@@ -1,0 +1,133 @@
+---
+output:
+  md_document:
+    variant: gfm
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.path = "misc/README/")
+
+rliesel::use_liesel_venv()
+reticulate::py_install("tabulate")
+```
+
+```{python logging, include=FALSE}
+import logging
+
+logging.getLogger("absl").setLevel(logging.ERROR)
+```
+
+```{python pandas, include=FALSE}
+import pandas as pd
+
+pd.set_option("display.max_rows", 30)
+pd.set_option("display.max_columns", 160)
+pd.set_option("display.width", 160)
+
+def print_df(self):
+    return self.to_markdown()
+
+pd.DataFrame.__repr__ = print_df
+```
+
+# Liesel: A Probabilistic Programming Framework
+
+<img src="misc/logo.png" alt="logo" align="right" width="185">
+
+Liesel is a probabilistic programming framework with a focus on semi-parametric regression. It includes:
+
+- **Liesel**, a library to express statistical models as Probabilistic Graphical Models (PGMs). Through the PGM representation, the user can build and update models in a natural way.
+- **Goose**, a library to build custom MCMC algorithms with several parameter blocks and MCMC kernels such as the No U-Turn Sampler (NUTS), the Iteratively Weighted Least Squares (IWLS) sampler, or different Gibbs samplers. Goose also takes care of the MCMC bookkeeping and the chain post-processing.
+- [**RLiesel**](https://github.com/liesel-devs/rliesel), an R interface for Liesel which assists the user with the configuration of semi-parametric regression models such as Generalized Additive Models for Location, Scale and Shape (GAMLSS) with different response distributions, spline-based smooth terms and shrinkage priors.
+
+The name "Liesel" is an homage to the [Gänseliesel fountain](https://en.wikipedia.org/wiki/G%C3%A4nseliesel), landmark of Liesel's birth city [Göttingen](https://en.wikipedia.org/wiki/G%C3%B6ttingen).
+
+## Usage
+
+The following example shows how to build a simple i.i.d. normal model with Liesel. We set up two parameter and one data node, and combine them in a model.
+
+```{python liesel-example-1}
+import numpy as np
+
+import liesel.liesel as lsl
+
+n_loc = lsl.Parameter(0.0, name="loc")
+n_scale = lsl.Parameter(1.0, name="scale")
+
+n_y = lsl.Node(
+    value=np.array([1.314, 0.861, -1.813, 0.587, -1.408]),
+    distribution=lsl.NodeDistribution("Normal", loc=n_loc, scale=n_scale),
+    name="y",
+)
+
+model = lsl.Model([n_loc, n_scale, n_y])
+```
+
+The model allows us to evaluate the log-probability through a property, which is updated automatically if the value of a node is modified.
+
+```{python liesel-example-2}
+model.log_prob
+n_loc.value = -0.5
+model.log_prob
+```
+
+We can estimate the mean parameter with Goose and a NUTS sampler. Goose's workhorse to run an MCMC algorithm is the `Engine`, which can be constructed with the `EngineBuilder`. The builder allows us to assign different MCMC kernels to one or more parameters. We also need to specify the model, the initial values, and the sampling duration, before we can run the sampler.
+
+```{python goose-example}
+import liesel.goose as gs
+
+builder = gs.EngineBuilder(seed=42, num_chains=4)
+
+builder.add_kernel(gs.NUTSKernel(["loc"]))
+builder.set_model(lsl.GooseModel(model))
+builder.set_initial_values(model.state)
+
+builder.set_duration(warmup_duration=1000, posterior_duration=1000)
+
+engine = builder.build()
+engine.sample_all_epochs()
+```
+
+Finally, we can print a summary table and view some diagnostic plots.
+
+```{python goose-summary, results="asis"}
+results = engine.get_results()
+gs.summary(results)
+```
+
+```{python goose-plot, out.width="70%"}
+gs.plot_param(results, param="loc")
+```
+
+## Paper, tutorials and API documentation
+
+For a scientific discussion of the software, see our paper on arXiv (in preparation). If you want to try out Liesel yourself, take a look at the [tutorials](https://liesel-devs.github.io/liesel-tutorials) and the [API documentation](https://liesel-devs.github.io/liesel).
+
+## Installation
+
+Liesel requires Python &ge; 3.10. Create and activate a virtual environment, and run these commands to install Liesel:
+
+```
+git clone https://github.com/liesel-devs/liesel.git
+cd liesel
+pip install .
+# or `pip install -e .[dev]` for an editable install including the dev utils
+```
+
+Liesel depends on JAX and `jaxlib`. As of now, there are no official `jaxlib` wheels for Windows. If you are on Windows, the JAX developers recommend using the [Windows Subsystem for Linux](https://docs.microsoft.com/en-us/windows/wsl/about). Alternatively, you can [build `jaxlib` from source](https://jax.readthedocs.io/en/latest/developer.html#additional-notes-for-building-jaxlib-from-source-on-windows) or try the unofficial `jaxlib` wheels from <https://github.com/cloudhan/jax-windows-builder>.
+
+If you are using the `lsl.plot_model()` function, installing `pygraphviz` will greatly improve the layout of the model graphs. Make sure you have the [Graphviz](https://graphviz.org) development headers on your system and run:
+
+```
+pip install pygraphviz
+```
+
+Again, the installation is a bit more challenging on Windows, but there are [instructions on the `pygraphviz` website](https://pygraphviz.github.io/documentation/stable/install.html#windows).
+
+## Development
+
+Please run `pre-commit run -a` before committing your work, and make sure the tests don't fail with `pytest --run-mcmc`.
+
+## Acknowledgements
+
+Liesel is being developed by Paul Wiemann and Hannes Riebl with support from Thomas Kneib. Important contributions were made by Joel Beck, Alex Afanasev, Gianmarco Callegher and Johannes Brachem. We are grateful to the German Research Foundation (DFG) for funding the development through grant 443179956.

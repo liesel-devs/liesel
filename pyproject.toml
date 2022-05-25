@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.isort]
+profile = "black"
+
+[tool.mypy]
+ignore_missing_imports = true
+scripts_are_modules = true
+files = ["liesel", "tests"]
+
+[tool.pytest.ini_options]
+filterwarnings = "ignore::DeprecationWarning"
+testpaths = ["tests"]
