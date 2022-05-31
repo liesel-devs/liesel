@@ -636,7 +636,7 @@ class Summary:
     def _repr_html_(self):
         df = self.to_dataframe()
         del df["var_fqn"]
-        return df._repr_html_()
+        return df.to_html(index_names=False)
 
     def __str__(self):
         return self.to_dataframe().__str__()
