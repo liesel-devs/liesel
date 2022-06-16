@@ -2,12 +2,14 @@
 # Posterior statistics and diagnostics
 """
 
+import typing
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
 import arviz as az
 import jax.numpy as jnp
+import jaxlib.xla_extension
 import numpy as np
 import pandas as pd
 import xarray
@@ -622,6 +624,21 @@ class Summary:
 
                 for quant_name, quant_dict in quants.items():
                     quant_per_elem[quant_name] = quant_dict[var][it.multi_index]
+
+                # convert DeviceArrays (scalar) to floats so that
+                # pandas treats them correctly
+
+                for key, val in quant_per_elem.items():
+                    if type(val) == jaxlib.xla_extension.DeviceArray:
+                        # make mypy happy
+                        val = typing.cast(jnp.ndarray, val)
+                        # value should be a scalar
+                        assert val.shape == ()
+
+                        # convert to float32
+                        val = np.atleast_1d(np.asarray(val))[0]
+
+                        quant_per_elem[key] = val
 
                 df_dict[var_fqn] = quant_per_elem
 
