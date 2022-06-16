@@ -1,4 +1,3 @@
 # classify as documentation and remove from language stats
 
 misc/** linguist-documentation
-tutorials/** linguist-documentation
