@@ -2,27 +2,11 @@ import logging
 from pathlib import Path
 
 
-def patch_tfp_logging_issue() -> None:
-    """
-    Work around <https://github.com/tensorflow/probability/issues/1523>.
-    """
-
-    logger = logging.getLogger("root")
-
-    class CheckTypesFilter(logging.Filter):
-        def filter(self, record):
-            return "check_types" not in record.getMessage()
-
-    logger.addFilter(CheckTypesFilter())
-
-
 def setup_logger() -> None:
     """
     Sets up a basic `StreamHandler`, which prints log messages to the terminal.
     The default log level of the `StreamHandler` is set to "info".
     """
-
-    patch_tfp_logging_issue()
 
     logger = logging.getLogger("root")
     logger.setLevel(logging.DEBUG)
