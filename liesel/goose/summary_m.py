@@ -589,7 +589,7 @@ class Summary:
         # don't change the original data
         quants = self.quantities.copy()
 
-        # make new entires for the quantiles
+        # make new entries for the quantiles
         for i, q in enumerate(self.config["quantiles"]):
             quants[f"q_{q}"] = {k: v[i, ...] for k, v in quants["quantile"].items()}
         quants["hdi_low"] = {k: v[0, ...] for k, v in quants["hdi"].items()}
@@ -599,7 +599,7 @@ class Summary:
         del quants["quantile"]
         del quants["hdi"]
 
-        # create one row per entrie
+        # create one row per entry
         df_dict = {}
         for var in quants["mean"].keys():
             it = np.nditer(quants["mean"][var], flags=["multi_index"])
@@ -710,7 +710,7 @@ class Summary:
             "sample_size_per_chain": param_chain.shape[1],
         }
 
-        #  converte everything to numpy array
+        # convert everything to numpy array
         for key in posterior_chain:
             posterior_chain[key] = np.asarray(posterior_chain[key])
 
@@ -725,7 +725,6 @@ class Summary:
                     _create_quantity_dict(single_chain, quantiles, hdi_prob)
                 )
             quantities = stack_leaves(single_chain_summaries, axis=0)
-            del quantities["rhat"]
         else:
             quantities = _create_quantity_dict(posterior_chain, quantiles, hdi_prob)
 
@@ -750,7 +749,6 @@ def _create_quantity_dict(
     quantile = azchain.quantile(q=quantiles, dim=["chain", "draw"])
     hdi = az.hdi(azchain, hdi_prob=hdi_prob)
 
-    rhat = az.rhat(azchain)
     ess_bulk = az.ess(azchain, method="bulk")
     ess_tail = az.ess(azchain, method="tail")
     mcse_mean = az.mcse(azchain, method="mean")
@@ -763,12 +761,17 @@ def _create_quantity_dict(
         "sd": sd,
         "quantile": quantile,
         "hdi": hdi,
-        "rhat": rhat,
+        "rhat": None,
         "ess_bulk": ess_bulk,
         "ess_tail": ess_tail,
         "mcse_mean": mcse_mean,
         "mcse_sd": mcse_sd,
     }
+
+    if azchain.chain.size > 1:
+        quantities["rhat"] = az.rhat(azchain)
+    else:
+        del quantities["rhat"]
 
     # convert to simple dict[str, np.ndarray]
     for key, val in quantities.items():
