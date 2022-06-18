@@ -105,7 +105,13 @@ For a scientific discussion of the software, see our paper on arXiv (in preparat
 
 ## Installation
 
-Liesel requires Python &ge; 3.10. Create and activate a virtual environment, and run these commands to install Liesel:
+Liesel requires Python &ge; 3.10. Create and activate a virtual environment, and install the latest release from PyPI:
+
+```
+pip install liesel
+```
+
+You can also install the development version from GitHub:
 
 ```
 git clone https://github.com/liesel-devs/liesel.git

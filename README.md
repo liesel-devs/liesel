@@ -96,16 +96,16 @@ engine.sample_all_epochs()
     ## WARNING - Errors per chain for kernel_00: 2, 1, 1, 2 / 50 transitions
     ## INFO - Finished epoch
     ## INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
-    ## WARNING - Errors per chain for kernel_00: 2, 2, 1, 2 / 100 transitions
+    ## WARNING - Errors per chain for kernel_00: 2, 2, 1, 1 / 100 transitions
     ## INFO - Finished epoch
     ## INFO - Starting epoch: SLOW_ADAPTATION, 200 transitions, 25 jitted together
-    ## WARNING - Errors per chain for kernel_00: 2, 2, 2, 1 / 200 transitions
+    ## WARNING - Errors per chain for kernel_00: 1, 2, 1, 1 / 200 transitions
     ## INFO - Finished epoch
     ## INFO - Starting epoch: SLOW_ADAPTATION, 500 transitions, 25 jitted together
-    ## WARNING - Errors per chain for kernel_00: 1, 1, 2, 1 / 500 transitions
+    ## WARNING - Errors per chain for kernel_00: 1, 2, 1, 2 / 500 transitions
     ## INFO - Finished epoch
     ## INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
-    ## WARNING - Errors per chain for kernel_00: 1, 2, 1, 1 / 50 transitions
+    ## WARNING - Errors per chain for kernel_00: 2, 2, 1, 1 / 50 transitions
     ## INFO - Finished epoch
     ## INFO - Finished warmup
     ## INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
@@ -120,10 +120,10 @@ gs.summary(results)
 
 |     | param_index | chain_index | num_samples | num_effective |   mean |    sd |  rhat |    q_5 |   q_50 |  q_95 | hdi_90_low | hdi_90_high |
 |:----|------------:|------------:|------------:|--------------:|-------:|------:|------:|-------:|-------:|------:|-----------:|------------:|
-| loc |           0 |           0 |        1000 |       399.549 |   -0.1 | 0.438 | 1.001 | -0.817 |   -0.1 | 0.612 |     -0.783 |        0.63 |
-| loc |           0 |           1 |        1000 |       373.287 | -0.099 |  0.44 | 1.001 | -0.838 | -0.096 | 0.624 |     -0.878 |       0.544 |
-| loc |           0 |           2 |        1000 |       395.392 | -0.116 | 0.434 | 1.001 | -0.883 | -0.117 | 0.585 |       -0.8 |       0.627 |
-| loc |           0 |           3 |        1000 |       322.511 | -0.062 | 0.472 | 1.001 | -0.794 | -0.074 | 0.741 |     -0.816 |       0.709 |
+| loc |           0 |           0 |        1000 |       435.251 | -0.088 | 0.438 | 1.001 | -0.823 | -0.089 | 0.613 |     -0.795 |       0.635 |
+| loc |           0 |           1 |        1000 |       373.608 | -0.099 |  0.44 | 1.001 | -0.838 | -0.097 | 0.624 |     -0.878 |       0.544 |
+| loc |           0 |           2 |        1000 |        394.22 | -0.118 | 0.434 | 1.001 | -0.882 | -0.114 | 0.585 |     -0.925 |       0.506 |
+| loc |           0 |           3 |        1000 |       322.429 | -0.061 | 0.472 | 1.001 | -0.792 | -0.071 | 0.741 |     -0.827 |       0.691 |
 
 ``` python
 gs.plot_param(results, param="loc")
@@ -141,7 +141,11 @@ documentation](https://liesel-devs.github.io/liesel).
 ## Installation
 
 Liesel requires Python ≥ 3.10. Create and activate a virtual
-environment, and run these commands to install Liesel:
+environment, and install the latest release from PyPI:
+
+    pip install liesel
+
+You can also install the development version from GitHub:
 
     git clone https://github.com/liesel-devs/liesel.git
     cd liesel
