@@ -4,6 +4,10 @@
     {% set logo = "https://raw.githubusercontent.com/liesel-devs/liesel/main/misc/logo/logo-light.png" %}
 {% endif %}
 
+{% if not logo_link %}
+    {% set logo_link = "https://liesel-devs.github.io/liesel" %}
+{% endif %}
+
 {% block nav_title %}
     {% if logo %}
         {% if logo_link %}<a href="{{ logo_link }}">{% endif %}
