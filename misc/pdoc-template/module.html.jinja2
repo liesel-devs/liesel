@@ -1,32 +1,13 @@
-{#
-We want to extend the default template instead of defining everything ourselves.
-#}
 {% extends "default/module.html.jinja2" %}
 
-{#
-We can redefine individual blocks.
-For example, if the `--favicon` option does not do what you want, you can specify a replacement like this.
-#}
-{% block favicon %}
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,{% filter urlencode %}{% include "resources/pdoc-logo.svg" %}{% endfilter %}"/>
-{% endblock %}
+{% if not logo %}
+    {% set logo = "https://raw.githubusercontent.com/liesel-devs/liesel/main/misc/logo/logo-light.png" %}
+{% endif %}
 
-{#
-We can access system environment variables in the template, for example to pass version information.
-#}
-{% block nav_footer %}
-    <footer>My Package v{{ env["VERSION"] | default("1.0") }}</footer>
-{% endblock %}
-
-{#
-We can also adjust which members are documented by overriding the is_public macro.
-In this example, the private function `Dog.__lt__` is exposed publicly.
-However, doing this is not recommended, see https://pdoc.dev/docs/pdoc.html#control-what-is-documented.
-#}
-{% macro is_public(doc) %}
-    {% if doc.qualname == "Dog.__lt__" %}
-        true
-    {% else %}
-        {{ default_is_public(doc) }}
+{% block nav_title %}
+    {% if logo %}
+        {% if logo_link %}<a href="{{ logo_link }}">{% endif %}
+        <img src="{{ logo }}" class="logo" alt="logo" width="185">
+        {% if logo_link %}</a>{% endif %}
     {% endif %}
-{% endmacro %}
+{% endblock %}
