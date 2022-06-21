@@ -1,6 +1,7 @@
 # Liesel: A Probabilistic Programming Framework
 
-<img src="misc/logo.png" alt="logo" align="right" width="185">
+<img src="misc/logo/logo-light.png#gh-light-mode-only" alt="logo" align="right" width="185">
+<img src="misc/logo/logo-dark.png#gh-dark-mode-only" alt="logo" align="right" width="185">
 
 Liesel is a probabilistic programming framework with a focus on
 semi-parametric regression. It includes:
