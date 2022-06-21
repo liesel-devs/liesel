@@ -53,4 +53,5 @@ jobs:
 
       steps:
         - name: Deploy pages
+          id: deployment
           uses: actions/deploy-pages@v1
