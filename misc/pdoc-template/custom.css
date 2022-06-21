@@ -1,12 +1,15 @@
-/* You can add additional CSS rules in custom.css. */
-
-.docstring h2, .docstring h3, .docstring h4, .docstring h5 {
-    font-size: 1.25rem;
-    font-weight: 500;
-    margin: 0 0 0.5rem 0;
-    padding: 0;
+nav.pdoc {
+    box-shadow: none;
 }
 
-li p + p {
-    margin-top: -0.5rem;
+.pdoc > section:not(.module-info) {
+    margin-bottom: 3rem;
+}
+
+.pdoc > section:not(.module-info) > .attr {
+    background-color: #e0e0e0;
+}
+
+li > p {
+    margin-bottom: 0.5rem;
 }
