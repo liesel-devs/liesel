@@ -4,8 +4,11 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
-  pdoc:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -24,14 +27,28 @@ jobs:
           pip list
 
       - name: Run pdoc
-        run: |
-          pdoc -o ./public -t ./misc/pdoc-template liesel
-          touch ./public/.nojekyll
+        run: pdoc -o ./docs -t ./misc/pdoc-template liesel
 
-      - name: Deploy to GitHub Pages
-        uses: JamesIves/github-pages-deploy-action@v4.2.5
+      - name: Upload artifact
+        run: tar -hcf ./artifact.tar --directory ./docs .
+        uses: actions/upload-artifact@v3
         with:
-          branch: gh-pages
-          folder: public
-          git-config-name: Hannes Riebl
-          git-config-email: hriebl@uni-goettingen.de
+          name: github-pages
+          path: ./artifact.tar
+
+  deploy:
+      needs: build
+      runs-on: ubuntu-latest
+      timeout-minutes: 10
+
+      permissions:
+        pages: write
+        id-token: write
+
+      environment:
+        name: github-pages
+        url: ${{ steps.deployment.outputs.page_url }}
+
+      steps:
+        - name: Deploy pages
+          uses: actions/deploy-pages@v1
