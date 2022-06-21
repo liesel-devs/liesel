@@ -29,8 +29,10 @@ jobs:
       - name: Run pdoc
         run: pdoc -o ./docs -t ./misc/pdoc-template liesel
 
-      - name: Upload artifact
+      - name: Create artifact
         run: tar -hcf ./artifact.tar --directory ./docs .
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
           name: github-pages
