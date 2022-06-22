@@ -2,8 +2,12 @@ nav.pdoc {
     box-shadow: none;
 }
 
-.pdoc > section:not(.module-info) {
-    margin-bottom: 5rem;
+.pdoc > section {
+    margin-bottom: 5rem !important;
+}
+
+.pdoc > section:last-of-type {
+    margin-bottom: 0rem !important;
 }
 
 .pdoc > section:not(.module-info) > .attr {
