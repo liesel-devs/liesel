@@ -3,11 +3,15 @@ nav.pdoc {
 }
 
 .pdoc > section:not(.module-info) {
-    margin-bottom: 3rem;
+    margin-bottom: 5rem;
 }
 
 .pdoc > section:not(.module-info) > .attr {
     background-color: #e0e0e0;
+    border-left-style: solid;
+    border-left-color: #ff99d6;
+    border-left-width: 0.5rem;
+    padding-left: 0.5rem;
 }
 
 li > p {
