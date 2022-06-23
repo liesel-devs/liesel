@@ -11,7 +11,7 @@
     <style>/*! theme.css */:root{--pdoc-background:#fff;}.pdoc{--text:#212529;--muted:#6c757d;--link:#3660a5;--link-hover:#1659c5;--code:#f8f8f8;--active:#fff598;--accent:#eee;--accent2:#c1c1c1;--nav-hover:rgba(255, 255, 255, 0.5);--name:#0066BB;--def:#008800;--annotation:#007020;}</style>
     <style>/*! layout.css */html, body{width:100%;height:100%;}html, main{scroll-behavior:smooth;}body{background-color:var(--pdoc-background);}@media (max-width:769px){#navtoggle{cursor:pointer;position:absolute;width:50px;height:40px;top:1rem;right:1rem;border-color:var(--text);color:var(--text);display:flex;opacity:0.8;}#navtoggle:hover{opacity:1;}#togglestate + div{display:none;}#togglestate:checked + div{display:inherit;}main, header{padding:2rem 3vw;}header + main{margin-top:-3rem;}.git-button{display:none !important;}nav input[type="search"]{max-width:77%;}nav input[type="search"]:first-child{margin-top:-6px;}nav input[type="search"]:valid ~ *{display:none !important;}}@media (min-width:770px){:root{--sidebar-width:clamp(12.5rem, 28vw, 22rem);}nav{position:fixed;overflow:auto;height:100vh;width:var(--sidebar-width);}main, header{padding:3rem 2rem 3rem calc(var(--sidebar-width) + 3rem);width:calc(54rem + var(--sidebar-width));max-width:100%;}header + main{margin-top:-4rem;}#navtoggle{display:none;}}#togglestate{position:absolute;height:0;opacity:0;}nav.pdoc{--pad:clamp(0.5rem, 2vw, 1.75rem);--indent:1.5rem;background-color:var(--accent);border-right:1px solid var(--accent2);box-shadow:0 0 20px rgba(50, 50, 50, .2) inset;padding:0 0 0 var(--pad);overflow-wrap:anywhere;scrollbar-width:thin; scrollbar-color:var(--accent2) transparent }nav.pdoc::-webkit-scrollbar{width:.4rem; }nav.pdoc::-webkit-scrollbar-thumb{background-color:var(--accent2); }nav.pdoc > div{padding:var(--pad) 0;}nav.pdoc .module-list-button{display:inline-flex;align-items:center;color:var(--text);border-color:var(--muted);margin-bottom:1rem;}nav.pdoc .module-list-button:hover{border-color:var(--text);}nav.pdoc input[type=search]{display:block;outline-offset:0;width:calc(100% - var(--pad));}nav.pdoc .logo{max-width:calc(100% - var(--pad));max-height:35vh;display:block;margin:0 auto 1rem;transform:translate(calc(-.5 * var(--pad)), 0);}nav.pdoc ul{list-style:none;padding-left:0;}nav.pdoc > div > ul{margin-left:calc(0px - var(--pad));}nav.pdoc li a{padding:.2rem 0 .2rem calc(var(--pad) + var(--indent));}nav.pdoc > div > ul > li > a{padding-left:var(--pad);}nav.pdoc li{transition:all 100ms;}nav.pdoc li:hover{background-color:var(--nav-hover);}nav.pdoc a, nav.pdoc a:hover{color:var(--text);}nav.pdoc a{display:block;}nav.pdoc > h2:first-of-type{margin-top:1.5rem;}nav.pdoc .class:before{content:"class ";color:var(--muted);}nav.pdoc .function:after{content:"()";color:var(--muted);}nav.pdoc footer:before{content:"";display:block;width:calc(100% - var(--pad));border-top:solid var(--accent2) 1px;margin-top:1.5rem;padding-top:.5rem;}nav.pdoc footer{font-size:small;}</style>
     <style>/*! content.css */.pdoc{color:var(--text);box-sizing:border-box;line-height:1.5;background:none;}.pdoc .pdoc-button{display:inline-block;border:solid black 1px;border-radius:2px;font-size:.75rem;padding:calc(0.5em - 1px) 1em;transition:100ms all;}.pdoc .pdoc-alert{padding:1rem 1rem 1rem calc(1.5rem + 24px);border:1px solid transparent;border-radius:.25rem;background-repeat:no-repeat;background-position:1rem center;margin-bottom:1rem;}.pdoc .pdoc-alert > *:last-child{margin-bottom:0;}.pdoc .pdoc-alert-note {color:#084298;background-color:#cfe2ff;border-color:#b6d4fe;background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20fill%3D%22%23084298%22%20viewBox%3D%220%200%2016%2016%22%3E%3Cpath%20d%3D%22M8%2016A8%208%200%201%200%208%200a8%208%200%200%200%200%2016zm.93-9.412-1%204.705c-.07.34.029.533.304.533.194%200%20.487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703%200-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381%202.29-.287zM8%205.5a1%201%200%201%201%200-2%201%201%200%200%201%200%202z%22/%3E%3C/svg%3E");}.pdoc .pdoc-alert-warning{color:#664d03;background-color:#fff3cd;border-color:#ffecb5;background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20fill%3D%22%23664d03%22%20viewBox%3D%220%200%2016%2016%22%3E%3Cpath%20d%3D%22M8.982%201.566a1.13%201.13%200%200%200-1.96%200L.165%2013.233c-.457.778.091%201.767.98%201.767h13.713c.889%200%201.438-.99.98-1.767L8.982%201.566zM8%205c.535%200%20.954.462.9.995l-.35%203.507a.552.552%200%200%201-1.1%200L7.1%205.995A.905.905%200%200%201%208%205zm.002%206a1%201%200%201%201%200%202%201%201%200%200%201%200-2z%22/%3E%3C/svg%3E");}.pdoc .pdoc-alert-danger{color:#842029;background-color:#f8d7da;border-color:#f5c2c7;background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20fill%3D%22%23842029%22%20viewBox%3D%220%200%2016%2016%22%3E%3Cpath%20d%3D%22M5.52.359A.5.5%200%200%201%206%200h4a.5.5%200%200%201%20.474.658L8.694%206H12.5a.5.5%200%200%201%20.395.807l-7%209a.5.5%200%200%201-.873-.454L6.823%209.5H3.5a.5.5%200%200%201-.48-.641l2.5-8.5z%22/%3E%3C/svg%3E");}.pdoc .visually-hidden{position:absolute !important;width:1px !important;height:1px !important;padding:0 !important;margin:-1px !important;overflow:hidden !important;clip:rect(0, 0, 0, 0) !important;white-space:nowrap !important;border:0 !important;}.pdoc h1, .pdoc h2, .pdoc h3{font-weight:300;margin:.3em 0;padding:.2em 0;}.pdoc > section:not(.module-info) h1{font-size:1.5rem;font-weight:500;}.pdoc > section:not(.module-info) h2{font-size:1.4rem;font-weight:500;}.pdoc > section:not(.module-info) h3{font-size:1.3rem;font-weight:500;}.pdoc > section:not(.module-info) h4{font-size:1.2rem;}.pdoc > section:not(.module-info) h5{font-size:1.1rem;}.pdoc a{text-decoration:none;color:var(--link);}.pdoc a:hover{color:var(--link-hover);}.pdoc blockquote{margin-left:2rem;}.pdoc pre{border-top:1px solid var(--accent2);border-bottom:1px solid var(--accent2);margin-top:0;margin-bottom:1em;padding:.5rem 0 .5rem .5rem;overflow-x:auto;background-color:var(--code);}.pdoc code{color:var(--text);padding:.2em .4em;margin:0;font-size:85%;background-color:var(--code);border-radius:6px;}.pdoc a > code{color:inherit;}.pdoc pre > code{display:inline-block;font-size:inherit;background:none;border:none;padding:0;}.pdoc > section:not(.module-info){margin-bottom:1.5rem;}.pdoc .modulename{margin-top:0;font-weight:bold;}.pdoc .modulename a{color:var(--link);transition:100ms all;}.pdoc .git-button{float:right;border:solid var(--link) 1px;}.pdoc .git-button:hover{background-color:var(--link);color:var(--pdoc-background);}.view-source-toggle-state,.view-source-toggle-state ~ .pdoc-code{display:none;}.view-source-toggle-state:checked ~ .pdoc-code{display:block;}.view-source-button{display:inline-block;float:right;font-size:.75rem;line-height:1.5rem;color:var(--muted);padding:0 .4rem 0 1.3rem;cursor:pointer;text-indent:-2px;}.view-source-button > span{visibility:hidden;}.module-info .view-source-button{float:none;display:flex;justify-content:flex-end;margin:-1.2rem .4rem -.2rem 0;}.view-source-button::before{position:absolute;content:"View Source";display:list-item;list-style-type:disclosure-closed;}.view-source-toggle-state:checked ~ .attr .view-source-button::before,.view-source-toggle-state:checked ~ .view-source-button::before{list-style-type:disclosure-open;}.pdoc .docstring{margin-bottom:1.5rem;}.pdoc section:not(.module-info) .docstring{margin-left:clamp(0rem, 5vw - 2rem, 1rem);}.pdoc .docstring .pdoc-code{margin-left:1em;margin-right:1em;}.pdoc h1:target,.pdoc h2:target,.pdoc h3:target,.pdoc h4:target,.pdoc h5:target,.pdoc h6:target,.pdoc .pdoc-code > pre > span:target{background-color:var(--active);box-shadow:-1rem 0 0 0 var(--active);}.pdoc .pdoc-code > pre > span:target{display:block;}.pdoc div:target > .attr,.pdoc section:target > .attr,.pdoc dd:target > a{background-color:var(--active);}.pdoc *{scroll-margin:2rem;}.pdoc .pdoc-code .linenos{user-select:none;}.pdoc .attr:hover{filter:contrast(0.95);}.pdoc section, .pdoc .classattr{position:relative;}.pdoc .headerlink{--width:clamp(1rem, 3vw, 2rem);position:absolute;top:0;left:calc(0rem - var(--width));transition:all 100ms ease-in-out;opacity:0;}.pdoc .headerlink::before{content:"#";display:block;text-align:center;width:var(--width);height:2.3rem;line-height:2.3rem;font-size:1.5rem;}.pdoc .attr:hover ~ .headerlink,.pdoc *:target > .headerlink,.pdoc .headerlink:hover{opacity:1;}.pdoc .attr{display:block;margin:.5rem 0 .5rem;padding:.4rem .4rem .4rem 1rem;background-color:var(--accent);overflow-x:auto;}.pdoc .classattr{margin-left:2rem;}.pdoc .name{color:var(--name);font-weight:bold;}.pdoc .def{color:var(--def);font-weight:bold;}.pdoc .signature{background-color:transparent;}.pdoc .param, .pdoc .return-annotation{white-space:pre;}.pdoc .signature.multiline .param{display:block;}.pdoc .signature.condensed .param{display:inline-block;}.pdoc .annotation{color:var(--annotation);}.pdoc .inherited{margin-left:2rem;}.pdoc .inherited dt{font-weight:700;}.pdoc .inherited dt, .pdoc .inherited dd{display:inline;margin-left:0;margin-bottom:.5rem;}.pdoc .inherited dd:not(:last-child):after{content:", ";}.pdoc .inherited .class:before{content:"class ";}.pdoc .inherited .function a:after{content:"()";}.pdoc .search-result .docstring{overflow:auto;max-height:25vh;}.pdoc .search-result.focused > .attr{background-color:var(--active);}.pdoc .attribution{margin-top:2rem;display:block;opacity:0.5;transition:all 200ms;filter:grayscale(100%);}.pdoc .attribution:hover{opacity:1;filter:grayscale(0%);}.pdoc .attribution img{margin-left:5px;height:35px;vertical-align:middle;width:70px;transition:all 200ms;}.pdoc table{display:block;width:max-content;max-width:100%;overflow:auto;margin-bottom:1rem;}.pdoc table th{font-weight:600;}.pdoc table th, .pdoc table td{padding:6px 13px;border:1px solid var(--accent2);}</style>
-    <style>/*! custom.css */nav.pdoc{box-shadow:none;}.pdoc > section{margin-bottom:5rem !important;}.pdoc > section:last-of-type{margin-bottom:0rem !important;}.pdoc > section:not(.module-info) > .attr{background-color:#e0e0e0;border-left-style:solid;border-left-color:#ff99d6;border-left-width:0.5rem;padding-left:0.5rem;}li > p{margin-bottom:0.5rem;}</style></head>
+    <style>/*! custom.css */nav.pdoc{box-shadow:none;}.pdoc > section{margin-bottom:5rem !important;}.pdoc > section:last-of-type{margin-bottom:0rem !important;}.pdoc > section:not(.module-info) > .attr{border-left-style:solid;border-left-color:#ff99d6;border-left-width:0.5rem;padding-left:0.5rem;}li > p{margin-bottom:0.5rem;}.view-docstring-toggle-state,.view-docstring-toggle-state ~ .docstring{display:none;}.view-docstring-toggle-state:checked ~ .docstring{display:block;}.view-docstring-button{display:inline-block;float:right;font-size:.75rem;line-height:1.5rem;color:var(--muted);padding:0 .4rem 0 1.3rem;cursor:pointer;text-indent:-2px;}.view-docstring-button > span{visibility:hidden;}.view-docstring-button::before{position:absolute;content:"View Docstring";display:list-item;list-style-type:disclosure-closed;}.view-docstring-toggle-state:checked ~ .attr .view-docstring-button::before,.view-docstring-toggle-state:checked ~ .view-docstring-button::before{list-style-type:disclosure-open;}</style></head>
 <body>
     <nav class="pdoc">
         <label id="navtoggle" for="togglestate" class="pdoc-button"><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'><path stroke-linecap='round' stroke="currentColor" stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/></svg></label>
@@ -516,12 +516,15 @@
             </section>
                 <section id="Addition">
                             <input id="Addition-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Addition-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">Addition</span><wbr>(<span class="base"><a href="#Node">liesel.liesel.Node[liesel.liesel.AdditionCalculator]</a></span>):
 
                 <label class="view-source-button" for="Addition-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Addition-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Addition"></a>
@@ -551,6 +554,7 @@
 
                 <label class="view-source-button" for="Addition.__init__-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#Addition.__init__"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="Addition.__init__-824"><a href="#Addition.__init__-824"><span class="linenos">824</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
@@ -601,12 +605,15 @@
                 </section>
                 <section id="Bijector">
                             <input id="Bijector-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Bijector-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">Bijector</span><wbr>(<span class="base"><a href="#Node">liesel.liesel.Node[liesel.liesel.BijectorCalculator]</a></span>):
 
                 <label class="view-source-button" for="Bijector-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Bijector-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Bijector"></a>
@@ -638,6 +645,7 @@
 
                 <label class="view-source-button" for="Bijector.__init__-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#Bijector.__init__"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="Bijector.__init__-878"><a href="#Bijector.__init__-878"><span class="linenos">878</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
@@ -690,12 +698,15 @@
                 </section>
                 <section id="ColumnStack">
                             <input id="ColumnStack-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="ColumnStack-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">ColumnStack</span><wbr>(<span class="base"><a href="#Node">liesel.liesel.Node[liesel.liesel.ColumnStackCalculator]</a></span>):
 
                 <label class="view-source-button" for="ColumnStack-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="ColumnStack-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#ColumnStack"></a>
@@ -725,6 +736,7 @@
 
                 <label class="view-source-button" for="ColumnStack.__init__-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#ColumnStack.__init__"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="ColumnStack.__init__-920"><a href="#ColumnStack.__init__-920"><span class="linenos">920</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
@@ -775,12 +787,15 @@
                 </section>
                 <section id="CopRegBuilder">
                             <input id="CopRegBuilder-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="CopRegBuilder-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">CopRegBuilder</span><wbr>(<span class="base"><a href="#DistRegBuilder">liesel.liesel.DistRegBuilder</a></span>):
 
                 <label class="view-source-button" for="CopRegBuilder-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="CopRegBuilder-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#CopRegBuilder"></a>
@@ -871,6 +886,7 @@ the user needs to make sure it uses the right NumPy implementation.</p></li>
 
                 <label class="view-source-button" for="CopRegBuilder.__init__-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#CopRegBuilder.__init__"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="CopRegBuilder.__init__-284"><a href="#CopRegBuilder.__init__-284"><span class="linenos">284</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model0</span><span class="p">:</span> <span class="n">DistRegBuilder</span><span class="p">,</span> <span class="n">model1</span><span class="p">:</span> <span class="n">DistRegBuilder</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -902,6 +918,7 @@ the user needs to make sure it uses the right NumPy implementation.</p></li>
 
                 <label class="view-source-button" for="CopRegBuilder.add_copula-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#CopRegBuilder.add_copula"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="CopRegBuilder.add_copula-309"><a href="#CopRegBuilder.add_copula-309"><span class="linenos">309</span></a>    <span class="k">def</span> <span class="nf">add_copula</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copula</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">TFPDistributionClass</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CopRegBuilder</span><span class="p">:</span>
@@ -947,12 +964,15 @@ the user needs to make sure it uses the right NumPy implementation.</p></li>
                 </section>
                 <section id="DesignMatrix">
                             <input id="DesignMatrix-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="DesignMatrix-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">DesignMatrix</span><wbr>(<span class="base">typing.Generic[~TNodeCalculator]</span>):
 
                 <label class="view-source-button" for="DesignMatrix-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="DesignMatrix-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#DesignMatrix"></a>
@@ -1000,12 +1020,15 @@ the user needs to make sure it uses the right NumPy implementation.</p></li>
                 </section>
                 <section id="DistRegBuilder">
                             <input id="DistRegBuilder-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="DistRegBuilder-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">DistRegBuilder</span><wbr>(<span class="base"><a href="#ModelBuilder">liesel.liesel.ModelBuilder</a></span>):
 
                 <label class="view-source-button" for="DistRegBuilder-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="DistRegBuilder-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#DistRegBuilder"></a>
@@ -1239,6 +1262,7 @@ the user needs to make sure it uses the right NumPy implementation.</p></li>
 
                 <label class="view-source-button" for="DistRegBuilder.__init__-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#DistRegBuilder.__init__"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="DistRegBuilder.__init__-54"><a href="#DistRegBuilder.__init__-54"><span class="linenos">54</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -1258,6 +1282,7 @@ the user needs to make sure it uses the right NumPy implementation.</p></li>
             <span class="name">response</span><span class="annotation">: <a href="#Node">liesel.liesel.Node</a></span>
 
         
+        
     </div>
     <a class="headerlink" href="#DistRegBuilder.response"></a>
     
@@ -1266,12 +1291,15 @@ the user needs to make sure it uses the right NumPy implementation.</p></li>
                             </div>
                             <div id="DistRegBuilder.add_p_smooth" class="classattr">
                                         <input id="DistRegBuilder.add_p_smooth-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="DistRegBuilder.add_p_smooth-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">add_p_smooth</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">X</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">m</span><span class="p">:</span> <span class="nb">float</span>,</span><span class="param">	<span class="n">s</span><span class="p">:</span> <span class="nb">float</span>,</span><span class="param">	<span class="n">predictor</span><span class="p">:</span> <span class="nb">str</span>,</span><span class="param">	<span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></span><span class="return-annotation">) -> <span class="n">liesel</span><span class="o">.</span><span class="n">liesel</span><span class="o">.</span><span class="n">distreg</span><span class="o">.</span><span class="n">PSmoothGroup</span>:</span></span>
 
                 <label class="view-source-button" for="DistRegBuilder.add_p_smooth-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="DistRegBuilder.add_p_smooth-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#DistRegBuilder.add_p_smooth"></a>
@@ -1343,12 +1371,15 @@ the user needs to make sure it uses the right NumPy implementation.</p></li>
                             </div>
                             <div id="DistRegBuilder.add_np_smooth" class="classattr">
                                         <input id="DistRegBuilder.add_np_smooth-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="DistRegBuilder.add_np_smooth-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">add_np_smooth</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">X</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">K</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">a</span><span class="p">:</span> <span class="nb">float</span>,</span><span class="param">	<span class="n">b</span><span class="p">:</span> <span class="nb">float</span>,</span><span class="param">	<span class="n">predictor</span><span class="p">:</span> <span class="nb">str</span>,</span><span class="param">	<span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></span><span class="return-annotation">) -> <span class="n">liesel</span><span class="o">.</span><span class="n">liesel</span><span class="o">.</span><span class="n">distreg</span><span class="o">.</span><span class="n">NPSmoothGroup</span>:</span></span>
 
                 <label class="view-source-button" for="DistRegBuilder.add_np_smooth-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="DistRegBuilder.add_np_smooth-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#DistRegBuilder.add_np_smooth"></a>
@@ -1435,12 +1466,15 @@ the user needs to make sure it uses the right NumPy implementation.</p></li>
                             </div>
                             <div id="DistRegBuilder.add_predictor" class="classattr">
                                         <input id="DistRegBuilder.add_predictor-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="DistRegBuilder.add_predictor-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">add_predictor</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">name</span><span class="p">:</span> <span class="nb">str</span>,</span><span class="param">	<span class="n">inverse_link</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span></span><span class="return-annotation">) -> <span class="n"><a href="#DistRegBuilder">liesel.liesel.DistRegBuilder</a></span>:</span></span>
 
                 <label class="view-source-button" for="DistRegBuilder.add_predictor-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="DistRegBuilder.add_predictor-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#DistRegBuilder.add_predictor"></a>
@@ -1503,12 +1537,15 @@ the user needs to make sure it uses the right NumPy implementation.</p></li>
                             </div>
                             <div id="DistRegBuilder.add_response" class="classattr">
                                         <input id="DistRegBuilder.add_response-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="DistRegBuilder.add_response-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">add_response</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">response</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">distribution</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span></span><span class="return-annotation">) -> <span class="n"><a href="#DistRegBuilder">liesel.liesel.DistRegBuilder</a></span>:</span></span>
 
                 <label class="view-source-button" for="DistRegBuilder.add_response-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="DistRegBuilder.add_response-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#DistRegBuilder.add_response"></a>
@@ -1579,12 +1616,15 @@ a string, the user needs to make sure it uses the right NumPy implementation.</p
                 </section>
                 <section id="GooseModel">
                             <input id="GooseModel-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="GooseModel-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">GooseModel</span>:
 
                 <label class="view-source-button" for="GooseModel-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="GooseModel-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#GooseModel"></a>
@@ -1619,6 +1659,7 @@ a string, the user needs to make sure it uses the right NumPy implementation.</p
 
                 <label class="view-source-button" for="GooseModel.__init__-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#GooseModel.__init__"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="GooseModel.__init__-86"><a href="#GooseModel.__init__-86"><span class="linenos">86</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="n">Model</span><span class="p">):</span>
@@ -1638,6 +1679,7 @@ a string, the user needs to make sure it uses the right NumPy implementation.</p
 
                 <label class="view-source-button" for="GooseModel.extract_position-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#GooseModel.extract_position"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="GooseModel.extract_position-89"><a href="#GooseModel.extract_position-89"><span class="linenos">89</span></a>    <span class="k">def</span> <span class="nf">extract_position</span><span class="p">(</span>
@@ -1659,6 +1701,7 @@ a string, the user needs to make sure it uses the right NumPy implementation.</p
 
                 <label class="view-source-button" for="GooseModel.update_state-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#GooseModel.update_state"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="GooseModel.update_state-94"><a href="#GooseModel.update_state-94"><span class="linenos">94</span></a>    <span class="k">def</span> <span class="nf">update_state</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">position</span><span class="p">:</span> <span class="n">Position</span><span class="p">,</span> <span class="n">model_state</span><span class="p">:</span> <span class="n">ModelState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ModelState</span><span class="p">:</span>
@@ -1678,6 +1721,7 @@ a string, the user needs to make sure it uses the right NumPy implementation.</p
 
                 <label class="view-source-button" for="GooseModel.log_prob-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#GooseModel.log_prob"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="GooseModel.log_prob-97"><a href="#GooseModel.log_prob-97"><span class="linenos">97</span></a>    <span class="k">def</span> <span class="nf">log_prob</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model_state</span><span class="p">:</span> <span class="n">ModelState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
@@ -1691,12 +1735,15 @@ a string, the user needs to make sure it uses the right NumPy implementation.</p
                 </section>
                 <section id="Hyperparameter">
                             <input id="Hyperparameter-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Hyperparameter-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">Hyperparameter</span><wbr>(<span class="base">typing.Generic[~TNodeCalculator]</span>):
 
                 <label class="view-source-button" for="Hyperparameter-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Hyperparameter-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Hyperparameter"></a>
@@ -1744,12 +1791,15 @@ a string, the user needs to make sure it uses the right NumPy implementation.</p
                 </section>
                 <section id="InverseLink">
                             <input id="InverseLink-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="InverseLink-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">InverseLink</span><wbr>(<span class="base"><a href="#Node">liesel.liesel.Node[liesel.liesel.BijectorCalculator]</a></span>):
 
                 <label class="view-source-button" for="InverseLink-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="InverseLink-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#InverseLink"></a>
@@ -1800,12 +1850,15 @@ a string, the user needs to make sure it uses the right NumPy implementation.</p
                 </section>
                 <section id="Model">
                             <input id="Model-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Model-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">Model</span>:
 
                 <label class="view-source-button" for="Model-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Model-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Model"></a>
@@ -2063,6 +2116,7 @@ a model in a safe way.</p>
 
                 <label class="view-source-button" for="Model.__init__-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#Model.__init__"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="Model.__init__-65"><a href="#Model.__init__-65"><span class="linenos">65</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
@@ -2100,12 +2154,15 @@ a model in a safe way.</p>
                             </div>
                             <div id="Model.empty_copy" class="classattr">
                                         <input id="Model.empty_copy-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Model.empty_copy-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">empty_copy</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span></span><span class="return-annotation">) -> <span class="n"><a href="#Model">liesel.liesel.Model</a></span>:</span></span>
 
                 <label class="view-source-button" for="Model.empty_copy-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Model.empty_copy-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Model.empty_copy"></a>
@@ -2131,12 +2188,15 @@ a model in a safe way.</p>
                             </div>
                             <div id="Model.get_nodes_by_class" class="classattr">
                                         <input id="Model.get_nodes_by_class-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Model.get_nodes_by_class-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">get_nodes_by_class</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="bp">cls</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="n"><a href="#Node">liesel.liesel.Node</a></span><span class="p">]</span></span><span class="return-annotation">) -> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n"><a href="#Node">liesel.liesel.Node</a></span><span class="p">]</span>:</span></span>
 
                 <label class="view-source-button" for="Model.get_nodes_by_class-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Model.get_nodes_by_class-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Model.get_nodes_by_class"></a>
@@ -2158,12 +2218,15 @@ a model in a safe way.</p>
                             </div>
                             <div id="Model.get_nodes_by_regex" class="classattr">
                                         <input id="Model.get_nodes_by_regex-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Model.get_nodes_by_regex-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">get_nodes_by_regex</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span>, </span><span class="param"><span class="n">regex</span><span class="p">:</span> <span class="nb">str</span></span><span class="return-annotation">) -> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n"><a href="#Node">liesel.liesel.Node</a></span><span class="p">]</span>:</span></span>
 
                 <label class="view-source-button" for="Model.get_nodes_by_regex-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Model.get_nodes_by_regex-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Model.get_nodes_by_regex"></a>
@@ -2186,10 +2249,13 @@ a model in a safe way.</p>
 
                             </div>
                             <div id="Model.jaxified" class="classattr">
-                                <div class="attr variable">
+                                        <input id="Model.jaxified-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">jaxified</span><span class="annotation">: bool</span>
 
         
+                <label class="view-docstring-button" for="Model.jaxified-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#Model.jaxified"></a>
     
@@ -2200,12 +2266,15 @@ a model in a safe way.</p>
                             </div>
                             <div id="Model.jaxify" class="classattr">
                                         <input id="Model.jaxify-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Model.jaxify-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">jaxify</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span></span><span class="return-annotation">) -> <span class="n"><a href="#Model">liesel.liesel.Model</a></span>:</span></span>
 
                 <label class="view-source-button" for="Model.jaxify-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Model.jaxify-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Model.jaxify"></a>
@@ -2225,10 +2294,13 @@ a model in a safe way.</p>
 
                             </div>
                             <div id="Model.log_prob" class="classattr">
-                                <div class="attr variable">
+                                        <input id="Model.log_prob-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">log_prob</span><span class="annotation">: float</span>
 
         
+                <label class="view-docstring-button" for="Model.log_prob-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#Model.log_prob"></a>
     
@@ -2242,10 +2314,13 @@ as the unnormalized log-posterior.</p>
 
                             </div>
                             <div id="Model.state" class="classattr">
-                                <div class="attr variable">
+                                        <input id="Model.state-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">state</span><span class="annotation">: dict[str, <a href="#NodeState">liesel.liesel.NodeState</a>]</span>
 
         
+                <label class="view-docstring-button" for="Model.state-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#Model.state"></a>
     
@@ -2258,12 +2333,15 @@ as the unnormalized log-posterior.</p>
                             </div>
                             <div id="Model.transform_parameter" class="classattr">
                                         <input id="Model.transform_parameter-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Model.transform_parameter-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">transform_parameter</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span>, </span><span class="param"><span class="n">name</span><span class="p">:</span> <span class="nb">str</span>, </span><span class="param"><span class="n">bijector</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span></span><span class="return-annotation">) -> <span class="n"><a href="#Model">liesel.liesel.Model</a></span>:</span></span>
 
                 <label class="view-source-button" for="Model.transform_parameter-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Model.transform_parameter-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Model.transform_parameter"></a>
@@ -2306,12 +2384,15 @@ as the unnormalized log-posterior.</p>
                             </div>
                             <div id="Model.unjaxify" class="classattr">
                                         <input id="Model.unjaxify-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Model.unjaxify-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">unjaxify</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span></span><span class="return-annotation">) -> <span class="n"><a href="#Model">liesel.liesel.Model</a></span>:</span></span>
 
                 <label class="view-source-button" for="Model.unjaxify-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Model.unjaxify-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Model.unjaxify"></a>
@@ -2332,12 +2413,15 @@ as the unnormalized log-posterior.</p>
                             </div>
                             <div id="Model.update" class="classattr">
                                         <input id="Model.update-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Model.update-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">update</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span></span><span class="return-annotation">) -> <span class="n"><a href="#Model">liesel.liesel.Model</a></span>:</span></span>
 
                 <label class="view-source-button" for="Model.update-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Model.update-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Model.update"></a>
@@ -2370,12 +2454,15 @@ has changed (unless requested otherwise by the user).</p>
                 </section>
                 <section id="ModelBuilder">
                             <input id="ModelBuilder-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="ModelBuilder-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">ModelBuilder</span>:
 
                 <label class="view-source-button" for="ModelBuilder-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="ModelBuilder-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#ModelBuilder"></a>
@@ -2491,6 +2578,7 @@ has changed (unless requested otherwise by the user).</p>
 
                 <label class="view-source-button" for="ModelBuilder.__init__-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#ModelBuilder.__init__"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="ModelBuilder.__init__-284"><a href="#ModelBuilder.__init__-284"><span class="linenos">284</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
@@ -2508,12 +2596,15 @@ has changed (unless requested otherwise by the user).</p>
                             </div>
                             <div id="ModelBuilder.add_nodes" class="classattr">
                                         <input id="ModelBuilder.add_nodes-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="ModelBuilder.add_nodes-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">add_nodes</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="o">*</span><span class="n">nodes</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n"><a href="#Node">liesel.liesel.Node</a></span><span class="p">,</span> <span class="n">Iterable</span><span class="p">[</span><span class="n"><a href="#Node">liesel.liesel.Node</a></span><span class="p">]]</span></span><span class="return-annotation">) -> <span class="n"><a href="#ModelBuilder">liesel.liesel.ModelBuilder</a></span>:</span></span>
 
                 <label class="view-source-button" for="ModelBuilder.add_nodes-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="ModelBuilder.add_nodes-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#ModelBuilder.add_nodes"></a>
@@ -2537,12 +2628,15 @@ has changed (unless requested otherwise by the user).</p>
                             </div>
                             <div id="ModelBuilder.add_groups" class="classattr">
                                         <input id="ModelBuilder.add_groups-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="ModelBuilder.add_groups-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">add_groups</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="o">*</span><span class="n">groups</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n"><a href="#NodeGroup">liesel.liesel.NodeGroup</a></span><span class="p">,</span> <span class="n">Iterable</span><span class="p">[</span><span class="n"><a href="#NodeGroup">liesel.liesel.NodeGroup</a></span><span class="p">]]</span></span><span class="return-annotation">) -> <span class="n"><a href="#ModelBuilder">liesel.liesel.ModelBuilder</a></span>:</span></span>
 
                 <label class="view-source-button" for="ModelBuilder.add_groups-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="ModelBuilder.add_groups-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#ModelBuilder.add_groups"></a>
@@ -2566,12 +2660,15 @@ has changed (unless requested otherwise by the user).</p>
                             </div>
                             <div id="ModelBuilder.all_nodes" class="classattr">
                                         <input id="ModelBuilder.all_nodes-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="ModelBuilder.all_nodes-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">all_nodes</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span></span><span class="return-annotation">) -> <span class="nb">list</span><span class="p">[</span><span class="n"><a href="#Node">liesel.liesel.Node</a></span><span class="p">]</span>:</span></span>
 
                 <label class="view-source-button" for="ModelBuilder.all_nodes-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="ModelBuilder.all_nodes-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#ModelBuilder.all_nodes"></a>
@@ -2600,12 +2697,15 @@ including the nodes from the groups and the inputs.</p>
                             </div>
                             <div id="ModelBuilder.build" class="classattr">
                                         <input id="ModelBuilder.build-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="ModelBuilder.build-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">build</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span></span><span class="return-annotation">) -> <span class="n"><a href="#Model">liesel.liesel.Model</a></span>:</span></span>
 
                 <label class="view-source-button" for="ModelBuilder.build-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="ModelBuilder.build-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#ModelBuilder.build"></a>
@@ -2628,10 +2728,13 @@ including the nodes from the groups and the inputs.</p>
                             </div>
                 </section>
                 <section id="ModelState">
-                    <div class="attr variable">
+                            <input id="ModelState-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">ModelState</span><span class="default_value"> = dict[str, <a href="#NodeState">liesel.liesel.NodeState</a>]</span>
 
         
+                <label class="view-docstring-button" for="ModelState-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#ModelState"></a>
     
@@ -2642,12 +2745,15 @@ including the nodes from the groups and the inputs.</p>
                 </section>
                 <section id="Node">
                             <input id="Node-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Node-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">Node</span><wbr>(<span class="base">typing.Generic[~TNodeCalculator]</span>):
 
                 <label class="view-source-button" for="Node-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Node-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Node"></a>
@@ -3023,6 +3129,7 @@ An output of a node A is a node B which depends on the value of A.</p></li>
 
                 <label class="view-source-button" for="Node.__init__-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#Node.__init__"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="Node.__init__-392"><a href="#Node.__init__-392"><span class="linenos">392</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
@@ -3059,10 +3166,13 @@ An output of a node A is a node B which depends on the value of A.</p></li>
 
                             </div>
                             <div id="Node.calculator" class="classattr">
-                                <div class="attr variable">
+                                        <input id="Node.calculator-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">calculator</span><span class="annotation">: ~TNodeCalculator</span>
 
         
+                <label class="view-docstring-button" for="Node.calculator-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#Node.calculator"></a>
     
@@ -3072,10 +3182,13 @@ An output of a node A is a node B which depends on the value of A.</p></li>
 
                             </div>
                             <div id="Node.distribution" class="classattr">
-                                <div class="attr variable">
+                                        <input id="Node.distribution-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">distribution</span><span class="annotation">: <a href="#NodeDistribution">liesel.liesel.NodeDistribution</a></span>
 
         
+                <label class="view-docstring-button" for="Node.distribution-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#Node.distribution"></a>
     
@@ -3086,12 +3199,15 @@ An output of a node A is a node B which depends on the value of A.</p></li>
                             </div>
                             <div id="Node.grad" class="classattr">
                                         <input id="Node.grad-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Node.grad-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">grad</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span></span><span class="return-annotation">) -> <span class="n">Any</span>:</span></span>
 
                 <label class="view-source-button" for="Node.grad-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Node.grad-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Node.grad"></a>
@@ -3125,10 +3241,13 @@ to JIT-compile more complex functions. Alternatively, you can use Goose.</p>
 
                             </div>
                             <div id="Node.has_calculator" class="classattr">
-                                <div class="attr variable">
+                                        <input id="Node.has_calculator-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">has_calculator</span><span class="annotation">: bool</span>
 
         
+                <label class="view-docstring-button" for="Node.has_calculator-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#Node.has_calculator"></a>
     
@@ -3138,10 +3257,13 @@ to JIT-compile more complex functions. Alternatively, you can use Goose.</p>
 
                             </div>
                             <div id="Node.has_distribution" class="classattr">
-                                <div class="attr variable">
+                                        <input id="Node.has_distribution-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">has_distribution</span><span class="annotation">: bool</span>
 
         
+                <label class="view-docstring-button" for="Node.has_distribution-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#Node.has_distribution"></a>
     
@@ -3151,10 +3273,13 @@ to JIT-compile more complex functions. Alternatively, you can use Goose.</p>
 
                             </div>
                             <div id="Node.has_model" class="classattr">
-                                <div class="attr variable">
+                                        <input id="Node.has_model-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">has_model</span><span class="annotation">: bool</span>
 
         
+                <label class="view-docstring-button" for="Node.has_model-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#Node.has_model"></a>
     
@@ -3164,10 +3289,13 @@ to JIT-compile more complex functions. Alternatively, you can use Goose.</p>
 
                             </div>
                             <div id="Node.has_name" class="classattr">
-                                <div class="attr variable">
+                                        <input id="Node.has_name-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">has_name</span><span class="annotation">: bool</span>
 
         
+                <label class="view-docstring-button" for="Node.has_name-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#Node.has_name"></a>
     
@@ -3178,12 +3306,15 @@ to JIT-compile more complex functions. Alternatively, you can use Goose.</p>
                             </div>
                             <div id="Node.input_value_changed" class="classattr">
                                         <input id="Node.input_value_changed-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Node.input_value_changed-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">input_value_changed</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span></span><span class="return-annotation">) -> <span class="n"><a href="#Node">liesel.liesel.Node</a></span>:</span></span>
 
                 <label class="view-source-button" for="Node.input_value_changed-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Node.input_value_changed-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Node.input_value_changed"></a>
@@ -3213,10 +3344,13 @@ as outdated.</p>
 
                             </div>
                             <div id="Node.inputs" class="classattr">
-                                <div class="attr variable">
+                                        <input id="Node.inputs-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">inputs</span><span class="annotation">: set[<a href="#Node">liesel.liesel.Node</a>]</span>
 
         
+                <label class="view-docstring-button" for="Node.inputs-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#Node.inputs"></a>
     
@@ -3226,10 +3360,13 @@ as outdated.</p>
 
                             </div>
                             <div id="Node.jaxified" class="classattr">
-                                <div class="attr variable">
+                                        <input id="Node.jaxified-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">jaxified</span><span class="annotation">: bool</span>
 
         
+                <label class="view-docstring-button" for="Node.jaxified-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#Node.jaxified"></a>
     
@@ -3240,12 +3377,15 @@ as outdated.</p>
                             </div>
                             <div id="Node.jaxify" class="classattr">
                                         <input id="Node.jaxify-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Node.jaxify-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">jaxify</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span></span><span class="return-annotation">) -> <span class="n"><a href="#Node">liesel.liesel.Node</a></span>:</span></span>
 
                 <label class="view-source-button" for="Node.jaxify-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Node.jaxify-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Node.jaxify"></a>
@@ -3269,10 +3409,13 @@ as outdated.</p>
 
                             </div>
                             <div id="Node.log_prob" class="classattr">
-                                <div class="attr variable">
+                                        <input id="Node.log_prob-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">log_prob</span><span class="annotation">: Any</span>
 
         
+                <label class="view-docstring-button" for="Node.log_prob-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#Node.log_prob"></a>
     
@@ -3282,10 +3425,13 @@ as outdated.</p>
 
                             </div>
                             <div id="Node.model" class="classattr">
-                                <div class="attr variable">
+                                        <input id="Node.model-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">model</span><span class="annotation">: <a href="#Model">liesel.liesel.Model</a></span>
 
         
+                <label class="view-docstring-button" for="Node.model-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#Node.model"></a>
     
@@ -3295,10 +3441,13 @@ as outdated.</p>
 
                             </div>
                             <div id="Node.name" class="classattr">
-                                <div class="attr variable">
+                                        <input id="Node.name-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">name</span><span class="annotation">: str</span>
 
         
+                <label class="view-docstring-button" for="Node.name-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#Node.name"></a>
     
@@ -3309,12 +3458,15 @@ as outdated.</p>
                             </div>
                             <div id="Node.own_value_changed" class="classattr">
                                         <input id="Node.own_value_changed-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Node.own_value_changed-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">own_value_changed</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span></span><span class="return-annotation">) -> <span class="n"><a href="#Node">liesel.liesel.Node</a></span>:</span></span>
 
                 <label class="view-source-button" for="Node.own_value_changed-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Node.own_value_changed-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Node.own_value_changed"></a>
@@ -3343,12 +3495,15 @@ as outdated.</p>
                             </div>
                             <div id="Node.set_value" class="classattr">
                                         <input id="Node.set_value-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Node.set_value-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">set_value</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span>, </span><span class="param"><span class="n">value</span><span class="p">:</span> <span class="n">Any</span>, </span><span class="param"><span class="n">update</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span></span><span class="return-annotation">) -> <span class="n"><a href="#Node">liesel.liesel.Node</a></span>:</span></span>
 
                 <label class="view-source-button" for="Node.set_value-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Node.set_value-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Node.set_value"></a>
@@ -3383,10 +3538,13 @@ updates the model.</p>
 
                             </div>
                             <div id="Node.state" class="classattr">
-                                <div class="attr variable">
+                                        <input id="Node.state-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">state</span><span class="annotation">: <a href="#NodeState">liesel.liesel.NodeState</a></span>
 
         
+                <label class="view-docstring-button" for="Node.state-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#Node.state"></a>
     
@@ -3396,10 +3554,13 @@ updates the model.</p>
 
                             </div>
                             <div id="Node.strong" class="classattr">
-                                <div class="attr variable">
+                                        <input id="Node.strong-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">strong</span><span class="annotation">: bool</span>
 
         
+                <label class="view-docstring-button" for="Node.strong-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#Node.strong"></a>
     
@@ -3410,12 +3571,15 @@ updates the model.</p>
                             </div>
                             <div id="Node.unjaxify" class="classattr">
                                         <input id="Node.unjaxify-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Node.unjaxify-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">unjaxify</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span></span><span class="return-annotation">) -> <span class="n"><a href="#Node">liesel.liesel.Node</a></span>:</span></span>
 
                 <label class="view-source-button" for="Node.unjaxify-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Node.unjaxify-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Node.unjaxify"></a>
@@ -3440,12 +3604,15 @@ updates the model.</p>
                             </div>
                             <div id="Node.update" class="classattr">
                                         <input id="Node.update-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Node.update-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">update</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span></span><span class="return-annotation">) -> <span class="n"><a href="#Node">liesel.liesel.Node</a></span>:</span></span>
 
                 <label class="view-source-button" for="Node.update-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Node.update-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Node.update"></a>
@@ -3476,12 +3643,15 @@ updates the model.</p>
                             </div>
                             <div id="Node.validate" class="classattr">
                                         <input id="Node.validate-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Node.validate-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">validate</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span></span><span class="return-annotation">) -> <span class="n"><a href="#Node">liesel.liesel.Node</a></span>:</span></span>
 
                 <label class="view-source-button" for="Node.validate-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Node.validate-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Node.validate"></a>
@@ -3500,10 +3670,13 @@ updates the model.</p>
 
                             </div>
                             <div id="Node.value" class="classattr">
-                                <div class="attr variable">
+                                        <input id="Node.value-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">value</span><span class="annotation">: Any</span>
 
         
+                <label class="view-docstring-button" for="Node.value-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#Node.value"></a>
     
@@ -3513,10 +3686,13 @@ updates the model.</p>
 
                             </div>
                             <div id="Node.weak" class="classattr">
-                                <div class="attr variable">
+                                        <input id="Node.weak-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">weak</span><span class="annotation">: bool</span>
 
         
+                <label class="view-docstring-button" for="Node.weak-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#Node.weak"></a>
     
@@ -3528,12 +3704,15 @@ updates the model.</p>
                 </section>
                 <section id="NodeCalculator">
                             <input id="NodeCalculator-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="NodeCalculator-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">NodeCalculator</span><wbr>(<span class="base">liesel.liesel.nodes.NodeComponent</span>):
 
                 <label class="view-source-button" for="NodeCalculator-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="NodeCalculator-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#NodeCalculator"></a>
@@ -3560,6 +3739,7 @@ Superclass of the <code>AdditionCalculator</code>, the <code>BijectorCalculator<
 
                             <div id="NodeCalculator.value" class="classattr">
                                         <input id="NodeCalculator.value-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="NodeCalculator.value-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
                     <div class="decorator">@abstractmethod</div>
 
@@ -3567,6 +3747,8 @@ Superclass of the <code>AdditionCalculator</code>, the <code>BijectorCalculator<
         <span class="name">value</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span></span><span class="return-annotation">) -> <span class="n">Any</span>:</span></span>
 
                 <label class="view-source-button" for="NodeCalculator.value-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="NodeCalculator.value-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#NodeCalculator.value"></a>
@@ -3596,12 +3778,15 @@ Superclass of the <code>AdditionCalculator</code>, the <code>BijectorCalculator<
                 </section>
                 <section id="NodeDistribution">
                             <input id="NodeDistribution-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="NodeDistribution-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">NodeDistribution</span><wbr>(<span class="base">liesel.liesel.nodes.NodeComponent</span>):
 
                 <label class="view-source-button" for="NodeDistribution-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="NodeDistribution-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#NodeDistribution"></a>
@@ -3767,6 +3952,7 @@ The inputs of the distribution.</p>
 
                 <label class="view-source-button" for="NodeDistribution.__init__-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#NodeDistribution.__init__"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="NodeDistribution.__init__-252"><a href="#NodeDistribution.__init__-252"><span class="linenos">252</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
@@ -3786,12 +3972,15 @@ The inputs of the distribution.</p>
                             </div>
                             <div id="NodeDistribution.distribution" class="classattr">
                                         <input id="NodeDistribution.distribution-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="NodeDistribution.distribution-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">distribution</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span></span><span class="return-annotation">) -> <span class="n">Any</span>:</span></span>
 
                 <label class="view-source-button" for="NodeDistribution.distribution-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="NodeDistribution.distribution-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#NodeDistribution.distribution"></a>
@@ -3830,12 +4019,15 @@ The inputs of the distribution.</p>
                             </div>
                             <div id="NodeDistribution.transform" class="classattr">
                                         <input id="NodeDistribution.transform-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="NodeDistribution.transform-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">transform</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span>, </span><span class="param"><span class="n">bijector</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span></span><span class="return-annotation">) -> <span class="n"><a href="#NodeDistribution">liesel.liesel.NodeDistribution</a></span>:</span></span>
 
                 <label class="view-source-button" for="NodeDistribution.transform-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="NodeDistribution.transform-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#NodeDistribution.transform"></a>
@@ -3859,12 +4051,15 @@ The inputs of the distribution.</p>
                             </div>
                             <div id="NodeDistribution.cdf" class="classattr">
                                         <input id="NodeDistribution.cdf-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="NodeDistribution.cdf-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">cdf</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span>, </span><span class="param"><span class="n">value</span><span class="p">:</span> <span class="n">Any</span>, </span><span class="param"><span class="o">**</span><span class="n">kwargs</span></span><span class="return-annotation">) -> <span class="n">Any</span>:</span></span>
 
                 <label class="view-source-button" for="NodeDistribution.cdf-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="NodeDistribution.cdf-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#NodeDistribution.cdf"></a>
@@ -3888,12 +4083,15 @@ The inputs of the distribution.</p>
                             </div>
                             <div id="NodeDistribution.log_prob" class="classattr">
                                         <input id="NodeDistribution.log_prob-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="NodeDistribution.log_prob-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">log_prob</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span>, </span><span class="param"><span class="n">value</span><span class="p">:</span> <span class="n">Any</span>, </span><span class="param"><span class="o">**</span><span class="n">kwargs</span></span><span class="return-annotation">) -> <span class="n">Any</span>:</span></span>
 
                 <label class="view-source-button" for="NodeDistribution.log_prob-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="NodeDistribution.log_prob-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#NodeDistribution.log_prob"></a>
@@ -3918,12 +4116,15 @@ The inputs of the distribution.</p>
                             </div>
                             <div id="NodeDistribution.mean" class="classattr">
                                         <input id="NodeDistribution.mean-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="NodeDistribution.mean-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">mean</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span>, </span><span class="param"><span class="o">**</span><span class="n">kwargs</span></span><span class="return-annotation">) -> <span class="n">Any</span>:</span></span>
 
                 <label class="view-source-button" for="NodeDistribution.mean-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="NodeDistribution.mean-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#NodeDistribution.mean"></a>
@@ -3947,12 +4148,15 @@ The inputs of the distribution.</p>
                             </div>
                             <div id="NodeDistribution.sample" class="classattr">
                                         <input id="NodeDistribution.sample-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="NodeDistribution.sample-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">sample</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span>, </span><span class="param"><span class="n">sample_shape</span><span class="o">=</span><span class="p">()</span>, </span><span class="param"><span class="n">seed</span><span class="o">=</span><span class="kc">None</span>, </span><span class="param"><span class="o">**</span><span class="n">kwargs</span></span><span class="return-annotation">) -> <span class="n">Any</span>:</span></span>
 
                 <label class="view-source-button" for="NodeDistribution.sample-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="NodeDistribution.sample-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#NodeDistribution.sample"></a>
@@ -3996,6 +4200,7 @@ The inputs of the distribution.</p>
 
                 <label class="view-source-button" for="NodeGroup-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#NodeGroup"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="NodeGroup-708"><a href="#NodeGroup-708"><span class="linenos">708</span></a><span class="k">class</span> <span class="nc">NodeGroup</span><span class="p">(</span><span class="nb">dict</span><span class="p">):</span>
@@ -4037,12 +4242,15 @@ The inputs of the distribution.</p>
 
                             <div id="NodeGroup.copy" class="classattr">
                                         <input id="NodeGroup.copy-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="NodeGroup.copy-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">copy</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span></span><span class="return-annotation">) -> <span class="n"><a href="#NodeGroup">liesel.liesel.NodeGroup</a></span>:</span></span>
 
                 <label class="view-source-button" for="NodeGroup.copy-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="NodeGroup.copy-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#NodeGroup.copy"></a>
@@ -4059,10 +4267,13 @@ The inputs of the distribution.</p>
 
                             </div>
                             <div id="NodeGroup.has_name" class="classattr">
-                                <div class="attr variable">
+                                        <input id="NodeGroup.has_name-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">has_name</span><span class="annotation">: bool</span>
 
         
+                <label class="view-docstring-button" for="NodeGroup.has_name-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#NodeGroup.has_name"></a>
     
@@ -4072,10 +4283,13 @@ The inputs of the distribution.</p>
 
                             </div>
                             <div id="NodeGroup.name" class="classattr">
-                                <div class="attr variable">
+                                        <input id="NodeGroup.name-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">name</span><span class="annotation">: str</span>
 
         
+                <label class="view-docstring-button" for="NodeGroup.name-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#NodeGroup.name"></a>
     
@@ -4105,12 +4319,15 @@ The inputs of the distribution.</p>
                 </section>
                 <section id="NodeState">
                             <input id="NodeState-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="NodeState-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">NodeState</span><wbr>(<span class="base">typing.NamedTuple</span>):
 
                 <label class="view-source-button" for="NodeState-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="NodeState-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#NodeState"></a>
@@ -4130,11 +4347,14 @@ The inputs of the distribution.</p>
 
 
                             <div id="NodeState.__init__" class="classattr">
-                                <div class="attr function">
+                                        <input id="NodeState.__init__-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr function">
             
         <span class="name">NodeState</span><span class="signature pdoc-code condensed">(<span class="param"><span class="n">value</span><span class="p">:</span> <span class="n">Any</span>, </span><span class="param"><span class="n">log_prob</span><span class="p">:</span> <span class="n">Any</span></span>)</span>
 
         
+                <label class="view-docstring-button" for="NodeState.__init__-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#NodeState.__init__"></a>
     
@@ -4144,10 +4364,13 @@ The inputs of the distribution.</p>
 
                             </div>
                             <div id="NodeState.value" class="classattr">
-                                <div class="attr variable">
+                                        <input id="NodeState.value-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">value</span><span class="annotation">: Any</span>
 
         
+                <label class="view-docstring-button" for="NodeState.value-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#NodeState.value"></a>
     
@@ -4157,10 +4380,13 @@ The inputs of the distribution.</p>
 
                             </div>
                             <div id="NodeState.log_prob" class="classattr">
-                                <div class="attr variable">
+                                        <input id="NodeState.log_prob-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">log_prob</span><span class="annotation">: Any</span>
 
         
+                <label class="view-docstring-button" for="NodeState.log_prob-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#NodeState.log_prob"></a>
     
@@ -4182,12 +4408,15 @@ The inputs of the distribution.</p>
                 </section>
                 <section id="PIT">
                             <input id="PIT-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="PIT-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">PIT</span><wbr>(<span class="base"><a href="#Node">liesel.liesel.Node[liesel.liesel.PITCalculator]</a></span>):
 
                 <label class="view-source-button" for="PIT-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="PIT-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#PIT"></a>
@@ -4218,6 +4447,7 @@ The inputs of the distribution.</p>
 
                 <label class="view-source-button" for="PIT.__init__-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#PIT.__init__"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="PIT.__init__-949"><a href="#PIT.__init__-949"><span class="linenos">949</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
@@ -4269,12 +4499,15 @@ The inputs of the distribution.</p>
                 </section>
                 <section id="Parameter">
                             <input id="Parameter-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Parameter-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">Parameter</span><wbr>(<span class="base">typing.Generic[~TNodeCalculator]</span>):
 
                 <label class="view-source-button" for="Parameter-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Parameter-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Parameter"></a>
@@ -4322,6 +4555,7 @@ The inputs of the distribution.</p>
 
                 <label class="view-source-button" for="Parameter.__init__-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#Parameter.__init__"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="Parameter.__init__-762"><a href="#Parameter.__init__-762"><span class="linenos">762</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
@@ -4339,12 +4573,15 @@ The inputs of the distribution.</p>
                             </div>
                             <div id="Parameter.initialize_with_mean" class="classattr">
                                         <input id="Parameter.initialize_with_mean-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Parameter.initialize_with_mean-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">initialize_with_mean</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span></span><span class="return-annotation">) -> <span class="n"><a href="#Parameter">liesel.liesel.Parameter</a></span>:</span></span>
 
                 <label class="view-source-button" for="Parameter.initialize_with_mean-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Parameter.initialize_with_mean-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Parameter.initialize_with_mean"></a>
@@ -4407,10 +4644,13 @@ The inputs of the distribution.</p>
                             </div>
                 </section>
                 <section id="Position">
-                    <div class="attr variable">
+                            <input id="Position-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">Position</span><span class="default_value"> = <a href="#Position">liesel.liesel.Position</a></span>
 
         
+                <label class="view-docstring-button" for="Position-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#Position"></a>
     
@@ -4421,12 +4661,15 @@ The inputs of the distribution.</p>
                 </section>
                 <section id="Predictor">
                             <input id="Predictor-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Predictor-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">Predictor</span><wbr>(<span class="base"><a href="#Node">liesel.liesel.Node[liesel.liesel.AdditionCalculator]</a></span>):
 
                 <label class="view-source-button" for="Predictor-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Predictor-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Predictor"></a>
@@ -4477,12 +4720,15 @@ The inputs of the distribution.</p>
                 </section>
                 <section id="RegressionCoef">
                             <input id="RegressionCoef-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="RegressionCoef-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">RegressionCoef</span><wbr>(<span class="base">typing.Generic[~TNodeCalculator]</span>):
 
                 <label class="view-source-button" for="RegressionCoef-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="RegressionCoef-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#RegressionCoef"></a>
@@ -4534,12 +4780,15 @@ The inputs of the distribution.</p>
                 </section>
                 <section id="Response">
                             <input id="Response-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Response-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">Response</span><wbr>(<span class="base">typing.Generic[~TNodeCalculator]</span>):
 
                 <label class="view-source-button" for="Response-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Response-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Response"></a>
@@ -4587,12 +4836,15 @@ The inputs of the distribution.</p>
                 </section>
                 <section id="Smooth">
                             <input id="Smooth-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Smooth-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">Smooth</span><wbr>(<span class="base"><a href="#Node">liesel.liesel.Node[liesel.liesel.SmoothCalculator]</a></span>):
 
                 <label class="view-source-button" for="Smooth-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Smooth-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Smooth"></a>
@@ -4623,6 +4875,7 @@ The inputs of the distribution.</p>
 
                 <label class="view-source-button" for="Smooth.__init__-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#Smooth.__init__"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="Smooth.__init__-985"><a href="#Smooth.__init__-985"><span class="linenos">985</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
@@ -4674,12 +4927,15 @@ The inputs of the distribution.</p>
                 </section>
                 <section id="SmoothingParam">
                             <input id="SmoothingParam-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="SmoothingParam-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">SmoothingParam</span><wbr>(<span class="base">typing.Generic[~TNodeCalculator]</span>):
 
                 <label class="view-source-button" for="SmoothingParam-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="SmoothingParam-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#SmoothingParam"></a>
@@ -4731,12 +4987,15 @@ The inputs of the distribution.</p>
                 </section>
                 <section id="dist_reg_mcmc">
                             <input id="dist_reg_mcmc-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="dist_reg_mcmc-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">dist_reg_mcmc</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">model</span><span class="p">:</span> <span class="n"><a href="#Model">liesel.liesel.Model</a></span>,</span><span class="param">	<span class="n">seed</span><span class="p">:</span> <span class="nb">int</span>,</span><span class="param">	<span class="n">num_chains</span><span class="p">:</span> <span class="nb">int</span></span><span class="return-annotation">) -> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">EngineBuilder</span>:</span></span>
 
                 <label class="view-source-button" for="dist_reg_mcmc-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="dist_reg_mcmc-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#dist_reg_mcmc"></a>
@@ -4791,12 +5050,15 @@ parameters for a distributional regression model.</p>
                 </section>
                 <section id="load_model">
                             <input id="load_model-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="load_model-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">load_model</span><span class="signature pdoc-code condensed">(<span class="param"><span class="n">path</span><span class="p">:</span> <span class="nb">str</span></span><span class="return-annotation">) -> <span class="n"><a href="#Model">liesel.liesel.Model</a></span>:</span></span>
 
                 <label class="view-source-button" for="load_model-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="load_model-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#load_model"></a>
@@ -4817,12 +5079,15 @@ parameters for a distributional regression model.</p>
                 </section>
                 <section id="plot_model">
                             <input id="plot_model-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="plot_model-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">plot_model</span><span class="signature pdoc-code condensed">(<span class="param"><span class="n">model</span>, </span><span class="param"><span class="n">show</span><span class="o">=</span><span class="kc">True</span>, </span><span class="param"><span class="n">save_path</span><span class="o">=</span><span class="kc">None</span>, </span><span class="param"><span class="n">width</span><span class="o">=</span><span class="mi">20</span>, </span><span class="param"><span class="n">height</span><span class="o">=</span><span class="mi">15</span>, </span><span class="param"><span class="n">prog</span><span class="o">=</span><span class="s1">&#39;dot&#39;</span></span>)</span>
 
                 <label class="view-source-button" for="plot_model-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="plot_model-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#plot_model"></a>
@@ -4899,12 +5164,15 @@ twopi.</p></li>
                 </section>
                 <section id="save_model">
                             <input id="save_model-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="save_model-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">save_model</span><span class="signature pdoc-code condensed">(<span class="param"><span class="n">model</span><span class="p">:</span> <span class="n"><a href="#Model">liesel.liesel.Model</a></span>, </span><span class="param"><span class="n">path</span><span class="p">:</span> <span class="nb">str</span></span><span class="return-annotation">) -> <span class="kc">None</span>:</span></span>
 
                 <label class="view-source-button" for="save_model-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="save_model-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#save_model"></a>
@@ -4923,12 +5191,15 @@ twopi.</p></li>
                 </section>
                 <section id="tau2_gibbs_kernel">
                             <input id="tau2_gibbs_kernel-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="tau2_gibbs_kernel-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">tau2_gibbs_kernel</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">group</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">liesel</span><span class="o">.</span><span class="n">distreg</span><span class="o">.</span><span class="n">NPSmoothGroup</span></span><span class="return-annotation">) -> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">gibbs</span><span class="o">.</span><span class="n">GibbsKernel</span>:</span></span>
 
                 <label class="view-source-button" for="tau2_gibbs_kernel-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="tau2_gibbs_kernel-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#tau2_gibbs_kernel"></a>
@@ -4964,12 +5235,15 @@ twopi.</p></li>
                 </section>
                 <section id="transform_parameter">
                             <input id="transform_parameter-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="transform_parameter-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">transform_parameter</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">node</span><span class="p">:</span> <span class="n"><a href="#Node">liesel.liesel.Node</a></span>,</span><span class="param">	<span class="n">bijector</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span></span><span class="return-annotation">) -> <span class="n"><a href="#NodeGroup">liesel.liesel.NodeGroup</a></span>:</span></span>
 
                 <label class="view-source-button" for="transform_parameter-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="transform_parameter-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#transform_parameter"></a>

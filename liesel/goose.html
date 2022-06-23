@@ -11,7 +11,7 @@
     <style>/*! theme.css */:root{--pdoc-background:#fff;}.pdoc{--text:#212529;--muted:#6c757d;--link:#3660a5;--link-hover:#1659c5;--code:#f8f8f8;--active:#fff598;--accent:#eee;--accent2:#c1c1c1;--nav-hover:rgba(255, 255, 255, 0.5);--name:#0066BB;--def:#008800;--annotation:#007020;}</style>
     <style>/*! layout.css */html, body{width:100%;height:100%;}html, main{scroll-behavior:smooth;}body{background-color:var(--pdoc-background);}@media (max-width:769px){#navtoggle{cursor:pointer;position:absolute;width:50px;height:40px;top:1rem;right:1rem;border-color:var(--text);color:var(--text);display:flex;opacity:0.8;}#navtoggle:hover{opacity:1;}#togglestate + div{display:none;}#togglestate:checked + div{display:inherit;}main, header{padding:2rem 3vw;}header + main{margin-top:-3rem;}.git-button{display:none !important;}nav input[type="search"]{max-width:77%;}nav input[type="search"]:first-child{margin-top:-6px;}nav input[type="search"]:valid ~ *{display:none !important;}}@media (min-width:770px){:root{--sidebar-width:clamp(12.5rem, 28vw, 22rem);}nav{position:fixed;overflow:auto;height:100vh;width:var(--sidebar-width);}main, header{padding:3rem 2rem 3rem calc(var(--sidebar-width) + 3rem);width:calc(54rem + var(--sidebar-width));max-width:100%;}header + main{margin-top:-4rem;}#navtoggle{display:none;}}#togglestate{position:absolute;height:0;opacity:0;}nav.pdoc{--pad:clamp(0.5rem, 2vw, 1.75rem);--indent:1.5rem;background-color:var(--accent);border-right:1px solid var(--accent2);box-shadow:0 0 20px rgba(50, 50, 50, .2) inset;padding:0 0 0 var(--pad);overflow-wrap:anywhere;scrollbar-width:thin; scrollbar-color:var(--accent2) transparent }nav.pdoc::-webkit-scrollbar{width:.4rem; }nav.pdoc::-webkit-scrollbar-thumb{background-color:var(--accent2); }nav.pdoc > div{padding:var(--pad) 0;}nav.pdoc .module-list-button{display:inline-flex;align-items:center;color:var(--text);border-color:var(--muted);margin-bottom:1rem;}nav.pdoc .module-list-button:hover{border-color:var(--text);}nav.pdoc input[type=search]{display:block;outline-offset:0;width:calc(100% - var(--pad));}nav.pdoc .logo{max-width:calc(100% - var(--pad));max-height:35vh;display:block;margin:0 auto 1rem;transform:translate(calc(-.5 * var(--pad)), 0);}nav.pdoc ul{list-style:none;padding-left:0;}nav.pdoc > div > ul{margin-left:calc(0px - var(--pad));}nav.pdoc li a{padding:.2rem 0 .2rem calc(var(--pad) + var(--indent));}nav.pdoc > div > ul > li > a{padding-left:var(--pad);}nav.pdoc li{transition:all 100ms;}nav.pdoc li:hover{background-color:var(--nav-hover);}nav.pdoc a, nav.pdoc a:hover{color:var(--text);}nav.pdoc a{display:block;}nav.pdoc > h2:first-of-type{margin-top:1.5rem;}nav.pdoc .class:before{content:"class ";color:var(--muted);}nav.pdoc .function:after{content:"()";color:var(--muted);}nav.pdoc footer:before{content:"";display:block;width:calc(100% - var(--pad));border-top:solid var(--accent2) 1px;margin-top:1.5rem;padding-top:.5rem;}nav.pdoc footer{font-size:small;}</style>
     <style>/*! content.css */.pdoc{color:var(--text);box-sizing:border-box;line-height:1.5;background:none;}.pdoc .pdoc-button{display:inline-block;border:solid black 1px;border-radius:2px;font-size:.75rem;padding:calc(0.5em - 1px) 1em;transition:100ms all;}.pdoc .pdoc-alert{padding:1rem 1rem 1rem calc(1.5rem + 24px);border:1px solid transparent;border-radius:.25rem;background-repeat:no-repeat;background-position:1rem center;margin-bottom:1rem;}.pdoc .pdoc-alert > *:last-child{margin-bottom:0;}.pdoc .pdoc-alert-note {color:#084298;background-color:#cfe2ff;border-color:#b6d4fe;background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20fill%3D%22%23084298%22%20viewBox%3D%220%200%2016%2016%22%3E%3Cpath%20d%3D%22M8%2016A8%208%200%201%200%208%200a8%208%200%200%200%200%2016zm.93-9.412-1%204.705c-.07.34.029.533.304.533.194%200%20.487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703%200-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381%202.29-.287zM8%205.5a1%201%200%201%201%200-2%201%201%200%200%201%200%202z%22/%3E%3C/svg%3E");}.pdoc .pdoc-alert-warning{color:#664d03;background-color:#fff3cd;border-color:#ffecb5;background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20fill%3D%22%23664d03%22%20viewBox%3D%220%200%2016%2016%22%3E%3Cpath%20d%3D%22M8.982%201.566a1.13%201.13%200%200%200-1.96%200L.165%2013.233c-.457.778.091%201.767.98%201.767h13.713c.889%200%201.438-.99.98-1.767L8.982%201.566zM8%205c.535%200%20.954.462.9.995l-.35%203.507a.552.552%200%200%201-1.1%200L7.1%205.995A.905.905%200%200%201%208%205zm.002%206a1%201%200%201%201%200%202%201%201%200%200%201%200-2z%22/%3E%3C/svg%3E");}.pdoc .pdoc-alert-danger{color:#842029;background-color:#f8d7da;border-color:#f5c2c7;background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20fill%3D%22%23842029%22%20viewBox%3D%220%200%2016%2016%22%3E%3Cpath%20d%3D%22M5.52.359A.5.5%200%200%201%206%200h4a.5.5%200%200%201%20.474.658L8.694%206H12.5a.5.5%200%200%201%20.395.807l-7%209a.5.5%200%200%201-.873-.454L6.823%209.5H3.5a.5.5%200%200%201-.48-.641l2.5-8.5z%22/%3E%3C/svg%3E");}.pdoc .visually-hidden{position:absolute !important;width:1px !important;height:1px !important;padding:0 !important;margin:-1px !important;overflow:hidden !important;clip:rect(0, 0, 0, 0) !important;white-space:nowrap !important;border:0 !important;}.pdoc h1, .pdoc h2, .pdoc h3{font-weight:300;margin:.3em 0;padding:.2em 0;}.pdoc > section:not(.module-info) h1{font-size:1.5rem;font-weight:500;}.pdoc > section:not(.module-info) h2{font-size:1.4rem;font-weight:500;}.pdoc > section:not(.module-info) h3{font-size:1.3rem;font-weight:500;}.pdoc > section:not(.module-info) h4{font-size:1.2rem;}.pdoc > section:not(.module-info) h5{font-size:1.1rem;}.pdoc a{text-decoration:none;color:var(--link);}.pdoc a:hover{color:var(--link-hover);}.pdoc blockquote{margin-left:2rem;}.pdoc pre{border-top:1px solid var(--accent2);border-bottom:1px solid var(--accent2);margin-top:0;margin-bottom:1em;padding:.5rem 0 .5rem .5rem;overflow-x:auto;background-color:var(--code);}.pdoc code{color:var(--text);padding:.2em .4em;margin:0;font-size:85%;background-color:var(--code);border-radius:6px;}.pdoc a > code{color:inherit;}.pdoc pre > code{display:inline-block;font-size:inherit;background:none;border:none;padding:0;}.pdoc > section:not(.module-info){margin-bottom:1.5rem;}.pdoc .modulename{margin-top:0;font-weight:bold;}.pdoc .modulename a{color:var(--link);transition:100ms all;}.pdoc .git-button{float:right;border:solid var(--link) 1px;}.pdoc .git-button:hover{background-color:var(--link);color:var(--pdoc-background);}.view-source-toggle-state,.view-source-toggle-state ~ .pdoc-code{display:none;}.view-source-toggle-state:checked ~ .pdoc-code{display:block;}.view-source-button{display:inline-block;float:right;font-size:.75rem;line-height:1.5rem;color:var(--muted);padding:0 .4rem 0 1.3rem;cursor:pointer;text-indent:-2px;}.view-source-button > span{visibility:hidden;}.module-info .view-source-button{float:none;display:flex;justify-content:flex-end;margin:-1.2rem .4rem -.2rem 0;}.view-source-button::before{position:absolute;content:"View Source";display:list-item;list-style-type:disclosure-closed;}.view-source-toggle-state:checked ~ .attr .view-source-button::before,.view-source-toggle-state:checked ~ .view-source-button::before{list-style-type:disclosure-open;}.pdoc .docstring{margin-bottom:1.5rem;}.pdoc section:not(.module-info) .docstring{margin-left:clamp(0rem, 5vw - 2rem, 1rem);}.pdoc .docstring .pdoc-code{margin-left:1em;margin-right:1em;}.pdoc h1:target,.pdoc h2:target,.pdoc h3:target,.pdoc h4:target,.pdoc h5:target,.pdoc h6:target,.pdoc .pdoc-code > pre > span:target{background-color:var(--active);box-shadow:-1rem 0 0 0 var(--active);}.pdoc .pdoc-code > pre > span:target{display:block;}.pdoc div:target > .attr,.pdoc section:target > .attr,.pdoc dd:target > a{background-color:var(--active);}.pdoc *{scroll-margin:2rem;}.pdoc .pdoc-code .linenos{user-select:none;}.pdoc .attr:hover{filter:contrast(0.95);}.pdoc section, .pdoc .classattr{position:relative;}.pdoc .headerlink{--width:clamp(1rem, 3vw, 2rem);position:absolute;top:0;left:calc(0rem - var(--width));transition:all 100ms ease-in-out;opacity:0;}.pdoc .headerlink::before{content:"#";display:block;text-align:center;width:var(--width);height:2.3rem;line-height:2.3rem;font-size:1.5rem;}.pdoc .attr:hover ~ .headerlink,.pdoc *:target > .headerlink,.pdoc .headerlink:hover{opacity:1;}.pdoc .attr{display:block;margin:.5rem 0 .5rem;padding:.4rem .4rem .4rem 1rem;background-color:var(--accent);overflow-x:auto;}.pdoc .classattr{margin-left:2rem;}.pdoc .name{color:var(--name);font-weight:bold;}.pdoc .def{color:var(--def);font-weight:bold;}.pdoc .signature{background-color:transparent;}.pdoc .param, .pdoc .return-annotation{white-space:pre;}.pdoc .signature.multiline .param{display:block;}.pdoc .signature.condensed .param{display:inline-block;}.pdoc .annotation{color:var(--annotation);}.pdoc .inherited{margin-left:2rem;}.pdoc .inherited dt{font-weight:700;}.pdoc .inherited dt, .pdoc .inherited dd{display:inline;margin-left:0;margin-bottom:.5rem;}.pdoc .inherited dd:not(:last-child):after{content:", ";}.pdoc .inherited .class:before{content:"class ";}.pdoc .inherited .function a:after{content:"()";}.pdoc .search-result .docstring{overflow:auto;max-height:25vh;}.pdoc .search-result.focused > .attr{background-color:var(--active);}.pdoc .attribution{margin-top:2rem;display:block;opacity:0.5;transition:all 200ms;filter:grayscale(100%);}.pdoc .attribution:hover{opacity:1;filter:grayscale(0%);}.pdoc .attribution img{margin-left:5px;height:35px;vertical-align:middle;width:70px;transition:all 200ms;}.pdoc table{display:block;width:max-content;max-width:100%;overflow:auto;margin-bottom:1rem;}.pdoc table th{font-weight:600;}.pdoc table th, .pdoc table td{padding:6px 13px;border:1px solid var(--accent2);}</style>
-    <style>/*! custom.css */nav.pdoc{box-shadow:none;}.pdoc > section{margin-bottom:5rem !important;}.pdoc > section:last-of-type{margin-bottom:0rem !important;}.pdoc > section:not(.module-info) > .attr{background-color:#e0e0e0;border-left-style:solid;border-left-color:#ff99d6;border-left-width:0.5rem;padding-left:0.5rem;}li > p{margin-bottom:0.5rem;}</style></head>
+    <style>/*! custom.css */nav.pdoc{box-shadow:none;}.pdoc > section{margin-bottom:5rem !important;}.pdoc > section:last-of-type{margin-bottom:0rem !important;}.pdoc > section:not(.module-info) > .attr{border-left-style:solid;border-left-color:#ff99d6;border-left-width:0.5rem;padding-left:0.5rem;}li > p{margin-bottom:0.5rem;}.view-docstring-toggle-state,.view-docstring-toggle-state ~ .docstring{display:none;}.view-docstring-toggle-state:checked ~ .docstring{display:block;}.view-docstring-button{display:inline-block;float:right;font-size:.75rem;line-height:1.5rem;color:var(--muted);padding:0 .4rem 0 1.3rem;cursor:pointer;text-indent:-2px;}.view-docstring-button > span{visibility:hidden;}.view-docstring-button::before{position:absolute;content:"View Docstring";display:list-item;list-style-type:disclosure-closed;}.view-docstring-toggle-state:checked ~ .attr .view-docstring-button::before,.view-docstring-toggle-state:checked ~ .view-docstring-button::before{list-style-type:disclosure-open;}</style></head>
 <body>
     <nav class="pdoc">
         <label id="navtoggle" for="togglestate" class="pdoc-button"><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'><path stroke-linecap='round' stroke="currentColor" stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/></svg></label>
@@ -463,12 +463,15 @@ research software).</p>
             </section>
                 <section id="DictModel">
                             <input id="DictModel-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="DictModel-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">DictModel</span>:
 
                 <label class="view-source-button" for="DictModel-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="DictModel-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#DictModel"></a>
@@ -507,6 +510,7 @@ and a corresponding log-probability function.</p>
 
                 <label class="view-source-button" for="DictModel.__init__-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#DictModel.__init__"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="DictModel.__init__-20"><a href="#DictModel.__init__-20"><span class="linenos">20</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">log_prob_fn</span><span class="p">:</span> <span class="n">LogProbFunction</span><span class="p">):</span>
@@ -526,6 +530,7 @@ and a corresponding log-probability function.</p>
 
                 <label class="view-source-button" for="DictModel.extract_position-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#DictModel.extract_position"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="DictModel.extract_position-23"><a href="#DictModel.extract_position-23"><span class="linenos">23</span></a>    <span class="k">def</span> <span class="nf">extract_position</span><span class="p">(</span>
@@ -547,6 +552,7 @@ and a corresponding log-probability function.</p>
 
                 <label class="view-source-button" for="DictModel.update_state-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#DictModel.update_state"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="DictModel.update_state-28"><a href="#DictModel.update_state-28"><span class="linenos">28</span></a>    <span class="k">def</span> <span class="nf">update_state</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">position</span><span class="p">:</span> <span class="n">Position</span><span class="p">,</span> <span class="n">model_state</span><span class="p">:</span> <span class="n">ModelState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ModelState</span><span class="p">:</span>
@@ -566,6 +572,7 @@ and a corresponding log-probability function.</p>
 
                 <label class="view-source-button" for="DictModel.log_prob-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#DictModel.log_prob"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="DictModel.log_prob-31"><a href="#DictModel.log_prob-31"><span class="linenos">31</span></a>    <span class="k">def</span> <span class="nf">log_prob</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model_state</span><span class="p">:</span> <span class="n">ModelState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
@@ -579,12 +586,15 @@ and a corresponding log-probability function.</p>
                 </section>
                 <section id="Engine">
                             <input id="Engine-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Engine-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">Engine</span>:
 
                 <label class="view-source-button" for="Engine-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Engine-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Engine"></a>
@@ -1056,6 +1066,7 @@ and a corresponding log-probability function.</p>
 
                 <label class="view-source-button" for="Engine.__init__-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#Engine.__init__"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="Engine.__init__-180"><a href="#Engine.__init__-180"><span class="linenos">180</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
@@ -1141,10 +1152,13 @@ and a corresponding log-probability function.</p>
 
                             </div>
                             <div id="Engine.current_epoch" class="classattr">
-                                <div class="attr variable">
+                                        <input id="Engine.current_epoch-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">current_epoch</span><span class="annotation">: liesel.goose.epoch.EpochState</span>
 
         
+                <label class="view-docstring-button" for="Engine.current_epoch-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#Engine.current_epoch"></a>
     
@@ -1157,12 +1171,15 @@ and a corresponding log-probability function.</p>
                             </div>
                             <div id="Engine.sample_all_epochs" class="classattr">
                                         <input id="Engine.sample_all_epochs-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Engine.sample_all_epochs-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">sample_all_epochs</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span></span>)</span>
 
                 <label class="view-source-button" for="Engine.sample_all_epochs-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Engine.sample_all_epochs-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Engine.sample_all_epochs"></a>
@@ -1186,12 +1203,15 @@ and a corresponding log-probability function.</p>
                             </div>
                             <div id="Engine.sample_next_epoch" class="classattr">
                                         <input id="Engine.sample_next_epoch-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Engine.sample_next_epoch-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">sample_next_epoch</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span></span>)</span>
 
                 <label class="view-source-button" for="Engine.sample_next_epoch-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Engine.sample_next_epoch-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Engine.sample_next_epoch"></a>
@@ -1228,12 +1248,15 @@ and a corresponding log-probability function.</p>
                             </div>
                             <div id="Engine.append_epoch" class="classattr">
                                         <input id="Engine.append_epoch-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Engine.append_epoch-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">append_epoch</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span>, </span><span class="param"><span class="n">epoch</span><span class="p">:</span> <span class="n"><a href="#EpochConfig">liesel.goose.EpochConfig</a></span></span>)</span>
 
                 <label class="view-source-button" for="Engine.append_epoch-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Engine.append_epoch-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Engine.append_epoch"></a>
@@ -1250,12 +1273,15 @@ and a corresponding log-probability function.</p>
                             </div>
                             <div id="Engine.is_sampling_done" class="classattr">
                                         <input id="Engine.is_sampling_done-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Engine.is_sampling_done-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">is_sampling_done</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span></span><span class="return-annotation">) -> <span class="nb">bool</span>:</span></span>
 
                 <label class="view-source-button" for="Engine.is_sampling_done-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Engine.is_sampling_done-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Engine.is_sampling_done"></a>
@@ -1272,12 +1298,15 @@ and a corresponding log-probability function.</p>
                             </div>
                             <div id="Engine.get_results" class="classattr">
                                         <input id="Engine.get_results-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Engine.get_results-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">get_results</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span></span><span class="return-annotation">) -> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">engine</span><span class="o">.</span><span class="n">SamplingResult</span>:</span></span>
 
                 <label class="view-source-button" for="Engine.get_results-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Engine.get_results-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Engine.get_results"></a>
@@ -1312,12 +1341,15 @@ and a corresponding log-probability function.</p>
                 </section>
                 <section id="EngineBuilder">
                             <input id="EngineBuilder-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="EngineBuilder-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">EngineBuilder</span>:
 
                 <label class="view-source-button" for="EngineBuilder-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="EngineBuilder-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#EngineBuilder"></a>
@@ -1538,6 +1570,7 @@ to initialize the engine can be set with the method <code><a href="#EngineBuilde
 
                 <label class="view-source-button" for="EngineBuilder.__init__-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#EngineBuilder.__init__"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="EngineBuilder.__init__-59"><a href="#EngineBuilder.__init__-59"><span class="linenos">59</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">num_chains</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
@@ -1572,10 +1605,13 @@ to initialize the engine can be set with the method <code><a href="#EngineBuilde
 
                             </div>
                             <div id="EngineBuilder.positions_included" class="classattr">
-                                <div class="attr variable">
+                                        <input id="EngineBuilder.positions_included-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">positions_included</span><span class="annotation">: list[str]</span>
 
         
+                <label class="view-docstring-button" for="EngineBuilder.positions_included-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#EngineBuilder.positions_included"></a>
     
@@ -1585,10 +1621,13 @@ to initialize the engine can be set with the method <code><a href="#EngineBuilde
 
                             </div>
                             <div id="EngineBuilder.positions_excluded" class="classattr">
-                                <div class="attr variable">
+                                        <input id="EngineBuilder.positions_excluded-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">positions_excluded</span><span class="annotation">: list[str]</span>
 
         
+                <label class="view-docstring-button" for="EngineBuilder.positions_excluded-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#EngineBuilder.positions_excluded"></a>
     
@@ -1601,12 +1640,15 @@ to initialize the engine can be set with the method <code><a href="#EngineBuilde
                             </div>
                             <div id="EngineBuilder.set_engine_seed" class="classattr">
                                         <input id="EngineBuilder.set_engine_seed-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="EngineBuilder.set_engine_seed-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">set_engine_seed</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span>, </span><span class="param"><span class="n">seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">jax</span><span class="o">.</span><span class="n">_src</span><span class="o">.</span><span class="n">prng</span><span class="o">.</span><span class="n">PRNGKeyArray</span></span>)</span>
 
                 <label class="view-source-button" for="EngineBuilder.set_engine_seed-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="EngineBuilder.set_engine_seed-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#EngineBuilder.set_engine_seed"></a>
@@ -1631,6 +1673,7 @@ to initialize the engine can be set with the method <code><a href="#EngineBuilde
             <span class="name">engine_seed</span><span class="annotation">: jax._src.prng.PRNGKeyArray</span>
 
         
+        
     </div>
     <a class="headerlink" href="#EngineBuilder.engine_seed"></a>
     
@@ -1639,12 +1682,15 @@ to initialize the engine can be set with the method <code><a href="#EngineBuilde
                             </div>
                             <div id="EngineBuilder.add_kernel" class="classattr">
                                         <input id="EngineBuilder.add_kernel-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="EngineBuilder.add_kernel-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">add_kernel</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span>, </span><span class="param"><span class="n">kernel</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">Kernel</span></span>)</span>
 
                 <label class="view-source-button" for="EngineBuilder.add_kernel-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="EngineBuilder.add_kernel-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#EngineBuilder.add_kernel"></a>
@@ -1664,6 +1710,7 @@ to initialize the engine can be set with the method <code><a href="#EngineBuilde
             <span class="name">kernels</span><span class="annotation">: tuple[liesel.goose.types.Kernel, ...]</span>
 
         
+        
     </div>
     <a class="headerlink" href="#EngineBuilder.kernels"></a>
     
@@ -1672,12 +1719,15 @@ to initialize the engine can be set with the method <code><a href="#EngineBuilde
                             </div>
                             <div id="EngineBuilder.add_quantity_generator" class="classattr">
                                         <input id="EngineBuilder.add_quantity_generator-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="EngineBuilder.add_quantity_generator-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">add_quantity_generator</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span>, </span><span class="param"><span class="n">generator</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">QuantityGenerator</span></span>)</span>
 
                 <label class="view-source-button" for="EngineBuilder.add_quantity_generator-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="EngineBuilder.add_quantity_generator-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#EngineBuilder.add_quantity_generator"></a>
@@ -1697,6 +1747,7 @@ to initialize the engine can be set with the method <code><a href="#EngineBuilde
             <span class="name">quantity_generators</span><span class="annotation">: tuple[liesel.goose.types.QuantityGenerator, ...]</span>
 
         
+        
     </div>
     <a class="headerlink" href="#EngineBuilder.quantity_generators"></a>
     
@@ -1705,12 +1756,15 @@ to initialize the engine can be set with the method <code><a href="#EngineBuilde
                             </div>
                             <div id="EngineBuilder.set_initial_values" class="classattr">
                                         <input id="EngineBuilder.set_initial_values-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="EngineBuilder.set_initial_values-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">set_initial_values</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span>, </span><span class="param"><span class="n">model_state</span><span class="p">:</span> <span class="n">Any</span>, </span><span class="param"><span class="n">multiple_chains</span><span class="o">=</span><span class="kc">False</span></span>)</span>
 
                 <label class="view-source-button" for="EngineBuilder.set_initial_values-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="EngineBuilder.set_initial_values-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#EngineBuilder.set_initial_values"></a>
@@ -1745,6 +1799,7 @@ Note that if <code>multiple_chains</code> is true, the first axis of each leaf o
             <span class="name">model_state</span><span class="annotation">: liesel.option.Option[typing.Any]</span>
 
         
+        
     </div>
     <a class="headerlink" href="#EngineBuilder.model_state"></a>
     
@@ -1753,12 +1808,15 @@ Note that if <code>multiple_chains</code> is true, the first axis of each leaf o
                             </div>
                             <div id="EngineBuilder.set_epochs" class="classattr">
                                         <input id="EngineBuilder.set_epochs-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="EngineBuilder.set_epochs-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">set_epochs</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">epochs</span><span class="p">:</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Iterable</span><span class="p">[</span><span class="n"><a href="#EpochConfig">liesel.goose.EpochConfig</a></span><span class="p">]</span></span>)</span>
 
                 <label class="view-source-button" for="EngineBuilder.set_epochs-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="EngineBuilder.set_epochs-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#EngineBuilder.set_epochs"></a>
@@ -1775,12 +1833,15 @@ Note that if <code>multiple_chains</code> is true, the first axis of each leaf o
                             </div>
                             <div id="EngineBuilder.set_duration" class="classattr">
                                         <input id="EngineBuilder.set_duration-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="EngineBuilder.set_duration-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">set_duration</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">warmup_duration</span><span class="p">:</span> <span class="nb">int</span>,</span><span class="param">	<span class="n">posterior_duration</span><span class="p">:</span> <span class="nb">int</span>,</span><span class="param">	<span class="n">term_duration</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">50</span></span>)</span>
 
                 <label class="view-source-button" for="EngineBuilder.set_duration-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="EngineBuilder.set_duration-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#EngineBuilder.set_duration"></a>
@@ -1813,6 +1874,7 @@ like dual averaging can converge.</p>
             <span class="name">epochs</span><span class="annotation">: tuple[<a href="#EpochConfig">liesel.goose.EpochConfig</a>, ...]</span>
 
         
+        
     </div>
     <a class="headerlink" href="#EngineBuilder.epochs"></a>
     
@@ -1821,12 +1883,15 @@ like dual averaging can converge.</p>
                             </div>
                             <div id="EngineBuilder.set_model" class="classattr">
                                         <input id="EngineBuilder.set_model-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="EngineBuilder.set_model-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">set_model</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span>, </span><span class="param"><span class="n">model</span><span class="p">:</span> <span class="n"><a href="#ModelInterface">liesel.goose.ModelInterface</a></span></span>)</span>
 
                 <label class="view-source-button" for="EngineBuilder.set_model-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="EngineBuilder.set_model-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#EngineBuilder.set_model"></a>
@@ -1843,12 +1908,15 @@ like dual averaging can converge.</p>
                             </div>
                             <div id="EngineBuilder.build" class="classattr">
                                         <input id="EngineBuilder.build-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="EngineBuilder.build-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">build</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span></span><span class="return-annotation">) -> <span class="n"><a href="#Engine">liesel.goose.Engine</a></span>:</span></span>
 
                 <label class="view-source-button" for="EngineBuilder.build-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="EngineBuilder.build-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#EngineBuilder.build"></a>
@@ -1933,6 +2001,7 @@ like dual averaging can converge.</p>
                 </section>
                 <section id="EpochConfig">
                             <input id="EpochConfig-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="EpochConfig-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
                     <div class="decorator">@register_dataclass_as_pytree</div>
         <div class="decorator">@dataclass</div>
@@ -1941,6 +2010,8 @@ like dual averaging can converge.</p>
     <span class="name">EpochConfig</span>:
 
                 <label class="view-source-button" for="EpochConfig-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="EpochConfig-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#EpochConfig"></a>
@@ -1973,6 +2044,7 @@ like dual averaging can converge.</p>
         <span class="name">EpochConfig</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="nb">type</span><span class="p">:</span> <span class="n"><a href="#EpochType">liesel.goose.EpochType</a></span>,</span><span class="param">	<span class="n">duration</span><span class="p">:</span> <span class="nb">int</span>,</span><span class="param">	<span class="n">thinning</span><span class="p">:</span> <span class="nb">int</span>,</span><span class="param">	<span class="n">optional</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span></span>)</span>
 
         
+        
     </div>
     <a class="headerlink" href="#EpochConfig.__init__"></a>
     
@@ -1988,6 +2060,7 @@ like dual averaging can converge.</p>
 
                 <label class="view-source-button" for="EpochConfig.to_state-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#EpochConfig.to_state"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="EpochConfig.to_state-58"><a href="#EpochConfig.to_state-58"><span class="linenos">58</span></a>    <span class="k">def</span> <span class="nf">to_state</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nth_epoch</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">time_before_epoch</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EpochState</span><span class="p">:</span>
@@ -2007,12 +2080,15 @@ like dual averaging can converge.</p>
                 </section>
                 <section id="EpochType">
                             <input id="EpochType-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="EpochType-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">EpochType</span><wbr>(<span class="base">enum.IntEnum</span>):
 
                 <label class="view-source-button" for="EpochType-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="EpochType-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#EpochType"></a>
@@ -2060,6 +2136,7 @@ like dual averaging can converge.</p>
             <span class="name">INITIAL_VALUES</span><span class="default_value"> = &lt;<a href="#EpochType.INITIAL_VALUES">EpochType.INITIAL_VALUES</a>: 0&gt;</span>
 
         
+        
     </div>
     <a class="headerlink" href="#EpochType.INITIAL_VALUES"></a>
     
@@ -2070,6 +2147,7 @@ like dual averaging can converge.</p>
                                 <div class="attr variable">
             <span class="name">FAST_ADAPTATION</span><span class="default_value"> = &lt;<a href="#EpochType.FAST_ADAPTATION">EpochType.FAST_ADAPTATION</a>: 1&gt;</span>
 
+        
         
     </div>
     <a class="headerlink" href="#EpochType.FAST_ADAPTATION"></a>
@@ -2082,6 +2160,7 @@ like dual averaging can converge.</p>
             <span class="name">SLOW_ADAPTATION</span><span class="default_value"> = &lt;<a href="#EpochType.SLOW_ADAPTATION">EpochType.SLOW_ADAPTATION</a>: 2&gt;</span>
 
         
+        
     </div>
     <a class="headerlink" href="#EpochType.SLOW_ADAPTATION"></a>
     
@@ -2092,6 +2171,7 @@ like dual averaging can converge.</p>
                                 <div class="attr variable">
             <span class="name">BURNIN</span><span class="default_value"> = &lt;<a href="#EpochType.BURNIN">EpochType.BURNIN</a>: 3&gt;</span>
 
+        
         
     </div>
     <a class="headerlink" href="#EpochType.BURNIN"></a>
@@ -2104,6 +2184,7 @@ like dual averaging can converge.</p>
             <span class="name">POSTERIOR</span><span class="default_value"> = &lt;<a href="#EpochType.POSTERIOR">EpochType.POSTERIOR</a>: 4&gt;</span>
 
         
+        
     </div>
     <a class="headerlink" href="#EpochType.POSTERIOR"></a>
     
@@ -2112,6 +2193,7 @@ like dual averaging can converge.</p>
                             </div>
                             <div id="EpochType.is_adaptation" class="classattr">
                                         <input id="EpochType.is_adaptation-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="EpochType.is_adaptation-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
                     <div class="decorator">@staticmethod</div>
 
@@ -2119,6 +2201,8 @@ like dual averaging can converge.</p>
         <span class="name">is_adaptation</span><span class="signature pdoc-code condensed">(<span class="param"><span class="n">epoch_type</span><span class="p">:</span> <span class="n"><a href="#EpochType">liesel.goose.EpochType</a></span></span><span class="return-annotation">) -> <span class="nb">bool</span>:</span></span>
 
                 <label class="view-source-button" for="EpochType.is_adaptation-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="EpochType.is_adaptation-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#EpochType.is_adaptation"></a>
@@ -2144,6 +2228,7 @@ Implemented as a static method to make it jittable.</p>
                             </div>
                             <div id="EpochType.is_warmup" class="classattr">
                                         <input id="EpochType.is_warmup-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="EpochType.is_warmup-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
                     <div class="decorator">@staticmethod</div>
 
@@ -2151,6 +2236,8 @@ Implemented as a static method to make it jittable.</p>
         <span class="name">is_warmup</span><span class="signature pdoc-code condensed">(<span class="param"><span class="n">epoch_type</span><span class="p">:</span> <span class="n"><a href="#EpochType">liesel.goose.EpochType</a></span></span><span class="return-annotation">) -> <span class="nb">bool</span>:</span></span>
 
                 <label class="view-source-button" for="EpochType.is_warmup-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="EpochType.is_warmup-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#EpochType.is_warmup"></a>
@@ -2200,12 +2287,15 @@ Implemented as a static method to make it jittable.</p>
                 </section>
                 <section id="GibbsKernel">
                             <input id="GibbsKernel-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="GibbsKernel-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">GibbsKernel</span><wbr>(<span class="base">liesel.goose.kernel.ModelMixin</span>, <span class="base">liesel.goose.types.Kernel[typing.Any, liesel.goose.kernel.DefaultTransitionInfo, liesel.goose.kernel.DefaultTuningInfo]</span>):
 
                 <label class="view-source-button" for="GibbsKernel-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="GibbsKernel-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#GibbsKernel"></a>
@@ -2325,6 +2415,7 @@ Implemented as a static method to make it jittable.</p>
 
                 <label class="view-source-button" for="GibbsKernel.__init__-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#GibbsKernel.__init__"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="GibbsKernel.__init__-35"><a href="#GibbsKernel.__init__-35"><span class="linenos">35</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
@@ -2342,10 +2433,13 @@ Implemented as a static method to make it jittable.</p>
 
                             </div>
                             <div id="GibbsKernel.error_book" class="classattr">
-                                <div class="attr variable">
+                                        <input id="GibbsKernel.error_book-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">error_book</span><span class="annotation">: ClassVar[dict[int, str]]</span><span class="default_value"> = {0: &#39;no errors&#39;}</span>
 
         
+                <label class="view-docstring-button" for="GibbsKernel.error_book-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#GibbsKernel.error_book"></a>
     
@@ -2357,10 +2451,13 @@ Implemented as a static method to make it jittable.</p>
 
                             </div>
                             <div id="GibbsKernel.needs_history" class="classattr">
-                                <div class="attr variable">
+                                        <input id="GibbsKernel.needs_history-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">needs_history</span><span class="annotation">: ClassVar[bool]</span><span class="default_value"> = False</span>
 
         
+                <label class="view-docstring-button" for="GibbsKernel.needs_history-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#GibbsKernel.needs_history"></a>
     
@@ -2370,10 +2467,13 @@ Implemented as a static method to make it jittable.</p>
 
                             </div>
                             <div id="GibbsKernel.identifier" class="classattr">
-                                <div class="attr variable">
+                                        <input id="GibbsKernel.identifier-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr variable">
             <span class="name">identifier</span><span class="annotation">: str</span><span class="default_value"> = &#39;&#39;</span>
 
         
+                <label class="view-docstring-button" for="GibbsKernel.identifier-view-docstring"><span>View Docstring</span></label>
+
     </div>
     <a class="headerlink" href="#GibbsKernel.identifier"></a>
     
@@ -2385,12 +2485,15 @@ if it is an empty string.</p>
                             </div>
                             <div id="GibbsKernel.init_state" class="classattr">
                                         <input id="GibbsKernel.init_state-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="GibbsKernel.init_state-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">init_state</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span>, </span><span class="param"><span class="n">prng_key</span>, </span><span class="param"><span class="n">model_state</span></span>)</span>
 
                 <label class="view-source-button" for="GibbsKernel.init_state-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="GibbsKernel.init_state-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#GibbsKernel.init_state"></a>
@@ -2410,12 +2513,15 @@ if it is an empty string.</p>
                             </div>
                             <div id="GibbsKernel.transition" class="classattr">
                                         <input id="GibbsKernel.transition-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="GibbsKernel.transition-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">transition</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">prng_key</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">_src</span><span class="o">.</span><span class="n">prng</span><span class="o">.</span><span class="n">PRNGKeyArray</span>,</span><span class="param">	<span class="n">kernel_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">model_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">epoch</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">epoch</span><span class="o">.</span><span class="n">EpochState</span></span><span class="return-annotation">) -> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">kernel</span><span class="o">.</span><span class="n">TransitionOutcome</span><span class="p">[</span><span class="n">typing</span><span class="o">.</span><span class="n">Any</span><span class="p">,</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">kernel</span><span class="o">.</span><span class="n">DefaultTransitionInfo</span><span class="p">]</span>:</span></span>
 
                 <label class="view-source-button" for="GibbsKernel.transition-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="GibbsKernel.transition-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#GibbsKernel.transition"></a>
@@ -2449,12 +2555,15 @@ if it is an empty string.</p>
                             </div>
                             <div id="GibbsKernel.tune" class="classattr">
                                         <input id="GibbsKernel.tune-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="GibbsKernel.tune-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">tune</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">prng_key</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">_src</span><span class="o">.</span><span class="n">prng</span><span class="o">.</span><span class="n">PRNGKeyArray</span>,</span><span class="param">	<span class="n">kernel_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">model_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">epoch</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">epoch</span><span class="o">.</span><span class="n">EpochState</span>,</span><span class="param">	<span class="n">history</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n"><a href="#Position">liesel.goose.Position</a></span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span></span><span class="return-annotation">) -> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">kernel</span><span class="o">.</span><span class="n">TuningOutcome</span><span class="p">[</span><span class="n">typing</span><span class="o">.</span><span class="n">Any</span><span class="p">,</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">kernel</span><span class="o">.</span><span class="n">DefaultTuningInfo</span><span class="p">]</span>:</span></span>
 
                 <label class="view-source-button" for="GibbsKernel.tune-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="GibbsKernel.tune-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#GibbsKernel.tune"></a>
@@ -2482,12 +2591,15 @@ if it is an empty string.</p>
                             </div>
                             <div id="GibbsKernel.start_epoch" class="classattr">
                                         <input id="GibbsKernel.start_epoch-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="GibbsKernel.start_epoch-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">start_epoch</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">prng_key</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">_src</span><span class="o">.</span><span class="n">prng</span><span class="o">.</span><span class="n">PRNGKeyArray</span>,</span><span class="param">	<span class="n">kernel_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">model_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">epoch</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">epoch</span><span class="o">.</span><span class="n">EpochState</span></span><span class="return-annotation">) -> <span class="n">Any</span>:</span></span>
 
                 <label class="view-source-button" for="GibbsKernel.start_epoch-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="GibbsKernel.start_epoch-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#GibbsKernel.start_epoch"></a>
@@ -2513,12 +2625,15 @@ if it is an empty string.</p>
                             </div>
                             <div id="GibbsKernel.end_epoch" class="classattr">
                                         <input id="GibbsKernel.end_epoch-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="GibbsKernel.end_epoch-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">end_epoch</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">prng_key</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">_src</span><span class="o">.</span><span class="n">prng</span><span class="o">.</span><span class="n">PRNGKeyArray</span>,</span><span class="param">	<span class="n">kernel_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">model_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">epoch</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">epoch</span><span class="o">.</span><span class="n">EpochState</span></span><span class="return-annotation">) -> <span class="n">Any</span>:</span></span>
 
                 <label class="view-source-button" for="GibbsKernel.end_epoch-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="GibbsKernel.end_epoch-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#GibbsKernel.end_epoch"></a>
@@ -2544,12 +2659,15 @@ if it is an empty string.</p>
                             </div>
                             <div id="GibbsKernel.end_warmup" class="classattr">
                                         <input id="GibbsKernel.end_warmup-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="GibbsKernel.end_warmup-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">end_warmup</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">prng_key</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">_src</span><span class="o">.</span><span class="n">prng</span><span class="o">.</span><span class="n">PRNGKeyArray</span>,</span><span class="param">	<span class="n">kernel_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">model_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">tuning_history</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">TuningInfo</span> <span class="o">|</span> <span class="kc">None</span></span><span class="return-annotation">) -> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">kernel</span><span class="o">.</span><span class="n">WarmupOutcome</span><span class="p">[</span><span class="n">typing</span><span class="o">.</span><span class="n">Any</span><span class="p">]</span>:</span></span>
 
                 <label class="view-source-button" for="GibbsKernel.end_warmup-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="GibbsKernel.end_warmup-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#GibbsKernel.end_warmup"></a>
@@ -2590,12 +2708,15 @@ if it is an empty string.</p>
                 </section>
                 <section id="HMCKernel">
                             <input id="HMCKernel-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="HMCKernel-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">HMCKernel</span><wbr>(<span class="base">liesel.goose.kernel.ModelMixin</span>, <span class="base">liesel.goose.kernel.TransitionMixin[liesel.goose.hmc.HMCKernelState, liesel.goose.hmc.HMCTransitionInfo]</span>, <span class="base">liesel.goose.kernel.TuningMixin[liesel.goose.hmc.HMCKernelState, liesel.goose.kernel.DefaultTuningInfo]</span>):
 
                 <label class="view-source-button" for="HMCKernel-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="HMCKernel-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#HMCKernel"></a>
@@ -2842,6 +2963,7 @@ implementing the <code>liesel.goose.types.Kernel</code> protocol.</p>
 
                 <label class="view-source-button" for="HMCKernel.__init__-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#HMCKernel.__init__"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="HMCKernel.__init__-90"><a href="#HMCKernel.__init__-90"><span class="linenos"> 90</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
@@ -2880,6 +3002,7 @@ implementing the <code>liesel.goose.types.Kernel</code> protocol.</p>
             <span class="name">error_book</span><span class="annotation">: ClassVar[dict[int, str]]</span><span class="default_value"> = {0: &#39;no errors&#39;, 1: &#39;divergent transition&#39;}</span>
 
         
+        
     </div>
     <a class="headerlink" href="#HMCKernel.error_book"></a>
     
@@ -2890,6 +3013,7 @@ implementing the <code>liesel.goose.types.Kernel</code> protocol.</p>
                                 <div class="attr variable">
             <span class="name">needs_history</span><span class="annotation">: ClassVar[bool]</span><span class="default_value"> = True</span>
 
+        
         
     </div>
     <a class="headerlink" href="#HMCKernel.needs_history"></a>
@@ -2902,6 +3026,7 @@ implementing the <code>liesel.goose.types.Kernel</code> protocol.</p>
             <span class="name">identifier</span><span class="annotation">: str</span><span class="default_value"> = &#39;&#39;</span>
 
         
+        
     </div>
     <a class="headerlink" href="#HMCKernel.identifier"></a>
     
@@ -2910,12 +3035,15 @@ implementing the <code>liesel.goose.types.Kernel</code> protocol.</p>
                             </div>
                             <div id="HMCKernel.init_state" class="classattr">
                                         <input id="HMCKernel.init_state-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="HMCKernel.init_state-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">init_state</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span>, </span><span class="param"><span class="n">prng_key</span>, </span><span class="param"><span class="n">model_state</span></span>)</span>
 
                 <label class="view-source-button" for="HMCKernel.init_state-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="HMCKernel.init_state-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#HMCKernel.init_state"></a>
@@ -2973,12 +3101,15 @@ by the user).</p>
                             </div>
                             <div id="HMCKernel.start_epoch" class="classattr">
                                         <input id="HMCKernel.start_epoch-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="HMCKernel.start_epoch-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">start_epoch</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">prng_key</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">_src</span><span class="o">.</span><span class="n">prng</span><span class="o">.</span><span class="n">PRNGKeyArray</span>,</span><span class="param">	<span class="n">kernel_state</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">hmc</span><span class="o">.</span><span class="n">HMCKernelState</span>,</span><span class="param">	<span class="n">model_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">epoch</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">epoch</span><span class="o">.</span><span class="n">EpochState</span></span><span class="return-annotation">) -> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">hmc</span><span class="o">.</span><span class="n">HMCKernelState</span>:</span></span>
 
                 <label class="view-source-button" for="HMCKernel.start_epoch-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="HMCKernel.start_epoch-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#HMCKernel.start_epoch"></a>
@@ -3005,12 +3136,15 @@ by the user).</p>
                             </div>
                             <div id="HMCKernel.end_epoch" class="classattr">
                                         <input id="HMCKernel.end_epoch-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="HMCKernel.end_epoch-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">end_epoch</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">prng_key</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">_src</span><span class="o">.</span><span class="n">prng</span><span class="o">.</span><span class="n">PRNGKeyArray</span>,</span><span class="param">	<span class="n">kernel_state</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">hmc</span><span class="o">.</span><span class="n">HMCKernelState</span>,</span><span class="param">	<span class="n">model_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">epoch</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">epoch</span><span class="o">.</span><span class="n">EpochState</span></span><span class="return-annotation">) -> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">hmc</span><span class="o">.</span><span class="n">HMCKernelState</span>:</span></span>
 
                 <label class="view-source-button" for="HMCKernel.end_epoch-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="HMCKernel.end_epoch-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#HMCKernel.end_epoch"></a>
@@ -3037,12 +3171,15 @@ by the user).</p>
                             </div>
                             <div id="HMCKernel.end_warmup" class="classattr">
                                         <input id="HMCKernel.end_warmup-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="HMCKernel.end_warmup-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">end_warmup</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">prng_key</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">_src</span><span class="o">.</span><span class="n">prng</span><span class="o">.</span><span class="n">PRNGKeyArray</span>,</span><span class="param">	<span class="n">kernel_state</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">hmc</span><span class="o">.</span><span class="n">HMCKernelState</span>,</span><span class="param">	<span class="n">model_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">tuning_history</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">kernel</span><span class="o">.</span><span class="n">DefaultTuningInfo</span> <span class="o">|</span> <span class="kc">None</span></span><span class="return-annotation">) -> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">kernel</span><span class="o">.</span><span class="n">WarmupOutcome</span><span class="p">[</span><span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">hmc</span><span class="o">.</span><span class="n">HMCKernelState</span><span class="p">]</span>:</span></span>
 
                 <label class="view-source-button" for="HMCKernel.end_warmup-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="HMCKernel.end_warmup-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#HMCKernel.end_warmup"></a>
@@ -3090,12 +3227,15 @@ by the user).</p>
                 </section>
                 <section id="IWLSKernel">
                             <input id="IWLSKernel-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="IWLSKernel-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">IWLSKernel</span><wbr>(<span class="base">liesel.goose.kernel.ModelMixin</span>, <span class="base">liesel.goose.kernel.TransitionMixin[liesel.goose.iwls.IWLSKernelState, liesel.goose.kernel.DefaultTransitionInfo]</span>):
 
                 <label class="view-source-button" for="IWLSKernel-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="IWLSKernel-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#IWLSKernel"></a>
@@ -3325,6 +3465,7 @@ implementing the <code>liesel.goose.types.Kernel</code> protocol.</p>
 
                 <label class="view-source-button" for="IWLSKernel.__init__-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#IWLSKernel.__init__"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="IWLSKernel.__init__-63"><a href="#IWLSKernel.__init__-63"><span class="linenos">63</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
@@ -3358,6 +3499,7 @@ implementing the <code>liesel.goose.types.Kernel</code> protocol.</p>
             <span class="name">error_book</span><span class="annotation">: ClassVar[dict[int, str]]</span><span class="default_value"> = {0: &#39;no errors&#39;, 90: &#39;nan acceptance prob&#39;}</span>
 
         
+        
     </div>
     <a class="headerlink" href="#IWLSKernel.error_book"></a>
     
@@ -3368,6 +3510,7 @@ implementing the <code>liesel.goose.types.Kernel</code> protocol.</p>
                                 <div class="attr variable">
             <span class="name">needs_history</span><span class="annotation">: ClassVar[bool]</span><span class="default_value"> = False</span>
 
+        
         
     </div>
     <a class="headerlink" href="#IWLSKernel.needs_history"></a>
@@ -3380,6 +3523,7 @@ implementing the <code>liesel.goose.types.Kernel</code> protocol.</p>
             <span class="name">identifier</span><span class="annotation">: str</span><span class="default_value"> = &#39;&#39;</span>
 
         
+        
     </div>
     <a class="headerlink" href="#IWLSKernel.identifier"></a>
     
@@ -3388,12 +3532,15 @@ implementing the <code>liesel.goose.types.Kernel</code> protocol.</p>
                             </div>
                             <div id="IWLSKernel.init_state" class="classattr">
                                         <input id="IWLSKernel.init_state-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="IWLSKernel.init_state-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">init_state</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span>, </span><span class="param"><span class="n">prng_key</span>, </span><span class="param"><span class="n">model_state</span></span>)</span>
 
                 <label class="view-source-button" for="IWLSKernel.init_state-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="IWLSKernel.init_state-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#IWLSKernel.init_state"></a>
@@ -3413,12 +3560,15 @@ implementing the <code>liesel.goose.types.Kernel</code> protocol.</p>
                             </div>
                             <div id="IWLSKernel.tune" class="classattr">
                                         <input id="IWLSKernel.tune-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="IWLSKernel.tune-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">tune</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">prng_key</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">_src</span><span class="o">.</span><span class="n">prng</span><span class="o">.</span><span class="n">PRNGKeyArray</span>,</span><span class="param">	<span class="n">kernel_state</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">iwls</span><span class="o">.</span><span class="n">IWLSKernelState</span>,</span><span class="param">	<span class="n">model_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">epoch</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">epoch</span><span class="o">.</span><span class="n">EpochState</span>,</span><span class="param">	<span class="n">history</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n"><a href="#Position">liesel.goose.Position</a></span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span></span><span class="return-annotation">) -> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">kernel</span><span class="o">.</span><span class="n">TuningOutcome</span><span class="p">[</span><span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">iwls</span><span class="o">.</span><span class="n">IWLSKernelState</span><span class="p">,</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">kernel</span><span class="o">.</span><span class="n">DefaultTuningInfo</span><span class="p">]</span>:</span></span>
 
                 <label class="view-source-button" for="IWLSKernel.tune-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="IWLSKernel.tune-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#IWLSKernel.tune"></a>
@@ -3446,12 +3596,15 @@ implementing the <code>liesel.goose.types.Kernel</code> protocol.</p>
                             </div>
                             <div id="IWLSKernel.start_epoch" class="classattr">
                                         <input id="IWLSKernel.start_epoch-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="IWLSKernel.start_epoch-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">start_epoch</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">prng_key</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">_src</span><span class="o">.</span><span class="n">prng</span><span class="o">.</span><span class="n">PRNGKeyArray</span>,</span><span class="param">	<span class="n">kernel_state</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">iwls</span><span class="o">.</span><span class="n">IWLSKernelState</span>,</span><span class="param">	<span class="n">model_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">epoch</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">epoch</span><span class="o">.</span><span class="n">EpochState</span></span><span class="return-annotation">) -> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">iwls</span><span class="o">.</span><span class="n">IWLSKernelState</span>:</span></span>
 
                 <label class="view-source-button" for="IWLSKernel.start_epoch-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="IWLSKernel.start_epoch-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#IWLSKernel.start_epoch"></a>
@@ -3478,12 +3631,15 @@ implementing the <code>liesel.goose.types.Kernel</code> protocol.</p>
                             </div>
                             <div id="IWLSKernel.end_epoch" class="classattr">
                                         <input id="IWLSKernel.end_epoch-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="IWLSKernel.end_epoch-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">end_epoch</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">prng_key</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">_src</span><span class="o">.</span><span class="n">prng</span><span class="o">.</span><span class="n">PRNGKeyArray</span>,</span><span class="param">	<span class="n">kernel_state</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">iwls</span><span class="o">.</span><span class="n">IWLSKernelState</span>,</span><span class="param">	<span class="n">model_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">epoch</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">epoch</span><span class="o">.</span><span class="n">EpochState</span></span><span class="return-annotation">) -> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">iwls</span><span class="o">.</span><span class="n">IWLSKernelState</span>:</span></span>
 
                 <label class="view-source-button" for="IWLSKernel.end_epoch-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="IWLSKernel.end_epoch-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#IWLSKernel.end_epoch"></a>
@@ -3510,12 +3666,15 @@ implementing the <code>liesel.goose.types.Kernel</code> protocol.</p>
                             </div>
                             <div id="IWLSKernel.end_warmup" class="classattr">
                                         <input id="IWLSKernel.end_warmup-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="IWLSKernel.end_warmup-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">end_warmup</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">prng_key</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">_src</span><span class="o">.</span><span class="n">prng</span><span class="o">.</span><span class="n">PRNGKeyArray</span>,</span><span class="param">	<span class="n">kernel_state</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">iwls</span><span class="o">.</span><span class="n">IWLSKernelState</span>,</span><span class="param">	<span class="n">model_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">tuning_history</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">kernel</span><span class="o">.</span><span class="n">DefaultTuningInfo</span> <span class="o">|</span> <span class="kc">None</span></span><span class="return-annotation">) -> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">kernel</span><span class="o">.</span><span class="n">WarmupOutcome</span><span class="p">[</span><span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">iwls</span><span class="o">.</span><span class="n">IWLSKernelState</span><span class="p">]</span>:</span></span>
 
                 <label class="view-source-button" for="IWLSKernel.end_warmup-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="IWLSKernel.end_warmup-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#IWLSKernel.end_warmup"></a>
@@ -3559,12 +3718,15 @@ implementing the <code>liesel.goose.types.Kernel</code> protocol.</p>
                 </section>
                 <section id="ModelInterface">
                             <input id="ModelInterface-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="ModelInterface-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">ModelInterface</span><wbr>(<span class="base">typing.Protocol</span>):
 
                 <label class="view-source-button" for="ModelInterface-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="ModelInterface-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#ModelInterface"></a>
@@ -3609,6 +3771,7 @@ the log-probability.</p>
 
                             <div id="ModelInterface.extract_position" class="classattr">
                                         <input id="ModelInterface.extract_position-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="ModelInterface.extract_position-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
                     <div class="decorator">@abstractmethod</div>
 
@@ -3616,6 +3779,8 @@ the log-probability.</p>
         <span class="name">extract_position</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">position_keys</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>,</span><span class="param">	<span class="n">model_state</span><span class="p">:</span> <span class="n">Any</span></span><span class="return-annotation">) -> <span class="n"><a href="#Position">liesel.goose.Position</a></span>:</span></span>
 
                 <label class="view-source-button" for="ModelInterface.extract_position-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="ModelInterface.extract_position-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#ModelInterface.extract_position"></a>
@@ -3642,6 +3807,7 @@ the log-probability.</p>
                             </div>
                             <div id="ModelInterface.update_state" class="classattr">
                                         <input id="ModelInterface.update_state-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="ModelInterface.update_state-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
                     <div class="decorator">@abstractmethod</div>
 
@@ -3649,6 +3815,8 @@ the log-probability.</p>
         <span class="name">update_state</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span>, </span><span class="param"><span class="n">position</span><span class="p">:</span> <span class="n"><a href="#Position">liesel.goose.Position</a></span>, </span><span class="param"><span class="n">model_state</span><span class="p">:</span> <span class="n">Any</span></span><span class="return-annotation">) -> <span class="n">Any</span>:</span></span>
 
                 <label class="view-source-button" for="ModelInterface.update_state-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="ModelInterface.update_state-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#ModelInterface.update_state"></a>
@@ -3667,6 +3835,7 @@ the log-probability.</p>
                             </div>
                             <div id="ModelInterface.log_prob" class="classattr">
                                         <input id="ModelInterface.log_prob-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="ModelInterface.log_prob-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
                     <div class="decorator">@abstractmethod</div>
 
@@ -3674,6 +3843,8 @@ the log-probability.</p>
         <span class="name">log_prob</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span>, </span><span class="param"><span class="n">model_state</span><span class="p">:</span> <span class="n">Any</span></span><span class="return-annotation">) -> <span class="nb">float</span>:</span></span>
 
                 <label class="view-source-button" for="ModelInterface.log_prob-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="ModelInterface.log_prob-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#ModelInterface.log_prob"></a>
@@ -3693,12 +3864,15 @@ the log-probability.</p>
                 </section>
                 <section id="NUTSKernel">
                             <input id="NUTSKernel-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="NUTSKernel-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">NUTSKernel</span><wbr>(<span class="base">liesel.goose.kernel.ModelMixin</span>, <span class="base">liesel.goose.kernel.TransitionMixin[liesel.goose.nuts.NUTSKernelState, liesel.goose.nuts.NUTSTransitionInfo]</span>, <span class="base">liesel.goose.kernel.TuningMixin[liesel.goose.nuts.NUTSKernelState, liesel.goose.kernel.DefaultTuningInfo]</span>):
 
                 <label class="view-source-button" for="NUTSKernel-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="NUTSKernel-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#NUTSKernel"></a>
@@ -3943,6 +4117,7 @@ implementing the <code>liesel.goose.types.Kernel</code> protocol.</p>
 
                 <label class="view-source-button" for="NUTSKernel.__init__-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#NUTSKernel.__init__"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="NUTSKernel.__init__-106"><a href="#NUTSKernel.__init__-106"><span class="linenos">106</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
@@ -3981,6 +4156,7 @@ implementing the <code>liesel.goose.types.Kernel</code> protocol.</p>
             <span class="name">error_book</span><span class="annotation">: ClassVar[dict[int, str]]</span><span class="default_value"> = {0: &#39;no errors&#39;, 1: &#39;divergent transition&#39;}</span>
 
         
+        
     </div>
     <a class="headerlink" href="#NUTSKernel.error_book"></a>
     
@@ -3991,6 +4167,7 @@ implementing the <code>liesel.goose.types.Kernel</code> protocol.</p>
                                 <div class="attr variable">
             <span class="name">needs_history</span><span class="annotation">: ClassVar[bool]</span><span class="default_value"> = True</span>
 
+        
         
     </div>
     <a class="headerlink" href="#NUTSKernel.needs_history"></a>
@@ -4003,6 +4180,7 @@ implementing the <code>liesel.goose.types.Kernel</code> protocol.</p>
             <span class="name">identifier</span><span class="annotation">: str</span><span class="default_value"> = &#39;&#39;</span>
 
         
+        
     </div>
     <a class="headerlink" href="#NUTSKernel.identifier"></a>
     
@@ -4011,12 +4189,15 @@ implementing the <code>liesel.goose.types.Kernel</code> protocol.</p>
                             </div>
                             <div id="NUTSKernel.init_state" class="classattr">
                                         <input id="NUTSKernel.init_state-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="NUTSKernel.init_state-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">init_state</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span>, </span><span class="param"><span class="n">prng_key</span>, </span><span class="param"><span class="n">model_state</span></span>)</span>
 
                 <label class="view-source-button" for="NUTSKernel.init_state-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="NUTSKernel.init_state-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#NUTSKernel.init_state"></a>
@@ -4073,12 +4254,15 @@ by the user).</p>
                             </div>
                             <div id="NUTSKernel.start_epoch" class="classattr">
                                         <input id="NUTSKernel.start_epoch-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="NUTSKernel.start_epoch-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">start_epoch</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">prng_key</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">_src</span><span class="o">.</span><span class="n">prng</span><span class="o">.</span><span class="n">PRNGKeyArray</span>,</span><span class="param">	<span class="n">kernel_state</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">nuts</span><span class="o">.</span><span class="n">NUTSKernelState</span>,</span><span class="param">	<span class="n">model_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">epoch</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">epoch</span><span class="o">.</span><span class="n">EpochState</span></span><span class="return-annotation">) -> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">nuts</span><span class="o">.</span><span class="n">NUTSKernelState</span>:</span></span>
 
                 <label class="view-source-button" for="NUTSKernel.start_epoch-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="NUTSKernel.start_epoch-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#NUTSKernel.start_epoch"></a>
@@ -4105,12 +4289,15 @@ by the user).</p>
                             </div>
                             <div id="NUTSKernel.end_epoch" class="classattr">
                                         <input id="NUTSKernel.end_epoch-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="NUTSKernel.end_epoch-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">end_epoch</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">prng_key</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">_src</span><span class="o">.</span><span class="n">prng</span><span class="o">.</span><span class="n">PRNGKeyArray</span>,</span><span class="param">	<span class="n">kernel_state</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">nuts</span><span class="o">.</span><span class="n">NUTSKernelState</span>,</span><span class="param">	<span class="n">model_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">epoch</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">epoch</span><span class="o">.</span><span class="n">EpochState</span></span><span class="return-annotation">) -> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">nuts</span><span class="o">.</span><span class="n">NUTSKernelState</span>:</span></span>
 
                 <label class="view-source-button" for="NUTSKernel.end_epoch-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="NUTSKernel.end_epoch-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#NUTSKernel.end_epoch"></a>
@@ -4137,12 +4324,15 @@ by the user).</p>
                             </div>
                             <div id="NUTSKernel.end_warmup" class="classattr">
                                         <input id="NUTSKernel.end_warmup-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="NUTSKernel.end_warmup-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">end_warmup</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">prng_key</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">_src</span><span class="o">.</span><span class="n">prng</span><span class="o">.</span><span class="n">PRNGKeyArray</span>,</span><span class="param">	<span class="n">kernel_state</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">nuts</span><span class="o">.</span><span class="n">NUTSKernelState</span>,</span><span class="param">	<span class="n">model_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">tuning_history</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">kernel</span><span class="o">.</span><span class="n">DefaultTuningInfo</span> <span class="o">|</span> <span class="kc">None</span></span><span class="return-annotation">) -> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">kernel</span><span class="o">.</span><span class="n">WarmupOutcome</span><span class="p">[</span><span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">nuts</span><span class="o">.</span><span class="n">NUTSKernelState</span><span class="p">]</span>:</span></span>
 
                 <label class="view-source-button" for="NUTSKernel.end_warmup-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="NUTSKernel.end_warmup-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#NUTSKernel.end_warmup"></a>
@@ -4193,6 +4383,7 @@ by the user).</p>
             <span class="name">Position</span><span class="default_value"> = <a href="#Position">liesel.goose.Position</a></span>
 
         
+        
     </div>
     <a class="headerlink" href="#Position"></a>
     
@@ -4201,12 +4392,15 @@ by the user).</p>
                 </section>
                 <section id="RWKernel">
                             <input id="RWKernel-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="RWKernel-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
             
     <span class="def">class</span>
     <span class="name">RWKernel</span><wbr>(<span class="base">liesel.goose.kernel.ModelMixin</span>, <span class="base">liesel.goose.kernel.TransitionMixin[liesel.goose.rw.RWKernelState, liesel.goose.kernel.DefaultTransitionInfo]</span>):
 
                 <label class="view-source-button" for="RWKernel-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="RWKernel-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#RWKernel"></a>
@@ -4375,6 +4569,7 @@ algorithms (1997)</a>.</p>
 
                 <label class="view-source-button" for="RWKernel.__init__-view-source"><span>View Source</span></label>
 
+        
     </div>
     <a class="headerlink" href="#RWKernel.__init__"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="RWKernel.__init__-64"><a href="#RWKernel.__init__-64"><span class="linenos">64</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
@@ -4404,6 +4599,7 @@ algorithms (1997)</a>.</p>
             <span class="name">error_book</span><span class="annotation">: ClassVar[dict[int, str]]</span><span class="default_value"> = {0: &#39;no errors&#39;, 90: &#39;nan acceptance prob&#39;}</span>
 
         
+        
     </div>
     <a class="headerlink" href="#RWKernel.error_book"></a>
     
@@ -4414,6 +4610,7 @@ algorithms (1997)</a>.</p>
                                 <div class="attr variable">
             <span class="name">needs_history</span><span class="annotation">: ClassVar[bool]</span><span class="default_value"> = False</span>
 
+        
         
     </div>
     <a class="headerlink" href="#RWKernel.needs_history"></a>
@@ -4426,6 +4623,7 @@ algorithms (1997)</a>.</p>
             <span class="name">identifier</span><span class="annotation">: str</span><span class="default_value"> = &#39;&#39;</span>
 
         
+        
     </div>
     <a class="headerlink" href="#RWKernel.identifier"></a>
     
@@ -4434,12 +4632,15 @@ algorithms (1997)</a>.</p>
                             </div>
                             <div id="RWKernel.init_state" class="classattr">
                                         <input id="RWKernel.init_state-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="RWKernel.init_state-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">init_state</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span>, </span><span class="param"><span class="n">prng_key</span>, </span><span class="param"><span class="n">model_state</span></span>)</span>
 
                 <label class="view-source-button" for="RWKernel.init_state-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="RWKernel.init_state-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#RWKernel.init_state"></a>
@@ -4459,12 +4660,15 @@ algorithms (1997)</a>.</p>
                             </div>
                             <div id="RWKernel.tune" class="classattr">
                                         <input id="RWKernel.tune-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="RWKernel.tune-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">tune</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">prng_key</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">_src</span><span class="o">.</span><span class="n">prng</span><span class="o">.</span><span class="n">PRNGKeyArray</span>,</span><span class="param">	<span class="n">kernel_state</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">rw</span><span class="o">.</span><span class="n">RWKernelState</span>,</span><span class="param">	<span class="n">model_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">epoch</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">epoch</span><span class="o">.</span><span class="n">EpochState</span>,</span><span class="param">	<span class="n">history</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n"><a href="#Position">liesel.goose.Position</a></span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span></span><span class="return-annotation">) -> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">kernel</span><span class="o">.</span><span class="n">TuningOutcome</span><span class="p">[</span><span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">rw</span><span class="o">.</span><span class="n">RWKernelState</span><span class="p">,</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">kernel</span><span class="o">.</span><span class="n">DefaultTuningInfo</span><span class="p">]</span>:</span></span>
 
                 <label class="view-source-button" for="RWKernel.tune-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="RWKernel.tune-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#RWKernel.tune"></a>
@@ -4492,12 +4696,15 @@ algorithms (1997)</a>.</p>
                             </div>
                             <div id="RWKernel.start_epoch" class="classattr">
                                         <input id="RWKernel.start_epoch-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="RWKernel.start_epoch-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">start_epoch</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">prng_key</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">_src</span><span class="o">.</span><span class="n">prng</span><span class="o">.</span><span class="n">PRNGKeyArray</span>,</span><span class="param">	<span class="n">kernel_state</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">rw</span><span class="o">.</span><span class="n">RWKernelState</span>,</span><span class="param">	<span class="n">model_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">epoch</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">epoch</span><span class="o">.</span><span class="n">EpochState</span></span><span class="return-annotation">) -> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">rw</span><span class="o">.</span><span class="n">RWKernelState</span>:</span></span>
 
                 <label class="view-source-button" for="RWKernel.start_epoch-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="RWKernel.start_epoch-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#RWKernel.start_epoch"></a>
@@ -4524,12 +4731,15 @@ algorithms (1997)</a>.</p>
                             </div>
                             <div id="RWKernel.end_epoch" class="classattr">
                                         <input id="RWKernel.end_epoch-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="RWKernel.end_epoch-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">end_epoch</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">prng_key</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">_src</span><span class="o">.</span><span class="n">prng</span><span class="o">.</span><span class="n">PRNGKeyArray</span>,</span><span class="param">	<span class="n">kernel_state</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">rw</span><span class="o">.</span><span class="n">RWKernelState</span>,</span><span class="param">	<span class="n">model_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">epoch</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">epoch</span><span class="o">.</span><span class="n">EpochState</span></span><span class="return-annotation">) -> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">rw</span><span class="o">.</span><span class="n">RWKernelState</span>:</span></span>
 
                 <label class="view-source-button" for="RWKernel.end_epoch-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="RWKernel.end_epoch-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#RWKernel.end_epoch"></a>
@@ -4556,12 +4766,15 @@ algorithms (1997)</a>.</p>
                             </div>
                             <div id="RWKernel.end_warmup" class="classattr">
                                         <input id="RWKernel.end_warmup-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="RWKernel.end_warmup-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">end_warmup</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">prng_key</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">_src</span><span class="o">.</span><span class="n">prng</span><span class="o">.</span><span class="n">PRNGKeyArray</span>,</span><span class="param">	<span class="n">kernel_state</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">rw</span><span class="o">.</span><span class="n">RWKernelState</span>,</span><span class="param">	<span class="n">model_state</span><span class="p">:</span> <span class="n">Any</span>,</span><span class="param">	<span class="n">tuning_history</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">TuningInfo</span> <span class="o">|</span> <span class="kc">None</span></span><span class="return-annotation">) -> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">kernel</span><span class="o">.</span><span class="n">WarmupOutcome</span><span class="p">[</span><span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">rw</span><span class="o">.</span><span class="n">RWKernelState</span><span class="p">]</span>:</span></span>
 
                 <label class="view-source-button" for="RWKernel.end_warmup-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="RWKernel.end_warmup-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#RWKernel.end_warmup"></a>
@@ -4605,6 +4818,7 @@ algorithms (1997)</a>.</p>
                 </section>
                 <section id="Summary">
                             <input id="Summary-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Summary-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr class">
                     <div class="decorator">@dataclass</div>
 
@@ -4612,6 +4826,8 @@ algorithms (1997)</a>.</p>
     <span class="name">Summary</span>:
 
                 <label class="view-source-button" for="Summary-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Summary-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Summary"></a>
@@ -4812,6 +5028,7 @@ quantile.</p>
         <span class="name">Summary</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">quantities</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">numpy</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]]</span>,</span><span class="param">	<span class="n">config</span><span class="p">:</span> <span class="nb">dict</span>,</span><span class="param">	<span class="n">sample_info</span><span class="p">:</span> <span class="nb">dict</span></span>)</span>
 
         
+        
     </div>
     <a class="headerlink" href="#Summary.__init__"></a>
     
@@ -4820,12 +5037,15 @@ quantile.</p>
                             </div>
                             <div id="Summary.to_dataframe" class="classattr">
                                         <input id="Summary.to_dataframe-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Summary.to_dataframe-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">to_dataframe</span><span class="signature pdoc-code condensed">(<span class="param"><span class="bp">self</span></span><span class="return-annotation">) -> <span class="n">pandas</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">frame</span><span class="o">.</span><span class="n">DataFrame</span>:</span></span>
 
                 <label class="view-source-button" for="Summary.to_dataframe-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Summary.to_dataframe-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Summary.to_dataframe"></a>
@@ -4905,6 +5125,7 @@ quantile.</p>
                             </div>
                             <div id="Summary.from_result" class="classattr">
                                         <input id="Summary.from_result-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="Summary.from_result-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
                     <div class="decorator">@staticmethod</div>
 
@@ -4912,6 +5133,8 @@ quantile.</p>
         <span class="name">from_result</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">result</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">engine</span><span class="o">.</span><span class="n">SamplingResult</span>,</span><span class="param">	<span class="n">additional_chain</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n"><a href="#Position">liesel.goose.Position</a></span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">quantiles</span><span class="p">:</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.05</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">)</span>,</span><span class="param">	<span class="n">hdi_prob</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.9</span>,</span><span class="param">	<span class="n">selected</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">deselected</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">per_chain</span><span class="o">=</span><span class="kc">False</span></span><span class="return-annotation">) -> <span class="n"><a href="#Summary">liesel.goose.Summary</a></span>:</span></span>
 
                 <label class="view-source-button" for="Summary.from_result-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="Summary.from_result-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#Summary.from_result"></a>
@@ -5016,12 +5239,15 @@ Certain measures like rhat are not availavle if <code>per_chain</code> is true.<
                 </section>
                 <section id="plot_cor">
                             <input id="plot_cor-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="plot_cor-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">plot_cor</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">results</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">engine</span><span class="o">.</span><span class="n">SamplingResult</span>,</span><span class="param">	<span class="n">params</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">param_indices</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">chain_indices</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">max_chains</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="mi">5</span>,</span><span class="param">	<span class="n">max_lags</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">title_spacing</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.85</span>,</span><span class="param">	<span class="n">xlabel</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;Lag&#39;</span>,</span><span class="param">	<span class="n">style</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;whitegrid&#39;</span>,</span><span class="param">	<span class="n">color_palette</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">ncol</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span>,</span><span class="param">	<span class="n">height</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span>,</span><span class="param">	<span class="n">aspect_ratio</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span>,</span><span class="param">	<span class="n">save_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="o">**</span><span class="n">kwargs</span></span><span class="return-annotation">) -> <span class="n">seaborn</span><span class="o">.</span><span class="n">axisgrid</span><span class="o">.</span><span class="n">FacetGrid</span>:</span></span>
 
                 <label class="view-source-button" for="plot_cor-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="plot_cor-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#plot_cor"></a>
@@ -5241,12 +5467,15 @@ Further keyword arguments passed to the seaborn <code>FacetGrid()</code> functio
                 </section>
                 <section id="plot_density">
                             <input id="plot_density-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="plot_density-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">plot_density</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">results</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">engine</span><span class="o">.</span><span class="n">SamplingResult</span>,</span><span class="param">	<span class="n">params</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">param_indices</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">chain_indices</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">max_chains</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="mi">5</span>,</span><span class="param">	<span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">title_spacing</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.85</span>,</span><span class="param">	<span class="n">xlabel</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;Value&#39;</span>,</span><span class="param">	<span class="n">style</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;whitegrid&#39;</span>,</span><span class="param">	<span class="n">color_palette</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">ncol</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span>,</span><span class="param">	<span class="n">height</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span>,</span><span class="param">	<span class="n">aspect_ratio</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span>,</span><span class="param">	<span class="n">save_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="o">**</span><span class="n">kwargs</span></span><span class="return-annotation">) -> <span class="n">seaborn</span><span class="o">.</span><span class="n">axisgrid</span><span class="o">.</span><span class="n">FacetGrid</span>:</span></span>
 
                 <label class="view-source-button" for="plot_density-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="plot_density-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#plot_density"></a>
@@ -5443,12 +5672,15 @@ Further keyword arguments passed to the seaborn <code>displot()</code> function.
                 </section>
                 <section id="plot_param">
                             <input id="plot_param-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="plot_param-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">plot_param</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">results</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">engine</span><span class="o">.</span><span class="n">SamplingResult</span>,</span><span class="param">	<span class="n">param</span><span class="p">:</span> <span class="nb">str</span>,</span><span class="param">	<span class="n">param_index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">chain_indices</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">max_chains</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="mi">5</span>,</span><span class="param">	<span class="n">max_lags</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">title_spacing</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.9</span>,</span><span class="param">	<span class="n">style</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;whitegrid&#39;</span>,</span><span class="param">	<span class="n">color_list</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">figure_size</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span> <span class="o">|</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">9</span><span class="p">,</span> <span class="mi">6</span><span class="p">)</span>,</span><span class="param">	<span class="n">legend_position</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.2</span><span class="p">,</span> <span class="mf">0.4</span><span class="p">)</span>,</span><span class="param">	<span class="n">save_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></span><span class="return-annotation">) -> <span class="kc">None</span>:</span></span>
 
                 <label class="view-source-button" for="plot_param-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="plot_param-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#plot_param"></a>
@@ -5625,12 +5857,15 @@ File path where the plot is saved.</p></li>
                 </section>
                 <section id="plot_trace">
                             <input id="plot_trace-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="plot_trace-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">plot_trace</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">results</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">engine</span><span class="o">.</span><span class="n">SamplingResult</span>,</span><span class="param">	<span class="n">params</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">param_indices</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">chain_indices</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">max_chains</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="mi">5</span>,</span><span class="param">	<span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">title_spacing</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.85</span>,</span><span class="param">	<span class="n">xlabel</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;Iteration&#39;</span>,</span><span class="param">	<span class="n">style</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;whitegrid&#39;</span>,</span><span class="param">	<span class="n">color_palette</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">ncol</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span>,</span><span class="param">	<span class="n">height</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span>,</span><span class="param">	<span class="n">aspect_ratio</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span>,</span><span class="param">	<span class="n">save_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">include_warmup</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>,</span><span class="param">	<span class="o">**</span><span class="n">kwargs</span></span><span class="return-annotation">) -> <span class="n">seaborn</span><span class="o">.</span><span class="n">axisgrid</span><span class="o">.</span><span class="n">FacetGrid</span>:</span></span>
 
                 <label class="view-source-button" for="plot_trace-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="plot_trace-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#plot_trace"></a>
@@ -5835,12 +6070,15 @@ Further keyword arguments passed to the seaborn <code>relplot()</code> function.
                 </section>
                 <section id="stan_epochs">
                             <input id="stan_epochs-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="stan_epochs-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">stan_epochs</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">warmup_duration</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1000</span>,</span><span class="param">	<span class="n">posterior_duration</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1000</span>,</span><span class="param">	<span class="n">init_duration</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">75</span>,</span><span class="param">	<span class="n">term_duration</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">50</span>,</span><span class="param">	<span class="n">base_duration</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">25</span></span><span class="return-annotation">) -> <span class="nb">list</span><span class="p">[</span><span class="n"><a href="#EpochConfig">liesel.goose.EpochConfig</a></span><span class="p">]</span>:</span></span>
 
                 <label class="view-source-button" for="stan_epochs-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="stan_epochs-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#stan_epochs"></a>
@@ -5911,12 +6149,15 @@ following the Stan Development Team, <a href="https://mc-stan.org/docs/2_28/refe
                 </section>
                 <section id="summary">
                             <input id="summary-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+        <input id="summary-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
         <span class="name">summary</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">results</span><span class="p">:</span> <span class="n">liesel</span><span class="o">.</span><span class="n">goose</span><span class="o">.</span><span class="n">engine</span><span class="o">.</span><span class="n">SamplingResult</span>,</span><span class="param">	<span class="n">per_chain</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>,</span><span class="param">	<span class="n">params</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">param_indices</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">chain_indices</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">quantiles</span><span class="p">:</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.05</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">)</span>,</span><span class="param">	<span class="n">hdi_prob</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.9</span>,</span><span class="param">	<span class="n">round_digits</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span>,</span><span class="param">	<span class="n">as_dataframe</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span></span><span class="return-annotation">) -> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">]]</span> <span class="o">|</span> <span class="n">pandas</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">frame</span><span class="o">.</span><span class="n">DataFrame</span>:</span></span>
 
                 <label class="view-source-button" for="summary-view-source"><span>View Source</span></label>
+
+                <label class="view-docstring-button" for="summary-view-docstring"><span>View Docstring</span></label>
 
     </div>
     <a class="headerlink" href="#summary"></a>
