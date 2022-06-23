@@ -11,7 +11,6 @@ nav.pdoc {
 }
 
 .pdoc > section:not(.module-info) > .attr {
-    background-color: #e0e0e0;
     border-left-style: solid;
     border-left-color: #ff99d6;
     border-left-width: 0.5rem;
@@ -20,4 +19,42 @@ nav.pdoc {
 
 li > p {
     margin-bottom: 0.5rem;
+}
+
+/* adapted from https://github.com/mitmproxy/pdoc/blob/v12.0.2/pdoc/templates/content.css */
+
+.view-docstring-toggle-state,
+.view-docstring-toggle-state ~ .docstring {
+    display: none;
+}
+
+.view-docstring-toggle-state:checked ~ .docstring {
+    display: block;
+}
+
+.view-docstring-button {
+    display: inline-block;
+    float: right;
+    font-size: .75rem;
+    line-height: 1.5rem;
+    color: var(--muted);
+    padding: 0 .4rem 0 1.3rem;
+    cursor: pointer;
+    text-indent: -2px;
+}
+
+.view-docstring-button > span {
+    visibility: hidden;
+}
+
+.view-docstring-button::before {
+    position: absolute;
+    content: "View Docstring";
+    display: list-item;
+    list-style-type: disclosure-closed;
+}
+
+.view-docstring-toggle-state:checked ~ .attr .view-docstring-button::before,
+.view-docstring-toggle-state:checked ~ .view-docstring-button::before {
+    list-style-type: disclosure-open;
 }

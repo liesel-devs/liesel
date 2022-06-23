@@ -8,6 +8,8 @@
     {% set logo_link = "https://liesel-devs.github.io/liesel" %}
 {% endif %}
 
+## adapted from https://github.com/mitmproxy/pdoc/blob/v12.0.2/pdoc/templates/default/module.html.jinja2
+
 {% block nav_title %}
     {% if logo %}
         {% if logo_link %}<a href="{{ logo_link }}">{% endif %}
@@ -15,3 +17,36 @@
         {% if logo_link %}</a>{% endif %}
     {% endif %}
 {% endblock %}
+
+{% defaultmacro member(doc) %}
+    {{- view_source_state(doc) -}}
+    {{- view_docstring_state(doc) -}}
+    <div class="attr {{ doc.type }}">
+        {% if doc.type == "class" %}
+            {{ class(doc) }}
+        {% elif doc.type == "function" %}
+            {{ function(doc) }}
+        {% elif doc.type == "module" %}
+            {{ submodule(doc) }}
+        {% else %}
+            {{ variable(doc) }}
+        {% endif %}
+        {{ view_source_button(doc) }}
+        {{ view_docstring_button(doc) }}
+    </div>
+    <a class="headerlink" href="#{{ doc.qualname or doc.name }}"></a>
+    {{ view_source_code(doc) }}
+    {{ docstring(doc) }}
+{% enddefaultmacro %}
+
+{% defaultmacro view_docstring_state(doc) %}
+    {% if doc.docstring %}
+        <input id="{{ doc.qualname or doc.name }}-view-docstring" class="view-docstring-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+    {% endif %}
+{% enddefaultmacro %}
+
+{% defaultmacro view_docstring_button(doc) %}
+    {% if doc.docstring %}
+        <label class="view-docstring-button" for="{{ doc.qualname or doc.name }}-view-docstring"><span>View Docstring</span></label>
+    {% endif %}
+{% enddefaultmacro %}
