@@ -161,21 +161,6 @@ class SamplingResult:
 class Engine:
     """MCMC engine capable of combining multiple transition kernels."""
 
-    # __slots__ = (
-    #     "_prng_keys",
-    #     "_model_states",
-    #     "_kernel_states",
-    #     "_calculator",
-    #     "_random_calculator",
-    #     "_position_chain",
-    #     "_transition_info_chain",
-    #     "_tuning_info_chain",
-    #     "_calc_result_chain",
-    #     "_calc_result_random_chain",
-    #     "_epoch_configs",
-    #     "_position_keys",
-    # )
-
     def __init__(
         self,
         seeds: KeyArray,
