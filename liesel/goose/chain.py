@@ -130,19 +130,23 @@ class EpochChainManager(Generic[TPyTree]):
     """
     An `EpochChainManager` is a container for multiple epoch chains.
 
-    The chains can be concatenated over multiple epochs.
+    The chains can be concatenated over multiple epochs. Thinning defined in epochs
+    can be switched on or of with the constructor flag
     """
 
-    def __init__(self, multichain: bool) -> None:
+    def __init__(self, multichain: bool, apply_thinning: bool = False) -> None:
         self._multichain = multichain
         self._chains: list[ListEpochChain[TPyTree]] = []
+        self._apply_thinning = apply_thinning
 
     @property
     def current_epoch(self) -> EpochConfig:
         return self._chains[-1].epoch
 
     def advance_epoch(self, epoch: EpochConfig) -> None:
-        new_chain: ListEpochChain[TPyTree] = ListEpochChain(self._multichain, epoch)
+        new_chain: ListEpochChain[TPyTree] = ListEpochChain(
+            self._multichain, epoch, self._apply_thinning
+        )
         self._chains.append(new_chain)
 
     def append(self, chunk: TPyTree) -> None:
