@@ -6,10 +6,13 @@ This module is experimental. Expect API changes.
 
 from typing import Callable, Generic, Protocol, Sequence, TypeVar
 
+import jax
+import numpy as np
+
 from liesel.option import Option
 
 from .epoch import EpochConfig
-from .pytree import concatenate_leaves
+from .pytree import concatenate_leaves, slice_leaves
 from .types import PyTree
 
 TPyTree = TypeVar("TPyTree", bound=PyTree)
@@ -49,7 +52,13 @@ class Chain(Protocol[TPyTree]):
 
 
 class EpochChain(Chain[TPyTree]):
-    """An `EpochChain` is a `Chain` with an associated `EpochConfig`."""
+    """
+    An `EpochChain` is a `Chain` with an associated `EpochConfig`.
+
+    The implementation must implement thinning. That is,
+    if epoch.thinning > 1 and enabled in contructor, the chain must
+    safe only every epch.thinning element
+    """
 
     @property
     def epoch(self) -> EpochConfig:
@@ -90,13 +99,31 @@ class ListChain(Generic[TPyTree]):
 class ListEpochChain(ListChain[TPyTree]):
     """Implements the `EpochChain` protocol with a list as storage."""
 
-    def __init__(self, multichain: bool, epoch: EpochConfig):
+    def __init__(
+        self, multichain: bool, epoch: EpochConfig, apply_thinning: bool = False
+    ):
         super().__init__(multichain)
         self._epoch = epoch
+        self._apply_thinning = apply_thinning
+        self._states_counter = 1
 
     @property
     def epoch(self) -> EpochConfig:
         return self._epoch
+
+    def append(self, chunk: TPyTree) -> None:
+        if self._apply_thinning:
+            th = self._epoch.thinning
+            size = jax.tree_leaves(chunk)[0].shape[1]
+            idx = np.arange(size)[(self._states_counter + np.arange(size)) % th == 0]
+
+            self._states_counter += size
+
+            if len(idx) > 0:
+                chunk = slice_leaves(chunk, np.s_[:, idx, ...])
+                return super().append(chunk)
+        else:
+            return super().append(chunk)
 
 
 class EpochChainManager(Generic[TPyTree]):

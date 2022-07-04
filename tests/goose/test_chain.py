@@ -87,16 +87,6 @@ def test_epoch_list_chain():
     assert comp[1]["bar"].shape == (1, 5, 2, 2)
 
 
-# def test_epoch_chain_no_epoch():
-#     chain = DefaultEpochChain()
-#     with pytest.raises(RuntimeError):
-#         chain.append(make_chunk())
-
-#     assert chain.get_latest_epoch() is None
-#     assert chain.get_latest_chain() is None
-#     assert not chain.is_epoch_active()
-
-
 def test_epoch_chain_manager() -> None:
     manager: EpochChainManager[Any] = EpochChainManager(False)
 
@@ -118,3 +108,49 @@ def test_epoch_chain_manager() -> None:
     # test combine_filtered
     chain = manager.combine_filtered(lambda config: config.duration == 10).unwrap()
     assert chain[0].shape == (10, 1, 3)
+
+
+def test_epoch_chain_thinning() -> None:
+    # thinning larger than chunk size
+    chain: ListEpochChain[Any] = ListEpochChain(
+        True, EpochConfig(EpochType.POSTERIOR, 100, 10, None), apply_thinning=True
+    )
+
+    data = jnp.arange(0, 10).reshape(2, 5)
+
+    for _ in range(100 // 5):
+        chain.append(data)
+    res = chain.get().unwrap()
+
+    assert res.shape == (2, 10)
+    assert jnp.all(res.sum(axis=1) == 10 * jnp.array((4, 9)))
+
+    # thinning smaller than chunk size
+    chain = ListEpochChain(
+        True, EpochConfig(EpochType.POSTERIOR, 99, 3, None), apply_thinning=True
+    )
+
+    data = jnp.arange(0, 18).reshape(2, 9)
+
+    for _ in range(99 // 9):
+        chain.append(data)
+    res = chain.get().unwrap()
+
+    assert res.shape == (2, 33)
+    assert jnp.all(
+        res.sum(axis=1) == 11 * jnp.array(((2, 5, 8), (11, 14, 17))).sum(axis=1)
+    )
+
+    # thinning enabled but set to 1
+    chain = ListEpochChain(
+        True, EpochConfig(EpochType.POSTERIOR, 10, 1, None), apply_thinning=True
+    )
+
+    data = jnp.arange(0, 10).reshape(2, 5)
+
+    for _ in range(10 // 5):
+        chain.append(data)
+    res = chain.get().unwrap()
+
+    assert res.shape == (2, 10)
+    assert jnp.all(res.sum(axis=1) == 2 * data.sum(axis=1))

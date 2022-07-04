@@ -151,6 +151,10 @@ def test_epoch_manager_with_faulty_configs() -> None:
     with pytest.raises(RuntimeError):
         manager.append(EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None))
 
+    # thinning must be one for warmup epoch
+    with pytest.raises(RuntimeError):
+        manager.append(EpochConfig(EpochType.FAST_ADAPTATION, 20, 10, None))
+
     # warm up cannot follow posterior
     manager.append(EpochConfig(EpochType.FAST_ADAPTATION, 3, 1, None))
     manager.append(EpochConfig(EpochType.POSTERIOR, 4, 1, None))
@@ -161,6 +165,19 @@ def test_epoch_manager_with_faulty_configs() -> None:
     with pytest.raises(RuntimeError):
         manager.append(EpochConfig(EpochType.POSTERIOR, -1, 1, None))
 
-    # duration must be one
+    # duration must be multiple of thinning
     with pytest.raises(RuntimeError):
-        manager.append(EpochConfig(EpochType.POSTERIOR, 20, 10, None))
+        manager.append(EpochConfig(EpochType.POSTERIOR, 13, 7, None))
+
+
+def test_epoch_manager_with_thinning() -> None:
+    manager = EpochManager([EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None)])
+
+    # thinning must be one for warmup epoch
+    with pytest.raises(RuntimeError):
+        manager.append(EpochConfig(EpochType.FAST_ADAPTATION, 20, 10, None))
+
+    manager.append(EpochConfig(EpochType.FAST_ADAPTATION, 100, 1, None))
+
+    # thinning can be larger than one in POSTERIOR epoch
+    manager.append(EpochConfig(EpochType.POSTERIOR, 100, 20, None))
