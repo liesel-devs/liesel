@@ -15,6 +15,7 @@ def stan_epochs(
     init_duration: int = 75,
     term_duration: int = 50,
     base_duration: int = 25,
+    thinning: int = 1,
 ) -> list[EpochConfig]:
     """
     Sets up a list of `liesel.goose.epoch.EpochConfig`'s,
@@ -28,6 +29,7 @@ def stan_epochs(
     - `init_duration`: The number of samples in the *initial fast* adaptation epoch.
     - `term_duration`: The number of samples in the *final fast* adaptation epoch.
     - `base_duration`: The number of samples in the *first slow* adaptation epoch.
+    - `thinning`: Thinning applied in the posterior epoch.
     """
 
     if warmup_duration < 20:

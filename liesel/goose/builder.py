@@ -133,16 +133,25 @@ class EngineBuilder:
         self._epochs = EpochManager(epochs)
 
     def set_duration(
-        self, warmup_duration: int, posterior_duration: int, term_duration: int = 50
+        self,
+        warmup_duration: int,
+        posterior_duration: int,
+        term_duration: int = 50,
+        thinning: int = 1,
     ):
         """
         Sets epochs using the `stan_epochs` function.
 
         Note that `term_duration` needs to be long enough that tuning algorithms
         like dual averaging can converge.
+
+        Thinning is only applied in the posterior epoch.
         """
         epochs = stan_epochs(
-            warmup_duration, posterior_duration, term_duration=term_duration
+            warmup_duration,
+            posterior_duration,
+            term_duration=term_duration,
+            thinning=thinning,
         )
         self._epochs = EpochManager(epochs)
 
