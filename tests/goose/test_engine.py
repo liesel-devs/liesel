@@ -7,7 +7,6 @@ from typing import ClassVar
 
 import jax
 import jax.numpy as jnp
-from .deterministic_kernels import DetCountingKernel, DetCountingKernelState
 
 from liesel.goose.builder import EngineBuilder
 from liesel.goose.engine import (
@@ -21,6 +20,8 @@ from liesel.goose.kernel_sequence import KernelSequence
 from liesel.goose.models import DictModel
 from liesel.goose.pytree import register_dataclass_as_pytree
 from liesel.goose.types import Array, KeyArray, ModelInterface, ModelState
+
+from .deterministic_kernels import DetCountingKernel, DetCountingKernelState
 
 
 @register_dataclass_as_pytree
