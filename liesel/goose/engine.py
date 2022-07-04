@@ -212,13 +212,17 @@ class Engine:
         self._prng_key = seeds
 
         # setup storage
-        self._position_chain: EpochChainManager = EpochChainManager(multichain=True)
+        self._position_chain: EpochChainManager = EpochChainManager(
+            multichain=True, apply_thinning=True
+        )
         self._transition_info_chain: EpochChainManager = EpochChainManager(
             multichain=True
         )
         self._tuning_info_chain: ListChain = ListChain(multichain=True)
         self._kernel_state_chain: EpochChainManager = EpochChainManager(multichain=True)
-        self._quantities_chain: EpochChainManager = EpochChainManager(multichain=True)
+        self._quantities_chain: EpochChainManager = EpochChainManager(
+            multichain=True, apply_thinning=True
+        )
 
         # initialize kernel state
         keys = self._split_prng_key_one()
