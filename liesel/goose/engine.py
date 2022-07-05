@@ -76,7 +76,7 @@ def _initialze_prng(seed: int | KeyArray) -> KeyArray:
         raise ValueError("Seed has an unsupported shape")
 
 
-def _add_time_dimension(multichain: bool, x: PyTree) -> PyTree:
+def _add_time_dimension(x: PyTree) -> PyTree:
     """
     Adds a new dimension for time to each leaf.
 
@@ -87,9 +87,8 @@ def _add_time_dimension(multichain: bool, x: PyTree) -> PyTree:
     If multi-chain is true, each leaf must have at least one dimension
     (representing the chain index).
     """
-    axis = jax.lax.cond(multichain, None, lambda _: 1, None, lambda _: 0)
     initial_position = jax.tree_util.tree_map(
-        lambda y, *_ys: jnp.expand_dims(y, axis),
+        lambda y, *_ys: jnp.expand_dims(y, 1),
         x,
     )
     return initial_position
@@ -212,16 +211,12 @@ class Engine:
         self._prng_key = seeds
 
         # setup storage
-        self._position_chain: EpochChainManager = EpochChainManager(
-            multichain=True, apply_thinning=True
-        )
-        self._transition_info_chain: EpochChainManager = EpochChainManager(
-            multichain=True
-        )
-        self._tuning_info_chain: ListChain = ListChain(multichain=True)
-        self._kernel_state_chain: EpochChainManager = EpochChainManager(multichain=True)
+        self._position_chain: EpochChainManager = EpochChainManager(apply_thinning=True)
+        self._transition_info_chain: EpochChainManager = EpochChainManager()
+        self._tuning_info_chain: ListChain = ListChain()
+        self._kernel_state_chain: EpochChainManager = EpochChainManager()
         self._quantities_chain: EpochChainManager = EpochChainManager(
-            multichain=True, apply_thinning=True
+            apply_thinning=True
         )
 
         # initialize kernel state
@@ -344,7 +339,6 @@ class Engine:
         self.current_epoch.advance_time(1)
 
         initial_position = _add_time_dimension(
-            multichain=True,
             x=jax.vmap(self._model.extract_position, in_axes=(None, 0))(
                 self._position_keys, self._model_states
             ),
@@ -353,12 +347,12 @@ class Engine:
         self._position_chain.append(initial_position)
 
         if self._store_kernel_states:
-            ks = _add_time_dimension(multichain=True, x=self._kernel_states)
+            ks = _add_time_dimension(x=self._kernel_states)
             self._kernel_state_chain.append(ks)
 
         if self._quantity_generators:
             quants = self._generate_quantity()
-            quants = _add_time_dimension(multichain=True, x=quants)
+            quants = _add_time_dimension(x=quants)
             self._quantities_chain.append(quants)
 
         self._epoch = None
@@ -476,9 +470,7 @@ class Engine:
             self._kernel_states = tune_output.kernel_states
 
             # we need to add the time dimension
-            self._tuning_info_chain.append(
-                _add_time_dimension(multichain=True, x=tune_output.infos)
-            )
+            self._tuning_info_chain.append(_add_time_dimension(x=tune_output.infos))
 
     def _sample_many(
         self,

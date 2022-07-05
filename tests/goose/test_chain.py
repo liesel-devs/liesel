@@ -30,8 +30,8 @@ def create_chunk() -> PyTree:
     return chunk
 
 
-def test_multi_list_chain() -> None:
-    chain: Chain = ListChain(True)
+def test_list_chain() -> None:
+    chain: Chain = ListChain()
     assert chain.get().is_none()
 
     chain.append(create_chunk())
@@ -49,27 +49,8 @@ def test_multi_list_chain() -> None:
     assert comp[1]["bar"].shape == (1, 5, 2, 2)
 
 
-def test_single_list_chain() -> None:
-    chain: Chain = ListChain(False)
-    assert chain.get().is_none()
-
-    chain.append(create_chunk())
-    assert chain.get().is_some()
-
-    chain.append(create_chunk())
-    assert chain.get().is_some()
-
-    chain.append(create_chunk())
-    chain.append(create_chunk())
-    chain.append(create_chunk())
-    comp = chain.get().unwrap()
-    assert comp[0].shape == (5, 1, 3)
-    assert comp[1]["foo"].shape == (5, 1)
-    assert comp[1]["bar"].shape == (5, 1, 2, 2)
-
-
 def test_epoch_list_chain():
-    chain: EpochChain[Any] = ListEpochChain(True, create_epoch(11))
+    chain: EpochChain[Any] = ListEpochChain(create_epoch(11))
     assert chain.get().is_none()
 
     chain.append(create_chunk())
@@ -88,7 +69,7 @@ def test_epoch_list_chain():
 
 
 def test_epoch_chain_manager() -> None:
-    manager: EpochChainManager[Any] = EpochChainManager(False)
+    manager: EpochChainManager[Any] = EpochChainManager()
 
     nepochs = 3
     for i in range(nepochs):
@@ -99,21 +80,21 @@ def test_epoch_chain_manager() -> None:
 
     # test combine_all
     chain = manager.combine_all().unwrap()
-    assert chain[0].shape == (5 + 10 + 15, 1, 3)
+    assert chain[0].shape == (1, 5 + 10 + 15, 3)
 
     # test combine
     chain = manager.combine((1, 2)).unwrap()
-    assert chain[0].shape == (10 + 15, 1, 3)
+    assert chain[0].shape == (1, 10 + 15, 3)
 
     # test combine_filtered
     chain = manager.combine_filtered(lambda config: config.duration == 10).unwrap()
-    assert chain[0].shape == (10, 1, 3)
+    assert chain[0].shape == (1, 10, 3)
 
 
 def test_epoch_chain_thinning() -> None:
     # thinning larger than chunk size
     chain: ListEpochChain[Any] = ListEpochChain(
-        True, EpochConfig(EpochType.POSTERIOR, 100, 10, None), apply_thinning=True
+        EpochConfig(EpochType.POSTERIOR, 100, 10, None), apply_thinning=True
     )
 
     data = jnp.arange(0, 10).reshape(2, 5)
@@ -127,7 +108,7 @@ def test_epoch_chain_thinning() -> None:
 
     # thinning smaller than chunk size
     chain = ListEpochChain(
-        True, EpochConfig(EpochType.POSTERIOR, 99, 3, None), apply_thinning=True
+        EpochConfig(EpochType.POSTERIOR, 99, 3, None), apply_thinning=True
     )
 
     data = jnp.arange(0, 18).reshape(2, 9)
@@ -143,7 +124,7 @@ def test_epoch_chain_thinning() -> None:
 
     # thinning enabled but set to 1
     chain = ListEpochChain(
-        True, EpochConfig(EpochType.POSTERIOR, 10, 1, None), apply_thinning=True
+        EpochConfig(EpochType.POSTERIOR, 10, 1, None), apply_thinning=True
     )
 
     data = jnp.arange(0, 10).reshape(2, 5)
