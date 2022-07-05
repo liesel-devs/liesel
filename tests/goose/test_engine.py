@@ -51,26 +51,13 @@ class FooQauntGen:
 
 
 def test_add_time_dimension():
-    tree = jax.jit(lambda x: x)((1.0, [1.0, {"f": jnp.array([1.0, 2.0])}]))
-
     def get_dims(t):
         return [t[0].shape, t[1][0].shape, t[1][1]["f"].shape]
-
-    dims = [(), (), (2,)]
-    assert dims == get_dims(tree)
-
-    tree2 = _add_time_dimension(False, tree)
-    dims2 = [
-        (1,),
-        (1,),
-        (1, 2),
-    ]
-    assert dims2 == get_dims(tree2)
 
     tree0 = jax.jit(lambda x: x)(
         (jnp.array([1.0, 2.0]), [jnp.zeros((3, 3)), {"f": jnp.array([1.0, 2.0])}])
     )
-    tree3 = _add_time_dimension(True, tree0)
+    tree3 = _add_time_dimension(tree0)
     dims3 = [
         (2, 1),
         (3, 1, 3),

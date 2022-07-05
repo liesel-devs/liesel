@@ -20,25 +20,17 @@ TPyTree = TypeVar("TPyTree", bound=PyTree)
 
 class Chain(Protocol[TPyTree]):
     """
-    A `Chain` stores multiple chucks of pytrees and concatenates them along a time
-    axis.
+    A `Chain` stores multiple chucks of pytrees and concatenates them along a
+    time axis.
 
-    A `Chain` operates on the assumption that all chunks are pytrees with the same
-    structure.
+    The `Chain` always assume multiple independent chains that are indexed via
+    the first axis. The second dimension represents the time. Consequently, the
+    leaves in the pytree must have a dimension of two (i.e., [chain, time,
+    ...]).
 
-    The `Chain` can either represent one chain or multiple independent chains.
-    For a single chain, the first dimension of each leaf represents the time.
-    For a multi-chain, the first dimension is the chain index and the second dimension
-    represents the time. Consequently, the leafs in the pytree must have a dimension of
-    at least one (single chain) or two (multi-chain).
-
-    For a multi-chain, the size of the first dimension (the chain index) is not
-    allowed to vary among chunks.
+    A `Chain` operates on the assumption that all chunks are pytrees with the
+    same structure. However, the time dimension is allowed to vary in size.
     """
-
-    @property
-    def multichain(self) -> bool:
-        """Returns true if the chain is a multi-chain, and false otherwise."""
 
     def append(self, chunk: TPyTree) -> None:
         """Appends a chunk to the chain."""
@@ -71,20 +63,14 @@ class EpochChain(Chain[TPyTree]):
 class ListChain(Generic[TPyTree]):
     """Implements the `Chain` protocol with a list as storage."""
 
-    def __init__(self, multichain: bool):
-        self._multichain = multichain
+    def __init__(self):
         self._chunks_list: list[TPyTree] = []
-
-    @property
-    def multichain(self) -> bool:
-        return self._multichain
 
     def append(self, chunk: TPyTree) -> None:
         return self._chunks_list.append(chunk)
 
     def _concatenate(self) -> None:
-        time_axis = 1 if self.multichain else 0
-        combined = concatenate_leaves(self._chunks_list, time_axis)
+        combined = concatenate_leaves(self._chunks_list, 1)
         if combined is not None:
             self._chunks_list = [combined]
 
@@ -99,10 +85,8 @@ class ListChain(Generic[TPyTree]):
 class ListEpochChain(ListChain[TPyTree]):
     """Implements the `EpochChain` protocol with a list as storage."""
 
-    def __init__(
-        self, multichain: bool, epoch: EpochConfig, apply_thinning: bool = False
-    ):
-        super().__init__(multichain)
+    def __init__(self, epoch: EpochConfig, apply_thinning: bool = False):
+        super().__init__()
         self._epoch = epoch
         self._apply_thinning = apply_thinning
         self._states_counter = 1
@@ -134,8 +118,7 @@ class EpochChainManager(Generic[TPyTree]):
     can be switched on or of with the constructor flag
     """
 
-    def __init__(self, multichain: bool, apply_thinning: bool = False) -> None:
-        self._multichain = multichain
+    def __init__(self, apply_thinning: bool = False) -> None:
         self._chains: list[ListEpochChain[TPyTree]] = []
         self._apply_thinning = apply_thinning
 
@@ -144,9 +127,7 @@ class EpochChainManager(Generic[TPyTree]):
         return self._chains[-1].epoch
 
     def advance_epoch(self, epoch: EpochConfig) -> None:
-        new_chain: ListEpochChain[TPyTree] = ListEpochChain(
-            self._multichain, epoch, self._apply_thinning
-        )
+        new_chain: ListEpochChain[TPyTree] = ListEpochChain(epoch, self._apply_thinning)
         self._chains.append(new_chain)
 
     def append(self, chunk: TPyTree) -> None:
@@ -165,7 +146,7 @@ class EpochChainManager(Generic[TPyTree]):
         return self._chains[-1].epoch
 
     def combine(self, epoch_numbers: Sequence[int]) -> Option[TPyTree]:
-        chain: ListChain[TPyTree] = ListChain(self._multichain)
+        chain: ListChain[TPyTree] = ListChain()
         for num in epoch_numbers:
             epoch_chain = self._chains[num]
             chunk = epoch_chain.get()
@@ -174,7 +155,7 @@ class EpochChainManager(Generic[TPyTree]):
         return chain.get()
 
     def combine_all(self) -> Option[TPyTree]:
-        chain: ListChain[TPyTree] = ListChain(self._multichain)
+        chain: ListChain[TPyTree] = ListChain()
         for epoch_chain in self._chains:
             chunk = epoch_chain.get()
             if chunk.is_some():
@@ -184,7 +165,7 @@ class EpochChainManager(Generic[TPyTree]):
     def combine_filtered(
         self, predicate: Callable[[EpochConfig], bool]
     ) -> Option[TPyTree]:
-        chain: ListChain[TPyTree] = ListChain(self._multichain)
+        chain: ListChain[TPyTree] = ListChain()
         for epoch_chain in self._chains:
             if predicate(epoch_chain.epoch):
                 chunk = epoch_chain.get()
