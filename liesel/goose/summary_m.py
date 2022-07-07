@@ -5,7 +5,7 @@
 import typing
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, NamedTuple
 
 import arviz as az
 import jax.numpy as jnp
@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import xarray
 
-from liesel.goose.engine import SamplingResult
+from liesel.goose.engine import ErrorLog, SamplingResult
 from liesel.goose.pytree import slice_leaves, stack_leaves
 from liesel.goose.types import Position
 
@@ -562,6 +562,61 @@ def summary(
     )
 
 
+class ErrorSummaryForOneCode(NamedTuple):
+    error_code: int
+    error_msg: str
+    count_per_chain: np.ndarray
+    count_per_chain_posterior: None
+
+
+ErrorSummary = dict[str, dict[int, ErrorSummaryForOneCode]]
+
+
+def _make_error_summary(
+    error_log: ErrorLog,
+) -> ErrorSummary:
+    """
+    creates an error summary from the error log.
+
+    The returned value looks like
+
+    ```
+    {
+        "kernel_identifier": {
+            error_code1: ("error_msg", count, count_in_posterior), error_code2:
+            ("error_msg", count, count_in_posterior), ...
+        },
+        ...
+    }
+    ```
+
+    The `error_msg` is the empty string if the kernel class is not supplied in the
+    `error_log` and `count_in_posterior` is currently always none.
+    """
+    error_summary = {}
+    for kel in error_log.values():
+        counter_dict: dict[int, np.ndarray] = {}
+
+        ec_unique = np.unique(kel.error_codes)
+        for ec in ec_unique:
+            if ec == 0:
+                continue
+            occurences_per_chain = np.sum(kel.error_codes == ec, axis=1)
+            counter_dict[ec] = occurences_per_chain
+
+        krnl_summary = {}
+        for key, count in counter_dict.items():
+            ec = key
+            # type ignore is ok since the type must implement the kernel protocol.
+            error_msg = kel.kernel_cls.map_or(
+                "", lambda krn_cls: krn_cls.error_book[ec]  # type: ignore
+            )
+            krnl_summary[ec] = ErrorSummaryForOneCode(ec, error_msg, count, None)
+        error_summary[kel.kernel_ident] = krnl_summary
+
+    return error_summary
+
+
 @dataclass
 class Summary:
     """
@@ -582,6 +637,7 @@ class Summary:
     quantities: dict[str, dict[str, np.ndarray]]
     config: dict
     sample_info: dict
+    error_summary: ErrorSummary
 
     def to_dataframe(self) -> pd.DataFrame:
         """Turns Summary object into a DataFrame object."""
@@ -734,7 +790,14 @@ class Summary:
             "chains_merged": not per_chain,
         }
 
-        return Summary(quantities=quantities, config=config, sample_info=sample_info)
+        error_summary = _make_error_summary(result.get_error_log(False))
+
+        return Summary(
+            quantities=quantities,
+            config=config,
+            sample_info=sample_info,
+            error_summary=error_summary,
+        )
 
 
 def _create_quantity_dict(
