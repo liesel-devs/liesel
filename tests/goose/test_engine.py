@@ -7,8 +7,10 @@ from typing import ClassVar
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from liesel.goose.builder import EngineBuilder
+from liesel.goose.chain import EpochChainManager
 from liesel.goose.engine import (
     Engine,
     SamplingResult,
@@ -16,10 +18,12 @@ from liesel.goose.engine import (
     stack_for_multi,
 )
 from liesel.goose.epoch import EpochConfig, EpochState, EpochType
+from liesel.goose.kernel import DefaultTransitionInfo
 from liesel.goose.kernel_sequence import KernelSequence
 from liesel.goose.models import DictModel
 from liesel.goose.pytree import register_dataclass_as_pytree
 from liesel.goose.types import Array, KeyArray, ModelInterface, ModelState
+from liesel.option import Option
 
 from .deterministic_kernels import DetCountingKernel, DetCountingKernelState
 
@@ -64,6 +68,34 @@ def test_add_time_dimension():
         (2, 1),
     ]
     assert dims3 == get_dims(tree3)
+
+
+def test_error_log():
+    errs = np.array([0, 0, 1, 0, 0, 0, 1, 1]).reshape((-1, 2))
+    ti = jax.vmap(
+        lambda x: DefaultTransitionInfo(x, np.array((0.0, 0.0)), np.array((0, 0)))
+    )(errs)
+    tis = {"kern0": ti}
+
+    em = EpochChainManager()
+    em.advance_epoch(EpochConfig(EpochType.POSTERIOR, 4, 1, None))
+    em.append(tis)
+    em.combine_all()
+
+    sr = SamplingResult(
+        EpochChainManager(),
+        em,
+        Option.none(),
+        Option.none(),
+        Option.none(),
+        Option.none(),
+    )
+
+    error_log = sr.get_error_log()
+    kel = error_log["kern0"]
+    assert kel.kernel_name == "kern0"
+    assert np.all(kel.transition == np.array([1, 3]))
+    assert np.all(kel.error_codes == np.array([[1, 0], [1, 1]]))
 
 
 def t_test_engine():

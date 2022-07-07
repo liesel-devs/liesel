@@ -10,13 +10,14 @@ import logging
 import pickle
 from dataclasses import dataclass
 from functools import partial
-from typing import Sequence
+from typing import NamedTuple, Sequence, cast
 
 import jax
 import jax.lax
 import jax.numpy as jnp
 import jax.random
 import jax.tree_util
+import numpy as np
 from tqdm import tqdm
 
 from liesel.option import Option
@@ -38,6 +39,25 @@ from .types import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class KernelErrorLog(NamedTuple):
+    """
+    Holds the number of the transitions in which an error
+    in at least one chain occured and an array with the error
+    code for each chain.
+
+    - transition is an 1-D array (transition time)
+    - error_codes is a 2-D array (time, chain)
+    """
+
+    kernel_name: str
+    transition: Array
+    error_codes: Array
+    """The error codes are a"""
+
+
+ErrorLog = dict[str, KernelErrorLog]
 
 
 def _expand_and_stack(chunk, *rest):
@@ -144,6 +164,33 @@ class SamplingResult:
         time: Array = next(iter(opt_tis.values())).time
 
         return Option(time)
+
+    def get_error_log(self, posterior_only=False) -> ErrorLog:
+        """
+        returns the error log
+
+        that is an dict[kernel_name, KernelErrorLog]
+        """
+        opt: Option[TransitionInfos]
+        if posterior_only:
+            opt = self.transition_infos.combine_filtered(
+                lambda config: config.type == EpochType.POSTERIOR
+            )
+            tis = opt.expect(f"No posterior transition infos in {repr(self)}")
+        else:
+            opt = self.transition_infos.combine_all()
+            tis = opt.expect(f"No transition infos in {repr(self)}")
+
+        error_log: ErrorLog = {}
+        for ker_name in tis:
+            mask = np.any(tis[ker_name].error_code != 0, axis=1)
+            transition: np.ndarray = np.where(mask)[0]
+            # cast is ok since the object has more dimensions in the leaf
+            error_codes: np.ndarray = cast(np.ndarray, tis[ker_name].error_code)[
+                mask, :
+            ]
+            error_log[ker_name] = KernelErrorLog(ker_name, transition, error_codes)
+        return error_log
 
     def pkl_save(self, path) -> None:
         """Save result as a pickled object under `path`."""
