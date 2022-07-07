@@ -71,10 +71,8 @@ def test_add_time_dimension():
 
 
 def test_error_log():
-    errs = np.array([0, 0, 1, 0, 0, 0, 1, 1]).reshape((-1, 2))
-    ti = jax.vmap(
-        lambda x: DefaultTransitionInfo(x, np.array((0.0, 0.0)), np.array((0, 0)))
-    )(errs)
+    errs: np.ndarray = np.array([0, 0, 1, 0, 0, 0, 1, 1]).reshape((2, -1))
+    ti = DefaultTransitionInfo(errs, np.zeros((2, 4)), np.zeros((2, 4), np.int8))
     tis = {"kern0": ti}
 
     em = EpochChainManager()
@@ -94,9 +92,9 @@ def test_error_log():
 
     error_log = sr.get_error_log()
     kel = error_log["kern0"]
-    assert kel.kernel_name == "kern0"
-    assert np.all(kel.transition == np.array([1, 3]))
-    assert np.all(kel.error_codes == np.array([[1, 0], [1, 1]]))
+    assert kel.kernel_ident == "kern0"
+    assert np.array_equal(kel.transition, np.array([2, 3]))
+    assert np.array_equal(kel.error_codes, np.array([[1, 0], [1, 1]]))
 
 
 def t_test_engine():

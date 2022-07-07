@@ -43,19 +43,18 @@ logger = logging.getLogger(__name__)
 
 class KernelErrorLog(NamedTuple):
     """
-    Holds the number of the transitions in which an error
-    in at least one chain occured and an array with the error
-    code for each chain.
+    Holds the number of the transitions in which an error in at least one chain
+    occured and an array with the error code for each chain. Additionally, the
+    kernel identifier is specified and optionally the cls of the kernel.
 
-    - transition is an 1-D array (transition time)
-    - error_codes is a 2-D array (time, chain)
+    - transition is an 1-D array (time)
+    - error_codes is a 2-D array (chain, time)
     """
 
-    kernel_name: str
+    kernel_ident: str
     kernel_cls: Option[type]  # needed to use the error book
-    transition: Array
-    error_codes: Array
-    """The error codes are a"""
+    transition: np.ndarray
+    error_codes: np.ndarray
 
 
 ErrorLog = dict[str, KernelErrorLog]
@@ -182,11 +181,11 @@ class SamplingResult:
 
         error_log: ErrorLog = {}
         for ker_name in tis:
-            mask = np.any(tis[ker_name].error_code != 0, axis=1)
+            mask = np.any(tis[ker_name].error_code != 0, axis=0)
             transition: np.ndarray = np.where(mask)[0]
             # cast is ok since the object has more dimensions in the leaf
             error_codes: np.ndarray = cast(np.ndarray, tis[ker_name].error_code)[
-                mask, :
+                :, mask
             ]
             cls = self.kernel_classes.map(lambda d: d[ker_name])
             error_log[ker_name] = KernelErrorLog(ker_name, cls, transition, error_codes)
