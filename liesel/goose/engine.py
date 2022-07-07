@@ -137,6 +137,7 @@ class SamplingResult:
     tuning_infos: Option[Chain]
     kernel_states: Option[EpochChainManager]
     full_model_states: Option[EpochChainManager]
+    kernel_classes: Option[dict[str, type]]
 
     def get_samples(self) -> Position:
         opt: Option[Position] = self.positions.combine_all()
@@ -349,6 +350,10 @@ class Engine:
         else:
             gqs = None
 
+        kernels_cls: dict[str, type] = {
+            ker.identifier: type(ker) for ker in self._kernel_sequence.get_kernels()
+        }
+
         return SamplingResult(
             positions=self._position_chain,
             transition_infos=self._transition_info_chain,
@@ -356,6 +361,7 @@ class Engine:
             tuning_infos=Option(self._tuning_info_chain),
             kernel_states=Option(ksc),
             full_model_states=Option(None),
+            kernel_classes=Option(kernels_cls),
         )
 
     def _split_prng_key(self, n: int = 1) -> KeyArray:
