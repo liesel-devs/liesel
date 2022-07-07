@@ -52,6 +52,7 @@ class KernelErrorLog(NamedTuple):
     """
 
     kernel_name: str
+    kernel_cls: Option[type]  # needed to use the error book
     transition: Array
     error_codes: Array
     """The error codes are a"""
@@ -190,7 +191,8 @@ class SamplingResult:
             error_codes: np.ndarray = cast(np.ndarray, tis[ker_name].error_code)[
                 mask, :
             ]
-            error_log[ker_name] = KernelErrorLog(ker_name, transition, error_codes)
+            cls = self.kernel_classes.map(lambda d: d[ker_name])
+            error_log[ker_name] = KernelErrorLog(ker_name, cls, transition, error_codes)
         return error_log
 
     def pkl_save(self, path) -> None:
