@@ -8,6 +8,7 @@ This module is experimental. Expect API changes.
 
 import logging
 import pickle
+import warnings
 from dataclasses import dataclass
 from functools import partial
 from typing import NamedTuple, Sequence, cast
@@ -74,8 +75,15 @@ def stack_for_multi(chunks: list):
     The function adds a new dimension (axis 0) to each leaf and stacks the leafs
     along the new axis.
 
-    This is deprecated. Please use the functions in the `pytree` module.
+    **deprecated**
     """
+
+    warnings.warn(
+        "`stack_for_multi` is deprecated. Please use the functions"
+        " in the `pytree` module.",
+        DeprecationWarning,
+    )
+
     return jax.tree_util.tree_map(
         lambda x, *xs: _expand_and_stack(x, *xs), chunks[0], *chunks[1:]
     )
