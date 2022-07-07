@@ -70,7 +70,7 @@ def _expand_and_stack(chunk, *rest):
 
 def stack_for_multi(chunks: list):
     """
-    Combine identically structured pytrees to be used in multi-chain.
+    Combine identically structured pytrees to be used in multichain.
 
     The function adds a new dimension (axis 0) to each leaf and stacks the leafs
     along the new axis.
@@ -102,11 +102,8 @@ def _add_time_dimension(x: PyTree) -> PyTree:
     Adds a new dimension for time to each leaf.
 
     The returned tree has the same structure with one additional dimension of
-    size 1. The new dimension is `axis=0` if multi-chain is false and `axis=1` if
-    multi-chain is true.
-
-    If multi-chain is true, each leaf must have at least one dimension
-    (representing the chain index).
+    size 1. The new dimension is `axis=1`. Each leaf must have at least one
+    dimension (representing the chain index).
     """
     initial_position = jax.tree_util.tree_map(
         lambda y, *_ys: jnp.expand_dims(y, 1),
