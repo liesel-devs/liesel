@@ -96,7 +96,7 @@ class ListEpochChain(ListChain[TPyTree]):
         return self._epoch
 
     def append(self, chunk: TPyTree) -> None:
-        if self._apply_thinning:
+        if self._apply_thinning and self.epoch.thinning > 1:
             th = self._epoch.thinning
             size = jax.tree_leaves(chunk)[0].shape[1]
             idx = np.arange(size)[(self._states_counter + np.arange(size)) % th == 0]
