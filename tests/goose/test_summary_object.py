@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import ClassVar, Sequence
 
 import jax.numpy as jnp
+import numpy as np
 import pytest
 from jax.random import KeyArray
 
@@ -52,7 +53,7 @@ class MockKernelTransInfo:
 
 
 class MockKernel(ModelMixin):
-    error_book: ClassVar[dict[int, str]] = {0: "no errors"}
+    error_book: ClassVar[dict[int, str]] = {0: "no errors", 1: "error 1", 2: "error 2"}
     needs_history: ClassVar[bool] = False
     identifier: str = ""
 
@@ -273,3 +274,38 @@ def test_df_sample_info(result: SamplingResult):
         result, per_chain=True, selected=["baz"]
     ).to_dataframe()
     assert summary["sample_size"][0] == 250
+
+
+def test_error_summary(result: SamplingResult):
+    # add some error codes to the chain
+    ecs = np.array(
+        result.transition_infos.get_current_chain()
+        ._chunks_list[0]["kernel_00"]
+        .error_code
+    )
+    ecs[0, 0] = 1
+    ecs[:, 230] = 1
+    ecs[1, 220:225] = 2
+    result.transition_infos.get_current_chain()._chunks_list[0][
+        "kernel_00"
+    ].error_code = ecs
+
+    # create the summary object
+    summary = Summary.from_result(result, selected=["baz"])
+    es = summary.error_summary["kernel_00"]
+
+    # check error_code correspond
+    assert es[1].error_code == 1
+    assert es[2].error_code == 2
+
+    # check that these error codes don't have entries
+    assert 3 not in es
+    assert 0 not in es
+
+    # check that error messages are correct
+    assert es[1].error_msg == "error 1"
+    assert es[2].error_msg == "error 2"
+
+    # check that counts are correct
+    assert np.all(es[1].count_per_chain == np.array([2, 1, 1]))
+    assert np.all(es[2].count_per_chain == np.array([0, 5, 0]))

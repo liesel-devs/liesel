@@ -28,10 +28,8 @@ class DefaultTransitionInfo:
     acceptance_prob: float
     position_moved: int
 
-    def minimize(self):
-        return DefaultTransitionInfo(
-            self.error_code, self.acceptance_prob, self.position_moved
-        )
+    def minimize(self) -> "DefaultTransitionInfo":
+        return self
 
 
 @register_dataclass_as_pytree

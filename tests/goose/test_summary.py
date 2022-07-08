@@ -385,8 +385,8 @@ def test_df_output():
         for col in ["hdi_10_low", "hdi_10_high"]
     )
 
-    assert summary(results, round_digits=0)["num_effective"][0] == 67.0
-    assert summary(results, round_digits=1)["num_effective"][0] == 66.5
+    assert summary(results, round_digits=0)["num_effective"][0] == 57.0
+    assert summary(results, round_digits=1)["num_effective"][0] == 57.3
 
 
 def test_correct_error_messages():

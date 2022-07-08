@@ -8,15 +8,17 @@ This module is experimental. Expect API changes.
 
 import logging
 import pickle
+import warnings
 from dataclasses import dataclass
 from functools import partial
-from typing import Sequence
+from typing import NamedTuple, Sequence, cast
 
 import jax
 import jax.lax
 import jax.numpy as jnp
 import jax.random
 import jax.tree_util
+import numpy as np
 from tqdm import tqdm
 
 from liesel.option import Option
@@ -40,6 +42,25 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 
+class KernelErrorLog(NamedTuple):
+    """
+    Holds the number of the transitions in which an error in at least one chain
+    occured and an array with the error code for each chain. Additionally, the
+    kernel identifier is specified and optionally the cls of the kernel.
+
+    - transition is an 1-D array (time)
+    - error_codes is a 2-D array (chain, time)
+    """
+
+    kernel_ident: str
+    kernel_cls: Option[type]  # needed to use the error book
+    transition: np.ndarray
+    error_codes: np.ndarray
+
+
+ErrorLog = dict[str, KernelErrorLog]
+
+
 def _expand_and_stack(chunk, *rest):
     chunks = [chunk]
     chunks.extend(rest)
@@ -49,13 +70,20 @@ def _expand_and_stack(chunk, *rest):
 
 def stack_for_multi(chunks: list):
     """
-    Combine identically structured pytrees to be used in multi-chain.
+    Combine identically structured pytrees to be used in multichain.
 
     The function adds a new dimension (axis 0) to each leaf and stacks the leafs
     along the new axis.
 
-    This is deprecated. Please use the functions in the `pytree` module.
+    **deprecated**
     """
+
+    warnings.warn(
+        "`stack_for_multi` is deprecated. Please use the functions"
+        " in the `pytree` module.",
+        DeprecationWarning,
+    )
+
     return jax.tree_util.tree_map(
         lambda x, *xs: _expand_and_stack(x, *xs), chunks[0], *chunks[1:]
     )
@@ -81,11 +109,8 @@ def _add_time_dimension(x: PyTree) -> PyTree:
     Adds a new dimension for time to each leaf.
 
     The returned tree has the same structure with one additional dimension of
-    size 1. The new dimension is `axis=0` if multi-chain is false and `axis=1` if
-    multi-chain is true.
-
-    If multi-chain is true, each leaf must have at least one dimension
-    (representing the chain index).
+    size 1. The new dimension is `axis=1`. Each leaf must have at least one
+    dimension (representing the chain index).
     """
     initial_position = jax.tree_util.tree_map(
         lambda y, *_ys: jnp.expand_dims(y, 1),
@@ -117,6 +142,7 @@ class SamplingResult:
     tuning_infos: Option[Chain]
     kernel_states: Option[EpochChainManager]
     full_model_states: Option[EpochChainManager]
+    kernel_classes: Option[dict[str, type]]
 
     def get_samples(self) -> Position:
         opt: Option[Position] = self.positions.combine_all()
@@ -144,6 +170,34 @@ class SamplingResult:
         time: Array = next(iter(opt_tis.values())).time
 
         return Option(time)
+
+    def get_error_log(self, posterior_only=False) -> ErrorLog:
+        """
+        returns the error log
+
+        that is an dict[kernel_name, KernelErrorLog]
+        """
+        opt: Option[TransitionInfos]
+        if posterior_only:
+            opt = self.transition_infos.combine_filtered(
+                lambda config: config.type == EpochType.POSTERIOR
+            )
+            tis = opt.expect(f"No posterior transition infos in {repr(self)}")
+        else:
+            opt = self.transition_infos.combine_all()
+            tis = opt.expect(f"No transition infos in {repr(self)}")
+
+        error_log: ErrorLog = {}
+        for ker_name in tis:
+            mask = np.any(tis[ker_name].error_code != 0, axis=0)
+            transition: np.ndarray = np.where(mask)[0]
+            # cast is ok since the object has more dimensions in the leaf
+            error_codes: np.ndarray = cast(np.ndarray, tis[ker_name].error_code)[
+                :, mask
+            ]
+            cls = self.kernel_classes.map(lambda d: d[ker_name])
+            error_log[ker_name] = KernelErrorLog(ker_name, cls, transition, error_codes)
+        return error_log
 
     def pkl_save(self, path) -> None:
         """Save result as a pickled object under `path`."""
@@ -302,6 +356,10 @@ class Engine:
         else:
             gqs = None
 
+        kernels_cls: dict[str, type] = {
+            ker.identifier: type(ker) for ker in self._kernel_sequence.get_kernels()
+        }
+
         return SamplingResult(
             positions=self._position_chain,
             transition_infos=self._transition_info_chain,
@@ -309,6 +367,7 @@ class Engine:
             tuning_infos=Option(self._tuning_info_chain),
             kernel_states=Option(ksc),
             full_model_states=Option(None),
+            kernel_classes=Option(kernels_cls),
         )
 
     def _split_prng_key(self, n: int = 1) -> KeyArray:
