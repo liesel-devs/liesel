@@ -570,10 +570,14 @@ class ErrorSummaryForOneCode(NamedTuple):
 
 
 ErrorSummary = dict[str, dict[int, ErrorSummaryForOneCode]]
+"""
+see doc string of `_make_error_summery`
+"""
 
 
 def _make_error_summary(
     error_log: ErrorLog,
+    posterior_error_log: ErrorLog | None,
 ) -> ErrorSummary:
     """
     creates an error summary from the error log.
@@ -583,8 +587,9 @@ def _make_error_summary(
     ```
     {
         "kernel_identifier": {
-            error_code1: ("error_msg", count, count_in_posterior), error_code2:
-            ("error_msg", count, count_in_posterior), ...
+            error_code1: ("error_msg", count, count_in_posterior),
+            error_code2: ("error_msg", count, count_in_posterior),
+            ...
         },
         ...
     }
@@ -597,6 +602,7 @@ def _make_error_summary(
     for kel in error_log.values():
         counter_dict: dict[int, np.ndarray] = {}
 
+        # calculate the overall counts
         ec_unique = np.unique(kel.error_codes)
         for ec in ec_unique:
             if ec == 0:
@@ -604,7 +610,7 @@ def _make_error_summary(
             occurences_per_chain = np.sum(kel.error_codes == ec, axis=1)
             counter_dict[ec] = occurences_per_chain
 
-        krnl_summary = {}
+        krnl_summary: dict[int, ErrorSummaryForOneCode] = {}
         for key, count in counter_dict.items():
             ec = key
             # type ignore is ok since the type must implement the kernel protocol.
@@ -612,6 +618,19 @@ def _make_error_summary(
                 "", lambda krn_cls: krn_cls.error_book[ec]  # type: ignore
             )
             krnl_summary[ec] = ErrorSummaryForOneCode(ec, error_msg, count, None)
+
+        # calculate the counts in the posterior
+        if posterior_error_log is not None:
+            kel_post = posterior_error_log[kel.kernel_ident]
+            ec_unique = np.unique(kel_post.error_codes)
+            for ec in ec_unique:
+                if ec == 0:
+                    continue
+                occurences_per_chain = np.sum(kel_post.error_codes == ec, axis=1)
+                krnl_summary[ec] = krnl_summary[ec]._replace(
+                    count_per_chain_posterior=occurences_per_chain
+                )
+
         error_summary[kel.kernel_ident] = krnl_summary
 
     return error_summary
@@ -790,7 +809,9 @@ class Summary:
             "chains_merged": not per_chain,
         }
 
-        error_summary = _make_error_summary(result.get_error_log(False))
+        error_summary = _make_error_summary(
+            result.get_error_log(False), result.get_error_log(True)
+        )
 
         return Summary(
             quantities=quantities,
