@@ -17,6 +17,7 @@ import xarray
 from liesel.goose.engine import ErrorLog, SamplingResult
 from liesel.goose.pytree import slice_leaves, stack_leaves
 from liesel.goose.types import Position
+from liesel.option import Option
 
 
 def raise_chain_indices_error(
@@ -577,7 +578,7 @@ see doc string of `_make_error_summery`
 
 def _make_error_summary(
     error_log: ErrorLog,
-    posterior_error_log: ErrorLog | None,
+    posterior_error_log: Option[ErrorLog],
 ) -> ErrorSummary:
     """
     creates an error summary from the error log.
@@ -620,8 +621,9 @@ def _make_error_summary(
             krnl_summary[ec] = ErrorSummaryForOneCode(ec, error_msg, count, None)
 
         # calculate the counts in the posterior
-        if posterior_error_log is not None:
-            kel_post = posterior_error_log[kel.kernel_ident]
+        if posterior_error_log.is_some():
+            posterior_error_log_unwrapped = posterior_error_log.unwrap()
+            kel_post = posterior_error_log_unwrapped[kel.kernel_ident]
             ec_unique = np.unique(kel_post.error_codes)
             for ec in ec_unique:
                 if ec == 0:
@@ -810,7 +812,7 @@ class Summary:
         }
 
         error_summary = _make_error_summary(
-            result.get_error_log(False), result.get_error_log(True)
+            result.get_error_log(False).unwrap(), result.get_error_log(True)
         )
 
         return Summary(

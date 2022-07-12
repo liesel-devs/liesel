@@ -171,7 +171,7 @@ class SamplingResult:
 
         return Option(time)
 
-    def get_error_log(self, posterior_only=False) -> ErrorLog:
+    def get_error_log(self, posterior_only=False) -> Option[ErrorLog]:
         """
         returns the error log
 
@@ -182,7 +182,10 @@ class SamplingResult:
             opt = self.transition_infos.combine_filtered(
                 lambda config: config.type == EpochType.POSTERIOR
             )
-            tis = opt.expect(f"No posterior transition infos in {repr(self)}")
+            if opt.is_none():
+                return Option(None)
+            else:
+                tis = opt.expect(f"No posterior transition infos in {repr(self)}")
         else:
             opt = self.transition_infos.combine_all()
             tis = opt.expect(f"No transition infos in {repr(self)}")
@@ -197,7 +200,7 @@ class SamplingResult:
             ]
             cls = self.kernel_classes.map(lambda d: d[ker_name])
             error_log[ker_name] = KernelErrorLog(ker_name, cls, transition, error_codes)
-        return error_log
+        return Option(error_log)
 
     def pkl_save(self, path) -> None:
         """Save result as a pickled object under `path`."""

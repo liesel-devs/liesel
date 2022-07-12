@@ -90,7 +90,7 @@ def test_error_log():
         Option.none(),
     )
 
-    error_log = sr.get_error_log()
+    error_log = sr.get_error_log().unwrap()
     kel = error_log["kern0"]
     assert kel.kernel_ident == "kern0"
     assert np.array_equal(kel.transition, np.array([2, 3]))
