@@ -25,7 +25,7 @@ from liesel.goose.pytree import register_dataclass_as_pytree
 from liesel.goose.types import Array, KeyArray, ModelInterface, ModelState
 from liesel.option import Option
 
-from deterministic_kernels import DetCountingKernel, DetCountingKernelState
+from .deterministic_kernels import DetCountingKernel, DetCountingKernelState
 
 
 @register_dataclass_as_pytree
