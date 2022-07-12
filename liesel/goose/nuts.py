@@ -56,32 +56,32 @@ class NUTSTransitionInfo(DefaultTransitionInfo):
     """
 
     turning: bool
-    """Whether the expansion stopped because the trajectory started turning back."""
+    """Whether the expansion was stopped because the trajectory started turning."""
 
-    trajectory_expansions: int
-    """The number of sub-trajectory samples that were taken."""
+    treedepth: int
+    """The tree depth, that is, the number of times the trajectory was expanded."""
 
-    integration_steps: int
-    """
-    The number of integration steps that were taken.
-
-    This is also the number of states in the full trajectory.
-    """
+    leapfrog: int
+    """The number of computed leapfrog steps."""
 
 
-def _goose_info(nuts_info: nuts.NUTSInfo) -> NUTSTransitionInfo:
-    error_code = 1 * nuts_info.is_divergent
-    acceptance_prob = nuts_info.acceptance_probability
-    position_moved = 99
+def _error_code(*args: bool) -> int:
+    return jnp.array(args) @ (2 ** jnp.arange(len(args)))
+
+
+def _goose_info(nuts_info: nuts.NUTSInfo, max_treedepth: int) -> NUTSTransitionInfo:
+    error_code = _error_code(
+        nuts_info.is_divergent, nuts_info.num_trajectory_expansions == max_treedepth
+    )
 
     return NUTSTransitionInfo(
-        error_code,
-        acceptance_prob,
-        position_moved,
-        nuts_info.is_divergent,
-        nuts_info.is_turning,
-        nuts_info.num_trajectory_expansions,
-        nuts_info.integration_steps,
+        error_code=error_code,
+        acceptance_prob=nuts_info.acceptance_probability,
+        position_moved=99,
+        divergent=nuts_info.is_divergent,
+        turning=nuts_info.is_turning,
+        treedepth=nuts_info.num_trajectory_expansions,
+        leapfrog=nuts_info.integration_steps,
     )
 
 
@@ -98,7 +98,13 @@ class NUTSKernel(
     implementing the `liesel.goose.types.Kernel` protocol.
     """
 
-    error_book: ClassVar[dict[int, str]] = {0: "no errors", 1: "divergent transition"}
+    error_book: ClassVar[dict[int, str]] = {
+        0: "no errors",
+        1: "divergent transition",
+        2: "maximum tree depth",
+        3: "divergent transition + maximum tree depth",
+    }
+
     needs_history: ClassVar[bool] = True
     identifier: str = ""
 
@@ -107,7 +113,7 @@ class NUTSKernel(
         position_keys: Sequence[str],
         initial_step_size: float | None = None,
         initial_inverse_mass_matrix: Array | None = None,
-        max_num_doublings: int = 10,
+        max_treedepth: int = 10,
         da_target_accept: float = 0.8,
         da_gamma: float = 0.05,
         da_kappa: float = 0.75,
@@ -119,7 +125,7 @@ class NUTSKernel(
 
         self.initial_step_size = initial_step_size
         self.initial_inverse_mass_matrix = initial_inverse_mass_matrix
-        self.max_num_doublings = max_num_doublings
+        self.max_treedepth = max_treedepth
 
         self.da_target_accept = da_target_accept
         self.da_gamma = da_gamma
@@ -132,7 +138,7 @@ class NUTSKernel(
         return nuts.init(self.position(model_state), self.log_prob_fn(model_state))
 
     def _blackjax_kernel(self) -> Callable:
-        return nuts.kernel(max_num_doublings=self.max_num_doublings)
+        return nuts.kernel(max_num_doublings=self.max_treedepth)
 
     def init_state(self, prng_key, model_state):
         """
@@ -199,7 +205,7 @@ class NUTSKernel(
             kernel_state.inverse_mass_matrix,
         )
 
-        info = _goose_info(blackjax_info)
+        info = _goose_info(blackjax_info, self.max_treedepth)
         model_state = self.model.update_state(blackjax_state.position, model_state)
         return TransitionOutcome(info, kernel_state, model_state)
 
