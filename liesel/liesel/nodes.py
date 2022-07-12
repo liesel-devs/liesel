@@ -1015,6 +1015,8 @@ def transform_parameter(node: Node, bijector: str | TFPBijectorClass) -> NodeGro
 
     if isinstance(bijector, str):
         _bijector = getattr(nb, bijector)
+    else:
+        _bijector = bijector
 
     value = _bijector().forward(node.value)
     distribution = node.distribution.transform(bijector)
