@@ -624,7 +624,6 @@ def _make_error_summary(
         if posterior_error_log.is_some():
             posterior_error_log_unwrapped = posterior_error_log.unwrap()
             kel_post = posterior_error_log_unwrapped[kel.kernel_ident]
-            ec_unique = np.unique(kel_post.error_codes)
             for ec in ec_unique:
                 if ec == 0:
                     continue
@@ -727,13 +726,121 @@ class Summary:
 
         return df
 
-    def _repr_html_(self):
+    def _param_df(self):
         df = self.to_dataframe()
-        del df["var_fqn"]
-        return df.to_html(index_names=False)
+
+        df.index.name = "parameter"
+        df = df.rename(columns={"var_index": "index"})
+        df = df.set_index("index", append=True)
+
+        # fmt: off
+        df = df[[
+            "mean",
+            "sd",
+            "sample_size",
+            "ess_bulk",
+            "ess_tail",
+            "rhat",
+            "mcse_mean",
+            "mcse_sd",
+        ]]
+        # fmt: on
+
+        return df
+
+    def _error_df(self, per_chain=False):
+        # fmt: off
+        df = pd.concat({
+            kernel: pd.DataFrame.from_dict(code_summary, orient="index")
+            for kernel, code_summary in self.error_summary.items()
+        })
+        # fmt: on
+
+        df = df.reset_index(level=-1, drop=True)
+        df = df.set_index(["error_code", "error_msg"], append=True)
+        df.index.names = ["kernel", "error_code", "error_msg"]
+
+        # fmt: off
+        df = df.rename(columns={
+            "count_per_chain": "total",
+            "count_per_chain_posterior": "posterior",
+        })
+        # fmt: on
+
+        df = df.explode(["total", "posterior"])
+        df["warmup"] = df["total"] - df["posterior"]
+        df = df.drop(columns="total")
+
+        df = df.melt(
+            value_vars=["warmup", "posterior"],
+            var_name="phase",
+            value_name="count",
+            ignore_index=False,
+        )
+
+        df = df.set_index("phase", append=True)
+        df["chain"] = df.groupby(level=df.index.names).cumcount()
+        df = df.reset_index(level=-1)
+
+        df = df.set_index(["phase", "chain"], append=True)
+
+        if not per_chain:
+            df = df.reset_index(level=-1, drop=True)
+            df = df.groupby(level=df.index.names).aggregate({"count": "sum"})
+            df = df.sort_index(level=-1, ascending=False)
+
+        return df
+
+    def __repr__(self):
+        param_df = self._param_df()
+        error_df = self._error_df()
+
+        txt = (
+            "Parameter summary:\n\n"
+            + repr(param_df)
+            + "\n\nError summary:\n\n"
+            + repr(error_df)
+        )
+
+        return txt
+
+    def _repr_html_(self):
+        param_df = self._param_df()
+        error_df = self._error_df()
+
+        html = (
+            "\n<p><strong>Parameter summary:</strong></p>\n"
+            + param_df.to_html()
+            + "\n<p><strong>Error summary:</strong></p>\n"
+            + error_df.to_html()
+            + "\n"
+        )
+
+        return html
+
+    def _repr_markdown_(self, x):
+        param_df = self._param_df()
+        error_df = self._error_df()
+
+        try:
+            param_md = param_df.to_markdown()
+            error_md = error_df.to_markdown()
+        except ImportError:
+            param_md = f"```\n{repr(param_df)}\n```"
+            error_md = f"```\n{repr(error_df)}\n```"
+
+        md = (
+            "\n\n**Parameter summary:**\n\n"
+            + param_md
+            + "\n\n**Error summary:**\n\n"
+            + error_md
+            + "\n\n"
+        )
+
+        return md
 
     def __str__(self):
-        return self.to_dataframe().__str__()
+        return str(self.to_dataframe())
 
     @staticmethod
     def from_result(
