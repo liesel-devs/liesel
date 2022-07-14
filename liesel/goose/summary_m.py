@@ -773,7 +773,7 @@ class Summary:
         df["phase"] = pd.Categorical(df["phase"], categories=["warmup", "posterior"])
 
         df = df.set_index("phase", append=True)
-        df["chain"] = df.groupby(level=df.index.names).cumcount()
+        df["chain"] = df.groupby(level=[0, 1, 2, 3]).cumcount()
         df = df.set_index("chain", append=True)
         df = df.sort_index()
 
@@ -786,7 +786,7 @@ class Summary:
         df = df.drop(columns="sample_size")
 
         if not per_chain:
-            df = df.groupby(level=df.index.names[:-1])
+            df = df.groupby(level=[0, 1, 2, 3], observed=True)
             df = df.aggregate({"count": "sum", "relative": "mean"})
             df = df.sort_index()
 
