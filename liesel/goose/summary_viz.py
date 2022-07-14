@@ -200,6 +200,53 @@ def setup_plot_df(
     ).astype({"chain_index": "category"})
 
 
+def setup_scatterplot_df(
+    results: SamplingResult,
+    params: str | list[str] | None,
+    param_indices: int | Sequence[int] | None,
+    chain_indices: int | Sequence[int] | None,
+    max_chains: int | None,
+    include_warmup: bool = False,
+) -> pd.DataFrame:
+    """
+    Provides bespoke data input for plot_scatter. If two indices *and* two params are
+    specified, the first index refers the first param and the second index to the
+    second.
+    """
+    if (
+        isinstance(params, str)
+        or params is None
+        or isinstance(param_indices, int)
+        or param_indices is None
+    ):
+        return setup_plot_df(
+            results, params, param_indices, chain_indices, max_chains, include_warmup
+        )
+    if not isinstance(params, str) and len(params) > 1:
+        param0_df = setup_plot_df(
+            results,
+            params[0],
+            param_indices[0],
+            chain_indices,
+            max_chains,
+            include_warmup,
+        )
+        param1_df = setup_plot_df(
+            results,
+            params[1],
+            param_indices[1],
+            chain_indices,
+            max_chains,
+            include_warmup,
+        )
+        plot_df = pd.concat([param0_df, param1_df], ignore_index=True)
+    else:
+        plot_df = setup_plot_df(
+            results, params, param_indices, chain_indices, max_chains, include_warmup
+        )
+    return plot_df
+
+
 def set_plot_cols(plot_df: pd.DataFrame, ncol: int) -> int:
     """Determines number of facets within each row of the grid."""
 
@@ -902,36 +949,49 @@ def plot_scatter(
     title: str | None = None,
     title_spacing: float = 0.9,
     style: str = "whitegrid",
+    color_list: list[str] | None = None,
     figure_size: tuple[int | float, int | float] = (9, 6),
     legend_position: tuple[float, float] | str = "best",
     save_path: str | None = None,
+    include_warmup: bool = False,
 ):
 
     sns.set_theme(style=style)
-    plot_df = collect_param_dfs(
-        results,
-        params=params,
-        param_indices=param_indices,
-        chain_indices=chain_indices,
-        max_chains=max_chains,
+    plot_df = setup_scatterplot_df(
+        results, params, param_indices, chain_indices, max_chains, include_warmup
     )
-    wide_df = wide_plot_df(data=plot_df, params=params, param_indices=param_indices)
-    labx = get_label(plot_df, params[0], param_indices[0])
-    laby = get_label(plot_df, params[1], param_indices[1])
 
-    color_list = set_colors(plot_df, None)
+    labels = plot_df.param_label.unique()
+    if len(labels) != 2:
+        raise ValueError(
+            "'plot_scatter' can only plot exactly two parameters. Use 'plot_pairs'"
+            " instead to plot more."
+        )
+
+    plot_df = (
+        plot_df.drop(["param_index", "param"], axis=1)
+        .pivot(
+            index=["chain_index", "iteration"], columns="param_label", values="value"
+        )
+        .reset_index()
+        .drop(["iteration"], axis=1)
+    )
+
+    color_list = set_colors(plot_df, color_list)
     fig, axis = plt.subplots(1, 1, figsize=figure_size)
     sns.scatterplot(
-        data=wide_df,
-        x=labx,
-        y=laby,
+        data=plot_df,
+        x=labels[0],
+        y=labels[1],
         alpha=alpha,
         hue="chain_index",
         palette=color_list,
         ax=axis,
     )
-    fig.suptitle(get_title(plot_df, title))
-    fig.subplots_adjust(top=title_spacing)
+    if title is not None:
+        fig.suptitle()
+        fig.subplots_adjust(top=title_spacing)
+
     axis.legend(title="Chain", loc=legend_position, frameon=False)
 
     save_figure(save_path=save_path)
