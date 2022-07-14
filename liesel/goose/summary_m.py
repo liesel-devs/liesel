@@ -572,7 +572,7 @@ class ErrorSummaryForOneCode(NamedTuple):
 
 ErrorSummary = dict[str, dict[int, ErrorSummaryForOneCode]]
 """
-see doc string of `_make_error_summery`
+See docstring of `_make_error_summary`.
 """
 
 
@@ -581,15 +581,15 @@ def _make_error_summary(
     posterior_error_log: Option[ErrorLog],
 ) -> ErrorSummary:
     """
-    creates an error summary from the error log.
+    Creates an error summary from the error log.
 
-    The returned value looks like
+    The returned value looks like this:
 
     ```
     {
-        "kernel_identifier": {
-            error_code1: ("error_msg", count, count_in_posterior),
-            error_code2: ("error_msg", count, count_in_posterior),
+        kernel_identifier: {
+            error_code: (error_code, error_msg, count, count_in_posterior),
+            error_code: (error_code, error_msg, count, count_in_posterior),
             ...
         },
         ...
@@ -597,7 +597,7 @@ def _make_error_summary(
     ```
 
     The `error_msg` is the empty string if the kernel class is not supplied in the
-    `error_log` and `count_in_posterior` is currently always none.
+    `error_log`.
     """
     error_summary = {}
     for kel in error_log.values():
@@ -642,10 +642,10 @@ class Summary:
     """
     A summary object.
 
-    Allows easy programatic access via quantities[quantity_name][var_name]. The
-    array has the a similar shape as the parameter with var_name. However, if
-    `per_chain` is `True` the first dimension refers to the chain index.
-    Additionally, for "hdi" and "quantile" the second dimension refers to the
+    Allows easy programmatic access via `quantities[quantity_name][var_name]`.
+    The array has a similar shape as the parameter with `var_name`. However,
+    if `per_chain` is `True`, the first dimension refers to the chain index.
+    Additionally, for `hdi` and `quantile` the second dimension refers to the
     quantile.
 
     The summary object can be turned into a `pd.DataFrame` using the function
@@ -733,18 +733,9 @@ class Summary:
         df = df.rename(columns={"var_index": "index"})
         df = df.set_index("index", append=True)
 
-        # fmt: off
-        df = df[[
-            "mean",
-            "sd",
-            "sample_size",
-            "ess_bulk",
-            "ess_tail",
-            "rhat",
-            "mcse_mean",
-            "mcse_sd",
-        ]]
-        # fmt: on
+        qtls = [f"q_{qtl}" for qtl in self.config["quantiles"]]
+        cols = ["mean", "sd"] + qtls + ["sample_size", "ess_bulk", "ess_tail", "rhat"]
+        df = df[cols]
 
         return df
 
@@ -756,7 +747,8 @@ class Summary:
         })
         # fmt: on
 
-        df = df.reset_index(level=-1, drop=True)
+        df = df.reset_index(level=1, drop=True)
+        df["error_code"] = df["error_code"].astype(int)
         df = df.set_index(["error_code", "error_msg"], append=True)
         df.index.names = ["kernel", "error_code", "error_msg"]
 
@@ -778,16 +770,25 @@ class Summary:
             ignore_index=False,
         )
 
+        df["phase"] = pd.Categorical(df["phase"], categories=["warmup", "posterior"])
+
         df = df.set_index("phase", append=True)
         df["chain"] = df.groupby(level=df.index.names).cumcount()
-        df = df.reset_index(level=-1)
+        df = df.set_index("chain", append=True)
+        df = df.sort_index()
 
-        df = df.set_index(["phase", "chain"], append=True)
+        df["sample_size"] = None
+        warmup_size = self.sample_info["warmup_size_per_chain"]
+        posterior_size = self.sample_info["sample_size_per_chain"]
+        df.loc[pd.IndexSlice[:, :, :, "warmup"], "sample_size"] = warmup_size
+        df.loc[pd.IndexSlice[:, :, :, "posterior"], "sample_size"] = posterior_size
+        df["relative"] = df["count"] / df["sample_size"]
+        df = df.drop(columns="sample_size")
 
         if not per_chain:
-            df = df.reset_index(level=-1, drop=True)
-            df = df.groupby(level=df.index.names).aggregate({"count": "sum"})
-            df = df.sort_index(level=-1, ascending=False)
+            df = df.groupby(level=df.index.names[:-1])
+            df = df.aggregate({"count": "sum", "relative": "mean"})
+            df = df.sort_index()
 
         return df
 
@@ -818,7 +819,7 @@ class Summary:
 
         return html
 
-    def _repr_markdown_(self, x):
+    def _repr_markdown_(self):
         param_df = self._param_df()
         error_df = self._error_df()
 
@@ -855,16 +856,16 @@ class Summary:
         """
         Creates a `Summary` object from a result object.
 
-        An optional `addition_chain` can be supplied to add more parameters to
+        An optional `additional_chain` can be supplied to add more parameters to
         the summary output. `additional_chain` must be a position chain which
-        maches chain and time dimention of the posterior chain as returned by
-        `result.get_posterior_sampels()`.
+        matches chain and time dimension of the posterior chain as returned by
+        `result.get_posterior_samples()`.
 
         The arguments `selected` and `deselected` allow to get a summary only
-        from subset of the position keys.
+        for a subset of the position keys.
 
-        When using `per_chain` the summary is calculated on a per chain basis.
-        Certain measures like rhat are not availavle if `per_chain` is true.
+        When using `per_chain`, the summary is calculated on a per-chain basis.
+        Certain measures like `rhat` are not available if `per_chain` is true.
 
         Experimental.
         """
@@ -889,9 +890,16 @@ class Summary:
 
         # get some general infos on the sampling
         param_chain = next(iter(posterior_chain.values()))
+        epochs = result.positions.get_epochs()
+
+        warmup_size = np.sum(
+            [epoch.duration for epoch in epochs if epoch.type.is_warmup(epoch.type)]
+        )
+
         sample_info = {
             "num_chains": param_chain.shape[0],
             "sample_size_per_chain": param_chain.shape[1],
+            "warmup_size_per_chain": warmup_size,
         }
 
         # convert everything to numpy array
