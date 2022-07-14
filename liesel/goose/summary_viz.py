@@ -658,7 +658,7 @@ def raise_multi_param_error(plot_df: pd.DataFrame, param: str) -> None:
     if plot_df["param_label"].nunique() > 1:
         raise ValueError(
             f"{param} has more than one index. "
-            f"Please specify a single `param_index` for plotting."
+            "Please specify a single `param_index` for plotting."
         )
 
 
@@ -858,5 +858,80 @@ def plot_param(
     fig.tight_layout()
     fig.suptitle(get_title(plot_df, title))
     fig.subplots_adjust(top=title_spacing)
+
+    save_figure(save_path=save_path)
+
+
+def filter_plot_data(data: pd.DataFrame, param: str, param_index: int) -> pd.DataFrame:
+    index = data.param_index == param_index
+    name = data.param == param
+    df_param = data[index & name]
+    return df_param.reset_index()
+
+
+def get_label(data, param: str, param_index: int) -> str:
+    df_param = filter_plot_data(data, param, param_index)
+    return df_param.param_label.unique()[0]
+
+
+def wide_plot_df(
+    data: pd.DataFrame, params: list[str], param_indices: tuple[int, int]
+) -> pd.DataFrame:
+
+    df_param1 = filter_plot_data(data, params[0], param_indices[0])
+    df_param2 = filter_plot_data(data, params[1], param_indices[1])
+
+    wide_df = pd.DataFrame(
+        {
+            "chain_index": df_param1.chain_index.values,
+            "iteration": df_param1.iteration.values,
+            df_param1.param_label.unique()[0]: df_param1["value"],
+            df_param2.param_label.unique()[0]: df_param2["value"],
+        }
+    )
+    return wide_df
+
+
+def plot_scatter(
+    results: SamplingResult,
+    params: list[str],
+    param_indices: tuple[int, int],
+    chain_indices: int | Sequence[int] | None = None,
+    max_chains: int | None = 5,
+    alpha: float = 0.2,
+    title: str | None = None,
+    title_spacing: float = 0.9,
+    style: str = "whitegrid",
+    figure_size: tuple[int | float, int | float] = (9, 6),
+    legend_position: tuple[float, float] | str = "best",
+    save_path: str | None = None,
+):
+
+    sns.set_theme(style=style)
+    plot_df = collect_param_dfs(
+        results,
+        params=params,
+        param_indices=param_indices,
+        chain_indices=chain_indices,
+        max_chains=max_chains,
+    )
+    wide_df = wide_plot_df(data=plot_df, params=params, param_indices=param_indices)
+    labx = get_label(plot_df, params[0], param_indices[0])
+    laby = get_label(plot_df, params[1], param_indices[1])
+
+    color_list = set_colors(plot_df, None)
+    fig, axis = plt.subplots(1, 1, figsize=figure_size)
+    sns.scatterplot(
+        data=wide_df,
+        x=labx,
+        y=laby,
+        alpha=alpha,
+        hue="chain_index",
+        palette=color_list,
+        ax=axis,
+    )
+    fig.suptitle(get_title(plot_df, title))
+    fig.subplots_adjust(top=title_spacing)
+    axis.legend(title="Chain", loc=legend_position, frameon=False)
 
     save_figure(save_path=save_path)
