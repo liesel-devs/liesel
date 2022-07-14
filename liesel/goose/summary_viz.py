@@ -66,16 +66,6 @@ def convert_to_sequence(indices: int | Sequence[int]) -> Sequence[int]:
     return indices
 
 
-def merge_cols(df: pd.DataFrame, col1: str, col2: str) -> pd.DataFrame:
-    """
-    Combine param and param_index column to single column. Transforms e.g. beta and 0 to
-    beta_0.
-    """
-
-    df[col1] = df[col1].astype(str) + "_" + df[col2].astype(str)
-    return df
-
-
 def filter_param_df(
     param_df: pd.DataFrame,
     param_indices: int | Sequence[int] | None,
@@ -118,13 +108,18 @@ def postprocess_param_df(
     num_original_subparams = param_df["param_index"].nunique()
 
     if num_original_subparams > 1:
-        param_df = merge_cols(param_df, col1="param", col2="param_index")
+        name = param_df["param"].astype(str)
+        index = param_df["param_index"].astype(str)
+        param_df["param_label"] = name + "_" + index
+    else:
+        name = param_df["param"].astype(str)
+        param_df["param_label"] = name
 
     chain_indices = validate_chain_indices(chain_indices, num_original_chains)
     param_indices = validate_param_indices(param_indices, num_original_subparams, param)
     param_df = filter_param_df(param_df, param_indices, chain_indices, max_chains)
 
-    return param_df.drop(columns="param_index")
+    return param_df
 
 
 def collect_subparam_dfs(
@@ -357,7 +352,7 @@ def plot_trace(
         x="iteration",
         y="value",
         hue="chain_index",
-        col="param",
+        col="param_label",
         col_wrap=set_plot_cols(plot_df, ncol),
         facet_kws=dict(sharex=True, sharey=False),
         palette=color_palette,
@@ -481,7 +476,7 @@ def plot_density(
         x="value",
         y=None,
         hue="chain_index",
-        col="param",
+        col="param_label",
         col_wrap=set_plot_cols(plot_df, ncol),
         facet_kws=dict(sharex=False, sharey=False),
         palette=color_palette,
@@ -629,7 +624,7 @@ def plot_cor(
         sns.FacetGrid(
             data=plot_df,
             hue="chain_index",
-            col="param",
+            col="param_label",
             col_wrap=set_plot_cols(plot_df, ncol),
             palette=color_palette,
             height=height,
@@ -660,7 +655,7 @@ def raise_multi_param_error(plot_df: pd.DataFrame, param: str) -> None:
     subparameter. Throws an informative error otherwise.
     """
 
-    if plot_df["param"].nunique() > 1:
+    if plot_df["param_label"].nunique() > 1:
         raise ValueError(
             f"{param} has more than one index. "
             f"Please specify a single `param_index` for plotting."
