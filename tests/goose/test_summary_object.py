@@ -278,6 +278,21 @@ def test_df_sample_info(result: SamplingResult):
 
 def test_error_summary(result: SamplingResult):
     # add some error codes to the chain
+
+    # epoch 1 - warmup
+    ecs = np.array(
+        result.transition_infos.get_specific_chain(1)
+        ._chunks_list[0]["kernel_00"]
+        .error_code
+    )
+    ecs[0, 0] = 1
+    ecs[:, 3] = 1
+    ecs[2, 3:5] = 2
+    result.transition_infos.get_specific_chain(1)._chunks_list[0][
+        "kernel_00"
+    ].error_code = ecs
+
+    # posterior
     ecs = np.array(
         result.transition_infos.get_current_chain()
         ._chunks_list[0]["kernel_00"]
@@ -306,6 +321,10 @@ def test_error_summary(result: SamplingResult):
     assert es[1].error_msg == "error 1"
     assert es[2].error_msg == "error 2"
 
-    # check that counts are correct
-    assert np.all(es[1].count_per_chain == np.array([2, 1, 1]))
-    assert np.all(es[2].count_per_chain == np.array([0, 5, 0]))
+    # check that counts are correct - overall
+    assert np.all(es[1].count_per_chain == np.array([4, 2, 1]))
+    assert np.all(es[2].count_per_chain == np.array([0, 5, 2]))
+
+    # check that counts are correct - only in the posterior
+    assert np.all(es[1].count_per_chain_posterior == np.array([2, 1, 1]))
+    assert np.all(es[2].count_per_chain_posterior == np.array([0, 5, 0]))

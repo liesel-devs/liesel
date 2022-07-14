@@ -17,6 +17,7 @@ import xarray
 from liesel.goose.engine import ErrorLog, SamplingResult
 from liesel.goose.pytree import slice_leaves, stack_leaves
 from liesel.goose.types import Position
+from liesel.option import Option
 
 
 def raise_chain_indices_error(
@@ -570,33 +571,39 @@ class ErrorSummaryForOneCode(NamedTuple):
 
 
 ErrorSummary = dict[str, dict[int, ErrorSummaryForOneCode]]
+"""
+See docstring of `_make_error_summary`.
+"""
 
 
 def _make_error_summary(
     error_log: ErrorLog,
+    posterior_error_log: Option[ErrorLog],
 ) -> ErrorSummary:
     """
-    creates an error summary from the error log.
+    Creates an error summary from the error log.
 
-    The returned value looks like
+    The returned value looks like this:
 
     ```
     {
-        "kernel_identifier": {
-            error_code1: ("error_msg", count, count_in_posterior), error_code2:
-            ("error_msg", count, count_in_posterior), ...
+        kernel_identifier: {
+            error_code: (error_code, error_msg, count, count_in_posterior),
+            error_code: (error_code, error_msg, count, count_in_posterior),
+            ...
         },
         ...
     }
     ```
 
     The `error_msg` is the empty string if the kernel class is not supplied in the
-    `error_log` and `count_in_posterior` is currently always none.
+    `error_log`.
     """
     error_summary = {}
     for kel in error_log.values():
         counter_dict: dict[int, np.ndarray] = {}
 
+        # calculate the overall counts
         ec_unique = np.unique(kel.error_codes)
         for ec in ec_unique:
             if ec == 0:
@@ -604,7 +611,7 @@ def _make_error_summary(
             occurences_per_chain = np.sum(kel.error_codes == ec, axis=1)
             counter_dict[ec] = occurences_per_chain
 
-        krnl_summary = {}
+        krnl_summary: dict[int, ErrorSummaryForOneCode] = {}
         for key, count in counter_dict.items():
             ec = key
             # type ignore is ok since the type must implement the kernel protocol.
@@ -612,6 +619,19 @@ def _make_error_summary(
                 "", lambda krn_cls: krn_cls.error_book[ec]  # type: ignore
             )
             krnl_summary[ec] = ErrorSummaryForOneCode(ec, error_msg, count, None)
+
+        # calculate the counts in the posterior
+        if posterior_error_log.is_some():
+            posterior_error_log_unwrapped = posterior_error_log.unwrap()
+            kel_post = posterior_error_log_unwrapped[kel.kernel_ident]
+            for ec in ec_unique:
+                if ec == 0:
+                    continue
+                occurences_per_chain = np.sum(kel_post.error_codes == ec, axis=1)
+                krnl_summary[ec] = krnl_summary[ec]._replace(
+                    count_per_chain_posterior=occurences_per_chain
+                )
+
         error_summary[kel.kernel_ident] = krnl_summary
 
     return error_summary
@@ -622,10 +642,10 @@ class Summary:
     """
     A summary object.
 
-    Allows easy programatic access via quantities[quantity_name][var_name]. The
-    array has the a similar shape as the parameter with var_name. However, if
-    `per_chain` is `True` the first dimension refers to the chain index.
-    Additionally, for "hdi" and "quantile" the second dimension refers to the
+    Allows easy programmatic access via `quantities[quantity_name][var_name]`.
+    The array has a similar shape as the parameter with `var_name`. However,
+    if `per_chain` is `True`, the first dimension refers to the chain index.
+    Additionally, for `hdi` and `quantile` the second dimension refers to the
     quantile.
 
     The summary object can be turned into a `pd.DataFrame` using the function
@@ -706,13 +726,122 @@ class Summary:
 
         return df
 
-    def _repr_html_(self):
+    def _param_df(self):
         df = self.to_dataframe()
-        del df["var_fqn"]
-        return df.to_html(index_names=False)
+
+        df.index.name = "parameter"
+        df = df.rename(columns={"var_index": "index"})
+        df = df.set_index("index", append=True)
+
+        qtls = [f"q_{qtl}" for qtl in self.config["quantiles"]]
+        cols = ["mean", "sd"] + qtls + ["sample_size", "ess_bulk", "ess_tail", "rhat"]
+        df = df[cols]
+
+        return df
+
+    def _error_df(self, per_chain=False):
+        # fmt: off
+        df = pd.concat({
+            kernel: pd.DataFrame.from_dict(code_summary, orient="index")
+            for kernel, code_summary in self.error_summary.items()
+        })
+        # fmt: on
+
+        df = df.reset_index(level=1, drop=True)
+        df["error_code"] = df["error_code"].astype(int)
+        df = df.set_index(["error_code", "error_msg"], append=True)
+        df.index.names = ["kernel", "error_code", "error_msg"]
+
+        # fmt: off
+        df = df.rename(columns={
+            "count_per_chain": "total",
+            "count_per_chain_posterior": "posterior",
+        })
+        # fmt: on
+
+        df = df.explode(["total", "posterior"])
+        df["warmup"] = df["total"] - df["posterior"]
+        df = df.drop(columns="total")
+
+        df = df.melt(
+            value_vars=["warmup", "posterior"],
+            var_name="phase",
+            value_name="count",
+            ignore_index=False,
+        )
+
+        df["phase"] = pd.Categorical(df["phase"], categories=["warmup", "posterior"])
+
+        df = df.set_index("phase", append=True)
+        df["chain"] = df.groupby(level=df.index.names).cumcount()
+        df = df.set_index("chain", append=True)
+        df = df.sort_index()
+
+        df["sample_size"] = None
+        warmup_size = self.sample_info["warmup_size_per_chain"]
+        posterior_size = self.sample_info["sample_size_per_chain"]
+        df.loc[pd.IndexSlice[:, :, :, "warmup"], "sample_size"] = warmup_size
+        df.loc[pd.IndexSlice[:, :, :, "posterior"], "sample_size"] = posterior_size
+        df["relative"] = df["count"] / df["sample_size"]
+        df = df.drop(columns="sample_size")
+
+        if not per_chain:
+            df = df.groupby(level=df.index.names[:-1])
+            df = df.aggregate({"count": "sum", "relative": "mean"})
+            df = df.sort_index()
+
+        return df
+
+    def __repr__(self):
+        param_df = self._param_df()
+        error_df = self._error_df()
+
+        txt = (
+            "Parameter summary:\n\n"
+            + repr(param_df)
+            + "\n\nError summary:\n\n"
+            + repr(error_df)
+        )
+
+        return txt
+
+    def _repr_html_(self):
+        param_df = self._param_df()
+        error_df = self._error_df()
+
+        html = (
+            "\n<p><strong>Parameter summary:</strong></p>\n"
+            + param_df.to_html()
+            + "\n<p><strong>Error summary:</strong></p>\n"
+            + error_df.to_html()
+            + "\n"
+        )
+
+        return html
+
+    def _repr_markdown_(self):
+        param_df = self._param_df()
+        error_df = self._error_df()
+
+        try:
+            param_md = param_df.to_markdown()
+            error_md = error_df.to_markdown()
+        except ImportError:
+            param_md = f"```\n{repr(param_df)}\n```"
+            error_md = f"```\n{repr(error_df)}\n```"
+
+        md = (
+            "\n\n**Parameter summary:**\n\n"
+            + param_md
+            + "\n\n**Error summary:**\n\n"
+            + error_md
+            + "\n\n"
+        )
+
+        return md
 
     def __str__(self):
-        return self.to_dataframe().__str__()
+        return str(self.to_dataframe())
 
     @staticmethod
     def from_result(
@@ -727,16 +856,16 @@ class Summary:
         """
         Creates a `Summary` object from a result object.
 
-        An optional `addition_chain` can be supplied to add more parameters to
+        An optional `additional_chain` can be supplied to add more parameters to
         the summary output. `additional_chain` must be a position chain which
-        maches chain and time dimention of the posterior chain as returned by
-        `result.get_posterior_sampels()`.
+        matches chain and time dimension of the posterior chain as returned by
+        `result.get_posterior_samples()`.
 
         The arguments `selected` and `deselected` allow to get a summary only
-        from subset of the position keys.
+        for a subset of the position keys.
 
-        When using `per_chain` the summary is calculated on a per chain basis.
-        Certain measures like rhat are not availavle if `per_chain` is true.
+        When using `per_chain`, the summary is calculated on a per-chain basis.
+        Certain measures like `rhat` are not available if `per_chain` is true.
 
         Experimental.
         """
@@ -761,9 +890,16 @@ class Summary:
 
         # get some general infos on the sampling
         param_chain = next(iter(posterior_chain.values()))
+        epochs = result.positions.get_epochs()
+
+        warmup_size = np.sum(
+            [epoch.duration for epoch in epochs if epoch.type.is_warmup(epoch.type)]
+        )
+
         sample_info = {
             "num_chains": param_chain.shape[0],
             "sample_size_per_chain": param_chain.shape[1],
+            "warmup_size_per_chain": warmup_size,
         }
 
         # convert everything to numpy array
@@ -790,7 +926,9 @@ class Summary:
             "chains_merged": not per_chain,
         }
 
-        error_summary = _make_error_summary(result.get_error_log(False))
+        error_summary = _make_error_summary(
+            result.get_error_log(False).unwrap(), result.get_error_log(True)
+        )
 
         return Summary(
             quantities=quantities,
