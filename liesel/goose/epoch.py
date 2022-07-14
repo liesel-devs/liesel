@@ -136,15 +136,16 @@ class EpochManager:
         if config.duration < 1:
             raise RuntimeError("Duration must be greater than or equal to 1")
 
+        if config.thinning < 1:
+            raise RuntimeError("Thinning must be greater than or equal to 1")
+
         if config.thinning != 1:
+            if config.duration < config.thinning:
+                raise RuntimeError("Duration must be greater than or equal to thinning")
+
             if config.type == EpochType.POSTERIOR:
                 if config.duration % config.thinning != 0:
                     raise RuntimeError("Duration must be a multiple of thinning")
-            else:
-                raise RuntimeError(
-                    "Thinning in non-posterior epochs is currently not supported"
-                    "and must be set to 1"
-                )
 
         self._configs.append(config)
 

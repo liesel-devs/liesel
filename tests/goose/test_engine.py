@@ -152,7 +152,7 @@ def t_test_engine_builder() -> None:
         [
             EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
             EpochConfig(EpochType.FAST_ADAPTATION, 50, 1, None),
-            EpochConfig(EpochType.BURNIN, 50, 1, None),
+            EpochConfig(EpochType.BURNIN, 55, 10, None),
             EpochConfig(EpochType.POSTERIOR, 100, 10, None),
         ]
     )
@@ -178,15 +178,15 @@ def t_test_engine_builder() -> None:
 
     # test thinning worked
     assert results.get_posterior_samples()["x"].shape == (4, 10)
-    assert results.get_samples()["x"].shape == (4, 111)
+    assert results.get_samples()["x"].shape == (4, 66)
     assert results.generated_quantities.unwrap().combine_all().unwrap()["foo"].result[
         0
-    ].shape == (4, 111)
+    ].shape == (4, 66)
 
     # test thinning is not applied to TIs
     assert results.transition_infos.combine_all().unwrap()[
         "kernel_01"
-    ].error_code.shape == (4, 200)
+    ].error_code.shape == (4, 205)
 
 
 if __name__ == "__main__":
