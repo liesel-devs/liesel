@@ -110,7 +110,7 @@ def postprocess_param_df(
     if num_original_subparams > 1:
         name = param_df["param"].astype(str)
         index = param_df["param_index"].astype(str)
-        param_df["param_label"] = name + "_" + index
+        param_df["param_label"] = name + "[" + index + "]"
     else:
         name = param_df["param"].astype(str)
         param_df["param_label"] = name
