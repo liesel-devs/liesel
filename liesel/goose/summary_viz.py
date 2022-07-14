@@ -935,3 +935,49 @@ def plot_scatter(
     axis.legend(title="Chain", loc=legend_position, frameon=False)
 
     save_figure(save_path=save_path)
+
+
+def plot_pairs(
+    results: SamplingResult,
+    params: str | list[str] | None = None,
+    param_indices: int | Sequence[int] | None = None,
+    chain_indices: int | Sequence[int] | None = None,
+    max_chains: int | None = 5,
+    alpha: float = 0.2,
+    title: str | None = None,
+    title_spacing: float = 0.9,
+    style: str = "whitegrid",
+    diag_kind: str = "kde",
+    height: int = 3,
+    aspect_ratio: int = 1,
+    save_path: str | None = None,
+    include_warmup: bool = False,
+):
+    sns.set_theme(style=style)
+    plot_df = setup_plot_df(
+        results, params, param_indices, chain_indices, max_chains, include_warmup
+    )
+
+    plot_df = (
+        plot_df.drop(["param_index", "param"], axis=1)
+        .pivot(
+            index=["chain_index", "iteration"], columns="param_label", values="value"
+        )
+        .reset_index()
+        .drop(["iteration"], axis=1)
+    )
+
+    g = sns.pairplot(
+        data=plot_df,
+        hue="chain_index",
+        plot_kws={"alpha": alpha},
+        diag_kind=diag_kind,
+        height=height,
+        aspect=aspect_ratio,
+    )
+
+    if title is not None:
+        g.fig.suptitle(title)
+        g.fig.subplots_adjust(top=title_spacing)
+
+    save_figure(save_path=save_path)
