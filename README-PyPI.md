@@ -10,4 +10,9 @@ Liesel is a probabilistic programming framework with a focus on semi-parametric 
 
 The name "Liesel" is an homage to the [Gänseliesel fountain](https://en.wikipedia.org/wiki/G%C3%A4nseliesel), landmark of Liesel's birth city [Göttingen](https://en.wikipedia.org/wiki/G%C3%B6ttingen).
 
-For more information, see [the GitHub repository](https://github.com/liesel-devs/liesel).
+## Resources
+
+- [Liesel & Goose repo](https://github.com/liesel-devs/liesel)
+- [Liesel & Goose API docs](https://liesel-devs.github.io/liesel)
+- [RLiesel repo](https://github.com/liesel-devs/rliesel)
+- [Tutorials](https://liesel-devs.github.io/liesel-tutorials)
