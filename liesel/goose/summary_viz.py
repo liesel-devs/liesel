@@ -978,6 +978,7 @@ def plot_pairs(
     title_spacing: float = 0.9,
     style: str = "whitegrid",
     diag_kind: str = "kde",
+    color_palette: str | list[str] | dict[int, str] | None = None,
     height: int = 3,
     aspect_ratio: int = 1,
     save_path: str | None = None,
@@ -1004,6 +1005,7 @@ def plot_pairs(
         diag_kind=diag_kind,
         height=height,
         aspect=aspect_ratio,
+        palette=color_palette,
     )
 
     if title is not None:
