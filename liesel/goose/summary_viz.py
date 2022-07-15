@@ -925,6 +925,67 @@ def plot_scatter(
     save_path: str | None = None,
     include_warmup: bool = False,
 ):
+    """
+    Produces a scatterplot of two parameters.
+
+    ## Parameters
+
+    - `results`: Result object of the sampling process. Must have a method
+      `get_posterior_samples()` which extracts all samples from the posterior
+      distribution.
+
+    - `params`: Names of the model parameters that are contained in the plot. Must
+      coincide with the dictionary keys of the `Position` with the posterior samples.
+
+    - `param_indices`: Indices of each model parameter that are contained in the plot.
+      Selects e.g. `beta[0]` out of a `beta` parameter vector. If only one string is
+      supplied as the value of `params`, `param_indices` must contain two indices. If a
+      sequence of two strings is supplied to `params`, you can supply either a single
+      integer or a tuple of two integers. A single integer will be used as the index
+      for *both* parameters. If you use a tuple of two integers, the first element will
+      be used as the index for the first parameter, and the second element will be used
+      as the index for the second parameter.
+
+    - `chain_indices`: Indices of chains for each model subparameter that are contained
+      in the plot. Selects e.g. chain 0 and chain 2 out of multiple chains. A single
+      index can be specified as an integer or a sequence containing one integer. If
+      `None`, all chains are included.
+
+    - `max_chains`: Upper bound how many chains are included within each subplot/facet.
+      Avoids overplotting. If `None`, all chains contained in the `results` input are
+      plotted. Always starts chain selection from the lowest chain index upwards. For
+      selecting specific chains use the argument `chain_indices`.
+
+    - `alpha`: Amount of transparency; a float between 0 and 1.
+
+    - `title`: Plot title.
+
+    - `title_spacing`: Determines the margin/whitespace between the plot title (set with
+      `fig.suptitle()`) and the first row of subplots/facets. Passed to the `top`
+      argument of `fig.subplots_adjust()`.
+
+    - `style`: Passed to the `style` argument of `sns.set_theme()`. Valid options are
+      `darkgrid`, `whitegrid`, `dark`, `white`, and `ticks`.
+
+    - `color_list`: Determines the chain colors for all three subplots. Custom colors
+      can be passed with a list of color strings. The length of the list must match the
+      number of chains. If `None`, the default `tab10` matplotlib colormap is chosen.
+
+    - `figure_size`: Size of the entire plot grid. Passed to the `figsize` argument of
+      `plt.figure()`. When changing the figure size consider changing the
+      `legend_position` as well. Generally, a ratio of 3:2 is recommended.
+
+    - `legend_position`: Determines the color legend position. Coordinates are relative
+      to the upper panel within the plot grid. The first coordinate specifies the
+      horizontal, the second coordinate the vertical position. Might require an
+      adjustment when changing the `figure_size` values or the number of chains.
+
+    - `save_path`: File path where the plot is saved.
+
+    - `include_warmup: Include the warmup samples in the trace plot.
+    """
+    # NOTE: Docstring duplications
+    # Multiple arguments in this docstring are shared with other plotting functions.
 
     sns.set_theme(style=style)
     plot_df = setup_scatterplot_df(
