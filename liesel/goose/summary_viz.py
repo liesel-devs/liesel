@@ -909,36 +909,6 @@ def plot_param(
     save_figure(save_path=save_path)
 
 
-def filter_plot_data(data: pd.DataFrame, param: str, param_index: int) -> pd.DataFrame:
-    index = data.param_index == param_index
-    name = data.param == param
-    df_param = data[index & name]
-    return df_param.reset_index()
-
-
-def get_label(data, param: str, param_index: int) -> str:
-    df_param = filter_plot_data(data, param, param_index)
-    return df_param.param_label.unique()[0]
-
-
-def wide_plot_df(
-    data: pd.DataFrame, params: list[str], param_indices: tuple[int, int]
-) -> pd.DataFrame:
-
-    df_param1 = filter_plot_data(data, params[0], param_indices[0])
-    df_param2 = filter_plot_data(data, params[1], param_indices[1])
-
-    wide_df = pd.DataFrame(
-        {
-            "chain_index": df_param1.chain_index.values,
-            "iteration": df_param1.iteration.values,
-            df_param1.param_label.unique()[0]: df_param1["value"],
-            df_param2.param_label.unique()[0]: df_param2["value"],
-        }
-    )
-    return wide_df
-
-
 def plot_scatter(
     results: SamplingResult,
     params: list[str],
