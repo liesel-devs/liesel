@@ -27,7 +27,7 @@ def subparam_chains_to_df(
     subparam_chains: np.ndarray, param_index: int
 ) -> pd.DataFrame:
     """
-    Convert array of posterior samples for a single subparameter (e.g. beta_0) to a
+    Convert array of posterior samples for a single subparameter (e.g. beta[0]) to a
     pandas data frame.
     """
 
@@ -319,7 +319,7 @@ def plot_trace(
 
     - `param_indices`:
       Indices of each model parameter that are contained in the plot. Selects e.g.
-      `beta_0` out of a `beta` parameter vector.A single index can be specified as an
+      `beta[0]` out of a `beta` parameter vector. A single index can be specified as an
       integer or a sequence containing one integer. If `None`, all subparameters are
       included.
 
@@ -371,7 +371,7 @@ def plot_trace(
     - `save_path`:
       File path where the plot is saved.
 
-    - `include_warmup:
+    - `include_warmup`:
        Include the warmup samples in the trace plot.
 
     - `**kwargs`:
@@ -448,7 +448,7 @@ def plot_density(
 
     - `param_indices`:
       Indices of each model parameter that are contained in the plot. Selects e.g.
-      `beta_0` out of a `beta` parameter vector.A single index can be specified as an
+      `beta[0]` out of a `beta` parameter vector. A single index can be specified as an
       integer or a sequence containing one integer. If `None`, all subparameters are
       included.
 
@@ -587,7 +587,7 @@ def plot_cor(
 
     - `param_indices`:
       Indices of each model parameter that are contained in the plot. Selects e.g.
-      `beta_0` out of a `beta` parameter vector.A single index can be specified as an
+      `beta[0]` out of a `beta` parameter vector. A single index can be specified as an
       integer or a sequence containing one integer. If `None`, all subparameters are
       included.
 
@@ -832,7 +832,7 @@ def plot_param(
 
     - `param_index`:
       A single index of the selected model parameter that is contained in the plot.
-      Selects e.g. `beta_0` out of a `beta` parameter vector. Can be specified as an
+      Selects e.g. `beta[0]` out of a `beta` parameter vector. Can be specified as an
       integer or as a sequence containing one integer. If `None`, the parameter is
       assumed to have only a single index.
 
