@@ -1,6 +1,10 @@
+
 # Liesel: A Probabilistic Programming Framework
 
-[![pre-commit](https://github.com/liesel-devs/liesel/actions/workflows/pre-commit.yml/badge.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pre-commit.yml) [![pytest](https://github.com/liesel-devs/liesel/actions/workflows/pytest.yml/badge.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pytest.yml) [![pdoc](https://github.com/liesel-devs/liesel/actions/workflows/pdoc.yml/badge.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pdoc.yml)
+[![pypi](https://img.shields.io/pypi/v/liesel.svg?color=blue)](https://pypi.org/project/liesel/)
+[![pre-commit](https://github.com/liesel-devs/liesel/actions/workflows/pre-commit.yml/badge.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pre-commit.yml)
+[![pytest](https://github.com/liesel-devs/liesel/actions/workflows/pytest.yml/badge.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pytest.yml)
+[![pdoc](https://github.com/liesel-devs/liesel/actions/workflows/pdoc.yml/badge.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pdoc.yml)
 
 <img src="misc/logo/logo-light.png#gh-light-mode-only" alt="logo" align="right" width="185">
 <img src="misc/logo/logo-dark.png#gh-dark-mode-only" alt="logo" align="right" width="185">
@@ -27,6 +31,13 @@ The name “Liesel” is an homage to the [Gänseliesel
 fountain](https://en.wikipedia.org/wiki/G%C3%A4nseliesel), landmark of
 Liesel’s birth city
 [Göttingen](https://en.wikipedia.org/wiki/G%C3%B6ttingen).
+
+## Resources
+
+-   [Liesel & Goose repo](https://github.com/liesel-devs/liesel)
+-   [Liesel & Goose API docs](https://liesel-devs.github.io/liesel)
+-   [RLiesel repo](https://github.com/liesel-devs/rliesel)
+-   [Tutorials](https://liesel-devs.github.io/liesel-tutorials)
 
 ## Usage
 
@@ -58,14 +69,14 @@ which is updated automatically if the value of a node is modified.
 model.log_prob
 ```
 
-    ## -8.635652087852478
+    -8.635652087852478
 
 ``` python
 n_loc.value = -0.5
 model.log_prob
 ```
 
-    ## -9.031152087852478
+    -9.031152087852478
 
 We can estimate the mean parameter with Goose and a NUTS sampler.
 Goose’s workhorse to run an MCMC algorithm is the `Engine`, which can be
@@ -89,57 +100,56 @@ engine = builder.build()
 engine.sample_all_epochs()
 ```
 
-    ## INFO - Starting epoch: FAST_ADAPTATION, 75 transitions, 25 jitted together
-    ## WARNING - Errors per chain for kernel_00: 1, 2, 2, 2 / 75 transitions
-    ## INFO - Finished epoch
-    ## INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
-    ## WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 25 transitions
-    ## INFO - Finished epoch
-    ## INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
-    ## WARNING - Errors per chain for kernel_00: 2, 1, 1, 2 / 50 transitions
-    ## INFO - Finished epoch
-    ## INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
-    ## WARNING - Errors per chain for kernel_00: 2, 2, 1, 1 / 100 transitions
-    ## INFO - Finished epoch
-    ## INFO - Starting epoch: SLOW_ADAPTATION, 200 transitions, 25 jitted together
-    ## WARNING - Errors per chain for kernel_00: 1, 2, 1, 1 / 200 transitions
-    ## INFO - Finished epoch
-    ## INFO - Starting epoch: SLOW_ADAPTATION, 500 transitions, 25 jitted together
-    ## WARNING - Errors per chain for kernel_00: 1, 2, 1, 2 / 500 transitions
-    ## INFO - Finished epoch
-    ## INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
-    ## WARNING - Errors per chain for kernel_00: 2, 2, 1, 1 / 50 transitions
-    ## INFO - Finished epoch
-    ## INFO - Finished warmup
-    ## INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
-    ## INFO - Finished epoch
+    INFO - Starting epoch: FAST_ADAPTATION, 75 transitions, 25 jitted together
+    WARNING - Errors per chain for kernel_00: 1, 2, 2, 2 / 75 transitions
+    INFO - Finished epoch
+    INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
+    WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 25 transitions
+    INFO - Finished epoch
+    INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
+    WARNING - Errors per chain for kernel_00: 2, 1, 1, 2 / 50 transitions
+    INFO - Finished epoch
+    INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
+    WARNING - Errors per chain for kernel_00: 2, 2, 1, 1 / 100 transitions
+    INFO - Finished epoch
+    INFO - Starting epoch: SLOW_ADAPTATION, 200 transitions, 25 jitted together
+    WARNING - Errors per chain for kernel_00: 1, 2, 1, 1 / 200 transitions
+    INFO - Finished epoch
+    INFO - Starting epoch: SLOW_ADAPTATION, 500 transitions, 25 jitted together
+    WARNING - Errors per chain for kernel_00: 1, 2, 1, 2 / 500 transitions
+    INFO - Finished epoch
+    INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
+    WARNING - Errors per chain for kernel_00: 2, 2, 1, 1 / 50 transitions
+    INFO - Finished epoch
+    INFO - Finished warmup
+    INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
+    INFO - Finished epoch
 
 Finally, we can print a summary table and view some diagnostic plots.
 
 ``` python
 results = engine.get_results()
-gs.summary(results)
+gs.Summary.from_result(results)
 ```
 
-|     | param_index | chain_index | num_samples | num_effective |   mean |    sd |  rhat |    q_5 |   q_50 |  q_95 | hdi_90_low | hdi_90_high |
-|:----|------------:|------------:|------------:|--------------:|-------:|------:|------:|-------:|-------:|------:|-----------:|------------:|
-| loc |           0 |           0 |        1000 |       435.251 | -0.088 | 0.438 | 1.001 | -0.823 | -0.089 | 0.613 |     -0.795 |       0.635 |
-| loc |           0 |           1 |        1000 |       373.608 | -0.099 |  0.44 | 1.001 | -0.838 | -0.097 | 0.624 |     -0.878 |       0.544 |
-| loc |           0 |           2 |        1000 |        394.22 | -0.118 | 0.434 | 1.001 | -0.882 | -0.114 | 0.585 |     -0.925 |       0.506 |
-| loc |           0 |           3 |        1000 |       322.429 | -0.061 | 0.472 | 1.001 | -0.792 | -0.071 | 0.741 |     -0.827 |       0.691 |
+**Parameter summary:**
+
+|             |       mean |       sd |    q_0.05 |      q_0.5 |   q_0.95 |   sample_size |   ess_bulk |   ess_tail |    rhat |
+|:------------|-----------:|---------:|----------:|-----------:|---------:|--------------:|-----------:|-----------:|--------:|
+| ('loc', ()) | -0.0913915 | 0.446812 | -0.832265 | -0.0940755 |  0.63899 |          4000 |    1495.18 |    2133.35 | 1.00132 |
+
+**Error summary:**
+
+|                                                       |   count |   relative |
+|:------------------------------------------------------|--------:|-----------:|
+| ('kernel_00', 1, 'divergent transition', 'warmup')    |      40 |       0.01 |
+| ('kernel_00', 1, 'divergent transition', 'posterior') |       0 |       0    |
 
 ``` python
 gs.plot_param(results, param="loc")
 ```
 
-<img src="misc/README/goose-plot-1.png" width="70%" />
-
-## Paper, tutorials and API documentation
-
-For a scientific discussion of the software, see our paper on arXiv (in
-preparation). If you want to try out Liesel yourself, take a look at the
-[tutorials](https://liesel-devs.github.io/liesel-tutorials) and the [API
-documentation](https://liesel-devs.github.io/liesel).
+<img src="misc/README/goose-plot-1.png" style="width:70.0%" />
 
 ## Installation
 

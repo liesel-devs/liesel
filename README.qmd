@@ -1,36 +1,35 @@
 ---
-output:
-  md_document:
-    variant: gfm
+format: gfm
+knitr:
+  opts_chunk:
+    fig.path: "misc/README/"
+    out.width: "70%"
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(fig.path = "misc/README/")
+```{r}
+#| include: false
 
+unlink("misc/README/", recursive = TRUE)
 rliesel::use_liesel_venv()
-reticulate::py_install("tabulate")
 ```
 
-```{python logging, include=FALSE}
+```{python}
+#| include: false
+
 import logging
 
+import liesel.goose as gs
+
 logging.getLogger("absl").setLevel(logging.ERROR)
-```
-
-```{python pandas, include=FALSE}
-import pandas as pd
-
-pd.set_option("display.max_rows", 30)
-pd.set_option("display.max_columns", 160)
-pd.set_option("display.width", 160)
-
-def print_df(self):
-    return self.to_markdown()
-
-pd.DataFrame.__repr__ = print_df
+gs.Summary._repr_html_ = gs.Summary._repr_markdown_
 ```
 
 # Liesel: A Probabilistic Programming Framework
+
+[![pypi](https://img.shields.io/pypi/v/liesel.svg?color=blue)](https://pypi.org/project/liesel/)
+[![pre-commit](https://github.com/liesel-devs/liesel/actions/workflows/pre-commit.yml/badge.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pre-commit.yml)
+[![pytest](https://github.com/liesel-devs/liesel/actions/workflows/pytest.yml/badge.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pytest.yml)
+[![pdoc](https://github.com/liesel-devs/liesel/actions/workflows/pdoc.yml/badge.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pdoc.yml)
 
 <img src="misc/logo/logo-light.png#gh-light-mode-only" alt="logo" align="right" width="185">
 <img src="misc/logo/logo-dark.png#gh-dark-mode-only" alt="logo" align="right" width="185">
@@ -43,11 +42,18 @@ Liesel is a probabilistic programming framework with a focus on semi-parametric 
 
 The name "Liesel" is an homage to the [Gänseliesel fountain](https://en.wikipedia.org/wiki/G%C3%A4nseliesel), landmark of Liesel's birth city [Göttingen](https://en.wikipedia.org/wiki/G%C3%B6ttingen).
 
+## Resources
+
+- [Liesel & Goose repo](https://github.com/liesel-devs/liesel)
+- [Liesel & Goose API docs](https://liesel-devs.github.io/liesel)
+- [RLiesel repo](https://github.com/liesel-devs/rliesel)
+- [Tutorials](https://liesel-devs.github.io/liesel-tutorials)
+
 ## Usage
 
 The following example shows how to build a simple i.i.d. normal model with Liesel. We set up two parameter and one data node, and combine them in a model.
 
-```{python liesel-example-1}
+```{python}
 import numpy as np
 
 import liesel.liesel as lsl
@@ -66,7 +72,7 @@ model = lsl.Model([n_loc, n_scale, n_y])
 
 The model allows us to evaluate the log-probability through a property, which is updated automatically if the value of a node is modified.
 
-```{python liesel-example-2}
+```{python}
 model.log_prob
 n_loc.value = -0.5
 model.log_prob
@@ -74,7 +80,7 @@ model.log_prob
 
 We can estimate the mean parameter with Goose and a NUTS sampler. Goose's workhorse to run an MCMC algorithm is the `Engine`, which can be constructed with the `EngineBuilder`. The builder allows us to assign different MCMC kernels to one or more parameters. We also need to specify the model, the initial values, and the sampling duration, before we can run the sampler.
 
-```{python goose-example}
+```{python}
 import liesel.goose as gs
 
 builder = gs.EngineBuilder(seed=42, num_chains=4)
@@ -91,18 +97,13 @@ engine.sample_all_epochs()
 
 Finally, we can print a summary table and view some diagnostic plots.
 
-```{python goose-summary, results="asis"}
-results = engine.get_results()
-gs.summary(results)
-```
+```{python}
+#| label: goose-plot
 
-```{python goose-plot, out.width="70%"}
+results = engine.get_results()
+gs.Summary.from_result(results)
 gs.plot_param(results, param="loc")
 ```
-
-## Paper, tutorials and API documentation
-
-For a scientific discussion of the software, see our paper on arXiv (in preparation). If you want to try out Liesel yourself, take a look at the [tutorials](https://liesel-devs.github.io/liesel-tutorials) and the [API documentation](https://liesel-devs.github.io/liesel).
 
 ## Installation
 
