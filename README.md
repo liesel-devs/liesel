@@ -1,7 +1,7 @@
 
 # Liesel: A Probabilistic Programming Framework
 
-[![pypi](https://img.shields.io/pypi/v/liesel.svg?color=blue)](https://pypi.org/project/liesel/)
+[![pypi](https://img.shields.io/pypi/v/liesel.svg?color=blue)](https://pypi.org/project/liesel)
 [![pre-commit](https://github.com/liesel-devs/liesel/actions/workflows/pre-commit.yml/badge.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pre-commit.yml)
 [![pytest](https://github.com/liesel-devs/liesel/actions/workflows/pytest.yml/badge.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pytest.yml)
 [![pdoc](https://github.com/liesel-devs/liesel/actions/workflows/pdoc.yml/badge.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pdoc.yml)
@@ -34,10 +34,13 @@ Liesel’s birth city
 
 ## Resources
 
--   [Liesel & Goose repo](https://github.com/liesel-devs/liesel)
--   [Liesel & Goose API docs](https://liesel-devs.github.io/liesel)
--   [RLiesel repo](https://github.com/liesel-devs/rliesel)
--   [Tutorials](https://liesel-devs.github.io/liesel-tutorials)
+-   :girl::swan::computer: [Liesel & Goose
+    repo](https://github.com/liesel-devs/liesel)
+-   :girl::swan::book: [Liesel & Goose API
+    docs](https://liesel-devs.github.io/liesel)
+-   :registered::computer: [RLiesel
+    repo](https://github.com/liesel-devs/rliesel)
+-   :book: [Tutorials](https://liesel-devs.github.io/liesel-tutorials)
 
 ## Usage
 
