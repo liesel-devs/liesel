@@ -33,6 +33,7 @@ extensions = [
     # "sphinx.ext.linkcode",
     "sphinx.ext.viewcode",
     "sphinx.ext.mathjax",
+    "sphinx_remove_toctrees",  # speeds up build with many stub pages
     "sphinx.ext.intersphinx",
 ]
 
@@ -95,3 +96,11 @@ autosummary_filename_map = {
     "liesel.goose.summary_m.summary": "liesel.goose.summary_m.summary-function",
     "liesel.goose.summary_m.Summary": "liesel.goose.summary_m.summary-class",
 }
+
+# Remove auto-generated API docs from sidebars. They take too long to build.
+remove_from_toctrees = [
+    "generated/liesel.liesel.*.*.*.rst",
+    "generated/liesel.goose.*.*.*.rst",
+    "generated/liesel.tfp.*.*.*.rst",
+
+    ]
