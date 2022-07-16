@@ -32,6 +32,7 @@ extensions = [
     "sphinx.ext.autosummary", # for automatic API doc tables
     # "sphinx.ext.linkcode",
     'sphinx.ext.viewcode',
+    'sphinx.ext.mathjax',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
