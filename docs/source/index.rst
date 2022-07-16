@@ -9,6 +9,7 @@ Liesel can be installed via pip::
     $ pip install liesel
 
 
+
 API Reference Overview
 -----------------------
 
@@ -17,6 +18,8 @@ API Reference Overview
    :caption: API Reference
    :recursive:
 
+   ~liesel.liesel
+.. 
    ~liesel.liesel
    ~liesel.goose
    ~liesel.tfp
@@ -27,3 +30,7 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
+
+
+.. toctree::
+   test

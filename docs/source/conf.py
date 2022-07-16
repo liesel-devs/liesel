@@ -28,12 +28,24 @@ author = "Hannes Riebl, Paul Wiemann"
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    "sphinx.ext.napoleon", # parse numpy and google style docstrings
-    "sphinx.ext.autosummary", # for automatic API doc tables
+    "sphinx.ext.napoleon",  # parse numpy and google style docstrings
+    "sphinx.ext.autosummary",  # for automatic API doc tables
     # "sphinx.ext.linkcode",
-    'sphinx.ext.viewcode',
-    'sphinx.ext.mathjax',
+    "sphinx.ext.viewcode",
+    "sphinx.ext.mathjax",
+    "sphinx.ext.intersphinx",
 ]
+
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3/", None),
+    "numpy": ("https://numpy.org/doc/stable/", None),
+    "scipy": ("https://docs.scipy.org/doc/scipy-1.8.1/", None),
+    "jax": ("https://jax.readthedocs.io/en/latest/", None),
+    "tensorflow_probability": ( # we can use "tfp" as a prefix, too
+        "https://www.tensorflow.org/probability/api_docs/python",
+        "https://github.com/GPflow/tensorflow-intersphinx/raw/master/tfp_py_objects.inv",
+    ),
+}
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
@@ -65,6 +77,7 @@ html_theme_options = {
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
 
+
 def linkcode_resolve(domain, info):
     """For the linkcode extension."""
     if domain != "py":
@@ -72,7 +85,7 @@ def linkcode_resolve(domain, info):
     if not info["module"]:
         return None
     filename = info["module"].replace(".", "/")
-    
+
     return f"https://github.com/liesel-devs/liesel/blob/main/{filename}.py"
 
 
