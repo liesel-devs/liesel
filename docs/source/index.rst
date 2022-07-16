@@ -18,6 +18,8 @@ API Reference Overview
    :recursive:
 
    ~liesel.liesel
+   ~liesel.goose
+   ~liesel.tfp
 
 Indices and tables
 ==================
