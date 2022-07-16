@@ -58,6 +58,7 @@ class IWLSKernel(ModelMixin, TransitionMixin[IWLSKernelState, IWLSTransitionInfo
     error_book: ClassVar[dict[int, str]] = {0: "no errors", 90: "nan acceptance prob"}
     needs_history: ClassVar[bool] = False
     identifier: str = ""
+    position_keys: tuple[str, ...]
 
     def __init__(
         self,

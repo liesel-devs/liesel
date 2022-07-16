@@ -49,6 +49,9 @@ class NUTSKernelState:
 @register_dataclass_as_pytree
 @dataclass
 class NUTSTransitionInfo(DefaultTransitionInfo):
+    error_code: int
+    acceptance_prob: float
+    position_moved: int
     divergent: bool
     """
     Whether the difference in energy between the original and the new state exceeded
@@ -107,6 +110,7 @@ class NUTSKernel(
 
     needs_history: ClassVar[bool] = True
     identifier: str = ""
+    position_keys: tuple[str, ...]
 
     def __init__(
         self,

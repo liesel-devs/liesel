@@ -30,6 +30,7 @@ class GibbsKernel(
     error_book: ClassVar[dict[int, str]] = {0: "no errors"}
     needs_history: ClassVar[bool] = False
     identifier: str = ""
+    position_keys: tuple[str, ...]
 
     def __init__(
         self,
