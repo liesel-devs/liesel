@@ -1,16 +1,23 @@
-.. liesel documentation master file, created by
-   sphinx-quickstart on Sat Jul 16 17:08:34 2022.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+Liesel: A Probabilistic Programming Framework
+===============================================
 
-Welcome to liesel's documentation!
-==================================
+Installation
+--------------
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+Liesel can be installed via pip::
+
+    $ pip install liesel
 
 
+API Reference Overview
+-----------------------
+
+.. autosummary::
+   :toctree: generated
+   :caption: API Reference
+   :recursive:
+
+   ~liesel.liesel
 
 Indices and tables
 ==================
