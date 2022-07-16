@@ -1,5 +1,4 @@
-{{ fullname | escape}}
-{{ underline }}
+{{ fullname | escape | underline}}
 
 .. automodule:: {{ fullname }}
 
@@ -33,12 +32,22 @@
 
    .. autosummary::
       :toctree:
-      :template: autosummary/class.rst
+   {% if not fullname.startswith("liesel.tfp") %}
+      :template: autosummary/class-without-inheritance.rst
+   {% elif fullname.startswith("liesel.tfp.jax.distributions") %}
+      :template: autosummary/class-without-inheritance-strict.rst
+   {% elif fullname.startswith("liesel.tfp.numpy.distributions") %}
+      :template: autosummary/class-without-inheritance-strict.rst
+   {% else %}
+      :template: autosummary/class-without-inheritance.rst
+   {% endif %}
       :nosignatures:
    {% for item in classes %}
       {{ item }}
    {%- endfor %}
+   
    {% endif %}
+
    {% endblock %}
 
    {% block exceptions %}
