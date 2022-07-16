@@ -329,7 +329,7 @@ def plot_trace(
     - `save_path`:
       File path where the plot is saved.
 
-    - `include_warmup:
+    - `include_warmup`:
        Include the warmup samples in the trace plot.
 
     - `**kwargs`:
