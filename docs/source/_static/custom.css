@@ -1,0 +1,8 @@
+/* override table no-wrap; for inherited kwargs tables */
+.wy-table-responsive table td, .wy-table-responsive table th {
+    white-space: normal;
+}
+
+p.rubric {
+    border-bottom: 0em;
+}
