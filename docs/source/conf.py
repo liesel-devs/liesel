@@ -35,6 +35,7 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx_remove_toctrees",  # speeds up build with many stub pages
     "sphinx.ext.intersphinx",
+    'sphinx_copybutton',
 ]
 
 intersphinx_mapping = {
