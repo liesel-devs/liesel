@@ -30,7 +30,8 @@ author = "Hannes Riebl, Paul Wiemann"
 extensions = [
     "sphinx.ext.napoleon", # parse numpy and google style docstrings
     "sphinx.ext.autosummary", # for automatic API doc tables
-    "sphinx.ext.linkcode",
+    # "sphinx.ext.linkcode",
+    'sphinx.ext.viewcode',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -64,6 +65,7 @@ html_static_path = ["_static"]
 html_css_files = ["custom.css"]
 
 def linkcode_resolve(domain, info):
+    """For the linkcode extension."""
     if domain != "py":
         return None
     if not info["module"]:
