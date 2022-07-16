@@ -70,3 +70,11 @@ def linkcode_resolve(domain, info):
     filename = info["module"].replace(".", "/")
     
     return f"https://github.com/liesel-devs/liesel/blob/main/{filename}.py"
+
+
+# maps functions with a class name that is indistinguishable when case is
+# ignore to another filename
+autosummary_filename_map = {
+    "liesel.goose.summary_m.summary": "liesel.goose.summary_m.summary-function",
+    "liesel.goose.summary_m.Summary": "liesel.goose.summary_m.summary-class",
+}
