@@ -33,7 +33,7 @@ API Reference Overview
    ~liesel.tfp
 
 Indices and tables
-==================
+-------------------
 
 * :ref:`genindex`
 * :ref:`modindex`
