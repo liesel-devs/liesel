@@ -28,7 +28,6 @@ API Reference Overview
    :caption: API Reference
    :recursive:
 
-..
    ~liesel.liesel
    ~liesel.goose
    ~liesel.tfp
