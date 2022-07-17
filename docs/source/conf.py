@@ -36,6 +36,7 @@ extensions = [
     "sphinx_remove_toctrees",  # speeds up build with many stub pages
     "sphinx.ext.intersphinx",
     'sphinx_copybutton',
+    "myst_parser",
 ]
 
 intersphinx_mapping = {
@@ -71,6 +72,7 @@ html_logo = "../../misc/logo/logo-light.png"
 html_theme_options = {
     "repository_url": "https://github.com/liesel-devs/liesel",
     "use_repository_button": True,
+    "logo_only": True
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,

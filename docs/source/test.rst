@@ -45,4 +45,3 @@ We can also have nice-looking boxes:
 
 .. warning::
     This is a warning.
-
