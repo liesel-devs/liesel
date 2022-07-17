@@ -6,6 +6,9 @@ Welcome to Liesel
    https://liesel-devs.github.io/liesel/liesel.html
 
 
+.. include:: welcome.md
+   :parser: myst_parser.sphinx_
+
 
 
 .. toctree::
