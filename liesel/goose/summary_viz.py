@@ -250,7 +250,7 @@ def setup_scatterplot_df(
 def set_plot_cols(plot_df: pd.DataFrame, ncol: int) -> int:
     """Determines number of facets within each row of the grid."""
 
-    num_subparams = plot_df["param"].nunique()
+    num_subparams = plot_df["param_label"].nunique()
     return min(ncol, num_subparams)
 
 
