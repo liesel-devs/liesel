@@ -2,14 +2,14 @@
 format: gfm
 knitr:
   opts_chunk:
-    fig.path: "misc/README/"
+    fig.path: "README-files/"
     out.width: "70%"
 ---
 
 ```{r}
 #| include: false
 
-unlink("misc/README/", recursive = TRUE)
+unlink("README-files", recursive = TRUE)
 rliesel::use_liesel_venv()
 ```
 
@@ -31,8 +31,8 @@ gs.Summary._repr_html_ = gs.Summary._repr_markdown_
 [![pytest](https://github.com/liesel-devs/liesel/actions/workflows/pytest.yml/badge.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pytest.yml)
 [![pdoc](https://github.com/liesel-devs/liesel/actions/workflows/pdoc.yml/badge.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pdoc.yml)
 
-<img src="misc/logo/logo-light.png#gh-light-mode-only" alt="logo" align="right" width="185">
-<img src="misc/logo/logo-dark.png#gh-dark-mode-only" alt="logo" align="right" width="185">
+<img src="https://raw.githubusercontent.com/liesel-devs/liesel/main/misc/logo/logo-light.png#gh-light-mode-only" alt="logo" align="right" width="185">
+<img src="https://raw.githubusercontent.com/liesel-devs/liesel/main/misc/logo/logo-dark.png#gh-dark-mode-only" alt="logo" align="right" width="185">
 
 Liesel is a probabilistic programming framework with a focus on semi-parametric regression. It includes:
 
