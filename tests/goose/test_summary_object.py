@@ -328,3 +328,35 @@ def test_error_summary(result: SamplingResult):
     # check that counts are correct - only in the posterior
     assert np.all(es[1].count_per_chain_posterior == np.array([2, 1, 1]))
     assert np.all(es[2].count_per_chain_posterior == np.array([0, 5, 0]))
+
+
+@pytest.fixture(scope="module")
+def single_chain_result() -> SamplingResult:
+    builder = EngineBuilder(0, 1)
+    state = {
+        "foo": jnp.arange(3, dtype=jnp.float32),
+        "bar": jnp.zeros((3, 5, 7)),
+        "baz": jnp.array(1.0),
+    }
+
+    builder.add_kernel(MockKernel(list(state.keys())))
+    builder.set_model(DictModel(logprob))
+    builder.set_initial_values(state)
+    builder.set_epochs(
+        [
+            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
+            EpochConfig(EpochType.BURNIN, 50, 1, None),
+            EpochConfig(EpochType.POSTERIOR, 250, 1, None),
+        ]
+    )
+    engine = builder.build()
+    engine.sample_all_epochs()
+    return engine.get_results()
+
+
+def test_single_chain_repr_fs_return(single_chain_result: SamplingResult):
+    summary = Summary.from_result(single_chain_result)
+    md = summary._repr_markdown_()
+    html = summary._repr_html_()
+    assert isinstance(md, str)
+    assert isinstance(html, str)

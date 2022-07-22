@@ -735,6 +735,7 @@ class Summary:
 
         qtls = [f"q_{qtl}" for qtl in self.config["quantiles"]]
         cols = ["mean", "sd"] + qtls + ["sample_size", "ess_bulk", "ess_tail", "rhat"]
+        cols = [col for col in cols if col in df.columns]
         df = df[cols]
 
         return df
@@ -746,6 +747,9 @@ class Summary:
             for kernel, code_summary in self.error_summary.items()
         })
         # fmt: on
+
+        if df.empty:
+            return df
 
         df = df.reset_index(level=1, drop=True)
         df["error_code"] = df["error_code"].astype(int)
@@ -796,12 +800,10 @@ class Summary:
         param_df = self._param_df()
         error_df = self._error_df()
 
-        txt = (
-            "Parameter summary:\n\n"
-            + repr(param_df)
-            + "\n\nError summary:\n\n"
-            + repr(error_df)
-        )
+        txt = "Parameter summary:\n\n" + repr(param_df)
+
+        if not error_df.empty:
+            txt += "\n\nError summary:\n\n" + repr(error_df)
 
         return txt
 
@@ -809,14 +811,12 @@ class Summary:
         param_df = self._param_df()
         error_df = self._error_df()
 
-        html = (
-            "\n<p><strong>Parameter summary:</strong></p>\n"
-            + param_df.to_html()
-            + "\n<p><strong>Error summary:</strong></p>\n"
-            + error_df.to_html()
-            + "\n"
-        )
+        html = "\n<p><strong>Parameter summary:</strong></p>\n" + param_df.to_html()
 
+        if not error_df.empty:
+            html += "\n<p><strong>Error summary:</strong></p>\n" + error_df.to_html()
+
+        html += "\n"
         return html
 
     def _repr_markdown_(self):
@@ -830,14 +830,12 @@ class Summary:
             param_md = f"```\n{repr(param_df)}\n```"
             error_md = f"```\n{repr(error_df)}\n```"
 
-        md = (
-            "\n\n**Parameter summary:**\n\n"
-            + param_md
-            + "\n\n**Error summary:**\n\n"
-            + error_md
-            + "\n\n"
-        )
+        md = "\n\n**Parameter summary:**\n\n" + param_md
 
+        if not error_df.empty:
+            md += "\n\n**Error summary:**\n\n" + error_md
+
+        md += "\n\n"
         return md
 
     def __str__(self):
