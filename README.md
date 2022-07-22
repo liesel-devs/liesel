@@ -1,3 +1,5 @@
+<!-- This README is for PyPI. The README for GitHub is in .github/README.md -->
+
 # Liesel: A Probabilistic Programming Framework
 
 <img src="https://raw.githubusercontent.com/liesel-devs/liesel/main/misc/logo/logo-light.png" alt="logo" align="right" width="185">

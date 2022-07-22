@@ -6,6 +6,8 @@ knitr:
     out.width: "70%"
 ---
 
+<!-- README.md is generated from README.qmd. Please edit that file -->
+
 ```{r}
 #| include: false
 

@@ -1,4 +1,6 @@
 
+<!-- README.md is generated from README.qmd. Please edit that file -->
+
 # Liesel: A Probabilistic Programming Framework
 
 [![pypi](https://img.shields.io/pypi/v/liesel.svg?color=blue)](https://pypi.org/project/liesel)
