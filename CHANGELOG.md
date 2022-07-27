@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.2] - 2022-07-27
+
+### What's new?
+
+- :swan: Fixed MCMC summary for single chains (@hriebl)
+
+[All commits since 0.1.1](https://github.com/liesel-devs/liesel/compare/v0.1.1...v0.1.2)
+
 ## [0.1.1] - 2022-07-20
 
 ### What's new?
@@ -30,6 +38,7 @@ All notable changes to this project will be documented in this file.
 - @GianmarcoCallegher
 - @jobrachem
 
-[Unreleased]: https://github.com/liesel-devs/liesel/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/liesel-devs/liesel/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/liesel-devs/liesel/releases/tag/v0.1.2
 [0.1.1]: https://github.com/liesel-devs/liesel/releases/tag/v0.1.1
 [0.1.0]: https://github.com/liesel-devs/liesel/releases/tag/v0.1.0
