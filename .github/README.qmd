@@ -23,7 +23,6 @@ import logging
 import liesel.goose as gs
 
 logging.getLogger("absl").setLevel(logging.ERROR)
-gs.Summary._repr_html_ = gs.Summary._repr_markdown_
 ```
 
 # Liesel: A Probabilistic Programming Framework
