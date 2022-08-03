@@ -138,7 +138,7 @@ gs.Summary.from_result(results)
 ```
 
 <p><strong>Parameter summary:</strong></p>
-<table border="1" class="dataframe">
+<table border="0" class="dataframe">
   <thead>
     <tr style="text-align: right;">
       <th></th>
@@ -184,7 +184,7 @@ gs.Summary.from_result(results)
   </tbody>
 </table>
 <p><strong>Error summary:</strong></p>
-<table border="1" class="dataframe">
+<table border="0" class="dataframe">
   <thead>
     <tr style="text-align: right;">
       <th></th>

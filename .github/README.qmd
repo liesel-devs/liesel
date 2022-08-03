@@ -20,9 +20,10 @@ rliesel::use_liesel_venv()
 
 import logging
 
-import liesel.goose as gs
+import pandas as pd
 
 logging.getLogger("absl").setLevel(logging.ERROR)
+pd.options.display.html.border = 0
 ```
 
 # Liesel: A Probabilistic Programming Framework
