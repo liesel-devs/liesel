@@ -29,6 +29,7 @@ author = "Hannes Riebl, Paul Wiemann"
 # ones.
 extensions = [
     "sphinx.ext.napoleon",  # parse numpy and google style docstrings
+    "sphinx_autodoc_typehints",
     "sphinx.ext.autosummary",  # for automatic API doc tables
     # "sphinx.ext.linkcode",
     "sphinx.ext.viewcode",
@@ -49,6 +50,21 @@ intersphinx_mapping = {
         "https://github.com/GPflow/tensorflow-intersphinx/raw/master/tfp_py_objects.inv",
     ),
 }
+
+# Napoleon options
+napoleon_use_param = True
+
+# For compatibility with sphinx_autodoc_typehints
+# If True, the return text will be rendered as literals
+napoleon_preprocess_types = False
+
+# For compatibility with sphinx_autodoc_typehints
+# If True, napoleon will add a :rtype: role, causing sphinx_autodoc_typehints
+# to not add its own role from the type annotations.
+napoleon_use_rtype = False  
+
+# sphinx_autodoc_typehints: options
+typehints_defaults = "braces-after"
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
