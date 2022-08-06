@@ -34,6 +34,7 @@ extensions = [
     # "sphinx.ext.linkcode",
     "sphinx.ext.viewcode",
     "sphinx.ext.mathjax",
+    "sphinx.ext.doctest",
     "sphinx_remove_toctrees",  # speeds up build with many stub pages
     "sphinx.ext.intersphinx",
     'sphinx_copybutton',
@@ -65,6 +66,15 @@ napoleon_use_rtype = False
 
 # sphinx_autodoc_typehints: options
 typehints_defaults = "braces-after"
+
+# Doctest setup
+doctest_global_setup = '''
+import liesel.liesel as lsl
+import liesel.goose as gs
+import jax.numpy as jnp
+import jax
+import numpy as np
+'''
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
