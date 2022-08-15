@@ -42,6 +42,7 @@ jobs:
         run: |
           git config --local user.name "github-actions[bot]"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git ls-remote | grep refs/heads/pytest-cov && git remote set-branches --add origin pytest-cov && git fetch
           git switch pytest-cov || git switch --orphan pytest-cov
           git add coverage.svg
           git diff --staged --quiet || git commit -m "Updated coverage.svg"
