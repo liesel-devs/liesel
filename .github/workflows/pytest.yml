@@ -2,7 +2,7 @@ name: pytest
 
 on:
   push:
-    branches: [main, coverage-badge]
+    branches: [main]
   pull_request:
     branches: [main]
 
