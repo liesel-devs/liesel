@@ -33,7 +33,7 @@ jobs:
           pip list
 
       - name: Run pytest
-        run: pytest --cov=liesel_internal tests/ --run-mcmc
+        run: pytest --cov=liesel tests/ --run-mcmc
 
       - name: Create coverage badge
         uses: tj-actions/coverage-badge-py@v1.8
