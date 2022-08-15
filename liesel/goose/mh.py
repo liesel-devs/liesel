@@ -19,15 +19,17 @@ def mh_step(
     model: ModelInterface,
     proposal: Position,
     model_state: ModelState,
-    correction: float = 0.0,
+    log_correction: float = 0.0,
 ) -> tuple[DefaultTransitionInfo, ModelState]:
-    """
+    r"""
     Decides if an MCMC proposal is accepted in a Metropolis-Hastings step.
 
     ## Parameters
 
-    - `correction`: The Metropolis-Hastings correction in the case of an asymmetric
-      proposal distribution.
+    - `log_correction`: The Metropolis-Hastings correction in the case of an
+      asymmetric proposal distribution. Let $q(x'|x)$ be the density of the
+      proposal $x'$ given the current state $x$. Then `log_correction` defined
+      as $\log(q(x | x') / q(x' | x))$
 
     ## Returns
 
@@ -39,7 +41,7 @@ def mh_step(
     proposed_model_state = model.update_state(proposal, model_state)
     proposed_log_prob = model.log_prob(proposed_model_state)
 
-    log_acc_prob = proposed_log_prob - current_log_prob + correction
+    log_acc_prob = proposed_log_prob - current_log_prob + log_correction
 
     log_acc_prob, error_code = jax.lax.cond(
         jnp.isnan(log_acc_prob),
