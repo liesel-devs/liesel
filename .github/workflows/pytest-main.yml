@@ -1,22 +1,13 @@
-name: pytest
+name: pytest-main
 
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
 
 jobs:
-  pytest:
-    runs-on: ${{ matrix.os }}
+  pytest-main:
+    runs-on: ubuntu-latest
     timeout-minutes: 10
-
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          # - macOS-latest
 
     steps:
       - name: Check out repository
