@@ -7,7 +7,7 @@
 [![pre-commit](https://github.com/liesel-devs/liesel/actions/workflows/pre-commit.yml/badge.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pre-commit.yml)
 [![pdoc](https://github.com/liesel-devs/liesel/actions/workflows/pdoc.yml/badge.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pdoc.yml)
 [![pytest](https://github.com/liesel-devs/liesel/actions/workflows/pytest.yml/badge.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pytest.yml)
-[![pytest-coverage](../coverage.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pytest.yml)
+[![pytest-cov](https://raw.githubusercontent.com/liesel-devs/liesel/pytest-cov/coverage.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pytest.yml)
 
 <img src="https://raw.githubusercontent.com/liesel-devs/liesel/main/misc/logo/logo-light.png#gh-light-mode-only" alt="logo" align="right" width="185">
 <img src="https://raw.githubusercontent.com/liesel-devs/liesel/main/misc/logo/logo-dark.png#gh-dark-mode-only" alt="logo" align="right" width="185">
@@ -55,12 +55,7 @@ in a model.
 import numpy as np
 
 import liesel.liesel as lsl
-```
 
-    /Users/johannesbrachem/.pyenv/versions/3.10.3/envs/liesel/lib/python3.10/site-packages/jax/_src/lib/__init__.py:34: UserWarning: JAX on Mac ARM machines is experimental and minimally tested. Please see https://github.com/google/jax/issues/5501 in the event of problems.
-      warnings.warn("JAX on Mac ARM machines is experimental and minimally tested. "
-
-``` python
 n_loc = lsl.Parameter(0.0, name="loc")
 n_scale = lsl.Parameter(1.0, name="scale")
 
@@ -121,16 +116,16 @@ engine.sample_all_epochs()
     WARNING - Errors per chain for kernel_00: 2, 1, 1, 2 / 50 transitions
     INFO - Finished epoch
     INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
-    WARNING - Errors per chain for kernel_00: 1, 2, 1, 1 / 100 transitions
+    WARNING - Errors per chain for kernel_00: 2, 2, 1, 1 / 100 transitions
     INFO - Finished epoch
     INFO - Starting epoch: SLOW_ADAPTATION, 200 transitions, 25 jitted together
-    WARNING - Errors per chain for kernel_00: 2, 2, 2, 1 / 200 transitions
+    WARNING - Errors per chain for kernel_00: 1, 2, 1, 1 / 200 transitions
     INFO - Finished epoch
     INFO - Starting epoch: SLOW_ADAPTATION, 500 transitions, 25 jitted together
-    WARNING - Errors per chain for kernel_00: 3, 2, 2, 2 / 500 transitions
+    WARNING - Errors per chain for kernel_00: 1, 2, 1, 2 / 500 transitions
     INFO - Finished epoch
     INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
-    WARNING - Errors per chain for kernel_00: 1, 2, 1, 1 / 50 transitions
+    WARNING - Errors per chain for kernel_00: 2, 2, 1, 1 / 50 transitions
     INFO - Finished epoch
     INFO - Finished warmup
     INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
@@ -177,15 +172,15 @@ gs.Summary.from_result(results)
     <tr>
       <th>loc</th>
       <th>()</th>
-      <td>-0.092958</td>
-      <td>0.445374</td>
-      <td>-0.834403</td>
-      <td>-0.093373</td>
-      <td>0.624101</td>
+      <td>-0.091391</td>
+      <td>0.446812</td>
+      <td>-0.832265</td>
+      <td>-0.094075</td>
+      <td>0.63899</td>
       <td>4000</td>
-      <td>1517.531959</td>
-      <td>2235.07803</td>
-      <td>1.00088</td>
+      <td>1495.17777</td>
+      <td>2133.345866</td>
+      <td>1.001324</td>
     </tr>
   </tbody>
 </table>
@@ -215,13 +210,13 @@ gs.Summary.from_result(results)
       <th rowspan="2" valign="top">1</th>
       <th rowspan="2" valign="top">divergent transition</th>
       <th>warmup</th>
-      <td>43</td>
-      <td>0.01075</td>
+      <td>40</td>
+      <td>0.01</td>
     </tr>
     <tr>
       <th>posterior</th>
       <td>0</td>
-      <td>0.00000</td>
+      <td>0.00</td>
     </tr>
   </tbody>
 </table>
