@@ -70,7 +70,7 @@ def run_kernel_test(mcmc_seed: int, kernels: Sequence[Kernel]) -> None:
     avg_log_sigma = np.mean(samples["log_sigma"])
     assert avg_log_sigma == approx(np.log(sigma_ols), rel=0.05)
 
-    for i, kernel in enumerate(kernels):
+    for kernel in kernels:
         if hasattr(kernel, "da_target_accept"):
             avg_acceptance_prob = np.mean(infos[kernel.identifier].acceptance_prob)
 
