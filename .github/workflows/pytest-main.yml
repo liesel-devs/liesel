@@ -1,0 +1,45 @@
+name: pytest-main
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  pytest-main:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: "3.10"
+
+      - name: Install liesel
+        run: |
+          pip install .[dev]
+          pip list
+
+      - name: Run pytest
+        run: pytest --cov --run-mcmc
+
+      - name: Create coverage badge
+        uses: tj-actions/coverage-badge-py@v1.8
+
+      - name: Commit coverage.svg
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git ls-remote | grep refs/heads/pytest-cov && git remote set-branches --add origin pytest-cov && git fetch
+          git switch pytest-cov || git switch --orphan pytest-cov
+          git add coverage.svg
+          git diff --staged --quiet || git commit -m "Updated coverage.svg"
+
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: pytest-cov
