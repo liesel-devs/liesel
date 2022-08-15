@@ -28,7 +28,8 @@ jobs:
 
       - name: Create coverage badge
         uses: tj-actions/coverage-badge-py@v1.8
-        output: coverage-new.svg
+        with:
+          output: coverage-new.svg
 
       - name: Commit coverage.svg
         run: |
