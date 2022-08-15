@@ -12,6 +12,7 @@ from .epoch import EpochConfig, EpochType
 from .gibbs import GibbsKernel
 from .hmc import HMCKernel
 from .iwls import IWLSKernel
+from .mh_kernel import MHKernel, MHProposal
 from .models import DictModel
 from .nuts import NUTSKernel
 from .rw import RWKernel
@@ -36,6 +37,8 @@ __all__ = [
     "GibbsKernel",
     "HMCKernel",
     "IWLSKernel",
+    "MHKernel",
+    "MHProposal",
     "ModelInterface",
     "NUTSKernel",
     "Position",
