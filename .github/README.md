@@ -6,8 +6,8 @@
 [![pypi](https://img.shields.io/pypi/v/liesel.svg?color=blue)](https://pypi.org/project/liesel)
 [![pre-commit](https://github.com/liesel-devs/liesel/actions/workflows/pre-commit.yml/badge.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pre-commit.yml)
 [![pdoc](https://github.com/liesel-devs/liesel/actions/workflows/pdoc.yml/badge.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pdoc.yml)
-[![pytest](https://github.com/liesel-devs/liesel/actions/workflows/pytest-main.yml/badge.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pytest-main.yml)
-[![pytest-cov](https://raw.githubusercontent.com/liesel-devs/liesel/pytest-cov/coverage.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pytest-main.yml)
+[![pytest](https://github.com/liesel-devs/liesel/actions/workflows/pytest.yml/badge.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pytest.yml)
+[![pytest-cov](https://raw.githubusercontent.com/liesel-devs/liesel/pytest-cov/coverage.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pytest.yml)
 
 <img src="https://raw.githubusercontent.com/liesel-devs/liesel/main/misc/logo/logo-light.png#gh-light-mode-only" alt="logo" align="right" width="185">
 <img src="https://raw.githubusercontent.com/liesel-devs/liesel/main/misc/logo/logo-dark.png#gh-dark-mode-only" alt="logo" align="right" width="185">
