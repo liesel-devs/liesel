@@ -88,6 +88,7 @@ def test_error_log():
         Option.none(),
         Option.none(),
         Option.none(),
+        Option.none(),
     )
 
     error_log = sr.get_error_log().unwrap()
