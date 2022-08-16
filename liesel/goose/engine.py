@@ -128,7 +128,7 @@ class Carry:
 
 
 @dataclass
-class SamplingResult:
+class SamplingResults:
     """
     Contains the results of the MCMC engine.
 
@@ -212,6 +212,10 @@ class SamplingResult:
         """Loads the pickled object from `path`."""
         with open(path, "rb") as f:
             return pickle.load(f)
+
+
+# Alias for backwards compatibility
+SamplingResult = SamplingResults
 
 
 class Engine:

@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import xarray
 
-from liesel.goose.engine import ErrorLog, SamplingResult
+from liesel.goose.engine import ErrorLog, SamplingResult, SamplingResults
 from liesel.goose.pytree import slice_leaves, stack_leaves
 from liesel.goose.types import Position
 from liesel.option import Option
@@ -841,8 +841,9 @@ class Summary:
     def __str__(self):
         return str(self.to_dataframe())
 
-    @staticmethod
+    @classmethod
     def from_result(
+        cls,
         result: SamplingResult,
         additional_chain: Position | None = None,
         quantiles: Sequence[float] = (0.05, 0.5, 0.95),
@@ -852,7 +853,39 @@ class Summary:
         per_chain=False,
     ) -> "Summary":
         """
-        Creates a `Summary` object from a result object.
+        Alias for :meth:`.from_results` for backwards compatibility.
+
+        In addition to the name, there are two further subtle differences to
+        :meth:`.from_results`.
+
+        - The argument ``result`` is in singular. The method :meth:`.from_results` uses
+          the plural instead.
+        - The argument ``result`` is of type :class:`.SamplingResult`, which itself is
+          an alias for :meth:`.SamplingResults`.
+        """
+
+        return cls.from_results(
+            results=result,
+            additional_chain=additional_chain,
+            quantiles=quantiles,
+            hdi_prob=hdi_prob,
+            selected=selected,
+            deselected=deselected,
+            per_chain=per_chain,
+        )
+
+    @staticmethod
+    def from_results(
+        results: SamplingResults,
+        additional_chain: Position | None = None,
+        quantiles: Sequence[float] = (0.05, 0.5, 0.95),
+        hdi_prob: float = 0.9,
+        selected: list[str] | None = None,
+        deselected: list[str] | None = None,
+        per_chain=False,
+    ) -> "Summary":
+        """
+        Creates a `Summary` object from a results object.
 
         An optional `additional_chain` can be supplied to add more parameters to
         the summary output. `additional_chain` must be a position chain which
@@ -868,7 +901,7 @@ class Summary:
         Experimental.
         """
 
-        posterior_chain = result.get_posterior_samples()
+        posterior_chain = results.get_posterior_samples()
         if additional_chain:
             for k, v in additional_chain.items():
                 posterior_chain[k] = v
@@ -888,7 +921,7 @@ class Summary:
 
         # get some general infos on the sampling
         param_chain = next(iter(posterior_chain.values()))
-        epochs = result.positions.get_epochs()
+        epochs = results.positions.get_epochs()
 
         warmup_size = np.sum(
             [epoch.duration for epoch in epochs if epoch.type.is_warmup(epoch.type)]
@@ -925,7 +958,7 @@ class Summary:
         }
 
         error_summary = _make_error_summary(
-            result.get_error_log(False).unwrap(), result.get_error_log(True)
+            results.get_error_log(False).unwrap(), results.get_error_log(True)
         )
 
         return Summary(
