@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from liesel.goose.engine import Engine, SamplingResult, stack_for_multi
+from liesel.goose.engine import Engine, SamplingResults, stack_for_multi
 from liesel.goose.kernel_sequence import KernelSequence
 from liesel.goose.models import DictModel
 from liesel.goose.rw import RWKernel
@@ -21,7 +21,7 @@ def log_prob_log_sigma(model_state):
     return jnp.sum(log_probs)
 
 
-def setup_tests(beta_dim: int, num_chains: int = 3) -> SamplingResult:
+def setup_tests(beta_dim: int, num_chains: int = 3) -> SamplingResults:
     rng = np.random.default_rng(1337)
 
     n = 30

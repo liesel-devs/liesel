@@ -3,7 +3,7 @@ import os.path
 import matplotlib
 import pytest
 
-from liesel.goose.engine import SamplingResult
+from liesel.goose.engine import SamplingResults
 from liesel.goose.summary_viz import (
     plot_cor,
     plot_density,
@@ -19,7 +19,7 @@ matplotlib.use("template")
 # file was generated with files/files_for_test_summary.py
 path_module_dir = os.path.dirname(__file__)
 path = os.path.join(path_module_dir, "files", "summary_viz_res.pkl")
-results = SamplingResult.pkl_load(path)
+results = SamplingResults.pkl_load(path)
 
 
 def test_data_complete():

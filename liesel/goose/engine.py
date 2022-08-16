@@ -208,7 +208,7 @@ class SamplingResults:
             pickle.dump(self, f)
 
     @staticmethod
-    def pkl_load(path) -> "SamplingResult":
+    def pkl_load(path) -> "SamplingResults":
         """Loads the pickled object from `path`."""
         with open(path, "rb") as f:
             return pickle.load(f)
@@ -351,7 +351,7 @@ class Engine:
         """Returns true if all configured epochs have been sampled."""
         return not self._epoch_manager.has_more()
 
-    def get_results(self) -> SamplingResult:
+    def get_results(self) -> SamplingResults:
         """Returns the results of the sampling process."""
         if self._store_kernel_states:
             ksc = self._kernel_state_chain
@@ -367,7 +367,7 @@ class Engine:
             ker.identifier: type(ker) for ker in self._kernel_sequence.get_kernels()
         }
 
-        return SamplingResult(
+        return SamplingResults(
             positions=self._position_chain,
             transition_infos=self._transition_info_chain,
             generated_quantities=Option(gqs),

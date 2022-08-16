@@ -13,7 +13,7 @@ from liesel.goose.builder import EngineBuilder
 from liesel.goose.chain import EpochChainManager
 from liesel.goose.engine import (
     Engine,
-    SamplingResult,
+    SamplingResults,
     _add_time_dimension,
     stack_for_multi,
 )
@@ -80,7 +80,7 @@ def test_error_log():
     em.append(tis)
     em.combine_all()
 
-    sr = SamplingResult(
+    sr = SamplingResults(
         EpochChainManager(),
         em,
         Option.none(),
@@ -133,7 +133,7 @@ def t_test_engine():
 
     engine.sample_all_epochs()
 
-    results: SamplingResult = engine.get_results()
+    results: SamplingResults = engine.get_results()
 
     print(results.positions.combine_all())
     print(results.transition_infos.combine_all())
@@ -168,7 +168,7 @@ def t_test_engine_builder() -> None:
     engine = builder.build()
 
     engine.sample_all_epochs()
-    results: SamplingResult = engine.get_results()
+    results: SamplingResults = engine.get_results()
 
     # print(results.get_posterior_samples())
     # print(results.get_tuning_times())

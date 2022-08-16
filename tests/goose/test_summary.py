@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from liesel.goose.engine import SamplingResult
+from liesel.goose.engine import SamplingResults
 from liesel.goose.summary_m import get_param_stats, get_subparam_stats, summary
 
 # ---------------------------------------------------------------------------- #
@@ -13,9 +13,9 @@ from liesel.goose.summary_m import get_param_stats, get_subparam_stats, summary
 # ---------------------------------------------------------------------------- #
 path_module_dir = os.path.dirname(__file__)
 path0 = os.path.join(path_module_dir, "files", "summary_res.pkl")
-results = SamplingResult.pkl_load(path0)
+results = SamplingResults.pkl_load(path0)
 path1 = os.path.join(path_module_dir, "files", "summary_res_long.pkl")
-results_long = SamplingResult.pkl_load(path1)
+results_long = SamplingResults.pkl_load(path1)
 posterior_samples = results.get_posterior_samples()
 
 # ---------------------------------------------------------------------------- #

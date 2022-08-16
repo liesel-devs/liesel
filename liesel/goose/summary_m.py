@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import xarray
 
-from liesel.goose.engine import ErrorLog, SamplingResult, SamplingResults
+from liesel.goose.engine import ErrorLog, SamplingResults
 from liesel.goose.pytree import slice_leaves, stack_leaves
 from liesel.goose.types import Position
 from liesel.option import Option
@@ -471,7 +471,7 @@ def collect_param_dfs(
 
 
 def summary(
-    results: SamplingResult,
+    results: SamplingResults,
     per_chain: bool = True,
     params: str | list[str] | None = None,
     param_indices: int | Sequence[int] | None = None,
@@ -844,7 +844,7 @@ class Summary:
     @classmethod
     def from_result(
         cls,
-        result: SamplingResult,
+        result: SamplingResults,
         additional_chain: Position | None = None,
         quantiles: Sequence[float] = (0.05, 0.5, 0.95),
         hdi_prob: float = 0.9,
