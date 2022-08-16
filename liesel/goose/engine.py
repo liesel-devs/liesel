@@ -30,7 +30,6 @@ from .pytree import as_strong_pytree, register_dataclass_as_pytree
 from .types import (
     Array,
     GeneratedQuantity,
-    Kernel,
     KeyArray,
     ModelInterface,
     ModelState,
@@ -144,7 +143,7 @@ class SamplingResults:
     kernel_states: Option[EpochChainManager]
     full_model_states: Option[EpochChainManager]
     kernel_classes: Option[dict[str, type]]
-    kernels_by_position: Option[dict[str, Kernel]]
+    kernels_by_position: Option[dict[str, str]]
 
     def get_samples(self) -> Position:
         opt: Option[Position] = self.positions.combine_all()
@@ -156,7 +155,8 @@ class SamplingResults:
         )
         return opt.expect(f"No posterior samples in {repr(self)}")
 
-    def get_kernels_by_position(self) -> dict[str, Kernel]:
+    def get_kernels_by_position(self) -> dict[str, str]:
+        """Returns a :class:`dict` of ``{"position name": "kernel identifier"}``."""
         return self.kernels_by_position.expect(
             f"No position-kernel associations in {repr(self)}"
         )
@@ -373,9 +373,11 @@ class Engine:
         kernels = self._kernel_sequence.get_kernels()
         kernels_cls: dict[str, type] = {ker.identifier: type(ker) for ker in kernels}
 
-        kernels_by_position = dict()
+        kernels_by_position: dict[str, str] = dict()
         for kernel in kernels:
-            kernels_by_position.update({key: kernel for key in kernel.position_keys})
+            kernels_by_position.update(
+                {key: kernel.identifier for key in kernel.position_keys}
+            )
 
         return SamplingResults(
             positions=self._position_chain,
