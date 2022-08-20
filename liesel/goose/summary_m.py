@@ -2,6 +2,8 @@
 # Posterior statistics and diagnostics
 """
 
+from __future__ import annotations
+
 import typing
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -857,7 +859,7 @@ class Summary:
         selected: list[str] | None = None,
         deselected: list[str] | None = None,
         per_chain=False,
-    ) -> "Summary":
+    ) -> Summary:
         """
         Alias for :meth:`.from_results` for backwards compatibility.
 
@@ -889,7 +891,7 @@ class Summary:
         selected: list[str] | None = None,
         deselected: list[str] | None = None,
         per_chain=False,
-    ) -> "Summary":
+    ) -> Summary:
         """
         Creates a `Summary` object from a results object.
 

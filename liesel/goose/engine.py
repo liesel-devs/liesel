@@ -6,6 +6,8 @@ This module is experimental. Expect API changes.
 
 # mypy: check-untyped-defs
 
+from __future__ import annotations
+
 import logging
 import pickle
 import warnings
@@ -215,7 +217,7 @@ class SamplingResults:
             pickle.dump(self, f)
 
     @staticmethod
-    def pkl_load(path) -> "SamplingResults":
+    def pkl_load(path) -> SamplingResults:
         """Loads the pickled object from `path`."""
         with open(path, "rb") as f:
             return pickle.load(f)
