@@ -143,7 +143,7 @@ class SamplingResults:
     kernel_states: Option[EpochChainManager]
     full_model_states: Option[EpochChainManager]
     kernel_classes: Option[dict[str, type]]
-    kernels_by_position: Option[dict[str, str]]
+    kernels_by_pos_key: Option[dict[str, str]]
 
     def get_samples(self) -> Position:
         opt: Option[Position] = self.positions.combine_all()
@@ -155,9 +155,9 @@ class SamplingResults:
         )
         return opt.expect(f"No posterior samples in {repr(self)}")
 
-    def get_kernels_by_position(self) -> dict[str, str]:
+    def get_kernels_by_pos_key(self) -> dict[str, str]:
         """Returns a :class:`dict` of ``{"position name": "kernel identifier"}``."""
-        return self.kernels_by_position.expect(
+        return self.kernels_by_pos_key.expect(
             f"No position-kernel associations in {repr(self)}"
         )
 
@@ -387,7 +387,7 @@ class Engine:
             kernel_states=Option(ksc),
             full_model_states=Option(None),
             kernel_classes=Option(kernels_cls),
-            kernels_by_position=Option(kernels_by_position),
+            kernels_by_pos_key=Option(kernels_by_position),
         )
 
     def _split_prng_key(self, n: int = 1) -> KeyArray:

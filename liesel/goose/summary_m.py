@@ -658,7 +658,7 @@ class Summary:
     config: dict
     sample_info: dict
     error_summary: ErrorSummary
-    kernels_by_position: dict[str, str]
+    kernels_by_pos_key: dict[str, str]
 
     def to_dataframe(self) -> pd.DataFrame:
         """Turns Summary object into a DataFrame object."""
@@ -686,7 +686,7 @@ class Summary:
                 )
                 quant_per_elem: dict[str, Any] = {}
                 quant_per_elem["variable"] = var
-                quant_per_elem["kernel"] = self.kernels_by_position.get(var, "-")
+                quant_per_elem["kernel"] = self.kernels_by_pos_key.get(var, "-")
                 if self.config["chains_merged"]:
                     quant_per_elem["var_index"] = it.multi_index
                     quant_per_elem["sample_size"] = (
@@ -972,7 +972,7 @@ class Summary:
             config=config,
             sample_info=sample_info,
             error_summary=error_summary,
-            kernels_by_position=results.get_kernels_by_position(),
+            kernels_by_pos_key=results.get_kernels_by_pos_key(),
         )
 
 
