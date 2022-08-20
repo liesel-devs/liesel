@@ -737,9 +737,9 @@ class Summary:
 
         qtls = [f"q_{qtl}" for qtl in self.config["quantiles"]]
         cols = (
-            ["mean", "sd"]
+            ["kernel", "mean", "sd"]
             + qtls
-            + ["sample_size", "ess_bulk", "ess_tail", "rhat", "kernel"]
+            + ["sample_size", "ess_bulk", "ess_tail", "rhat"]
         )
         cols = [col for col in cols if col in df.columns]
         df = df[cols]
