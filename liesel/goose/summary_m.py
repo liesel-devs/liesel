@@ -2,6 +2,8 @@
 # Posterior statistics and diagnostics
 """
 
+from __future__ import annotations
+
 import typing
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -14,7 +16,7 @@ import numpy as np
 import pandas as pd
 import xarray
 
-from liesel.goose.engine import ErrorLog, SamplingResult
+from liesel.goose.engine import ErrorLog, SamplingResults
 from liesel.goose.pytree import slice_leaves, stack_leaves
 from liesel.goose.types import Position
 from liesel.option import Option
@@ -471,7 +473,7 @@ def collect_param_dfs(
 
 
 def summary(
-    results: SamplingResult,
+    results: SamplingResults,
     per_chain: bool = True,
     params: str | list[str] | None = None,
     param_indices: int | Sequence[int] | None = None,
@@ -658,6 +660,7 @@ class Summary:
     config: dict
     sample_info: dict
     error_summary: ErrorSummary
+    kernels_by_pos_key: dict[str, str]
 
     def to_dataframe(self) -> pd.DataFrame:
         """Turns Summary object into a DataFrame object."""
@@ -685,6 +688,7 @@ class Summary:
                 )
                 quant_per_elem: dict[str, Any] = {}
                 quant_per_elem["variable"] = var
+                quant_per_elem["kernel"] = self.kernels_by_pos_key.get(var, "-")
                 if self.config["chains_merged"]:
                     quant_per_elem["var_index"] = it.multi_index
                     quant_per_elem["sample_size"] = (
@@ -734,7 +738,11 @@ class Summary:
         df = df.set_index("index", append=True)
 
         qtls = [f"q_{qtl}" for qtl in self.config["quantiles"]]
-        cols = ["mean", "sd"] + qtls + ["sample_size", "ess_bulk", "ess_tail", "rhat"]
+        cols = (
+            ["kernel", "mean", "sd"]
+            + qtls
+            + ["sample_size", "ess_bulk", "ess_tail", "rhat"]
+        )
         cols = [col for col in cols if col in df.columns]
         df = df[cols]
 
@@ -841,18 +849,51 @@ class Summary:
     def __str__(self):
         return str(self.to_dataframe())
 
-    @staticmethod
+    @classmethod
     def from_result(
-        result: SamplingResult,
+        cls,
+        result: SamplingResults,
         additional_chain: Position | None = None,
         quantiles: Sequence[float] = (0.05, 0.5, 0.95),
         hdi_prob: float = 0.9,
         selected: list[str] | None = None,
         deselected: list[str] | None = None,
         per_chain=False,
-    ) -> "Summary":
+    ) -> Summary:
         """
-        Creates a `Summary` object from a result object.
+        Alias for :meth:`.from_results` for backwards compatibility.
+
+        In addition to the name, there are two further subtle differences to
+        :meth:`.from_results`.
+
+        - The argument ``result`` is in singular. The method :meth:`.from_results` uses
+          the plural instead.
+        - The argument ``result`` is of type :class:`.SamplingResult`, which itself is
+          an alias for :meth:`.SamplingResults`.
+        """
+
+        return cls.from_results(
+            results=result,
+            additional_chain=additional_chain,
+            quantiles=quantiles,
+            hdi_prob=hdi_prob,
+            selected=selected,
+            deselected=deselected,
+            per_chain=per_chain,
+        )
+
+    @staticmethod
+    def from_results(
+        results: SamplingResults,
+        additional_chain: Position | None = None,
+        quantiles: Sequence[float] = (0.05, 0.5, 0.95),
+        hdi_prob: float = 0.9,
+        selected: list[str] | None = None,
+        deselected: list[str] | None = None,
+        per_chain=False,
+    ) -> Summary:
+        """
+        Creates a `Summary` object from a results object.
 
         An optional `additional_chain` can be supplied to add more parameters to
         the summary output. `additional_chain` must be a position chain which
@@ -868,7 +909,7 @@ class Summary:
         Experimental.
         """
 
-        posterior_chain = result.get_posterior_samples()
+        posterior_chain = results.get_posterior_samples()
         if additional_chain:
             for k, v in additional_chain.items():
                 posterior_chain[k] = v
@@ -888,7 +929,7 @@ class Summary:
 
         # get some general infos on the sampling
         param_chain = next(iter(posterior_chain.values()))
-        epochs = result.positions.get_epochs()
+        epochs = results.positions.get_epochs()
 
         warmup_size = np.sum(
             [epoch.duration for epoch in epochs if epoch.type.is_warmup(epoch.type)]
@@ -925,7 +966,7 @@ class Summary:
         }
 
         error_summary = _make_error_summary(
-            result.get_error_log(False).unwrap(), result.get_error_log(True)
+            results.get_error_log(False).unwrap(), results.get_error_log(True)
         )
 
         return Summary(
@@ -933,6 +974,7 @@ class Summary:
             config=config,
             sample_info=sample_info,
             error_summary=error_summary,
+            kernels_by_pos_key=results.get_kernels_by_pos_key(),
         )
 
 

@@ -104,7 +104,7 @@ Finally, we can print a summary table and view some diagnostic plots.
 #| label: goose-plot
 
 results = engine.get_results()
-gs.Summary.from_result(results)
+gs.Summary.from_results(results)
 gs.plot_param(results, param="loc")
 ```
 

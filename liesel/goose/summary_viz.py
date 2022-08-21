@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from liesel.goose.engine import SamplingResult
+from liesel.goose.engine import SamplingResults
 from liesel.goose.summary_m import (
     adjust_dimensions,
     move_col_first,
@@ -155,7 +155,7 @@ def collect_subparam_dfs(
 
 
 def collect_param_dfs(
-    results: SamplingResult,
+    results: SamplingResults,
     params: str | list[str] | None = None,
     param_indices: int | Sequence[int] | None = None,
     chain_indices: int | Sequence[int] | None = None,
@@ -181,7 +181,7 @@ def collect_param_dfs(
 
 
 def setup_plot_df(
-    results: SamplingResult,
+    results: SamplingResults,
     params: str | list[str] | None,
     param_indices: int | Sequence[int] | None,
     chain_indices: int | Sequence[int] | None,
@@ -201,7 +201,7 @@ def setup_plot_df(
 
 
 def setup_scatterplot_df(
-    results: SamplingResult,
+    results: SamplingResults,
     params: str | list[str] | None,
     param_indices: int | Sequence[int] | None,
     chain_indices: int | Sequence[int] | None,
@@ -285,7 +285,7 @@ def save_figure(g: sns.FacetGrid | None = None, save_path: str | None = None) ->
 
 
 def plot_trace(
-    results: SamplingResult,
+    results: SamplingResults,
     params: str | list[str] | None = None,
     param_indices: int | Sequence[int] | None = None,
     chain_indices: int | Sequence[int] | None = None,
@@ -415,7 +415,7 @@ def plot_trace(
 
 
 def plot_density(
-    results: SamplingResult,
+    results: SamplingResults,
     params: str | list[str] | None = None,
     param_indices: int | Sequence[int] | None = None,
     chain_indices: int | Sequence[int] | None = None,
@@ -553,7 +553,7 @@ def compute_max_lags(
 
 
 def plot_cor(
-    results: SamplingResult,
+    results: SamplingResults,
     params: str | list[str] | None = None,
     param_indices: int | Sequence[int] | None = None,
     chain_indices: int | Sequence[int] | None = None,
@@ -800,7 +800,7 @@ def get_title(plot_df: pd.DataFrame, title: str | None) -> str:
 
 
 def plot_param(
-    results: SamplingResult,
+    results: SamplingResults,
     param: str,
     param_index: int | None = None,
     chain_indices: int | Sequence[int] | None = None,
@@ -910,7 +910,7 @@ def plot_param(
 
 
 def plot_scatter(
-    results: SamplingResult,
+    results: SamplingResults,
     params: list[str],
     param_indices: tuple[int, int],
     chain_indices: int | Sequence[int] | None = None,
@@ -1029,7 +1029,7 @@ def plot_scatter(
 
 
 def plot_pairs(
-    results: SamplingResult,
+    results: SamplingResults,
     params: str | list[str] | None = None,
     param_indices: int | Sequence[int] | None = None,
     chain_indices: int | Sequence[int] | None = None,

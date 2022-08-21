@@ -135,7 +135,7 @@ Finally, we can print a summary table and view some diagnostic plots.
 
 ``` python
 results = engine.get_results()
-gs.Summary.from_result(results)
+gs.Summary.from_results(results)
 ```
 
 <p><strong>Parameter summary:</strong></p>
