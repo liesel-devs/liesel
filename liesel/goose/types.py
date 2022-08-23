@@ -1,5 +1,5 @@
 """
-# Type aliases, type variables and protocols
+Type aliases, type variables and protocols.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ if TYPE_CHECKING:
         WarmupOutcome,
     )
 
+__docformat__ = "numpy"
 
 # simple type aliases
 
@@ -37,17 +38,23 @@ class TuningInfo(Protocol):
 
 class TransitionInfo(Protocol):
     error_code: int
-    """An error code defined in the error book of the kernel.
-    0 if no errors occurred during the transition."""
+    """
+    An error code defined in the error book of the kernel.
+    0 if no errors occurred during the transition.
+    """
 
     acceptance_prob: float
-    """The acceptance probability of a proposal of a Metropolis-Hastings kernel
+    """
+    The acceptance probability of a proposal of a Metropolis-Hastings kernel
     or the average acceptance probability across a trajectory of a NUTS-type kernel.
-    99.0 if not used by the kernel."""
+    99.0 if not used by the kernel.
+    """
 
     position_moved: int
-    """0 if the position did not move during the transition, 1 if it *did* move,
-    and 99 if unknown."""
+    """
+    0 if the position did not move during the transition, 1 if it *did* move,
+    and 99 if unknown.
+    """
 
     @abstractmethod
     def minimize(self) -> DefaultTransitionInfo:
@@ -61,9 +68,10 @@ TTuningInfo = TypeVar("TTuningInfo", bound=TuningInfo)
 
 class ModelInterface(Protocol):
     """
-    The model interface defines a standardized way for Goose to communicate
-    with a statistical model, that is, to update the model state and to compute
-    the log-probability.
+    Defines a standardized way for Goose to communicate with a statistical model.
+
+    This means predominantly, to update the model state and to compute the
+    log-probability.
     """
 
     @abstractmethod
@@ -151,7 +159,7 @@ class Kernel(Protocol[TKernelState, TTransitionInfo, TTuningInfo]):
         """
         Called after each warmup epoch.
 
-        `history` may be `None` if class variable `needs_history` is `False`.
+        ``history`` may be ``None`` if class variable ``needs_history`` is ``False``.
 
         Must be jittable.
         """
@@ -197,13 +205,13 @@ class Kernel(Protocol[TKernelState, TTransitionInfo, TTuningInfo]):
         """
         Asks the kernel to inspect the warmup history and react to it.
 
-        This method is executed once the first non-warmup epoch is encountered
-        and before `start_epoch` is called.
+        This method is executed once the first non-warmup epoch is encountered and
+        before :meth:`.start_epoch` is called.
 
-        `tuning_history` is `None` if no tuning has happened prior to the first
-        non-warmup epoch. Otherwise `tuning_history` has the same structure as returned
-        from `tune()` but each leaf has an additional dimension. The first dimension
-        refers to the n-the tuning.
+        ``tuning_history`` is ``None`` if no tuning has happened prior to the first
+        non-warmup epoch. Otherwise ``tuning_history`` has the same structure as
+        returned from :meth:`.tune` but each leaf has an additional dimension. The first
+        dimension refers to the n-the tuning.
 
         Must be jittable.
 
