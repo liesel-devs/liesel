@@ -1,10 +1,12 @@
 """
-# MCMC engine
+MCMC engine
 
 This module is experimental. Expect API changes.
 """
 
 # mypy: check-untyped-defs
+
+from __future__ import annotations
 
 import logging
 import pickle
@@ -128,7 +130,7 @@ class Carry:
 
 
 @dataclass
-class SamplingResult:
+class SamplingResults:
     """
     Contains the results of the MCMC engine.
 
@@ -143,6 +145,7 @@ class SamplingResult:
     kernel_states: Option[EpochChainManager]
     full_model_states: Option[EpochChainManager]
     kernel_classes: Option[dict[str, type]]
+    kernels_by_pos_key: Option[dict[str, str]]
 
     def get_samples(self) -> Position:
         opt: Option[Position] = self.positions.combine_all()
@@ -153,6 +156,12 @@ class SamplingResult:
             lambda config: config.type == EpochType.POSTERIOR
         )
         return opt.expect(f"No posterior samples in {repr(self)}")
+
+    def get_kernels_by_pos_key(self) -> dict[str, str]:
+        """Returns a :class:`dict` of ``{"position name": "kernel identifier"}``."""
+        return self.kernels_by_pos_key.expect(
+            f"No position-kernel associations in {repr(self)}"
+        )
 
     def get_posterior_transition_infos(self) -> dict[str, TransitionInfo]:
         opt = self.transition_infos.combine_filtered(
@@ -208,10 +217,14 @@ class SamplingResult:
             pickle.dump(self, f)
 
     @staticmethod
-    def pkl_load(path) -> "SamplingResult":
+    def pkl_load(path) -> SamplingResults:
         """Loads the pickled object from `path`."""
         with open(path, "rb") as f:
             return pickle.load(f)
+
+
+# Alias for backwards compatibility
+SamplingResult = SamplingResults
 
 
 class Engine:
@@ -347,7 +360,7 @@ class Engine:
         """Returns true if all configured epochs have been sampled."""
         return not self._epoch_manager.has_more()
 
-    def get_results(self) -> SamplingResult:
+    def get_results(self) -> SamplingResults:
         """Returns the results of the sampling process."""
         if self._store_kernel_states:
             ksc = self._kernel_state_chain
@@ -359,11 +372,16 @@ class Engine:
         else:
             gqs = None
 
-        kernels_cls: dict[str, type] = {
-            ker.identifier: type(ker) for ker in self._kernel_sequence.get_kernels()
-        }
+        kernels = self._kernel_sequence.get_kernels()
+        kernels_cls: dict[str, type] = {ker.identifier: type(ker) for ker in kernels}
 
-        return SamplingResult(
+        kernels_by_position: dict[str, str] = dict()
+        for kernel in kernels:
+            kernels_by_position.update(
+                {key: kernel.identifier for key in kernel.position_keys}
+            )
+
+        return SamplingResults(
             positions=self._position_chain,
             transition_infos=self._transition_info_chain,
             generated_quantities=Option(gqs),
@@ -371,6 +389,7 @@ class Engine:
             kernel_states=Option(ksc),
             full_model_states=Option(None),
             kernel_classes=Option(kernels_cls),
+            kernels_by_pos_key=Option(kernels_by_position),
         )
 
     def _split_prng_key(self, n: int = 1) -> KeyArray:

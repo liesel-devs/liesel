@@ -1,9 +1,9 @@
 """
-# MCMC engine builder
+MCMC engine builder
 
 The purpose of the engine builder is to provide a simple API to gradually assemble
 the components needed by the MCMC engine. The builder is responsible of returning an
-engine in a well-defined state. Furthermore, the builder can return different engine
+engine in a well-defined state. Furthermore, the builder can return different engine 
 implementations.
 """
 
@@ -39,21 +39,31 @@ def _find_duplicate(xs: list[str]) -> Option[str]:
 
 class EngineBuilder:
     """
-    The `EngineBuilder` is used to construct an MCMC Engine.
+    The :class:`.EngineBuilder` is used to construct an MCMC Engine.
 
-    Currently, the `EngineBuilder` builds an object of the class `Engine`.
+    Currently, the :class:`.EngineBuilder` builds an object of the class
+    :class:`.Engine`. 
 
     By default, every position key associated with an MCMC kernel is tracked.
-    This behavior can be adjusted with the fields `positions_included`
-    and `positions_excluded`.
+    This behavior can be adjusted with the fields :class:`.positions_included`
+    and :attr:`.positions_excluded`. 
 
-    ## Parameters
+    Parameters
+    ----------
+    seed
+        Used to initialize the PRNG for the building process. The PRNG state
+    num_chains
+        The number of chains to be used. 
 
-    - `seed`: Used to initialize the PRNG for the building process. The PRNG state
-      is also used to initialize the PRNG state of the engine. A user-specific seed
-      to initialize the engine can be set with the method `set_engine_seed`.
-    - `num_chains`: The number of chains to be used.
+    Attributes
+    ----------
+    positions_included
+        List of additional position keys that should be tracked.
+    positions_excluded
+        List of position keys that should not be tracked. Excluded keys override
+        additional keys.
     """
+    
 
     def __init__(self, seed: int, num_chains: int):
         keys = jax.random.split(jax.random.PRNGKey(seed))
@@ -72,14 +82,7 @@ class EngineBuilder:
         self.show_progress: bool = True
 
         self.positions_included: list[str] = []
-        """List of additional position keys that should be tracked."""
-
         self.positions_excluded: list[str] = []
-        """
-        List of position keys that should not be tracked.
-
-        Excluded keys override additional keys.
-        """
 
     def set_engine_seed(self, seed: int | KeyArray):
         """Sets a seed used to initialize the MCMC engine."""
@@ -95,7 +98,7 @@ class EngineBuilder:
         return self._engine_key
 
     def add_kernel(self, kernel: Kernel):
-        """Adds a `Kernel`."""
+        """Adds a :class:`.Kernel`."""
         self._kernels.append(kernel)
 
     @property
@@ -103,7 +106,7 @@ class EngineBuilder:
         return tuple(self._kernels)
 
     def add_quantity_generator(self, generator: QuantityGenerator):
-        """Adds a `QuantityGenerator`."""
+        """Adds a :class:`.QuantityGenerator`."""
         self._quantity_generators.append(generator)
 
     @property
@@ -114,10 +117,10 @@ class EngineBuilder:
         """
         Sets the initial model state.
 
-        If `multiple_chains` is true the `model_state` will be used as is;
-        otherwise `model_state` will be used as the initial values for each chain.
-        Note that if `multiple_chains` is true, the first axis of each leaf of
-        `model_state` refers to the chain.
+        If :attr:`.multiple_chains` is true the :attr:`.model_state` will be used as is;
+        otherwise :attr:`.model_state` will be used as the initial values for each chain.
+        Note that if :attr:`.multiple_chains` is true, the first axis of each leaf of
+        :attr:`.model_state` refers to the chain.
         """
         if not multiple_chains:
             model_states = stack_leaves(model_state for _ in range(self._num_chains))
@@ -141,9 +144,9 @@ class EngineBuilder:
         thinning_warmup: int = 1,
     ):
         """
-        Sets epochs using the `stan_epochs` function.
+        Sets epochs using the :func:`.stan_epochs` function.
 
-        Note that `term_duration` needs to be long enough that tuning algorithms
+        Note that :attr:`.term_duration` needs to be long enough that tuning algorithms
         like dual averaging can converge.
         """
         epochs = stan_epochs(

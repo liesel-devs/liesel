@@ -7,7 +7,7 @@ import pytest
 from jax.random import KeyArray
 
 from liesel.goose.builder import EngineBuilder
-from liesel.goose.engine import SamplingResult
+from liesel.goose.engine import SamplingResults
 from liesel.goose.epoch import EpochConfig, EpochState, EpochType
 from liesel.goose.kernel import (
     DefaultTransitionInfo,
@@ -135,7 +135,7 @@ def logprob(state):
 
 
 @pytest.fixture(scope="module")
-def result() -> SamplingResult:
+def result() -> SamplingResults:
     builder = EngineBuilder(0, 3)
     state = {
         "foo": jnp.arange(3, dtype=jnp.float32),
@@ -162,8 +162,8 @@ def result() -> SamplingResult:
 # TODO: speed up tests
 
 
-def test_shapes(result: SamplingResult):
-    summary = Summary.from_result(result)
+def test_shapes(result: SamplingResults):
+    summary = Summary.from_results(result)
 
     # combined chains
     assert summary.quantities["mean"]["foo"].shape == (3,)
@@ -185,7 +185,7 @@ def test_shapes(result: SamplingResult):
     assert summary.quantities["hdi"]["baz"].shape == (2,)
 
     # combined chains
-    summary = Summary.from_result(result, quantiles=(0.2, 0.4), per_chain=True)
+    summary = Summary.from_results(result, quantiles=(0.2, 0.4), per_chain=True)
 
     assert summary.quantities["mean"]["foo"].shape == (
         3,
@@ -214,35 +214,35 @@ def test_shapes(result: SamplingResult):
     )
 
 
-def test_additional_chain(result: SamplingResult):
+def test_additional_chain(result: SamplingResults):
     chain = result.get_posterior_samples()
     chain["expbaz"] = jnp.log(chain["baz"] + 1)
     chain["expbar"] = jnp.log(chain["bar"] + 1)
 
-    summary = Summary.from_result(result, chain)
+    summary = Summary.from_results(result, chain)
 
     assert summary.quantities["mean"]["expbar"].shape == (3, 5, 7)
     assert summary.quantities["mean"]["expbaz"].shape == ()
 
 
-def test_selected(result: SamplingResult):
-    summary = Summary.from_result(result, selected=["foo"])
+def test_selected(result: SamplingResults):
+    summary = Summary.from_results(result, selected=["foo"])
 
     assert "foo" in summary.quantities["mean"]
     assert "bar" not in summary.quantities["mean"]
     assert "baz" not in summary.quantities["mean"]
 
 
-def test_deselected(result: SamplingResult):
-    summary = Summary.from_result(result, deselected=["baz"])
+def test_deselected(result: SamplingResults):
+    summary = Summary.from_results(result, deselected=["baz"])
 
     assert "foo" in summary.quantities["mean"]
     assert "bar" in summary.quantities["mean"]
     assert "baz" not in summary.quantities["mean"]
 
 
-def test_mean(result: SamplingResult):
-    summary = Summary.from_result(result)
+def test_mean(result: SamplingResults):
+    summary = Summary.from_results(result)
     assert jnp.allclose(
         summary.quantities["mean"]["foo"], jnp.array([175.5, 176.5, 177.5])
     )
@@ -252,31 +252,31 @@ def test_mean(result: SamplingResult):
     assert jnp.allclose(summary.quantities["mean"]["baz"], jnp.array(176.5))
 
 
-def test_config(result: SamplingResult):
-    summary = Summary.from_result(result, quantiles=(0.4, 0.6), hdi_prob=0.5)
+def test_config(result: SamplingResults):
+    summary = Summary.from_results(result, quantiles=(0.4, 0.6), hdi_prob=0.5)
     assert summary.config["chains_merged"]
     assert summary.config["quantiles"] == (0.4, 0.6)
     assert summary.config["hdi_prob"] == 0.5
 
 
-def test_sample_info(result: SamplingResult):
-    summary = Summary.from_result(result)
+def test_sample_info(result: SamplingResults):
+    summary = Summary.from_results(result)
     print(summary.sample_info)
     assert summary.sample_info["num_chains"] == 3
     assert summary.sample_info["sample_size_per_chain"] == 250
 
 
-def test_df_sample_info(result: SamplingResult):
-    summary = Summary.from_result(result, selected=["baz"]).to_dataframe()
+def test_df_sample_info(result: SamplingResults):
+    summary = Summary.from_results(result, selected=["baz"]).to_dataframe()
     assert summary["sample_size"][0] == 3 * 250
 
-    summary = Summary.from_result(
+    summary = Summary.from_results(
         result, per_chain=True, selected=["baz"]
     ).to_dataframe()
     assert summary["sample_size"][0] == 250
 
 
-def test_error_summary(result: SamplingResult):
+def test_error_summary(result: SamplingResults):
     # add some error codes to the chain
 
     # epoch 1 - warmup
@@ -306,7 +306,7 @@ def test_error_summary(result: SamplingResult):
     ].error_code = ecs
 
     # create the summary object
-    summary = Summary.from_result(result, selected=["baz"])
+    summary = Summary.from_results(result, selected=["baz"])
     es = summary.error_summary["kernel_00"]
 
     # check error_code correspond
@@ -328,3 +328,35 @@ def test_error_summary(result: SamplingResult):
     # check that counts are correct - only in the posterior
     assert np.all(es[1].count_per_chain_posterior == np.array([2, 1, 1]))
     assert np.all(es[2].count_per_chain_posterior == np.array([0, 5, 0]))
+
+
+@pytest.fixture(scope="module")
+def single_chain_result() -> SamplingResults:
+    builder = EngineBuilder(0, 1)
+    state = {
+        "foo": jnp.arange(3, dtype=jnp.float32),
+        "bar": jnp.zeros((3, 5, 7)),
+        "baz": jnp.array(1.0),
+    }
+
+    builder.add_kernel(MockKernel(list(state.keys())))
+    builder.set_model(DictModel(logprob))
+    builder.set_initial_values(state)
+    builder.set_epochs(
+        [
+            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
+            EpochConfig(EpochType.BURNIN, 50, 1, None),
+            EpochConfig(EpochType.POSTERIOR, 250, 1, None),
+        ]
+    )
+    engine = builder.build()
+    engine.sample_all_epochs()
+    return engine.get_results()
+
+
+def test_single_chain_repr_fs_return(single_chain_result: SamplingResults):
+    summary = Summary.from_results(single_chain_result)
+    md = summary._repr_markdown_()
+    html = summary._repr_html_()
+    assert isinstance(md, str)
+    assert isinstance(html, str)

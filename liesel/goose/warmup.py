@@ -1,5 +1,5 @@
 """
-# Standard warmup schemes
+Standard warmup schemes.
 """
 
 from functools import partial
@@ -7,6 +7,8 @@ from functools import partial
 from .epoch import EpochConfig, EpochType
 
 _EpochConfig = partial(EpochConfig, optional=None)
+
+__docformat__ = "numpy"
 
 
 def stan_epochs(
@@ -19,27 +21,32 @@ def stan_epochs(
     thinning_warmup: int = 1,
 ) -> list[EpochConfig]:
     """
-    Sets up a list of `liesel.goose.epoch.EpochConfig`'s, following the Stan
-    Development Team, [Stan Reference Manual (2021), Chapter 15.2](
-    https://mc-stan.org/docs/2_28/reference-manual/hmc-algorithm-parameters.html).
+    Sets up a list of :class:`.EpochConfig`'s, following the Stan Development Team (Stan
+    Reference Manual 2021, Chapter 15.2 [#stan_manual]_).
 
-    ## Parameters
+    .. [#stan_manual] https://mc-stan.org/docs/2_28/reference-manual/hmc-algorithm-parameters.html # noqa: E501
 
-    - `warmup_duration`: The number of warmup samples.
-    - `posterior_duration`: The number of posterior samples.
-    - `init_duration`: The number of samples in the *initial fast* adaptation
-      epoch.
-    - `term_duration`: The number of samples in the *final fast* adaptation
-      epoch.
-    - `base_duration`: The number of samples in the *first slow* adaptation
-      epoch.
-    - `thinning_posterior`: Thinning applied in the posterior epoch.
-    - `thinning_warmup`: Thinning applied in each warmup.
+    Parameters
+    ----------
+    warmup_duration
+        The number of warmup samples.
+    posterior_duration
+        The number of posterior samples.
+    init_duration
+        The number of samples in the *initial fast* adaptation epoch.
+    term_duration
+        The number of samples in the *final fast* adaptation epoch.
+    base_duration
+        The number of samples in the *first slow* adaptation epoch.
+    thinning_posterior
+        Thinning applied in the posterior epoch.
+    thinning_warmup
+        Thinning applied in each warmup.
 
-    ## Thinning
-
-    Warning: Kernels which rely on history tuning might not be able to deal with
-    thinning during warmup.
+    Warnings
+    --------
+    Kernels which rely on history tuning might not be able to deal with thinning during
+    warmup.
 
     """
 
