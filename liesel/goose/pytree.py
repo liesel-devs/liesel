@@ -11,6 +11,8 @@ import jax.tree_util
 
 T = TypeVar("T")
 
+__docformat__ = "numpy"
+
 
 def register_dataclass_as_pytree(cls):
     """Decorator for registering dataclasses as pytrees."""

@@ -27,6 +27,8 @@ from .mm import tune_inv_mm_diag, tune_inv_mm_full
 from .pytree import register_dataclass_as_pytree
 from .types import Array, KeyArray, ModelState, Position
 
+__docformat__ = "numpy"
+
 
 @register_dataclass_as_pytree
 @dataclass
