@@ -45,7 +45,7 @@ class Chain(Protocol[TPyTree]):
 
 class EpochChain(Chain[TPyTree]):
     """
-    An ``EpochChain`` is a :class:`.Chain` with an associated ``EpochConfig``.
+    An ``EpochChain`` is a :class:`.Chain` with an associated :class:`.EpochConfig`.
 
     The implementation must implement thinning. That is,
     if epoch.thinning > 1 and enabled in contructor, the chain must
@@ -61,7 +61,7 @@ class EpochChain(Chain[TPyTree]):
 
 
 class ListChain(Generic[TPyTree]):
-    """Implements the `Chain` protocol with a list as storage."""
+    """Implements the :class:`.Chain` protocol with a list as storage."""
 
     def __init__(self):
         self._chunks_list: list[TPyTree] = []
@@ -112,7 +112,7 @@ class ListEpochChain(ListChain[TPyTree]):
 
 class EpochChainManager(Generic[TPyTree]):
     """
-    An ``EpochChainManager` is a container for multiple epoch chains.
+    An ``EpochChainManager`` is a container for multiple epoch chains.
 
     The chains can be concatenated over multiple epochs. Thinning defined in epochs
     can be switched on or of with the constructor flag

@@ -31,8 +31,8 @@ from .types import Array, KeyArray, ModelState, Position
 @dataclass
 class IWLSKernelState:
     """
-    A dataclass for the state of a `IWLSKernel`, implementing the
-    `liesel.goose.da.DAKernelState` protocol.
+    A dataclass for the state of a :class:`.IWLSKernel`, implementing the
+    :mod:`.liesel.goose.da.DAKernelState` protocol.
     """
 
     step_size: float
@@ -52,7 +52,7 @@ class IWLSKernel(ModelMixin, TransitionMixin[IWLSKernelState, IWLSTransitionInfo
     """
     An IWLS kernel with dual averaging and an (optional) user-defined function
     for computing the Cholesky decomposition of the Fisher information matrix,
-    implementing the `liesel.goose.types.Kernel` protocol.
+    implementing the :mod:`.liesel.goose.types.Kernel` protocol.
     """
 
     error_book: ClassVar[dict[int, str]] = {0: "no errors", 90: "nan acceptance prob"}
@@ -100,9 +100,9 @@ class IWLSKernel(ModelMixin, TransitionMixin[IWLSKernelState, IWLSTransitionInfo
         self, model_state: ModelState, flat_score_fn: Callable[[Array], Array]
     ) -> Array:
         """
-        Calls `flat_score_fn` on a flat position.
+        Calls :func:`.flat_score_fn` on a flat position.
 
-        The flat position is extracted from the `model_state`.
+        The flat position is extracted from the :attr:`.model_state`.
         """
 
         flat_position, _ = ravel_pytree(self.position(model_state))
@@ -113,10 +113,10 @@ class IWLSKernel(ModelMixin, TransitionMixin[IWLSKernelState, IWLSTransitionInfo
     ) -> Array:
         """
         Computes the Cholesky decomposition of the Fisher information matrix
-        via `flat_hessian_fn`.
+        via :attr:`.flat_hessian_fn`.
 
-        The flat position is extracted from the `model_state`. If the user provided a
-        `chol_info_fn` when initializing the kernel, this function is called instead.
+        The flat position is extracted from the :attr:`.model_state`. If the user provided a
+        :attr:`.chol_info_fn` when initializing the kernel, this function is called instead.
         """
 
         if self.chol_info_fn is None:

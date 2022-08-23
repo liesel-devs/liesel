@@ -45,7 +45,7 @@ class EngineBuilder:
     :class:`.Engine`. 
 
     By default, every position key associated with an MCMC kernel is tracked.
-    This behavior can be adjusted with the fields :class:`.positions_included`
+    This behavior can be adjusted with the fields :attr:`.positions_included`
     and :attr:`.positions_excluded`. 
 
     Parameters
@@ -53,15 +53,7 @@ class EngineBuilder:
     seed
         Used to initialize the PRNG for the building process. The PRNG state
     num_chains
-        The number of chains to be used. 
-
-    Attributes
-    ----------
-    positions_included
-        List of additional position keys that should be tracked.
-    positions_excluded
-        List of position keys that should not be tracked. Excluded keys override
-        additional keys.
+        The number of chains to be used.
     """
     
 
@@ -82,7 +74,10 @@ class EngineBuilder:
         self.show_progress: bool = True
 
         self.positions_included: list[str] = []
+        """List of additional position keys that should be tracked."""
         self.positions_excluded: list[str] = []
+        """List of position keys that should not be tracked. Excluded keys override
+        additional keys."""
 
     def set_engine_seed(self, seed: int | KeyArray):
         """Sets a seed used to initialize the MCMC engine."""
