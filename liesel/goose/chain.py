@@ -1,5 +1,3 @@
-__docformat__ = "numpy"
-
 """
 MCMC chains
 
@@ -18,6 +16,8 @@ from .pytree import concatenate_leaves, slice_leaves
 from .types import PyTree
 
 TPyTree = TypeVar("TPyTree", bound=PyTree)
+
+__docformat__ = "numpy"
 
 
 class Chain(Protocol[TPyTree]):

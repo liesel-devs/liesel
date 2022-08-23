@@ -1,11 +1,9 @@
-__docformat__ = "numpy"
-
 """
 MCMC engine builder
 
 The purpose of the engine builder is to provide a simple API to gradually assemble
 the components needed by the MCMC engine. The builder is responsible of returning an
-engine in a well-defined state. Furthermore, the builder can return different engine 
+engine in a well-defined state. Furthermore, the builder can return different engine
 implementations.
 """
 
@@ -24,6 +22,8 @@ from .kernel_sequence import KernelSequence
 from .pytree import stack_leaves
 from .types import Kernel, KeyArray, ModelInterface, ModelState, QuantityGenerator
 from .warmup import stan_epochs
+
+__docformat__ = "numpy"
 
 
 def _find_duplicate(xs: list[str]) -> Option[str]:
@@ -44,11 +44,11 @@ class EngineBuilder:
     The :class:`.EngineBuilder` is used to construct an MCMC Engine.
 
     Currently, the :class:`.EngineBuilder` builds an object of the class
-    :class:`.Engine`. 
+    :class:`.Engine`.
 
     By default, every position key associated with an MCMC kernel is tracked.
     This behavior can be adjusted with the fields :attr:`.positions_included`
-    and :attr:`.positions_excluded`. 
+    and :attr:`.positions_excluded`.
 
     Parameters
     ----------
@@ -57,7 +57,6 @@ class EngineBuilder:
     num_chains
         The number of chains to be used.
     """
-    
 
     def __init__(self, seed: int, num_chains: int):
         keys = jax.random.split(jax.random.PRNGKey(seed))
@@ -115,9 +114,9 @@ class EngineBuilder:
         Sets the initial model state.
 
         If :attr:`.multiple_chains` is true the :attr:`.model_state` will be used as is;
-        otherwise :attr:`.model_state` will be used as the initial values for each chain.
-        Note that if :attr:`.multiple_chains` is true, the first axis of each leaf of
-        :attr:`.model_state` refers to the chain.
+        otherwise :attr:`.model_state` will be used as the initial values for each
+        chain. Note that if :attr:`.multiple_chains` is true, the first axis of each
+        leaf of :attr:`.model_state` refers to the chain.
         """
         if not multiple_chains:
             model_states = stack_leaves(model_state for _ in range(self._num_chains))

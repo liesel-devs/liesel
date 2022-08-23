@@ -1,5 +1,3 @@
-__docformat__ = "numpy"
-
 """
 # MCMC epochs
 """
@@ -12,6 +10,8 @@ from typing import Iterable, cast
 
 from .pytree import register_dataclass_as_pytree
 from .types import PyTree
+
+__docformat__ = "numpy"
 
 
 class EpochType(IntEnum):

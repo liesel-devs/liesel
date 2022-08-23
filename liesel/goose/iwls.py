@@ -114,11 +114,12 @@ class IWLSKernel(ModelMixin, TransitionMixin[IWLSKernelState, IWLSTransitionInfo
         self, model_state: ModelState, flat_hessian_fn: Callable[[Array], Array]
     ) -> Array:
         """
-        Computes the Cholesky decomposition of the Fisher information matrix
-        via :attr:`.flat_hessian_fn`.
+        Computes the Cholesky decomposition of the Fisher information matrix via
+        :attr:`.flat_hessian_fn`.
 
-        The flat position is extracted from the :attr:`.model_state`. If the user provided a
-        :attr:`.chol_info_fn` when initializing the kernel, this function is called instead.
+        The flat position is extracted from the :attr:`.model_state`. If the user
+        provided a :attr:`.chol_info_fn` when initializing the kernel, this function is
+        called instead.
         """
 
         if self.chol_info_fn is None:
