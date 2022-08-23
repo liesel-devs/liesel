@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from liesel.goose.engine import SamplingResult
+from liesel.goose.engine import SamplingResults
 from liesel.goose.summary_m import get_param_stats, get_subparam_stats, summary
 
 # ---------------------------------------------------------------------------- #
@@ -13,9 +13,9 @@ from liesel.goose.summary_m import get_param_stats, get_subparam_stats, summary
 # ---------------------------------------------------------------------------- #
 path_module_dir = os.path.dirname(__file__)
 path0 = os.path.join(path_module_dir, "files", "summary_res.pkl")
-results = SamplingResult.pkl_load(path0)
+results = SamplingResults.pkl_load(path0)
 path1 = os.path.join(path_module_dir, "files", "summary_res_long.pkl")
-results_long = SamplingResult.pkl_load(path1)
+results_long = SamplingResults.pkl_load(path1)
 posterior_samples = results.get_posterior_samples()
 
 # ---------------------------------------------------------------------------- #
@@ -385,8 +385,8 @@ def test_df_output():
         for col in ["hdi_10_low", "hdi_10_high"]
     )
 
-    assert summary(results, round_digits=0)["num_effective"][0] == 57.0
-    assert summary(results, round_digits=1)["num_effective"][0] == 57.3
+    assert summary(results, round_digits=0)["num_effective"][0] == 60.0
+    assert summary(results, round_digits=1)["num_effective"][0] == 59.6
 
 
 def test_correct_error_messages():

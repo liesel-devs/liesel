@@ -70,7 +70,7 @@ instance/
 
 # Sphinx documentation
 docs/_build/
-docs/source/generated
+docs/source/generated/
 
 # PyBuilder
 .pybuilder/
@@ -166,6 +166,7 @@ cython_debug/
 
 # VS Code files
 .vscode/
+
 .DS_Store
 docs/source/test.rst
 liesel/liesel/test.py
