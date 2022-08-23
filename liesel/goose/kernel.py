@@ -20,6 +20,8 @@ from .types import (
     TTuningInfo,
 )
 
+__docformat__ = "numpy"
+
 
 @register_dataclass_as_pytree
 @dataclass
@@ -43,9 +45,9 @@ class DefaultTuningInfo:
 @dataclass
 class TransitionOutcome(Generic[TKernelState, TTransitionInfo]):
     """
-    A dataclass for the return value of the kernel method `transition`.
-    Different kernels can use different types of `liesel.goose.types.KernelState`'s
-    and `liesel.goose.types.TransitionInfo`'s.
+    A dataclass for the return value of the kernel method ``transition``. Different
+    kernels can use different types of :class:`.KernelState`'s and
+    :class:`.TransitionInfo`'s.
     """
 
     info: TTransitionInfo
@@ -57,9 +59,8 @@ class TransitionOutcome(Generic[TKernelState, TTransitionInfo]):
 @dataclass
 class TuningOutcome(Generic[TKernelState, TTuningInfo]):
     """
-    A dataclass for the return value of the kernel method `tune`.
-    Different kernels can use different types of `liesel.goose.types.KernelState`'s
-    and `liesel.goose.types.TuningInfo`'s.
+    A dataclass for the return value of the kernel method `tune`. Different kernels can
+    use different types of :class:`.KernelState`'s and :class:`.TuningInfo`'s.
     """
 
     info: TTuningInfo
@@ -70,8 +71,8 @@ class TuningOutcome(Generic[TKernelState, TTuningInfo]):
 @dataclass
 class WarmupOutcome(Generic[TKernelState]):
     """
-    A dataclass for the return value of the kernel method `end_warmup`.
-    Different kernels can use different types of `liesel.goose.types.KernelState`'s.
+    A dataclass for the return value of the kernel method ``end_warmup``. Different
+    kernels can use different types of :class:`.KernelState`'s.
     """
 
     error_code: int
@@ -177,8 +178,8 @@ class TransitionMixin(Generic[TKernelState, TTransitionInfo]):
 
 class TuningMixin(Generic[TKernelState, TTuningInfo]):
     """
-    An abstract mixin defining two tuning methods after a slow and a fast
-    adaptation epoch.
+    An abstract mixin defining two tuning methods after a slow and a fast adaptation
+    epoch.
     """
 
     def tune(
