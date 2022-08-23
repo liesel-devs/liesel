@@ -166,6 +166,5 @@ cython_debug/
 
 # VS Code files
 .vscode/
+
 .DS_Store
-docs/source/test.rst
-liesel/liesel/test.py

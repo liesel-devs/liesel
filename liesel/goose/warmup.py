@@ -21,10 +21,10 @@ def stan_epochs(
     thinning_warmup: int = 1,
 ) -> list[EpochConfig]:
     """
-    Sets up a list of :class:`.EpochConfig`'s, following the Stan Development Team (Stan
-    Reference Manual 2021, Chapter 15.2 [#stan_manual]_).
+    Sets up a list of :class:`.EpochConfig`'s.
 
-    .. [#stan_manual] https://mc-stan.org/docs/2_28/reference-manual/hmc-algorithm-parameters.html # noqa: E501
+    This follows the Stan Development Team (Stan Reference Manual 2021, Chapter 15.2
+    [#stanmanual]_).
 
     Parameters
     ----------
@@ -47,6 +47,11 @@ def stan_epochs(
     --------
     Kernels which rely on history tuning might not be able to deal with thinning during
     warmup.
+
+    References
+    ----------
+
+    .. [#stanmanual] https://mc-stan.org/docs/2_28/reference-manual/hmc-algorithm-parameters.html # noqa: E501
 
     """
 

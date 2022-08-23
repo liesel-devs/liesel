@@ -1,5 +1,5 @@
 """
-# Kernel sequence
+Kernel sequence.
 """
 
 from dataclasses import dataclass

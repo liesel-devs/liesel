@@ -1,5 +1,5 @@
 """
-# Random walk sampler
+Random walk sampler.
 """
 
 from dataclasses import dataclass, field
@@ -23,13 +23,15 @@ from .mh import mh_step
 from .pytree import register_dataclass_as_pytree
 from .types import KeyArray, ModelState, Position, TuningInfo
 
+__docformat__ = "numpy"
+
 
 @register_dataclass_as_pytree
 @dataclass
 class RWKernelState:
     """
-    A dataclass for the state of a `RWKernel`, implementing the
-    `liesel.goose.da.DAKernelState` protocol.
+    A dataclass for the state of a ``RWKernel``, implementing the
+    :class:`.DAKernelState` protocol.
     """
 
     step_size: float
@@ -47,13 +49,15 @@ RWTuningInfo = DefaultTuningInfo
 
 class RWKernel(ModelMixin, TransitionMixin[RWKernelState, RWTransitionInfo]):
     """
-    A random walk kernel with Gaussian proposals, Metropolis-Hastings correction and
-    dual averaging, implementing the `liesel.goose.types.Kernel` protocol.
+    A random walk kernel.
 
-    The kernel uses a default Metropolis-Hastings target acceptance probability
-    of 0.234, which is optimal for a random walk sampler (in a certain sense). See
-    Gelman et al., [Weak convergence and optimal scaling of random walk Metropolis
-    algorithms (1997)](https://doi.org/10.1214/aoap/1034625254).
+    Uses Gaussian proposals, Metropolis-Hastings correction and dual averaging.
+    Implements the :class:`.Kernel` protocol.
+
+    The kernel uses a default Metropolis-Hastings target acceptance probability of
+    0.234, which is optimal for a random walk sampler (in a certain sense). See Gelman
+    et al. (1997) Weak convergence and optimal scaling of random walk Metropolis
+    algorithms: https://doi.org/10.1214/aoap/1034625254.
     """
 
     error_book: ClassVar[dict[int, str]] = {0: "no errors", 90: "nan acceptance prob"}
