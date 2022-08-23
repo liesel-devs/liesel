@@ -1,5 +1,5 @@
 """
-# Standard warmup schemes
+Standard warmup schemes.
 """
 
 from functools import partial
