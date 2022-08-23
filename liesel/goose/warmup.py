@@ -8,6 +8,8 @@ from .epoch import EpochConfig, EpochType
 
 _EpochConfig = partial(EpochConfig, optional=None)
 
+__docformat__ = "numpy"
+
 
 def stan_epochs(
     warmup_duration: int = 1000,
