@@ -1,3 +1,5 @@
+__docformat__ = "numpy"
+
 """
 # MCMC epochs
 """

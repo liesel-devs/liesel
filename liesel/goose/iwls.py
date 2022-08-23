@@ -1,3 +1,5 @@
+__docformat__ = "numpy"
+
 """
 # Iteratively weighted least squares (IWLS) sampler
 """
