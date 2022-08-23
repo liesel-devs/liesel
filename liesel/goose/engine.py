@@ -1,5 +1,5 @@
 """
-# MCMC engine
+MCMC engine
 
 This module is experimental. Expect API changes.
 """
