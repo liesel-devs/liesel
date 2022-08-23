@@ -1,5 +1,5 @@
 """
-# No U-Turn Sampler (NUTS)
+No U-Turn Sampler (NUTS).
 """
 
 from dataclasses import dataclass, field
@@ -32,8 +32,8 @@ from .types import Array, KeyArray, ModelState, Position
 @dataclass
 class NUTSKernelState:
     """
-    A dataclass for the state of a `NUTSKernel`, implementing the
-    `liesel.goose.da.DAKernelState` protocol.
+    A dataclass for the state of a :class:`.NUTSKernel`, implementing the
+    :class:`.DAKernelState` protocol.
     """
 
     step_size: float
@@ -97,8 +97,8 @@ class NUTSKernel(
     TuningMixin[NUTSKernelState, NUTSTuningInfo],
 ):
     """
-    A NUTS kernel with dual averaging and an inverse mass matrix tuner,
-    implementing the `liesel.goose.types.Kernel` protocol.
+    A NUTS kernel with dual averaging and an inverse mass matrix tuner, implementing the
+    :class:`.Kernel` protocol.
     """
 
     error_book: ClassVar[dict[int, str]] = {
@@ -146,9 +146,8 @@ class NUTSKernel(
 
     def init_state(self, prng_key, model_state):
         """
-        Initializes the kernel state with an identity inverse mass matrix
-        and a reasonable step size (unless explicit arguments were provided
-        by the user).
+        Initializes the kernel state with an identity inverse mass matrix and a
+        reasonable step size (unless explicit arguments were provided by the user).
         """
 
         if self.initial_inverse_mass_matrix is None:
