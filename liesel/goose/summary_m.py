@@ -1,5 +1,5 @@
 """
-# Posterior statistics and diagnostics
+Posterior statistics and diagnostics.
 """
 
 from __future__ import annotations
@@ -21,11 +21,13 @@ from liesel.goose.pytree import slice_leaves, stack_leaves
 from liesel.goose.types import Position
 from liesel.option import Option
 
+__docformat__ = "numpy"
+
 
 def raise_chain_indices_error(
     chain_indices: Sequence[int], num_original_chains: int
 ) -> None:
-    """Display informative error message with valid `chain_indices` inputs."""
+    """Display informative error message with valid ``chain_indices`` inputs."""
     if any(
         chain_index not in range(num_original_chains) for chain_index in chain_indices
     ):
@@ -39,7 +41,9 @@ def validate_chain_indices(
     chain_indices: int | Sequence[int] | None,
     num_original_chains: int,
 ) -> Sequence[int]:
-    """Convert `int` or `None` input of `chain_indices` to sequence of integers."""
+    """
+    Convert ``int`` or ``None`` input of ``chain_indices`` to sequence of integers.
+    """
     if chain_indices is None:
         return list(range(num_original_chains))
 
@@ -51,7 +55,7 @@ def validate_chain_indices(
 
 
 def numpy_to_arviz(subparam_chains: np.ndarray) -> xarray.DataArray:
-    """Convert data structure of `arviz` package to numpy array."""
+    """Convert data structure of ``arviz`` package to numpy array."""
     arviz_data = az.convert_to_inference_data(subparam_chains)
     return arviz_data["posterior"]["x"]
 
@@ -71,7 +75,7 @@ def combine_chains(subparam_chains: np.ndarray) -> tuple[np.ndarray, xarray.Data
 
 def add_num_effective(arviz_array: xarray.DataArray, round_digits: int) -> np.ndarray:
     """
-    Compute the effective sample size of one specific subparameter (e.g. `beta_0`).
+    Compute the effective sample size of one specific subparameter (e.g. ``beta_0``).
     """
     return np.array(
         [az.ess(arviz_array[[i]])["x"].values for i in range(arviz_array.shape[0])]
@@ -82,7 +86,7 @@ def compute_quantiles(
     subparam_chains: np.ndarray, quantiles: Sequence[float], round_digits: int
 ) -> np.ndarray:
     """
-    Compute posterior quantiles of one specific subparameter (e.g. `beta_0`).
+    Compute posterior quantiles of one specific subparameter (e.g. ``beta_0``).
     """
     # i'th row contains i'th input quantile for all chains
     # j'th column contains all input quantiles for j'th chain
@@ -97,7 +101,7 @@ def add_quantiles(
 ) -> dict[str, int | float | np.ndarray]:
     """
     Add posterior quantiles to dictionary which collects all summary statistics and
-    diagnostics for one specific subparameter (e.g. `beta_0`).
+    diagnostics for one specific subparameter (e.g. ``beta_0``).
     """
     # number of rows equals length of quantiles input
     quantiles_array = compute_quantiles(subparam_chains, quantiles, round_digits)
@@ -146,7 +150,7 @@ def add_hdi(
 ) -> dict[str, int | float | np.ndarray]:
     """
     Add Highest Density Intervals to dictionary which collects all summary statistics
-    and diagnostics for one specific subparameter (e.g. `beta_0`).
+    and diagnostics for one specific subparameter (e.g. ``beta_0``).
     """
     hdi_lower, hdi_upper = compute_hdi(arviz_array, hdi_prob, round_digits)
 
@@ -161,7 +165,7 @@ def subparam_stats_to_df(
 ) -> pd.DataFrame:
     """
     Convert dictionary which collects all summary statistics and diagnostics for one
-    specific subparameter (e.g. `beta_0`) to a `pandas` data frame.
+    specific subparameter (e.g. ``beta_0``) to a :class:`~pandas.DataFrame`.
     """
     if not per_chain:
         # Must be dropped BEFORE conversion to data frame due to unequal lengths
@@ -182,7 +186,7 @@ def get_subparam_stats(
 ) -> dict[str, int | float | np.ndarray] | pd.DataFrame:
     """
     Collect all summary statistics and diagnostics for one specific subparameter (e.g.
-    `beta_0`) into one dictionary or `pandas` data frame.
+    ``beta_0``) into one dictionary or :class:`~pandas.DataFrame`.
     """
     num_original_chains = subparam_chains.shape[0]
     chain_indices = validate_chain_indices(chain_indices, num_original_chains)
@@ -235,7 +239,7 @@ def raise_dimension_error(param: str, num_dim: int) -> None:
 
 def adjust_dimensions(param_chains: np.ndarray, num_dim: int) -> np.ndarray:
     """
-    Make shape of posterior samples for one dimensional parameters (e.g. `log_sigma`)
+    Make shape of posterior samples for one dimensional parameters (e.g. ``log_sigma``)
     consistent with multi-dimensional parameters.
     """
     if num_dim == 2:
@@ -247,8 +251,8 @@ def raise_param_indices_error(
     param_indices: Sequence[int], num_original_subparams: int, param: str
 ) -> None:
     """
-    Display informative error message with valid `param_indices` inputs for this
-    specific `param`.
+    Display informative error message with valid ``param_indices`` inputs for this
+    specific ``param``.
     """
     if any(
         param_index not in range(num_original_subparams)
@@ -263,7 +267,9 @@ def raise_param_indices_error(
 def validate_param_indices(
     param_indices: int | Sequence[int] | None, num_original_subparams: int, param: str
 ) -> Sequence[int]:
-    """Convert `int` or `None` input of `param_indices` to sequence of integers."""
+    """
+    Convert ``int`` or ``None`` input of ``param_indices`` to sequence of integers.
+    """
     if param_indices is None:
         return list(range(num_original_subparams))
 
@@ -286,7 +292,7 @@ def collect_subparam_dicts(
 ) -> list[dict]:
     """
     Combine dictionaries with summary statistics and diagnostics within one parameter
-    vector (e.g. `beta_0` and `beta_1`) into a list.
+    vector (e.g. ``beta_0`` and ``beta_1``) into a list.
     """
     return [
         get_subparam_stats(
@@ -304,7 +310,7 @@ def collect_subparam_dicts(
 
 
 def move_col_first(df: pd.DataFrame, colname: str) -> pd.DataFrame:
-    """Move last column of a `pandas` data frame to the first column."""
+    """Move last column of a :class:`~pandas.DataFrame` to the first column."""
     return df[[colname] + [col for col in df.columns if col != colname]]
 
 
@@ -319,7 +325,7 @@ def collect_subparam_dfs(
 ) -> pd.DataFrame:
     """
     Combine data frames with summary statistics and diagnostics within one parameter
-    vector (e.g. `beta_0` and `beta_1`) into a single `pandas` data frame.
+    vector (e.g. ``beta_0`` and ``beta_1``) into a single :class:`~pandas.DataFrame`.
     """
     param_df = pd.concat(
         [
@@ -353,7 +359,7 @@ def get_param_stats(
 ) -> list[dict] | pd.DataFrame:
     """
     Collect all summary statistics and diagnostics for one specific parameter vector
-    (e.g. `beta`) into one dictionary or `pandas` data frame.
+    (e.g. ``"beta"``) into one dictionary or :class:`~pandas.DataFrame`.
     """
     # arviz package requires numpy arrays instead of jax numpy arrays
     param_chains = np.array(posterior_samples[param])
@@ -393,7 +399,7 @@ def get_param_stats(
 def validate_params(
     posterior_samples: dict[str, jnp.DeviceArray], params: str | list[str] | None
 ) -> list[str]:
-    """Convert `str` or `None` input of `params` to sequence of strings."""
+    """Convert ``str`` or ``None`` input of ``params`` to sequence of strings."""
     posterior_keys = list(posterior_samples.keys())
     if params is None:
         return posterior_keys
@@ -449,7 +455,7 @@ def collect_param_dfs(
 ) -> pd.DataFrame:
     """
     Combine data frames with summary statistics and diagnostics of all model parameters
-    into a single `pandas` data frame.
+    into a single :class:`~pandas.DataFrame`.
     """
     param_dfs: list[pd.DataFrame] = []
     for param in params:
@@ -486,54 +492,48 @@ def summary(
     """
     Compute summary statistics and diagnostic measures of posterior samples.
 
-    ## Parameters
+    Parameters
+    ----------
+    results
+         Result object of the sampling process. Must have a method
+         ``get_posterior_samples()`` which extracts all samples from the posterior
+         distribution.
+    per_chain
+         If ``True``, all statistics and diagnostics (except the Rhat value) are
+         computed for each chain separately. If ``False``, one metric is computed for
+         each subparameter after concatenating all chains.
+    params
+         Names of the model parameters that are contained in the summary output. Must
+         coincide with the dictionary keys of the ``Position`` with the posterior
+         samples. If ``None``, all parameters are included.
+    param_indices
+         Indices of each model parameter that are contained in the summary output.
+         Selects e.g. ``beta_0`` out of a ``beta`` parameter vector.A single index can
+         be specified as an integer or a sequence containing one integer. If ``None``,
+         all subparameters are included.
+    chain_indices
+         Indices of chains for each model subparameter that are contained in the summary
+         output. Selects e.g. chain 0 and chain 2 out of multiple chains. A single index
+         can be specified as an integer or a sequence containing one integer. If
+         ``None``, all chains are included.
+    quantiles
+         Quantiles of the posterior distribution that are contained in the summary
+         output.
+    hdi_prob
+         Coverage level of the Highest Density Interval of the posterior distribution.
+         Summary output contains lower and upper bound of this interval.
+    round_digits
+         Number of decimals for each float value within the summary output.
+    as_dataframe
+         If ``True``, all statistics and diagnostics are embedded into a ``pandas`` data
+         frame. If ``False``, a dictionary with the same keys as ``Position`` with the
+         posterior samples is returned.
 
-    - `results`:
-      Result object of the sampling process. Must have a method
-      `get_posterior_samples()` which extracts all samples from the posterior
-      distribution.
+    Returns
+    -------
 
-    - `per_chain`:
-      If `True`, all statistics and diagnostics (except the Rhat value) are computed for
-      each chain separately. If `False`, one metric is computed for each subparameter
-      after concatenating all chains.
-
-    - `params`:
-      Names of the model parameters that are contained in the summary output. Must
-      coincide with the dictionary keys of the `Position` with the posterior samples.
-      If `None`, all parameters are included.
-
-    - `param_indices`:
-      Indices of each model parameter that are contained in the summary output. Selects
-      e.g. `beta_0` out of a `beta` parameter vector.A single index can be specified as
-      an integer or a sequence containing one integer. If `None`, all subparameters are
-      included.
-
-    - `chain_indices`:
-      Indices of chains for each model subparameter that are contained in the summary
-      output. Selects e.g. chain 0 and chain 2 out of multiple chains. A single index
-      can be specified as an integer or a sequence containing one integer. If `None`,
-      all chains are included.
-
-    - `quantiles`:
-      Quantiles of the posterior distribution that are contained in the summary output.
-
-    - `hdi_prob`:
-      Coverage level of the Highest Density Interval of the posterior distribution.
-      Summary output contains lower and upper bound of this interval.
-
-    - `round_digits`:
-      Number of decimals for each float value within the summary output.
-
-    - `as_dataframe`:
-      If `True`, all statistics and diagnostics are embedded into a `pandas` data frame.
-      If `False`, a dictionary with the same keys as `Position` with the posterior
-      samples is returned.
-
-    ## Returns
-
-    Dictionary if `as_dataframe` is False, `pandas.DataFrame` if `as_dataframe` is
-    True.
+    Dictionary if ``as_dataframe`` is False, :class:`.pandas.DataFrame` if
+    ``as_dataframe`` is True.
     """
     # NOTE: Docstring Duplications
     # The entries `results`, `params`, `param_indices` and `chain_indices` are shared
@@ -574,7 +574,7 @@ class ErrorSummaryForOneCode(NamedTuple):
 
 ErrorSummary = dict[str, dict[int, ErrorSummaryForOneCode]]
 """
-See docstring of `_make_error_summary`.
+See docstring of ``_make_error_summary``.
 """
 
 
@@ -585,21 +585,19 @@ def _make_error_summary(
     """
     Creates an error summary from the error log.
 
-    The returned value looks like this:
+    The returned value looks like this::
 
-    ```
-    {
-        kernel_identifier: {
-            error_code: (error_code, error_msg, count, count_in_posterior),
-            error_code: (error_code, error_msg, count, count_in_posterior),
+        {
+            kernel_identifier: {
+                error_code: (error_code, error_msg, count, count_in_posterior),
+                error_code: (error_code, error_msg, count, count_in_posterior),
+                ...
+            },
             ...
-        },
-        ...
-    }
-    ```
+        }
 
-    The `error_msg` is the empty string if the kernel class is not supplied in the
-    `error_log`.
+    The ``error_msg`` is the empty string if the kernel class is not supplied in the
+    ``error_log``.
     """
     error_summary = {}
     for kel in error_log.values():
@@ -644,14 +642,14 @@ class Summary:
     """
     A summary object.
 
-    Allows easy programmatic access via `quantities[quantity_name][var_name]`.
-    The array has a similar shape as the parameter with `var_name`. However,
-    if `per_chain` is `True`, the first dimension refers to the chain index.
-    Additionally, for `hdi` and `quantile` the second dimension refers to the
+    Allows easy programmatic access via ``quantities[quantity_name][var_name]``. The
+    array has a similar shape as the parameter with ``var_name``. However, if
+    ``per_chain`` is ``True``, the first dimension refers to the chain index.
+    Additionally, for ``hdi`` and ``quantile`` the second dimension refers to the
     quantile.
 
-    The summary object can be turned into a `pd.DataFrame` using the function
-    `to_dataframe`.
+    The summary object can be turned into a :class:`~pandas.DataFrame` using the
+    function ``to_dataframe``.
 
     Experimental.
     """
@@ -663,7 +661,7 @@ class Summary:
     kernels_by_pos_key: dict[str, str]
 
     def to_dataframe(self) -> pd.DataFrame:
-        """Turns Summary object into a DataFrame object."""
+        """Turns Summary object into a :class:`~pandas.DataFrame` object."""
 
         # don't change the original data
         quants = self.quantities.copy()
@@ -893,18 +891,18 @@ class Summary:
         per_chain=False,
     ) -> Summary:
         """
-        Creates a `Summary` object from a results object.
+        Creates a :class:`.Summary` object from a results object.
 
-        An optional `additional_chain` can be supplied to add more parameters to
-        the summary output. `additional_chain` must be a position chain which
+        An optional ``additional_chain`` can be supplied to add more parameters to
+        the summary output. ``additional_chain`` must be a position chain which
         matches chain and time dimension of the posterior chain as returned by
-        `result.get_posterior_samples()`.
+        :meth:`SamplingResults.get_posterior_samples`.
 
-        The arguments `selected` and `deselected` allow to get a summary only
+        The arguments ``selected`` and ``deselected`` allow to get a summary only
         for a subset of the position keys.
 
-        When using `per_chain`, the summary is calculated on a per-chain basis.
-        Certain measures like `rhat` are not available if `per_chain` is true.
+        When using ``per_chain``, the summary is calculated on a per-chain basis.
+        Certain measures like ``rhat`` are not available if ``per_chain`` is true.
 
         Experimental.
         """
