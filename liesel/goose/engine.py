@@ -48,22 +48,21 @@ __docformat__ = "numpy"
 
 class KernelErrorLog(NamedTuple):
     """
-    Holds the number of the transitions in which an error in at least one chain
-    occured and an array with the error code for each chain. Additionally, the
-    kernel identifier is specified and optionally the cls of the kernel.
+    Holds the number of the transitions in which an error in at least one chain occured
+    and an array with the error code for each chain.
 
-    Attributes
-    ----------
-    transition
-        1-D array (time).
-    error_codes
-        2-D array (chain, time).
+    Additionally, the kernel identifier is specified and optionally the cls of the
+    kernel.
     """
 
     kernel_ident: str
     kernel_cls: Option[type]  # needed to use the error book
+
     transition: np.ndarray
+    """1-D array (time)."""
+
     error_codes: np.ndarray
+    """2-D array (chain, time)."""
 
 
 ErrorLog = dict[str, KernelErrorLog]
