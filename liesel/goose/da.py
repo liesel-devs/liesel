@@ -1,5 +1,5 @@
 """
-# Dual averaging
+Dual averaging.
 
 This module uses the error codes 80-89.
 """
@@ -8,16 +8,19 @@ from typing import Protocol
 
 import jax.numpy as jnp
 
+__docformat__ = "numpy"
+
 
 class DAKernelState(Protocol):
     """
-    A protocol for a kernel state with dual averaging support. For an introduction to
-    dual averaging, see:
+    A protocol for a kernel state with dual averaging support. For an introduction
+    to dual averaging, see the blog post by Colin Carroll [#carroll]_ and the Stan
+    Reference Manual [#stan]_.
 
-    - Colin Carroll, [Step Size Adaptation in Hamiltonian Monte Carlo (2019)](
-      https://colindcarroll.com/2019/04/21/step-size-adaptation-in-hamiltonian-monte-carlo).
-    - Stan Development Team, [Stan Reference Manual (2021), Chapter 15.2](
-      https://mc-stan.org/docs/2_28/reference-manual/hmc-algorithm-parameters.html).
+    .. [#carroll] `Colin Carroll, Step Size Adaptation in Hamiltonian Monte Carlo (2019)
+       <https://colindcarroll.com/2019/04/21/step-size-adaptation-in-hamiltonian-monte-carlo>`_.
+    .. [#stan] `Stan Development Team, Stan Reference Manual (2021), Chapter 15.2
+       <https://mc-stan.org/docs/2_28/reference-manual/hmc-algorithm-parameters.html>`_.
     """
 
     step_size: float
@@ -25,21 +28,21 @@ class DAKernelState(Protocol):
 
     error_sum: float
     """The error sum of the acceptance probability. Should not be set by the user,
-    but is used by the `da_step` function."""
+    but is used by the :func:`.da_step` function."""
 
     log_avg_step_size: float
     """The logarithm of the average step size. Should not be set by the user, but is
-    used by the `da_step` function."""
+    used by the :func:`.da_step` function."""
 
     mu: float
     """The bias of the step size proposals. Should not be set by the user, but is
-    used by the `da_step` function."""
+    used by the :func:`.da_step` function."""
 
 
 def da_init(kernel_state: DAKernelState) -> None:
     """
-    Initializes (or resets) a `DAKernelState`. Returns `None` and should be called for
-    the side effect on the `kernel_state` argument.
+    Initializes (or resets) a :class:`.DAKernelState`. Returns ``None`` and should be
+    called for the side effect on the ``kernel_state`` argument.
     """
 
     kernel_state.error_sum = 0.0
@@ -57,18 +60,25 @@ def da_step(
     t0: int = 10,
 ) -> None:
     """
-    Performs an dual averaging update on a `DAKernelState`. Returns `None` and should
-    be called for the side effect on the `kernel_state` argument.
+    Performs an dual averaging update on a :class:`.DAKernelState`. Returns ``None``
+    and should be called for the side effect on the ``kernel_state`` argument.
 
-    ## Parameters
-
-    - `kernel_state`: A kernel state implementing the `DAKernelState` protocol.
-    - `acceptance_prob`: The acceptance probability of this MCMC iteration.
-    - `time_in_epoch`: The number of completed MCMC iterations in this epoch.
-    - `target_accept`: The target acceptance probability.
-    - `gamma`: The adaptation regularization scale.
-    - `kappa`: The adaptation relaxation exponent.
-    - `t0`: The adaptation iteration offset.
+    Parameters
+    ----------
+    kernel_state
+        A kernel state implementing the :class:`.DAKernelState` protocol.
+    acceptance_prob
+        The acceptance probability of this MCMC iteration.
+    time_in_epoch
+        The number of completed MCMC iterations in this epoch.
+    target_accept
+        The target acceptance probability.
+    gamma
+        The adaptation regularization scale.
+    kappa
+        The adaptation relaxation exponent.
+    t0
+        The adaptation iteration offset.
     """
 
     ks = kernel_state
@@ -84,8 +94,8 @@ def da_step(
 
 def da_finalize(kernel_state: DAKernelState) -> None:
     """
-    Sets the new step size in a `DAKernelState`. Returns `None` and should be called
-    for the side effect on the `kernel_state` argument.
+    Sets the new step size in a :class:`.DAKernelState`. Returns ``None`` and should be
+    called for the side effect on the ``kernel_state`` argument.
     """
 
     kernel_state.step_size = jnp.exp(kernel_state.log_avg_step_size)
