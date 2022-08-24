@@ -1,7 +1,5 @@
-__docformat__ = "numpy"
-
 """
-# Utilities for the IWLS sampler
+Utilities for the IWLS sampler.
 """
 
 import jax
@@ -9,6 +7,8 @@ import jax.numpy as jnp
 import jax.scipy
 
 from .types import Array, KeyArray
+
+__docformat__ = "numpy"
 
 triangular_solve = jax.lax.linalg.triangular_solve
 

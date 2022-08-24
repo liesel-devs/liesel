@@ -1,9 +1,9 @@
 """
-# Goose MCMC framework
+Goose MCMC framework
 
-This module defines the public API of Goose. Expect breakages if using anything
-beyond this module (and maybe also if using this module, as this is early-stage
-research software).
+This module defines the public API of Goose. Expect breakages if using anything beyond
+this module (and maybe also if using this module, as this is early-stage research
+software).
 """
 
 from .builder import EngineBuilder as EngineBuilder
