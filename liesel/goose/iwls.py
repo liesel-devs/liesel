@@ -34,7 +34,7 @@ from .types import Array, KeyArray, ModelState, Position
 class IWLSKernelState:
     """
     A dataclass for the state of a :class:`.IWLSKernel`, implementing the
-    :mod:`.liesel.goose.da.DAKernelState` protocol.
+    :class:`.liesel.goose.da.DAKernelState` protocol.
     """
 
     step_size: float
@@ -54,7 +54,7 @@ class IWLSKernel(ModelMixin, TransitionMixin[IWLSKernelState, IWLSTransitionInfo
     """
     An IWLS kernel with dual averaging and an (optional) user-defined function
     for computing the Cholesky decomposition of the Fisher information matrix,
-    implementing the :mod:`.liesel.goose.types.Kernel` protocol.
+    implementing the :class:`.liesel.goose.types.Kernel` protocol.
     """
 
     error_book: ClassVar[dict[int, str]] = {0: "no errors", 90: "nan acceptance prob"}
