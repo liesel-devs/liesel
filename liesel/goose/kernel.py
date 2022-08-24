@@ -45,8 +45,8 @@ class DefaultTuningInfo:
 @dataclass
 class TransitionOutcome(Generic[TKernelState, TTransitionInfo]):
     """
-    A dataclass for the return value of the kernel method ``transition``. Different
-    kernels can use different types of :class:`.KernelState`'s and
+    A dataclass for the return value of the kernel method :meth:`.Kernel.transition`.
+    Different kernels can use different types of :class:`.KernelState`'s and
     :class:`.TransitionInfo`'s.
     """
 
@@ -59,8 +59,9 @@ class TransitionOutcome(Generic[TKernelState, TTransitionInfo]):
 @dataclass
 class TuningOutcome(Generic[TKernelState, TTuningInfo]):
     """
-    A dataclass for the return value of the kernel method `tune`. Different kernels can
-    use different types of :class:`.KernelState`'s and :class:`.TuningInfo`'s.
+    A dataclass for the return value of the kernel method :meth:`.Kernel.tune`.
+    Different kernels can use different types of :class:`.KernelState`'s and
+    :class:`.TuningInfo`'s.
     """
 
     info: TTuningInfo
@@ -71,8 +72,8 @@ class TuningOutcome(Generic[TKernelState, TTuningInfo]):
 @dataclass
 class WarmupOutcome(Generic[TKernelState]):
     """
-    A dataclass for the return value of the kernel method ``end_warmup``. Different
-    kernels can use different types of :class:`.KernelState`'s.
+    A dataclass for the return value of the kernel method :meth:`.Kernel.end_warmup`.
+    Different kernels can use different types of :class:`.KernelState`'s.
     """
 
     error_code: int

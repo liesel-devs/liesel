@@ -41,7 +41,7 @@ def slice_leaves(pytree, idx):
     """
     Performs the same slice operation on every leaf.
 
-    ``idx`` can be constructed with :func:`jax.numpy.s_` or :func:`numpy.s_`, for
+    ``idx`` can be constructed with :obj:`jax.numpy.s_` or :obj:`numpy.s_`, for
     example:
 
     >>> jnp.s_[0]
@@ -109,7 +109,7 @@ def split_and_transpose(pytree, axis=0):
 
 def as_strong_pytree(pytree: T) -> T:
     """
-    Converts every leaf in a pytree to a non-weak :class:`jax.numpy.DeviceArray`.
+    Converts every leaf in a pytree to a non-weak :obj:`jax.numpy.DeviceArray`.
 
     See https://jax.readthedocs.io/en/latest/type_promotion.html.
     """

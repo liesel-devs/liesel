@@ -1,5 +1,5 @@
 """
-# MCMC epochs
+MCMC epochs.
 """
 
 from __future__ import annotations
@@ -26,8 +26,8 @@ class EpochType(IntEnum):
     @staticmethod
     def is_adaptation(epoch_type: EpochType) -> bool:
         """
-        Returns ``True`` if the epoch is part of the adaptation phase.
-        Implemented as a static method to make it jittable.
+        Returns ``True`` if the epoch is part of the adaptation phase. Implemented as a
+        static method to make it jittable.
         """
         lhs = EpochType.INITIAL_VALUES < epoch_type
         rhs = epoch_type < EpochType.BURNIN
@@ -153,8 +153,8 @@ class EpochManager:
 
     def has_more(self) -> bool:
         """
-        Returns ``True`` if there are epoch configs that have not been returned yet
-        by the :func:`.next` method, and false otherwise.
+        Returns ``True`` if there are epoch configs that have not been returned yet by
+        the :func:`.next` method, and false otherwise.
         """
         return self._next_epoch_ptr < len(self._configs)
 
