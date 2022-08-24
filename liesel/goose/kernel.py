@@ -1,5 +1,5 @@
 """
-# Kernel-related info, outcome and mixin classes
+Kernel-related info, outcome and mixin classes.
 """
 
 from abc import abstractmethod
@@ -97,9 +97,11 @@ class ModelMixin:
         return self._model
 
     def set_model(self, model: ModelInterface):
+        """Sets the model interface."""
         self._model = model
 
     def has_model(self) -> bool:
+        """Whether the model interface is set."""
         return self._model is not None
 
     def position(self, model_state: ModelState) -> Position:

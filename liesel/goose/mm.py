@@ -1,5 +1,5 @@
 """
-# Inverse mass matrix tuner
+Inverse mass matrix tuner.
 
 This module uses the error codes 70-79.
 """
@@ -8,6 +8,8 @@ import jax
 import jax.numpy as jnp
 
 from .types import Array, Position
+
+__docformat__ = "numpy"
 
 _vravel = jax.vmap(jnp.ravel, in_axes=0, out_axes=0)
 

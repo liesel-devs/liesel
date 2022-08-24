@@ -1,5 +1,5 @@
 """
-# Metropolis-Hastings
+Metropolis-Hastings.
 
 This module uses the error codes 90-99.
 """
@@ -10,8 +10,10 @@ import jax.numpy as jnp
 from .kernel import DefaultTransitionInfo
 from .types import KeyArray, ModelInterface, ModelState, Position
 
+__docformat__ = "numpy"
+
 mh_error_book = {0: "no errors", 90: "nan acceptance prob"}
-"""The error book of the `mh_step` function."""
+"""The error book of the :func:`.mh_step` function."""
 
 
 def mh_step(
@@ -24,17 +26,17 @@ def mh_step(
     r"""
     Decides if an MCMC proposal is accepted in a Metropolis-Hastings step.
 
-    ## Parameters
+    Parameters
+    ----------
+    log_correction
+        The Metropolis-Hastings correction in the case of an asymmetric proposal
+        distribution. Let ``q(x' | x)`` be the density of the proposal ``x'`` given
+        the current state ``x``, then the ``log_correction`` is defined as
+        ``log[q(x | x') / q(x' | x)]``.
 
-    - `log_correction`: The Metropolis-Hastings correction in the case of an
-      asymmetric proposal distribution. Let $q(x'|x)$ be the density of the
-      proposal $x'$ given the current state $x$. Then `log_correction` defined
-      as $\log(q(x | x') / q(x' | x))$
-
-    ## Returns
-
-    A tuple of a `liesel.goose.types.TransitionInfo` and a
-    `liesel.goose.types.ModelState` (= a pytree).
+    Returns
+    -------
+    A tuple of a :class:`.TransitionInfo` and a :class:`.ModelState` (= a pytree).
     """
 
     current_log_prob = model.log_prob(model_state)
