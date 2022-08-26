@@ -11,5 +11,11 @@ scripts_are_modules = true
 files = ["liesel", "tests"]
 
 [tool.pytest.ini_options]
-filterwarnings = ["ignore::DeprecationWarning", "default:::liesel"]    # only report DeprecationWarning triggered by "liesel"
 testpaths = ["tests"]
+# only report deprecation / pending deprecation / future warnings from liesel
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+    "ignore::FutureWarning",
+    "default:::liesel"
+]
