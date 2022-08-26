@@ -258,11 +258,11 @@ class TestDistRegBuilder:
 
     def test_build_empty(self, local_caplog):
         """An empty model can be built with a warning."""
-        with local_caplog():
+        with local_caplog() as caplog:
             drb = dr.DistRegBuilder()
             model = drb.build()
-            assert len(local_caplog.records) == 1
-            assert local_caplog.records[0].levelname == "WARNING"
+            assert len(caplog.records) == 1
+            assert caplog.records[0].levelname == "WARNING"
             assert model
 
 
