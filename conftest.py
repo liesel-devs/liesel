@@ -1,4 +1,9 @@
+import logging
+from contextlib import contextmanager
+from typing import Generator
+
 import pytest
+from _pytest.logging import LogCaptureHandler
 
 
 def to_int(value):
@@ -39,3 +44,54 @@ def pytest_collection_modifyitems(config, items):
 @pytest.fixture
 def mcmc_seed(request):
     return request.config.getoption("--mcmc-seed")
+
+
+class LogLocalCaptureFixture:
+    """
+    Provides access and control of log capturing.
+
+    Solves the issue that the caplog fixture listens only to the root logger - which
+    causes it to miss messages from non-propagating loggers.
+
+    Code taken from
+    https://github.com/pytest-dev/pytest/issues/3697#issuecomment-790925527
+    """
+
+    def __init__(self):
+        self.handler = LogCaptureHandler()
+
+    @property
+    def records(self):
+        return self.handler.records
+
+    @contextmanager
+    def __call__(
+        self, level: int = logging.INFO, name: str = "liesel"
+    ) -> Generator[None, None, None]:
+        """
+        Context manager that sets the level for capturing of logs. After the end of the
+        'with' statement the level is restored to its original value.
+
+        Parameters
+        ----------
+        level
+            The log level.
+        name
+            The name of the logger to update.
+        """
+        logger = logging.getLogger(name)
+
+        orig_level = logger.level
+        logger.setLevel(level)
+
+        logger.addHandler(self.handler)
+        try:
+            yield  # or yield self.handler?
+        finally:
+            logger.setLevel(orig_level)
+            logger.removeHandler(self.handler)
+
+
+@pytest.fixture
+def local_caplog() -> Generator[LogLocalCaptureFixture, None, None]:
+    yield LogLocalCaptureFixture()
