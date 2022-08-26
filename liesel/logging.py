@@ -6,17 +6,36 @@ def setup_logger() -> None:
     """
     Sets up a basic `StreamHandler`, which prints log messages to the terminal.
     The default log level of the `StreamHandler` is set to "info".
+
+    The global logging level for liesel log output can be adjusted like this::
+
+        import logging
+        logger = logging.getLogger("liesel")
+        logger.level = logging.WARNING
+
+    This will set the log level to "warning".
     """
 
-    logger = logging.getLogger("root")
-    logger.setLevel(logging.DEBUG)
+    # We adjust only our library's logger
+    logger = logging.getLogger("liesel")
 
+    # This is the level that will in principle be handled by the logger
+    # If it is set, for example, to logging.WARNING, this logger will never
+    # emit messages of a level below warning.
+    logger.level = logging.DEBUG
+
+    # By setting this to False, we prevent the liesel log messages from being passed
+    # on to the root logger. This prevents duplication of the log messages.
+    logger.propagate = False
+
+    # This is the default handler that we set for our log messages
     ch = logging.StreamHandler()
     ch.setLevel(logging.INFO)
 
     formatter = logging.Formatter("%(levelname)s - %(message)s")
 
     ch.setFormatter(formatter)
+
     logger.addHandler(ch)
 
 
