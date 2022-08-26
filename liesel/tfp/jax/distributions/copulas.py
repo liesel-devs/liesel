@@ -1,7 +1,7 @@
 # GENERATED FILE, DO NOT EDIT!
 
 """
-# Bivariate copulas
+Bivariate copulas.
 """
 
 import jax.numpy as np

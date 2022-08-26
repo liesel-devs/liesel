@@ -1,7 +1,7 @@
 # GENERATED FILE, DO NOT EDIT!
 
 """
-# An algebraic sigmoid bijector
+An algebraic sigmoid bijector.
 """
 
 import jax.numpy as np
