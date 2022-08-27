@@ -46,61 +46,56 @@ def mcmc_seed(request):
     return request.config.getoption("--mcmc-seed")
 
 
-class LocalLogCaptureFixture:
+@contextmanager
+def local_caplog_fn(
+    level: int = logging.INFO, name: str = "liesel"
+) -> Generator[LogCaptureHandler, None, None]:
     """
-    Provides access and control of log capturing.
+    Context manager that captures records from non-propagating loggers.
 
-    Solves the issue that the caplog fixture listens only to the root logger - which
-    causes it to miss messages from non-propagating loggers.
-
-    Code adapted from
+    After the end of the 'with' statement the log level is restored to its original
+    value. Code adapted from
     https://github.com/pytest-dev/pytest/issues/3697#issuecomment-790925527
+
+    Parameters
+    ----------
+    level
+        The log level.
+    name
+        The name of the logger to update.
+
     """
+    logger = logging.getLogger(name)
 
-    def __init__(self):
-        self.handler = LogCaptureHandler()
+    orig_level = logger.level
+    logger.setLevel(level)
 
-    @contextmanager
-    def __call__(
-        self, level: int = logging.INFO, name: str = "liesel"
-    ) -> Generator[None, None, None]:
-        """
-        Context manager that sets the level for capturing of logs. After the end of the
-        'with' statement the level is restored to its original value.
-
-        Parameters
-        ----------
-        level
-            The log level.
-        name
-            The name of the logger to update.
-
-        Examples
-        --------
-        Usage example::
-
-            import liesel.liesel.distreg as dr
-
-            def test_build_empty(local_caplog):
-                with local_caplog() as caplog:
-                    drb = dr.DistRegBuilder()
-                    model = drb.build()
-                    assert len(caplog.records) == 1
-                    assert caplog.records[0].levelname == "WARNING"
-        """
-        logger = logging.getLogger(name)
-
-        orig_level = logger.level
-        logger.setLevel(level)
-
-        logger.addHandler(self.handler)
-        try:
-            yield self.handler
-        finally:
-            logger.setLevel(orig_level)
-            logger.removeHandler(self.handler)
+    handler = LogCaptureHandler()
+    logger.addHandler(handler)
+    try:
+        yield handler
+    finally:
+        logger.setLevel(orig_level)
+        logger.removeHandler(handler)
 
 
 @pytest.fixture
-def local_caplog() -> Generator[LocalLogCaptureFixture, None, None]:
-    yield LocalLogCaptureFixture()
+def local_caplog():
+    """
+    Fixture that yields a context manager for capturing records from non-propagating
+    loggers.
+
+    Examples
+    --------
+    Usage example::
+
+        import liesel.liesel.distreg as dr
+
+        def test_build_empty(local_caplog):
+            with local_caplog() as caplog:
+                drb = dr.DistRegBuilder()
+                model = drb.build()
+                assert len(caplog.records)== 1
+                assert caplog.records[0].levelname == "WARNING"
+    """
+    yield local_caplog_fn
