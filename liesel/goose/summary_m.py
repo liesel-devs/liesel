@@ -495,39 +495,39 @@ def summary(
     Parameters
     ----------
     results
-         Result object of the sampling process. Must have a method
-         ``get_posterior_samples()`` which extracts all samples from the posterior
-         distribution.
+        Result object of the sampling process. Must have a method
+        ``get_posterior_samples()`` which extracts all samples from the posterior
+        distribution.
     per_chain
-         If ``True``, all statistics and diagnostics (except the Rhat value) are
-         computed for each chain separately. If ``False``, one metric is computed for
-         each subparameter after concatenating all chains.
+        If ``True``, all statistics and diagnostics (except the Rhat value) are
+        computed for each chain separately. If ``False``, one metric is computed for
+        each subparameter after concatenating all chains.
     params
-         Names of the model parameters that are contained in the summary output. Must
-         coincide with the dictionary keys of the ``Position`` with the posterior
-         samples. If ``None``, all parameters are included.
+        Names of the model parameters that are contained in the summary output. Must
+        coincide with the dictionary keys of the ``Position`` with the posterior
+        samples. If ``None``, all parameters are included.
     param_indices
-         Indices of each model parameter that are contained in the summary output.
-         Selects e.g. ``beta_0`` out of a ``beta`` parameter vector.A single index can
-         be specified as an integer or a sequence containing one integer. If ``None``,
-         all subparameters are included.
+        Indices of each model parameter that are contained in the summary output.
+        Selects e.g. ``beta_0`` out of a ``beta`` parameter vector.A single index can
+        be specified as an integer or a sequence containing one integer. If ``None``,
+        all subparameters are included.
     chain_indices
-         Indices of chains for each model subparameter that are contained in the summary
-         output. Selects e.g. chain 0 and chain 2 out of multiple chains. A single index
-         can be specified as an integer or a sequence containing one integer. If
-         ``None``, all chains are included.
+        Indices of chains for each model subparameter that are contained in the summary
+        output. Selects e.g. chain 0 and chain 2 out of multiple chains. A single index
+        can be specified as an integer or a sequence containing one integer. If
+        ``None``, all chains are included.
     quantiles
-         Quantiles of the posterior distribution that are contained in the summary
-         output.
+        Quantiles of the posterior distribution that are contained in the summary
+        output.
     hdi_prob
-         Coverage level of the Highest Density Interval of the posterior distribution.
-         Summary output contains lower and upper bound of this interval.
+        Coverage level of the Highest Density Interval of the posterior distribution.
+        Summary output contains lower and upper bound of this interval.
     round_digits
-         Number of decimals for each float value within the summary output.
+        Number of decimals for each float value within the summary output.
     as_dataframe
-         If ``True``, all statistics and diagnostics are embedded into a ``pandas`` data
-         frame. If ``False``, a dictionary with the same keys as ``Position`` with the
-         posterior samples is returned.
+        If ``True``, all statistics and diagnostics are embedded into a ``pandas`` data
+        frame. If ``False``, a dictionary with the same keys as ``Position`` with the
+        posterior samples is returned.
 
     Returns
     -------
