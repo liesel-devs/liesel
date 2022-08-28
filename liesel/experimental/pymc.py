@@ -10,36 +10,45 @@ liesel with the optional dependencies pymc
 
 ## Example of an linear model
 
-The model is also used in the test. Please consult the tutorial book for longer
-examples.
+The model is also used in the test. Please consult the tutorial book for longer examples.
 
 
 ```py
+RANDOM_SEED = 123
+rng = np.random.RandomState(RANDOM_SEED)
 
-RANDOM_SEED = 123 rng = np.random.RandomState(RANDOM_SEED)
+# set parameter values
+num_obs = 100
+sigma = 1.0
+beta = [1, 1, 2]
 
-# set parameter values num_obs = 100 sigma = 1.0 beta = [1, 1, 2]
+# simulate covariates
+x1 = rng.randn(num_obs)
+x2 = rng.randn(num_obs) * 0.2
 
-# simulate covariates x1 = rng.randn(num_obs) x2 = rng.randn(num_obs) * 0.2
+# Simulate outcome variable
+Y = beta[0] + beta[1] * x1 + beta[2] * x2 + sigma * rng.normal(size=num_obs)
 
-# Simulate outcome variable Y = beta[0] + beta[1] * x1 + beta[2] * x2 + sigma *
-rng.normal(size=num_obs)
+basic_model = pm.Model()
+with basic_model:
+    # priors
+    beta = pm.Normal("beta", mu=0, sigma=10, shape=3)
+    sigma = pm.HalfNormal("sigma", sigma=1)  # automatically transformed to real via log
 
-basic_model = pm.Model() with basic_model:
-    # priors beta = pm.Normal("beta", mu=0, sigma=10, shape=3) sigma =
-    pm.HalfNormal("sigma", sigma=1)  # automatically transformed to real via log
+    # predicted value
+    mu = beta[0] + beta[1] * x1 + beta[2] * x2
 
-    # predicted value mu = beta[0] + beta[1] * x1 + beta[2] * x2
+    # track the predicted value of the first obs
+    pm.Deterministic("mu[0]", mu[0])
 
-    # track the predicted value of the first obs pm.Deterministic("mu[0]",
-    mu[0])
+    # distribution of response (likelihood)
+    pm.Normal("Y_obs", mu=mu, sigma=sigma, observed=Y)
 
-    # distribution of response (likelihood) pm.Normal("Y_obs", mu=mu,
-    sigma=sigma, observed=Y)
-
-interface = PyMCInterface(basic_model, additional_vars=["sigma", "mu[0]"]) state
-= interface.get_initial_state() builder = gs.EngineBuilder(1, 2)
-builder.set_initial_values(state) builder.set_model(interface)
+interface = PyMCInterface(basic_model, additional_vars=["sigma", "mu[0]"])
+state = interface.get_initial_state()
+builder = gs.EngineBuilder(1, 2)
+builder.set_initial_values(state)
+builder.set_model(interface)
 builder.set_duration(1000, 2000)
 
 builder.add_kernel(gs.NUTSKernel(["beta"]))
@@ -49,9 +58,9 @@ builder.positions_included = ["sigma", "mu[0]"]
 
 engine = builder.build()
 
-engine.sample_all_epochs() results = engine.get_results() sum =
-gs.Summary.from_result(results)
-
+engine.sample_all_epochs()
+results = engine.get_results()
+sum = gs.Summary.from_result(results)
 ```
 
 Transformations of RVs can be avoided by setting `transform = None` in the
