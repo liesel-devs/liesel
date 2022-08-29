@@ -3,65 +3,65 @@ This module provides an `liesel.goose.ModelInterface` implementation for PyMC
 models.
 
 To use this module, the pymc package must be installed. To do so, please install
-liesel with the optional dependencies pymc
-
-```pip install liesel[pymc]```
+liesel with the optional dependencies pymc: :command:`pip install liesel[pymc]`
 
 
 ## Example of an linear model
 
-The model is also used in the test. Please consult the tutorial book for longer examples.
+The model is also used in the test. Please consult the tutorial book for longer
+examples.::
 
+    RANDOM_SEED = 123
+    rng = np.random.RandomState(RANDOM_SEED)
 
-```py
-RANDOM_SEED = 123
-rng = np.random.RandomState(RANDOM_SEED)
+    # set parameter values
+    num_obs = 100
+    sigma = 1.0
+    beta = [1, 1, 2]
 
-# set parameter values
-num_obs = 100
-sigma = 1.0
-beta = [1, 1, 2]
+    # simulate covariates
+    x1 = rng.randn(num_obs)
+    x2 = rng.randn(num_obs) * 0.2
 
-# simulate covariates
-x1 = rng.randn(num_obs)
-x2 = rng.randn(num_obs) * 0.2
+    # Simulate outcome variable
+    Y = beta[0] + beta[1] * x1 + beta[2] * x2 + sigma * rng.normal(size=num_obs)
 
-# Simulate outcome variable
-Y = beta[0] + beta[1] * x1 + beta[2] * x2 + sigma * rng.normal(size=num_obs)
+    basic_model = pm.Model()
+    with basic_model:
+        # priors
+        beta = pm.Normal("beta", mu=0, sigma=10, shape=3)
+        sigma = pm.HalfNormal("sigma", sigma=1)
+        # sigma is automatically transformed to real (log)
+        # the new variable is called sigma_log__
 
-basic_model = pm.Model()
-with basic_model:
-    # priors
-    beta = pm.Normal("beta", mu=0, sigma=10, shape=3)
-    sigma = pm.HalfNormal("sigma", sigma=1)  # automatically transformed to real via log
+        # predicted value
+        mu = beta[0] + beta[1] * x1 + beta[2] * x2
 
-    # predicted value
-    mu = beta[0] + beta[1] * x1 + beta[2] * x2
+        # track the predicted value of the first obs
+        pm.Deterministic("mu[0]", mu[0])
 
-    # track the predicted value of the first obs
-    pm.Deterministic("mu[0]", mu[0])
+        # distribution of response (likelihood)
+        pm.Normal("Y_obs", mu=mu, sigma=sigma, observed=Y)
 
-    # distribution of response (likelihood)
-    pm.Normal("Y_obs", mu=mu, sigma=sigma, observed=Y)
+    interface = PyMCInterface(basic_model, additional_vars=["sigma", "mu[0]"])
+    state = interface.get_initial_state()
+    builder = gs.EngineBuilder(1, 2)
+    builder.set_initial_values(state)
+    builder.set_model(interface)
+    builder.set_duration(1000, 2000)
 
-interface = PyMCInterface(basic_model, additional_vars=["sigma", "mu[0]"])
-state = interface.get_initial_state()
-builder = gs.EngineBuilder(1, 2)
-builder.set_initial_values(state)
-builder.set_model(interface)
-builder.set_duration(1000, 2000)
+    builder.add_kernel(gs.NUTSKernel(["beta"]))
+    builder.add_kernel(gs.NUTSKernel(["sigma_log__"]))
 
-builder.add_kernel(gs.NUTSKernel(["beta"]))
-builder.add_kernel(gs.NUTSKernel(["sigma_log__"]))
+    builder.positions_included = ["sigma", "mu[0]"]
 
-builder.positions_included = ["sigma", "mu[0]"]
+    engine = builder.build()
 
-engine = builder.build()
+    engine.sample_all_epochs()
+    results = engine.get_results()
+    sum = gs.Summary.from_result(results)
+    sum
 
-engine.sample_all_epochs()
-results = engine.get_results()
-sum = gs.Summary.from_result(results)
-```
 
 Transformations of RVs can be avoided by setting `transform = None` in the
 distribution argument.
@@ -84,11 +84,27 @@ except ImportError as e:
 
 class PyMCInterface:
     """
-    An implementation of `liesel.goose.types.ModelInterface` to be used with a
-    PyMC model.
+    An implementation of :class:`~liesel.goose.types.ModelInterface` to be used
+    with a PyMC model.
 
-    The initial position can be extraced with `get_initial_state`. The model
-    state is represented as a `Position`.
+    The initial position can be extraced with :meth:`.get_initial_state`. The
+    model state is represented as a :class:`.Position`.
+
+
+    Parameters
+    ----------
+    model
+        a pymc model
+    additional_vars:
+        names variables that are by default not but should be available via
+        extract_position
+
+
+    By default, only non-observed random variables are available via
+    extract_position. This includes transformed variables but not the
+    untransformed variable. Also, `Deterministic` is not available. To make them
+    trackable for :class:`liesel.goose.engine.Engine` these variables must be mentioned
+    in the constructor.
     """
 
     def __init__(self, model: pm.Model, additional_vars: list[str] = []):
@@ -109,13 +125,14 @@ class PyMCInterface:
 
     def get_initial_state(self) -> Position:
         """
-        returns the initial model state
+        Returns the model's initial.
         """
         return Position(self._pymc_model.initial_point())
 
     def extract_position(
         self, position_keys: Sequence[str], model_state: ModelState
     ) -> Position:
+        """Extracts a sub-position specified by position_keys from model_state."""
         # only extend the state if requested
         if self._additional_vars and any(
             key in position_keys for key in self._additional_vars
@@ -130,6 +147,7 @@ class PyMCInterface:
         return Position({key: model_state[key] for key in position_keys})
 
     def update_state(self, position: Position, model_state: ModelState) -> ModelState:
+        """Updates the model state with position returning the new model state."""
         ms: Position = model_state.copy()  # do not change the input (escaped traces).
         ms.update(position)
         return ms
