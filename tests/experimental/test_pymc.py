@@ -19,10 +19,10 @@ def basic_lm():
 
     # simulate covariates
     x1 = rng.randn(num_obs)
-    x2 = rng.randn(num_obs) * 0.2
+    x2 = 0.5 * rng.randn(num_obs)
 
     # Simulate outcome variable
-    Y = beta[0] + beta[1] * x1 + beta[2] * x2 + sigma * rng.normal(size=num_obs)
+    y = beta[0] + beta[1] * x1 + beta[2] * x2 + sigma * rng.normal(size=num_obs)
 
     basic_model = pm.Model()
     with basic_model:
@@ -39,7 +39,7 @@ def basic_lm():
         pm.Deterministic("mu[0]", mu[0])
 
         # distribution of response (likelihood)
-        pm.Normal("Y_obs", mu=mu, sigma=sigma, observed=Y)
+        pm.Normal("y_obs", mu=mu, sigma=sigma, observed=y)
 
     return basic_model
 
@@ -110,11 +110,11 @@ def test_mcmc(basic_lm: pm.Model):  # type: ignore
     sum = gs.Summary.from_result(results)
 
     assert np.allclose(
-        sum.quantities["mean"]["beta"], [0.90831701, 0.94932704, 2.10921894]
+        sum.quantities["mean"]["beta"], [0.9068794, 0.94820887, 2.0448447]
     )
-    assert np.allclose(sum.quantities["mean"]["sigma_log__"], -0.01266347)
-    assert np.allclose(sum.quantities["mean"]["sigma"], 0.98982774)
-    assert np.allclose(sum.quantities["mean"]["mu[0]"], 0.1485453)
+    assert np.allclose(sum.quantities["mean"]["sigma_log__"], -0.01403057)
+    assert np.allclose(sum.quantities["mean"]["sigma"], 0.98853235)
+    assert np.allclose(sum.quantities["mean"]["mu[0]"], 0.5339259)
 
 
 @pytest.mark.mcmc
@@ -138,8 +138,8 @@ def test_mcmc_two_kernels(basic_lm: pm.Model):  # type: ignore
     sum = gs.Summary.from_result(results)
 
     assert np.allclose(
-        sum.quantities["mean"]["beta"], [0.90800307, 0.94683822, 2.11281852]
+        sum.quantities["mean"]["beta"], [0.90512399, 0.94801362, 2.0486103]
     )
-    assert np.allclose(sum.quantities["mean"]["sigma_log__"], -0.01323162)
-    assert np.allclose(sum.quantities["mean"]["sigma"], 0.98938659)
-    assert np.allclose(sum.quantities["mean"]["mu[0]"], 0.15139553)
+    assert np.allclose(sum.quantities["mean"]["sigma_log__"], -0.01222878)
+    assert np.allclose(sum.quantities["mean"]["sigma"], 0.99029397)
+    assert np.allclose(sum.quantities["mean"]["mu[0]"], 0.53359132)

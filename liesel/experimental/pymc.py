@@ -21,10 +21,10 @@ examples.::
 
     # simulate covariates
     x1 = rng.randn(num_obs)
-    x2 = rng.randn(num_obs) * 0.2
+    x2 = 0.5 * rng.randn(num_obs)
 
-    # Simulate outcome variable
-    Y = beta[0] + beta[1] * x1 + beta[2] * x2 + sigma * rng.normal(size=num_obs)
+    # simulate outcome variable
+    y = beta[0] + beta[1] * x1 + beta[2] * x2 + sigma * rng.normal(size=num_obs)
 
     basic_model = pm.Model()
     with basic_model:
@@ -41,7 +41,7 @@ examples.::
         pm.Deterministic("mu[0]", mu[0])
 
         # distribution of response (likelihood)
-        pm.Normal("Y_obs", mu=mu, sigma=sigma, observed=Y)
+        pm.Normal("y_obs", mu=mu, sigma=sigma, observed=y)
 
     interface = PyMCInterface(basic_model, additional_vars=["sigma", "mu[0]"])
     state = interface.get_initial_state()
