@@ -22,7 +22,7 @@ def setup_logger() -> None:
     # This is the level that will in principle be handled by the logger
     # If it is set, for example, to logging.WARNING, this logger will never
     # emit messages of a level below warning.
-    logger.level = logging.DEBUG
+    logger.setLevel(logging.DEBUG)
 
     # By setting this to False, we prevent the liesel log messages from being passed
     # on to the root logger. This prevents duplication of the log messages.
@@ -37,6 +37,34 @@ def setup_logger() -> None:
     ch.setFormatter(formatter)
 
     logger.addHandler(ch)
+
+
+def reset_logger() -> None:
+    """
+    Resets the liesel logger.
+
+    Specifically, this function ...
+
+    - ... resets the level of the ``"liesel"`` logger to ``logging.NOTSET``.
+    - ... sets ``propagate=True`` for the ``"liesel"`` logger.
+    - ... removes ALL handlers set to the ``"liesel"`` logger.
+
+    This function is useful if you want to set up a custom logging configuration.
+
+    """
+    # We adjust only our library's logger
+    logger = logging.getLogger("liesel")
+
+    # Removes the level of the logger. Thus, this logger will propagate all log records.
+    logger.setLevel(logging.NOTSET)
+
+    # By setting this to True, we allow the liesel log messages to be passed
+    # on to the root logger.
+    logger.propagate = True
+
+    # Removes all handlers from the liesel logger
+    for handler in logger.handlers:
+        logger.removeHandler(handler)
 
 
 def add_file_handler(
