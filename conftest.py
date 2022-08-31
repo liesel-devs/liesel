@@ -53,9 +53,10 @@ def local_caplog_fn(
     """
     Context manager that captures records from non-propagating loggers.
 
-    After the end of the 'with' statement the log level is restored to its original
-    value. Code adapted from
-    https://github.com/pytest-dev/pytest/issues/3697#issuecomment-790925527
+    After the end of the ``with`` statement, the log level is restored to its original
+    value. Code adapted from `this GitHub comment <GH>`_.
+
+    .. _GH: https://github.com/pytest-dev/pytest/issues/3697#issuecomment-790925527
 
     Parameters
     ----------
@@ -63,19 +64,20 @@ def local_caplog_fn(
         The log level.
     name
         The name of the logger to update.
-
     """
+
     logger = logging.getLogger(name)
 
-    orig_level = logger.level
+    old_level = logger.level
     logger.setLevel(level)
 
     handler = LogCaptureHandler()
     logger.addHandler(handler)
+
     try:
         yield handler
     finally:
-        logger.setLevel(orig_level)
+        logger.setLevel(old_level)
         logger.removeHandler(handler)
 
 
@@ -95,7 +97,8 @@ def local_caplog():
             with local_caplog() as caplog:
                 drb = dr.DistRegBuilder()
                 model = drb.build()
-                assert len(caplog.records)== 1
+                assert len(caplog.records) == 1
                 assert caplog.records[0].levelname == "WARNING"
     """
+
     yield local_caplog_fn
