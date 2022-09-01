@@ -106,30 +106,30 @@ engine = builder.build()
 engine.sample_all_epochs()
 ```
 
-    INFO - Starting epoch: FAST_ADAPTATION, 75 transitions, 25 jitted together
-    WARNING - Errors per chain for kernel_00: 1, 2, 2, 2 / 75 transitions
-    INFO - Finished epoch
-    INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
-    WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 25 transitions
-    INFO - Finished epoch
-    INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
-    WARNING - Errors per chain for kernel_00: 2, 1, 1, 2 / 50 transitions
-    INFO - Finished epoch
-    INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
-    WARNING - Errors per chain for kernel_00: 2, 2, 1, 1 / 100 transitions
-    INFO - Finished epoch
-    INFO - Starting epoch: SLOW_ADAPTATION, 200 transitions, 25 jitted together
-    WARNING - Errors per chain for kernel_00: 1, 2, 1, 1 / 200 transitions
-    INFO - Finished epoch
-    INFO - Starting epoch: SLOW_ADAPTATION, 500 transitions, 25 jitted together
-    WARNING - Errors per chain for kernel_00: 1, 2, 1, 2 / 500 transitions
-    INFO - Finished epoch
-    INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
-    WARNING - Errors per chain for kernel_00: 2, 2, 1, 1 / 50 transitions
-    INFO - Finished epoch
-    INFO - Finished warmup
-    INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
-    INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 75 transitions, 25 jitted together
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 2, 2 / 75 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 25 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 1, 1, 2 / 50 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 1, 1 / 100 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 200 transitions, 25 jitted together
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 1, 1 / 200 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 500 transitions, 25 jitted together
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 1, 2 / 500 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 1, 1 / 50 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Finished warmup
+    liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
+    liesel.goose.engine - INFO - Finished epoch
 
 Finally, we can print a summary table and view some diagnostic plots.
 
@@ -144,6 +144,7 @@ gs.Summary.from_results(results)
     <tr style="text-align: right;">
       <th></th>
       <th></th>
+      <th>kernel</th>
       <th>mean</th>
       <th>sd</th>
       <th>q_0.05</th>
@@ -166,12 +167,14 @@ gs.Summary.from_results(results)
       <th></th>
       <th></th>
       <th></th>
+      <th></th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <th>loc</th>
       <th>()</th>
+      <td>kernel_00</td>
       <td>-0.091391</td>
       <td>0.446812</td>
       <td>-0.832265</td>

@@ -330,13 +330,13 @@ class TestPureModelFunctions:
         position = get_position(["foo", "mu", "sigma"], model.state)
         log_prob = get_log_prob_fn(position, model.state)
 
-        assert log_prob == get_log_prob(model.state)
+        assert log_prob == pytest.approx(get_log_prob(model.state))
 
     def test_goose_log_prob(self, model):
         gm = GooseModel(model)
         log_prob = gm.log_prob(model.state)
 
-        assert log_prob == get_log_prob(model.state)
+        assert log_prob == pytest.approx(get_log_prob(model.state))
 
     def test_goose_update_state(self, model):
         model.jaxify()
