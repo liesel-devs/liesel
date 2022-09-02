@@ -1,5 +1,5 @@
 """
-# Probabilistic graphical models (PGMs)
+Probabilistic graphical models (PGMs).
 """
 
 from __future__ import annotations
@@ -46,19 +46,14 @@ class Model:
     A probabilistic graphical model.
 
     A model is defined by the input-output relations between a number of
-    `liesel.liesel.nodes.Node` objects. This class provides methods to compute
+    :class:`.Node` objects. This class provides methods to compute
     the log-probability of a model and to update its nodes efficiently.
 
-    **Caveat emptor:** This class does not check for missing inputs or groups
-    that are not fully contained in a model. Use the `ModelBuilder` to set up
+    Warnings
+    --------
+    This class does not check for missing inputs or groups
+    that are not fully contained in a model. Use the :class:`.ModelBuilder` to set up
     a model in a safe way.
-
-    ## Attributes
-
-    - `graph`: The graph of the input-output relations between the nodes in the model.
-    - `groups`: A dictionary of the nodes groups in the model with their names as keys.
-    - `nodes`: A dictionary of the nodes in the model with their names as keys.
-    - `sorted_nodes`: A list of the nodes in the model in a topological order.
     """
 
     def __init__(
@@ -68,11 +63,14 @@ class Model:
     ) -> None:
         nodes = self._update_names(nodes or [], "n")
         self.nodes = {node.name: node for node in nodes}
+        """A dictionary of the nodes in the model with their names as keys."""
 
         groups = self._update_names(groups or [], "g")
         self.groups = {group.name: group for group in groups}
+        """A dictionary of the nodes groups in the model with their names as keys."""
 
         self.graph = nx.DiGraph()
+        """The graph of the input-output relations between the nodes in the model."""
         self.graph.add_nodes_from(nodes)
 
         for node in nodes:
@@ -84,6 +82,7 @@ class Model:
                 input.outputs.add(node)
 
         self.sorted_nodes = list(nx.topological_sort(self.graph))
+        """A list of the nodes in the model in a topological order."""
 
         for node in self.sorted_nodes:
             node.model = self
@@ -172,9 +171,9 @@ class Model:
         """
         Returns the log-probability of the model.
 
-        The log-probability is computed as the sum of the log-probabilities
-        of all nodes in the model. In a Bayesian context, it can be understood
-        as the unnormalized log-posterior.
+        The log-probability is computed as the sum of the log-probabilities of all nodes
+        in the model. In a Bayesian context, it can be understood as the unnormalized
+        log-posterior.
         """
 
         log_probs = [node.log_prob for node in self.sorted_nodes]
@@ -235,9 +234,9 @@ class Model:
         """
         Updates all outdated nodes in the model.
 
-        The update is performed in a topological order, restoring a consistent state
-        of the model. This method is called automatically by the nodes if their value
-        has changed (unless requested otherwise by the user).
+        The update is performed in a topological order, restoring a consistent state of
+        the model. This method is called automatically by the nodes if their value has
+        changed (unless requested otherwise by the user).
         """
 
         for node in self.sorted_nodes:
@@ -271,14 +270,13 @@ class Model:
 
 
 class ModelBuilder:
-    """
-    A builder class for the `Model`.
+    """A builder class for the :class:`.Model`."""
 
-    ## Attributes
+    nodes: list = []
+    """A list of nodes to be added to the model."""
 
-    - `nodes`: A list of nodes to be added to the model.
-    - `groups`: A list of node groups to be added to the model.
-    """
+    groups: list = []
+    """A list of node groups to be added to the model."""
 
     def __init__(
         self,
@@ -328,8 +326,8 @@ class ModelBuilder:
 
     def all_nodes(self) -> list[Node]:
         """
-        Returns a list of all *unique* nodes that will be part of the model,
-        including the nodes from the groups and the inputs.
+        Returns a list of all *unique* nodes that will be part of the model, including
+        the nodes from the groups and the inputs.
         """
 
         nodes = self.nodes.copy()

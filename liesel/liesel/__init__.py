@@ -1,5 +1,5 @@
 """
-# Liesel modeling framework
+Liesel modeling framework.
 """
 
 from .distreg import CopRegBuilder, DistRegBuilder, dist_reg_mcmc, tau2_gibbs_kernel

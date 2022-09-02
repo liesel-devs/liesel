@@ -1,5 +1,5 @@
 """
-# Model nodes
+Model nodes.
 """
 
 from __future__ import annotations
@@ -139,8 +139,8 @@ class NodeInputs(tuple):
 
     def replace(self, old, new):
         """
-        Returns a shallow copy of the node inputs with the `new` node instead of
-        the `old` one.
+        Returns a shallow copy of the node inputs with the ``new`` node instead of
+        the ``old`` one.
         """
 
         def fn(node):
@@ -155,7 +155,7 @@ class NodeComponent(ABC):
     """
     An abstract node component with inputs and a NumPy module.
 
-    Superclass of the `NodeDistribution` and the `NodeCalculator`.
+    Superclass of the :class:`.NodeDistribution` and the :class:`.NodeCalculator`.
     """
 
     def __init__(self, *args: Node, **kwargs: Node) -> None:
@@ -210,8 +210,8 @@ class NodeCalculator(NodeComponent):
     """
     An abstract value calculator of a node.
 
-    Computes the value of a node from its inputs.
-    Superclass of the `AdditionCalculator`, the `BijectorCalculator`, etc.
+    Computes the value of a node from its inputs. Superclass of the
+    :class:`.AdditionCalculator`, the :class:`.BijectorCalculator`, etc.
     """
 
     @abstractmethod
@@ -223,29 +223,26 @@ class NodeDistribution(NodeComponent):
     """
     A probability distribution of a node.
 
-    Computes the log-probability of a node from its inputs.
-    Implemented as a thin wrapper around a TFP distribution.
+    Computes the log-probability of a node from its inputs. Implemented as a thin
+    wrapper around a TFP distribution.
 
-    ## Parameters
+    Parameters
+    ----------
+    distribution
+        The name of a TFP distribution as a string, or alternatively, a user-defined
+        TFP-compatible distribution class.
 
-    - `distribution`:
-      The name of a TFP distribution as a string, or alternatively, a user-defined
-      TFP-compatible distribution class.
+        If a class is provided instead of a string, the user needs to make sure it uses
+        the right NumPy implementation.
+    bijector
+        The name of a TFP bijector as a string, or alternatively, a user-defined
+        TFP-compatible bijector class.
 
-      If a class is provided instead of a string, the user needs to make sure it uses
-      the right NumPy implementation.
-
-    - `bijector`:
-      The name of a TFP bijector as a string, or alternatively, a user-defined
-      TFP-compatible bijector class.
-
-      If a class is provided instead of a string, the user needs to make sure it uses
-      the right NumPy implementation. Defaults to None.
-
-    - `inputs`:
-      The inputs of the distribution.
-
-      The keywords must match the arguments of the TFP distribution.
+        If a class is provided instead of a string, the user needs to make sure it uses
+        the right NumPy implementation. Defaults to None.
+    inputs
+        The inputs of the distribution. The keywords must match the arguments of the TFP
+        distribution.
     """
 
     def __init__(
@@ -355,20 +352,21 @@ TNodeCalculator = TypeVar("TNodeCalculator", bound=NodeCalculator)
 
 class Node(Generic[TNodeCalculator]):
     """
-    A node, strong or weak, with or without a probability distribution,
-    which can be used to build probabilistic graphical models.
+    A node which can be used to build probabilistic graphical models.
 
-    ## Attributes
-
-    - `outdated`:
-      Whether the node is outdated.
-
-      A node is outdated if its value or the value of one of its inputs has changed.
-      The value and the log-probability of an outdated node need to be recomputed.
-
-    - `outputs`:
-      An output of a node A is a node B which depends on the value of A.
+    The node can be strong or weak, with or without a probability distribution.
     """
+
+    outdated: bool = True
+    """
+    Whether the node is outdated.
+
+    A node is outdated if its value or the value of one of its inputs has changed.
+    The value and the log-probability of an outdated node need to be recomputed.
+    """
+
+    outputs: set[Node] = set()
+    """An output of a node A is a node B which depends on the value of A."""
 
     @overload
     def __init__(
@@ -432,8 +430,8 @@ class Node(Generic[TNodeCalculator]):
         """
         Returns the gradient of the model log-probability w.r.t. the node value.
 
-        This method is **unlikely to be efficient**. Consider using JAX explicitly
-        to JIT-compile more complex functions. Alternatively, you can use Goose.
+        This method is **unlikely to be efficient**. Consider using JAX explicitly to
+        JIT-compile more complex functions. Alternatively, you can use Goose.
         """
 
         if self._grad_fn.is_none():
@@ -475,8 +473,8 @@ class Node(Generic[TNodeCalculator]):
         """
         Informs the node that the value of one of its inputs has changed.
 
-        Flags the node as outdated, and if the node is weak, also flags its outputs
-        as outdated.
+        Flags the node as outdated, and if the node is weak, also flags its outputs as
+        outdated.
         """
 
         self.outdated = True
@@ -579,8 +577,7 @@ class Node(Generic[TNodeCalculator]):
         """
         Sets the value of the node.
 
-        Flags the node and its outputs as outdated, and if requested,
-        updates the model.
+        Flags the node and its outputs as outdated, and if requested, updates the model.
         """
 
         if self.weak:
@@ -841,7 +838,7 @@ class Predictor(Addition):
 
 class BijectorCalculator(NodeCalculator):
     """
-    Evaluates the `forward` or the `inverse` method of a TFP bijector at its input.
+    Evaluates the ``forward`` or the ``inverse`` method of a TFP bijector at its input.
     """
 
     def __init__(
@@ -872,7 +869,7 @@ class BijectorCalculator(NodeCalculator):
 
 
 class Bijector(Node[BijectorCalculator]):
-    """A weak node with a `BijectorCalculator`."""
+    """A weak node with a :class:`.BijectorCalculator`."""
 
     def __init__(
         self,
@@ -914,7 +911,7 @@ class ColumnStackCalculator(NodeCalculator):
 
 
 class ColumnStack(Node[ColumnStackCalculator]):
-    """A weak node with a `ColumnStackCalculator`."""
+    """A weak node with a :class:`.ColumnStackCalculator`."""
 
     def __init__(
         self,
@@ -963,10 +960,10 @@ class PIT(Node[PITCalculator]):
 
 class SmoothCalculator(NodeCalculator):
     """
-    Calculates a smooth `x @ beta`.
+    Calculates a smooth ``x @ beta``.
 
-    A smooth is the matrix-vector product of a design matrix `x` and a vector of
-    regression coefficients `beta`.
+    A smooth is the matrix-vector product of a design matrix ``x`` and a vector of
+    regression coefficients ``beta``.
     """
 
     def __init__(self, x, beta):
@@ -979,7 +976,7 @@ class SmoothCalculator(NodeCalculator):
 
 
 class Smooth(Node[SmoothCalculator]):
-    """A weak node with a `SmoothCalculator`."""
+    """A weak node with a :class:`.SmoothCalculator`."""
 
     def __init__(
         self,

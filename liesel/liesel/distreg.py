@@ -1,5 +1,5 @@
 """
-# Distributional regression
+Distributional regression.
 """
 
 from __future__ import annotations
@@ -59,10 +59,11 @@ class DistRegBuilder(ModelBuilder):
 
     @property
     def response(self) -> Node:
+        """The response node."""
         return self._response.expect(f"No response in {repr(self)}")
 
     def _smooth_name(self, name: str | None, predictor: str, prefix: str) -> str:
-        """Generates a name for a smooth if the `name` argument is `None`."""
+        """Generates a name for a smooth if the ``name`` argument is ``None``."""
 
         other_smooths = self._smooths[predictor]
         other_names = [node.name for node in other_smooths if node.has_name]
@@ -91,15 +92,21 @@ class DistRegBuilder(ModelBuilder):
         predictor: str,
         name: str | None = None,
     ) -> PSmoothGroup:
-        """Adds a parametric smooth to the model builder.
+        """
+        Adds a parametric smooth to the model builder.
 
-        ## Parameters
-
-        - `X`: The design matrix.
-        - `m`: The mean of the Gaussian prior.
-        - `s`: The standard deviation of the Gaussian prior.
-        - `predictor`: The name of the predictor to add the smooth to.
-        - `name`: The name of the smooth.
+        Parameters
+        ----------
+        X
+            The design matrix.
+        m
+            The mean of the Gaussian prior.
+        s
+            The standard deviation of the Gaussian prior.
+        predictor
+            The name of the predictor to add the smooth to.
+        name
+            The name of the smooth.
         """
 
         try:
@@ -144,14 +151,21 @@ class DistRegBuilder(ModelBuilder):
         """
         Adds a non-parametric smooth to the model builder.
 
-        ## Parameters
-
-        - `X`: The design matrix.
-        - `K`: The penalty matrix.
-        - `a`: The a, α or concentration parameter of the inverse gamma prior.
-        - `b`: The b, β or scale parameter of the inverse gamma prior.
-        - `predictor`: The name of the predictor to add the smooth to.
-        - `name`: The name of the smooth.
+        Parameters
+        ----------
+        X
+            The design matrix.
+        K
+            The penalty matrix.
+        a
+            The a, :math:`\\alpha` or concentration parameter of the inverse gamma
+            prior.
+        b
+            The b, :math:`\\beta` or scale parameter of the inverse gamma prior.
+        predictor
+            The name of the predictor to add the smooth to.
+        name
+            The name of the smooth.
         """
 
         try:
@@ -201,20 +215,17 @@ class DistRegBuilder(ModelBuilder):
         """
         Adds a predictor to the model builder.
 
-        ## Parameters
-
-        - `name`:
-          The name of the parameter of the response distribution.
-
-          Must match the name of the parameter of the TFP distribution.
-
-        - `inverse_link`:
-          The inverse link mapping the regression predictor to the parameter
-          of the response distribution.
-
-          Either a string identifying a TFP bijector, or alternatively,
-          a TFP-compatible bijector class. If a class is provided instead of a string,
-          the user needs to make sure it uses the right NumPy implementation.
+        Parameters
+        ----------
+        name
+            The name of the parameter of the response distribution. Must match the name
+            of the parameter of the TFP distribution.
+        inverse_link
+            The inverse link mapping the regression predictor to the parameter of the
+            response distribution. Either a string identifying a TFP bijector, or
+            alternatively, a TFP-compatible bijector class. If a class is provided
+            instead of a string, the user needs to make sure it uses the right NumPy
+            implementation.
         """
 
         if name not in self._smooths or not self._smooths[name]:
@@ -235,17 +246,15 @@ class DistRegBuilder(ModelBuilder):
         """
         Adds the response to the model builder.
 
-        ## Parameters
-
-        - `response`:
-          The response vector or matrix.
-
-        - `distribution`:
-          The conditional distribution of the response variable.
-
-          Either a string identifying a TFP distribution, or alternatively,
-          a TFP-compatible distribution class. If a class is provided instead of
-          a string, the user needs to make sure it uses the right NumPy implementation.
+        Parameters
+        ----------
+        response
+            The response vector or matrix.
+        distribution
+            The conditional distribution of the response variable. Either a string
+            identifying a TFP distribution, or alternatively, a TFP-compatible
+            distribution class. If a class is provided instead of a string, the user
+            needs to make sure it uses the right NumPy implementation.
         """
 
         if not self._distributional_parameters:
@@ -269,15 +278,12 @@ class CopRegBuilder(DistRegBuilder):
     Remember to add a predictor for the dependence parameter before adding the copula
     and building the model.
 
-    ## Parameters
-
-    - `model0`: The first marginal distributional regression model **builder**.
-    - `model1`: The second marginal distributional regression model **builder**.
-    - `copula`: The copula of the response variables.
-
-      Either a string identifying a TFP distribution, or alternatively,
-      a TFP-compatible distribution class. If a class is provided instead of a string,
-      the user needs to make sure it uses the right NumPy implementation.
+    Parameters
+    ----------
+    model0
+        The first marginal distributional regression model **builder**.
+    model1
+        The second marginal distributional regression model **builder**.
     """
 
     def __init__(self, model0: DistRegBuilder, model1: DistRegBuilder) -> None:
@@ -306,6 +312,17 @@ class CopRegBuilder(DistRegBuilder):
         return model
 
     def add_copula(self, copula: str | TFPDistributionClass) -> CopRegBuilder:
+        """
+        Adds a copula.
+
+        Parameters
+        ----------
+        copula
+            The copula of the response variables. Either a string identifying a TFP
+            distribution, or alternatively, a TFP-compatible distribution class. If a
+            class is provided instead of a string, the user needs to make sure it uses
+            the right NumPy implementation.
+        """
         pit0_node = PIT(self._model0.response, name="m0_pit")
         pit1_node = PIT(self._model1.response, name="m1_pit")
 
@@ -347,15 +364,20 @@ def tau2_gibbs_kernel(group: NPSmoothGroup) -> GibbsKernel:
 
 def dist_reg_mcmc(model: Model, seed: int, num_chains: int) -> EngineBuilder:
     """
-    Configures an `EngineBuilder` with a Metropolis-in-Gibbs MCMC algorithm with an
-    `IWLSKernel` for the regression coefficients and a `GibbsKernel` for the smoothing
-    parameters for a distributional regression model.
+    Configures an :class:`.EngineBuilder` for a distributional regression model.
 
-    ## Parameters
+    The EngineBuilder uses a Metropolis-in-Gibbs MCMC algorithm with an
+    :class:`.IWLSKernel` for the regression coefficients and a :class:`.GibbsKernel` for
+    the smoothing parameters for a distributional regression model.
 
-    - `model`: A model built with a `DistRegBuilder`.
-    - `seed`: The PRNG seed for the engine builder.
-    - `num_chains`: The number of chains to be sampled.
+    Parameters
+    ----------
+    model
+        A model built with a :class:`.DistRegBuilder`.
+    seed
+        The PRNG seed for the engine builder.
+    num_chains
+        The number of chains to be sampled.
     """
 
     builder = EngineBuilder(seed, num_chains)

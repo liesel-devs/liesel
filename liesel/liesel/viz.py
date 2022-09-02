@@ -1,5 +1,5 @@
 """
-# Model visualization
+Model visualization
 """
 
 import matplotlib.pyplot as plt
@@ -11,30 +11,21 @@ def plot_model(model, show=True, save_path=None, width=20, height=15, prog="dot"
     """
     Plots a Liesel model.
 
-    ## Parameters
-
-    - `model`:
-      The model to be plotted.
-
-    - `show`:
-      Whether to show the plot in a new window.
-
-    - `save_path`:
-      Path to save the plot.
-
-      If not provided, the plot will not be saved.
-
-    - `width`:
-      Width of the plot in inches.
-
-    - `height`:
-      Height of the plot in inches.
-
-    - `prog`:
-      Layout parameter.
-
-      Available layouts: circo, dot (the default), fdp, neato, osage, patchwork, sfdp,
-      twopi.
+    Parameters
+    ----------
+    model
+        The model to be plotted.
+    show
+        Whether to show the plot in a new window.
+    save_path
+        Path to save the plot. If not provided, the plot will not be saved.
+    width
+        Width of the plot in inches.
+    height
+        Height of the plot in inches.
+    prog
+        Layout parameter. Available layouts: : circo, dot (the default), fdp, neato,
+        osage, patchwork, sfdp, twopi.
     """
 
     _, axis, pos = _prepare_figure(model.graph, width, height, prog)
