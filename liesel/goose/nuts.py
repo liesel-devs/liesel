@@ -86,7 +86,7 @@ def _goose_info(nuts_info: nuts.NUTSInfo, max_treedepth: int) -> NUTSTransitionI
         divergent=nuts_info.is_divergent,
         turning=nuts_info.is_turning,
         treedepth=nuts_info.num_trajectory_expansions,
-        leapfrog=nuts_info.integration_steps,
+        leapfrog=nuts_info.num_integration_steps,
     )
 
 

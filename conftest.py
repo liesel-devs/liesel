@@ -1,4 +1,9 @@
+import logging
+from contextlib import contextmanager
+from typing import Generator
+
 import pytest
+from _pytest.logging import LogCaptureHandler
 
 
 def to_int(value):
@@ -39,3 +44,61 @@ def pytest_collection_modifyitems(config, items):
 @pytest.fixture
 def mcmc_seed(request):
     return request.config.getoption("--mcmc-seed")
+
+
+@contextmanager
+def local_caplog_fn(
+    level: int = logging.INFO, name: str = "liesel"
+) -> Generator[LogCaptureHandler, None, None]:
+    """
+    Context manager that captures records from non-propagating loggers.
+
+    After the end of the ``with`` statement, the log level is restored to its original
+    value. Code adapted from `this GitHub comment <GH>`_.
+
+    .. _GH: https://github.com/pytest-dev/pytest/issues/3697#issuecomment-790925527
+
+    Parameters
+    ----------
+    level
+        The log level.
+    name
+        The name of the logger to update.
+    """
+
+    logger = logging.getLogger(name)
+
+    old_level = logger.level
+    logger.setLevel(level)
+
+    handler = LogCaptureHandler()
+    logger.addHandler(handler)
+
+    try:
+        yield handler
+    finally:
+        logger.setLevel(old_level)
+        logger.removeHandler(handler)
+
+
+@pytest.fixture
+def local_caplog():
+    """
+    Fixture that yields a context manager for capturing records from non-propagating
+    loggers.
+
+    Examples
+    --------
+    Usage example::
+
+        import liesel.liesel.distreg as dr
+
+        def test_build_empty(local_caplog):
+            with local_caplog() as caplog:
+                drb = dr.DistRegBuilder()
+                model = drb.build()
+                assert len(caplog.records) == 1
+                assert caplog.records[0].levelname == "WARNING"
+    """
+
+    yield local_caplog_fn

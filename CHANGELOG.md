@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.3] - 2022-09-01
+
+### What's new?
+
+- :swan: Added a generic Metropolis-Hastings kernel that can wrap a user-defined proposal function (@wiep)
+- :swan: Added a column to the MCMC summary table that lists the MCMC kernel for each model parameter (@jobrachem)
+- :swan: Added an [experimental PyMC interface](https://github.com/liesel-devs/liesel/blob/v0.1.3/liesel/experimental/pymc.py) that can sample PyMC models with Goose (@wiep)
+- Updated dependencies: JAX == 0.3.16, BlackJAX >= 0.8.3 (@jobrachem, @hriebl)
+- Improved logging setup using a non-propagating logger (@jobrachem)
+
+[All commits since 0.1.2](https://github.com/liesel-devs/liesel/compare/v0.1.2...v0.1.3)
+
 ## [0.1.2] - 2022-07-27
 
 ### What's new?
@@ -38,7 +50,8 @@ All notable changes to this project will be documented in this file.
 - @GianmarcoCallegher
 - @jobrachem
 
-[Unreleased]: https://github.com/liesel-devs/liesel/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/liesel-devs/liesel/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/liesel-devs/liesel/releases/tag/v0.1.3
 [0.1.2]: https://github.com/liesel-devs/liesel/releases/tag/v0.1.2
 [0.1.1]: https://github.com/liesel-devs/liesel/releases/tag/v0.1.1
 [0.1.0]: https://github.com/liesel-devs/liesel/releases/tag/v0.1.0
