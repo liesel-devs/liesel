@@ -1,5 +1,5 @@
 """
-# A Rust-inspired Option type for Liesel and Goose
+A Rust-inspired Option type for Liesel and Goose.
 """
 
 from __future__ import annotations
@@ -12,10 +12,12 @@ U = TypeVar("U")
 
 
 class Option(Generic[T]):
-    """An Option type inspired by the Rust stdlib.
+    """
+    An Option type inspired by the Rust stdlib.
 
-    See <https://doc.rust-lang.org/std/option/enum.Option.html> for descriptions
-    of the methods.
+    See Rust documentation_ for descriptions of the methods.
+
+    .. _documentation: https://doc.rust-lang.org/std/option/enum.Option.html
     """
 
     def __init__(self, value: T | None) -> None:
