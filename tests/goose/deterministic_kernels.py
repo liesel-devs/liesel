@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import ClassVar, Sequence
 
 import jax.numpy as jnp
-from jax.random import KeyArray
 
 from liesel.goose.epoch import EpochState, EpochType
 from liesel.goose.kernel import (
@@ -16,7 +15,7 @@ from liesel.goose.kernel import (
     WarmupOutcome,
 )
 from liesel.goose.pytree import register_dataclass_as_pytree
-from liesel.goose.types import ModelInterface, ModelState, Position
+from liesel.goose.types import KeyArray, ModelInterface, ModelState, Position
 
 
 @register_dataclass_as_pytree

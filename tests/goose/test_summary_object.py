@@ -4,7 +4,6 @@ from typing import ClassVar, Sequence
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from jax.random import KeyArray
 
 from liesel.goose.builder import EngineBuilder
 from liesel.goose.engine import SamplingResults
@@ -19,7 +18,7 @@ from liesel.goose.kernel import (
 from liesel.goose.models import DictModel
 from liesel.goose.pytree import register_dataclass_as_pytree
 from liesel.goose.summary_m import Summary
-from liesel.goose.types import Kernel, ModelInterface, ModelState, Position
+from liesel.goose.types import Kernel, KeyArray, ModelInterface, ModelState, Position
 
 
 @register_dataclass_as_pytree

@@ -7,8 +7,6 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Any, ClassVar, NewType, Protocol, Sequence, TypeVar
 
-import jax.numpy
-
 if TYPE_CHECKING:
     from .epoch import EpochState
     from .kernel import (
@@ -27,7 +25,7 @@ Array = Any
 ModelState = PyTree
 Position = NewType("Position", dict[str, Array])
 KernelState = PyTree
-KeyArray = jax.random.KeyArray
+KeyArray = Any
 
 
 class TuningInfo(Protocol):
