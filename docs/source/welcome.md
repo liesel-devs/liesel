@@ -30,12 +30,12 @@ If you are looking for code examples, the [tutorial book][6] might come in handy
 Liesel is being developed by Paul Wiemann and Hannes Riebl at the
 [University of Göttingen][7] with support from Thomas Kneib. Important contributions
 were made by Joel Beck, Alex Afanasev, Gianmarco Callegher and Johannes Brachem. We are
-grateful to the [German Research Foundation (DFG)[8] for funding the development
+grateful to the [German Research Foundation (DFG)][8] for funding the development
 through grant 443179956.
 
 <!-- TODO: Use main branch for logos -->
-<img src="https://raw.githubusercontent.com/liesel-devs/liesel/sphinx-docs/docs/source/_static/uni-goe.svg" alt="University of Göttingen" align="left" height="80">
-<img src="https://raw.githubusercontent.com/liesel-devs/liesel/sphinx-docs/docs/source/_static/funded-by-dfg.svg" alt="Funded by DFG" align="left" height="80">
+<img src="https://raw.githubusercontent.com/liesel-devs/liesel/sphinx-docs/docs/source/_static/uni-goe.svg" alt="University of Göttingen" align="left" height="60">
+<img src="https://raw.githubusercontent.com/liesel-devs/liesel/sphinx-docs/docs/source/_static/funded-by-dfg.svg" alt="Funded by DFG" align="left" height="60">
 
 [1]: https://github.com/liesel-devs/liesel
 [2]: https://github.com/liesel-devs/rliesel
