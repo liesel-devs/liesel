@@ -1,5 +1,3 @@
-# A Probabilistic Programming Framework
-
 Welcome to the API documentation of Liesel, a probabilistic programming framework with
 a focus on semi-parametric regression. It includes:
 
@@ -22,10 +20,22 @@ birth city [Göttingen][4].
 
 For installation instructions, see the [README][5] in the main repository.
 
-## Further reading
+## Further Reading
 
 For a scientific discussion of the software, see our paper on arXiv (in preparation).
 If you are looking for code examples, the [tutorial book][6] might come in handy.
+
+## Acknowledgements
+
+Liesel is being developed by Paul Wiemann and Hannes Riebl at the
+[University of Göttingen][7] with support from Thomas Kneib. Important contributions
+were made by Joel Beck, Alex Afanasev, Gianmarco Callegher and Johannes Brachem. We are
+grateful to the [German Research Foundation (DFG)[8] for funding the development
+through grant 443179956.
+
+<!-- TODO: Use main branch for logos -->
+<img src="https://raw.githubusercontent.com/liesel-devs/liesel/sphinx-docs/docs/source/_static/uni-goe.svg" alt="University of Göttingen" align="left" height="80">
+<img src="https://raw.githubusercontent.com/liesel-devs/liesel/sphinx-docs/docs/source/_static/funded-by-dfg.svg" alt="Funded by DFG" align="left" height="80">
 
 [1]: https://github.com/liesel-devs/liesel
 [2]: https://github.com/liesel-devs/rliesel
@@ -33,3 +43,5 @@ If you are looking for code examples, the [tutorial book][6] might come in handy
 [4]: https://en.wikipedia.org/wiki/G%C3%B6ttingen
 [5]: https://github.com/liesel-devs/liesel#installation
 [6]: https://liesel-devs.github.io/liesel-tutorials
+[7]: https://www.uni-goettingen.de/en
+[8]: https://www.dfg.de/en
