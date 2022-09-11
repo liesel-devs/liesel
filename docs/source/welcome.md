@@ -34,8 +34,8 @@ grateful to the [German Research Foundation (DFG)][8] for funding the developmen
 through grant 443179956.
 
 <!-- TODO: Use main branch for logos -->
-<img src="https://raw.githubusercontent.com/liesel-devs/liesel/sphinx-docs/docs/source/_static/uni-goe.svg" alt="University of Göttingen" align="left" height="60">
-<img src="https://raw.githubusercontent.com/liesel-devs/liesel/sphinx-docs/docs/source/_static/funded-by-dfg.svg" alt="Funded by DFG" align="left" height="60">
+<img src="https://raw.githubusercontent.com/liesel-devs/liesel/sphinx-docs/docs/source/_static/uni-goe.svg" alt="University of Göttingen" style="height: 4em; margin: 0 1em 1em 0">
+<img src="https://raw.githubusercontent.com/liesel-devs/liesel/sphinx-docs/docs/source/_static/funded-by-dfg.svg" alt="Funded by DFG" style="height: 4em; margin: 0 1em 1em 0">
 
 [1]: https://github.com/liesel-devs/liesel
 [2]: https://github.com/liesel-devs/rliesel
