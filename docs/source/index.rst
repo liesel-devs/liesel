@@ -12,6 +12,7 @@ API Reference
    :caption: API Reference
    :recursive:
 
+   ~liesel.experimental
    ~liesel.liesel
    ~liesel.goose
    ~liesel.tfp
