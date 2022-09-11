@@ -27,7 +27,7 @@
    {% block attributes %}
    {% if attributes %}
    .. rubric:: {{ _('Attributes') }}
-   
+
    This section is empty if this class has only inherited attributes.
 
    .. autosummary::

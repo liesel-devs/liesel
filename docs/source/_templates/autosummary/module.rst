@@ -45,7 +45,7 @@
    {% for item in classes %}
       {{ item }}
    {%- endfor %}
-   
+
    {% endif %}
 
    {% endblock %}

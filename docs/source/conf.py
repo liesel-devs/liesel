@@ -37,7 +37,7 @@ extensions = [
     "sphinx.ext.doctest",
     "sphinx_remove_toctrees",  # speeds up build with many stub pages
     "sphinx.ext.intersphinx",
-    'sphinx_copybutton',
+    "sphinx_copybutton",
     "myst_parser",
 ]
 
@@ -46,9 +46,9 @@ intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable/", None),
     "scipy": ("https://docs.scipy.org/doc/scipy-1.8.1/", None),
     "jax": ("https://jax.readthedocs.io/en/latest/", None),
-    "tensorflow_probability": ( # we can use "tfp" as a prefix, too
+    "tensorflow_probability": (  # we can use "tfp" as a prefix, too
         "https://www.tensorflow.org/probability/api_docs/python",
-        "https://github.com/GPflow/tensorflow-intersphinx/raw/master/tfp_py_objects.inv",
+        "https://github.com/GPflow/tensorflow-intersphinx/raw/master/tfp_py_objects.inv",  # noqa: E501
     ),
 }
 
@@ -62,19 +62,19 @@ napoleon_preprocess_types = False
 # For compatibility with sphinx_autodoc_typehints
 # If True, napoleon will add a :rtype: role, causing sphinx_autodoc_typehints
 # to not add its own role from the type annotations.
-napoleon_use_rtype = False  
+napoleon_use_rtype = False
 
 # sphinx_autodoc_typehints: options
 typehints_defaults = "braces-after"
 
 # Doctest setup
-doctest_global_setup = '''
+doctest_global_setup = """
 import liesel.liesel as lsl
 import liesel.goose as gs
 import jax.numpy as jnp
 import jax
 import numpy as np
-'''
+"""
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
@@ -98,7 +98,7 @@ html_logo = "../../misc/logo/logo-light.png"
 html_theme_options = {
     "repository_url": "https://github.com/liesel-devs/liesel",
     "use_repository_button": True,
-    "logo_only": True
+    "logo_only": True,
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,
@@ -131,5 +131,4 @@ remove_from_toctrees = [
     "generated/liesel.liesel.*.*.*.rst",
     "generated/liesel.goose.*.*.*.rst",
     "generated/liesel.tfp.*.*.*.rst",
-
-    ]
+]

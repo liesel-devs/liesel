@@ -1,7 +1,6 @@
 # see https://pre-commit.com for more information
 # see https://pre-commit.com/hooks.html for more hooks
 
-exclude: (^docs/)
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.1.0
@@ -36,3 +35,4 @@ repos:
         types_or: [python, pyi]
         args: [--ignore-missing-imports, --scripts-are-modules]
         require_serial: true
+        exclude: ^docs/

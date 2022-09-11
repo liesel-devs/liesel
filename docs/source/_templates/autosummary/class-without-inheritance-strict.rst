@@ -2,12 +2,12 @@
 
 .. In this template, methods are ignored even if the parent class
    has only a private version of the method. For example, if the parent
-   class has a method "_cross_entropy", and the child class has a method 
+   class has a method "_cross_entropy", and the child class has a method
    "cross_entropy", that method will not be documented by this template.
-   This fixes an issue with inheritance, for example from 
+   This fixes an issue with inheritance, for example from
    tensorflow_probability.substrates.jax.distributions
 
-   The modules liesel.tfp.jax.distributions and 
+   The modules liesel.tfp.jax.distributions and
    liesel.tfp.numpy.distributions are both affected
 
 .. currentmodule:: {{ module }}
@@ -39,7 +39,7 @@
    {% block attributes %}
    {% if attributes %}
    .. rubric:: {{ _('Attributes') }}
-   
+
    This section is empty if this class has only inherited attributes.
 
    .. autosummary::
