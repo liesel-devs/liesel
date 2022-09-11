@@ -1,7 +1,7 @@
 # Configuration file for the Sphinx documentation builder.
 #
 # This file only contains a selection of the most common options. For a full
-# list see the documentation:
+# list, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
 # -- Path setup --------------------------------------------------------------
@@ -12,30 +12,30 @@
 #
 # import os
 # import sys
-# sys.path.insert(0, os.path.abspath('.'))
+# sys.path.insert(0, os.path.abspath("."))
 
 
 # -- Project information -----------------------------------------------------
 
 project = "liesel"
 copyright = "2022, Hannes Riebl & Paul Wiemann"
-author = "Hannes Riebl, Paul Wiemann"
+author = "Hannes Riebl & Paul Wiemann"
 
 
 # -- General configuration ---------------------------------------------------
 
 # Add any Sphinx extension module names here, as strings. They can be
-# extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
+# extensions coming with Sphinx (named "sphinx.ext.*") or your custom
 # ones.
 extensions = [
-    "sphinx.ext.napoleon",  # parse numpy and google style docstrings
+    "sphinx.ext.napoleon",  # parse NumPy and Google style docstrings
     "sphinx_autodoc_typehints",
     "sphinx.ext.autosummary",  # for automatic API doc tables
     # "sphinx.ext.linkcode",
     "sphinx.ext.viewcode",
     "sphinx.ext.mathjax",
     "sphinx.ext.doctest",
-    "sphinx_remove_toctrees",  # speeds up build with many stub pages
+    "sphinx_remove_toctrees",  # speed up builds with many stub pages
     "sphinx.ext.intersphinx",
     "sphinx_copybutton",
     "myst_parser",
@@ -55,42 +55,41 @@ intersphinx_mapping = {
 # Napoleon options
 napoleon_use_param = True
 
-# For compatibility with sphinx_autodoc_typehints
-# If True, the return text will be rendered as literals
+# For compatibility with sphinx_autodoc_typehints:
+# If True, the return text will be rendered as literals.
 napoleon_preprocess_types = False
 
-# For compatibility with sphinx_autodoc_typehints
-# If True, napoleon will add a :rtype: role, causing sphinx_autodoc_typehints
+# For compatibility with sphinx_autodoc_typehints:
+# If True, Napoleon will add a :rtype: role, causing sphinx_autodoc_typehints
 # to not add its own role from the type annotations.
 napoleon_use_rtype = False
 
-# sphinx_autodoc_typehints: options
+# sphinx_autodoc_typehints options
 typehints_defaults = "braces-after"
 
-# Doctest setup
+# doctest setup
 doctest_global_setup = """
-import liesel.liesel as lsl
-import liesel.goose as gs
-import jax.numpy as jnp
 import jax
+import jax.numpy as jnp
 import numpy as np
+import liesel.goose as gs
+import liesel.liesel as lsl
 """
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
 
-# List of patterns, relative to source directory, that match files and
-# directories to ignore when looking for source files.
-# This pattern also affects html_static_path and html_extra_path.
+# List of patterns, relative to the source directory, that match files and
+# directories to ignore when looking for source files. These patterns also
+# affect html_static_path and html_extra_path.
 exclude_patterns = []
 
 
 # -- Options for HTML output -------------------------------------------------
 pygments_style = "sphinx"
 
-# The theme to use for HTML and HTML Help pages.  See the documentation for
+# The theme to use for HTML and HTML help pages. See the documentation for
 # a list of builtin themes.
-#
 html_theme = "sphinx_book_theme"
 # html_theme = "pydata_sphinx_theme"
 html_title = ""
@@ -115,18 +114,16 @@ def linkcode_resolve(domain, info):
     if not info["module"]:
         return None
     filename = info["module"].replace(".", "/")
-
     return f"https://github.com/liesel-devs/liesel/blob/main/{filename}.py"
 
 
-# maps functions with a class name that is indistinguishable when case is
-# ignore to another filename
+# Map functions and classes with the same lowercase names to other filenames.
 autosummary_filename_map = {
     "liesel.goose.summary_m.summary": "liesel.goose.summary_m.summary-function",
     "liesel.goose.summary_m.Summary": "liesel.goose.summary_m.summary-class",
 }
 
-# Remove auto-generated API docs from sidebars. They take too long to build.
+# Remove auto-generated API docs from the sidebar. They take too long to build.
 remove_from_toctrees = [
     "generated/liesel.liesel.*.*.*.rst",
     "generated/liesel.goose.*.*.*.rst",
