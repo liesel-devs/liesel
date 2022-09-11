@@ -15,6 +15,6 @@ The name "Liesel" is an homage to the [Gänseliesel fountain](https://en.wikiped
 ## Resources
 
 - [Liesel & Goose repo](https://github.com/liesel-devs/liesel)
-- [Liesel & Goose API docs](https://liesel-devs.github.io/liesel)
+- [Liesel & Goose API docs](https://docs.liesel-project.org)
 - [RLiesel repo](https://github.com/liesel-devs/rliesel)
 - [Tutorials](https://liesel-devs.github.io/liesel-tutorials)

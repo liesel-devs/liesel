@@ -6,9 +6,9 @@ build-backend = "setuptools.build_meta"
 profile = "black"
 
 [tool.mypy]
+files = ["liesel", "tests"]
 ignore_missing_imports = true
 scripts_are_modules = true
-files = ["liesel", "tests"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

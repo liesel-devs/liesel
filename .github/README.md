@@ -40,7 +40,7 @@ Liesel’s birth city
 -   :girl::swan::computer: [Liesel & Goose
     repo](https://github.com/liesel-devs/liesel)
 -   :girl::swan::book: [Liesel & Goose API
-    docs](https://liesel-devs.github.io/liesel)
+    docs](https://docs.liesel-project.org)
 -   :registered::computer: [RLiesel
     repo](https://github.com/liesel-devs/rliesel)
 -   :book: [Tutorials](https://liesel-devs.github.io/liesel-tutorials)
