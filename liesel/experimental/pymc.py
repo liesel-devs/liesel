@@ -1,5 +1,5 @@
 """
-This module provides a :class:`.liesel.goose.ModelInterface` implementation for PyMC
+This module provides a :class:`.ModelInterface` implementation for PyMC
 models.
 
 To use this module, the pymc package must be installed. To do so, please install
