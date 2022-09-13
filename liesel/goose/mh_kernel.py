@@ -1,8 +1,6 @@
 """
-# Metroplis Hastings kernel
-
-This kernel allows for a user-defined proposal functions and adds
-the MH step. Optional, the kernel supports a stepsize adaptation.
+Metroplis Hastings kernel. This kernel allows for a user-defined proposal functions and
+adds the MH step. Optional, the kernel supports a stepsize adaptation.
 """
 
 from typing import Callable, ClassVar, NamedTuple, Sequence
@@ -29,8 +27,8 @@ class MHProposal(NamedTuple):
     position: Position
     log_correction: float
     """
-    Let $q(x' | x)$ be the prosal density, then $log(q(x'|x)
-    / q(x | x'))$ is the log_mh_correction.
+    Let :math:`q(x' | x)` be the prosal density, then :math:`log(q(x'|x) / q(x | x'))`
+    is the log_mh_correction.
     """
 
 
@@ -41,19 +39,20 @@ MHProposalFn = Callable[[KeyArray, ModelState, float], MHProposal]
 
 class MHKernel(ModelMixin, TransitionMixin[RWKernelState, MHTransitionInfo]):
     """
-    A Metropolis-Hastings kernel implementing the `Kernel` protocol.
+    A Metropolis-Hastings kernel implementing the :class:`.Kernel` protocol.
 
-    The user needs to provide a proposal function that proposes a new state and
-    the log_correction.
+    The user needs to provide a proposal function that proposes a new state and the
+    log_correction.
 
-    If `da_tune_step_size` is `True` the stepsize passed as an argument to the
-    proposal function is tuned using the dual averging algorithm. Step size is
-    tuned on the fly during all adaptive epochs.
+    If ``da_tune_step_size`` is ``True`` the stepsize passed as an argument to the
+    proposal function is tuned using the dual averging algorithm. Step size is tuned on
+    the fly during all adaptive epochs.
     """
 
     error_book: ClassVar[dict[int, str]] = {0: "no errors", 90: "nan acceptance prob"}
     needs_history: ClassVar[bool] = False
     identifier: str = ""
+    position_keys: tuple[str, ...]
 
     def __init__(
         self,
@@ -77,9 +76,7 @@ class MHKernel(ModelMixin, TransitionMixin[RWKernelState, MHTransitionInfo]):
         self.da_t0 = da_t0
 
     def init_state(self, prng_key, model_state):
-        """
-        Initializes the kernel state.
-        """
+        """Initializes the kernel state."""
 
         return RWKernelState(step_size=self.initial_step_size)
 
@@ -90,9 +87,7 @@ class MHKernel(ModelMixin, TransitionMixin[RWKernelState, MHTransitionInfo]):
         model_state: ModelState,
         epoch: EpochState,
     ) -> TransitionOutcome[RWKernelState, DefaultTransitionInfo]:
-        """
-        Performs an MCMC transition *without* dual averaging.
-        """
+        """Performs an MCMC transition *without* dual averaging."""
 
         key, subkey = jax.random.split(prng_key)
         step_size = kernel_state.step_size
@@ -117,9 +112,7 @@ class MHKernel(ModelMixin, TransitionMixin[RWKernelState, MHTransitionInfo]):
         model_state: ModelState,
         epoch: EpochState,
     ) -> TransitionOutcome[RWKernelState, DefaultTransitionInfo]:
-        """
-        Performs an MCMC transition *with* dual averaging.
-        """
+        """Performs an MCMC transition *with* dual averaging."""
 
         outcome = self._standard_transition(prng_key, kernel_state, model_state, epoch)
 
@@ -144,9 +137,7 @@ class MHKernel(ModelMixin, TransitionMixin[RWKernelState, MHTransitionInfo]):
         epoch: EpochState,
         history: Position | None = None,
     ) -> TuningOutcome[RWKernelState, DefaultTuningInfo]:
-        """
-        Currently does nothing.
-        """
+        """Currently does nothing."""
 
         info = MHTuningInfo(error_code=0, time=epoch.time)
         return TuningOutcome(info, kernel_state)
@@ -158,9 +149,7 @@ class MHKernel(ModelMixin, TransitionMixin[RWKernelState, MHTransitionInfo]):
         model_state: ModelState,
         epoch: EpochState,
     ) -> RWKernelState:
-        """
-        Resets the state of the dual averaging algorithm.
-        """
+        """Resets the state of the dual averaging algorithm."""
 
         da_init(kernel_state)
         return kernel_state
@@ -186,8 +175,6 @@ class MHKernel(ModelMixin, TransitionMixin[RWKernelState, MHTransitionInfo]):
         model_state: ModelState,
         tuning_history: TuningInfo | None,
     ) -> WarmupOutcome[RWKernelState]:
-        """
-        Currently does nothing.
-        """
+        """Currently does nothing."""
 
         return WarmupOutcome(error_code=0, kernel_state=kernel_state)

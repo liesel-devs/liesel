@@ -1,5 +1,5 @@
 """
-# Diagnostic plots of the posterior samples
+Diagnostic plots of the posterior samples.
 """
 
 from collections.abc import Sequence
@@ -22,12 +22,14 @@ from liesel.goose.summary_m import (
     validate_params,
 )
 
+__docformat__ = "numpy"
+
 
 def subparam_chains_to_df(
     subparam_chains: np.ndarray, param_index: int
 ) -> pd.DataFrame:
     """
-    Convert array of posterior samples for a single subparameter (e.g. beta[0]) to a
+    Convert array of posterior samples for a single subparameter (e.g. ``beta[0]``) to a
     pandas data frame.
     """
 
@@ -303,83 +305,68 @@ def plot_trace(
     **kwargs,
 ) -> sns.FacetGrid:
     """
-    Visualize posterior samples over time with a trace plot.
+    Visualizes posterior samples over time with a trace plot.
 
-    ## Parameters
+    Parameters
+    ----------
+    results
+        Result object of the sampling process. Must have a method
+        ``get_posterior_samples()`` which extracts all samples from the posterior
+        distribution.
+    params
+        Names of the model parameters that are contained in the plot. Must coincide
+        with the dictionary keys of the `Position` with the posterior samples. If
+        `None`, all parameters are included.
+    param_indices
+        Indices of each model parameter that are contained in the plot. Selects e.g.
+        ``beta[0]`` out of a ``beta`` parameter vector. A single index can be specified
+        as an integer or a sequence containing one integer. If ``None``, all
+        subparameters are included.
+    chain_indices
+        Indices of chains for each model subparameter that are contained in the plot.
+        Selects e.g. chain 0 and chain 2 out of multiple chains. A single index can be
+        specified as an integer or a sequence containing one integer. If ``None``, all
+        chains are included.
+    max_chains
+        Upper bound how many chains are included within each subplot/facet. Avoids
+        overplotting. If ``None``, all chains contained in the ``results`` input are
+        plotted. Always starts chain selection from the lowest chain index upwards. For
+        selecting specific chains use the argument ``chain_indices``.
+    title
+        Plot title.
+    title_spacing
+        Determines the margin/whitespace between the plot title (set with
+        ``fig.suptitle()``) and the first row of subplots/facets. Passed to the ``top``
+        argument of ``fig.subplots_adjust()``.
+    xlabel
+        Label of the x-axis.
+    style
+        Passed to the ``style`` argument of ``sns.set_theme()``. Valid options are
+        ``"darkgrid"``, ``"whitegrid"``, ``"dark"``, ``"white"``, and ``"ticks"``.
+    color_palette
+        Passed to the palette argument of ``sns.relplot()``. String values must be
+        valid inputs of ``sns.color_palette()`` such as a seaborn color palette or a
+        matplotlib colormap. Custom colors can be set with a list of color strings or a
+        dictionary with the chain indices as keys and color strings as values. The
+        number of color strings must coincide with the number of plotted chains. If
+        ``None``, the default ``tab10`` matplotlib colormap is chosen.
+    ncol
+        Number of subplots/facets within each row of the grid.
+    height
+        Height in inches of each subplot/facet within the grid.
+    aspect_ratio
+        Ratio of width / height of each subplot/facet within the grid, i.e. ``width =
+        aspect_ratio * height``.
+    save_path
+        File path where the plot is saved.
+    include_warmup
+        Include the warmup samples in the trace plot.
+    **kwargs
+        Further keyword arguments passed to the seaborn ``relplot()`` function.
 
-    - `results`:
-      Result object of the sampling process. Must have a method
-      `get_posterior_samples()` which extracts all samples from the posterior
-      distribution.
-
-    - `params`:
-      Names of the model parameters that are contained in the plot. Must coincide with
-      the dictionary keys of the `Position` with the posterior samples. If `None`,
-      all parameters are included.
-
-    - `param_indices`:
-      Indices of each model parameter that are contained in the plot. Selects e.g.
-      `beta[0]` out of a `beta` parameter vector. A single index can be specified as an
-      integer or a sequence containing one integer. If `None`, all subparameters are
-      included.
-
-    - `chain_indices`:
-      Indices of chains for each model subparameter that are contained in the plot.
-      Selects e.g. chain 0 and chain 2 out of multiple chains. A single index can be
-      specified as an integer or a sequence containing one integer. If `None`, all
-      chains are included.
-
-    - `max_chains`:
-      Upper bound how many chains are included within each subplot/facet. Avoids
-      overplotting. If `None`, all chains contained in the `results` input are plotted.
-      Always starts chain selection from the lowest chain index upwards. For selecting
-      specific chains use the argument `chain_indices`.
-
-    - `title`:
-      Plot title.
-
-    - `title_spacing`:
-      Determines the margin/whitespace between the plot title (set with
-      `fig.suptitle()`) and the first row of subplots/facets. Passed to the `top`
-      argument of `fig.subplots_adjust()`.
-
-    - `xlabel`:
-      Label of the x-axis.
-
-    - `style`:
-      Passed to the `style` argument of `sns.set_theme()`. Valid options are `darkgrid`,
-      `whitegrid`, `dark`, `white`, and `ticks`.
-
-    - `color_palette`:
-      Passed to the palette argument of `sns.relplot()`. String values must be valid
-      inputs of `sns.color_palette()` such as a seaborn color palette or a matplotlib
-      colormap. Custom colors can be set with a list of color strings or a dictionary
-      with the chain indices as keys and color strings as values. The number of color
-      strings must coincide with the number of plotted chains. If `None`, the default
-      `tab10` matplotlib colormap is chosen.
-
-    - `ncol`:
-      Number of subplots/facets within each row of the grid.
-
-    - `height`:
-      Height in inches of each subplot/facet within the grid.
-
-    - `aspect_ratio`:
-      Ratio of width / height of each subplot/facet within the grid,
-      i.e. `width = aspect_ratio * height`.
-
-    - `save_path`:
-      File path where the plot is saved.
-
-    - `include_warmup`:
-       Include the warmup samples in the trace plot.
-
-    - `**kwargs`:
-      Further keyword arguments passed to the seaborn `relplot()` function.
-
-    ## Returns
-
-    A seaborn `FacetGrid`.
+    Returns
+    -------
+    A seaborn ``FacetGrid``.
     """
 
     # NOTE: Docstring duplications
@@ -432,80 +419,66 @@ def plot_density(
     **kwargs,
 ) -> sns.FacetGrid:
     """
-    Visualize posterior distributions with a density plot.
+    Visualizes posterior distributions with a density plot.
 
-    ## Parameters
+    Parameters
+    ----------
+    results
+        Result object of the sampling process. Must have a method
+        ``get_posterior_samples()`` which extracts all samples from the posterior
+        distribution.
+    params
+        Names of the model parameters that are contained in the plot. Must coincide
+        with the dictionary keys of the ``Position`` with the posterior samples. If
+        ``None``, all parameters are included.
+    param_indices
+        Indices of each model parameter that are contained in the plot. Selects e.g.
+        ``beta[0]`` out of a ``beta`` parameter vector. A single index can be specified
+        as an integer or a sequence containing one integer. If ``None``, all
+        subparameters are included.
+    chain_indices
+        Indices of chains for each model subparameter that are contained in the plot.
+        Selects e.g. chain 0 and chain 2 out of multiple chains. A single index can be
+        specified as an integer or a sequence containing one integer. If ``None``, all
+        chains are included.
+    max_chains
+        Upper bound how many chains are included within each subplot/facet. Avoids
+        overplotting. If ``None``, all chains contained in the ``results`` input are
+        plotted. Always starts chain selection from the lowest chain index upwards. For
+        selecting specific chains use the argument ``chain_indices``.
+    title
+        Plot title.
+    title_spacing
+        Determines the margin/whitespace between the plot title (set with
+        ``fig.suptitle()``) and the first row of subplots/facets. Passed to the ``top``
+        argument of ``fig.subplots_adjust()``.
+    xlabel
+        Label of the x-axis.
+    style
+        Passed to the ``style`` argument of ``sns.set_theme()``. Valid options are
+        ``darkgrid``, ``whitegrid``, ``dark``, ``white``, and ``ticks``.
+    color_palette
+        Passed to the palette argument of ``sns.displot()``. String values must be
+        valid inputs of ``sns.color_palette()`` such as a seaborn color palette or a
+        matplotlib colormap. Custom colors can be set with a list of color strings or a
+        dictionary with the chain indices as keys and color strings as values. The
+        number of color strings must coincide with the number of plotted chains. If
+        ``None``, the default ``tab10`` matplotlib colormap is chosen.
+    ncol
+        Number of subplots/facets within each row of the grid.
+    height
+        Height in inches of each subplot/facet within the grid.
+    aspect_ratio
+        Ratio of width / height of each subplot/facet within the grid, i.e. ``width =
+        aspect_ratio * height``.
+    save_path
+        File path where the plot is saved.
+    **kwargs
+        Further keyword arguments passed to the seaborn ``displot()`` function.
 
-    - `results`:
-      Result object of the sampling process. Must have a method
-      `get_posterior_samples()` which extracts all samples from the posterior
-      distribution.
-
-    - `params`:
-      Names of the model parameters that are contained in the plot. Must coincide with
-      the dictionary keys of the `Position` with the posterior samples. If `None`,
-      all parameters are included.
-
-    - `param_indices`:
-      Indices of each model parameter that are contained in the plot. Selects e.g.
-      `beta[0]` out of a `beta` parameter vector. A single index can be specified as an
-      integer or a sequence containing one integer. If `None`, all subparameters are
-      included.
-
-    - `chain_indices`:
-      Indices of chains for each model subparameter that are contained in the plot.
-      Selects e.g. chain 0 and chain 2 out of multiple chains. A single index can be
-      specified as an integer or a sequence containing one integer. If `None`, all
-      chains are included.
-
-    - `max_chains`:
-      Upper bound how many chains are included within each subplot/facet. Avoids
-      overplotting. If `None`, all chains contained in the `results` input are plotted.
-      Always starts chain selection from the lowest chain index upwards. For selecting
-      specific chains use the argument `chain_indices`.
-
-    - `title`:
-      Plot title.
-
-    - `title_spacing`:
-      Determines the margin/whitespace between the plot title (set with
-      `fig.suptitle()`) and the first row of subplots/facets. Passed to the `top`
-      argument of `fig.subplots_adjust()`.
-
-    - `xlabel`:
-      Label of the x-axis.
-
-    - `style`:
-      Passed to the `style` argument of `sns.set_theme()`. Valid options are `darkgrid`,
-      `whitegrid`, `dark`, `white`, and `ticks`.
-
-    - `color_palette`:
-      Passed to the palette argument of `sns.displot()`. String values must be valid
-      inputs of `sns.color_palette()` such as a seaborn color palette or a matplotlib
-      colormap. Custom colors can be set with a list of color strings or a dictionary
-      with the chain indices as keys and color strings as values. The number of color
-      strings must coincide with the number of plotted chains. If `None`, the default
-      `tab10` matplotlib colormap is chosen.
-
-    - `ncol`:
-      Number of subplots/facets within each row of the grid.
-
-    - `height`:
-      Height in inches of each subplot/facet within the grid.
-
-    - `aspect_ratio`:
-      Ratio of width / height of each subplot/facet within the grid,
-      i.e. `width = aspect_ratio * height`.
-
-    - `save_path`:
-      File path where the plot is saved.
-
-    - `**kwargs`:
-      Further keyword arguments passed to the seaborn `displot()` function.
-
-    ## Returns
-
-    A seaborn `FacetGrid`.
+    Returns
+    -------
+    A seaborn ``FacetGrid``.
     """
 
     # NOTE: Docstring duplications
@@ -571,84 +544,70 @@ def plot_cor(
     **kwargs,
 ) -> sns.FacetGrid:
     """
-    Visualize autocorrelations of posterior samples.
+    Visualizes autocorrelations of posterior samples.
 
-    ## Parameters
+    Parameters
+    ----------
+    results
+        Result object of the sampling process. Must have a method
+        ``get_posterior_samples()`` which extracts all samples from the posterior
+        distribution.
+    params
+        Names of the model parameters that are contained in the plot. Must coincide
+        with the dictionary keys of the ``Position`` with the posterior samples. If
+        ``None``, all parameters are included.
+    param_indices
+        Indices of each model parameter that are contained in the plot. Selects e.g.
+        ``beta[0]`` out of a ``beta`` parameter vector. A single index can be specified
+        as an integer or a sequence containing one integer. If ``None``, all
+        subparameters are included.
+    chain_indices
+        Indices of chains for each model subparameter that are contained in the plot.
+        Selects e.g. chain 0 and chain 2 out of multiple chains. A single index can be
+        specified as an integer or a sequence containing one integer. If ``None``, all
+        chains are included.
+    max_chains
+        Upper bound how many chains are included within each subplot/facet. Avoids
+        overplotting. If ``None``, all chains contained in the ``results`` input are
+        plotted. Always starts chain selection from the lowest chain index upwards. For
+        selecting specific chains use the argument ``chain_indices``.
+    max_lags
+        Maximum number of time lags shown on the x-axis of the autocorrelation plot. If
+        ``None``, the minimum of the chain lengths and 30 is chosen.
+    title
+        Plot title.
+    title_spacing
+        Determines the margin/whitespace between the plot title (set with
+        ``fig.suptitle()``) and the first row of subplots/facets. Passed to the ``top``
+        argument of ``fig.subplots_adjust()``.
+    xlabel
+        Label of the x-axis.
+    style
+        Passed to the ``style`` argument of ``sns.set_theme()``. Valid options are
+        ``darkgrid``, ``whitegrid``, ``dark``, ``white``, and ``ticks``.
+    color_palette
+        Passed to the palette argument of ``sns.FacetGrid()``. String values must be
+        valid inputs of ``sns.color_palette()`` such as a seaborn color palette or a
+        matplotlib colormap. Custom colors can be set with a list of color strings or a
+        dictionary with the chain indices as keys and color strings as values. The
+        number of color strings must coincide with the number of plotted chains. If
+        ``None``, the default ``tab10`` matplotlib colormap is chosen.
+    ncol
+        Number of subplots/facets within each row of the grid.
+    height
+        Height in inches of each subplot/facet within the grid.
+    aspect_ratio
+        Ratio of width / height of each subplot/facet within the grid, i.e. ``width =
+        aspect_ratio * height``.
+    save_path
+        File path where the plot is saved.
+    **kwargs
+        Further keyword arguments passed to the seaborn ``FacetGrid()`` function.
 
-    - `results`:
-      Result object of the sampling process. Must have a method
-      `get_posterior_samples()` which extracts all samples from the posterior
-      distribution.
 
-    - `params`:
-      Names of the model parameters that are contained in the plot. Must coincide with
-      the dictionary keys of the `Position` with the posterior samples. If `None`,
-      all parameters are included.
-
-    - `param_indices`:
-      Indices of each model parameter that are contained in the plot. Selects e.g.
-      `beta[0]` out of a `beta` parameter vector. A single index can be specified as an
-      integer or a sequence containing one integer. If `None`, all subparameters are
-      included.
-
-    - `chain_indices`:
-      Indices of chains for each model subparameter that are contained in the plot.
-      Selects e.g. chain 0 and chain 2 out of multiple chains. A single index can be
-      specified as an integer or a sequence containing one integer. If `None`, all
-      chains are included.
-
-    - `max_chains`:
-      Upper bound how many chains are included within each subplot/facet. Avoids
-      overplotting. If `None`, all chains contained in the `results` input are plotted.
-      Always starts chain selection from the lowest chain index upwards. For selecting
-      specific chains use the argument `chain_indices`.
-
-    - `max_lags`:
-      Maximum number of time lags shown on the x-axis of the autocorrelation plot. If
-      `None`, the minimum of the chain lengths and 30 is chosen.
-
-    - `title`:
-      Plot title.
-
-    - `title_spacing`:
-      Determines the margin/whitespace between the plot title (set with
-      `fig.suptitle()`) and the first row of subplots/facets. Passed to the `top`
-      argument of `fig.subplots_adjust()`.
-
-    - `xlabel`:
-      Label of the x-axis.
-
-    - `style`:
-      Passed to the `style` argument of `sns.set_theme()`. Valid options are `darkgrid`,
-      `whitegrid`, `dark`, `white`, and `ticks`.
-
-    - `color_palette`:
-      Passed to the palette argument of `sns.FacetGrid()`. String values must be valid
-      inputs of `sns.color_palette()` such as a seaborn color palette or a matplotlib
-      colormap. Custom colors can be set with a list of color strings or a dictionary
-      with the chain indices as keys and color strings as values. The number of color
-      strings must coincide with the number of plotted chains. If `None`, the default
-      `tab10` matplotlib colormap is chosen.
-
-    - `ncol`:
-      Number of subplots/facets within each row of the grid.
-
-    - `height`:
-      Height in inches of each subplot/facet within the grid.
-
-    - `aspect_ratio`:
-      Ratio of width / height of each subplot/facet within the grid,
-      i.e. `width = aspect_ratio * height`.
-
-    - `save_path`:
-      File path where the plot is saved.
-
-    - `**kwargs`:
-      Further keyword arguments passed to the seaborn `FacetGrid()` function.
-
-    ## Returns
-
-    A seaborn `FacetGrid`.
+    Returns
+    -------
+    A seaborn ``FacetGrid``.
     """
 
     # NOTE: Docstring duplications
@@ -698,8 +657,8 @@ def plot_cor(
 
 def raise_multi_param_error(plot_df: pd.DataFrame, param: str) -> None:
     """
-    `plot_param()` function can only display all three diagnostic plots for a single
-    subparameter. Throws an informative error otherwise.
+    :func:`.plot_param` function can only display all three diagnostic plots for a
+    single subparameter. Throws an informative error otherwise.
     """
 
     if plot_df["param_label"].nunique() > 1:
@@ -816,72 +775,60 @@ def plot_param(
     save_path: str | None = None,
 ) -> None:
     """
-    Visualize trace plot, density plot and autocorrelation plot of a single
+    Visualizes trace plot, density plot and autocorrelation plot of a single
     subparameter.
 
-    ## Parameters
-
-    - `results`:
-      Result object of the sampling process. Must have a method
-      `get_posterior_samples()` which extracts all samples from the posterior
-      distribution.
-
-    - `param`:
-      Name of a single model parameter that is contained in the plot. Must coincide with
-      one dictionary key of the `Position` with the posterior samples.
-
-    - `param_index`:
-      A single index of the selected model parameter that is contained in the plot.
-      Selects e.g. `beta[0]` out of a `beta` parameter vector. Can be specified as an
-      integer or as a sequence containing one integer. If `None`, the parameter is
-      assumed to have only a single index.
-
-    - `chain_indices`:
-      Indices of chains for each model subparameter that are contained in the plot.
-      Selects e.g. chain 0 and chain 2 out of multiple chains. A single index can be
-      specified as an integer or a sequence containing one integer. If `None`, all
-      chains are included.
-
-    - `max_chains`:
-      Upper bound how many chains are included within each subplot/facet. Avoids
-      overplotting. If `None`, all chains contained in the `results` input are plotted.
-      Always starts chain selection from the lowest chain index upwards. For selecting
-      specific chains use the argument `chain_indices`.
-
-    - `max_lags`:
-      Maximum number of time lags shown on the x-axis of the autocorrelation plot. If
-      `None`, the minimum of the chain lengths and 30 is chosen.
-
-    - `title`:
-      Plot title.
-
-    - `title_spacing`:
-      Determines the margin/whitespace between the plot title (set with
-      `fig.suptitle()`) and the first row of subplots/facets. Passed to the `top`
-      argument of `fig.subplots_adjust()`.
-
-    - `style`:
-      Passed to the `style` argument of `sns.set_theme()`. Valid options are `darkgrid`,
-      `whitegrid`, `dark`, `white`, and `ticks`.
-
-    - `color_list`:
-      Determines the chain colors for all three subplots. Custom colors can be passed
-      with a list of color strings. The length of the list must match the number of
-      chains. If `None`, the default `tab10` matplotlib colormap is chosen.
-
-    - `figure_size`:
-      Size of the entire plot grid. Passed to the `figsize` argument of `plt.figure()`.
-      When changing the figure size consider changing the `legend_position` as well.
-      Generally, a ratio of 3:2 is recommended.
-
-    - `legend_position`:
-      Determines the color legend position. Coordinates are relative to the upper panel
-      within the plot grid. The first coordinate specifies the horizontal, the second
-      coordinate the vertical position. Might require an adjustment when changing the
-      `figure_size` values or the number of chains.
-
-    - `save_path`:
-      File path where the plot is saved.
+    Parameters
+    ----------
+    results
+        Result object of the sampling process. Must have a method
+        ``get_posterior_samples()`` which extracts all samples from the posterior
+        distribution.
+    param
+        Name of a single model parameter that is contained in the plot. Must coincide
+        with one dictionary key of the ``Position`` with the posterior samples.
+    param_index
+        A single index of the selected model parameter that is contained in the plot.
+        Selects e.g. ``beta[0]`` out of a ``beta`` parameter vector. Can be specified
+        as an integer or as a sequence containing one integer. If ``None``, the
+        parameter is assumed to have only a single index.
+    chain_indices
+        Indices of chains for each model subparameter that are contained in the plot.
+        Selects e.g. chain 0 and chain 2 out of multiple chains. A single index can be
+        specified as an integer or a sequence containing one integer. If ``None``, all
+        chains are included.
+    max_chains
+        Upper bound how many chains are included within each subplot/facet. Avoids
+        overplotting. If ``None``, all chains contained in the ``results`` input are
+        plotted. Always starts chain selection from the lowest chain index upwards. For
+        selecting specific chains use the argument ``chain_indices``.
+    max_lags
+        Maximum number of time lags shown on the x-axis of the autocorrelation plot. If
+        ``None``, the minimum of the chain lengths and 30 is chosen.
+    title
+        Plot title.
+    title_spacing
+        Determines the margin/whitespace between the plot title (set with
+        ``fig.suptitle()``) and the first row of subplots/facets. Passed to the ``top``
+        argument of ``fig.subplots_adjust()``.
+    style
+        Passed to the ``style`` argument of ``sns.set_theme()``. Valid options are
+        ``darkgrid``, ``whitegrid``, ``dark``, ``white``, and ``ticks``.
+    color_list
+        Determines the chain colors for all three subplots. Custom colors can be passed
+        with a list of color strings. The length of the list must match the number of
+        chains. If ``None``, the default ``tab10`` matplotlib colormap is chosen.
+    figure_size
+        Size of the entire plot grid. Passed to the ``figsize`` argument of
+        ``plt.figure()``. When changing the figure size consider changing the
+        ``legend_position`` as well. Generally, a ratio of 3
+    legend_position
+        Determines the color legend position. Coordinates are relative to the upper
+        panel within the plot grid. The first coordinate specifies the horizontal, the
+        second coordinate the vertical position. Might require an adjustment when
+        changing the ``figure_size`` values or the number of chains.
+    save_path
+        File path where the plot is saved.
     """
 
     # NOTE: Docstring duplications
@@ -928,61 +875,60 @@ def plot_scatter(
     """
     Produces a scatterplot of two parameters.
 
-    ## Parameters
-
-    - `results`: Result object of the sampling process. Must have a method
-      `get_posterior_samples()` which extracts all samples from the posterior
-      distribution.
-
-    - `params`: Names of the model parameters that are contained in the plot. Must
-      coincide with the dictionary keys of the `Position` with the posterior samples.
-
-    - `param_indices`: Indices of each model parameter that are contained in the plot.
-      Selects e.g. `beta[0]` out of a `beta` parameter vector. If only one string is
-      supplied as the value of `params`, `param_indices` must contain two indices. If a
-      sequence of two strings is supplied to `params`, you can supply either a single
-      integer or a tuple of two integers. A single integer will be used as the index
-      for *both* parameters. If you use a tuple of two integers, the first element will
-      be used as the index for the first parameter, and the second element will be used
-      as the index for the second parameter.
-
-    - `chain_indices`: Indices of chains for each model subparameter that are contained
-      in the plot. Selects e.g. chain 0 and chain 2 out of multiple chains. A single
-      index can be specified as an integer or a sequence containing one integer. If
-      `None`, all chains are included.
-
-    - `max_chains`: Upper bound how many chains are included within each subplot/facet.
-      Avoids overplotting. If `None`, all chains contained in the `results` input are
-      plotted. Always starts chain selection from the lowest chain index upwards. For
-      selecting specific chains use the argument `chain_indices`.
-
-    - `alpha`: Amount of transparency; a float between 0 and 1.
-
-    - `title`: Plot title.
-
-    - `title_spacing`: Determines the margin/whitespace between the plot title (set with
-      `fig.suptitle()`) and the first row of subplots/facets. Passed to the `top`
-      argument of `fig.subplots_adjust()`.
-
-    - `style`: Passed to the `style` argument of `sns.set_theme()`. Valid options are
-      `darkgrid`, `whitegrid`, `dark`, `white`, and `ticks`.
-
-    - `color_list`: Determines the chain colors for all three subplots. Custom colors
-      can be passed with a list of color strings. The length of the list must match the
-      number of chains. If `None`, the default `tab10` matplotlib colormap is chosen.
-
-    - `figure_size`: Size of the entire plot grid. Passed to the `figsize` argument of
-      `plt.figure()`. When changing the figure size consider changing the
-      `legend_position` as well. Generally, a ratio of 3:2 is recommended.
-
-    - `legend_position`: Determines the color legend position. Coordinates are relative
-      to the upper panel within the plot grid. The first coordinate specifies the
-      horizontal, the second coordinate the vertical position. Might require an
-      adjustment when changing the `figure_size` values or the number of chains.
-
-    - `save_path`: File path where the plot is saved.
-
-    - `include_warmup: Include the warmup samples in the trace plot.
+    Parameters
+    ----------
+    results
+        Result object of the sampling process. Must have a method
+        ``get_posterior_samples()`` which extracts all samples from the posterior
+        distribution.
+    params
+        Names of the model parameters that are contained in the plot. Must coincide with
+        the dictionary keys of the ``Position`` with the posterior samples.
+    param_indices
+        Indices of each model parameter that are contained in the plot. Selects e.g.
+        ``beta[0]`` out of a ``beta`` parameter vector. If only one string is supplied
+        as the value of ``params``, ``param_indices`` must contain two indices. If a
+        sequence of two strings is supplied to ``params``, you can supply either a
+        single integer or a tuple of two integers. A single integer will be used as the
+        index for *both* parameters. If you use a tuple of two integers, the first
+        element will be used as the index for the first parameter, and the second
+        element will be used as the index for the second parameter.
+    chain_indices
+        Indices of chains for each model subparameter that are contained in the plot.
+        Selects e.g. chain 0 and chain 2 out of multiple chains. A single index can be
+        specified as an integer or a sequence containing one integer. If ``None``, all
+        chains are included.
+    max_chains
+        Upper bound how many chains are included within each subplot/facet. Avoids
+        overplotting. If ``None``, all chains contained in the ``results`` input are
+        plotted. Always starts chain selection from the lowest chain index upwards. For
+        selecting specific chains use the argument ``chain_indices``.
+    alpha
+        Amount of transparency; a float between 0 and 1.
+    title
+        Plot title.
+    title_spacing
+        Determines the margin/whitespace between the plot title (set with
+        ``fig.suptitle()``) and the first row of subplots/facets. Passed to the ``top``
+        argument of ``fig.subplots_adjust()``.
+    style
+        Passed to the ``style`` argument of ``sns.set_theme()``. Valid options are
+        ``darkgrid``, ``whitegrid``, ``dark``, ``white``, and ``ticks``.
+    color_list
+        Determines the chain colors for all three subplots. Custom colors can be passed
+        with a list of color strings. The length of the list must match the number of
+        chains. If ``None``, the default ``tab10`` matplotlib colormap is chosen.
+    figure_size
+        Size of the entire plot grid. Passed to the ``figsize`` argument of
+        ``plt.figure()``. When changing the figure size consider changing the
+        ``legend_position`` as well. Generally, a ratio of 3
+    legend_position
+        Determines the color legend position. Coordinates are relative to the upper
+        panel within the plot grid. The first coordinate specifies the horizontal, the
+        second coordinate the vertical position. Might require an adjustment when
+        changing the ``figure_size`` values or the number of chains.
+    save_path
+        File path where the plot is saved.
     """
     # NOTE: Docstring duplications
     # Multiple arguments in this docstring are shared with other plotting functions.
@@ -1048,67 +994,66 @@ def plot_pairs(
     """
     Produces a pairplot panel.
 
-    ## Parameters
-
-    - `results`: Result object of the sampling process. Must have a method
-      `get_posterior_samples()` which extracts all samples from the posterior
-      distribution.
-
-    - `params`: Names of the model parameters that are contained in the plot. Must
-      coincide with the dictionary keys of the `Position` with the posterior samples. If
-      `None`, all parameters are included.
-
-    - `param_indices`: Indices of each model parameter that are contained in the plot.
-      Selects e.g. `beta[0]` out of a `beta` parameter vector. A single index can be
-      specified as an integer or a sequence containing one integer. If `None`, all
-      subparameters are included.
-
-    - `chain_indices`: Indices of chains for each model subparameter that are contained
-      in the plot. Selects e.g. chain 0 and chain 2 out of multiple chains. A single
-      index can be specified as an integer or a sequence containing one integer. If
-      `None`, all chains are included.
-
-    - `max_chains`: Upper bound how many chains are included within each subplot/facet.
-      Avoids overplotting. If `None`, all chains contained in the `results` input are
-      plotted. Always starts chain selection from the lowest chain index upwards. For
-      selecting specific chains use the argument `chain_indices`.
-
-    - `alpha`: Amount of transparency; a float between 0 and 1.
-
-    - `title`: Plot title.
-
-    - `title_spacing`: Determines the margin/whitespace between the plot title (set with
-      `fig.suptitle()`) and the first row of subplots/facets. Passed to the `top`
-      argument of `fig.subplots_adjust()`.
-
-    - `style`: Passed to the `style` argument of `sns.set_theme()`. Valid options are
-      `darkgrid`, `whitegrid`, `dark`, `white`, and `ticks`.
-
-    - `diag_kind`: Kind of plot for the diagonal subplots. Can be 'kde' (default) for
-      kernel density estimates or 'hist' for histograms.
-
-    - `color_palette`: Passed to the palette argument of `sns.pairplot()`. String values
-      must be valid inputs of `sns.color_palette()` such as a seaborn color palette or a
-      matplotlib colormap. Custom colors can be set with a list of color strings or a
-      dictionary with the chain indices as keys and color strings as values. The number
-      of color strings must coincide with the number of plotted chains. If `None`, the
-      default `tab10` matplotlib colormap is chosen.
-
-    - `height`:
-      Height in inches of each subplot/facet within the grid.
-
-    - `aspect_ratio`:
-      Ratio of width / height of each subplot/facet within the grid,
-      i.e. `width = aspect_ratio * height`.
-
-    - `legend_position`: Determines the color legend position. Coordinates are relative
-      to the upper panel within the plot grid. The first coordinate specifies the
-      horizontal, the second coordinate the vertical position. Might require an
-      adjustment when changing the `figure_size` values or the number of chains.
-
-    - `save_path`: File path where the plot is saved.
-
-    - `include_warmup`: Include the warmup samples in the trace plot.
+    Parameters
+    ----------
+    results
+        Result object of the sampling process. Must have a method
+        ``get_posterior_samples()`` which extracts all samples from the posterior
+        distribution.
+    params
+        Names of the model parameters that are contained in the plot. Must coincide with
+        the dictionary keys of the ``Position`` with the posterior samples. If ``None``,
+        all parameters are included.
+    param_indices
+        Indices of each model parameter that are contained in the plot. Selects e.g.
+        ``beta[0]`` out of a ``beta`` parameter vector. A single index can be specified
+        as an integer or a sequence containing one integer. If ``None``, all
+        subparameters are included.
+    chain_indices
+        Indices of chains for each model subparameter that are contained in the plot.
+        Selects e.g. chain 0 and chain 2 out of multiple chains. A single index can be
+        specified as an integer or a sequence containing one integer. If ``None``, all
+        chains are included.
+    max_chains
+        Upper bound how many chains are included within each subplot/facet. Avoids
+        overplotting. If ``None``, all chains contained in the ``results`` input are
+        plotted. Always starts chain selection from the lowest chain index upwards. For
+        selecting specific chains use the argument ``chain_indices``.
+    alpha
+        Amount of transparency; a float between 0 and 1.
+    title
+        Plot title.
+    title_spacing
+        Determines the margin/whitespace between the plot title (set with
+        ``fig.suptitle()``) and the first row of subplots/facets. Passed to the ``top``
+        argument of ``fig.subplots_adjust()``.
+    style
+        Passed to the ``style`` argument of ``sns.set_theme()``. Valid options are
+        ``darkgrid``, ``whitegrid``, ``dark``, ``white``, and ``ticks``.
+    diag_kind
+        Kind of plot for the diagonal subplots. Can be 'kde' (default) for kernel
+        density estimates or 'hist' for histograms.
+    color_palette
+        Passed to the palette argument of ``sns.pairplot()``. String values must be
+        valid inputs of ``sns.color_palette()`` such as a seaborn color palette or a
+        matplotlib colormap. Custom colors can be set with a list of color strings or a
+        dictionary with the chain indices as keys and color strings as values. The
+        number of color strings must coincide with the number of plotted chains. If
+        ``None``, the default ``tab10`` matplotlib colormap is chosen.
+    height
+        Height in inches of each subplot/facet within the grid.
+    aspect_ratio
+        Ratio of width / height of each subplot/facet within the grid, i.e. ``width =
+        aspect_ratio * height``.
+    legend_position
+        Determines the color legend position. Coordinates are relative to the upper
+        panel within the plot grid. The first coordinate specifies the horizontal, the
+        second coordinate the vertical position. Might require an adjustment when
+        changing the ``figure_size`` values or the number of chains.
+    save_path
+        File path where the plot is saved.
+    include_warmup
+        Include the warmup samples in the trace plot.
     """
     # NOTE: Docstring duplications
     # Multiple arguments in this docstring are shared with other plotting functions.

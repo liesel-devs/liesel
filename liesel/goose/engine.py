@@ -1,5 +1,5 @@
 """
-# MCMC engine
+MCMC engine
 
 This module is experimental. Expect API changes.
 """
@@ -43,21 +43,26 @@ from .types import (
 
 logger = logging.getLogger(__name__)
 
+__docformat__ = "numpy"
+
 
 class KernelErrorLog(NamedTuple):
     """
-    Holds the number of the transitions in which an error in at least one chain
-    occured and an array with the error code for each chain. Additionally, the
-    kernel identifier is specified and optionally the cls of the kernel.
+    Holds the number of the transitions in which an error in at least one chain occured
+    and an array with the error code for each chain.
 
-    - transition is an 1-D array (time)
-    - error_codes is a 2-D array (chain, time)
+    Additionally, the kernel identifier is specified and optionally the cls of the
+    kernel.
     """
 
     kernel_ident: str
     kernel_cls: Option[type]  # needed to use the error book
+
     transition: np.ndarray
+    """1-D array (time)."""
+
     error_codes: np.ndarray
+    """2-D array (chain, time)."""
 
 
 ErrorLog = dict[str, KernelErrorLog]
@@ -81,8 +86,8 @@ def stack_for_multi(chunks: list):
     """
 
     warnings.warn(
-        "`stack_for_multi` is deprecated. Please use the functions"
-        " in the `pytree` module.",
+        "``stack_for_multi`` is deprecated. Please use the functions"
+        " in the :mod:`.pytree` module.",
         DeprecationWarning,
     )
 
@@ -111,7 +116,7 @@ def _add_time_dimension(x: PyTree) -> PyTree:
     Adds a new dimension for time to each leaf.
 
     The returned tree has the same structure with one additional dimension of
-    size 1. The new dimension is `axis=1`. Each leaf must have at least one
+    size 1. The new dimension is ``axis=1``. Each leaf must have at least one
     dimension (representing the chain index).
     """
     initial_position = jax.tree_util.tree_map(
@@ -135,7 +140,7 @@ class SamplingResults:
     Contains the results of the MCMC engine.
 
     Easy access to the samples is provided via the methods
-    `get_samples` and `get_posterior_samples`.
+    :func:`.get_samples` and :func:`.get_posterior_samples`.
     """
 
     positions: EpochChainManager
@@ -182,9 +187,7 @@ class SamplingResults:
 
     def get_error_log(self, posterior_only=False) -> Option[ErrorLog]:
         """
-        returns the error log
-
-        that is an dict[kernel_name, KernelErrorLog]
+        Returns the error log that is an dict[kernel_name, KernelErrorLog]
         """
         opt: Option[TransitionInfos]
         if posterior_only:
@@ -212,19 +215,28 @@ class SamplingResults:
         return Option(error_log)
 
     def pkl_save(self, path) -> None:
-        """Save result as a pickled object under `path`."""
+        """Save result as a pickled object under :attr:`.path`."""
         with open(path, "wb") as f:
             pickle.dump(self, f)
 
     @staticmethod
     def pkl_load(path) -> SamplingResults:
-        """Loads the pickled object from `path`."""
+        """Loads the pickled object from :attr:`.path`."""
         with open(path, "rb") as f:
             return pickle.load(f)
 
 
-# Alias for backwards compatibility
-SamplingResult = SamplingResults
+class SamplingResult(SamplingResults):
+    """Alias of :class:`.SamplingResults` for backwards compatibility."""
+
+    positions: EpochChainManager
+    transition_infos: EpochChainManager
+    generated_quantities: Option[EpochChainManager]
+    tuning_infos: Option[Chain]
+    kernel_states: Option[EpochChainManager]
+    full_model_states: Option[EpochChainManager]
+    kernel_classes: Option[dict[str, type]]
+    kernels_by_pos_key: Option[dict[str, str]]
 
 
 class Engine:
@@ -312,7 +324,7 @@ class Engine:
         """
         Returns the current epoch.
 
-        Raises a `RuntimeError` if no epoch is active.
+        Raises a :exc:`.RuntimeError` if no epoch is active.
         """
         if self._epoch is None:
             raise RuntimeError("No active epoch")
@@ -469,7 +481,7 @@ class Engine:
         """
         Ends the warmup sequence.
 
-        Calls `end_warmup` for each kernel. From now on, only epochs of type
+        Calls :func:`.end_warmup` for each kernel. From now on, only epochs of type
         posterior can follow.
         """
         keys = self._split_prng_key_one()

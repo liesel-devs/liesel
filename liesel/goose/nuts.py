@@ -1,5 +1,5 @@
 """
-# No U-Turn Sampler (NUTS)
+No U-Turn Sampler (NUTS).
 """
 
 from dataclasses import dataclass, field
@@ -27,13 +27,15 @@ from .mm import tune_inv_mm_diag, tune_inv_mm_full
 from .pytree import register_dataclass_as_pytree
 from .types import Array, KeyArray, ModelState, Position
 
+__docformat__ = "numpy"
+
 
 @register_dataclass_as_pytree
 @dataclass
 class NUTSKernelState:
     """
-    A dataclass for the state of a `NUTSKernel`, implementing the
-    `liesel.goose.da.DAKernelState` protocol.
+    A dataclass for the state of a :class:`.NUTSKernel`, implementing the
+    :class:`.DAKernelState` protocol.
     """
 
     step_size: float
@@ -49,6 +51,9 @@ class NUTSKernelState:
 @register_dataclass_as_pytree
 @dataclass
 class NUTSTransitionInfo(DefaultTransitionInfo):
+    error_code: int
+    acceptance_prob: float
+    position_moved: int
     divergent: bool
     """
     Whether the difference in energy between the original and the new state exceeded
@@ -94,8 +99,8 @@ class NUTSKernel(
     TuningMixin[NUTSKernelState, NUTSTuningInfo],
 ):
     """
-    A NUTS kernel with dual averaging and an inverse mass matrix tuner,
-    implementing the `liesel.goose.types.Kernel` protocol.
+    A NUTS kernel with dual averaging and an inverse mass matrix tuner, implementing the
+    :class:`.Kernel` protocol.
     """
 
     error_book: ClassVar[dict[int, str]] = {
@@ -107,6 +112,7 @@ class NUTSKernel(
 
     needs_history: ClassVar[bool] = True
     identifier: str = ""
+    position_keys: tuple[str, ...]
 
     def __init__(
         self,
@@ -142,9 +148,8 @@ class NUTSKernel(
 
     def init_state(self, prng_key, model_state):
         """
-        Initializes the kernel state with an identity inverse mass matrix
-        and a reasonable step size (unless explicit arguments were provided
-        by the user).
+        Initializes the kernel state with an identity inverse mass matrix and a
+        reasonable step size (unless explicit arguments were provided by the user).
         """
 
         if self.initial_inverse_mass_matrix is None:

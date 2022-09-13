@@ -1,5 +1,5 @@
 """
-# MCMC chains
+MCMC chains
 
 This module is experimental. Expect API changes.
 """
@@ -17,18 +17,20 @@ from .types import PyTree
 
 TPyTree = TypeVar("TPyTree", bound=PyTree)
 
+__docformat__ = "numpy"
+
 
 class Chain(Protocol[TPyTree]):
     """
-    A `Chain` stores multiple chucks of pytrees and concatenates them along a
+    A ``Chain`` stores multiple chucks of pytrees and concatenates them along a
     time axis.
 
-    The `Chain` always assume multiple independent chains that are indexed via
+    The ``Chain`` always assume multiple independent chains that are indexed via
     the first axis. The second dimension represents the time. Consequently, the
     leaves in the pytree must have a dimension of two (i.e., [chain, time,
     ...]).
 
-    A `Chain` operates on the assumption that all chunks are pytrees with the
+    A ``Chain`` operates on the assumption that all chunks are pytrees with the
     same structure. However, the time dimension is allowed to vary in size.
     """
 
@@ -45,23 +47,23 @@ class Chain(Protocol[TPyTree]):
 
 class EpochChain(Chain[TPyTree]):
     """
-    An `EpochChain` is a `Chain` with an associated `EpochConfig`.
+    An ``EpochChain`` is a :class:`.Chain` with an associated :class:`.EpochConfig`.
 
     The implementation must implement thinning. That is,
     if epoch.thinning > 1 and enabled in contructor, the chain must
-    safe only every epch.thinning element
+    safe only every epoch.thinning element
     """
 
     @property
     def epoch(self) -> EpochConfig:
-        """Returns the associated `EpochConfig`."""
+        """Returns the associated :class:`.EpochConfig`."""
 
 
 # implementations
 
 
 class ListChain(Generic[TPyTree]):
-    """Implements the `Chain` protocol with a list as storage."""
+    """Implements the :class:`.Chain` protocol with a list as storage."""
 
     def __init__(self):
         self._chunks_list: list[TPyTree] = []
@@ -83,7 +85,7 @@ class ListChain(Generic[TPyTree]):
 
 
 class ListEpochChain(ListChain[TPyTree]):
-    """Implements the `EpochChain` protocol with a list as storage."""
+    """Implements the :class:`.EpochChain` protocol with a list as storage."""
 
     def __init__(self, epoch: EpochConfig, apply_thinning: bool = False):
         super().__init__()
@@ -112,7 +114,7 @@ class ListEpochChain(ListChain[TPyTree]):
 
 class EpochChainManager(Generic[TPyTree]):
     """
-    An `EpochChainManager` is a container for multiple epoch chains.
+    An ``EpochChainManager`` is a container for multiple epoch chains.
 
     The chains can be concatenated over multiple epochs. Thinning defined in epochs
     can be switched on or of with the constructor flag

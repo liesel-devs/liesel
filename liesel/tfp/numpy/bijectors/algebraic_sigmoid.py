@@ -1,5 +1,5 @@
 """
-# An algebraic sigmoid bijector
+An algebraic sigmoid bijector.
 """
 
 import numpy as np

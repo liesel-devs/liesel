@@ -1,5 +1,5 @@
 """
-# The Liesel-Goose interface
+The Liesel-Goose interface.
 """
 
 from __future__ import annotations
@@ -50,7 +50,9 @@ def get_log_prob(model_state: ModelState) -> float:
 def make_update_state_fn(
     model: Model, jaxify=True
 ) -> Callable[[Position, ModelState], ModelState]:
-    """Returns a pure and jittable `update_state` function for the provided model."""
+    """
+    Returns a pure and jittable :func:`.update_state` function for the provided model.
+    """
 
     model = model.empty_copy()
 
@@ -66,7 +68,7 @@ def make_update_state_fn(
 def make_log_prob_fn(
     model: Model, jaxify=True
 ) -> Callable[[Position, ModelState], float]:
-    """Returns a pure and jittable `log_prob` function for the provided model."""
+    """Returns a pure and jittable ``log_prob`` function for the provided model."""
 
     model = model.empty_copy()
 
@@ -80,7 +82,7 @@ def make_log_prob_fn(
 
 
 class GooseModel:
-    """A `liesel.goose.ModelInterface` for a `liesel.liesel.Model`."""
+    """A :class:`.ModelInterface` for a Liesel :class:`.Model`."""
 
     def __init__(self, model: Model):
         self._update_state_fn = make_update_state_fn(model)
@@ -88,10 +90,13 @@ class GooseModel:
     def extract_position(
         self, position_keys: Iterable[str], model_state: ModelState
     ) -> Position:
+        # TODO: Inherit docstring from liesel.goose.types.ModelInterface
         return get_position(position_keys, model_state)
 
     def update_state(self, position: Position, model_state: ModelState) -> ModelState:
+        # TODO: Inherit docstring from liesel.goose.types.ModelInterface
         return self._update_state_fn(position, model_state)
 
     def log_prob(self, model_state: ModelState) -> float:
+        # TODO: Inherit docstring from liesel.goose.types.ModelInterface
         return get_log_prob(model_state)

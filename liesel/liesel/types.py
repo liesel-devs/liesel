@@ -1,5 +1,5 @@
 """
-# Type aliases
+Type aliases.
 """
 
 from typing import Any, NamedTuple

@@ -1,5 +1,5 @@
 """
-# Pytree utilities
+Pytree utilities.
 """
 
 import dataclasses
@@ -10,6 +10,8 @@ import jax.numpy as jnp
 import jax.tree_util
 
 T = TypeVar("T")
+
+__docformat__ = "numpy"
 
 
 def register_dataclass_as_pytree(cls):
@@ -39,12 +41,15 @@ def slice_leaves(pytree, idx):
     """
     Performs the same slice operation on every leaf.
 
-    `idx` can be constructed with `jnp.s_` or `np.s_`, for example:
+    ``idx`` can be constructed with :obj:`jax.numpy.s_` or :obj:`numpy.s_`, for
+    example:
 
-    ```python
-    jnp.s_[0]
-    jnp.s_[0:3, :, 2]
-    ```
+    >>> jnp.s_[0]
+    0
+
+    >>> jnp.s_[0:3, :, 2]
+    (slice(0, 3, None), slice(None, None, None), 2)
+
     """
     return jax.tree_util.tree_map(lambda x: x[idx], pytree)
 
@@ -74,7 +79,7 @@ def split_leaves(pytree, indices_or_sections, axis=0):
     """
     Splits all leaves in a pytree into multiple sub-arrays.
 
-    The function applies `jnp.split` to all leaves.
+    The function applies :func:`jax.numpy.split` to all leaves.
     """
     return jax.tree_util.tree_map(
         lambda x: jnp.split(x, indices_or_sections, axis), pytree
@@ -90,9 +95,10 @@ def squeeze_leaves(pytree, axis=0):
 
 def split_and_transpose(pytree, axis=0):
     """
-    Splits the leaves in a pytree along one axis and transposes the tree such
-    that it's a list of pytrees. It assumes that all leaves have the same
-    dimensionality along the chosen axis.
+    Splits the leaves in a pytree along one axis and transposes the tree such that it's
+    a list of pytrees.
+
+    It assumes that all leaves have the same dimensionality along the chosen axis.
     """
     dim = jax.tree_util.tree_leaves(pytree)[0].shape[axis]
     spytree = split_leaves(pytree, dim, axis=axis)
@@ -103,9 +109,9 @@ def split_and_transpose(pytree, axis=0):
 
 def as_strong_pytree(pytree: T) -> T:
     """
-    Converts every leaf in a pytree to a non-weak `DeviceArray`.
+    Converts every leaf in a pytree to a non-weak :obj:`jax.numpy.DeviceArray`.
 
-    See <https://jax.readthedocs.io/en/latest/type_promotion.html>.
+    See https://jax.readthedocs.io/en/latest/type_promotion.html.
     """
     return jax.tree_util.tree_map(
         lambda x: jnp.asarray(x, dtype=jnp.asarray(x).dtype), pytree

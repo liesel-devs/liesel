@@ -1,5 +1,5 @@
 """
-# Bivariate copulas
+Bivariate copulas.
 """
 
 import numpy as np

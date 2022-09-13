@@ -1,5 +1,5 @@
 """
-# A normal smooth prior for semi-parametric regression
+A normal smooth prior for semi-parametric regression.
 """
 
 import numpy as np

@@ -1,5 +1,5 @@
 """
-# Hamiltonian/Hybrid Monte Carlo (HMC)
+Hamiltonian/Hybrid Monte Carlo (HMC).
 """
 
 from dataclasses import dataclass, field
@@ -27,13 +27,15 @@ from .mm import tune_inv_mm_diag, tune_inv_mm_full
 from .pytree import register_dataclass_as_pytree
 from .types import Array, KeyArray, ModelState, Position
 
+__docformat__ = "numpy"
+
 
 @register_dataclass_as_pytree
 @dataclass
 class HMCKernelState:
     """
-    A dataclass for the state of a `HMCKernel`, implementing the
-    `liesel.goose.da.DAKernelState` protocol.
+    A dataclass for the state of a :class:`.HMCKernel`, implementing the
+    :class:`.DAKernelState` protocol.
     """
 
     step_size: float
@@ -49,6 +51,9 @@ class HMCKernelState:
 @register_dataclass_as_pytree
 @dataclass
 class HMCTransitionInfo(DefaultTransitionInfo):
+    error_code: int
+    acceptance_prob: float
+    position_moved: int
     divergent: bool
     """
     Whether the difference in energy between the original and the new state exceeded
@@ -79,12 +84,13 @@ class HMCKernel(
 ):
     """
     A HMC kernel with dual averaging and an inverse mass matrix tuner,
-    implementing the `liesel.goose.types.Kernel` protocol.
+    implementing the :class:`.Kernel` protocol.
     """
 
     error_book: ClassVar[dict[int, str]] = {0: "no errors", 1: "divergent transition"}
     needs_history: ClassVar[bool] = True
     identifier: str = ""
+    position_keys: tuple[str, ...]
 
     def __init__(
         self,

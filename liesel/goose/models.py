@@ -1,5 +1,5 @@
 """
-# Model interfaces
+Model interfaces.
 """
 
 import copy
@@ -9,11 +9,13 @@ from .types import ModelState, Position
 
 LogProbFunction = Callable[[ModelState], float]
 
+__docformat__ = "numpy"
+
 
 class DictModel:
     """
-    A model interface for a model state represented by a `dict[str, Array]`
-    and a corresponding log-probability function.
+    A model interface for a model state represented by a ``dict[str, Array]`` and a
+    corresponding log-probability function.
     """
 
     def __init__(self, log_prob_fn: LogProbFunction):
@@ -32,8 +34,10 @@ class DictModel:
 
 
 class DataClassModel:
-    """A model interface for a model state represented by a `dataclass`
-    and a corresponding log-probability function."""
+    """
+    A model interface for a model state represented by a :obj:`~dataclasses.dataclass`
+    and a corresponding log-probability function.
+    """
 
     def __init__(self, log_prob_fn: LogProbFunction):
         self._log_prob_fn = log_prob_fn

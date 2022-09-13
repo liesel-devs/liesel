@@ -1,5 +1,5 @@
 """
-# MCMC epochs
+MCMC epochs.
 """
 
 from __future__ import annotations
@@ -10,6 +10,8 @@ from typing import Iterable, cast
 
 from .pytree import register_dataclass_as_pytree
 from .types import PyTree
+
+__docformat__ = "numpy"
 
 
 class EpochType(IntEnum):
@@ -24,8 +26,8 @@ class EpochType(IntEnum):
     @staticmethod
     def is_adaptation(epoch_type: EpochType) -> bool:
         """
-        Returns `True` if the epoch is part of the adaptation phase.
-        Implemented as a static method to make it jittable.
+        Returns ``True`` if the epoch is part of the adaptation phase. Implemented as a
+        static method to make it jittable.
         """
         lhs = EpochType.INITIAL_VALUES < epoch_type
         rhs = epoch_type < EpochType.BURNIN
@@ -36,7 +38,7 @@ class EpochType(IntEnum):
     @staticmethod
     def is_warmup(epoch_type: EpochType) -> bool:
         """
-        Returns `True` if the epoch is part of the warmup phase.
+        Returns ``True`` if the epoch is part of the warmup phase.
         Implemented as a static method to make it jittable.
         """
         rhs = EpochType.INITIAL_VALUES < epoch_type
@@ -83,13 +85,13 @@ class EpochState:
 
 class EpochManager:
     """
-    Manages `EpochConfig` objects.
+    Manages :class:`.EpochConfig` objects.
 
-    A sequence of `EpochConfig` objects can be handed to the manager either
+    A sequence of :class:`.EpochConfig` objects can be handed to the manager either
     during initialization or later with the `append` method. The manager creates
-    a new `EpochState` object with properly initialized time values.
+    a new :class:`.EpochState` object with properly initialized time values.
 
-    Furthermore, the `EpochManager` enforces this invariant:
+    Furthermore, the :class:`.EpochManager` enforces this invariant:
 
     - An epoch must be of duration at least 1.
     - An initial values epoch must be of duration exactly 1.
@@ -114,7 +116,7 @@ class EpochManager:
                 self.append(config)
 
     def append(self, config: EpochConfig):
-        """Appends an `EpochConfig` to the list of epochs."""
+        """Appends an :class:`.EpochConfig` to the list of epochs."""
         if not self._configs and config.type != EpochType.INITIAL_VALUES:
             raise RuntimeError("First epoch must be of type INITIAL_VALUES")
 
@@ -151,8 +153,8 @@ class EpochManager:
 
     def has_more(self) -> bool:
         """
-        Returns true if there are epoch configs that have not been returned yet
-        by the `next` method, and false otherwise.
+        Returns ``True`` if there are epoch configs that have not been returned yet by
+        the :func:`.next` method, and false otherwise.
         """
         return self._next_epoch_ptr < len(self._configs)
 
@@ -160,7 +162,7 @@ class EpochManager:
         """
         Returns the next epoch with an initialized state.
 
-        Raises a `RuntimeError` if there are no more epoch configs to return.
+        Raises a :class:`.RuntimeError` if there are no more epoch configs to return.
         """
         if self.has_more():
             config = self._configs[self._next_epoch_ptr]

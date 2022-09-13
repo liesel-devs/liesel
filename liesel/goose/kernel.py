@@ -1,5 +1,5 @@
 """
-# Kernel-related info, outcome and mixin classes
+Kernel-related info, outcome and mixin classes.
 """
 
 from abc import abstractmethod
@@ -19,6 +19,8 @@ from .types import (
     TTransitionInfo,
     TTuningInfo,
 )
+
+__docformat__ = "numpy"
 
 
 @register_dataclass_as_pytree
@@ -43,9 +45,9 @@ class DefaultTuningInfo:
 @dataclass
 class TransitionOutcome(Generic[TKernelState, TTransitionInfo]):
     """
-    A dataclass for the return value of the kernel method `transition`.
-    Different kernels can use different types of `liesel.goose.types.KernelState`'s
-    and `liesel.goose.types.TransitionInfo`'s.
+    A dataclass for the return value of the kernel method :meth:`.Kernel.transition`.
+    Different kernels can use different types of :class:`.KernelState`'s and
+    :class:`.TransitionInfo`'s.
     """
 
     info: TTransitionInfo
@@ -57,9 +59,9 @@ class TransitionOutcome(Generic[TKernelState, TTransitionInfo]):
 @dataclass
 class TuningOutcome(Generic[TKernelState, TTuningInfo]):
     """
-    A dataclass for the return value of the kernel method `tune`.
-    Different kernels can use different types of `liesel.goose.types.KernelState`'s
-    and `liesel.goose.types.TuningInfo`'s.
+    A dataclass for the return value of the kernel method :meth:`.Kernel.tune`.
+    Different kernels can use different types of :class:`.KernelState`'s and
+    :class:`.TuningInfo`'s.
     """
 
     info: TTuningInfo
@@ -70,8 +72,8 @@ class TuningOutcome(Generic[TKernelState, TTuningInfo]):
 @dataclass
 class WarmupOutcome(Generic[TKernelState]):
     """
-    A dataclass for the return value of the kernel method `end_warmup`.
-    Different kernels can use different types of `liesel.goose.types.KernelState`'s.
+    A dataclass for the return value of the kernel method :meth:`.Kernel.end_warmup`.
+    Different kernels can use different types of :class:`.KernelState`'s.
     """
 
     error_code: int
@@ -96,9 +98,11 @@ class ModelMixin:
         return self._model
 
     def set_model(self, model: ModelInterface):
+        """Sets the model interface."""
         self._model = model
 
     def has_model(self) -> bool:
+        """Whether the model interface is set."""
         return self._model is not None
 
     def position(self, model_state: ModelState) -> Position:
@@ -177,8 +181,8 @@ class TransitionMixin(Generic[TKernelState, TTransitionInfo]):
 
 class TuningMixin(Generic[TKernelState, TTuningInfo]):
     """
-    An abstract mixin defining two tuning methods after a slow and a fast
-    adaptation epoch.
+    An abstract mixin defining two tuning methods after a slow and a fast adaptation
+    epoch.
     """
 
     def tune(

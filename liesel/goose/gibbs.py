@@ -1,5 +1,5 @@
 """
-# Gibbs sampler
+Gibbs sampler.
 """
 
 from typing import Callable, ClassVar, Sequence
@@ -15,6 +15,8 @@ from .kernel import (
 )
 from .types import Kernel, KernelState, KeyArray, ModelState, Position, TuningInfo
 
+__docformat__ = "numpy"
+
 GibbsKernelState = KernelState
 GibbsTransitionInfo = DefaultTransitionInfo
 GibbsTuningInfo = DefaultTuningInfo
@@ -24,12 +26,13 @@ class GibbsKernel(
     ModelMixin, Kernel[GibbsKernelState, GibbsTransitionInfo, GibbsTuningInfo]
 ):
     """
-    A Gibbs kernel implementing the `liesel.goose.types.Kernel` protocol.
+    A Gibbs kernel implementing the :class:`.Kernel` protocol.
     """
 
     error_book: ClassVar[dict[int, str]] = {0: "no errors"}
     needs_history: ClassVar[bool] = False
     identifier: str = ""
+    position_keys: tuple[str, ...]
 
     def __init__(
         self,
