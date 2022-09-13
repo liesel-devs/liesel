@@ -1,15 +1,20 @@
 """
-This module provides an `liesel.goose.ModelInterface` implementation for PyMC
+This module provides a :class:`.liesel.goose.ModelInterface` implementation for PyMC
 models.
 
 To use this module, the pymc package must be installed. To do so, please install
-liesel with the optional dependencies pymc: :command:`pip install liesel[pymc]`
+liesel with the optional dependencies pymc:
+
+.. code-block:: bash
+
+    $ pip install liesel[pymc]
 
 
-## Example of an linear model
+Example of an linear model
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The model is also used in the test. Please consult the tutorial book for longer
-examples.::
+examples::
 
     RANDOM_SEED = 123
     rng = np.random.RandomState(RANDOM_SEED)
@@ -63,32 +68,32 @@ examples.::
     sum
 
 
-Transformations of RVs can be avoided by setting `transform = None` in the
+Transformations of RVs can be avoided by setting ``transform = None`` in the
 distribution argument.
-
-
 """
 
-from typing import Sequence
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Sequence
 
 from liesel.goose.types import ModelState, Position
 
-try:
-    import pymc as pm
-    from pymc.sampling_jax import get_jaxified_graph, get_jaxified_logp
-except ImportError as e:
-    raise ImportError(
-        f"pymc must be installed to use this module. original exception: {e}"
-    )
+if TYPE_CHECKING:
+    try:
+        import pymc as pm
+    except ImportError as e:
+        raise ImportError(
+            f"pymc must be installed to use this module. original exception: {e}"
+        )
 
 
 class PyMCInterface:
     """
-    An implementation of :class:`~liesel.goose.types.ModelInterface` to be used
-    with a PyMC model.
+    An implementation of :class:`~liesel.goose.types.ModelInterface` to be used with a
+    PyMC model.
 
-    The initial position can be extraced with :meth:`.get_initial_state`. The
-    model state is represented as a :class:`.Position`.
+    The initial position can be extraced with :meth:`.get_initial_state`. The model
+    state is represented as a :class:`.Position`.
 
 
     Parameters
@@ -100,14 +105,22 @@ class PyMCInterface:
         extract_position
 
 
-    By default, only non-observed random variables are available via
-    extract_position. This includes transformed variables but not the
-    untransformed variable. Also, `Deterministic` is not available. To make them
-    trackable for :class:`liesel.goose.engine.Engine` these variables must be mentioned
-    in the constructor.
+    By default, only non-observed random variables are available via extract_position.
+    This includes transformed variables but not the untransformed variable. Also,
+    `Deterministic` is not available. To make them trackable for
+    :class:`~liesel.goose.engine.Engine` these variables must be mentioned in the
+    constructor.
     """
 
     def __init__(self, model: pm.Model, additional_vars: list[str] = []):
+        try:
+            import pymc as pm
+            from pymc.sampling_jax import get_jaxified_graph, get_jaxified_logp
+        except ImportError as e:
+            raise ImportError(
+                f"pymc must be installed to use this module. original exception: {e}"
+            )
+
         self._pymc_model = model
         self._log_prob = get_jaxified_logp(self._pymc_model)
         self._rv_names = [rv.name for rv in model.value_vars]
