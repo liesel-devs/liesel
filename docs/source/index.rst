@@ -5,7 +5,7 @@ Liesel: A Probabilistic Programming Framework
    :parser: myst_parser.sphinx_
 
 API Reference
-^^^^^^^^^^^^^
+-------------
 
 .. autosummary::
    :toctree: generated
@@ -18,7 +18,7 @@ API Reference
    ~liesel.tfp
 
 Indices and Search
-^^^^^^^^^^^^^^^^^^
+------------------
 
 * :ref:`genindex`
 * :ref:`modindex`

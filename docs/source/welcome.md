@@ -16,16 +16,16 @@ a focus on semi-parametric regression. It includes:
 The name "Liesel" is an homage to the [Gänseliesel fountain][3], landmark of Liesel's
 birth city [Göttingen][4].
 
-## Installation
+# Installation
 
 For installation instructions, see the [README][5] in the main repository.
 
-## Further Reading
+# Further Reading
 
 For a scientific discussion of the software, see our paper on arXiv (in preparation).
 If you are looking for code examples, the [tutorial book][6] might come in handy.
 
-## Acknowledgements
+# Acknowledgements
 
 Liesel is being developed by Paul Wiemann and Hannes Riebl at the
 [University of Göttingen][7] with support from Thomas Kneib. Important contributions
@@ -33,9 +33,8 @@ were made by Joel Beck, Alex Afanasev, Gianmarco Callegher and Johannes Brachem.
 grateful to the [German Research Foundation (DFG)][8] for funding the development
 through grant 443179956.
 
-<!-- TODO: Use main branch for logos -->
-<img src="https://raw.githubusercontent.com/liesel-devs/liesel/sphinx-docs/docs/source/_static/uni-goe.svg" alt="University of Göttingen" style="height: 4em; margin: 0 1em 1em 0">
-<img src="https://raw.githubusercontent.com/liesel-devs/liesel/sphinx-docs/docs/source/_static/funded-by-dfg.svg" alt="Funded by DFG" style="height: 4em; margin: 0 1em 1em 0">
+<img src="https://raw.githubusercontent.com/liesel-devs/liesel/main/docs/source/_static/uni-goe.svg" alt="University of Göttingen" style="height: 4em; margin: 0 1em 1em 0">
+<img src="https://raw.githubusercontent.com/liesel-devs/liesel/main/docs/source/_static/funded-by-dfg.svg" alt="Funded by DFG" style="height: 4em; margin: 0 1em 1em 0">
 
 [1]: https://github.com/liesel-devs/liesel
 [2]: https://github.com/liesel-devs/rliesel
