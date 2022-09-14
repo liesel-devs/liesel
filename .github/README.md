@@ -3,12 +3,11 @@
 
 # Liesel: A Probabilistic Programming Framework
 
-[![pypi](https://img.shields.io/pypi/v/liesel.svg?color=blue)](https://pypi.org/project/liesel)
+[![pypi](https://img.shields.io/pypi/v/liesel?color=blue)](https://pypi.org/project/liesel)
+[![readthedocs](https://readthedocs.org/projects/liesel/badge/?version=latest)](https://docs.liesel-project.org/en/latest)
 [![pre-commit](https://github.com/liesel-devs/liesel/actions/workflows/pre-commit.yml/badge.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pre-commit.yml)
 [![pytest](https://github.com/liesel-devs/liesel/actions/workflows/pytest.yml/badge.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pytest.yml)
 [![pytest-cov](https://raw.githubusercontent.com/liesel-devs/liesel/pytest-cov/coverage.svg)](https://github.com/liesel-devs/liesel/actions/workflows/pytest.yml)
-[![Documentation
-Status](https://readthedocs.org/projects/liesel/badge/?version=latest.png)](https://docs.liesel-project.org/en/latest/?badge=latest)
 
 <img src="https://raw.githubusercontent.com/liesel-devs/liesel/main/misc/logo/logo-light.png#gh-light-mode-only" alt="logo" align="right" width="185">
 <img src="https://raw.githubusercontent.com/liesel-devs/liesel/main/misc/logo/logo-dark.png#gh-dark-mode-only" alt="logo" align="right" width="185">
@@ -117,16 +116,16 @@ engine.sample_all_epochs()
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 1, 1, 2 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 1, 1 / 100 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 1, 1 / 100 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 200 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 2, 1 / 200 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 1, 1 / 200 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 500 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 2, 2, 2 / 500 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 1, 2 / 500 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 1, 1 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 1, 1 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Finished warmup
     liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
@@ -176,15 +175,15 @@ gs.Summary.from_results(results)
       <th>loc</th>
       <th>()</th>
       <td>kernel_00</td>
-      <td>-0.092958</td>
-      <td>0.445374</td>
-      <td>-0.834403</td>
-      <td>-0.093373</td>
-      <td>0.624101</td>
+      <td>-0.091391</td>
+      <td>0.446812</td>
+      <td>-0.832265</td>
+      <td>-0.094075</td>
+      <td>0.63899</td>
       <td>4000</td>
-      <td>1517.531959</td>
-      <td>2235.07803</td>
-      <td>1.00088</td>
+      <td>1495.17777</td>
+      <td>2133.345866</td>
+      <td>1.001324</td>
     </tr>
   </tbody>
 </table>
@@ -214,13 +213,13 @@ gs.Summary.from_results(results)
       <th rowspan="2" valign="top">1</th>
       <th rowspan="2" valign="top">divergent transition</th>
       <th>warmup</th>
-      <td>43</td>
-      <td>0.01075</td>
+      <td>40</td>
+      <td>0.01</td>
     </tr>
     <tr>
       <th>posterior</th>
       <td>0</td>
-      <td>0.00000</td>
+      <td>0.00</td>
     </tr>
   </tbody>
 </table>
