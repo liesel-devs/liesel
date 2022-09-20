@@ -9,7 +9,7 @@ def usedocs(of: object, greedy: bool = True):
 
     Some notes on the details:
 
-    1. By default, this decorator will take paste the class docstring from the object
+    1. By default, this decorator will paste the class docstring from the object
        ``of`` to the decorated object.
     2. If the decorated object is a class, the decorator will paste the docstrings of
        methods and properties on the object ``of`` to their counterparts on the
