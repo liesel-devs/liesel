@@ -12,7 +12,7 @@ def usedocs(of: object):
     Usage example::
 
         class ParentClass:
-            '''Parentclass documentation'''
+            '''Parent class documentation.'''
 
             def parent_method(self):
                 '''Method documentation.'''
@@ -25,7 +25,7 @@ def usedocs(of: object):
                 pass
     """
 
-    def _use_docs(obj):
+    def _usedocs(obj):
         @wraps(obj)
         def wrapper():
             obj.__doc__ = of.__doc__
