@@ -51,6 +51,8 @@ class EpochType(IntEnum):
 @register_dataclass_as_pytree
 @dataclass
 class EpochConfig:
+    """Holds epoch configuration."""
+
     type: EpochType
     duration: int
     thinning: int

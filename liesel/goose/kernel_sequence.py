@@ -7,6 +7,7 @@ from typing import Sequence
 
 import jax
 
+from ..docs import usedocs
 from .epoch import EpochState
 from .pytree import register_dataclass_as_pytree
 from .types import (
@@ -27,26 +28,42 @@ TransitionInfos = dict[str, TransitionInfo]
 @register_dataclass_as_pytree
 @dataclass
 class KerSeqTransitionOutput:
+    """Holds the output of a kernel sequence transition."""
+
     model_state: ModelState
+    """Model state after transition of all kernels in the sequence."""
     kernel_states: KernelStates
+    """List of kernel states."""
     infos: TransitionInfos
+    """Dict of transition infos."""
 
 
 @register_dataclass_as_pytree
 @dataclass
 class KerSeqTuningOutput:
+    """Holds the output of kernel sequence tuning."""
+
     kernel_states: KernelStates
+    """List of kernel states."""
     infos: TuningInfos
+    """Dict of tuning infos."""
 
 
 @register_dataclass_as_pytree
 @dataclass
 class KerSeqFinalizeWarmupOutput:
+    """Holds the output of a kernel sequence warmup."""
+
     kernel_states: KernelStates
+    """List of kernel states."""
     error_codes: dict[str, int]
+    """Dict of error codes."""
 
 
+@usedocs(Kernel)
 class KernelSequence:
+    """Organizes a sequence of kernels."""
+
     def __init__(self, kernels: Sequence[Kernel]) -> None:
         identifiers = set()
         for ker in kernels:
@@ -62,9 +79,11 @@ class KernelSequence:
 
         self._kernels = list(kernels)
 
-    def get_kernels(self):
+    def get_kernels(self) -> list[Kernel]:
+        """Returns the kernel sequence"""
         return self._kernels
 
+    @usedocs(Kernel.init_state)
     def init_states(self, prng_key: KeyArray, model_state: ModelState) -> KernelStates:
         keys = jax.random.split(prng_key, len(self._kernels))
         states = [

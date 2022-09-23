@@ -155,28 +155,47 @@ class SamplingResults:
     kernels_by_pos_key: Option[dict[str, str]]
 
     def get_samples(self) -> Position:
+        """
+        Returns a dictionary of all samples for all parameters included in the
+        position.
+        """
         opt: Option[Position] = self.positions.combine_all()
         return opt.expect(f"No samples in {repr(self)}")
 
     def get_posterior_samples(self) -> Position:
+        """
+        Returns a dictionary of posterior samples for all parameters included in the
+        position.
+        """
         opt = self.positions.combine_filtered(
             lambda config: config.type == EpochType.POSTERIOR
         )
         return opt.expect(f"No posterior samples in {repr(self)}")
 
     def get_kernels_by_pos_key(self) -> dict[str, str]:
-        """Returns a :class:`dict` of ``{"position name": "kernel identifier"}``."""
+        """
+        Returns a dict, identifying the kernel used to sample each position.
+
+        The dict has the format ``{"position name": "kernel identifier"}``.
+        """
         return self.kernels_by_pos_key.expect(
             f"No position-kernel associations in {repr(self)}"
         )
 
     def get_posterior_transition_infos(self) -> dict[str, TransitionInfo]:
+        """
+        Returns a dictionary of posterior transition information for all parameters
+        included in the position.
+        """
         opt = self.transition_infos.combine_filtered(
             lambda config: config.type == EpochType.POSTERIOR
         )
         return opt.expect(f"No posterior transition infos in {repr(self)}")
 
     def get_tuning_times(self) -> Option[Array]:
+        """
+        Returns array of tuning times.
+        """
         if self.tuning_infos.is_none():
             return Option.none()
 

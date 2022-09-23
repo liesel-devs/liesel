@@ -88,9 +88,13 @@ class HMCKernel(
     """
 
     error_book: ClassVar[dict[int, str]] = {0: "no errors", 1: "divergent transition"}
+    """Dict of error codes and their meaning."""
     needs_history: ClassVar[bool] = True
+    """Whether this kernel needs its history for tuning."""
     identifier: str = ""
+    """Kernel identifier, set by :class:`.EngineBuilder`"""
     position_keys: tuple[str, ...]
+    """Tuple of position keys handled by this kernel."""
 
     def __init__(
         self,

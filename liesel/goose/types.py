@@ -121,10 +121,12 @@ class Kernel(Protocol[TKernelState, TTransitionInfo, TTuningInfo]):
 
     @abstractmethod
     def set_model(self, model: ModelInterface):
+        """Sets the model interface."""
         ...
 
     @abstractmethod
     def has_model(self) -> bool:
+        """Whether the model interface is set."""
         ...
 
     @abstractmethod

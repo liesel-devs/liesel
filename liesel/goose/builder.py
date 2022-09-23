@@ -91,6 +91,7 @@ class EngineBuilder:
 
     @property
     def engine_seed(self) -> KeyArray:
+        """The seed for the engine's pseudo-random number generation."""
         return self._engine_key
 
     def add_kernel(self, kernel: Kernel):
@@ -99,6 +100,7 @@ class EngineBuilder:
 
     @property
     def kernels(self) -> tuple[Kernel, ...]:
+        """Tuple of all Kernels that are present in the builder."""
         return tuple(self._kernels)
 
     def add_quantity_generator(self, generator: QuantityGenerator):
@@ -107,6 +109,7 @@ class EngineBuilder:
 
     @property
     def quantity_generators(self) -> tuple[QuantityGenerator, ...]:
+        """Tuple of all quantity generators present in the builder."""
         return tuple(self._quantity_generators)
 
     def set_initial_values(self, model_state: ModelState, multiple_chains=False):
@@ -125,6 +128,7 @@ class EngineBuilder:
 
     @property
     def model_state(self) -> Option[ModelState]:
+        """Model state."""
         return self._model_state
 
     def set_epochs(self, epochs: Iterable[EpochConfig]):
@@ -156,6 +160,7 @@ class EngineBuilder:
 
     @property
     def epochs(self) -> tuple[EpochConfig, ...]:
+        """Tuple of epoch configurations."""
         return tuple(self._epochs._configs)
 
     def set_model(self, model: ModelInterface):

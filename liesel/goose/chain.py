@@ -11,6 +11,7 @@ import numpy as np
 
 from liesel.option import Option
 
+from ..docs import usedocs
 from .epoch import EpochConfig
 from .pytree import concatenate_leaves, slice_leaves
 from .types import PyTree
@@ -62,6 +63,7 @@ class EpochChain(Chain[TPyTree]):
 # implementations
 
 
+@usedocs(Chain)
 class ListChain(Generic[TPyTree]):
     """Implements the :class:`.Chain` protocol with a list as storage."""
 
@@ -84,6 +86,7 @@ class ListChain(Generic[TPyTree]):
             return Option(self._chunks_list[0])
 
 
+@usedocs(EpochChain)
 class ListEpochChain(ListChain[TPyTree]):
     """Implements the :class:`.EpochChain` protocol with a list as storage."""
 
@@ -98,6 +101,7 @@ class ListEpochChain(ListChain[TPyTree]):
         return self._epoch
 
     def append(self, chunk: TPyTree) -> None:
+        """Applies thinning and appends a chunk to the chain."""
         if self._apply_thinning and self.epoch.thinning > 1:
             th = self._epoch.thinning
             size = jax.tree_util.tree_leaves(chunk)[0].shape[1]
@@ -126,28 +130,40 @@ class EpochChainManager(Generic[TPyTree]):
 
     @property
     def current_epoch(self) -> EpochConfig:
+        """Returns the current epoch."""
         return self._chains[-1].epoch
 
     def advance_epoch(self, epoch: EpochConfig) -> None:
+        """Creates and appends a :class:`.ListEpochChain` for the given ``epoch``."""
         new_chain: ListEpochChain[TPyTree] = ListEpochChain(epoch, self._apply_thinning)
         self._chains.append(new_chain)
 
+    @usedocs(ListEpochChain.append)
     def append(self, chunk: TPyTree) -> None:
         self._chains[-1].append(chunk)
 
     def get_epochs(self) -> Sequence[EpochConfig]:
+        """Returns a list of all epochs."""
         return [c.epoch for c in self._chains]
 
     def get_specific_chain(self, epoch_number: int) -> ListEpochChain[TPyTree]:
+        """Returns the chain for the given epoch number."""
         return self._chains[epoch_number]
 
     def get_current_chain(self) -> ListEpochChain[TPyTree]:
+        """Returns the current chain."""
         return self._chains[-1]
 
     def get_current_epoch(self) -> EpochConfig:
+        """Returns the current poch."""
         return self._chains[-1].epoch
 
     def combine(self, epoch_numbers: Sequence[int]) -> Option[TPyTree]:
+        """
+        Combines the given epochs and returns all chunks combined into one pytree.
+
+        The option is none if no samples are in the chain.
+        """
         chain: ListChain[TPyTree] = ListChain()
         for num in epoch_numbers:
             epoch_chain = self._chains[num]
@@ -157,6 +173,11 @@ class EpochChainManager(Generic[TPyTree]):
         return chain.get()
 
     def combine_all(self) -> Option[TPyTree]:
+        """
+        Combines the all epochs and returns all chunks combined into one pytree.
+
+        The option is none if no samples are in the chain.
+        """
         chain: ListChain[TPyTree] = ListChain()
         for epoch_chain in self._chains:
             chunk = epoch_chain.get()
@@ -167,6 +188,12 @@ class EpochChainManager(Generic[TPyTree]):
     def combine_filtered(
         self, predicate: Callable[[EpochConfig], bool]
     ) -> Option[TPyTree]:
+        """
+        Combines the all epochs for which the predicate evaluates to ``True``.
+        Returns all chunks combined into one pytree.
+
+        The option is none if no samples are in the chain.
+        """
         chain: ListChain[TPyTree] = ListChain()
         for epoch_chain in self._chains:
             if predicate(epoch_chain.epoch):
