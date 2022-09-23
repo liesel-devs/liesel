@@ -21,6 +21,7 @@ import jax.numpy as jnp
 import jax.random
 import jax.tree_util
 import numpy as np
+from deprecated.sphinx import deprecated
 from tqdm import tqdm
 
 from liesel.option import Option
@@ -75,14 +76,15 @@ def _expand_and_stack(chunk, *rest):
     return jnp.concatenate(expended_chunks, axis=0)
 
 
+@deprecated(
+    version="0.1.0", reason="Use the functions from liesel.goose.pytree instead."
+)
 def stack_for_multi(chunks: list):
     """
     Combine identically structured pytrees to be used in multichain.
 
     The function adds a new dimension (axis 0) to each leaf and stacks the leafs
     along the new axis.
-
-    **deprecated**
     """
 
     warnings.warn(
