@@ -90,7 +90,7 @@ class EpochConfig:
 class EpochState:
     """
     EpochState describes the state in the current epoch.
-    
+
     In particular, it calculates how much time is left in the current epoch and
     advances time. It also, provides access to the :class:`.EpochConfig` of the
     current epoch.
