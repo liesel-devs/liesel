@@ -131,6 +131,10 @@ def _add_time_dimension(x: PyTree) -> PyTree:
 @register_dataclass_as_pytree
 @dataclass(frozen=True)
 class Carry:
+    """
+    Holds the state that needs to be carried between MCMC interations.
+    """
+
     kernel_states: KernelStates
     model_state: ModelState
     epoch: EpochState
