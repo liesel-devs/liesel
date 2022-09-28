@@ -7,7 +7,7 @@
 
 
    {% block methods %}
-   {% if methods %}
+   {% if methods | reject("equalto", "__init__") | list %}
    .. rubric:: {{ _('Methods') }}
 
    .. autosummary::
