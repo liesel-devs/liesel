@@ -5,13 +5,15 @@ Model interfaces.
 import copy
 from typing import Callable, Sequence
 
-from .types import ModelState, Position
+from ..docs import usedocs
+from .types import ModelInterface, ModelState, Position
 
 LogProbFunction = Callable[[ModelState], float]
 
 __docformat__ = "numpy"
 
 
+@usedocs(ModelInterface)
 class DictModel:
     """
     A model interface for a model state represented by a ``dict[str, Array]`` and a
@@ -33,6 +35,7 @@ class DictModel:
         return self._log_prob_fn(model_state)
 
 
+@usedocs(ModelInterface)
 class DataClassModel:
     """
     A model interface for a model state represented by a :obj:`~dataclasses.dataclass`

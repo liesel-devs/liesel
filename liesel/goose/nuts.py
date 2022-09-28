@@ -52,6 +52,7 @@ class NUTSKernelState:
 @dataclass
 class NUTSTransitionInfo(DefaultTransitionInfo):
     error_code: int
+    """Dict of error codes and their meaning."""
     acceptance_prob: float
     position_moved: int
     divergent: bool
@@ -109,10 +110,14 @@ class NUTSKernel(
         2: "maximum tree depth",
         3: "divergent transition + maximum tree depth",
     }
+    """Dict of error codes and their meaning."""
 
     needs_history: ClassVar[bool] = True
+    """Whether this kernel needs its history for tuning."""
     identifier: str = ""
+    """Kernel identifier, set by :class:`.EngineBuilder`"""
     position_keys: tuple[str, ...]
+    """Tuple of position keys handled by this kernel."""
 
     def __init__(
         self,
