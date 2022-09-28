@@ -161,11 +161,29 @@ class Kernel(Protocol[TKernelState, TTransitionInfo, TTuningInfo]):
         history: Position | None,
     ) -> TuningOutcome[TKernelState, TTuningInfo]:
         """
-        Called after each warmup epoch.
+        The method can perform automatic tuning of the kernel and is called
+        after each adaptation epoch.
 
-        ``history`` may be ``None`` if class variable ``needs_history`` is ``False``.
+        To tune the kernel, the method can return an altered kernel state.
 
         Must be jittable.
+
+        Parameters
+        ----------
+        prng_key
+            The key for JAX' pseudo-random number generator.
+        model_state
+            Current model state.
+        kernel_state
+            Current kernel state.
+        epoch
+            Current epoch state.
+        history
+            Holds the history of the position of the current epoch, i.e., that
+            is the position but each leave in the pytree is enhanced by one
+            dimension (axis = 0) which represents the time or MCMC iteration.
+            The value may be ``None`` if the class variable :py:attr:`~needs_histroy` is
+            ``False``.
         """
 
         raise NotImplementedError
