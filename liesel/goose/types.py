@@ -30,11 +30,15 @@ KeyArray = Any
 
 
 class TuningInfo(Protocol):
+    """Holds information about sampler tuning."""
+
     error_code: int
     time: int
 
 
 class TransitionInfo(Protocol):
+    """Holds information about MCMC transitions."""
+
     error_code: int
     """
     An error code defined in the error book of the kernel.
@@ -236,10 +240,19 @@ class QuantityGenerator(Protocol[TGeneratedQuantity]):
 
     @abstractmethod
     def set_model(self, model: ModelInterface):
+        """
+        Sets a model.
+
+        Parameters
+        ----------
+        model
+            The model to be set.
+        """
         raise NotImplementedError
 
     @abstractmethod
     def has_model(self) -> bool:
+        """*True*, if a model has been set with :meth:`.set_model`."""
         raise NotImplementedError
 
     def generate(
@@ -248,4 +261,15 @@ class QuantityGenerator(Protocol[TGeneratedQuantity]):
         model_state: ModelState,
         epoch: EpochState,
     ) -> TGeneratedQuantity:
-        """Generates a new quantity based on the model and PRNG state."""
+        """
+        Generates a new quantity based on the model and PRNG state.
+
+        Parameters
+        ----------
+        prng_key
+            The key for JAX' pseudo-random number generator.
+        model_state
+            Current model state.
+        epoch
+            Current epoch state.
+        """
