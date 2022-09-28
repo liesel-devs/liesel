@@ -131,6 +131,10 @@ def _add_time_dimension(x: PyTree) -> PyTree:
 @register_dataclass_as_pytree
 @dataclass(frozen=True)
 class Carry:
+    """
+    Holds the state that needs to be carried between MCMC interations.
+    """
+
     kernel_states: KernelStates
     model_state: ModelState
     epoch: EpochState
@@ -146,13 +150,46 @@ class SamplingResults:
     """
 
     positions: EpochChainManager
+    """EpochChainManager giving access to monitored variables."""
     transition_infos: EpochChainManager
+    """EpochChainManager storing all transition infos."""
     generated_quantities: Option[EpochChainManager]
+    """
+    Option[EpochChainManager] storing all generated_quantities.
+
+    is_none(), if no quantities have been generated.
+    """
     tuning_infos: Option[Chain]
+    """
+    Option[Chain] storing all tuning infos.
+
+    is_none(), if no tuning was executed
+    """
+
     kernel_states: Option[EpochChainManager]
+    """
+    Option[EpochChainManager] holds all kernel states.
+
+    is_none(), if monitoring kernel states was not requested.
+    """
+
     full_model_states: Option[EpochChainManager]
+    """
+    Option[EpochChainManager] holds the full model state of each iteration.
+
+    is_none(), if monitoring was not explicitly requested.
+    """
+
     kernel_classes: Option[dict[str, type]]
+    """
+    Optional map of kernel identifier to the respective kernel type.
+    """
+
     kernels_by_pos_key: Option[dict[str, str]]
+    """
+    Optional map of position key to identifier of the for sampling responsible
+    kernel.
+    """
 
     def get_samples(self) -> Position:
         """
@@ -247,6 +284,7 @@ class SamplingResults:
             return pickle.load(f)
 
 
+@deprecated(reason="Use SamplingResults", version="0.1.4")
 class SamplingResult(SamplingResults):
     """Alias of :class:`.SamplingResults` for backwards compatibility."""
 

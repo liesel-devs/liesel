@@ -51,14 +51,31 @@ class EpochType(IntEnum):
 @register_dataclass_as_pytree
 @dataclass
 class EpochConfig:
-    """Holds epoch configuration."""
+    """Defines an Epoch in an MCMC algorithm."""
 
     type: EpochType
+    """
+    Type of this epoch.
+    """
     duration: int
+    """Duration of this epoch in terms of MCMC interations."""
     thinning: int
+    """Thinning applied in this epoch."""
     optional: PyTree | None
+    """Optional data attachted to this epoch. Must be a PyTree or None."""
 
     def to_state(self, nth_epoch: int, time_before_epoch: int) -> EpochState:
+        """
+        Creates initailized :class:`.EpochState` object based on this of
+        :class:`.EpochConfig` object.
+
+        Parameters
+        ----------
+        nth_epoch: position of the epoch in the epoch sequence.
+        time_before_epoch
+            time (i.e., mcmc iterations) that passed before this epoch; i.e.,
+            the sum of all previous epoch durations.
+        """
         return EpochState(
             config=self,
             nth_epoch=nth_epoch,
@@ -71,16 +88,31 @@ class EpochConfig:
 @register_dataclass_as_pytree
 @dataclass
 class EpochState:
+    """
+    EpochState describes the state in the current epoch.
+
+    In particular, it calculates how much time is left in the current epoch and
+    advances time. It also, provides access to the :class:`.EpochConfig` of the
+    current epoch.
+    """
+
     config: EpochConfig
+    """:class:`.EpochConfig` of this epoch."""
     nth_epoch: int
+    """Position of this epoch in the epoch sequence."""
     time: int
+    """Current time."""
     time_before_epoch: int
+    """Time passed before this epoch started."""
     time_in_epoch: int
+    """Current time within this epoch."""
 
     def time_left(self) -> int:
+        """Returns how much time is left in this epoch."""
         return self.config.duration - self.time_in_epoch
 
     def advance_time(self, by: int):
+        "Advances time by ``by`` units (mcmc iterations)."
         self.time = self.time + by
         self.time_in_epoch = self.time_in_epoch + by
 
