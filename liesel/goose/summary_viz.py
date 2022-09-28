@@ -25,7 +25,7 @@ from liesel.goose.summary_m import (
 __docformat__ = "numpy"
 
 
-def subparam_chains_to_df(
+def _subparam_chains_to_df(
     subparam_chains: np.ndarray, param_index: int
 ) -> pd.DataFrame:
     """
@@ -46,7 +46,7 @@ def subparam_chains_to_df(
     return move_col_first(subparam_df, colname="param_index")
 
 
-def preprocess_param_chains(
+def _preprocess_param_chains(
     posterior_samples: dict[str, jnp.DeviceArray], param: str
 ) -> np.ndarray:
     """Convert array of posteror samples for each parameter to equal dimensions."""
@@ -59,7 +59,7 @@ def preprocess_param_chains(
     return param_chains
 
 
-def convert_to_sequence(indices: int | Sequence[int]) -> Sequence[int]:
+def _convert_to_sequence(indices: int | Sequence[int]) -> Sequence[int]:
     """Convert integer parameter and chain indices to list or tuple."""
 
     if isinstance(indices, int):
@@ -68,7 +68,7 @@ def convert_to_sequence(indices: int | Sequence[int]) -> Sequence[int]:
     return indices
 
 
-def filter_param_df(
+def _filter_param_df(
     param_df: pd.DataFrame,
     param_indices: int | Sequence[int] | None,
     chain_indices: int | Sequence[int] | None,
@@ -80,11 +80,11 @@ def filter_param_df(
     """
 
     if chain_indices is not None:
-        chain_indices = convert_to_sequence(chain_indices)
+        chain_indices = _convert_to_sequence(chain_indices)
         param_df = param_df.loc[param_df["chain_index"].isin(chain_indices)]
 
     if param_indices is not None:
-        param_indices = convert_to_sequence(param_indices)
+        param_indices = _convert_to_sequence(param_indices)
         param_df = param_df.loc[param_df["param_index"].isin(param_indices)]
 
     if max_chains is not None and param_df["chain_index"].nunique() > max_chains:
@@ -94,7 +94,7 @@ def filter_param_df(
     return param_df
 
 
-def postprocess_param_df(
+def _postprocess_param_df(
     param_df: pd.DataFrame,
     param: str,
     param_indices: int | Sequence[int] | None,
@@ -119,12 +119,12 @@ def postprocess_param_df(
 
     chain_indices = validate_chain_indices(chain_indices, num_original_chains)
     param_indices = validate_param_indices(param_indices, num_original_subparams, param)
-    param_df = filter_param_df(param_df, param_indices, chain_indices, max_chains)
+    param_df = _filter_param_df(param_df, param_indices, chain_indices, max_chains)
 
     return param_df
 
 
-def collect_subparam_dfs(
+def _collect_subparam_dfs(
     posterior_samples: dict[str, jnp.DeviceArray],
     param: str,
     param_indices: int | Sequence[int] | None,
@@ -136,12 +136,12 @@ def collect_subparam_dfs(
     each parameter.
     """
 
-    param_chains = preprocess_param_chains(posterior_samples, param)
+    param_chains = _preprocess_param_chains(posterior_samples, param)
 
     param_df = (
         pd.concat(
             [
-                subparam_chains_to_df(param_chains[..., param_index], param_index)
+                _subparam_chains_to_df(param_chains[..., param_index], param_index)
                 for param_index in range(param_chains.shape[-1])
             ]
         )
@@ -151,12 +151,12 @@ def collect_subparam_dfs(
 
     param_df = move_col_first(param_df, colname="param")
 
-    return postprocess_param_df(
+    return _postprocess_param_df(
         param_df, param, param_indices, chain_indices, max_chains
     )
 
 
-def collect_param_dfs(
+def _collect_param_dfs(
     results: SamplingResults,
     params: str | list[str] | None = None,
     param_indices: int | Sequence[int] | None = None,
@@ -174,7 +174,7 @@ def collect_param_dfs(
 
     return pd.concat(
         [
-            collect_subparam_dfs(
+            _collect_subparam_dfs(
                 samples, param, param_indices, chain_indices, max_chains
             )
             for param in params
@@ -182,7 +182,7 @@ def collect_param_dfs(
     ).reset_index(drop=True)
 
 
-def setup_plot_df(
+def _setup_plot_df(
     results: SamplingResults,
     params: str | list[str] | None,
     param_indices: int | Sequence[int] | None,
@@ -192,7 +192,7 @@ def setup_plot_df(
 ) -> pd.DataFrame:
     """Provides data input for all plotting functions."""
 
-    return collect_param_dfs(
+    return _collect_param_dfs(
         results,
         params,
         param_indices,
@@ -202,7 +202,7 @@ def setup_plot_df(
     ).astype({"chain_index": "category"})
 
 
-def setup_scatterplot_df(
+def _setup_scatterplot_df(
     results: SamplingResults,
     params: str | list[str] | None,
     param_indices: int | Sequence[int] | None,
@@ -221,11 +221,11 @@ def setup_scatterplot_df(
         or isinstance(param_indices, int)
         or param_indices is None
     ):
-        return setup_plot_df(
+        return _setup_plot_df(
             results, params, param_indices, chain_indices, max_chains, include_warmup
         )
     if not isinstance(params, str) and len(params) > 1:
-        param0_df = setup_plot_df(
+        param0_df = _setup_plot_df(
             results,
             params[0],
             param_indices[0],
@@ -233,7 +233,7 @@ def setup_scatterplot_df(
             max_chains,
             include_warmup,
         )
-        param1_df = setup_plot_df(
+        param1_df = _setup_plot_df(
             results,
             params[1],
             param_indices[1],
@@ -243,20 +243,20 @@ def setup_scatterplot_df(
         )
         plot_df = pd.concat([param0_df, param1_df], ignore_index=True)
     else:
-        plot_df = setup_plot_df(
+        plot_df = _setup_plot_df(
             results, params, param_indices, chain_indices, max_chains, include_warmup
         )
     return plot_df
 
 
-def set_plot_cols(plot_df: pd.DataFrame, ncol: int) -> int:
+def _set_plot_cols(plot_df: pd.DataFrame, ncol: int) -> int:
     """Determines number of facets within each row of the grid."""
 
     num_subparams = plot_df["param_label"].nunique()
     return min(ncol, num_subparams)
 
 
-def set_aesthetics(
+def _set_aesthetics(
     g: sns.FacetGrid, title: str | None, title_spacing: float, xlabel: str, ylabel: str
 ) -> sns.FacetGrid:
     """Adds titles, labels and correct spacing between facets."""
@@ -376,7 +376,7 @@ def plot_trace(
     # and partially with `plot_param()`.
 
     sns.set_theme(style=style)
-    plot_df = setup_plot_df(
+    plot_df = _setup_plot_df(
         results, params, param_indices, chain_indices, max_chains, include_warmup
     )
 
@@ -387,7 +387,7 @@ def plot_trace(
         y="value",
         hue="chain_index",
         col="param_label",
-        col_wrap=set_plot_cols(plot_df, ncol),
+        col_wrap=_set_plot_cols(plot_df, ncol),
         facet_kws=dict(sharex=True, sharey=False),
         palette=color_palette,
         height=height,
@@ -395,7 +395,7 @@ def plot_trace(
         **kwargs,
     )
 
-    g = set_aesthetics(g, title, title_spacing, xlabel, ylabel="")
+    g = _set_aesthetics(g, title, title_spacing, xlabel, ylabel="")
 
     save_figure(g, save_path)
     return g
@@ -488,7 +488,7 @@ def plot_density(
     # and partially with `plot_param()`.
 
     sns.set_theme(style=style)
-    plot_df = setup_plot_df(results, params, param_indices, chain_indices, max_chains)
+    plot_df = _setup_plot_df(results, params, param_indices, chain_indices, max_chains)
 
     g = sns.displot(
         data=plot_df,
@@ -497,7 +497,7 @@ def plot_density(
         y=None,
         hue="chain_index",
         col="param_label",
-        col_wrap=set_plot_cols(plot_df, ncol),
+        col_wrap=_set_plot_cols(plot_df, ncol),
         facet_kws=dict(sharex=False, sharey=False),
         palette=color_palette,
         height=height,
@@ -505,13 +505,13 @@ def plot_density(
         **kwargs,
     )
 
-    g = set_aesthetics(g, title, title_spacing, xlabel, ylabel="")
+    g = _set_aesthetics(g, title, title_spacing, xlabel, ylabel="")
 
     save_figure(g, save_path)
     return g
 
 
-def compute_max_lags(
+def _compute_max_lags(
     plot_df: pd.DataFrame,
     max_lags: int | None,
 ) -> int:
@@ -618,8 +618,8 @@ def plot_cor(
     # The entry `max_lags` is shared with `plot_param()`.
 
     sns.set_theme(style=style)
-    plot_df = setup_plot_df(results, params, param_indices, chain_indices, max_chains)
-    max_lags = compute_max_lags(plot_df, max_lags)
+    plot_df = _setup_plot_df(results, params, param_indices, chain_indices, max_chains)
+    max_lags = _compute_max_lags(plot_df, max_lags)
 
     def do_acor_plot(x, maxlags, **kwargs):
         x = np.asarray(x)
@@ -631,7 +631,7 @@ def plot_cor(
             data=plot_df,
             hue="chain_index",
             col="param_label",
-            col_wrap=set_plot_cols(plot_df, ncol),
+            col_wrap=_set_plot_cols(plot_df, ncol),
             palette=color_palette,
             height=height,
             aspect=aspect_ratio,
@@ -649,13 +649,13 @@ def plot_cor(
         .add_legend()
     )
 
-    g = set_aesthetics(g, title, title_spacing, xlabel, ylabel="Autocorrelation")
+    g = _set_aesthetics(g, title, title_spacing, xlabel, ylabel="Autocorrelation")
 
     save_figure(g, save_path)
     return g
 
 
-def raise_multi_param_error(plot_df: pd.DataFrame, param: str) -> None:
+def _raise_multi_param_error(plot_df: pd.DataFrame, param: str) -> None:
     """
     :func:`.plot_param` function can only display all three diagnostic plots for a
     single subparameter. Throws an informative error otherwise.
@@ -668,7 +668,7 @@ def raise_multi_param_error(plot_df: pd.DataFrame, param: str) -> None:
         )
 
 
-def set_colors(plot_df: pd.DataFrame, color_list: list[str] | None) -> list[str]:
+def _set_colors(plot_df: pd.DataFrame, color_list: list[str] | None) -> list[str]:
     """Determines colors of different chains in each plot."""
 
     num_chains = plot_df["chain_index"].nunique()
@@ -686,7 +686,7 @@ def set_colors(plot_df: pd.DataFrame, color_list: list[str] | None) -> list[str]
     return color_list
 
 
-def setup_grid(
+def _setup_grid(
     figure_size: tuple[int | float, int | float]
 ) -> tuple[plt.Figure, Any, Any, Any]:
     """
@@ -701,7 +701,7 @@ def setup_grid(
     return fig, ax1, ax2, ax3
 
 
-def add_lineplot(plot_df: pd.DataFrame, ax: Any, color_list: list[str]) -> None:
+def _add_lineplot(plot_df: pd.DataFrame, ax: Any, color_list: list[str]) -> None:
     """Adds trace plot to plotting grid."""
 
     sns.lineplot(
@@ -715,7 +715,7 @@ def add_lineplot(plot_df: pd.DataFrame, ax: Any, color_list: list[str]) -> None:
     ).set(xlabel="Iteration", ylabel="")
 
 
-def add_kdeplot(plot_df: pd.DataFrame, ax: Any, color_list: list[str]) -> None:
+def _add_kdeplot(plot_df: pd.DataFrame, ax: Any, color_list: list[str]) -> None:
     """Adds density plot to plotting grid."""
 
     sns.kdeplot(
@@ -728,12 +728,12 @@ def add_kdeplot(plot_df: pd.DataFrame, ax: Any, color_list: list[str]) -> None:
     ).set(xlabel="Value", ylabel="")
 
 
-def add_corplot(
+def _add_corplot(
     plot_df: pd.DataFrame, ax: Any, max_lags: int | None, color_list: list[str]
 ) -> None:
     """Adds correlation plot to plotting grid."""
 
-    max_lags = compute_max_lags(plot_df, max_lags)
+    max_lags = _compute_max_lags(plot_df, max_lags)
 
     for chain_index, col in zip(plot_df["chain_index"].unique(), color_list):
         x = np.asarray(plot_df.loc[plot_df["chain_index"] == chain_index]["value"])
@@ -751,7 +751,7 @@ def add_corplot(
         ax.set(xlim=(0, max_lags), ylim=(-0.2, 1.1), xlabel="Lag", ylabel="")
 
 
-def get_title(plot_df: pd.DataFrame, title: str | None) -> str:
+def _get_title(plot_df: pd.DataFrame, title: str | None) -> str:
     """Sets either a custom or the default plot title."""
 
     default_title = f"Diagnostic plots for '{plot_df['param'][0]}'"
@@ -839,18 +839,18 @@ def plot_param(
     # The entry `max_lags` is shared with `plot_cor()`.
 
     sns.set_theme(style=style)
-    plot_df = setup_plot_df(results, param, param_index, chain_indices, max_chains)
-    raise_multi_param_error(plot_df, param)
-    color_list = set_colors(plot_df, color_list)
+    plot_df = _setup_plot_df(results, param, param_index, chain_indices, max_chains)
+    _raise_multi_param_error(plot_df, param)
+    color_list = _set_colors(plot_df, color_list)
 
-    fig, ax1, ax2, ax3 = setup_grid(figure_size)
-    add_lineplot(plot_df, ax1, color_list)
-    add_kdeplot(plot_df, ax2, color_list)
-    add_corplot(plot_df, ax3, max_lags, color_list)
+    fig, ax1, ax2, ax3 = _setup_grid(figure_size)
+    _add_lineplot(plot_df, ax1, color_list)
+    _add_kdeplot(plot_df, ax2, color_list)
+    _add_corplot(plot_df, ax3, max_lags, color_list)
     ax1.legend(title="Chain", bbox_to_anchor=legend_position, frameon=False)
 
     fig.tight_layout()
-    fig.suptitle(get_title(plot_df, title))
+    fig.suptitle(_get_title(plot_df, title))
     fig.subplots_adjust(top=title_spacing)
 
     save_figure(save_path=save_path)
@@ -934,7 +934,7 @@ def plot_scatter(
     # Multiple arguments in this docstring are shared with other plotting functions.
 
     sns.set_theme(style=style)
-    plot_df = setup_scatterplot_df(
+    plot_df = _setup_scatterplot_df(
         results, params, param_indices, chain_indices, max_chains, include_warmup
     )
 
@@ -954,7 +954,7 @@ def plot_scatter(
         .drop(["iteration"], axis=1)
     )
 
-    color_list = set_colors(plot_df, color_list)
+    color_list = _set_colors(plot_df, color_list)
     fig, axis = plt.subplots(1, 1, figsize=figure_size)
     sns.scatterplot(
         data=plot_df,
@@ -1059,7 +1059,7 @@ def plot_pairs(
     # Multiple arguments in this docstring are shared with other plotting functions.
 
     sns.set_theme(style=style)
-    plot_df = setup_plot_df(
+    plot_df = _setup_plot_df(
         results, params, param_indices, chain_indices, max_chains, include_warmup
     )
 
