@@ -249,7 +249,7 @@ class GeneratedQuantity(Protocol):
     implmentations of :class:`.QuantityGenerator`.
 
     Concrete implementations should add additional attributes.
-    
+
     The attribute ``error_code`` is reserved to store integers that map to error
     messages via the error book provided in the implmentation of
     :class:`.QuantityGenerator`.
