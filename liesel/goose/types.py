@@ -226,6 +226,17 @@ class Kernel(Protocol[TKernelState, TTransitionInfo, TTuningInfo]):
 
 
 class GeneratedQuantity(Protocol):
+    """
+    Protocol representing the data structure for quantities generated via
+    implmentations of :class:`.QuantityGenerator`.
+
+    Concrete implementations should add additional attributes.
+    
+    The attribute ``error_code`` is reserved to store integers that map to error
+    messages via the error book provided in the implmentation of
+    :class:`.QuantityGenerator`.
+    """
+
     error_code: int
 
 
@@ -235,6 +246,11 @@ TGeneratedQuantity = TypeVar(
 
 
 class QuantityGenerator(Protocol[TGeneratedQuantity]):
+    """
+    Protocol for a class that calculates a quantity based on the model
+    state and a random seed.
+    """
+
     error_book: ClassVar[dict[int, str]]
     identifier: str
 
