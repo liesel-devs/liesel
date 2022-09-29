@@ -50,6 +50,7 @@ class DefaultTuningInfo:
     error_code: int
     """Error code for error during tuning."""
     time: int
+    """MCMC time when the tuning happend."""
 
 
 @register_dataclass_as_pytree
