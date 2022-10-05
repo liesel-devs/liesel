@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import typing
 from collections.abc import Sequence
-from dataclasses import dataclass
 from typing import Any, NamedTuple
 
 import arviz as az
@@ -15,6 +14,7 @@ import jaxlib.xla_extension
 import numpy as np
 import pandas as pd
 import xarray
+from deprecated.sphinx import deprecated
 
 from liesel.goose.engine import ErrorLog, SamplingResults
 from liesel.goose.pytree import slice_leaves, stack_leaves
@@ -637,21 +637,37 @@ def _make_error_summary(
     return error_summary
 
 
-@dataclass
 class Summary:
     """
     A summary object.
 
     Allows easy programmatic access via ``quantities[quantity_name][var_name]``. The
-    array has a similar shape as the parameter with ``var_name``. However, if
-    ``per_chain`` is ``True``, the first dimension refers to the chain index.
-    Additionally, for ``hdi`` and ``quantile`` the second dimension refers to the
-    quantile.
+    array has a similar shape as the parameter with ``var_name``. However, Additionally,
+    for ``hdi`` and ``quantile`` the second dimension refers to the quantile.
 
-    The summary object can be turned into a :class:`~pandas.DataFrame` using the
-    function ``to_dataframe``.
+    The summary object can be turned into a :class:`~pandas.DataFrame` using
+    :meth:`.to_dataframe`.
 
-    Experimental.
+    Parameters
+    ----------
+    results
+        The sampling results to summarize.
+    additional_chain
+        can be supplied to add more parameters to the summary output. Must be a position
+        chain which matches chain and time dimension of the posterior chain as returned
+        by :meth:`.SamplingResults.get_posterior_samples`.
+    hdi_prob
+        Level on which to return posterior highest density intervals.
+    selected, deselected
+        Allow to get a summary only for a subset of the position keys.
+    per_chain
+        If *True*, the summary is calculated on a per-chain basis. Certain measures like
+        ``rhat`` are not available if ``per_chain`` is *True*.
+
+    Notes
+    -----
+    This class is still considered experimental. The API may still undergo larger
+    changes.
     """
 
     quantities: dict[str, dict[str, np.ndarray]]
@@ -659,6 +675,82 @@ class Summary:
     sample_info: dict
     error_summary: ErrorSummary
     kernels_by_pos_key: dict[str, str]
+
+    def __init__(
+        self,
+        results: SamplingResults,
+        additional_chain: Position | None = None,
+        quantiles: Sequence[float] = (0.05, 0.5, 0.95),
+        hdi_prob: float = 0.9,
+        selected: list[str] | None = None,
+        deselected: list[str] | None = None,
+        per_chain=False,
+    ):
+        posterior_chain = results.get_posterior_samples()
+        if additional_chain:
+            for k, v in additional_chain.items():
+                posterior_chain[k] = v
+
+        if selected:
+            posterior_chain = Position(
+                {
+                    key: value
+                    for key, value in posterior_chain.items()
+                    if key in selected
+                }
+            )
+
+        if deselected is not None:
+            for key in deselected:
+                del posterior_chain[key]
+
+        # get some general infos on the sampling
+        param_chain = next(iter(posterior_chain.values()))
+        epochs = results.positions.get_epochs()
+
+        warmup_size = np.sum(
+            [epoch.duration for epoch in epochs if epoch.type.is_warmup(epoch.type)]
+        )
+
+        sample_info = {
+            "num_chains": param_chain.shape[0],
+            "sample_size_per_chain": param_chain.shape[1],
+            "warmup_size_per_chain": warmup_size,
+        }
+
+        # convert everything to numpy array
+        for key in posterior_chain:
+            posterior_chain[key] = np.asarray(posterior_chain[key])
+
+        # calculate quantiles either per chain and merge the results or all at once
+        single_chain_summaries = []
+        if per_chain:
+            for chain_idx in range(sample_info["num_chains"]):
+                single_chain = slice_leaves(
+                    posterior_chain, jnp.s_[None, chain_idx, ...]
+                )
+                single_chain_summaries.append(
+                    _create_quantity_dict(single_chain, quantiles, hdi_prob)
+                )
+            quantities = stack_leaves(single_chain_summaries, axis=0)
+        else:
+            quantities = _create_quantity_dict(posterior_chain, quantiles, hdi_prob)
+
+        config = {
+            "quantiles": quantiles,
+            "hdi_prob": hdi_prob,
+            "chains_merged": not per_chain,
+        }
+
+        error_summary = _make_error_summary(
+            results.get_error_log(False).unwrap(), results.get_error_log(True)
+        )
+
+        self.quantities = quantities
+        self.config = config
+        self.sample_info = sample_info
+        self.error_summary = error_summary
+        self.kernels_by_pos_key = results.get_kernels_by_pos_key()
 
     def to_dataframe(self) -> pd.DataFrame:
         """Turns Summary object into a :class:`~pandas.DataFrame` object."""
@@ -848,6 +940,7 @@ class Summary:
         return str(self.to_dataframe())
 
     @classmethod
+    @deprecated(reason="Functionality moved directly to the __init__.", version="0.1.4")
     def from_result(
         cls,
         result: SamplingResults,
@@ -881,6 +974,7 @@ class Summary:
         )
 
     @staticmethod
+    @deprecated(reason="Functionality moved directly to the __init__.", version="0.1.4")
     def from_results(
         results: SamplingResults,
         additional_chain: Position | None = None,
@@ -892,87 +986,16 @@ class Summary:
     ) -> Summary:
         """
         Creates a :class:`.Summary` object from a results object.
-
-        An optional ``additional_chain`` can be supplied to add more parameters to
-        the summary output. ``additional_chain`` must be a position chain which
-        matches chain and time dimension of the posterior chain as returned by
-        :meth:`SamplingResults.get_posterior_samples`.
-
-        The arguments ``selected`` and ``deselected`` allow to get a summary only
-        for a subset of the position keys.
-
-        When using ``per_chain``, the summary is calculated on a per-chain basis.
-        Certain measures like ``rhat`` are not available if ``per_chain`` is true.
-
-        Experimental.
         """
 
-        posterior_chain = results.get_posterior_samples()
-        if additional_chain:
-            for k, v in additional_chain.items():
-                posterior_chain[k] = v
-
-        if selected:
-            posterior_chain = Position(
-                {
-                    key: value
-                    for key, value in posterior_chain.items()
-                    if key in selected
-                }
-            )
-
-        if deselected is not None:
-            for key in deselected:
-                del posterior_chain[key]
-
-        # get some general infos on the sampling
-        param_chain = next(iter(posterior_chain.values()))
-        epochs = results.positions.get_epochs()
-
-        warmup_size = np.sum(
-            [epoch.duration for epoch in epochs if epoch.type.is_warmup(epoch.type)]
-        )
-
-        sample_info = {
-            "num_chains": param_chain.shape[0],
-            "sample_size_per_chain": param_chain.shape[1],
-            "warmup_size_per_chain": warmup_size,
-        }
-
-        # convert everything to numpy array
-        for key in posterior_chain:
-            posterior_chain[key] = np.asarray(posterior_chain[key])
-
-        # calculate quantiles either per chain and merge the results or all at once
-        single_chain_summaries = []
-        if per_chain:
-            for chain_idx in range(sample_info["num_chains"]):
-                single_chain = slice_leaves(
-                    posterior_chain, jnp.s_[None, chain_idx, ...]
-                )
-                single_chain_summaries.append(
-                    _create_quantity_dict(single_chain, quantiles, hdi_prob)
-                )
-            quantities = stack_leaves(single_chain_summaries, axis=0)
-        else:
-            quantities = _create_quantity_dict(posterior_chain, quantiles, hdi_prob)
-
-        config = {
-            "quantiles": quantiles,
-            "hdi_prob": hdi_prob,
-            "chains_merged": not per_chain,
-        }
-
-        error_summary = _make_error_summary(
-            results.get_error_log(False).unwrap(), results.get_error_log(True)
-        )
-
         return Summary(
-            quantities=quantities,
-            config=config,
-            sample_info=sample_info,
-            error_summary=error_summary,
-            kernels_by_pos_key=results.get_kernels_by_pos_key(),
+            results=results,
+            additional_chain=additional_chain,
+            quantiles=quantiles,
+            hdi_prob=hdi_prob,
+            selected=selected,
+            deselected=deselected,
+            per_chain=per_chain,
         )
 
 

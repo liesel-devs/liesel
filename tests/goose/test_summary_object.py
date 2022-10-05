@@ -162,7 +162,7 @@ def result() -> SamplingResults:
 
 
 def test_shapes(result: SamplingResults):
-    summary = Summary.from_results(result)
+    summary = Summary(result)
 
     # combined chains
     assert summary.quantities["mean"]["foo"].shape == (3,)
@@ -184,7 +184,7 @@ def test_shapes(result: SamplingResults):
     assert summary.quantities["hdi"]["baz"].shape == (2,)
 
     # combined chains
-    summary = Summary.from_results(result, quantiles=(0.2, 0.4), per_chain=True)
+    summary = Summary(result, quantiles=(0.2, 0.4), per_chain=True)
 
     assert summary.quantities["mean"]["foo"].shape == (
         3,
@@ -218,14 +218,14 @@ def test_additional_chain(result: SamplingResults):
     chain["expbaz"] = jnp.log(chain["baz"] + 1)
     chain["expbar"] = jnp.log(chain["bar"] + 1)
 
-    summary = Summary.from_results(result, chain)
+    summary = Summary(result, chain)
 
     assert summary.quantities["mean"]["expbar"].shape == (3, 5, 7)
     assert summary.quantities["mean"]["expbaz"].shape == ()
 
 
 def test_selected(result: SamplingResults):
-    summary = Summary.from_results(result, selected=["foo"])
+    summary = Summary(result, selected=["foo"])
 
     assert "foo" in summary.quantities["mean"]
     assert "bar" not in summary.quantities["mean"]
@@ -233,7 +233,7 @@ def test_selected(result: SamplingResults):
 
 
 def test_deselected(result: SamplingResults):
-    summary = Summary.from_results(result, deselected=["baz"])
+    summary = Summary(result, deselected=["baz"])
 
     assert "foo" in summary.quantities["mean"]
     assert "bar" in summary.quantities["mean"]
@@ -241,7 +241,7 @@ def test_deselected(result: SamplingResults):
 
 
 def test_mean(result: SamplingResults):
-    summary = Summary.from_results(result)
+    summary = Summary(result)
     assert jnp.allclose(
         summary.quantities["mean"]["foo"], jnp.array([175.5, 176.5, 177.5])
     )
@@ -252,26 +252,24 @@ def test_mean(result: SamplingResults):
 
 
 def test_config(result: SamplingResults):
-    summary = Summary.from_results(result, quantiles=(0.4, 0.6), hdi_prob=0.5)
+    summary = Summary(result, quantiles=(0.4, 0.6), hdi_prob=0.5)
     assert summary.config["chains_merged"]
     assert summary.config["quantiles"] == (0.4, 0.6)
     assert summary.config["hdi_prob"] == 0.5
 
 
 def test_sample_info(result: SamplingResults):
-    summary = Summary.from_results(result)
+    summary = Summary(result)
     print(summary.sample_info)
     assert summary.sample_info["num_chains"] == 3
     assert summary.sample_info["sample_size_per_chain"] == 250
 
 
 def test_df_sample_info(result: SamplingResults):
-    summary = Summary.from_results(result, selected=["baz"]).to_dataframe()
+    summary = Summary(result, selected=["baz"]).to_dataframe()
     assert summary["sample_size"][0] == 3 * 250
 
-    summary = Summary.from_results(
-        result, per_chain=True, selected=["baz"]
-    ).to_dataframe()
+    summary = Summary(result, per_chain=True, selected=["baz"]).to_dataframe()
     assert summary["sample_size"][0] == 250
 
 
@@ -305,7 +303,7 @@ def test_error_summary(result: SamplingResults):
     ].error_code = ecs
 
     # create the summary object
-    summary = Summary.from_results(result, selected=["baz"])
+    summary = Summary(result, selected=["baz"])
     es = summary.error_summary["kernel_00"]
 
     # check error_code correspond
@@ -354,7 +352,7 @@ def single_chain_result() -> SamplingResults:
 
 
 def test_single_chain_repr_fs_return(single_chain_result: SamplingResults):
-    summary = Summary.from_results(single_chain_result)
+    summary = Summary(single_chain_result)
     md = summary._repr_markdown_()
     html = summary._repr_html_()
     assert isinstance(md, str)
