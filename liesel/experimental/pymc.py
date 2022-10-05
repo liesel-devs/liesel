@@ -64,7 +64,7 @@ examples::
 
     engine.sample_all_epochs()
     results = engine.get_results()
-    sum = gs.Summary.from_result(results)
+    sum = gs.Summary(results)
     sum
 
 

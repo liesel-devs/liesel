@@ -49,6 +49,7 @@ The name "Liesel" is an homage to the [Gänseliesel fountain](https://en.wikiped
 
 ## Resources
 
+- :newspaper: [Paper on arXiv](https://arxiv.org/abs/2209.10975)
 - :girl::swan::computer: [Liesel & Goose repo](https://github.com/liesel-devs/liesel)
 - :girl::swan::book: [Liesel & Goose API docs](https://docs.liesel-project.org)
 - :registered::computer: [RLiesel repo](https://github.com/liesel-devs/rliesel)
@@ -106,7 +107,7 @@ Finally, we can print a summary table and view some diagnostic plots.
 #| label: goose-plot
 
 results = engine.get_results()
-gs.Summary.from_results(results)
+gs.Summary(results)
 gs.plot_param(results, param="loc")
 ```
 

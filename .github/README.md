@@ -37,6 +37,7 @@ Liesel’s birth city
 
 ## Resources
 
+-   :newspaper: [Paper on arXiv](https://arxiv.org/abs/2209.10975)
 -   :girl::swan::computer: [Liesel & Goose
     repo](https://github.com/liesel-devs/liesel)
 -   :girl::swan::book: [Liesel & Goose API
@@ -135,7 +136,7 @@ Finally, we can print a summary table and view some diagnostic plots.
 
 ``` python
 results = engine.get_results()
-gs.Summary.from_results(results)
+gs.Summary(results)
 ```
 
 <p><strong>Parameter summary:</strong></p>
