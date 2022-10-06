@@ -7,7 +7,7 @@
 
 
    {% block methods %}
-   {% if methods %}
+   {% if methods | reject("in", inherited_members) | reject("equalto", "__init__") | list | length > 0 %}
    .. rubric:: {{ _('Methods') }}
 
    This section is empty if this class has only inherited attributes.
@@ -25,7 +25,7 @@
    {% endblock %}
 
    {% block attributes %}
-   {% if attributes %}
+   {% if attributes | reject("in", inherited_members) | list | length > 0 %}
    .. rubric:: {{ _('Attributes') }}
 
    This section is empty if this class has only inherited attributes.

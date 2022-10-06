@@ -8,9 +8,11 @@ from typing import Callable, Generic
 
 import jax
 
+from ..docs import usedocs
 from .epoch import EpochState, EpochType
 from .pytree import register_dataclass_as_pytree
 from .types import (
+    Kernel,
     KeyArray,
     ModelInterface,
     ModelState,
@@ -26,19 +28,29 @@ __docformat__ = "numpy"
 @register_dataclass_as_pytree
 @dataclass
 class DefaultTransitionInfo:
+    """A default template for a transition information object."""
+
     error_code: int
+    """Error code for the transition."""
     acceptance_prob: float
+    """Acceptance probability of the transition."""
     position_moved: int
+    """Indicates whether the transition resulted in acceptance or not."""
 
     def minimize(self) -> "DefaultTransitionInfo":
+        """Minimizes the transitioninfo."""
         return self
 
 
 @register_dataclass_as_pytree
 @dataclass
 class DefaultTuningInfo:
+    """A default template for a tuning information object."""
+
     error_code: int
+    """Error code for error during tuning."""
     time: int
+    """MCMC time when the tuning happend."""
 
 
 @register_dataclass_as_pytree
@@ -51,8 +63,21 @@ class TransitionOutcome(Generic[TKernelState, TTransitionInfo]):
     """
 
     info: TTransitionInfo
+    """
+    A transition info object, see :class:`.DefaultTransitionInfo`.
+    """
     kernel_state: TKernelState
+    """
+    A kernel state object, see :class:`.DAKernelState`.
+    """
     model_state: ModelState
+    """
+    Model state that results from the transition.
+
+    The exact definition depends on the model being used. See, for example,
+    :class:`.DictModel`.
+
+    """
 
 
 @register_dataclass_as_pytree
@@ -65,7 +90,13 @@ class TuningOutcome(Generic[TKernelState, TTuningInfo]):
     """
 
     info: TTuningInfo
+    """
+    A tuning info object, see :class:`.DefaultTuningInfo`.
+    """
     kernel_state: TKernelState
+    """
+    A kernel state object, see :class:`.DAKernelState`.
+    """
 
 
 @register_dataclass_as_pytree
@@ -77,7 +108,11 @@ class WarmupOutcome(Generic[TKernelState]):
     """
 
     error_code: int
+    """Error code for the transition."""
     kernel_state: TKernelState
+    """
+    A kernel state object, see :class:`.DAKernelState`.
+    """
 
 
 class ModelMixin:
@@ -129,6 +164,7 @@ class TransitionMixin(Generic[TKernelState, TTransitionInfo]):
     An abstract mixin defining two transition methods with and without adaptation.
     """
 
+    @usedocs(Kernel.transition)
     def transition(
         self,
         prng_key: KeyArray,
@@ -185,6 +221,7 @@ class TuningMixin(Generic[TKernelState, TTuningInfo]):
     epoch.
     """
 
+    @usedocs(Kernel.tune)
     def tune(
         self,
         prng_key: KeyArray,

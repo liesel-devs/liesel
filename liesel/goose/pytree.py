@@ -58,7 +58,8 @@ def stack_leaves(pytrees, axis=0):
     """
     Stacks all leaves in the list of pytrees along the given axis.
 
-    The stack operation creates a new axis.
+    The function applies :func:`jax.numpy.stack` to all leaves. The stack
+    operation creates a new axis.
     """
     return jax.tree_util.tree_map(
         lambda *xs: jnp.stack(xs, axis=axis),
@@ -70,7 +71,8 @@ def concatenate_leaves(pytrees, axis=0):
     """
     Concatenates all leaves in the list of pytrees along the given axis.
 
-    The concatenate operation does not create a new axis.
+    The function applies :func:`jax.numpy.concatenate` to all leaves. The
+    concatenate operation does not create a new axis.
     """
     return jax.tree_util.tree_map(lambda *xs: jnp.concatenate(xs, axis=axis), *pytrees)
 
@@ -89,6 +91,8 @@ def split_leaves(pytree, indices_or_sections, axis=0):
 def squeeze_leaves(pytree, axis=0):
     """
     Squeezes all leaves in a pytree.
+
+    The function applies :func:`jax.numpy.squeeze` to all leaves.
     """
     return jax.tree_util.tree_map(lambda x: jnp.squeeze(x, axis), pytree)
 

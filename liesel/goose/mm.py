@@ -21,6 +21,12 @@ def _history_to_matrix(history: Position) -> Array:
 def tune_inv_mm_diag(history: Position) -> Array:
     """
     Tunes an inverse mass vector with the sample variances of the history.
+
+    Parameters
+    ----------
+    history
+            Holds the history of the position. It is to be understand as in
+            :meth:`liesel.goose.types.Kernel.tune`.
     """
 
     matrix = _history_to_matrix(history)
@@ -33,8 +39,15 @@ def tune_inv_mm_diag(history: Position) -> Array:
 
 def tune_inv_mm_full(history: Position) -> Array:
     """
-    Tunes an inverse mass matrix with the sample variance-covariance matrix
-    of the history.
+    Tunes an inverse mass matrix with the sample variance-covariance matrix of
+    the history.
+
+    Parameters
+    ----------
+    history
+            Holds the history of the position. It is to be understand as in
+            :meth:`liesel.goose.types.Kernel.tune`.
+
     """
 
     matrix = _history_to_matrix(history)

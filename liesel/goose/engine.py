@@ -21,6 +21,7 @@ import jax.numpy as jnp
 import jax.random
 import jax.tree_util
 import numpy as np
+from deprecated.sphinx import deprecated
 from tqdm import tqdm
 
 from liesel.option import Option
@@ -75,14 +76,15 @@ def _expand_and_stack(chunk, *rest):
     return jnp.concatenate(expended_chunks, axis=0)
 
 
+@deprecated(
+    version="0.1.0", reason="Use the functions from liesel.goose.pytree instead."
+)
 def stack_for_multi(chunks: list):
     """
     Combine identically structured pytrees to be used in multichain.
 
     The function adds a new dimension (axis 0) to each leaf and stacks the leafs
     along the new axis.
-
-    **deprecated**
     """
 
     warnings.warn(
@@ -129,6 +131,10 @@ def _add_time_dimension(x: PyTree) -> PyTree:
 @register_dataclass_as_pytree
 @dataclass(frozen=True)
 class Carry:
+    """
+    Holds the state that needs to be carried between MCMC interations.
+    """
+
     kernel_states: KernelStates
     model_state: ModelState
     epoch: EpochState
@@ -144,37 +150,89 @@ class SamplingResults:
     """
 
     positions: EpochChainManager
+    """EpochChainManager giving access to monitored variables."""
     transition_infos: EpochChainManager
+    """EpochChainManager storing all transition infos."""
     generated_quantities: Option[EpochChainManager]
+    """
+    Option[EpochChainManager] storing all generated_quantities.
+
+    is_none(), if no quantities have been generated.
+    """
     tuning_infos: Option[Chain]
+    """
+    Option[Chain] storing all tuning infos.
+
+    is_none(), if no tuning was executed
+    """
+
     kernel_states: Option[EpochChainManager]
+    """
+    Option[EpochChainManager] holds all kernel states.
+
+    is_none(), if monitoring kernel states was not requested.
+    """
+
     full_model_states: Option[EpochChainManager]
+    """
+    Option[EpochChainManager] holds the full model state of each iteration.
+
+    is_none(), if monitoring was not explicitly requested.
+    """
+
     kernel_classes: Option[dict[str, type]]
+    """
+    Optional map of kernel identifier to the respective kernel type.
+    """
+
     kernels_by_pos_key: Option[dict[str, str]]
+    """
+    Optional map of position key to identifier of the for sampling responsible
+    kernel.
+    """
 
     def get_samples(self) -> Position:
+        """
+        Returns a dictionary of all samples for all parameters included in the
+        position.
+        """
         opt: Option[Position] = self.positions.combine_all()
         return opt.expect(f"No samples in {repr(self)}")
 
     def get_posterior_samples(self) -> Position:
+        """
+        Returns a dictionary of posterior samples for all parameters included in the
+        position.
+        """
         opt = self.positions.combine_filtered(
             lambda config: config.type == EpochType.POSTERIOR
         )
         return opt.expect(f"No posterior samples in {repr(self)}")
 
     def get_kernels_by_pos_key(self) -> dict[str, str]:
-        """Returns a :class:`dict` of ``{"position name": "kernel identifier"}``."""
+        """
+        Returns a dict, identifying the kernel used to sample each position.
+
+        The dict has the format ``{"position name": "kernel identifier"}``.
+        """
         return self.kernels_by_pos_key.expect(
             f"No position-kernel associations in {repr(self)}"
         )
 
     def get_posterior_transition_infos(self) -> dict[str, TransitionInfo]:
+        """
+        Returns a dictionary of posterior transition information for all parameters
+        included in the position.
+        """
         opt = self.transition_infos.combine_filtered(
             lambda config: config.type == EpochType.POSTERIOR
         )
         return opt.expect(f"No posterior transition infos in {repr(self)}")
 
     def get_tuning_times(self) -> Option[Array]:
+        """
+        Returns array of tuning times.
+        """
         if self.tuning_infos.is_none():
             return Option.none()
 
@@ -226,6 +284,7 @@ class SamplingResults:
             return pickle.load(f)
 
 
+@deprecated(reason="Use SamplingResults", version="0.1.4")
 class SamplingResult(SamplingResults):
     """Alias of :class:`.SamplingResults` for backwards compatibility."""
 

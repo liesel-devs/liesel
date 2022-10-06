@@ -53,6 +53,9 @@ def mvn_log_prob(x: Array, mean: Array, chol_inv_cov: Array) -> Array:
 
 def mvn_sample(prng_key: KeyArray, mean: Array, chol_inv_cov: Array) -> Array:
     """
+    Samples from the normal distribution based on the Cholesky decomposition of the
+    inverse covariance matrix.
+
     Parameters
     ----------
     prng_key

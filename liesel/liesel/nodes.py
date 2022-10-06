@@ -999,6 +999,13 @@ def transform_parameter(node: Node, bijector: str | TFPBijectorClass) -> NodeGro
     Transforms a parameter and its distribution with a TFP bijector.
 
     Returns a node group of the transformed and the original parameter.
+
+    Parameters
+    ----------
+    node
+        Node to be transformed.
+    bijector
+        A bijector class (or a name of a bijector class) from tensorflow probability.
     """
 
     if node.has_name:

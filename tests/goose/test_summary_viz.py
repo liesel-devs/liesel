@@ -5,11 +5,11 @@ import pytest
 
 from liesel.goose.engine import SamplingResults
 from liesel.goose.summary_viz import (
+    _setup_plot_df,
     plot_cor,
     plot_density,
     plot_param,
     plot_trace,
-    setup_plot_df,
 )
 
 # use non-interactive backend
@@ -23,7 +23,7 @@ results = SamplingResults.pkl_load(path)
 
 
 def test_data_complete():
-    data_complete = setup_plot_df(
+    data_complete = _setup_plot_df(
         results, params=None, param_indices=None, chain_indices=None, max_chains=None
     )
 
@@ -46,7 +46,7 @@ def test_data_complete():
 
 
 def test_data_subset():
-    data_subset = setup_plot_df(
+    data_subset = _setup_plot_df(
         results,
         params="beta",
         param_indices=[1, 3, 4],
@@ -69,13 +69,13 @@ def test_data_subset():
 
 
 def test_max_chains():
-    data_max_chains_large = setup_plot_df(
+    data_max_chains_large = _setup_plot_df(
         results, params=None, param_indices=None, chain_indices=None, max_chains=100
     )
 
     assert data_max_chains_large["chain_index"].nunique() == 15
 
-    data_max_chains_small = setup_plot_df(
+    data_max_chains_small = _setup_plot_df(
         results,
         params=None,
         param_indices=None,

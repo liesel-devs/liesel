@@ -30,11 +30,15 @@ KeyArray = Any
 
 
 class TuningInfo(Protocol):
+    """Holds information about sampler tuning."""
+
     error_code: int
     time: int
 
 
 class TransitionInfo(Protocol):
+    """Holds information about MCMC transitions."""
+
     error_code: int
     """
     An error code defined in the error book of the kernel.
@@ -121,10 +125,12 @@ class Kernel(Protocol[TKernelState, TTransitionInfo, TTuningInfo]):
 
     @abstractmethod
     def set_model(self, model: ModelInterface):
+        """Sets the model interface."""
         ...
 
     @abstractmethod
     def has_model(self) -> bool:
+        """Whether the model interface is set."""
         ...
 
     @abstractmethod
@@ -155,11 +161,29 @@ class Kernel(Protocol[TKernelState, TTransitionInfo, TTuningInfo]):
         history: Position | None,
     ) -> TuningOutcome[TKernelState, TTuningInfo]:
         """
-        Called after each warmup epoch.
+        The method can perform automatic tuning of the kernel and is called
+        after each adaptation epoch.
 
-        ``history`` may be ``None`` if class variable ``needs_history`` is ``False``.
+        To tune the kernel, the method can return an altered kernel state.
 
         Must be jittable.
+
+        Parameters
+        ----------
+        prng_key
+            The key for JAX' pseudo-random number generator.
+        model_state
+            Current model state.
+        kernel_state
+            Current kernel state.
+        epoch
+            Current epoch state.
+        history
+            Holds the history of the position of the current epoch, i.e., that
+            is the position but each leave in the pytree is enhanced by one
+            dimension (axis = 0) which represents the time or MCMC iteration.
+            The value may be ``None`` if the class variable :py:attr:`~needs_histroy` is
+            ``False``.
         """
 
         raise NotImplementedError
@@ -220,6 +244,17 @@ class Kernel(Protocol[TKernelState, TTransitionInfo, TTuningInfo]):
 
 
 class GeneratedQuantity(Protocol):
+    """
+    Protocol representing the data structure for quantities generated via
+    implmentations of :class:`.QuantityGenerator`.
+
+    Concrete implementations should add additional attributes.
+
+    The attribute ``error_code`` is reserved to store integers that map to error
+    messages via the error book provided in the implmentation of
+    :class:`.QuantityGenerator`.
+    """
+
     error_code: int
 
 
@@ -229,15 +264,29 @@ TGeneratedQuantity = TypeVar(
 
 
 class QuantityGenerator(Protocol[TGeneratedQuantity]):
+    """
+    Protocol for a class that calculates a quantity based on the model
+    state and a random seed.
+    """
+
     error_book: ClassVar[dict[int, str]]
     identifier: str
 
     @abstractmethod
     def set_model(self, model: ModelInterface):
+        """
+        Sets a model.
+
+        Parameters
+        ----------
+        model
+            The model to be set.
+        """
         raise NotImplementedError
 
     @abstractmethod
     def has_model(self) -> bool:
+        """*True*, if a model has been set with :meth:`.set_model`."""
         raise NotImplementedError
 
     def generate(
@@ -246,4 +295,15 @@ class QuantityGenerator(Protocol[TGeneratedQuantity]):
         model_state: ModelState,
         epoch: EpochState,
     ) -> TGeneratedQuantity:
-        """Generates a new quantity based on the model and PRNG state."""
+        """
+        Generates a new quantity based on the model and PRNG state.
+
+        Parameters
+        ----------
+        prng_key
+            The key for JAX' pseudo-random number generator.
+        model_state
+            Current model state.
+        epoch
+            Current epoch state.
+        """

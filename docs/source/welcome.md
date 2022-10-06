@@ -22,7 +22,7 @@ For installation instructions, see the [README][5] in the main repository.
 
 # Further Reading
 
-For a scientific discussion of the software, see our paper on arXiv (in preparation).
+For a scientific discussion of the software, see our [paper][9] on arXiv.
 If you are looking for code examples, the [tutorial book][6] might come in handy.
 
 # Acknowledgements
@@ -44,3 +44,4 @@ through grant 443179956.
 [6]: https://liesel-devs.github.io/liesel-tutorials
 [7]: https://www.uni-goettingen.de/en
 [8]: https://www.dfg.de/en
+[9]: https://arxiv.org/abs/2209.10975

@@ -28,6 +28,14 @@ def mh_step(
 
     Parameters
     ----------
+    prng_key
+        The key for JAX' pseudo-random number generator.
+    model
+        The model interface.
+    proposal
+        The proposal to be evaluated.
+    model_state
+        The current model state.
     log_correction
         The Metropolis-Hastings correction in the case of an asymmetric proposal
         distribution. Let ``q(x' | x)`` be the density of the proposal ``x'`` given
