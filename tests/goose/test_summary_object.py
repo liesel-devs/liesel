@@ -157,6 +157,30 @@ def result() -> SamplingResults:
     return engine.get_results()
 
 
+@pytest.fixture(scope="module")
+def result_for_quants() -> SamplingResults:
+    builder = EngineBuilder(0, 4)
+    state = {
+        "foo": jnp.arange(5, dtype=jnp.float32),
+        "bar": jnp.zeros((3, 5, 7)),
+        "baz": jnp.array(1.0),
+    }
+
+    builder.add_kernel(MockKernel(list(state.keys())))
+    builder.set_model(DictModel(logprob))
+    builder.set_initial_values(state)
+    builder.set_epochs(
+        [
+            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
+            EpochConfig(EpochType.BURNIN, 50, 1, None),
+            EpochConfig(EpochType.POSTERIOR, 250, 1, None),
+        ]
+    )
+    engine = builder.build()
+    engine.sample_all_epochs()
+    return engine.get_results()
+
+
 # TODO: add tests to test correctness of quantities
 # TODO: speed up tests
 
@@ -357,3 +381,44 @@ def test_single_chain_repr_fs_return(single_chain_result: SamplingResults):
     html = summary._repr_html_()
     assert isinstance(md, str)
     assert isinstance(html, str)
+
+
+def test_per_chain_quantiles(result: SamplingResults):
+    summary = Summary(result, per_chain=True)
+    cols = [
+        "var_fqn",
+        "chain_index",
+        "mean",
+        "q_0.05",
+        "q_0.5",
+        "q_0.95",
+        "hdi_low",
+        "hdi_high",
+    ]
+    df = summary.to_dataframe().loc["baz"][cols]
+
+    assert np.allclose(df["q_0.05"], 64.449997)
+    assert np.allclose(df["q_0.5"], 176.5)
+    assert np.allclose(df["q_0.95"], 288.549988)
+    assert np.allclose(df["hdi_low"], 52.0)
+    assert np.allclose(df["hdi_high"], 277.0)
+
+
+def test_quantity_shape(result_for_quants: SamplingResults):
+    """
+    Confirms that the HDI and quantile quantities at the summary object have the
+    intended shape:
+
+    - First index refers to the chain
+    - Second index refers to the quantile/hdi
+    - Following indices refer to individual parameters
+    """
+    summary = Summary(result_for_quants, per_chain=True)
+
+    assert summary.quantities["quantile"]["foo"].shape == (4, 3, 5)
+    assert summary.quantities["quantile"]["bar"].shape == (4, 3, 3, 5, 7)
+    assert summary.quantities["quantile"]["baz"].shape == (4, 3)
+
+    assert summary.quantities["hdi"]["foo"].shape == (4, 2, 5)
+    assert summary.quantities["hdi"]["bar"].shape == (4, 2, 3, 5, 7)
+    assert summary.quantities["hdi"]["baz"].shape == (4, 2)

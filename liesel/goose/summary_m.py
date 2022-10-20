@@ -670,7 +670,30 @@ class Summary:
     changes.
     """
 
+    per_chain: bool
     quantities: dict[str, dict[str, np.ndarray]]
+    """
+    Dict of summarizing quantities.
+
+    Built up in hierarchies as. Let ``summary`` be a :class:`.Summary` instance. The
+    hierarchy is::
+
+        q = summary.quantities["quantity_name"]["parameter_name"]
+
+    The extracted object is an ``np.ndarray``. If ``per_chain=True``, the arrays for
+    the ``"quantile"`` and ``"hdi"`` quantities have the following dimensions:
+
+    1. First index refers to the chain
+    2. Second index refers to the quantile/interval
+    3. Third and subsequent indices refer to individual parameters.
+
+    If ``per_chain=True``, the arrays for the other quantiles have the dimensions:
+
+    1. First index refers to the chain
+    2. Second and subsequent indices refer to individual parameters.
+
+    If ``per_chain=False``, the first index is removed for all quantities.
+    """
     config: dict
     sample_info: dict
     error_summary: ErrorSummary
@@ -684,7 +707,7 @@ class Summary:
         hdi_prob: float = 0.9,
         selected: list[str] | None = None,
         deselected: list[str] | None = None,
-        per_chain=False,
+        per_chain: bool = False,
     ):
         posterior_chain = results.get_posterior_samples()
         if additional_chain:
@@ -729,10 +752,13 @@ class Summary:
                 single_chain = slice_leaves(
                     posterior_chain, jnp.s_[None, chain_idx, ...]
                 )
-                single_chain_summaries.append(
-                    _create_quantity_dict(single_chain, quantiles, hdi_prob)
-                )
+
+                qdict = _create_quantity_dict(single_chain, quantiles, hdi_prob)
+
+                single_chain_summaries.append(qdict)
+
             quantities = stack_leaves(single_chain_summaries, axis=0)
+
         else:
             quantities = _create_quantity_dict(posterior_chain, quantiles, hdi_prob)
 
@@ -746,6 +772,7 @@ class Summary:
             results.get_error_log(False).unwrap(), results.get_error_log(True)
         )
 
+        self.per_chain = per_chain
         self.quantities = quantities
         self.config = config
         self.sample_info = sample_info
@@ -759,10 +786,20 @@ class Summary:
         quants = self.quantities.copy()
 
         # make new entries for the quantiles
-        for i, q in enumerate(self.config["quantiles"]):
-            quants[f"q_{q}"] = {k: v[i, ...] for k, v in quants["quantile"].items()}
-        quants["hdi_low"] = {k: v[0, ...] for k, v in quants["hdi"].items()}
-        quants["hdi_high"] = {k: v[1, ...] for k, v in quants["hdi"].items()}
+        if self.per_chain:
+            for i, q in enumerate(self.config["quantiles"]):
+                quants[f"q_{q}"] = {
+                    k: v[:, i, ...] for k, v in quants["quantile"].items()
+                }
+
+            quants["hdi_low"] = {k: v[:, 0, ...] for k, v in quants["hdi"].items()}
+            quants["hdi_high"] = {k: v[:, 1, ...] for k, v in quants["hdi"].items()}
+        else:
+            for i, q in enumerate(self.config["quantiles"]):
+                quants[f"q_{q}"] = {k: v[i, ...] for k, v in quants["quantile"].items()}
+
+            quants["hdi_low"] = {k: v[0, ...] for k, v in quants["hdi"].items()}
+            quants["hdi_high"] = {k: v[1, ...] for k, v in quants["hdi"].items()}
 
         # remove the old entries
         del quants["quantile"]
@@ -1039,9 +1076,15 @@ def _create_quantity_dict(
     for key, val in quantities.items():
         quantities[key] = {k: v.values for k, v in val.data_vars.items()}
 
+    # hdi shape BEFORE
+    # VarIDX --- HDI
+
     # special treatment for hdi since the function uses the last axis to refer
     # to the quantile
     for k, v in quantities["hdi"].items():
         quantities["hdi"][k] = np.moveaxis(v, -1, 0)
+
+    # hdi shape AFTER
+    # HDI --- VarIDX
 
     return quantities
