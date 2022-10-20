@@ -641,9 +641,11 @@ class Summary:
     """
     A summary object.
 
-    Allows easy programmatic access via ``quantities[quantity_name][var_name]``. The
-    array has a similar shape as the parameter with ``var_name``. However, Additionally,
-    for ``hdi`` and ``quantile`` the second dimension refers to the quantile.
+    Allows easy programmatic access via ``quantities[quantity_name][var_name]``.
+    The array has a similar shape as the parameter with ``var_name``. However,
+    if ``per_chain`` is ``True``, and additionally for the quantities ``hdi`` and
+    ``quantile``, the dimensions are different. Please refer to the documentation
+    of the attribute :attr:`.quantities` for details.
 
     The summary object can be turned into a :class:`~pandas.DataFrame` using
     :meth:`.to_dataframe`.
