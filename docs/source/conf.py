@@ -123,6 +123,9 @@ autosummary_filename_map = {
     "liesel.goose.summary_m.Summary": "liesel.goose.summary_m.summary-class",
 }
 
+# Only document module members that are listed in __all__ (if defined).
+autosummary_ignore_module_all = False
+
 # Remove auto-generated API docs from the sidebar. They take too long to build.
 remove_from_toctrees = [
     "generated/liesel.liesel.*.*.*.rst",
