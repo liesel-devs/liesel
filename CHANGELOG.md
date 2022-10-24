@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.4] - 2022-10-24
+
+### What's new?
+
+- :earth_africa: We have a new project homepage: <https://liesel-project.org>
+- :book: Migrated the docs from pdoc to Sphinx, see [the project homepage](https://docs.liesel-project.org) (@jobrachem)
+- :swan: An MCMC summary can now be created with `gs.Summary(results)` instead of `gs.Summary.from_results(results)` (#13, @jobrachem)
+- :swan: Fixed a bug with the reported quantiles in the per-chain MCMC summary (#14, @jobrachem)
+
+[All commits since 0.1.3](https://github.com/liesel-devs/liesel/compare/v0.1.3...v0.1.4)
+
 ## [0.1.3] - 2022-09-01
 
 ### What's new?
@@ -50,7 +61,8 @@ All notable changes to this project will be documented in this file.
 - @GianmarcoCallegher
 - @jobrachem
 
-[Unreleased]: https://github.com/liesel-devs/liesel/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/liesel-devs/liesel/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/liesel-devs/liesel/releases/tag/v0.1.4
 [0.1.3]: https://github.com/liesel-devs/liesel/releases/tag/v0.1.3
 [0.1.2]: https://github.com/liesel-devs/liesel/releases/tag/v0.1.2
 [0.1.1]: https://github.com/liesel-devs/liesel/releases/tag/v0.1.1
