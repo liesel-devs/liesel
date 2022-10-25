@@ -2,8 +2,9 @@
 Iteratively weighted least squares (IWLS) sampler
 """
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Callable, ClassVar, Sequence
+from typing import ClassVar
 
 import jax
 import jax.numpy as jnp

@@ -3,7 +3,8 @@ Metroplis Hastings kernel. This kernel allows for a user-defined proposal functi
 adds the MH step. Optional, the kernel supports a stepsize adaptation.
 """
 
-from typing import Callable, ClassVar, NamedTuple, Sequence
+from collections.abc import Callable, Sequence
+from typing import ClassVar, NamedTuple
 
 import jax
 

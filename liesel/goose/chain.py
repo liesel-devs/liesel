@@ -4,7 +4,8 @@ MCMC chains
 This module is experimental. Expect API changes.
 """
 
-from typing import Callable, Generic, Protocol, Sequence, TypeVar
+from collections.abc import Callable, Sequence
+from typing import Generic, Protocol, TypeVar
 
 import jax
 import numpy as np

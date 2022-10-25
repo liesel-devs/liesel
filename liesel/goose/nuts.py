@@ -2,9 +2,10 @@
 No U-Turn Sampler (NUTS).
 """
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from functools import partial
-from typing import Callable, ClassVar, Sequence
+from typing import ClassVar
 
 import jax.numpy as jnp
 from blackjax.adaptation.step_size import find_reasonable_step_size

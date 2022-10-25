@@ -11,9 +11,10 @@ from __future__ import annotations
 import logging
 import pickle
 import warnings
+from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import partial
-from typing import NamedTuple, Sequence, cast
+from typing import NamedTuple, cast
 
 import jax
 import jax.lax

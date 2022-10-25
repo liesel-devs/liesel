@@ -4,6 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.isort]
 profile = "black"
+py_version=39
 
 [tool.mypy]
 files = ["liesel", "tests"]

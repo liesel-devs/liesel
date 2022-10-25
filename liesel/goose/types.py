@@ -5,7 +5,8 @@ Type aliases, type variables and protocols.
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Any, ClassVar, NewType, Protocol, Sequence, TypeVar
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, ClassVar, NewType, Protocol, TypeVar
 
 if TYPE_CHECKING:
     from .epoch import EpochState
