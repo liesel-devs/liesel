@@ -2,8 +2,9 @@
 Random walk sampler.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import ClassVar, Sequence
+from typing import ClassVar
 
 import jax
 import jax.flatten_util

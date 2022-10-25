@@ -74,7 +74,8 @@ distribution argument.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Sequence
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 from liesel.goose.types import ModelState, Position
 

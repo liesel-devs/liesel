@@ -1,7 +1,8 @@
 """contains a deterministic kernel used for test purposes"""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import ClassVar, Sequence
+from typing import ClassVar
 
 import jax.numpy as jnp
 

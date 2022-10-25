@@ -3,8 +3,9 @@ Kernel-related info, outcome and mixin classes.
 """
 
 from abc import abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Generic
+from typing import Generic
 
 import jax
 

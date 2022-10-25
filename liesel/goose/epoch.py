@@ -4,9 +4,10 @@ MCMC epochs.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Iterable, cast
+from typing import cast
 
 from .pytree import register_dataclass_as_pytree
 from .types import PyTree

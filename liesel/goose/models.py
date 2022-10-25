@@ -3,7 +3,7 @@ Model interfaces.
 """
 
 import copy
-from typing import Callable, Sequence
+from collections.abc import Callable, Sequence
 
 from ..docs import usedocs
 from .types import ModelInterface, ModelState, Position

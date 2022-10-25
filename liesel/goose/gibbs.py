@@ -2,7 +2,8 @@
 Gibbs sampler.
 """
 
-from typing import Callable, ClassVar, Sequence
+from collections.abc import Callable, Sequence
+from typing import ClassVar
 
 from .epoch import EpochState
 from .kernel import (

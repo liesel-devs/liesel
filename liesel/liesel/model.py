@@ -7,9 +7,10 @@ from __future__ import annotations
 import logging
 import pickle
 import re
+from collections.abc import Iterable
 from copy import deepcopy
 from functools import reduce
-from typing import Iterable, TypeVar
+from typing import TypeVar
 
 import networkx as nx
 

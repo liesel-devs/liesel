@@ -4,8 +4,9 @@ The Liesel-Goose interface.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from functools import reduce
-from typing import TYPE_CHECKING, Callable, Iterable
+from typing import TYPE_CHECKING
 
 from .types import ModelState, Position
 
