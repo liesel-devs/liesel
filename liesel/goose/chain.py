@@ -4,6 +4,7 @@ MCMC chains
 This module is experimental. Expect API changes.
 """
 
+from abc import abstractmethod
 from collections.abc import Callable, Sequence
 from typing import Generic, Protocol, TypeVar
 
@@ -36,15 +37,19 @@ class Chain(Protocol[TPyTree]):
     same structure. However, the time dimension is allowed to vary in size.
     """
 
+    @abstractmethod
     def append(self, chunk: TPyTree) -> None:
         """Appends a chunk to the chain."""
+        raise NotImplementedError
 
+    @abstractmethod
     def get(self) -> Option[TPyTree]:
         """
         Returns all chunks combined into one pytree.
 
         The option is none if no samples are in the chain.
         """
+        raise NotImplementedError
 
 
 class EpochChain(Chain[TPyTree]):
@@ -57,8 +62,10 @@ class EpochChain(Chain[TPyTree]):
     """
 
     @property
+    @abstractmethod
     def epoch(self) -> EpochConfig:
         """Returns the associated :class:`.EpochConfig`."""
+        raise NotImplementedError
 
 
 # implementations
