@@ -9,8 +9,6 @@ import jax.numpy as jnp
 
 from .types import Array, Position
 
-__docformat__ = "numpy"
-
 _vravel = jax.vmap(jnp.ravel, in_axes=0, out_axes=0)
 
 

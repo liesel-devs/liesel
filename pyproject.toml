@@ -4,19 +4,25 @@ build-backend = "setuptools.build_meta"
 
 [tool.isort]
 profile = "black"
-py_version=39
+py_version = 310
 
 [tool.mypy]
 files = ["liesel", "tests"]
 ignore_missing_imports = true
 scripts_are_modules = true
 
+[[tool.mypy.overrides]]
+module = "jax.*"
+follow_imports = "skip"
+
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = "tests"
 # only report deprecation / pending deprecation / future warnings from liesel
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
     "ignore::FutureWarning",
+    "ignore:.*float64:UserWarning:aesara.link.jax.dispatch",
+    "ignore:.*experimental:UserWarning:pymc.sampling_jax",
     "default:::liesel"
 ]

@@ -10,8 +10,6 @@ import jax.numpy as jnp
 from .kernel import DefaultTransitionInfo
 from .types import KeyArray, ModelInterface, ModelState, Position
 
-__docformat__ = "numpy"
-
 mh_error_book = {0: "no errors", 90: "nan acceptance prob"}
 """The error book of the :func:`.mh_step` function."""
 

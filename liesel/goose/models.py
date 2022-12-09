@@ -10,8 +10,6 @@ from .types import ModelInterface, ModelState, Position
 
 LogProbFunction = Callable[[ModelState], float]
 
-__docformat__ = "numpy"
-
 
 @usedocs(ModelInterface)
 class DictModel:

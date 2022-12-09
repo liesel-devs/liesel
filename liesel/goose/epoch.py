@@ -12,8 +12,6 @@ from typing import cast
 from .pytree import register_dataclass_as_pytree
 from .types import PyTree
 
-__docformat__ = "numpy"
-
 
 class EpochType(IntEnum):
     """Indicates which MCMC phase the epoch is part of."""

@@ -1,10 +1,9 @@
 """
-A Rust-inspired Option type for Liesel and Goose.
+A Rust-inspired Option type.
 """
 
 from __future__ import annotations
 
-import weakref
 from collections.abc import Callable
 from typing import Generic, TypeVar
 
@@ -14,11 +13,11 @@ U = TypeVar("U")
 
 class Option(Generic[T]):
     """
-    An Option type inspired by the Rust stdlib.
+    An Option type inspired by the Rust standard library.
 
-    See Rust documentation_ for descriptions of the methods.
+    See `the Rust documentation <Rust_>`_ for descriptions of the methods.
 
-    .. _documentation: https://doc.rust-lang.org/std/option/enum.Option.html
+    .. _Rust: https://doc.rust-lang.org/std/option/enum.Option.html
     """
 
     def __init__(self, value: T | None) -> None:
@@ -86,22 +85,3 @@ class Option(Generic[T]):
 
     def __str__(self) -> str:
         return f"Option({self.value})"
-
-
-class WeakOption(Option[T]):
-    def __init__(self, value: T | None) -> None:
-        self._ref = Option(value).map(lambda x: weakref.ref(x))
-
-    @property
-    def value(self) -> T | None:
-        return self._ref.map_or(None, lambda x: x())
-
-    @value.setter
-    def value(self, value: T | None) -> None:
-        self._ref = Option(value).map(lambda x: weakref.ref(x))
-
-    def __repr__(self) -> str:
-        return f"WeakOption({repr(self.value)})"
-
-    def __str__(self) -> str:
-        return f"WeakOption({self.value})"

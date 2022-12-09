@@ -1,8 +1,8 @@
 """
-This module contains code that is considered experimental.
+Experimental Liesel add-ons.
 
-This means
+Beware:
 
-- the API can change at any time and
-- the code might break at any time.
+- The API of this module may change at any time.
+- The code of this module may break at any time.
 """

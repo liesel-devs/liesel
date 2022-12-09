@@ -73,7 +73,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import liesel.goose as gs
-import liesel.liesel as lsl
+import liesel.model as lsl
 """
 
 # Add any paths that contain templates here, relative to this directory.
@@ -86,6 +86,7 @@ exclude_patterns = []
 
 
 # -- Options for HTML output -------------------------------------------------
+
 pygments_style = "sphinx"
 
 # The theme to use for HTML and HTML help pages. See the documentation for
@@ -117,6 +118,9 @@ def linkcode_resolve(domain, info):
     return f"https://github.com/liesel-devs/liesel/blob/main/{filename}.py"
 
 
+# Mock / ignore the following modules.
+autodoc_mock_imports = ["liesel.distributions.nodist"]
+
 # Map functions and classes with the same lowercase names to other filenames.
 autosummary_filename_map = {
     "liesel.goose.summary_m.summary": "liesel.goose.summary_m.summary-function",
@@ -127,8 +131,4 @@ autosummary_filename_map = {
 autosummary_ignore_module_all = False
 
 # Remove auto-generated API docs from the sidebar. They take too long to build.
-remove_from_toctrees = [
-    "generated/liesel.liesel.*.*.*.rst",
-    "generated/liesel.goose.*.*.*.rst",
-    "generated/liesel.tfp.*.*.*.rst",
-]
+remove_from_toctrees = ["generated/liesel.*.*.*.*.rst"]

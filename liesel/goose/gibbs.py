@@ -16,8 +16,6 @@ from .kernel import (
 )
 from .types import Kernel, KernelState, KeyArray, ModelState, Position, TuningInfo
 
-__docformat__ = "numpy"
-
 GibbsKernelState = KernelState
 GibbsTransitionInfo = DefaultTransitionInfo
 GibbsTuningInfo = DefaultTuningInfo

@@ -23,8 +23,6 @@ from .pytree import stack_leaves
 from .types import Kernel, KeyArray, ModelInterface, ModelState, QuantityGenerator
 from .warmup import stan_epochs
 
-__docformat__ = "numpy"
-
 
 def _find_duplicate(xs: list[str]) -> Option[str]:
     """Checks if a list of strings contains any duplicates."""

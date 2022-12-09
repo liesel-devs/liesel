@@ -8,14 +8,21 @@ API Reference
 -------------
 
 .. autosummary::
-   :toctree: generated
-   :caption: API Reference
-   :recursive:
+    :toctree: generated
+    :caption: API Reference
+    :recursive:
 
-   ~liesel.experimental
-   ~liesel.liesel
-   ~liesel.goose
-   ~liesel.tfp
+    ~liesel.model
+    ~liesel.goose
+    ~liesel.distributions
+    ~liesel.bijectors
+
+.. autosummary::
+    :toctree: generated
+    :caption: Experimental API
+    :recursive:
+
+    ~liesel.experimental
 
 Indices and Search
 ------------------

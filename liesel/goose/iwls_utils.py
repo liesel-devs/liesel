@@ -8,8 +8,6 @@ import jax.scipy
 
 from .types import Array, KeyArray
 
-__docformat__ = "numpy"
-
 triangular_solve = jax.lax.linalg.triangular_solve
 
 

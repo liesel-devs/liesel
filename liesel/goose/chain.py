@@ -20,8 +20,6 @@ from .types import PyTree
 
 TPyTree = TypeVar("TPyTree", bound=PyTree)
 
-__docformat__ = "numpy"
-
 
 class Chain(Protocol[TPyTree]):
     """

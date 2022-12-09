@@ -20,7 +20,8 @@
    {% if methods | reject("in", inherited_members) | reject("equalto", "__init__") | list | length > 0 %}
    .. rubric:: {{ _('Methods') }}
 
-   This section is empty if this class has only inherited attributes.
+   This has only inherited attributes from another library. Please refer to the original
+   documentation.
 
    .. autosummary::
       :toctree:

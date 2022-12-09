@@ -22,26 +22,26 @@ For installation instructions, see the [README][5] in the main repository.
 
 # Further Reading
 
-For a scientific discussion of the software, see our [paper][9] on arXiv.
-If you are looking for code examples, the [tutorial book][6] might come in handy.
+For a scientific discussion of the software, see our [paper][6] on arXiv.
+If you are looking for code examples, the [tutorial book][7] might come in handy.
 
 # Acknowledgements
 
 Liesel is being developed by Paul Wiemann and Hannes Riebl at the
-[University of Göttingen][7] with support from Thomas Kneib. Important contributions
+[University of Göttingen][8] with support from Thomas Kneib. Important contributions
 were made by Joel Beck, Alex Afanasev, Gianmarco Callegher and Johannes Brachem. We are
-grateful to the [German Research Foundation (DFG)][8] for funding the development
+grateful to the [German Research Foundation (DFG)][9] for funding the development
 through grant 443179956.
 
-<img src="https://raw.githubusercontent.com/liesel-devs/liesel/main/docs/source/_static/uni-goe.svg" alt="University of Göttingen" style="height: 4em; margin: 0 1em 1em 0">
-<img src="https://raw.githubusercontent.com/liesel-devs/liesel/main/docs/source/_static/funded-by-dfg.svg" alt="Funded by DFG" style="height: 4em; margin: 0 1em 1em 0">
+<img src="https://raw.githubusercontent.com/liesel-devs/liesel/main/docs/source/_static/uni-goe.svg" alt="University of Göttingen" style="height: 4em; margin: 1em 2em 1em 0">
+<img src="https://raw.githubusercontent.com/liesel-devs/liesel/main/docs/source/_static/funded-by-dfg.svg" alt="Funded by DFG" style="height: 4em; margin: 1em 0 1em 0">
 
 [1]: https://github.com/liesel-devs/liesel
 [2]: https://github.com/liesel-devs/rliesel
 [3]: https://en.wikipedia.org/wiki/G%C3%A4nseliesel
 [4]: https://en.wikipedia.org/wiki/G%C3%B6ttingen
 [5]: https://github.com/liesel-devs/liesel#installation
-[6]: https://liesel-devs.github.io/liesel-tutorials
-[7]: https://www.uni-goettingen.de/en
-[8]: https://www.dfg.de/en
-[9]: https://arxiv.org/abs/2209.10975
+[6]: https://arxiv.org/abs/2209.10975
+[7]: https://liesel-devs.github.io/liesel-tutorials
+[8]: https://www.uni-goettingen.de/en
+[9]: https://www.dfg.de/en

@@ -32,11 +32,9 @@
 
    .. autosummary::
       :toctree:
-   {% if not fullname.startswith("liesel.tfp") %}
+   {% if not (fullname.startswith("liesel.distributions") or fullname.startswith("liesel.bijectors")) %}
       :template: autosummary/class-with-inheritance.rst
-   {% elif fullname.startswith("liesel.tfp.jax.distributions") %}
-      :template: autosummary/class-without-inheritance-strict.rst
-   {% elif fullname.startswith("liesel.tfp.numpy.distributions") %}
+   {% elif fullname.startswith("liesel.distributions") or fullname.startswith("liesel.bijectors") %}
       :template: autosummary/class-without-inheritance-strict.rst
    {% else %}
       :template: autosummary/class-without-inheritance.rst

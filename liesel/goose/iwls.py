@@ -27,8 +27,6 @@ from .mh import mh_step
 from .pytree import register_dataclass_as_pytree
 from .types import Array, KeyArray, ModelState, Position
 
-__docformat__ = "numpy"
-
 
 @register_dataclass_as_pytree
 @dataclass

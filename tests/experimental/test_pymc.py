@@ -1,10 +1,20 @@
+from __future__ import annotations
+
+from functools import partial
+
 import numpy as np
 import pytest
 
 import liesel.goose as gs
 
-pm = pytest.importorskip("pymc")
-from liesel.experimental.pymc import PyMCInterface  # noqa: E402
+try:
+    import pymc as pm
+
+    from liesel.experimental.pymc import PyMCInterface
+except ImportError:
+    pytestmark = pytest.mark.skip(reason="need pymc to run")
+
+roughly_close = partial(np.allclose, rtol=0.1, atol=0.01)
 
 
 @pytest.fixture
@@ -23,6 +33,10 @@ def basic_lm():
 
     # Simulate outcome variable
     y = beta[0] + beta[1] * x1 + beta[2] * x2 + sigma * rng.normal(size=num_obs)
+
+    x1 = np.asarray(x1, np.float32)
+    x2 = np.asarray(x2, np.float32)
+    y = np.asarray(y, np.float32)
 
     basic_model = pm.Model()
     with basic_model:
@@ -45,9 +59,7 @@ def basic_lm():
 
 
 def test_simple():
-    import pymc
-
-    model = pymc.Model()
+    model = pm.Model()
 
     with model:
         _ = pm.Normal("mu", mu=0, sigma=1)
@@ -55,17 +67,15 @@ def test_simple():
     interface = PyMCInterface(model=model)
     state = interface.get_initial_state()
     assert state["mu"] == 0.0
-    assert np.allclose(interface.log_prob(state), -0.91893853)
+    assert roughly_close(interface.log_prob(state), -0.91893853)
 
     state = interface.update_state({"mu": np.array(1.0)}, state)
     assert state["mu"] == 1.0
-    assert np.allclose(interface.log_prob(state), -1.41893853)
+    assert roughly_close(interface.log_prob(state), -1.41893853)
 
 
 def test_simple2():
-    import pymc
-
-    model = pymc.Model()
+    model = pm.Model()
 
     with model:
         sigma = pm.HalfNormal(
@@ -79,7 +89,7 @@ def test_simple2():
 
     assert state["mu"] == 0.0
     assert state["sigma_log__"] == 0.0
-    assert np.allclose(interface.log_prob(state), -0.91893853 + -0.72579135)
+    assert roughly_close(interface.log_prob(state), -0.91893853 + -0.72579135)
     assert interface.extract_position(["sigma"], state)["sigma"] == 1.0
 
     state = interface.update_state(
@@ -87,7 +97,7 @@ def test_simple2():
     )
     assert state["mu"] == 1.0
     assert state["sigma_log__"] == -1.0
-    assert np.allclose(interface.log_prob(state), -3.613467 + -1.29345899)
+    assert roughly_close(interface.log_prob(state), -3.613467 + -1.29345899)
 
 
 @pytest.mark.mcmc
@@ -107,14 +117,14 @@ def test_mcmc(basic_lm: pm.Model):  # type: ignore
 
     engine.sample_all_epochs()
     results = engine.get_results()
-    sum = gs.Summary.from_result(results)
+    sum = gs.Summary(results)
 
-    assert np.allclose(
+    assert roughly_close(
         sum.quantities["mean"]["beta"], [0.9068794, 0.94820887, 2.0448447]
     )
-    assert np.allclose(sum.quantities["mean"]["sigma_log__"], -0.01403057)
-    assert np.allclose(sum.quantities["mean"]["sigma"], 0.98853235)
-    assert np.allclose(sum.quantities["mean"]["mu[0]"], 0.5339259)
+    assert roughly_close(sum.quantities["mean"]["sigma_log__"], -0.01403057)
+    assert roughly_close(sum.quantities["mean"]["sigma"], 0.98853235)
+    assert roughly_close(sum.quantities["mean"]["mu[0]"], 0.5339259)
 
 
 @pytest.mark.mcmc
@@ -135,11 +145,11 @@ def test_mcmc_two_kernels(basic_lm: pm.Model):  # type: ignore
 
     engine.sample_all_epochs()
     results = engine.get_results()
-    sum = gs.Summary.from_result(results)
+    sum = gs.Summary(results)
 
-    assert np.allclose(
+    assert roughly_close(
         sum.quantities["mean"]["beta"], [0.90512399, 0.94801362, 2.0486103]
     )
-    assert np.allclose(sum.quantities["mean"]["sigma_log__"], -0.01222878)
-    assert np.allclose(sum.quantities["mean"]["sigma"], 0.99029397)
-    assert np.allclose(sum.quantities["mean"]["mu[0]"], 0.53359132)
+    assert roughly_close(sum.quantities["mean"]["sigma_log__"], -0.01222878)
+    assert roughly_close(sum.quantities["mean"]["sigma"], 0.99029397)
+    assert roughly_close(sum.quantities["mean"]["mu[0]"], 0.53359132)

@@ -8,8 +8,6 @@ from typing import Protocol
 
 import jax.numpy as jnp
 
-__docformat__ = "numpy"
-
 
 class DAKernelState(Protocol):
     """

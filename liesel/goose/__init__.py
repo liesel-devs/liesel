@@ -1,9 +1,5 @@
 """
-Goose MCMC framework
-
-This module defines the public API of Goose. Expect breakages if using anything beyond
-this module (and maybe also if using this module, as this is early-stage research
-software).
+Goose MCMC framework.
 """
 
 from .builder import EngineBuilder as EngineBuilder
@@ -16,7 +12,7 @@ from .mh_kernel import MHKernel, MHProposal
 from .models import DictModel
 from .nuts import NUTSKernel
 from .rw import RWKernel
-from .summary_m import Summary, summary
+from .summary_m import Summary
 from .summary_viz import (
     plot_cor,
     plot_density,
@@ -51,5 +47,4 @@ __all__ = [
     "plot_scatter",
     "plot_pairs",
     "stan_epochs",
-    "summary",
 ]

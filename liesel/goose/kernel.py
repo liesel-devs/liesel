@@ -23,8 +23,6 @@ from .types import (
     TTuningInfo,
 )
 
-__docformat__ = "numpy"
-
 
 @register_dataclass_as_pytree
 @dataclass

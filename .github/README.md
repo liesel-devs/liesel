@@ -15,20 +15,19 @@
 Liesel is a probabilistic programming framework with a focus on
 semi-parametric regression. It includes:
 
--   **Liesel**, a library to express statistical models as Probabilistic
-    Graphical Models (PGMs). Through the PGM representation, the user
-    can build and update models in a natural way.
--   **Goose**, a library to build custom MCMC algorithms with several
-    parameter blocks and MCMC kernels such as the No U-Turn Sampler
-    (NUTS), the Iteratively Weighted Least Squares (IWLS) sampler, or
-    different Gibbs samplers. Goose also takes care of the MCMC
-    bookkeeping and the chain post-processing.
--   [**RLiesel**](https://github.com/liesel-devs/rliesel), an R
-    interface for Liesel which assists the user with the configuration
-    of semi-parametric regression models such as Generalized Additive
-    Models for Location, Scale and Shape (GAMLSS) with different
-    response distributions, spline-based smooth terms and shrinkage
-    priors.
+- **Liesel**, a library to express statistical models as Probabilistic
+  Graphical Models (PGMs). Through the PGM representation, the user can
+  build and update models in a natural way.
+- **Goose**, a library to build custom MCMC algorithms with several
+  parameter blocks and MCMC kernels such as the No U-Turn Sampler
+  (NUTS), the Iteratively Weighted Least Squares (IWLS) sampler, or
+  different Gibbs samplers. Goose also takes care of the MCMC
+  bookkeeping and the chain post-processing.
+- [**RLiesel**](https://github.com/liesel-devs/rliesel), an R interface
+  for Liesel which assists the user with the configuration of
+  semi-parametric regression models such as Generalized Additive Models
+  for Location, Scale and Shape (GAMLSS) with different response
+  distributions, spline-based smooth terms and shrinkage priors.
 
 The name “Liesel” is an homage to the [Gänseliesel
 fountain](https://en.wikipedia.org/wiki/G%C3%A4nseliesel), landmark of
@@ -37,36 +36,36 @@ Liesel’s birth city
 
 ## Resources
 
--   :newspaper: [Paper on arXiv](https://arxiv.org/abs/2209.10975)
--   :girl::swan::computer: [Liesel & Goose
-    repo](https://github.com/liesel-devs/liesel)
--   :girl::swan::book: [Liesel & Goose API
-    docs](https://docs.liesel-project.org)
--   :registered::computer: [RLiesel
-    repo](https://github.com/liesel-devs/rliesel)
--   :book: [Tutorials](https://liesel-devs.github.io/liesel-tutorials)
+- :newspaper: [Paper on arXiv](https://arxiv.org/abs/2209.10975)
+- :girl::swan::computer: [Liesel & Goose
+  repo](https://github.com/liesel-devs/liesel)
+- :girl::swan::book: [Liesel & Goose API
+  docs](https://docs.liesel-project.org)
+- :registered::computer: [RLiesel
+  repo](https://github.com/liesel-devs/rliesel)
+- :book: [Tutorials](https://liesel-devs.github.io/liesel-tutorials)
 
 ## Usage
 
 The following example shows how to build a simple i.i.d. normal model
-with Liesel. We set up two parameter and one data node, and combine them
-in a model.
+with Liesel. We set up two parameters and one observed variable, and
+combine them in a model.
 
 ``` python
-import numpy as np
+import jax.numpy as jnp
+import tensorflow_probability.substrates.jax.distributions as tfd
+import liesel.model as lsl
 
-import liesel.liesel as lsl
+loc = lsl.Param(0.0, name="loc")
+scale = lsl.Param(1.0, name="scale")
 
-n_loc = lsl.Parameter(0.0, name="loc")
-n_scale = lsl.Parameter(1.0, name="scale")
-
-n_y = lsl.Node(
-    value=np.array([1.314, 0.861, -1.813, 0.587, -1.408]),
-    distribution=lsl.NodeDistribution("Normal", loc=n_loc, scale=n_scale),
+y = lsl.Obs(
+    value=jnp.array([1.314, 0.861, -1.813, 0.587, -1.408]),
+    distribution=lsl.Dist(tfd.Normal, loc=loc, scale=scale),
     name="y",
 )
 
-model = lsl.Model([n_loc, n_scale, n_y])
+model = lsl.Model([loc, scale, y])
 ```
 
 The model allows us to evaluate the log-probability through a property,
@@ -76,14 +75,14 @@ which is updated automatically if the value of a node is modified.
 model.log_prob
 ```
 
-    -8.635652087852478
+    DeviceArray(-8.635653, dtype=float32)
 
 ``` python
-n_loc.value = -0.5
+model.vars["loc"].value = -0.5
 model.log_prob
 ```
 
-    -9.031152087852478
+    DeviceArray(-9.031153, dtype=float32)
 
 We can estimate the mean parameter with Goose and a NUTS sampler.
 Goose’s workhorse to run an MCMC algorithm is the `Engine`, which can be

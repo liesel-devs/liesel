@@ -24,7 +24,7 @@ import logging
 
 import pandas as pd
 
-logging.getLogger("absl").setLevel(logging.ERROR)
+logging.getLogger("jax._src.lib.xla_bridge").setLevel(logging.ERROR)
 pd.options.display.html.border = 0
 ```
 
@@ -57,30 +57,30 @@ The name "Liesel" is an homage to the [Gänseliesel fountain](https://en.wikiped
 
 ## Usage
 
-The following example shows how to build a simple i.i.d. normal model with Liesel. We set up two parameter and one data node, and combine them in a model.
+The following example shows how to build a simple i.i.d. normal model with Liesel. We set up two parameters and one observed variable, and combine them in a model.
 
 ```{python}
-import numpy as np
+import jax.numpy as jnp
+import tensorflow_probability.substrates.jax.distributions as tfd
+import liesel.model as lsl
 
-import liesel.liesel as lsl
+loc = lsl.Param(0.0, name="loc")
+scale = lsl.Param(1.0, name="scale")
 
-n_loc = lsl.Parameter(0.0, name="loc")
-n_scale = lsl.Parameter(1.0, name="scale")
-
-n_y = lsl.Node(
-    value=np.array([1.314, 0.861, -1.813, 0.587, -1.408]),
-    distribution=lsl.NodeDistribution("Normal", loc=n_loc, scale=n_scale),
+y = lsl.Obs(
+    value=jnp.array([1.314, 0.861, -1.813, 0.587, -1.408]),
+    distribution=lsl.Dist(tfd.Normal, loc=loc, scale=scale),
     name="y",
 )
 
-model = lsl.Model([n_loc, n_scale, n_y])
+model = lsl.Model([loc, scale, y])
 ```
 
 The model allows us to evaluate the log-probability through a property, which is updated automatically if the value of a node is modified.
 
 ```{python}
 model.log_prob
-n_loc.value = -0.5
+model.vars["loc"].value = -0.5
 model.log_prob
 ```
 

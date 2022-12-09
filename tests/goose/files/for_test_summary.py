@@ -59,14 +59,6 @@ def setup_tests(beta_dim: int, num_chains: int = 3) -> SamplingResults:
 
 
 # save results in module folder
-results = setup_tests(beta_dim=2)
-path1 = os.path.join(os.path.dirname(__file__), "summary_res.pkl")
-results.pkl_save(path1)
-
-results_long = setup_tests(beta_dim=10)
-path2 = os.path.join(os.path.dirname(__file__), "summary_res_long.pkl")
-results_long.pkl_save(path2)
-
 results_long = setup_tests(beta_dim=5, num_chains=15)
 path3 = os.path.join(os.path.dirname(__file__), "summary_viz_res.pkl")
 results_long.pkl_save(path3)

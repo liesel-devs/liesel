@@ -17,8 +17,6 @@ if TYPE_CHECKING:
         WarmupOutcome,
     )
 
-__docformat__ = "numpy"
-
 # simple type aliases
 
 PyTree = Any

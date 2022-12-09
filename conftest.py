@@ -6,22 +6,13 @@ import pytest
 from _pytest.logging import LogCaptureHandler
 
 
-def to_int(value):
-    try:
-        value = int(value)
-    except ValueError:
-        raise pytest.UsageError("--mcmc-seed must specify an integer")
-
-    return value
-
-
 def pytest_addoption(parser):
     parser.addoption(
         "--run-mcmc", action="store_true", default=False, help="run mcmc tests"
     )
 
     parser.addoption(
-        "--mcmc-seed", action="store", default=42, help="set mcmc seed", type=to_int
+        "--mcmc-seed", action="store", default=42, help="set mcmc seed", type=int
     )
 
 
@@ -54,7 +45,7 @@ def local_caplog_fn(
     Context manager that captures records from non-propagating loggers.
 
     After the end of the ``with`` statement, the log level is restored to its original
-    value. Code adapted from `this GitHub comment <GH>`_.
+    value. Code adapted from `this GitHub comment <GH_>`_.
 
     .. _GH: https://github.com/pytest-dev/pytest/issues/3697#issuecomment-790925527
 
@@ -91,7 +82,7 @@ def local_caplog():
     --------
     Usage example::
 
-        import liesel.liesel.distreg as dr
+        import liesel.model.distreg as dr
 
         def test_build_empty(local_caplog):
             with local_caplog() as caplog:

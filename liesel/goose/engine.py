@@ -45,8 +45,6 @@ from .types import (
 
 logger = logging.getLogger(__name__)
 
-__docformat__ = "numpy"
-
 
 class KernelErrorLog(NamedTuple):
     """

@@ -13,16 +13,111 @@ import pandas as pd
 import seaborn as sns
 
 from liesel.goose.engine import SamplingResults
-from liesel.goose.summary_m import (
-    adjust_dimensions,
-    move_col_first,
-    raise_dimension_error,
-    validate_chain_indices,
-    validate_param_indices,
-    validate_params,
-)
 
-__docformat__ = "numpy"
+
+def _raise_chain_indices_error(
+    chain_indices: Sequence[int], num_original_chains: int
+) -> None:
+    """Display informative error message with valid ``chain_indices`` inputs."""
+    if any(
+        chain_index not in range(num_original_chains) for chain_index in chain_indices
+    ):
+        raise ValueError(
+            f"All chain indices must be between 0 and {num_original_chains-1} "
+            "(bounds inclusive)."
+        )
+
+
+def _validate_chain_indices(
+    chain_indices: int | Sequence[int] | None,
+    num_original_chains: int,
+) -> Sequence[int]:
+    """
+    Convert ``int`` or ``None`` input of ``chain_indices`` to sequence of integers.
+    """
+    if chain_indices is None:
+        return list(range(num_original_chains))
+
+    if isinstance(chain_indices, int):
+        chain_indices = [chain_indices]
+
+    _raise_chain_indices_error(chain_indices, num_original_chains)
+    return chain_indices
+
+
+def _raise_dimension_error(param: str, num_dim: int) -> None:
+    """Check for correct array dimensions of posterior samples."""
+    if num_dim not in (2, 3):
+        raise ValueError(
+            f"Array of posterior samples for {param} has the wrong number of"
+            f"dimensions.\nExpected 2 or 3, got {num_dim}."
+        )
+
+
+def _adjust_dimensions(param_chains: np.ndarray, num_dim: int) -> np.ndarray:
+    """
+    Make shape of posterior samples for one dimensional parameters (e.g. ``log_sigma``)
+    consistent with multi-dimensional parameters.
+    """
+    if num_dim == 2:
+        param_chains = np.expand_dims(param_chains, axis=-1)
+    return param_chains
+
+
+def _raise_param_indices_error(
+    param_indices: Sequence[int], num_original_subparams: int, param: str
+) -> None:
+    """
+    Display informative error message with valid ``param_indices`` inputs for this
+    specific ``param``.
+    """
+    if any(
+        param_index not in range(num_original_subparams)
+        for param_index in param_indices
+    ):
+        raise ValueError(
+            f"All param indices for {param} must be between "
+            f"0 and {num_original_subparams-1} (bounds inclusive)."
+        )
+
+
+def _validate_param_indices(
+    param_indices: int | Sequence[int] | None, num_original_subparams: int, param: str
+) -> Sequence[int]:
+    """
+    Convert ``int`` or ``None`` input of ``param_indices`` to sequence of integers.
+    """
+    if param_indices is None:
+        return list(range(num_original_subparams))
+
+    if isinstance(param_indices, int):
+        param_indices = [param_indices]
+
+    _raise_param_indices_error(param_indices, num_original_subparams, param)
+
+    return param_indices
+
+
+def _move_col_first(df: pd.DataFrame, colname: str) -> pd.DataFrame:
+    """Move last column of a :class:`~pandas.DataFrame` to the first column."""
+    return df[[colname] + [col for col in df.columns if col != colname]]
+
+
+def _validate_params(
+    posterior_samples: dict[str, jnp.DeviceArray], params: str | list[str] | None
+) -> list[str]:
+    """Convert ``str`` or ``None`` input of ``params`` to sequence of strings."""
+    posterior_keys = list(posterior_samples.keys())
+    if params is None:
+        return posterior_keys
+
+    if isinstance(params, str):
+        params = [params]
+
+    if any(param not in posterior_keys for param in params):
+        raise KeyError(f"All params must be in {posterior_keys}.")
+
+    return params
 
 
 def _subparam_chains_to_df(
@@ -43,7 +138,7 @@ def _subparam_chains_to_df(
         .assign(param_index=param_index)
     )
 
-    return move_col_first(subparam_df, colname="param_index")
+    return _move_col_first(subparam_df, colname="param_index")
 
 
 def _preprocess_param_chains(
@@ -54,8 +149,8 @@ def _preprocess_param_chains(
     param_chains = np.array(posterior_samples[param])
     num_dim = param_chains.ndim
 
-    raise_dimension_error(param, num_dim)
-    param_chains = adjust_dimensions(param_chains, num_dim)
+    _raise_dimension_error(param, num_dim)
+    param_chains = _adjust_dimensions(param_chains, num_dim)
     return param_chains
 
 
@@ -117,8 +212,10 @@ def _postprocess_param_df(
         name = param_df["param"].astype(str)
         param_df["param_label"] = name
 
-    chain_indices = validate_chain_indices(chain_indices, num_original_chains)
-    param_indices = validate_param_indices(param_indices, num_original_subparams, param)
+    chain_indices = _validate_chain_indices(chain_indices, num_original_chains)
+    param_indices = _validate_param_indices(
+        param_indices, num_original_subparams, param
+    )
     param_df = _filter_param_df(param_df, param_indices, chain_indices, max_chains)
 
     return param_df
@@ -149,7 +246,7 @@ def _collect_subparam_dfs(
         .reset_index(drop=True)
     )
 
-    param_df = move_col_first(param_df, colname="param")
+    param_df = _move_col_first(param_df, colname="param")
 
     return _postprocess_param_df(
         param_df, param, param_indices, chain_indices, max_chains
@@ -170,7 +267,7 @@ def _collect_param_dfs(
         samples = results.get_samples()
     else:
         samples = results.get_posterior_samples()
-    params = validate_params(samples, params)
+    params = _validate_params(samples, params)
 
     return pd.concat(
         [
