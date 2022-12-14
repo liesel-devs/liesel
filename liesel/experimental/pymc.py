@@ -77,12 +77,12 @@ import jax
 from liesel.goose.types import ModelState, Position
 
 try:
-    import aesara
+    import pytensor
 
     if jax.config.read("jax_enable_x64"):
-        aesara.config.floatX = "float64"
+        pytensor.config.floatX = "float64"
     else:
-        aesara.config.floatX = "float32"
+        pytensor.config.floatX = "float32"
 
     import pymc as pm
     from pymc.sampling_jax import get_jaxified_graph, get_jaxified_logp

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import partial
 
+import jax
 import numpy as np
 import pytest
 
@@ -72,6 +73,18 @@ def test_simple():
     state = interface.update_state({"mu": np.array(1.0)}, state)
     assert state["mu"] == 1.0
     assert roughly_close(interface.log_prob(state), -1.41893853)
+
+
+def test_default_dtype():
+    model = pm.Model()
+    with model:
+        _ = pm.Normal("mu", mu=0, sigma=1)
+
+    interface = PyMCInterface(model=model)
+    state = interface.get_initial_state()
+
+    assert not jax.config.read("jax_enable_x64")
+    assert interface.log_prob(state).dtype == np.float32
 
 
 def test_simple2():
