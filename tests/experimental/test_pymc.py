@@ -42,9 +42,9 @@ def basic_lm():
     basic_model = pm.Model()
     with basic_model:
         # priors
-        beta = pm.Normal("beta", mu=0, sigma=10, shape=3)
+        beta = pm.Normal("beta", mu=0.0, sigma=10.0, shape=3)
         sigma = pm.HalfNormal(
-            "sigma", sigma=1
+            "sigma", sigma=1.0
         )  # automatically transformed to real via log
 
         # predicted value
@@ -63,7 +63,7 @@ def test_simple():
     model = pm.Model()
 
     with model:
-        _ = pm.Normal("mu", mu=0, sigma=1)
+        _ = pm.Normal("mu", mu=0.0, sigma=1.0)
 
     interface = PyMCInterface(model=model)
     state = interface.get_initial_state()
@@ -78,7 +78,7 @@ def test_simple():
 def test_default_dtype():
     model = pm.Model()
     with model:
-        _ = pm.Normal("mu", mu=0, sigma=1)
+        _ = pm.Normal("mu", mu=0.0, sigma=1.0)
 
     interface = PyMCInterface(model=model)
     state = interface.get_initial_state()
@@ -93,9 +93,9 @@ def test_simple2():
     with model:
         sigma = pm.HalfNormal(
             "sigma",
-            sigma=1,
+            sigma=1.0,
         )
-        _ = pm.Normal("mu", mu=0, sigma=sigma)
+        _ = pm.Normal("mu", mu=0.0, sigma=sigma)
 
     interface = PyMCInterface(model=model, additional_vars=["sigma"])
     state = interface.get_initial_state()
