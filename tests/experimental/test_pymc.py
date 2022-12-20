@@ -26,7 +26,7 @@ def basic_lm():
     # set parameter values
     num_obs = 100
     sigma = 1.0
-    beta = [1, 1, 2]
+    beta = [1.0, 1.0, 2.0]
 
     # simulate covariates
     x1 = rng.randn(num_obs)
