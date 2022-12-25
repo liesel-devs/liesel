@@ -4,13 +4,12 @@ Posterior statistics and diagnostics.
 
 from __future__ import annotations
 
-import typing
 from collections.abc import Sequence
 from typing import Any, NamedTuple
 
 import arviz as az
+import jax
 import jax.numpy as jnp
-import jaxlib.xla_extension
 import numpy as np
 import pandas as pd
 from deprecated.sphinx import deprecated
@@ -314,20 +313,15 @@ class Summary:
                 for quant_name, quant_dict in quants.items():
                     quant_per_elem[quant_name] = quant_dict[var][it.multi_index]
 
-                # convert DeviceArrays (scalar) to floats so that
-                # pandas treats them correctly
-
+                # convert jax.Arrays (scalar) to floats so that pandas treats them
+                # correctly
                 for key, val in quant_per_elem.items():
-                    if type(val) == jaxlib.xla_extension.DeviceArray:
-                        # make mypy happy
-                        val = typing.cast(jnp.ndarray, val)
+                    if isinstance(val, jax.Array):
                         # value should be a scalar
                         assert val.shape == ()
 
-                        # convert to float32
-                        val = np.atleast_1d(np.asarray(val))[0]
-
-                        quant_per_elem[key] = val
+                        # replace dict element with value casted to float32
+                        quant_per_elem[key] = float(val)
 
                 df_dict[var_fqn] = quant_per_elem
 

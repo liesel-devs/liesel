@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import partial
 
+import jax
 import numpy as np
 import pytest
 
@@ -25,7 +26,7 @@ def basic_lm():
     # set parameter values
     num_obs = 100
     sigma = 1.0
-    beta = [1, 1, 2]
+    beta = [1.0, 1.0, 2.0]
 
     # simulate covariates
     x1 = rng.randn(num_obs)
@@ -41,9 +42,9 @@ def basic_lm():
     basic_model = pm.Model()
     with basic_model:
         # priors
-        beta = pm.Normal("beta", mu=0, sigma=10, shape=3)
+        beta = pm.Normal("beta", mu=0.0, sigma=10.0, shape=3)
         sigma = pm.HalfNormal(
-            "sigma", sigma=1
+            "sigma", sigma=1.0
         )  # automatically transformed to real via log
 
         # predicted value
@@ -62,7 +63,7 @@ def test_simple():
     model = pm.Model()
 
     with model:
-        _ = pm.Normal("mu", mu=0, sigma=1)
+        _ = pm.Normal("mu", mu=0.0, sigma=1.0)
 
     interface = PyMCInterface(model=model)
     state = interface.get_initial_state()
@@ -74,15 +75,27 @@ def test_simple():
     assert roughly_close(interface.log_prob(state), -1.41893853)
 
 
+def test_default_dtype():
+    model = pm.Model()
+    with model:
+        _ = pm.Normal("mu", mu=0.0, sigma=1.0)
+
+    interface = PyMCInterface(model=model)
+    state = interface.get_initial_state()
+
+    assert not jax.config.read("jax_enable_x64")
+    assert interface.log_prob(state).dtype == np.float32
+
+
 def test_simple2():
     model = pm.Model()
 
     with model:
         sigma = pm.HalfNormal(
             "sigma",
-            sigma=1,
+            sigma=1.0,
         )
-        _ = pm.Normal("mu", mu=0, sigma=sigma)
+        _ = pm.Normal("mu", mu=0.0, sigma=sigma)
 
     interface = PyMCInterface(model=model, additional_vars=["sigma"])
     state = interface.get_initial_state()
