@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.1] - 2022-12-25
+
+### What's new?
+
+- :swan: Updated the [experimental PyMC interface](https://docs.liesel-project.org/en/v0.2.1/generated/liesel.experimental.pymc.html) for Goose to PyMC 5.0 (@wiep)
+- :swan: Fixed a bug with the column dtype being `object` instead of `float` in the MCMC summary (@wiep)
+
+[All commits since 0.2.0](https://github.com/liesel-devs/liesel/compare/v0.2.0...v0.2.1)
+
 ## [0.2.0] - 2022-12-09
 
 For this release, the Liesel modeling library has been rewritten from scratch. We are
@@ -90,7 +99,8 @@ in full detail.
 - @GianmarcoCallegher
 - @jobrachem
 
-[Unreleased]: https://github.com/liesel-devs/liesel/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/liesel-devs/liesel/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/liesel-devs/liesel/releases/tag/v0.2.1
 [0.2.0]: https://github.com/liesel-devs/liesel/releases/tag/v0.2.0
 [0.1.4]: https://github.com/liesel-devs/liesel/releases/tag/v0.1.4
 [0.1.3]: https://github.com/liesel-devs/liesel/releases/tag/v0.1.3
