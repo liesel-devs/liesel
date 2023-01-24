@@ -1,0 +1,123 @@
+# GEV responses
+
+In this tutorial, we illustrate how to set up a distributional regression model with the generalized extreme value distribution as a response distribution. First, we simulate some data in R:
+
+- The location parameter ($\mu$) is a function of an intercept and a non-linear covariate effect.
+- The scale parameter ($\sigma$) is a function of an intercept and a linear effect and uses a log-link.
+- The shape or concentration parameter ($\xi$) is a function of an intercept and a linear effect.
+
+After simulating the data, we can configure the model with a single call to the `rliesel::liesel()` function.
+
+```{r}
+library(rliesel)
+library(VGAM)
+
+use_liesel_venv()
+set.seed(1337)
+
+n <- 1000
+
+x0 <- runif(n)
+x1 <- runif(n)
+x2 <- runif(n)
+
+y <- rgev(
+  n,
+  location = 0 + sin(2 * pi * x0),
+  scale = exp(-3 + x1),
+  shape = 0.1 + x2
+)
+
+plot(y)
+
+model <- liesel(
+  response = y,
+  distribution = "GeneralizedExtremeValue",
+  predictors = list(
+    loc = predictor(~ s(x0)),
+    scale = predictor(~ x1, inverse_link = "Exp"),
+    concentration = predictor(~ x2)
+  )
+)
+```
+
+Now, we can continue in Python and use the `lsl.dist_reg_mcmc()` function to set up a sampling algorithm with IWLS kernels for the regression coefficients ($\boldsymbol{\beta}$) and a Gibbs kernel for the smoothing parameter ($\tau^2$) of the spline. Note that we need to set $\beta_0$ for $\xi$ to 0.1 manually, because $\xi = 0$ breaks the sampler.
+
+```{python}
+import liesel.liesel as lsl
+import jax.numpy as jnp
+
+model = r.model
+
+# concentration = 0 seems to break the sampler
+model.nodes["concentration_p0_beta"].value = jnp.array([0.1, 0.0])
+
+builder = lsl.dist_reg_mcmc(model, seed=42, num_chains=4)
+builder.set_duration(warmup_duration=1000, posterior_duration=1000)
+
+engine = builder.build()
+engine.sample_all_epochs()
+```
+
+Some tabular summary statistics of the posterior samples:
+
+```{python results="asis"}
+import liesel.goose as gs
+
+results = engine.get_results()
+summary = gs.summary(results)
+
+summary.loc["loc_p0_beta"]
+summary.loc["loc_np0_tau2"]
+
+summary.loc["scale_p0_beta"]
+
+summary.loc["concentration_p0_beta"]
+```
+
+And the corresponding trace plots:
+
+```{python}
+fig = gs.plot_trace(results, "loc_p0_beta")
+fig = gs.plot_trace(results, "loc_np0_tau2")
+fig = gs.plot_trace(results, "loc_np0_beta")
+
+fig = gs.plot_trace(results, "scale_p0_beta")
+
+fig = gs.plot_trace(results, "concentration_p0_beta")
+```
+
+We need to reset the index of the `summary` data frame before we can transfer it to R.
+
+```{python}
+summary = summary.reset_index()
+```
+
+After transferring the `summary` data frame to R, we can process it with packages like dplyr and ggplot2. Here is a visualization of the estimated spline vs. the true function:
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(reticulate)
+
+summary <- py$summary
+
+beta <- summary %>%
+  filter(index == "loc_np0_beta") %>%
+  group_by(param_index) %>%
+  summarize(mean = mean(mean)) %>%
+  ungroup()
+
+beta <- beta$mean
+X <- py_to_r(model$nodes$loc_np0_X$value)
+estimate <- X %*% beta
+
+true <- sin(2 * pi * x0)
+
+ggplot(data.frame(x0 = x0, estimate = estimate, true = true)) +
+  geom_line(aes(x0, estimate), color = palette()[2]) +
+  geom_line(aes(x0, true), color = palette()[4]) +
+  ggtitle("Estimated spline (red) vs. true function (blue)") +
+  ylab("f") +
+  theme_minimal()
+```

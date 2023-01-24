@@ -1,0 +1,191 @@
+---
+output:
+    md_document:
+        variant: markdown
+---
+
+# Comparing samplers
+
+In this tutorial, we are comparing two different sampling schemes on the `mcycle` dataset with a Gaussian location-scale regression model and two splines for the mean and the standard deviation. The `mcycle` dataset is a "data frame giving a series of measurements of head acceleration in a simulated motorcycle accident, used to test crash helmets" (from the help page). It contains the following two variables:
+
+- `times`: in milliseconds after impact
+- `accel`: in g
+
+We start off in R by loading the dataset and setting up the model with the `rliesel::liesel()` function.
+
+```{r}
+library(MASS)
+library(rliesel)
+
+use_liesel_venv()
+
+data(mcycle)
+with(mcycle, plot(times, accel))
+
+model <- liesel(
+  response = mcycle$accel,
+  distribution = "Normal",
+  predictors = list(
+    loc = predictor(~ s(times)),
+    scale = predictor(~ s(times), inverse_link = "Exp")
+  ),
+  data = mcycle
+)
+```
+
+## Metropolis-in-Gibbs
+
+First, we try a Metropolis-in-Gibbs sampling scheme with IWLS kernels for the regression coefficients ($\boldsymbol{\beta}$) and Gibbs kernels for the smoothing parameters ($\tau^2$) of the splines.
+
+```{python}
+import liesel.liesel as lsl
+
+model = r.model
+
+builder = lsl.dist_reg_mcmc(model, seed=42, num_chains=4)
+builder.set_duration(warmup_duration=5000, posterior_duration=1000)
+
+engine = builder.build()
+engine.sample_all_epochs()
+```
+
+Clearly, the performance of the sampler could be better, especially for the intercept of the mean. The corresponding chain exhibits a very strong autocorrelation.
+
+```{python}
+import liesel.goose as gs
+
+results = engine.get_results()
+summary = gs.summary(results)
+
+fig = gs.plot_trace(results, "loc_p0_beta")
+fig = gs.plot_trace(results, "loc_np0_tau2")
+fig = gs.plot_trace(results, "loc_np0_beta")
+
+fig = gs.plot_trace(results, "scale_p0_beta")
+fig = gs.plot_trace(results, "scale_np0_tau2")
+fig = gs.plot_trace(results, "scale_np0_beta")
+```
+
+To confirm that the chains have converged to reasonable values, here is a plot of the estimated mean function:
+
+```{python include=FALSE}
+summary = summary.reset_index()
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(reticulate)
+
+summary <- py$summary
+
+beta <- summary %>%
+  filter(index == "loc_np0_beta") %>%
+  group_by(param_index) %>%
+  summarize(mean = mean(mean)) %>%
+  ungroup()
+
+beta <- beta$mean
+X <- py_to_r(model$nodes$loc_np0_X$value)
+f <- X %*% beta
+
+beta0 <- summary %>%
+  filter(index == "loc_p0_beta") %>%
+  group_by(param_index) %>%
+  summarize(mean = mean(mean)) %>%
+  ungroup()
+
+beta0 <- beta0$mean
+
+ggplot(data.frame(times = mcycle$times, mean = beta0 + f)) +
+  geom_line(aes(times, mean), color = palette()[2], size = 1) +
+  geom_point(aes(times, accel), data = mcycle) +
+  ggtitle("Estimated mean function") +
+  theme_minimal()
+```
+
+## NUTS sampler
+
+As an alternative, we try a NUTS kernel which samples all model parameters (regression coefficients and smoothing parameters) in one block. To do so, we first need to log-transform the smoothing parameters. This is the model graph before the transformation:
+
+```{python}
+lsl.plot_model(model)
+```
+
+Before transforming the smoothing parameters with the `lsl.transform_parameter()` function, we first need to copy all model nodes. Once this is done, we need to update the output nodes of the smoothing parameters and rebuild the model. There are two additional nodes in the new model graph.
+
+```{python}
+model = model.transform_parameter("loc_np0_tau2", "Log")
+model = model.transform_parameter("scale_np0_tau2", "Log")
+lsl.plot_model(model)
+```
+
+Now we can set up the NUTS sampler, which is straightforward because we are using only one kernel.
+
+```{python}
+parameters = model.get_nodes_by_class(lsl.Parameter)
+
+builder = gs.EngineBuilder(seed=42, num_chains=4)
+
+builder.set_model(lsl.GooseModel(model))
+builder.add_kernel(gs.NUTSKernel(parameters.keys()))
+builder.set_initial_values(model.state)
+
+builder.set_duration(warmup_duration=5000, posterior_duration=1000)
+
+engine = builder.build()
+engine.sample_all_epochs()
+```
+
+The results are mixed. On the one hand, the NUTS sampler performs much better on the intercepts (for both the mean and the standard deviation), but on the other hand, the Metropolis-in-Gibbs sampler with the IWLS kernels seems to work better for the spline coefficients.
+
+```{python}
+results = engine.get_results()
+summary = gs.summary(results)
+
+fig = gs.plot_trace(results, "loc_p0_beta")
+fig = gs.plot_trace(results, "loc_np0_tau2_transformed")
+fig = gs.plot_trace(results, "loc_np0_beta")
+
+fig = gs.plot_trace(results, "scale_p0_beta")
+fig = gs.plot_trace(results, "scale_np0_tau2_transformed")
+fig = gs.plot_trace(results, "scale_np0_beta")
+```
+
+Again, here is a plot of the estimated mean function:
+
+```{python include=FALSE}
+summary = summary.reset_index()
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(reticulate)
+
+summary <- py$summary
+
+beta <- summary %>%
+  filter(index == "loc_np0_beta") %>%
+  group_by(param_index) %>%
+  summarize(mean = mean(mean)) %>%
+  ungroup()
+
+beta <- beta$mean
+X <- py_to_r(model$nodes$loc_np0_X$value)
+f <- X %*% beta
+
+beta0 <- summary %>%
+  filter(index == "loc_p0_beta") %>%
+  group_by(param_index) %>%
+  summarize(mean = mean(mean)) %>%
+  ungroup()
+
+beta0 <- beta0$mean
+
+ggplot(data.frame(times = mcycle$times, mean = beta0 + f)) +
+  geom_line(aes(times, mean), color = palette()[2], size = 1) +
+  geom_point(aes(times, accel), data = mcycle) +
+  ggtitle("Estimated mean function") +
+  theme_minimal()
+```
