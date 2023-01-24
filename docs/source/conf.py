@@ -38,7 +38,7 @@ extensions = [
     "sphinx_remove_toctrees",  # speed up builds with many stub pages
     "sphinx.ext.intersphinx",
     "sphinx_copybutton",
-    "myst_parser",
+    "myst_nb",
 ]
 
 intersphinx_mapping = {
@@ -132,3 +132,8 @@ autosummary_ignore_module_all = False
 
 # Remove auto-generated API docs from the sidebar. They take too long to build.
 remove_from_toctrees = ["generated/liesel.*.*.*.*.rst"]
+
+# myst configuration
+myst_heading_anchors = 3  # auto-generate 3 levels of heading anchors
+myst_enable_extensions = ["dollarmath", "amsmath"]  # enable $$ syntax for math
+myst_dmath_double_inline = True
