@@ -18,6 +18,7 @@ render: $(md) postrender
 postrender:
 	-rm ../md/_quarto.yml
 	-rm ../md/.gitignore
+	-rm -r ../md/.quarto
 
 clean:
 	-rm -r ../md
