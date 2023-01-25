@@ -1,6 +1,5 @@
 project:
-  title: "qmd"
-  # output-dir: md
+  title: "tutorials"
 format: gfm
 execute:
   cache: true
