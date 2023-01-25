@@ -1,0 +1,6 @@
+project:
+  title: "qmd"
+  # output-dir: md
+format: gfm
+execute:
+  cache: true
