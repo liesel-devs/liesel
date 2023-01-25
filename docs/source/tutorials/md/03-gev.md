@@ -17,8 +17,19 @@ to the `rliesel::liesel()` function.
 
 ``` r
 library(rliesel)
-library(VGAM)
+```
 
+    Please set your Liesel venv, e.g. with use_liesel_venv()
+
+``` r
+library(VGAM)
+```
+
+    Loading required package: stats4
+
+    Loading required package: splines
+
+``` r
 use_liesel_venv()
 ```
 
@@ -57,11 +68,6 @@ model <- liesel(
 )
 ```
 
-    Warning in poetry_config(required_module): This project appears to use Poetry for Python dependency management.
-    However, the 'poetry' command line tool is not available.
-    reticulate will be unable to activate this project.
-    Please ensure that 'poetry' is available on the PATH.
-
 Now, we can continue in Python and use the `lsl.dist_reg_mcmc()`
 function to set up a sampling algorithm with IWLS kernels for the
 regression coefficients ($\boldsymbol{\beta}$) and a Gibbs kernel for
@@ -86,48 +92,49 @@ engine.sample_all_epochs()
 ```
 
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 75 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_02: 0, 0, 1, 0 / 75 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 5, 8, 8, 6 / 75 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 0, 0, 1, 0 / 75 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 6, 2, 6, 4 / 75 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 1, 0, 0, 1 / 75 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 1, 3, 2 / 25 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_02: 0, 1, 1, 1 / 25 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 1, 0, 1, 0 / 25 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 3, 1, 1, 1 / 25 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 1, 1, 2, 1 / 25 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_02: 1, 1, 2, 0 / 25 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 1, 2, 1, 2 / 25 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 1, 1, 2, 1 / 25 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 2, 3 / 50 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_02: 2, 1, 1, 0 / 50 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 0, 1, 2, 3 / 50 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 1, 0, 1, 0 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 1, 1, 1, 1 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_02: 1, 1, 1, 0 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 1, 1, 2, 4 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 2, 2, 1, 2 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 1, 1, 2 / 100 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_02: 1, 1, 1, 2 / 100 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 1, 1, 1, 1 / 100 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 1, 1, 1, 1 / 100 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 1, 0, 1, 1 / 100 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_02: 1, 1, 1, 0 / 100 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 1, 0, 2, 2 / 100 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 0, 2, 2, 2 / 100 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 200 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 2, 1 / 200 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_02: 1, 1, 1, 0 / 200 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 1, 0, 0, 1 / 200 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 4, 1, 1, 2 / 200 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 0, 1, 2, 1 / 200 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_02: 1, 0, 2, 0 / 200 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 2, 2, 2, 3 / 200 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 1, 0, 2, 0 / 200 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 500 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 3, 3, 0 / 500 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_02: 1, 1, 1, 2 / 500 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 0, 1, 1, 1 / 500 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 3, 2, 2, 1 / 500 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 0, 0, 1, 2 / 500 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_02: 2, 1, 2, 1 / 500 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 4, 9, 2, 3 / 500 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 1, 1, 2, 1 / 500 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 0, 0 / 50 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_02: 1, 2, 1, 1 / 50 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 1, 0, 0, 0 / 50 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 1, 1, 1, 3 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 1, 1, 1, 1 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_02: 0, 0, 1, 1 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 1, 2, 1, 0 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 1, 1, 1, 1 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Finished warmup
     liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 0, 3, 0, 10 / 1000 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 0, 1, 0, 2 / 1000 transitions
     liesel.goose.engine - INFO - Finished epoch
 
 Some tabular summary statistics of the posterior samples:
@@ -139,40 +146,786 @@ results = engine.get_results()
 gs.Summary(results)
 ```
 
-**Parameter summary:**
-
-                                          kernel      mean  ...     ess_tail      rhat
-    parameter                   index                       ...                       
-    concentration_p0_beta_value (0,)   kernel_04  0.071163  ...   621.257847  1.005525
-                                (1,)   kernel_04  1.063034  ...   327.458905  1.018020
-    loc_np0_beta_value          (0,)   kernel_02 -0.628609  ...   244.957340  1.020311
-                                (1,)   kernel_02  0.294310  ...   234.118677  1.022517
-                                (2,)   kernel_02 -0.381878  ...   391.440468  1.014608
-                                (3,)   kernel_02  0.357636  ...   154.609905  1.055907
-                                (4,)   kernel_02 -0.264448  ...   196.603094  1.073938
-                                (5,)   kernel_02  0.183906  ...   150.374472  1.036915
-                                (6,)   kernel_02  6.028223  ...   237.016711  1.058829
-                                (7,)   kernel_02  0.514359  ...   134.607186  1.037403
-                                (8,)   kernel_02  1.700216  ...   233.830268  1.053565
-    loc_np0_tau2_value          ()     kernel_01  6.363313  ...  3887.143262  0.999758
-    loc_p0_beta_value           (0,)   kernel_03  0.026949  ...   225.241539  1.055979
-    scale_p0_beta_value         (0,)   kernel_00 -3.076459  ...   184.429870  1.043563
-                                (1,)   kernel_00  1.055013  ...   291.023287  1.020358
-
-    [15 rows x 10 columns]
-
-**Error summary:**
-
-                                                       count  relative
-    kernel    error_code error_msg           phase                    
-    kernel_00 90         nan acceptance prob warmup       40   0.01000
-                                             posterior     0   0.00000
-    kernel_02 90         nan acceptance prob warmup       26   0.00650
-                                             posterior     0   0.00000
-    kernel_03 90         nan acceptance prob warmup       18   0.00450
-                                             posterior     0   0.00000
-    kernel_04 90         nan acceptance prob warmup       61   0.01525
-                                             posterior    13   0.00325
+<p>
+<strong>Parameter summary:</strong>
+</p>
+<table border="0" class="dataframe">
+<thead>
+<tr style="text-align: right;">
+<th>
+</th>
+<th>
+</th>
+<th>
+kernel
+</th>
+<th>
+mean
+</th>
+<th>
+sd
+</th>
+<th>
+q_0.05
+</th>
+<th>
+q_0.5
+</th>
+<th>
+q_0.95
+</th>
+<th>
+sample_size
+</th>
+<th>
+ess_bulk
+</th>
+<th>
+ess_tail
+</th>
+<th>
+rhat
+</th>
+</tr>
+<tr>
+<th>
+parameter
+</th>
+<th>
+index
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th rowspan="2" valign="top">
+concentration_p0_beta_value
+</th>
+<th>
+(0,)
+</th>
+<td>
+kernel_03
+</td>
+<td>
+0.075447
+</td>
+<td>
+0.051329
+</td>
+<td>
+-0.008686
+</td>
+<td>
+0.075767
+</td>
+<td>
+0.159544
+</td>
+<td>
+4000
+</td>
+<td>
+348.200832
+</td>
+<td>
+875.798233
+</td>
+<td>
+1.010979
+</td>
+</tr>
+<tr>
+<th>
+(1,)
+</th>
+<td>
+kernel_03
+</td>
+<td>
+1.048969
+</td>
+<td>
+0.096572
+</td>
+<td>
+0.889131
+</td>
+<td>
+1.047467
+</td>
+<td>
+1.210061
+</td>
+<td>
+4000
+</td>
+<td>
+193.710266
+</td>
+<td>
+481.773862
+</td>
+<td>
+1.036402
+</td>
+</tr>
+<tr>
+<th rowspan="9" valign="top">
+loc_np0_beta_value
+</th>
+<th>
+(0,)
+</th>
+<td>
+kernel_01
+</td>
+<td>
+-0.685694
+</td>
+<td>
+0.215018
+</td>
+<td>
+-1.022705
+</td>
+<td>
+-0.687069
+</td>
+<td>
+-0.330977
+</td>
+<td>
+4000
+</td>
+<td>
+86.284542
+</td>
+<td>
+128.361750
+</td>
+<td>
+1.045165
+</td>
+</tr>
+<tr>
+<th>
+(1,)
+</th>
+<td>
+kernel_01
+</td>
+<td>
+0.289815
+</td>
+<td>
+0.139187
+</td>
+<td>
+0.064596
+</td>
+<td>
+0.288524
+</td>
+<td>
+0.519786
+</td>
+<td>
+4000
+</td>
+<td>
+87.998816
+</td>
+<td>
+186.784327
+</td>
+<td>
+1.023931
+</td>
+</tr>
+<tr>
+<th>
+(2,)
+</th>
+<td>
+kernel_01
+</td>
+<td>
+-0.356332
+</td>
+<td>
+0.123979
+</td>
+<td>
+-0.553772
+</td>
+<td>
+-0.359969
+</td>
+<td>
+-0.163199
+</td>
+<td>
+4000
+</td>
+<td>
+113.963197
+</td>
+<td>
+176.479906
+</td>
+<td>
+1.021785
+</td>
+</tr>
+<tr>
+<th>
+(3,)
+</th>
+<td>
+kernel_01
+</td>
+<td>
+0.357042
+</td>
+<td>
+0.066428
+</td>
+<td>
+0.245314
+</td>
+<td>
+0.360057
+</td>
+<td>
+0.464094
+</td>
+<td>
+4000
+</td>
+<td>
+77.436863
+</td>
+<td>
+83.939543
+</td>
+<td>
+1.045038
+</td>
+</tr>
+<tr>
+<th>
+(4,)
+</th>
+<td>
+kernel_01
+</td>
+<td>
+-0.268976
+</td>
+<td>
+0.076855
+</td>
+<td>
+-0.391322
+</td>
+<td>
+-0.272515
+</td>
+<td>
+-0.135962
+</td>
+<td>
+4000
+</td>
+<td>
+82.253615
+</td>
+<td>
+156.877303
+</td>
+<td>
+1.044232
+</td>
+</tr>
+<tr>
+<th>
+(5,)
+</th>
+<td>
+kernel_01
+</td>
+<td>
+0.184520
+</td>
+<td>
+0.030112
+</td>
+<td>
+0.136322
+</td>
+<td>
+0.184245
+</td>
+<td>
+0.235142
+</td>
+<td>
+4000
+</td>
+<td>
+88.092075
+</td>
+<td>
+216.626091
+</td>
+<td>
+1.030478
+</td>
+</tr>
+<tr>
+<th>
+(6,)
+</th>
+<td>
+kernel_01
+</td>
+<td>
+6.023936
+</td>
+<td>
+0.037659
+</td>
+<td>
+5.962613
+</td>
+<td>
+6.024491
+</td>
+<td>
+6.086892
+</td>
+<td>
+4000
+</td>
+<td>
+84.063268
+</td>
+<td>
+89.869654
+</td>
+<td>
+1.042004
+</td>
+</tr>
+<tr>
+<th>
+(7,)
+</th>
+<td>
+kernel_01
+</td>
+<td>
+0.516285
+</td>
+<td>
+0.070313
+</td>
+<td>
+0.401706
+</td>
+<td>
+0.513593
+</td>
+<td>
+0.631987
+</td>
+<td>
+4000
+</td>
+<td>
+84.880395
+</td>
+<td>
+179.428533
+</td>
+<td>
+1.018909
+</td>
+</tr>
+<tr>
+<th>
+(8,)
+</th>
+<td>
+kernel_01
+</td>
+<td>
+1.696975
+</td>
+<td>
+0.028943
+</td>
+<td>
+1.651624
+</td>
+<td>
+1.696404
+</td>
+<td>
+1.748293
+</td>
+<td>
+4000
+</td>
+<td>
+81.153251
+</td>
+<td>
+85.232779
+</td>
+<td>
+1.041841
+</td>
+</tr>
+<tr>
+<th>
+loc_np0_tau2_value
+</th>
+<th>
+()
+</th>
+<td>
+kernel_00
+</td>
+<td>
+6.240120
+</td>
+<td>
+4.582030
+</td>
+<td>
+2.448960
+</td>
+<td>
+5.189541
+</td>
+<td>
+13.327612
+</td>
+<td>
+4000
+</td>
+<td>
+3844.927131
+</td>
+<td>
+3812.240711
+</td>
+<td>
+0.999801
+</td>
+</tr>
+<tr>
+<th>
+loc_p0_beta_value
+</th>
+<th>
+(0,)
+</th>
+<td>
+kernel_02
+</td>
+<td>
+0.027376
+</td>
+<td>
+0.002509
+</td>
+<td>
+0.023359
+</td>
+<td>
+0.027270
+</td>
+<td>
+0.031593
+</td>
+<td>
+4000
+</td>
+<td>
+143.732908
+</td>
+<td>
+319.068450
+</td>
+<td>
+1.022255
+</td>
+</tr>
+<tr>
+<th rowspan="2" valign="top">
+scale_p0_beta_value
+</th>
+<th>
+(0,)
+</th>
+<td>
+kernel_04
+</td>
+<td>
+-3.066489
+</td>
+<td>
+0.058847
+</td>
+<td>
+-3.161412
+</td>
+<td>
+-3.067476
+</td>
+<td>
+-2.968157
+</td>
+<td>
+4000
+</td>
+<td>
+160.470628
+</td>
+<td>
+339.060629
+</td>
+<td>
+1.020641
+</td>
+</tr>
+<tr>
+<th>
+(1,)
+</th>
+<td>
+kernel_04
+</td>
+<td>
+1.045101
+</td>
+<td>
+0.070765
+</td>
+<td>
+0.926669
+</td>
+<td>
+1.045294
+</td>
+<td>
+1.159769
+</td>
+<td>
+4000
+</td>
+<td>
+236.571733
+</td>
+<td>
+619.769253
+</td>
+<td>
+1.022317
+</td>
+</tr>
+</tbody>
+</table>
+<p>
+<strong>Error summary:</strong>
+</p>
+<table border="0" class="dataframe">
+<thead>
+<tr style="text-align: right;">
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+count
+</th>
+<th>
+relative
+</th>
+</tr>
+<tr>
+<th>
+kernel
+</th>
+<th>
+error_code
+</th>
+<th>
+error_msg
+</th>
+<th>
+phase
+</th>
+<th>
+</th>
+<th>
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th rowspan="2" valign="top">
+kernel_01
+</th>
+<th rowspan="2" valign="top">
+90
+</th>
+<th rowspan="2" valign="top">
+nan acceptance prob
+</th>
+<th>
+warmup
+</th>
+<td>
+24
+</td>
+<td>
+0.00600
+</td>
+</tr>
+<tr>
+<th>
+posterior
+</th>
+<td>
+0
+</td>
+<td>
+0.00000
+</td>
+</tr>
+<tr>
+<th rowspan="2" valign="top">
+kernel_02
+</th>
+<th rowspan="2" valign="top">
+90
+</th>
+<th rowspan="2" valign="top">
+nan acceptance prob
+</th>
+<th>
+warmup
+</th>
+<td>
+21
+</td>
+<td>
+0.00525
+</td>
+</tr>
+<tr>
+<th>
+posterior
+</th>
+<td>
+0
+</td>
+<td>
+0.00000
+</td>
+</tr>
+<tr>
+<th rowspan="2" valign="top">
+kernel_03
+</th>
+<th rowspan="2" valign="top">
+90
+</th>
+<th rowspan="2" valign="top">
+nan acceptance prob
+</th>
+<th>
+warmup
+</th>
+<td>
+68
+</td>
+<td>
+0.01700
+</td>
+</tr>
+<tr>
+<th>
+posterior
+</th>
+<td>
+3
+</td>
+<td>
+0.00075
+</td>
+</tr>
+<tr>
+<th rowspan="2" valign="top">
+kernel_04
+</th>
+<th rowspan="2" valign="top">
+90
+</th>
+<th rowspan="2" valign="top">
+nan acceptance prob
+</th>
+<th>
+warmup
+</th>
+<td>
+32
+</td>
+<td>
+0.00800
+</td>
+</tr>
+<tr>
+<th>
+posterior
+</th>
+<td>
+0
+</td>
+<td>
+0.00000
+</td>
+</tr>
+</tbody>
+</table>
 
 And the corresponding trace plots:
 
@@ -219,6 +972,20 @@ estimated spline vs. the true function:
 
 ``` r
 library(dplyr)
+```
+
+
+    Attaching package: 'dplyr'
+
+    The following objects are masked from 'package:stats':
+
+        filter, lag
+
+    The following objects are masked from 'package:base':
+
+        intersect, setdiff, setequal, union
+
+``` r
 library(ggplot2)
 library(reticulate)
 

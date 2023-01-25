@@ -1,3 +1,14 @@
+```{python}
+#| label: setup
+#| include: false
+
+import liesel.goose as gs
+import pandas as pd
+
+gs.Summary._repr_markdown_ = gs.Summary._repr_html_
+pd.options.display.html.border = 0
+```
+
 # GEV responses
 
 In this tutorial, we illustrate how to set up a distributional regression model with the generalized extreme value distribution as a response distribution. First, we simulate some data in R:
