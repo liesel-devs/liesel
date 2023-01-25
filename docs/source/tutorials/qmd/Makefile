@@ -21,4 +21,6 @@ postrender:
 	-rm -r ../md/.quarto
 
 clean:
-	-rm -r ../md
+	-rm ../md/*.md
+	-rm -r ../md/*_cache
+	-rm -r ../md/*_files
