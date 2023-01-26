@@ -25,7 +25,6 @@ After simulating the data, we can configure the model with a single call to the 
 library(rliesel)
 library(VGAM)
 
-use_liesel_venv()
 set.seed(1337)
 
 n <- 1000
