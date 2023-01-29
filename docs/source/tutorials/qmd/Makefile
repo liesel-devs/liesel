@@ -1,23 +1,14 @@
 md := $(patsubst %.qmd, ../md/%.md, $(wildcard *.qmd))
 
-.PHONY: render postrender clean
+.PHONY: render clean
 
-render: $(md) postrender
+render: $(md)
 
-../md/_quarto.yml: _quarto.yml
+../md/%.md: %.qmd _quarto.yml
 	mkdir -p ../md
-	cp $< $@
-
-../md/%.qmd: %.qmd
-	mkdir -p ../md
-	cp $< $@
-
-../md/%.md: ../md/%.qmd ../md/_quarto.yml
-	quarto render $<
-
-postrender:
-	-rm ../md/_quarto.yml
-	-rm -r ../md/.quarto
+	cp $^ ../md
+	quarto render ../md/$<
+	-rm -r $(addprefix ../md/, $^) ../md/.quarto
 
 clean:
 	-rm ../md/*.md
