@@ -1,5 +1,6 @@
 project:
   title: "tutorials"
 format: gfm
+engine: knitr
 execute:
   cache: false

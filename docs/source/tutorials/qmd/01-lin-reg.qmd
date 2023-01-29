@@ -1,3 +1,7 @@
+---
+engine: knitr
+---
+
 # Linear regression
 
 In this tutorial, we build a linear regression model with Liesel and estimate it with Goose. Our goal is to illustrate the most important features of the software in a straightforward context.
