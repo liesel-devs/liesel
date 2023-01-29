@@ -2,4 +2,4 @@ project:
   title: "tutorials"
 format: gfm
 execute:
-  cache: true
+  cache: false
