@@ -1,7 +1,3 @@
----
-engine: knitr
----
-
 # Linear regression
 
 In this tutorial, we build a linear regression model with Liesel and estimate it with Goose. Our goal is to illustrate the most important features of the software in a straightforward context.
@@ -43,7 +39,6 @@ import numpy as np
 # We use distributions and bijectors from tensorflow probability
 import tensorflow_probability.substrates.jax.distributions as tfd
 import tensorflow_probability.substrates.jax.bijectors as tfb
-# from liesel.model.goose import make_log_prob_fn
 
 rng = np.random.default_rng(42)
 ```
@@ -55,7 +50,7 @@ Now we can simulate 500 observations from the linear regression model $y_i \sim 
 
 n = 500
 true_beta = np.array([1.0, 2.0])
-true_sigma = np.array(1.0)
+true_sigma = 1.0
 
 # data-generating process
 
@@ -136,7 +131,7 @@ X = lsl.Obs(X_mat, name="X")
 To compute the matrix-vector product $\hat{\boldsymbol{y}} = \mathbf{X}\boldsymbol{\beta}$, we make our first use of the `lsl.Calc` class. We can use this class to include computations based on our nodes. It always takes a function as its first argument, and the nodes to be used as function inputs as the following arguments. In this case, we can create the calculator like this:
 
 ```{python}
-yhat_fn = lambda x, beta: x @ beta
+yhat_fn = lambda x, beta: jnp.dot(x, beta) # stick to JAX numpy functions in calculators
 calc = lsl.Calc(yhat_fn, x=X, beta=beta)
 ```
 
@@ -261,7 +256,10 @@ No compilation is required at this point, so this is pretty fast.
 
 ### Using a Gibbs kernel
 
-Using a Gibbs kernel is a bit more complicated, because Goose doesn't automatically derive the full conditional from the model graph. Hence, the user needs to provide a function to sample from the full conditional. The function needs to accept a PRNG state and a model state as arguments, and it needs to return a dictionary with the node name as the key and the new node value as the value. We could also update multiple parameters with one Gibbs kernel if we returned a dictionary of length two or more.
+So far, we have not sampled our standard deviation parameter `sigma`; we simply fixed it to zero. Now we extend our model with a Gibbs sampler for `sigma`. Using a Gibbs kernel is a bit more complicated, because Goose doesn't automatically derive the full conditional from the model graph. Hence, the user needs to provide a function to sample from the full conditional. The function needs to accept a PRNG state and a model state as arguments, and it needs to return a dictionary with the node name as the key and the new node value as the value. We could also update multiple parameters with one Gibbs kernel if we returned a dictionary of length two or more.
+
+To retrieve the values of our nodes from the `model_state`, we need to add the suffix `_value` behind the nodes' names. Likewise, the node name in returned dictionary needs to have the
+added `_value` suffix.
 
 ```{python}
 def draw_sigma(prng_key, model_state):
@@ -313,61 +311,6 @@ We could also take a look at a kernel density estimator with `gs.plot_density()`
 gs.plot_param(results, param="beta", param_index=0)
 ```
 
-### Parameter transformations
 
-Now let's try to sample the full parameter vector $(\boldsymbol{\beta}', \sigma)'$ with a single NUTS kernel instead. Since the standard deviation is a positive-valued parameter, we need to log-transform it to sample it with a NUTS kernel. The model class provides the `transform_parameter()` method for this purpose. The method returns a deep copy of the model with the transformed parameter.
-
-```{python}
-_, _vars = model.pop_nodes_and_vars()
-gb = lsl.GraphBuilder().add(_vars["y"])
-gb.transform(_vars["sigma"], tfb.Exp)
-
-model = gb.build_model()
-lsl.plot_vars(model)
-```
-
-
-The response distribution still requires the standard deviation on the original scale. The model graph shows that the back-transformation from the logarithmic to the original scale is performed by a bijector node (`lsl.Bijector`) between the transformed standard deviation and the response.
-
-```{python}
-lsl.plot_model(model)
-```
-
-Now we can set up and run an MCMC algorithm with a NUTS kernel for all parameters.
-
-```{python}
-builder = gs.EngineBuilder(seed=1339, num_chains=4)
-
-builder.set_model(lsl.GooseModel(model))
-builder.set_initial_values(model.state)
-
-builder.add_kernel(gs.NUTSKernel(["beta", "sigma_transformed"]))
-
-builder.set_duration(warmup_duration=1000, posterior_duration=1000)
-
-# by default, goose only stores the parameters specified in the kernels.
-# let's also store the standard deviation on the original scale.
-builder.positions_included = ["sigma"]
-
-engine = builder.build()
-engine.sample_all_epochs()
-```
-
-Judging from the trace plots, it seems that all chains have converged.
-
-```{python}
-results = engine.get_results()
-g = gs.plot_trace(results)
-```
-
-We can also take a look at the summary table, which includes the original $\sigma$ and the transformed $\log(\sigma)$.
-
-```{python results="asis"}
-gs.Summary.from_result(results)
-```
-
-The effective sample size is higher for $\sigma$ than for $\boldsymbol{\beta}$. Finally, let's check the autocorrelation of the samples.
-
-```{python}
-g = gs.plot_cor(results)
-```
+Here, we end this first tutorial. We have learned about a lot of different classes and
+seen how we can flexibly use different Kernels for drawing MCMC samples - that is quite a bit for the start. Now, have fun modelling with Liesel!
