@@ -1261,7 +1261,7 @@ gs.Summary(results)
     Parameter summary:
 
                                          kernel         mean  ...     ess_tail      rhat
-    parameter                  index                          ...                       
+    parameter                  index                          ...
     loc_np0_beta               (0,)   kernel_00    11.673532  ...    14.401107  2.436901
                                (1,)   kernel_00 -1488.046753  ...    36.895663  1.590867
                                (2,)   kernel_00  -623.860168  ...    11.421196  1.337461
@@ -1290,7 +1290,7 @@ gs.Summary(results)
     Error summary:
 
                                                                               count  relative
-    kernel    error_code error_msg                                 phase                     
+    kernel    error_code error_msg                                 phase
     kernel_00 1          divergent transition                      warmup      2271   0.11355
                                                                    posterior      0   0.00000
               2          maximum tree depth                        warmup     15882   0.79410
