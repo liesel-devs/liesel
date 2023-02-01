@@ -74,9 +74,9 @@ The graph of a Bayesian linear regression model is a tree, where the hyperparame
 
 We can use the following classes to build the tree:
 
-- `lsl.Obs`: We use this class to include observed data. Here, that means the response and the covariate values.
-- `lsl.Param`: We use this class to include the model parameters that we want to estimate. Here, that includes the regression coefficients $\boldsymbol{\beta} = [\beta_0, \beta_1]^T$ and the variance $\sigma^2$.
-- `lsl.Var`: We use this class to include other variables that we need for our model. Here, that will be the response and the hyperparameters of our priors for $\boldsymbol{\beta}$ and $\sigma^2$.
+- {func}`.Obs`: We use this class to include observed data. Here, that means the response and the covariate values.
+- {func}`.Param`: We use this class to include the model parameters that we want to estimate. Here, that includes the regression coefficients $\boldsymbol{\beta} = [\beta_0, \beta_1]^T$ and the variance $\sigma^2$.
+- {class}`.Var`: We use this class to include other variables that we need for our model. Here, that will be the response and the hyperparameters of our priors for $\boldsymbol{\beta}$ and $\sigma^2$.
 
 #### The regression coefficients
 
@@ -95,13 +95,13 @@ beta_scale
 
 Now, let us create the node for the regression coefficients.
 
-To do so, we need to define its initial value and its node distribution using the `lsl.Dist` class. This class wraps distribution classes with the TensorFlow Probability (TFP) API to connect them to our node classes. Here, the node distribution is initialized with three arguments: the TFP distribution object [(`tfd.Normal`)](https://www.tensorflow.org/probability/api_docs/python/tfp/distributions/Normal), and the two hyperparameter nodes representing the parameters of the distribution. TFP uses the names `loc` for the mean and `scale` for the standard deviation, so we have to use the same names here. This is a general feature of `lsl.Dist`, you can always use the parameter names from TFP to refer to the parameters of your distribution.
+To do so, we need to define its initial value and its node distribution using the {class}`.Dist` class. This class wraps distribution classes with the TensorFlow Probability (TFP) API to connect them to our node classes. Here, the node distribution is initialized with three arguments: the TFP distribution object [(`tfd.Normal`)](https://www.tensorflow.org/probability/api_docs/python/tfp/distributions/Normal), and the two hyperparameter nodes representing the parameters of the distribution. TFP uses the names `loc` for the mean and `scale` for the standard deviation, so we have to use the same names here. This is a general feature of {class}`.Dist`, you can always use the parameter names from TFP to refer to the parameters of your distribution.
 
 ```{python}
 beta_dist = lsl.Dist(tfd.Normal, loc=beta_loc, scale=beta_scale)
 ```
 
-With this distribution object, we can now create the node for our regression coefficient with the `lsl.Param` class:
+With this distribution object, we can now create the node for our regression coefficient with the {func}`.Param` class:
 
 ```{python}
 beta = lsl.Param(value=np.array([0.0, 0.0]), distribution=beta_dist,name="beta")
@@ -121,21 +121,21 @@ sigma = lsl.Param(value=10.0, distribution=sigma_dist, name="sigma")
 
 #### Design matrix, fitted values, and response
 
-All nodes we have seen so far are strong nodes. Before we can create a weak node that computes the predictions $\hat{\boldsymbol{y}} = \mathbf{X}\boldsymbol{\beta}$, we need to set up one more strong node for the design matrix. This is done quickly with a `lsl.Obs` node:
+All nodes we have seen so far are strong nodes. Before we can create a weak node that computes the predictions $\hat{\boldsymbol{y}} = \mathbf{X}\boldsymbol{\beta}$, we need to set up one more strong node for the design matrix. This is done quickly with a {func}`.Obs` node:
 
 ```{python}
 X = lsl.Obs(X_mat, name="X")
 ```
 
 
-To compute the matrix-vector product $\hat{\boldsymbol{y}} = \mathbf{X}\boldsymbol{\beta}$, we make our first use of the `lsl.Calc` class. We can use this class to include computations based on our nodes. It always takes a function as its first argument, and the nodes to be used as function inputs as the following arguments. In this case, we can create the calculator like this:
+To compute the matrix-vector product $\hat{\boldsymbol{y}} = \mathbf{X}\boldsymbol{\beta}$, we make our first use of the {class}`.Calc` class. We can use this class to include computations based on our nodes. It always takes a function as its first argument, and the nodes to be used as function inputs as the following arguments. In this case, we can create the calculator like this:
 
 ```{python}
 yhat_fn = lambda x, beta: jnp.dot(x, beta) # stick to JAX numpy functions in calculators
 calc = lsl.Calc(yhat_fn, x=X, beta=beta)
 ```
 
-With this calculator in place, we can create a corresponding node that represents the fitted values. For this, the `lsl.Var` class is the right choice. As the node's value, we use the `calc` object we just created.
+With this calculator in place, we can create a corresponding node that represents the fitted values. For this, the {class}`.Var` class is the right choice. As the node's value, we use the `calc` object we just created.
 
 ```{python}
 y_hat = lsl.Var(calc, name="y_hat")
@@ -152,7 +152,7 @@ y = lsl.Var(y_vec, distribution=y_dist, name="y")
 #### Bringing the model together
 
 Now, to construct a full-fledged Liesel model from our individual node objects, we can
-use the `lsl.GraphBuilder` class. Here, we will only add the response node.
+use the {class}`.GraphBuilder` class. Here, we will only add the response node.
 
 ```{python}
 gb = lsl.GraphBuilder().add(y)
@@ -161,14 +161,14 @@ gb
 
 Since all other nodes are directly or indirectly connected to this node, the GraphBuilder will
 add those nodes automatically when it builds the model. Let us do that now with a call to
-`gb.build_model()`. The model that is returned by the builder provides a couple of convenience function, for example, to evaluate the model log-probability, or to update the nodes in a topological order.
+{meth}`.build_model()`. The model that is returned by the builder provides a couple of convenience function, for example, to evaluate the model log-probability, or to update the nodes in a topological order.
 
 ```{python}
 model = gb.build_model()
 model
 ```
 
-The `lsl.plot_vars()` function visualizes the graph of a model. Strong nodes are shown in blue, weak nodes in red. Nodes with a probability distribution are highlighted with a star. In the figure below, we can see the tree-like structure of the graph and identify the two branches for the mean and the standard deviation of the response. By the way, if the layout of the graph looks messy for you, please make sure you have the `pygraphviz` package installed.
+The {func}`.plot_vars()` function visualizes the graph of a model. Strong nodes are shown in blue, weak nodes in red. Nodes with a probability distribution are highlighted with a star. In the figure below, we can see the tree-like structure of the graph and identify the two branches for the mean and the standard deviation of the response. By the way, if the layout of the graph looks messy for you, please make sure you have the `pygraphviz` package installed.
 
 ```{python}
 lsl.plot_vars(model)
@@ -214,9 +214,9 @@ For most inference algorithms, we need the gradient of the model log-probability
 
 ## MCMC inference with Goose
 
-This section illustrates the key features of Liesel's MCMC framework Goose. To use Goose, the user needs to select one or more sampling algorithms, called (transition) kernels, for the model parameters. Goose comes with a number of standard kernels such as Hamiltonian Monte Carlo (`gs.HMCKernel`) or the No U-Turn Sampler (`gs.NUTSKernel`). Multiple kernels can be combined in one sampling scheme and assigned to different parameters, and the user can implement their own problem-specific kernels, as long as they are compatible with the `liesel.goose.kernel.Kernel` protocol. In any case, the user is responsible for constructing a *mathematically valid* algorithm.
+This section illustrates the key features of Liesel's MCMC framework Goose. To use Goose, the user needs to select one or more sampling algorithms, called (transition) kernels, for the model parameters. Goose comes with a number of standard kernels such as Hamiltonian Monte Carlo ({class}`.HMCKernel`) or the No U-Turn Sampler ({class}`.NUTSKernel`). Multiple kernels can be combined in one sampling scheme and assigned to different parameters, and the user can implement their own problem-specific kernels, as long as they are compatible with the {class}`.Kernel` protocol. In any case, the user is responsible for constructing a *mathematically valid* algorithm.
 
-We start with a very simple sampling scheme, keeping $\sigma$ fixed at the true value and using a NUTS sampler for $\boldsymbol{\beta}$. The kernels are added to a `gs.Engine`, which coordinates the sampling, including the kernel tuning during the warmup, and the MCMC bookkeeping. The engine can be configured step by step with a `gs.EngineBuilder`. We need to inform the builder about the model, the initial values, the kernels, and the sampling duration. Finally, we can call the `build()` method, which returns a fully configured engine.
+We start with a very simple sampling scheme, keeping $\sigma$ fixed at the true value and using a NUTS sampler for $\boldsymbol{\beta}$. The kernels are added to a {class}`.Engine`, which coordinates the sampling, including the kernel tuning during the warmup, and the MCMC bookkeeping. The engine can be configured step by step with a {class}`.EngineBuilder`. We need to inform the builder about the model, the initial values, the kernels, and the sampling duration. Finally, we can call the {meth}`.EngBuilder.build` method, which returns a fully configured engine.
 
 ```{python}
 sigma.value = true_sigma
@@ -233,7 +233,7 @@ builder.set_duration(warmup_duration=1000, posterior_duration=1000)
 engine = builder.build()
 ```
 
-Now we can run the MCMC algorithm for the specified duration by calling the `sample_all_epochs()` method on the engine. In a first step, the model and the sampling algorithm are compiled, so don't worry if you don't see an output right away. The subsequent samples will be generated much faster. Finally, we can extract the results and print a summary table.
+Now we can run the MCMC algorithm for the specified duration by calling the {meth}`.sample_all_epochs` method on the engine. In a first step, the model and the sampling algorithm are compiled, so don't worry if you don't see an output right away. The subsequent samples will be generated much faster. Finally, we can extract the results and print a summary table.
 
 ```{python}
 engine.sample_all_epochs()
@@ -241,7 +241,7 @@ results = engine.get_results()
 gs.Summary.from_result(results)
 ```
 
-If we need more samples, we can append another epoch to the engine and sample it by calling either the `sample_next_epoch()` or the `sample_all_epochs()` method. The epochs are described by `gs.EpochConfig` objects.
+If we need more samples, we can append another epoch to the engine and sample it by calling either the {meth}`.sample_next_epoch` or the {meth}`.sample_all_epochs` method. The epochs are described by {class}`.EpochConfig` objects.
 
 ```{python}
 engine.append_epoch(
@@ -292,20 +292,20 @@ engine = builder.build()
 engine.sample_all_epochs()
 ```
 
-Goose provides a couple of convenient numerical and graphical summary tools. The `gs.Summary` class computes several summary statistics that can be either accessed programmatically or displayed as a summary table.
+Goose provides a couple of convenient numerical and graphical summary tools. The {class}`.Summary` class computes several summary statistics that can be either accessed programmatically or displayed as a summary table.
 
 ```{python results="asis"}
 results = engine.get_results()
 gs.Summary.from_result(results)
 ```
 
-We can plot the trace plots of the chains with `gs.plot_trace()`.
+We can plot the trace plots of the chains with {func}`.plot_trace()`.
 
 ```{python}
 g = gs.plot_trace(results)
 ```
 
-We could also take a look at a kernel density estimator with `gs.plot_density()` and the estimated autocorrelation with `gs.plot_cor()`. Alternatively, we can output all three diagnostic plots together with `gs.plot_param()`. The following plot shows the parameter $\beta_0$.
+We could also take a look at a kernel density estimator with {func}`.plot_density()` and the estimated autocorrelation with {func}`.plot_cor()`. Alternatively, we can output all three diagnostic plots together with {func}`.plot_param()`. The following plot shows the parameter $\beta_0$.
 
 ```{python}
 gs.plot_param(results, param="beta", param_index=0)
