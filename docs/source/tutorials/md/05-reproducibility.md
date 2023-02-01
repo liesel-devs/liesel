@@ -31,18 +31,18 @@ documentation](https://mc-stan.org/docs/reference-manual/reproducibility.html),
 we expect reproducibility only on the CPU and only if all of the
 following components are identical:
 
-- the Liesel version,
-- the Python version,
-- the versions of all libraries Liesel depends on,
-- the operating system version,
-- the computer hardware including CPU, motherboard and memory,
-- the compilers, including versions, flags and libraries, used to build
-  Python and all libraries Liesel depends on,
-- the program, including the seed, initialization and data.
+-   the Liesel version,
+-   the Python version,
+-   the versions of all libraries Liesel depends on,
+-   the operating system version,
+-   the computer hardware including CPU, motherboard and memory,
+-   the compilers, including versions, flags and libraries, used to
+    build Python and all libraries Liesel depends on,
+-   the program, including the seed, initialization and data.
 
 ## See also
 
-- [The PyTorch docs on
-  reproducibility](https://pytorch.org/docs/stable/notes/randomness.html)
-- [The Stan docs on
-  reproducibility](https://mc-stan.org/docs/reference-manual/reproducibility.html)
+-   [The PyTorch docs on
+    reproducibility](https://pytorch.org/docs/stable/notes/randomness.html)
+-   [The Stan docs on
+    reproducibility](https://mc-stan.org/docs/reference-manual/reproducibility.html)
