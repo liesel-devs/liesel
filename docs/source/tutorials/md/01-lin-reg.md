@@ -98,7 +98,8 @@ plt.ylabel("Response y")
 plt.show()
 ```
 
-![](01-lin-reg_files/figure-gfm/cell-3-output-1.png)
+<img src="01-lin-reg_files/figure-gfm/unnamed-chunk-2-1.png"
+width="672" />
 
 ### Building the model graph
 
@@ -269,7 +270,8 @@ sure you have the `pygraphviz` package installed.
 lsl.plot_vars(model)
 ```
 
-![](01-lin-reg_files/figure-gfm/cell-15-output-1.png)
+<img src="01-lin-reg_files/figure-gfm/unnamed-chunk-14-3.png"
+width="1344" />
 
 ### Node and model log-probabilities
 
@@ -314,25 +316,45 @@ response node, and the log-probability of the model change as well.
 
 ``` python
 print(f"Old value of sigma: {sigma.value}")
-print(f"Old log-prob of sigma: {sigma.log_prob}")
-print(f"Old log-prob of y: {y.log_prob.sum()}\n")
-
-sigma.value = 1.0
-
-print(f"New value of sigma: {sigma.value}")
-print(f"New log-prob of sigma: {sigma.log_prob}")
-print(f"New log-prob of y: {y.log_prob.sum()}\n")
-
-print(f"New model log-prob: {model.log_prob}")
 ```
 
     Old value of sigma: 10.0
+
+``` python
+print(f"Old log-prob of sigma: {sigma.log_prob}")
+```
+
     Old log-prob of sigma: -6.972140312194824
+
+``` python
+print(f"Old log-prob of y: {y.log_prob.sum()}\n")
+```
+
     Old log-prob of y: -1623.413818359375
 
+``` python
+sigma.value = 1.0
+
+print(f"New value of sigma: {sigma.value}")
+```
+
     New value of sigma: 1.0
+
+``` python
+print(f"New log-prob of sigma: {sigma.log_prob}")
+```
+
     New log-prob of sigma: -4.655529975891113
+
+``` python
+print(f"New log-prob of y: {y.log_prob.sum()}\n")
+```
+
     New log-prob of y: -1724.6702880859375
+
+``` python
+print(f"New model log-prob: {model.log_prob}")
+```
 
     New model log-prob: -1740.3740234375
 
@@ -389,74 +411,136 @@ table.
 
 ``` python
 engine.sample_all_epochs()
+```
+
+    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 75 transitions, 25 jitted together
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 4, 5, 3, 2 / 75 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 0 / 25 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 2, 1 / 50 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 3, 2 / 100 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 200 transitions, 25 jitted together
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 4, 1, 1, 3 / 200 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 500 transitions, 25 jitted together
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 3, 4, 1 / 500 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 3, 2, 4 / 50 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Finished warmup
+    liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
+    liesel.goose.engine - INFO - Finished epoch
+
+``` python
 results = engine.get_results()
 gs.Summary.from_result(results)
 ```
 
-    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 75 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 4, 5, 3, 2 / 75 transitions
-
-    liesel.goose.engine - INFO - Finished epoch
-
-    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 0 / 25 transitions
-
-    liesel.goose.engine - INFO - Finished epoch
-
-    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 2, 1 / 50 transitions
-
-    liesel.goose.engine - INFO - Finished epoch
-
-    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 3, 2 / 100 transitions
-
-    liesel.goose.engine - INFO - Finished epoch
-
-    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 200 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 4, 1, 1, 3 / 200 transitions
-
-    liesel.goose.engine - INFO - Finished epoch
-
-    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 500 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 3, 4, 1 / 500 transitions
-
-    liesel.goose.engine - INFO - Finished epoch
-
-    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 3, 2, 4 / 50 transitions
-
-    liesel.goose.engine - INFO - Finished epoch
-
-    liesel.goose.engine - INFO - Finished warmup
-
-    liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
-
-    liesel.goose.engine - INFO - Finished epoch
-
-    /var/folders/tn/j33340q16z763d6xp7mlcw4m0000gn/T/ipykernel_41708/656583813.py:3: DeprecationWarning: Call to deprecated class method from_result. (Functionality moved directly to the __init__.) -- Deprecated since version 0.1.4.
-      gs.Summary.from_result(results)
-
-**Parameter summary:**
-
-|                | kernel    |     mean |        sd |   q_0.05 |    q_0.5 |  q_0.95 | sample_size | ess_bulk | ess_tail |    rhat |
-|:---------------|:----------|---------:|----------:|---------:|---------:|--------:|------------:|---------:|---------:|--------:|
-| (‘beta’, (0,)) | kernel_00 | 0.984939 | 0.0876196 | 0.839608 | 0.985329 | 1.12575 |        4000 |  1097.98 |  1317.66 | 1.00241 |
-| (‘beta’, (1,)) | kernel_00 |  1.91049 |  0.151863 |  1.65808 |  1.91372 | 2.15839 |        4000 |  1111.86 |  1377.38 | 1.00346 |
-
-**Error summary:**
-
-|                                                       | count | relative |
-|:------------------------------------------------------|------:|---------:|
-| (‘kernel_00’, 1, ‘divergent transition’, ‘warmup’)    |    58 |   0.0145 |
-| (‘kernel_00’, 1, ‘divergent transition’, ‘posterior’) |     0 |        0 |
+<p><strong>Parameter summary:</strong></p>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th></th>
+      <th>kernel</th>
+      <th>mean</th>
+      <th>sd</th>
+      <th>q_0.05</th>
+      <th>q_0.5</th>
+      <th>q_0.95</th>
+      <th>sample_size</th>
+      <th>ess_bulk</th>
+      <th>ess_tail</th>
+      <th>rhat</th>
+    </tr>
+    <tr>
+      <th>parameter</th>
+      <th>index</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th rowspan="2" valign="top">beta</th>
+      <th>(0,)</th>
+      <td>kernel_00</td>
+      <td>0.984939</td>
+      <td>0.087620</td>
+      <td>0.839608</td>
+      <td>0.985329</td>
+      <td>1.125754</td>
+      <td>4000</td>
+      <td>1097.980113</td>
+      <td>1317.663070</td>
+      <td>1.002411</td>
+    </tr>
+    <tr>
+      <th>(1,)</th>
+      <td>kernel_00</td>
+      <td>1.910487</td>
+      <td>0.151863</td>
+      <td>1.658083</td>
+      <td>1.913725</td>
+      <td>2.158385</td>
+      <td>4000</td>
+      <td>1111.860239</td>
+      <td>1377.382202</td>
+      <td>1.003461</td>
+    </tr>
+  </tbody>
+</table>
+<p><strong>Error summary:</strong></p>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th>count</th>
+      <th>relative</th>
+    </tr>
+    <tr>
+      <th>kernel</th>
+      <th>error_code</th>
+      <th>error_msg</th>
+      <th>phase</th>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th rowspan="2" valign="top">kernel_00</th>
+      <th rowspan="2" valign="top">1</th>
+      <th rowspan="2" valign="top">divergent transition</th>
+      <th>warmup</th>
+      <td>58</td>
+      <td>0.0145</td>
+    </tr>
+    <tr>
+      <th>posterior</th>
+      <td>0</td>
+      <td>0.0000</td>
+    </tr>
+  </tbody>
+</table>
 
 If we need more samples, we can append another epoch to the engine and
 sample it by calling either the {meth}`.sample_next_epoch` or the
@@ -472,9 +556,7 @@ engine.sample_next_epoch()
 ```
 
     liesel.goose.engine - INFO - Finished warmup
-
     liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
-
     liesel.goose.engine - INFO - Finished epoch
 
 No compilation is required at this point, so this is pretty fast.
@@ -529,51 +611,28 @@ engine.sample_all_epochs()
 ```
 
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 75 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 4, 2, 5 / 75 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 4, 2, 4 / 75 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
-
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 25 transitions
-
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
-
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 2, 1 / 50 transitions
-
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 3, 1, 3 / 100 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 1, 3, 1 / 100 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 200 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 4, 2, 3, 4 / 200 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 1, 5, 2 / 200 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 500 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 6, 5, 2 / 500 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 5, 1, 2, 2 / 500 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 3, 2, 1 / 50 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 3, 1, 2 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Finished warmup
-
     liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
-
     liesel.goose.engine - INFO - Finished epoch
 
 Goose provides a couple of convenient numerical and graphical summary
@@ -586,23 +645,122 @@ results = engine.get_results()
 gs.Summary.from_result(results)
 ```
 
-    /var/folders/tn/j33340q16z763d6xp7mlcw4m0000gn/T/ipykernel_41708/2730361568.py:2: DeprecationWarning: Call to deprecated class method from_result. (Functionality moved directly to the __init__.) -- Deprecated since version 0.1.4.
-      gs.Summary.from_result(results)
+<div class="cell-output-display">
 
-**Parameter summary:**
+<p><strong>Parameter summary:</strong></p>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th></th>
+      <th>kernel</th>
+      <th>mean</th>
+      <th>sd</th>
+      <th>q_0.05</th>
+      <th>q_0.5</th>
+      <th>q_0.95</th>
+      <th>sample_size</th>
+      <th>ess_bulk</th>
+      <th>ess_tail</th>
+      <th>rhat</th>
+    </tr>
+    <tr>
+      <th>parameter</th>
+      <th>index</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th rowspan="2" valign="top">beta</th>
+      <th>(0,)</th>
+      <td>kernel_00</td>
+      <td>0.983148</td>
+      <td>0.094136</td>
+      <td>0.826079</td>
+      <td>0.984542</td>
+      <td>1.134910</td>
+      <td>4000</td>
+      <td>1028.382656</td>
+      <td>1343.123026</td>
+      <td>1.002847</td>
+    </tr>
+    <tr>
+      <th>(1,)</th>
+      <td>kernel_00</td>
+      <td>1.910886</td>
+      <td>0.163903</td>
+      <td>1.652337</td>
+      <td>1.907938</td>
+      <td>2.177518</td>
+      <td>4000</td>
+      <td>1045.218337</td>
+      <td>1393.930264</td>
+      <td>1.003240</td>
+    </tr>
+    <tr>
+      <th>sigma</th>
+      <th>()</th>
+      <td>kernel_01</td>
+      <td>1.043582</td>
+      <td>0.065483</td>
+      <td>0.941827</td>
+      <td>1.041352</td>
+      <td>1.155538</td>
+      <td>4000</td>
+      <td>3827.428939</td>
+      <td>3734.576578</td>
+      <td>1.000499</td>
+    </tr>
+  </tbody>
+</table>
+<p><strong>Error summary:</strong></p>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th>count</th>
+      <th>relative</th>
+    </tr>
+    <tr>
+      <th>kernel</th>
+      <th>error_code</th>
+      <th>error_msg</th>
+      <th>phase</th>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th rowspan="2" valign="top">kernel_00</th>
+      <th rowspan="2" valign="top">1</th>
+      <th rowspan="2" valign="top">divergent transition</th>
+      <th>warmup</th>
+      <td>58</td>
+      <td>0.0145</td>
+    </tr>
+    <tr>
+      <th>posterior</th>
+      <td>0</td>
+      <td>0.0000</td>
+    </tr>
+  </tbody>
+</table>
 
-|                | kernel    |     mean |        sd |   q_0.05 |    q_0.5 |  q_0.95 | sample_size | ess_bulk | ess_tail |    rhat |
-|:---------------|:----------|---------:|----------:|---------:|---------:|--------:|------------:|---------:|---------:|--------:|
-| (‘beta’, (0,)) | kernel_00 | 0.986647 | 0.0914558 | 0.835474 | 0.987684 | 1.13559 |        4000 |   1086.2 |  1384.62 | 1.00363 |
-| (‘beta’, (1,)) | kernel_00 |  1.90522 |   0.15938 |   1.6454 |  1.90668 | 2.17255 |        4000 |  1049.86 |  1089.05 | 1.00346 |
-| (‘sigma’, ())  | kernel_01 |  1.04353 | 0.0654345 | 0.940555 |  1.04085 | 1.15519 |        4000 |  3832.41 |  3771.37 | 1.00032 |
-
-**Error summary:**
-
-|                                                       | count | relative |
-|:------------------------------------------------------|------:|---------:|
-| (‘kernel_00’, 1, ‘divergent transition’, ‘warmup’)    |    70 |   0.0175 |
-| (‘kernel_00’, 1, ‘divergent transition’, ‘posterior’) |     0 |        0 |
+</div>
 
 We can plot the trace plots of the chains with {func}`.plot_trace()`.
 
@@ -610,7 +768,8 @@ We can plot the trace plots of the chains with {func}`.plot_trace()`.
 g = gs.plot_trace(results)
 ```
 
-![](01-lin-reg_files/figure-gfm/cell-26-output-1.png)
+<img src="01-lin-reg_files/figure-gfm/unnamed-chunk-25-5.png"
+width="960" />
 
 We could also take a look at a kernel density estimator with
 {func}`.plot_density()` and the estimated autocorrelation with
@@ -622,7 +781,8 @@ parameter $\beta_0$.
 gs.plot_param(results, param="beta", param_index=0)
 ```
 
-![](01-lin-reg_files/figure-gfm/cell-27-output-1.png)
+<img src="01-lin-reg_files/figure-gfm/unnamed-chunk-26-7.png"
+width="864" />
 
 Here, we end this first tutorial. We have learned about a lot of
 different classes and seen how we can flexibly use different Kernels for

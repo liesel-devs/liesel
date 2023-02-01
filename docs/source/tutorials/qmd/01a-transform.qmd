@@ -1,3 +1,6 @@
+---
+engine: knitr
+---
 # Parameter transformations
 
 This tutorial builds on the [linear regression tutorial](01-lin-reg.md#linear-regression). Here, we demonstrate how we can easily transform a parameter in our model to sample it with NUTS instead of a Gibbs Kernel.

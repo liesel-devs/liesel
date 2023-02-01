@@ -60,18 +60,23 @@ $(\boldsymbol{\beta}', \sigma)'$ with a single NUTS kernel instead of
 using a NUTS kernel for $\boldsymbol{\beta}$ and a Gibbs kernel for
 $\sigma$. Since the standard deviation is a positive-valued parameter,
 we need to log-transform it to sample it with a NUTS kernel. The
-{class}`.GraphBuilder` class provides the {meth}`.transform`
+{class}`.GraphBuilder` class provides the {meth}`.transform_parameter`
 method for this purpose.
 
 ``` python
 gb = lsl.GraphBuilder().add(y)
 gb.transform(sigma, tfb.Exp)
+```
 
+    Var<sigma_transformed>
+
+``` python
 model = gb.build_model()
 lsl.plot_vars(model)
 ```
 
-![](01a-transform_files/figure-gfm/cell-3-output-1.png)
+<img src="01a-transform_files/figure-gfm/unnamed-chunk-2-1.png"
+width="1344" />
 
 The response distribution still requires the standard deviation on the
 original scale. The model graph shows that the back-transformation from
@@ -102,51 +107,28 @@ engine.sample_all_epochs()
 ```
 
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 75 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 2, 4 / 75 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 3, 2, 5 / 75 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 1, 2, 1 / 25 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 2, 1 / 25 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 2 / 50 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 2, 0 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 3, 2, 1 / 100 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 1, 2, 2 / 100 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 200 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 3, 3, 2 / 200 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 3, 1, 1 / 200 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 500 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 3, 2, 3 / 500 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 3, 1, 3 / 500 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 3, 2, 3 / 50 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 1, 1 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Finished warmup
-
     liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
-
     liesel.goose.engine - INFO - Finished epoch
 
 Judging from the trace plots, it seems that all chains have converged.
@@ -156,9 +138,11 @@ results = engine.get_results()
 gs.plot_trace(results)
 ```
 
-![](01a-transform_files/figure-gfm/cell-5-output-1.png)
+<img src="01a-transform_files/figure-gfm/unnamed-chunk-4-3.png"
+width="960" />
 
-    <seaborn.axisgrid.FacetGrid at 0x172073b20>
+<img src="01a-transform_files/figure-gfm/unnamed-chunk-4-4.png"
+width="1020" />
 
 We can also take a look at the summary table, which includes the
 original $\sigma$ and the transformed $\log(\sigma)$.
@@ -167,24 +151,136 @@ original $\sigma$ and the transformed $\log(\sigma)$.
 gs.Summary.from_result(results)
 ```
 
-    /var/folders/tn/j33340q16z763d6xp7mlcw4m0000gn/T/ipykernel_39611/2697970077.py:1: DeprecationWarning: Call to deprecated class method from_result. (Functionality moved directly to the __init__.) -- Deprecated since version 0.1.4.
-      gs.Summary.from_result(results)
+<div class="cell-output-display">
 
-**Parameter summary:**
+<p><strong>Parameter summary:</strong></p>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th></th>
+      <th>kernel</th>
+      <th>mean</th>
+      <th>sd</th>
+      <th>q_0.05</th>
+      <th>q_0.5</th>
+      <th>q_0.95</th>
+      <th>sample_size</th>
+      <th>ess_bulk</th>
+      <th>ess_tail</th>
+      <th>rhat</th>
+    </tr>
+    <tr>
+      <th>parameter</th>
+      <th>index</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th rowspan="2" valign="top">beta</th>
+      <th>(0,)</th>
+      <td>kernel_00</td>
+      <td>0.984411</td>
+      <td>0.093455</td>
+      <td>0.826778</td>
+      <td>0.987161</td>
+      <td>1.135231</td>
+      <td>4000</td>
+      <td>1397.875438</td>
+      <td>1942.002698</td>
+      <td>1.001148</td>
+    </tr>
+    <tr>
+      <th>(1,)</th>
+      <td>kernel_00</td>
+      <td>1.905798</td>
+      <td>0.163746</td>
+      <td>1.643241</td>
+      <td>1.902507</td>
+      <td>2.181587</td>
+      <td>4000</td>
+      <td>1326.763862</td>
+      <td>1832.471511</td>
+      <td>1.001454</td>
+    </tr>
+    <tr>
+      <th>sigma</th>
+      <th>()</th>
+      <td>-</td>
+      <td>1.020561</td>
+      <td>0.033001</td>
+      <td>0.967251</td>
+      <td>1.019400</td>
+      <td>1.075795</td>
+      <td>4000</td>
+      <td>2552.504768</td>
+      <td>2278.873726</td>
+      <td>0.999660</td>
+    </tr>
+    <tr>
+      <th>sigma_transformed</th>
+      <th>()</th>
+      <td>kernel_00</td>
+      <td>0.019830</td>
+      <td>0.032304</td>
+      <td>-0.033297</td>
+      <td>0.019215</td>
+      <td>0.073060</td>
+      <td>4000</td>
+      <td>2552.513042</td>
+      <td>2278.873726</td>
+      <td>0.999677</td>
+    </tr>
+  </tbody>
+</table>
+<p><strong>Error summary:</strong></p>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th>count</th>
+      <th>relative</th>
+    </tr>
+    <tr>
+      <th>kernel</th>
+      <th>error_code</th>
+      <th>error_msg</th>
+      <th>phase</th>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th rowspan="2" valign="top">kernel_00</th>
+      <th rowspan="2" valign="top">1</th>
+      <th rowspan="2" valign="top">divergent transition</th>
+      <th>warmup</th>
+      <td>51</td>
+      <td>0.01275</td>
+    </tr>
+    <tr>
+      <th>posterior</th>
+      <td>0</td>
+      <td>0.00000</td>
+    </tr>
+  </tbody>
+</table>
 
-|                           | kernel    |      mean |        sd |     q_0.05 |     q_0.5 |    q_0.95 | sample_size | ess_bulk | ess_tail |     rhat |
-|:--------------------------|:----------|----------:|----------:|-----------:|----------:|----------:|------------:|---------:|---------:|---------:|
-| (‘beta’, (0,))            | kernel_00 |  0.985689 | 0.0916551 |    0.83466 |  0.986229 |   1.13938 |        4000 |  1461.79 |  1877.94 |  1.00143 |
-| (‘beta’, (1,))            | kernel_00 |   1.90624 |  0.161431 |    1.63923 |   1.90426 |   2.17451 |        4000 |  1410.96 |  1782.14 |  1.00158 |
-| (‘sigma’, ())             | \-        |   1.02065 |  0.032938 |   0.967396 |   1.02027 |   1.07567 |        4000 |  2700.11 |  2462.77 | 0.999834 |
-| (‘sigma_transformed’, ()) | kernel_00 | 0.0199161 | 0.0322623 | -0.0331476 | 0.0200678 | 0.0729471 |        4000 |  2700.12 |  2462.77 | 0.999834 |
-
-**Error summary:**
-
-|                                                       | count | relative |
-|:------------------------------------------------------|------:|---------:|
-| (‘kernel_00’, 1, ‘divergent transition’, ‘warmup’)    |    59 |  0.01475 |
-| (‘kernel_00’, 1, ‘divergent transition’, ‘posterior’) |     0 |        0 |
+</div>
 
 The effective sample size is higher for $\sigma$ than for
 $\boldsymbol{\beta}$. Finally, let’s check the autocorrelation of the
@@ -194,4 +290,5 @@ samples.
 g = gs.plot_cor(results)
 ```
 
-![](01a-transform_files/figure-gfm/cell-7-output-1.png)
+<img src="01a-transform_files/figure-gfm/unnamed-chunk-6-7.png"
+width="960" />

@@ -97,7 +97,8 @@ fig.tight_layout()
 plt.show()
 ```
 
-![](02-ls-reg_files/figure-gfm/cell-5-output-1.png)
+<img src="02-ls-reg_files/figure-gfm/unnamed-chunk-4-1.png"
+width="1152" />
 
 Since positivity of the variance is ensured by the exponential function,
 the linear part $\mathbf{z}_i^T \boldsymbol{\gamma}$ is not restricted
@@ -157,12 +158,18 @@ sns.set_theme(style="white")
 
 gb = lsl.GraphBuilder()
 gb.add(y)
+```
+
+    GraphBuilder<0 nodes, 1 vars>
+
+``` python
 model = gb.build_model() # builds the model from the graph (PGMs)
 
 lsl.plot_vars(model=model, width=12, height=8)
 ```
 
-![](02-ls-reg_files/figure-gfm/cell-9-output-1.png)
+<img src="02-ls-reg_files/figure-gfm/unnamed-chunk-8-3.png"
+width="1152" />
 
 We choose the No U-Turn sampler for generating posterior samples.
 Therefore the location and scale parameters can be drawn by separate
@@ -198,51 +205,28 @@ engine.sample_all_epochs()
 ```
 
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 75 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 4, 7, 7, 9 / 75 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 4, 9, 7, 9 / 75 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 2, 1, 3 / 25 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 1, 1, 1 / 25 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 0, 2 / 50 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 4, 1 / 100 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 3, 0, 2 / 100 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 200 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 6, 1, 2, 3 / 200 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 5, 3, 2, 4 / 200 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 550 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 5, 3, 4, 2 / 550 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 6, 1, 3, 3 / 550 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 500 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 4, 3, 6, 3 / 500 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 4, 4, 9, 6 / 500 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Finished warmup
-
     liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
-
     liesel.goose.engine - INFO - Finished epoch
 
 Now that we have 1000 posterior samples per chain, we can check the
@@ -253,7 +237,8 @@ results = engine.get_results()
 g = gs.plot_trace(results, chain_indices=0, ncol=4)
 ```
 
-![](02-ls-reg_files/figure-gfm/cell-11-output-1.png)
+<img src="02-ls-reg_files/figure-gfm/unnamed-chunk-10-5.png"
+width="1248" />
 
 Looks decent although we can see some correlation in the tracplots.
 Let’s check at the combined summary:
@@ -262,21 +247,135 @@ Let’s check at the combined summary:
 gs.summary_m.Summary(results, per_chain=False)
 ```
 
-**Parameter summary:**
+<div class="cell-output-display">
 
-|                 | kernel    |       mean |        sd |    q_0.05 |      q_0.5 |    q_0.95 | sample_size | ess_bulk | ess_tail |    rhat |
-|:----------------|:----------|-----------:|----------:|----------:|-----------:|----------:|------------:|---------:|---------:|--------:|
-| (‘beta’, (0,))  | kernel_00 |   0.881104 |  0.179658 |   0.58401 |   0.881796 |   1.17628 |        4000 |  1673.15 |   1739.3 | 1.00371 |
-| (‘beta’, (1,))  | kernel_00 |    3.00194 | 0.0628132 |   2.89959 |    3.00106 |   3.10711 |        4000 |  1788.99 |  1843.58 | 1.00269 |
-| (‘gamma’, (0,)) | kernel_00 | -0.0471558 | 0.0704228 | -0.161815 | -0.0491651 | 0.0717611 |        4000 |  1905.18 |  1877.19 | 1.00145 |
-| (‘gamma’, (1,)) | kernel_00 |   0.517133 | 0.0311779 |  0.465246 |    0.51712 |  0.568086 |        4000 |  1889.32 |  1989.78 | 1.00027 |
+<p><strong>Parameter summary:</strong></p>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th></th>
+      <th>kernel</th>
+      <th>mean</th>
+      <th>sd</th>
+      <th>q_0.05</th>
+      <th>q_0.5</th>
+      <th>q_0.95</th>
+      <th>sample_size</th>
+      <th>ess_bulk</th>
+      <th>ess_tail</th>
+      <th>rhat</th>
+    </tr>
+    <tr>
+      <th>parameter</th>
+      <th>index</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th rowspan="2" valign="top">beta</th>
+      <th>(0,)</th>
+      <td>kernel_00</td>
+      <td>0.880827</td>
+      <td>0.181844</td>
+      <td>0.586429</td>
+      <td>0.879604</td>
+      <td>1.186712</td>
+      <td>4000</td>
+      <td>1458.215371</td>
+      <td>1427.327347</td>
+      <td>1.001138</td>
+    </tr>
+    <tr>
+      <th>(1,)</th>
+      <td>kernel_00</td>
+      <td>3.001686</td>
+      <td>0.063852</td>
+      <td>2.896273</td>
+      <td>3.002595</td>
+      <td>3.107005</td>
+      <td>4000</td>
+      <td>1566.206586</td>
+      <td>1619.828620</td>
+      <td>1.001328</td>
+    </tr>
+    <tr>
+      <th rowspan="2" valign="top">gamma</th>
+      <th>(0,)</th>
+      <td>kernel_00</td>
+      <td>-0.046905</td>
+      <td>0.070704</td>
+      <td>-0.159413</td>
+      <td>-0.047429</td>
+      <td>0.069147</td>
+      <td>4000</td>
+      <td>1772.183521</td>
+      <td>1827.114792</td>
+      <td>1.002009</td>
+    </tr>
+    <tr>
+      <th>(1,)</th>
+      <td>kernel_00</td>
+      <td>0.516919</td>
+      <td>0.031528</td>
+      <td>0.464696</td>
+      <td>0.517133</td>
+      <td>0.566490</td>
+      <td>4000</td>
+      <td>1939.874645</td>
+      <td>1900.458898</td>
+      <td>1.000565</td>
+    </tr>
+  </tbody>
+</table>
+<p><strong>Error summary:</strong></p>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th>count</th>
+      <th>relative</th>
+    </tr>
+    <tr>
+      <th>kernel</th>
+      <th>error_code</th>
+      <th>error_msg</th>
+      <th>phase</th>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th rowspan="2" valign="top">kernel_00</th>
+      <th rowspan="2" valign="top">1</th>
+      <th rowspan="2" valign="top">divergent transition</th>
+      <th>warmup</th>
+      <td>95</td>
+      <td>0.015833</td>
+    </tr>
+    <tr>
+      <th>posterior</th>
+      <td>0</td>
+      <td>0.000000</td>
+    </tr>
+  </tbody>
+</table>
 
-**Error summary:**
-
-|                                                       | count |  relative |
-|:------------------------------------------------------|------:|----------:|
-| (‘kernel_00’, 1, ‘divergent transition’, ‘warmup’)    |    92 | 0.0153333 |
-| (‘kernel_00’, 1, ‘divergent transition’, ‘posterior’) |     0 |         0 |
+</div>
 
 Maybe a longer warm-up would give us better samples.
 
@@ -303,57 +402,31 @@ engine.sample_all_epochs()
 ```
 
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 75 transitions, 25 jitted together
-
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 7, 8, 8, 11 / 75 transitions
-
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 1, 2, 2 / 25 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 2, 1 / 25 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 2, 4, 3 / 50 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 2, 1 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 3, 1, 3 / 100 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 3, 6, 1 / 100 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 200 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 4, 3, 4, 5 / 200 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 5, 5, 4, 1 / 200 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 400 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 4, 6, 5, 9 / 400 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 5, 6, 2, 7 / 400 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 2150 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 6, 7, 8, 6 / 2150 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 6, 6, 5, 3 / 2150 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 1000 transitions, 25 jitted together
-
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 6, 5, 5, 4 / 1000 transitions
-
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 4, 4, 5, 4 / 1000 transitions
     liesel.goose.engine - INFO - Finished epoch
-
     liesel.goose.engine - INFO - Finished warmup
-
     liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
-
     liesel.goose.engine - INFO - Finished epoch
 
 ``` python
@@ -361,27 +434,142 @@ results = engine.get_results()
 g = gs.plot_trace(results, chain_indices=0, ncol=4)
 ```
 
-![](02-ls-reg_files/figure-gfm/cell-14-output-1.png)
+<img src="02-ls-reg_files/figure-gfm/unnamed-chunk-13-7.png"
+width="1248" />
 
 ``` python
 gs.summary_m.Summary(results, per_chain=False)
 ```
 
-**Parameter summary:**
+<div class="cell-output-display">
 
-|                 | kernel    |       mean |        sd |    q_0.05 |      q_0.5 |    q_0.95 | sample_size | ess_bulk | ess_tail |    rhat |
-|:----------------|:----------|-----------:|----------:|----------:|-----------:|----------:|------------:|---------:|---------:|--------:|
-| (‘beta’, (0,))  | kernel_00 |   0.882035 |  0.179706 |  0.597868 |   0.882147 |   1.18374 |        4000 |  1967.37 |  2083.47 | 1.00311 |
-| (‘beta’, (1,))  | kernel_00 |    3.00126 |  0.063587 |   2.89392 |    3.00272 |   3.10168 |        4000 |  1907.09 |  1966.33 | 1.00266 |
-| (‘gamma’, (0,)) | kernel_00 | -0.0430797 | 0.0718797 | -0.160976 | -0.0420747 | 0.0739314 |        4000 |  1920.89 |  1719.23 | 1.00229 |
-| (‘gamma’, (1,)) | kernel_00 |   0.515337 | 0.0317686 |  0.463239 |   0.515879 |  0.567581 |        4000 |  1936.27 |  1897.49 | 1.00237 |
+<p><strong>Parameter summary:</strong></p>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th></th>
+      <th>kernel</th>
+      <th>mean</th>
+      <th>sd</th>
+      <th>q_0.05</th>
+      <th>q_0.5</th>
+      <th>q_0.95</th>
+      <th>sample_size</th>
+      <th>ess_bulk</th>
+      <th>ess_tail</th>
+      <th>rhat</th>
+    </tr>
+    <tr>
+      <th>parameter</th>
+      <th>index</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th rowspan="2" valign="top">beta</th>
+      <th>(0,)</th>
+      <td>kernel_00</td>
+      <td>0.881393</td>
+      <td>0.172589</td>
+      <td>0.601376</td>
+      <td>0.883111</td>
+      <td>1.171452</td>
+      <td>4000</td>
+      <td>2003.047033</td>
+      <td>1879.327013</td>
+      <td>1.002681</td>
+    </tr>
+    <tr>
+      <th>(1,)</th>
+      <td>kernel_00</td>
+      <td>3.001631</td>
+      <td>0.061357</td>
+      <td>2.898357</td>
+      <td>3.002792</td>
+      <td>3.099864</td>
+      <td>4000</td>
+      <td>2010.142089</td>
+      <td>2067.774295</td>
+      <td>1.003066</td>
+    </tr>
+    <tr>
+      <th rowspan="2" valign="top">gamma</th>
+      <th>(0,)</th>
+      <td>kernel_00</td>
+      <td>-0.042988</td>
+      <td>0.071926</td>
+      <td>-0.160567</td>
+      <td>-0.041593</td>
+      <td>0.074112</td>
+      <td>4000</td>
+      <td>1759.715287</td>
+      <td>1818.225243</td>
+      <td>1.001614</td>
+    </tr>
+    <tr>
+      <th>(1,)</th>
+      <td>kernel_00</td>
+      <td>0.515210</td>
+      <td>0.031500</td>
+      <td>0.464253</td>
+      <td>0.515299</td>
+      <td>0.567202</td>
+      <td>4000</td>
+      <td>1733.247684</td>
+      <td>1788.459497</td>
+      <td>1.001245</td>
+    </tr>
+  </tbody>
+</table>
+<p><strong>Error summary:</strong></p>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th>count</th>
+      <th>relative</th>
+    </tr>
+    <tr>
+      <th>kernel</th>
+      <th>error_code</th>
+      <th>error_msg</th>
+      <th>phase</th>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th rowspan="2" valign="top">kernel_00</th>
+      <th rowspan="2" valign="top">1</th>
+      <th rowspan="2" valign="top">divergent transition</th>
+      <th>warmup</th>
+      <td>131</td>
+      <td>0.008188</td>
+    </tr>
+    <tr>
+      <th>posterior</th>
+      <td>0</td>
+      <td>0.000000</td>
+    </tr>
+  </tbody>
+</table>
 
-**Error summary:**
-
-|                                                       | count | relative |
-|:------------------------------------------------------|------:|---------:|
-| (‘kernel_00’, 1, ‘divergent transition’, ‘warmup’)    |   150 | 0.009375 |
-| (‘kernel_00’, 1, ‘divergent transition’, ‘posterior’) |     0 |        0 |
+</div>
 
 The trace plots for $\boldsymbol{\gamma}$ improved but those for
 $\boldsymbol{\beta}$ still show some corelation.
