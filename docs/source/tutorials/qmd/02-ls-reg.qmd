@@ -31,7 +31,6 @@ import liesel.model as lsl
 import matplotlib.pyplot as plt
 import seaborn as sns
 import tensorflow_probability.substrates.jax.distributions as tfd
-import tensorflow_probability.substrates.numpy.bijectors as tfb
 
 sns.set_theme(style="whitegrid")
 ```
