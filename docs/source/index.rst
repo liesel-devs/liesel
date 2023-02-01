@@ -10,11 +10,13 @@ Liesel: A Probabilistic Programming Framework
    :maxdepth: 2
    :caption: Tutorials
 
-   tutorials/notebooks/02-lin-reg
-   tutorials/notebooks/03-ls-reg
-   tutorials/rmd/06-reproducibility
-..   tutorials/rmd/04-gev
-   tutorials/rmd/05-mcycle
+   tutorials/md/01-lin-reg
+   tutorials/md/01a-transform
+   tutorials/md/02-ls-reg
+   tutorials/md/03-gev
+   tutorials/md/04-mycycle
+   tutorials/md/05-reproducibility
+
 
 API Reference
 -------------
@@ -35,6 +37,7 @@ API Reference
     :recursive:
 
     ~liesel.experimental
+
 
 Indices and Search
 ------------------
