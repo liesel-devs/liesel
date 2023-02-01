@@ -1,15 +1,5 @@
 ---
-jupyter:
-  jupytext:
-    text_representation:
-      extension: .Rmd
-      format_name: rmarkdown
-      format_version: '1.2'
-      jupytext_version: 1.14.4
-  kernelspec:
-    display_name: Python 3 (ipykernel)
-    language: python
-    name: python3
+jupyter: python3
 ---
 
 # Location-scale regression
@@ -33,13 +23,15 @@ We refer to $\boldsymbol{\beta}$ as location parameter and to $\boldsymbol{\gamm
 In this notebook, both design matrices only contain one intercept and one regressor column.
 However, the model design naturally generalizes to any (reasonable) number of covariates.
 
-
 ```{python}
+import jax
+import jax.numpy as jnp
 import liesel.goose as gs
-import liesel.liesel as lsl
+import liesel.model as lsl
 import matplotlib.pyplot as plt
-import numpy as np
 import seaborn as sns
+import tensorflow_probability.substrates.jax.distributions as tfd
+import tensorflow_probability.substrates.numpy.bijectors as tfb
 
 sns.set_theme(style="whitegrid")
 ```
@@ -47,20 +39,26 @@ sns.set_theme(style="whitegrid")
 First lets generate the data according to the model
 
 ```{python}
-rng = np.random.default_rng(seed=13)
+key = jax.random.PRNGKey(13)
+```
+
+```{python}
 n = 500
 
-true_beta = np.array([1.0, 3.0])
-true_gamma = np.array([0.0, 0.5])
+key, key_X, key_Z = jax.random.split(key, 3)
 
-X = np.column_stack([np.ones(n), rng.uniform(low=0, high=5, size=n)])
-Z = np.column_stack([np.ones(n), rng.normal(loc=2, scale=1, size=n)])
+true_beta = jnp.array([1.0, 3.0])
+true_gamma = jnp.array([0.0, 0.5])
 
-y = np.zeros(n)
-for i in np.arange(n):
-    mean = np.dot(X[i], true_beta)
-    log_sd = np.dot(Z[i], true_gamma)
-    y[i] = rng.normal(loc=mean, scale=np.exp(log_sd))
+X_mat = jnp.column_stack([jnp.ones(n), tfd.Uniform(low=0., high=5.).sample(n, seed=key_X)])
+Z_mat = jnp.column_stack([jnp.ones(n), tfd.Normal(loc=2., scale=1.).sample(n, seed=key_Z)])
+
+y_vec = jnp.zeros(n)
+key_y = jax.random.split(key, n)
+
+y_vec = jax.vmap(
+    lambda x, beta, z, gamma, key: tfd.Normal(loc=x @ beta, scale=jnp.exp(z @ gamma)).sample(seed=key),
+    (0, None, 0, None, 0))(X_mat, true_beta, Z_mat, true_gamma, key_y)
 ```
 
 The simulated data displays a linear relationship between the response $\mathbf{y}$ and the covariate $\mathbf{x}$.
@@ -71,8 +69,8 @@ Larger values of $\mathbf{ z}$ lead to a larger variance of the response.
 ```{python}
 fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(12, 6))
 sns.regplot(
-    x=X[:, 1],
-    y=y,
+    x=X_mat[:, 1],
+    y=y_vec,
     fit_reg=True,
     scatter_kws=dict(color="grey", s=20),
     line_kws=dict(color="blue"),
@@ -80,8 +78,8 @@ sns.regplot(
 ).set(xlabel="x", ylabel="y", xlim=[-0.2, 5.2])
 
 sns.scatterplot(
-    x=Z[:, 1],
-    y=y,
+    x=Z_mat[:, 1],
+    y=y_vec,
     color="grey",
     s=40,
     ax=ax2,
@@ -94,52 +92,58 @@ plt.show()
 
 Since positivity of the variance is ensured by the exponential function, the linear part $\mathbf{z}_i^T \boldsymbol{\gamma}$ is not restricted to the positive real line.
 Hence, setting a normal prior distribution for $\gamma$ is feasible, leading to an almost symmetric specification of the location and scale parts of the model.
-The nodes `n_beta` and `n_gamma` are initialized with values far away from zero to support a stable sampling process:
+The variables `beta` and `gamma` are initialized with values far away from zero to support a stable sampling process:
 
 ```{python}
-n_beta_loc = lsl.Hyperparameter(value=0.0, name="beta_loc")
-n_beta_scale = lsl.Hyperparameter(value=10.0, name="beta_scale")
-dist_beta = lsl.NodeDistribution(
-    distribution="Normal", loc=n_beta_loc, scale=n_beta_scale
-)
-n_beta = lsl.RegressionCoef(
-    value=np.array([10.0, 10.0]), distribution=dist_beta, name="beta"
-)
+beta_loc = lsl.Var(0.0, name="beta_loc")
+beta_scale = lsl.Var(100.0, name="beta_scale")
 
-n_gamma_loc = lsl.Hyperparameter(value=0.0, name="gamma_loc")
-n_gamma_scale = lsl.Hyperparameter(value=3.0, name="gamma_scale")
-dist_gamma = lsl.NodeDistribution(
-    distribution="Normal", loc=n_gamma_loc, scale=n_gamma_scale
+dist_beta = lsl.Dist(
+    distribution=tfd.Normal, loc=beta_loc, scale=beta_scale
 )
-n_gamma = lsl.RegressionCoef(
-    value=np.array([5.0, 5.0]), distribution=dist_gamma, name="gamma"
+dist_beta = lsl.Dist(tfd.Normal, loc=beta_loc, scale=beta_scale)
+
+beta = lsl.Param(
+    value=jnp.array([10., 10.]), distribution=dist_beta, name="beta"
+)
+```
+
+```{python}
+gamma_loc = lsl.Var(0.0, name="gamma_loc")
+gamma_scale = lsl.Var(3.0, name="gamma_scale")
+
+dist_gamma = lsl.Dist(
+    distribution=tfd.Normal, loc=gamma_loc, scale=gamma_scale
+)
+gamma = lsl.Param(
+    value=jnp.array([5.0, 5.0]), distribution=dist_gamma, name="gamma"
 )
 ```
 
 The additional complexity of the location-scale model compared to the standard linear model is handled in the next step.
-Since `n_gamma` takes values on the whole real line, but the response node `n_y` expects a positive scale input, we transform the `Linear Smooth` node with a `Bijector` object, which is placed in between the linear predictor `n_scale_linear` and the response node `n_y`:
+Since `gamma` takes values on the whole real line, but the response variable `y` expects a positive scale input, we need to apply the exponential function to the linear predictor to ensure positivity.
 
 ```{python}
-n_X = lsl.DesignMatrix(value=X, name="X")
-n_Z = lsl.DesignMatrix(value=Z, name="Z")
+X = lsl.Obs(value=X_mat, name="X")
+Z = lsl.Obs(value=Z_mat, name="Z")
 
-n_y_hat = lsl.Smooth(n_X, n_beta, name="y_hat")
-n_scale_linear = lsl.Smooth(n_Z, n_gamma, name="scale_pred")
-n_scale = lsl.Bijector(bijector="Exp", input=n_scale_linear, name="scale")
+mu = lsl.Var(lsl.Calc(lambda X, beta: X @ beta, X, beta), name="mu")
+scale = lsl.Var(lsl.Calc(lambda Z, gamma: jnp.exp(Z @ gamma), Z, gamma), name="scale")
 
-dist_y = lsl.NodeDistribution(distribution="Normal", loc=n_y_hat, scale=n_scale)
-n_y = lsl.Response(value=y, distribution=dist_y, name="y")
+dist_y = lsl.Dist(distribution=tfd.Normal, loc=mu, scale=scale)
+y = lsl.Obs(value=y_vec, distribution=dist_y, name="y")
 ```
 
-We can now combine the nodes in a model and visulize it
+We can now combine the nodes in a model and visualize it
 
 ```{python}
 sns.set_theme(style="white")
 
-mb = lsl.ModelBuilder()
-mb.add_nodes(n_y)
-loc_scale_model = mb.build()
-lsl.plot_model(model=loc_scale_model, width=12, height=8)
+gb = lsl.GraphBuilder()
+gb.add(y)
+model = gb.build_model() # builds the model from the graph (PGMs)
+
+lsl.plot_vars(model=model, width=12, height=8)
 ```
 
 We choose the No U-Turn sampler for generating posterior samples.
@@ -149,19 +153,19 @@ The latter option might lead to better estimation results but lacks the flexibil
 However, we will just fuse everything into one kernel do not use any specific arguments and hope that the default warmup scheme (similar to the warmup used in STAN) will do the trick.
 
 ```{python}
-builder = gs.EngineBuilder(seed=3, num_chains=4)
+builder = gs.EngineBuilder(seed=73, num_chains=4)
 
 # connects the engine with the model
-builder.set_model(lsl.GooseModel(loc_scale_model))
+builder.set_model(lsl.GooseModel(model))
+
+# we use the same initial values for all chains
+builder.set_initial_values(model.state)
 
 # add the kernel
 builder.add_kernel(gs.NUTSKernel(["beta", "gamma"]))
 
 # set number of iterations in warmup and posterior
 builder.set_duration(warmup_duration=1500, posterior_duration=1000, term_duration=500)
-
-# we use the same initial values for all chains
-builder.set_initial_values(loc_scale_model.state)
 
 # create the engine
 engine = builder.build()
@@ -177,10 +181,11 @@ results = engine.get_results()
 g = gs.plot_trace(results, chain_indices=0, ncol=4)
 ```
 
-Looks decent although we can see some correlation in the tracplots especially for $\beta$. Let's check at the combined summary:
+Looks decent although we can see some correlation in the tracplots. Let's check at the combined summary:
 
-```{python results="asis"}
-gs.summary(results, per_chain=False)
+```{python}
+#| results: asis
+gs.summary_m.Summary(results, per_chain=False)
 ```
 
 Maybe a longer warm-up would give us better samples.
@@ -189,16 +194,16 @@ Maybe a longer warm-up would give us better samples.
 builder = gs.EngineBuilder(seed=3, num_chains=4)
 
 # connects the engine with the model
-builder.set_model(lsl.GooseModel(loc_scale_model))
+builder.set_model(lsl.GooseModel(model))
+
+# we use the same initial values for all chains
+builder.set_initial_values(model.state)
 
 # add the kernel
 builder.add_kernel(gs.NUTSKernel(["beta", "gamma"]))
 
 # set number of iterations in warmup and posterior
 builder.set_duration(warmup_duration=4000, posterior_duration=1000, term_duration=1000)
-
-# we use the same initial values for all chains
-builder.set_initial_values(loc_scale_model.state)
 
 # create the engine
 engine = builder.build()
@@ -212,8 +217,9 @@ results = engine.get_results()
 g = gs.plot_trace(results, chain_indices=0, ncol=4)
 ```
 
-```{python results="asis"}
-gs.summary(results, per_chain=False)
+```{python}
+#| results: asis
+gs.summary_m.Summary(results, per_chain=False)
 ```
 
-Not really 😭
+The trace plots for $\boldsymbol{\gamma}$ improved but those for $\boldsymbol{\beta}$ still show some corelation.
