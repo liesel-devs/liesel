@@ -16,6 +16,7 @@ a focus on semi-parametric regression. It includes:
 The name "Liesel" is an homage to the [Gänseliesel fountain][3], landmark of Liesel's
 birth city [Göttingen][4].
 
+
 # Installation
 
 You can install Liesel via pip:
@@ -24,14 +25,15 @@ You can install Liesel via pip:
 $ pip install liesel
 ```
 
-For more detailed installation instructions, see the [README][5] in the main repository.
-This may be sensible, if you want tot work with the latest development version, or
-if you want to install PyGraphviz for nicely ordered display of Liesel model graphs.
+If you want to work with the latest development version of Liesel or use PyGraphviz for
+prettier plots of the model graphs, see the [README][5] in the main repository.
+
 
 # Tutorials
 
 To start working with Liesel, our tutorials might come in handy, starting with
 a tutorial on [linear regression](tutorials/md/01-lin-reg.md#linear-regression).
+
 
 # Further Reading
 
@@ -43,7 +45,7 @@ For a scientific discussion of the software, see our [paper][6] on arXiv.
 Liesel is being developed by Paul Wiemann and Hannes Riebl at the
 [University of Göttingen][7] with support from Thomas Kneib. Important contributions
 were made by Joel Beck, Alex Afanasev, Gianmarco Callegher and Johannes Brachem. We are
-grateful to the [German Research Foundation (DFG)][7] for funding the development
+grateful to the [German Research Foundation (DFG)][8] for funding the development
 through grant 443179956.
 
 <img src="https://raw.githubusercontent.com/liesel-devs/liesel/main/docs/source/_static/uni-goe.svg" alt="University of Göttingen" style="height: 4em; margin: 1em 2em 1em 0">
