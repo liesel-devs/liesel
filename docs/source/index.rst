@@ -4,7 +4,6 @@ Liesel: A Probabilistic Programming Framework
 .. include:: welcome.md
    :parser: myst_parser.sphinx_
 
-
 .. toctree::
    :hidden:
    :maxdepth: 2
