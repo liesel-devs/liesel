@@ -135,5 +135,9 @@ remove_from_toctrees = ["generated/liesel.*.*.*.*.rst"]
 
 # myst configuration
 myst_heading_anchors = 3  # auto-generate 3 levels of heading anchors
-myst_enable_extensions = ["dollarmath", "amsmath"]  # enable $$ syntax for math
+myst_enable_extensions = [
+    "dollarmath",
+    "amsmath",
+    "html_image",
+]
 myst_dmath_double_inline = True
