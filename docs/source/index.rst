@@ -14,7 +14,7 @@ Liesel: A Probabilistic Programming Framework
    tutorials/md/01a-transform
    tutorials/md/02-ls-reg
    tutorials/md/03-gev
-   tutorials/md/04-mycycle
+   tutorials/md/04-mcycle
    tutorials/md/05-reproducibility
 
 
