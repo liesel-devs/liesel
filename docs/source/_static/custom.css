@@ -6,3 +6,20 @@
 p.rubric {
     border-bottom: 0em;
 }
+
+/* from https://stackoverflow.com/a/62451601 */
+table.dataframe {
+    display: block;
+    max-width: -moz-fit-content;
+    max-width: fit-content;
+    overflow-x: auto;
+}
+
+table.dataframe th, table.dataframe td {
+    border: 1px solid #c9c9c9;
+    padding: 6px 13px;
+}
+
+table.dataframe tr:nth-child(even) {
+    background-color: #fafafa;
+}
