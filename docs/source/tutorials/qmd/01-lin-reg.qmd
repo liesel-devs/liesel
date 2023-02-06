@@ -1,6 +1,18 @@
 ---
 engine: knitr
 ---
+
+```{python}
+#| label: setup
+#| include: false
+
+import liesel.goose as gs
+import pandas as pd
+
+gs.Summary._repr_markdown_ = gs.Summary._repr_html_
+pd.options.display.html.border = 0
+```
+
 # Linear regression
 
 In this tutorial, we build a linear regression model with Liesel and estimate it with Goose. Our goal is to illustrate the most important features of the software in a straightforward context.

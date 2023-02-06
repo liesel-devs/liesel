@@ -70,13 +70,14 @@ gb.transform(sigma, tfb.Exp)
 
     Var<sigma_transformed>
 
+    No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+
 ``` python
 model = gb.build_model()
 lsl.plot_vars(model)
 ```
 
-<img src="01a-transform_files/figure-gfm/unnamed-chunk-2-1.png"
-width="1344" />
+![](01a-transform_files/figure-commonmark/unnamed-chunk-3-1.png)
 
 The response distribution still requires the standard deviation on the
 original scale. The model graph shows that the back-transformation from
@@ -110,22 +111,22 @@ engine.sample_all_epochs()
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 3, 2, 5 / 75 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 2, 1 / 25 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 25 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 2, 0 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 1, 1, 1 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 1, 2, 2 / 100 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 3, 2, 1 / 100 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 200 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 3, 1, 1 / 200 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 6, 4, 0 / 200 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 500 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 3, 1, 3 / 500 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 3, 3, 4 / 500 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 1, 1 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 3, 1, 1 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Finished warmup
     liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
@@ -135,14 +136,10 @@ Judging from the trace plots, it seems that all chains have converged.
 
 ``` python
 results = engine.get_results()
-gs.plot_trace(results)
+g = gs.plot_trace(results)
 ```
 
-<img src="01a-transform_files/figure-gfm/unnamed-chunk-4-3.png"
-width="960" />
-
-<img src="01a-transform_files/figure-gfm/unnamed-chunk-4-4.png"
-width="1020" />
+![](01a-transform_files/figure-commonmark/unnamed-chunk-5-3.png)
 
 We can also take a look at the summary table, which includes the
 original $\sigma$ and the transformed $\log(\sigma)$.
@@ -153,131 +150,301 @@ gs.Summary.from_result(results)
 
 <div class="cell-output-display">
 
-<p><strong>Parameter summary:</strong></p>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th></th>
-      <th>kernel</th>
-      <th>mean</th>
-      <th>sd</th>
-      <th>q_0.05</th>
-      <th>q_0.5</th>
-      <th>q_0.95</th>
-      <th>sample_size</th>
-      <th>ess_bulk</th>
-      <th>ess_tail</th>
-      <th>rhat</th>
-    </tr>
-    <tr>
-      <th>parameter</th>
-      <th>index</th>
-      <th></th>
-      <th></th>
-      <th></th>
-      <th></th>
-      <th></th>
-      <th></th>
-      <th></th>
-      <th></th>
-      <th></th>
-      <th></th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th rowspan="2" valign="top">beta</th>
-      <th>(0,)</th>
-      <td>kernel_00</td>
-      <td>0.984411</td>
-      <td>0.093455</td>
-      <td>0.826778</td>
-      <td>0.987161</td>
-      <td>1.135231</td>
-      <td>4000</td>
-      <td>1397.875438</td>
-      <td>1942.002698</td>
-      <td>1.001148</td>
-    </tr>
-    <tr>
-      <th>(1,)</th>
-      <td>kernel_00</td>
-      <td>1.905798</td>
-      <td>0.163746</td>
-      <td>1.643241</td>
-      <td>1.902507</td>
-      <td>2.181587</td>
-      <td>4000</td>
-      <td>1326.763862</td>
-      <td>1832.471511</td>
-      <td>1.001454</td>
-    </tr>
-    <tr>
-      <th>sigma</th>
-      <th>()</th>
-      <td>-</td>
-      <td>1.020561</td>
-      <td>0.033001</td>
-      <td>0.967251</td>
-      <td>1.019400</td>
-      <td>1.075795</td>
-      <td>4000</td>
-      <td>2552.504768</td>
-      <td>2278.873726</td>
-      <td>0.999660</td>
-    </tr>
-    <tr>
-      <th>sigma_transformed</th>
-      <th>()</th>
-      <td>kernel_00</td>
-      <td>0.019830</td>
-      <td>0.032304</td>
-      <td>-0.033297</td>
-      <td>0.019215</td>
-      <td>0.073060</td>
-      <td>4000</td>
-      <td>2552.513042</td>
-      <td>2278.873726</td>
-      <td>0.999677</td>
-    </tr>
-  </tbody>
+<p>
+<strong>Parameter summary:</strong>
+</p>
+<table border="0" class="dataframe">
+<thead>
+<tr style="text-align: right;">
+<th>
+</th>
+<th>
+</th>
+<th>
+kernel
+</th>
+<th>
+mean
+</th>
+<th>
+sd
+</th>
+<th>
+q_0.05
+</th>
+<th>
+q_0.5
+</th>
+<th>
+q_0.95
+</th>
+<th>
+sample_size
+</th>
+<th>
+ess_bulk
+</th>
+<th>
+ess_tail
+</th>
+<th>
+rhat
+</th>
+</tr>
+<tr>
+<th>
+parameter
+</th>
+<th>
+index
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th rowspan="2" valign="top">
+beta
+</th>
+<th>
+(0,)
+</th>
+<td>
+kernel_00
+</td>
+<td>
+0.985398
+</td>
+<td>
+0.092235
+</td>
+<td>
+0.830821
+</td>
+<td>
+0.987869
+</td>
+<td>
+1.133078
+</td>
+<td>
+4000
+</td>
+<td>
+1347.288852
+</td>
+<td>
+1782.123027
+</td>
+<td>
+1.002410
+</td>
+</tr>
+<tr>
+<th>
+(1,)
+</th>
+<td>
+kernel_00
+</td>
+<td>
+1.905954
+</td>
+<td>
+0.161854
+</td>
+<td>
+1.641781
+</td>
+<td>
+1.902298
+</td>
+<td>
+2.182521
+</td>
+<td>
+4000
+</td>
+<td>
+1279.325732
+</td>
+<td>
+1637.940077
+</td>
+<td>
+1.002966
+</td>
+</tr>
+<tr>
+<th>
+sigma
+</th>
+<th>
+()
+</th>
+<td>
+\-
+</td>
+<td>
+1.021049
+</td>
+<td>
+0.033204
+</td>
+<td>
+0.967392
+</td>
+<td>
+1.020831
+</td>
+<td>
+1.076941
+</td>
+<td>
+4000
+</td>
+<td>
+2517.352810
+</td>
+<td>
+2191.690912
+</td>
+<td>
+0.999687
+</td>
+</tr>
+<tr>
+<th>
+sigma_transformed
+</th>
+<th>
+()
+</th>
+<td>
+kernel_00
+</td>
+<td>
+0.020302
+</td>
+<td>
+0.032512
+</td>
+<td>
+-0.033152
+</td>
+<td>
+0.020617
+</td>
+<td>
+0.074125
+</td>
+<td>
+4000
+</td>
+<td>
+2517.356263
+</td>
+<td>
+2191.690912
+</td>
+<td>
+0.999687
+</td>
+</tr>
+</tbody>
 </table>
-<p><strong>Error summary:</strong></p>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th></th>
-      <th></th>
-      <th></th>
-      <th>count</th>
-      <th>relative</th>
-    </tr>
-    <tr>
-      <th>kernel</th>
-      <th>error_code</th>
-      <th>error_msg</th>
-      <th>phase</th>
-      <th></th>
-      <th></th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th rowspan="2" valign="top">kernel_00</th>
-      <th rowspan="2" valign="top">1</th>
-      <th rowspan="2" valign="top">divergent transition</th>
-      <th>warmup</th>
-      <td>51</td>
-      <td>0.01275</td>
-    </tr>
-    <tr>
-      <th>posterior</th>
-      <td>0</td>
-      <td>0.00000</td>
-    </tr>
-  </tbody>
+<p>
+<strong>Error summary:</strong>
+</p>
+<table border="0" class="dataframe">
+<thead>
+<tr style="text-align: right;">
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+count
+</th>
+<th>
+relative
+</th>
+</tr>
+<tr>
+<th>
+kernel
+</th>
+<th>
+error_code
+</th>
+<th>
+error_msg
+</th>
+<th>
+phase
+</th>
+<th>
+</th>
+<th>
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th rowspan="2" valign="top">
+kernel_00
+</th>
+<th rowspan="2" valign="top">
+1
+</th>
+<th rowspan="2" valign="top">
+divergent transition
+</th>
+<th>
+warmup
+</th>
+<td>
+57
+</td>
+<td>
+0.01425
+</td>
+</tr>
+<tr>
+<th>
+posterior
+</th>
+<td>
+0
+</td>
+<td>
+0.00000
+</td>
+</tr>
+</tbody>
 </table>
 
 </div>
@@ -290,5 +457,4 @@ samples.
 g = gs.plot_cor(results)
 ```
 
-<img src="01a-transform_files/figure-gfm/unnamed-chunk-6-7.png"
-width="960" />
+![](01a-transform_files/figure-commonmark/unnamed-chunk-7-5.png)

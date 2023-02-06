@@ -1,6 +1,18 @@
 ---
 engine: knitr
 ---
+
+```{python}
+#| label: setup
+#| include: false
+
+import liesel.goose as gs
+import pandas as pd
+
+gs.Summary._repr_markdown_ = gs.Summary._repr_html_
+pd.options.display.html.border = 0
+```
+
 # Parameter transformations
 
 This tutorial builds on the [linear regression tutorial](01-lin-reg.md#linear-regression). Here, we demonstrate how we can easily transform a parameter in our model to sample it with NUTS instead of a Gibbs Kernel.
@@ -89,7 +101,7 @@ Judging from the trace plots, it seems that all chains have converged.
 
 ```{python}
 results = engine.get_results()
-gs.plot_trace(results)
+g = gs.plot_trace(results)
 ```
 
 We can also take a look at the summary table, which includes the original $\sigma$ and the transformed $\log(\sigma)$.
