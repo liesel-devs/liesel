@@ -27,7 +27,7 @@ from .legacy import (
     SmoothingParam,
 )
 from .model import GraphBuilder, Model
-from .nodes import Array, Bijector, Dist, Distribution, Node, Var
+from .nodes import Array, Bijector, Dist, Distribution, Group, Node, Var
 
 matrix_rank = np.linalg.matrix_rank
 
@@ -78,7 +78,7 @@ class DistRegBuilder(GraphBuilder):
         s: float,
         predictor: str,
         name: str | None = None,
-    ) -> dict[str, Var]:
+    ) -> Group:
         """
         Adds a parametric smooth to the model builder.
 
@@ -114,15 +114,9 @@ class DistRegBuilder(GraphBuilder):
         smooth_var = Smooth(X_var, beta_var, name=name)
         self._smooths[predictor].append(smooth_var)
 
-        group = {
-            "smooth": smooth_var,
-            "beta": beta_var,
-            "X": X_var,
-            "m": m_var,
-            "s": s_var,
-        }
+        group = Group(name, smooth=smooth_var, beta=beta_var, X=X_var, m=m_var, s=s_var)
 
-        self.add_group(name, **group)
+        self.add_groups(group)
         return group
 
     def add_np_smooth(
@@ -133,7 +127,7 @@ class DistRegBuilder(GraphBuilder):
         b: float,
         predictor: str,
         name: str | None = None,
-    ) -> dict[str, Var]:
+    ) -> Group:
         """
         Adds a non-parametric smooth to the model builder.
 
@@ -183,18 +177,19 @@ class DistRegBuilder(GraphBuilder):
         smooth_var = Smooth(X_var, beta_var, name=name)
         self._smooths[predictor].append(smooth_var)
 
-        group = {
-            "smooth": smooth_var,
-            "beta": beta_var,
-            "tau2": tau2_var,
-            "rank": rank_var,
-            "X": X_var,
-            "K": K_var,
-            "a": a_var,
-            "b": b_var,
-        }
+        group = Group(
+            name,
+            smooth=smooth_var,
+            beta=beta_var,
+            tau2=tau2_var,
+            rank=rank_var,
+            X=X_var,
+            K=K_var,
+            a=a_var,
+            b=b_var,
+        )
 
-        self.add_group(name, **group)
+        self.add_groups(group)
         return group
 
     def add_predictor(self, name: str, inverse_link: type[Bijector]) -> DistRegBuilder:

@@ -247,25 +247,29 @@ class GraphBuilder:
 
         return self
 
-    def add_group(self, name: str, **kwargs: Node | Var) -> GraphBuilder:
-        """
-        Adds a group to the graph.
+    def groups(self) -> dict[str, Group]:
+        """Collects the groups of all nodes and variables."""
+        node_group_dicts = [n.groups for n in self.nodes if n.groups]
+        var_group_dicts = [v.groups for v in self.vars if v.groups]
+        dictlist = node_group_dicts + var_group_dicts
 
-        Also assigns the nodes and variables to the group,
-        see :attr:`liesel.model.nodes.Node.groups`.
+        return {name: grp for grpdict in dictlist for name, grp in grpdict.items()}
 
-        Parameters
-        ----------
-        name
-            The name of the group.
-        kwargs
-            The nodes and variables in the group with their keys in the group
-            as keywords.
-        """
+    def add_groups(self, *groups: Group) -> GraphBuilder:
+        """Adds groups to the graph."""
 
-        Group(name, **kwargs)
+        unique_names = {group.name for group in groups}
+        if len(unique_names) != len(groups):
+            raise RuntimeError("Groups must have unique names.")
 
-        self.add(*kwargs.values())
+        existing_groups = self.groups()
+
+        for group in groups:
+            if group.name in existing_groups:
+                raise RuntimeError(
+                    f"There is already a group of name '{group.name}' in {self}."
+                )
+            self.add(*group.values())
         return self
 
     def build_model(self, copy: bool = False) -> Model:
