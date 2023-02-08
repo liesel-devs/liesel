@@ -776,7 +776,7 @@ class Model:
         self._auto_update = auto_update
 
     def groups(self) -> dict[str, Group]:
-        """Composes the groups defined in the model nodes and variables."""
+        """Collects the groups in the model's nodes and variables."""
         node_group_dicts = [n.groups for n in self._nodes.values() if n.groups]
         var_group_dicts = [v.groups for v in self._vars.values() if v.groups]
         dictlist = node_group_dicts + var_group_dicts
