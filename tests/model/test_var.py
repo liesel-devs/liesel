@@ -90,21 +90,6 @@ def test_parameter() -> None:
         var.parameter = False
 
 
-def test_groups() -> None:
-    var = lnodes.Var(0.0, None)
-
-    assert not var.groups
-
-    grp = {
-        ("grp", "role"),
-    }
-    var.groups = grp
-    assert var.groups is grp
-
-    _ = lmodel.Model([var])
-    var.groups = set()
-
-
 def test_info() -> None:
     var = lnodes.Var(0.0, None)
 

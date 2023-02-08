@@ -28,6 +28,7 @@ from .nodes import (
     Calc,
     Data,
     Dist,
+    Group,
     InputGroup,
     Node,
     NodeState,
@@ -262,8 +263,7 @@ class GraphBuilder:
             as keywords.
         """
 
-        for key, arg in kwargs.items():
-            arg.groups.add((name, key))
+        Group(name, **kwargs)
 
         self.add(*kwargs.values())
         return self
@@ -771,25 +771,13 @@ class Model:
     def auto_update(self, auto_update: bool):
         self._auto_update = auto_update
 
-    def groups(self) -> dict[str, dict[str, Node | Var]]:
+    def groups(self) -> dict[str, Group]:
         """Composes the groups defined in the model nodes and variables."""
-        result: dict[str, dict[str, Node | Var]] = {}
+        node_group_dicts = [n.groups for n in self._nodes.values() if n.groups]
+        var_group_dicts = [v.groups for v in self._vars.values() if v.groups]
+        dictlist = node_group_dicts + var_group_dicts
 
-        for node in self._nodes.values():
-            for group, key in node.groups:
-                if group not in result:
-                    result[group] = {}
-
-                result[group][key] = node
-
-        for var in self._vars.values():
-            for group, key in var.groups:
-                if group not in result:
-                    result[group] = {}
-
-                result[group][key] = var
-
-        return result
+        return {name: grp for grpdict in dictlist for name, grp in grpdict.items()}
 
     def copy_nodes_and_vars(self) -> tuple[dict[str, Node], dict[str, Var]]:
         """Returns an unfrozen deep copy of the model nodes and variables."""

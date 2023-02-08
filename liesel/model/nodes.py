@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import weakref
 from abc import ABC, abstractmethod
+from collections import UserDict
 from collections.abc import Callable
 from functools import wraps
 from types import MappingProxyType
@@ -15,6 +16,7 @@ import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as jd
 import tensorflow_probability.substrates.numpy.bijectors as nb
 import tensorflow_probability.substrates.numpy.distributions as nd
+from deprecated.sphinx import deprecated
 
 from ..distributions.nodist import NoDistribution
 
@@ -122,7 +124,7 @@ class Node(ABC):
         _needs_seed: bool = False,
         **kwinputs: Any,
     ):
-        self._groups: set[tuple[str, str]] = set()
+        self._groups: _GroupDict = _GroupDict(self)
         self._inputs = tuple(self._to_node(_input) for _input in inputs)
         self._kwinputs = {kw: self._to_node(_input) for kw, _input in kwinputs.items()}
         self._kwinputs_proxy = MappingProxyType(self._kwinputs)
@@ -202,23 +204,11 @@ class Node(ABC):
         return self
 
     @property
-    def groups(self) -> set[tuple[str, str]]:
+    def groups(self) -> _GroupDict:
         """
         The groups the node is part of.
-
-        The groups are defined as a set of tuples, each of which consists of
-        the group name and the key of the node in the group, e.g.::
-
-            {
-                ("group1", "key_in_group1"),
-                ("group2", "key_in_group2"),
-            }
         """
         return self._groups
-
-    @groups.setter
-    def groups(self, groups: set[tuple[str, str]]):
-        self._groups = groups
 
     @property
     def inputs(self) -> tuple[Node, ...]:
@@ -678,7 +668,7 @@ class Var:
         self._parameter = False
         self._role = ""
 
-        self._groups: set[tuple[str, str]] = set()
+        self._groups: _GroupDict = _GroupDict(self)
 
         self.info: dict[str, Any] = {}
         """Additional meta-information about the variable as a dict."""
@@ -771,23 +761,9 @@ class Var:
         self._dist_node = dist_node
 
     @property
-    def groups(self) -> set[tuple[str, str]]:
-        """
-        The groups the variable belongs to.
-
-        The groups are defined as a set of tuples, each of which consists of
-        the group name and the key of the variable in the group, e.g.::
-
-            {
-                ("group1", "key_in_group1"),
-                ("group2", "key_in_group2"),
-            }
-        """
+    def groups(self) -> _GroupDict:
+        """The groups the variable belongs to."""
         return self._groups
-
-    @groups.setter
-    def groups(self, groups: set[tuple[str, str]]):
-        self._groups = groups
 
     @property
     def has_dist(self) -> bool:
@@ -961,7 +937,8 @@ def Param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
-def add_group(name: str, **kwargs: Node | Var) -> None:
+@deprecated(reason="Use the new `Group` object directly.", version="0.2.2")
+def add_group(name: str, **kwargs: Node | Var) -> Group:
     """
     Assigns the nodes and variables to a group.
 
@@ -976,5 +953,230 @@ def add_group(name: str, **kwargs: Node | Var) -> None:
         as keywords.
     """
 
-    for key, arg in kwargs.items():
-        arg.groups.add((name, key))
+    return Group(name, **kwargs)
+
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Group ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+class _GroupDict(UserDict):
+    """
+    A modified dictionary that holds :class:`.Group` objects.
+    """
+
+    def __init__(self, parent: Node | Var, **groups):
+        self._parent = parent
+        super().__init__(**groups)
+
+    def __setitem__(self, key: str, item: Group) -> None:
+
+        if not isinstance(item, Group):
+            raise ValueError(f"{item} is not a Group.")
+
+        if key != item.name:
+            raise RuntimeError(
+                f"Key '{key}' is not equal to group name: '{item.name}'."
+            )
+
+        if key in self.data:
+            raise RuntimeError(
+                f"{self._parent} is already a member of a group with the name {key}."
+            )
+
+        if self._parent not in item.values():
+            raise RuntimeError(f"{self} is not a member of {item}.")
+
+        return super().__setitem__(key, item)
+
+    def __delitem__(self, key: str) -> None:
+        group = self.data[key]
+        name_in_group = group.name_of(self._parent)
+        if name_in_group is not None:
+            del group[name_in_group]
+
+    def _remove(self, key: str) -> None:
+        del self.data[key]
+
+
+class Group(UserDict):
+    """
+    A modified dictionary that holds :class:`.Var` and :class:`.Node` objects.
+
+    The keys for the group members can differ from their ``.name`` attribute.
+
+    Parameters
+    ----------
+    name
+        Group name. When working with groups, you should make sure that your group names
+        are unique.
+    **nodes_and_vars
+        :class:`.Var` and :class:`.Node` objects that become members of this group. In
+        the group, vars and nodes will be referred to by the key that you use here. This
+        key is allowed to differ from the vars' and nodes' names.
+
+    Examples
+    --------
+
+    Add two vars to a group upon initialization::
+
+        >>> import liesel.model as lsl
+
+        >>> v1 = lsl.Var(0.0, name="v1")
+        >>> v2 = lsl.Var(0.0, name="v2")
+        >>> group = lsl.Group("g1", var1=v1, var2=v2)
+        >>> group.vars
+        mappingproxy({'var1': Var<v1>, 'var2': Var<v2>})
+
+
+    Add a var to a group after initialization::
+
+        >>> import liesel.model as lsl
+
+        >>> v1 = lslVar(0.0, name="v1")
+        >>> group = Group("g1")
+        >>> group["var1"] = v1
+        >>> group.vars
+        mappingproxy({'var1': Var<v1>})
+
+    Remove var from a group. This ends the group membership of the variable, i.e.: the
+    var is removed from the group AND the group is removed from the var::
+
+        >>> import liesel.model as lsl
+
+        >>> v1 = lslVar(0.0, name="v1")
+        >>> group = Group("g1", var1=v1)
+
+        >>> del group["var1"]
+        >>> group.vars
+        mappingproxy({})
+        >>> v1.groups
+        {}
+
+    Remove group from var. This also ends the group membership of the variable, i.e.:
+    the var is removed from the group AND the group is removed from the var::
+
+        >>> import liesel.model as lsl
+
+        >>> v1 = lslVar(0.0, name="v1")
+        >>> group = Group("g1", var1=v1)
+
+        >>> del v1.groups["g1"]
+        >>> v1.groups
+        {}
+        >>> g1.vars
+        mappingproxy({})
+
+    Create a new group that merges two groups::
+
+        >>> import liesel.model as lsl
+
+        >>> v1 = lslVar(0.0, name="v1")
+        >>> v2 = lslVar(0.0, name="v2")
+
+        >>> group1 = Group("g1", var1=v1)
+        >>> group2 = Group("g2", var2=v2)
+
+        >>> group3 = Group("g3", **group1, **group2)
+        >>> group3.vars
+        mappingproxy({'var1': Var<v1>, 'var2': Var<v2>})
+
+    Merge a group into an existing group::
+
+        >>> import liesel.model as lsl
+
+        >>> v1 = lslVar(0.0, name="v1")
+        >>> v2 = lslVar(0.0, name="v2")
+
+        >>> group1 = Group("g1", var1=v1)
+        >>> group2 = Group("g2", var2=v2)
+
+        >>> group1 |= group2
+        >>> group1.vars
+        mappingproxy({'var1': Var<v1>, 'var2': Var<v2>})
+    """
+
+    def __init__(self, name: str, **nodes_and_vars):
+        self.name = name
+        super().__init__(**nodes_and_vars)
+
+    def __setitem__(self, key: str, obj: Var | Node):
+        """
+        Implements: ``self[key] = obj``
+
+        Replaces existing nodes or variables of the same name.
+        Fails, if the Var/Node is already a member of this group or a group with the
+        same name, or if membership is inconsistent.
+        """
+        obj_in_group = obj in self.data.values()
+        group_in_obj = self in obj.groups.values()
+
+        if obj_in_group and group_in_obj:
+            raise RuntimeError(f"{obj} is already part of {self}.")
+
+        elif obj_in_group or group_in_obj:
+            raise RuntimeError(
+                f"Inconsistent group membership for {obj}. {obj} in {self}:"
+                f" {obj_in_group}; {self} in {obj}.groups:"
+                f" {group_in_obj}."
+            )
+
+        elif self.name in obj.groups:
+            raise RuntimeError(
+                f"{obj} is already a member of a group with the name '{self.name}'."
+            )
+
+        if key in self.data:
+            self.__delitem__(key)
+
+        self.data[key] = obj
+        obj.groups[self.name] = self
+
+    def __delitem__(self, key: str):
+        """
+        Implements: ``del self[key]``
+        """
+        obj = self.__getitem__(key)
+        obj.groups._remove(self.name)
+
+        del self.data[key]
+
+    def __or__(self, other):
+        """
+        Forbid the '|' operator for groups, because it may be confusing that the new
+        object is a dict, not a group.
+        """
+        raise NotImplementedError(
+            "New groups cannot be created with the '|' operator, because they need a"
+            " new name."
+        )
+
+    def __ior__(self, other) -> Group:
+        """
+        Implements: ``self |= other``
+        """
+        self.update(other)
+        return self
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}<{self.name}>"
+
+    @property
+    def vars(self) -> MappingProxyType[str, Var]:
+        """A mapping of the variables in the group with their names as keys."""
+
+        vars_ = {name: obj for name, obj in self.data.items() if isinstance(obj, Var)}
+        return MappingProxyType(vars_)
+
+    @property
+    def nodes(self) -> MappingProxyType[str, Node]:
+        """A mapping of the nodes in the group with their names as keys."""
+        nodes = {name: obj for name, obj in self.data.items() if isinstance(obj, Node)}
+        return MappingProxyType(nodes)
+
+    def name_of(self, item: Node | Var) -> str | None:
+        for key, member in self.data.items():
+            if member is item:
+                return key
+        return None
