@@ -59,28 +59,29 @@ engine.sample_all_epochs()
 ```
 
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 75 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 0, 0, 0, 1 / 75 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_05: 1, 1, 1, 1 / 75 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_02: 1, 1, 1, 1 / 75 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 0, 1, 0, 1 / 25 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 1, 1, 1, 0 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 0, 1, 0, 0 / 100 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 200 transitions, 25 jitted together
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 0, 0, 1, 0 / 200 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 400 transitions, 25 jitted together
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 1, 0, 0, 1 / 400 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 800 transitions, 25 jitted together
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 1, 1, 0, 0 / 800 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 3300 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 0, 1, 0, 1 / 3300 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 1, 0, 1, 0 / 3300 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 1, 0, 0, 1 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 1, 1, 0, 0 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Finished warmup
     liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
@@ -176,34 +177,34 @@ loc_np0_beta_value
 (0,)
 </th>
 <td>
-kernel_01
+kernel_04
 </td>
 <td>
--71.749649
+-108.944023
 </td>
 <td>
-243.404678
+261.579132
 </td>
 <td>
--471.154236
+-534.661642
 </td>
 <td>
--78.070900
+-112.349243
 </td>
 <td>
-3.265136e+02
+3.214457e+02
 </td>
 <td>
 4000
 </td>
 <td>
-107.242884
+23.188321
 </td>
 <td>
-480.206111
+289.586868
 </td>
 <td>
-1.030491
+1.130036
 </td>
 </tr>
 <tr>
@@ -211,34 +212,34 @@ kernel_01
 (1,)
 </th>
 <td>
-kernel_01
+kernel_04
 </td>
 <td>
--1435.168457
+-1435.197754
 </td>
 <td>
-234.020386
+236.186478
 </td>
 <td>
--1813.984619
+-1825.811743
 </td>
 <td>
--1439.191589
+-1431.409546
 </td>
 <td>
--1.045109e+03
+-1.062530e+03
 </td>
 <td>
 4000
 </td>
 <td>
-300.685537
+177.889227
 </td>
 <td>
-799.823367
+277.960100
 </td>
 <td>
-1.009126
+1.017449
 </td>
 </tr>
 <tr>
@@ -246,34 +247,34 @@ kernel_01
 (2,)
 </th>
 <td>
-kernel_01
+kernel_04
 </td>
 <td>
--693.983948
+-714.273010
 </td>
 <td>
-170.614014
+179.665131
 </td>
 <td>
--966.296927
+-1012.843674
 </td>
 <td>
--691.828979
+-712.025330
 </td>
 <td>
--4.237409e+02
+-4.222988e+02
 </td>
 <td>
 4000
 </td>
 <td>
-422.634179
+133.030770
 </td>
 <td>
-908.951817
+566.805593
 </td>
 <td>
-1.012569
+1.034158
 </td>
 </tr>
 <tr>
@@ -281,34 +282,34 @@ kernel_01
 (3,)
 </th>
 <td>
-kernel_01
+kernel_04
 </td>
 <td>
--560.734131
+-564.613586
 </td>
 <td>
-112.971436
+105.870987
 </td>
 <td>
--742.432364
+-738.670807
 </td>
 <td>
--564.023438
+-563.240082
 </td>
 <td>
--3.731574e+02
+-3.907725e+02
 </td>
 <td>
 4000
 </td>
 <td>
-223.983433
+325.079382
 </td>
 <td>
-551.776886
+609.108075
 </td>
 <td>
-1.021564
+1.023588
 </td>
 </tr>
 <tr>
@@ -316,34 +317,34 @@ kernel_01
 (4,)
 </th>
 <td>
-kernel_01
+kernel_04
 </td>
 <td>
-1126.935669
+1131.977051
 </td>
 <td>
-94.510315
+91.643028
 </td>
 <td>
-971.606635
+984.666318
 </td>
 <td>
-1125.880127
+1127.913696
 </td>
 <td>
-1.284334e+03
+1.285110e+03
 </td>
 <td>
 4000
 </td>
 <td>
-314.077898
+199.313114
 </td>
 <td>
-704.643443
+395.645071
 </td>
 <td>
-1.009145
+1.012527
 </td>
 </tr>
 <tr>
@@ -351,34 +352,34 @@ kernel_01
 (5,)
 </th>
 <td>
-kernel_01
+kernel_04
 </td>
 <td>
--66.792961
+-59.648293
 </td>
 <td>
-32.871391
+32.147057
 </td>
 <td>
--123.013205
+-111.867696
 </td>
 <td>
--66.058674
+-60.775717
 </td>
 <td>
--1.292954e+01
+-4.936346e+00
 </td>
 <td>
 4000
 </td>
 <td>
-164.500902
+141.453249
 </td>
 <td>
-632.450287
+397.598892
 </td>
 <td>
-1.025022
+1.023719
 </td>
 </tr>
 <tr>
@@ -386,34 +387,34 @@ kernel_01
 (6,)
 </th>
 <td>
-kernel_01
+kernel_04
 </td>
 <td>
--213.597229
+-213.432419
 </td>
 <td>
-20.918447
+19.873352
 </td>
 <td>
--247.094501
+-246.126113
 </td>
 <td>
--214.438644
+-213.572990
 </td>
 <td>
--1.780851e+02
+-1.812692e+02
 </td>
 <td>
 4000
 </td>
 <td>
-344.216499
+180.098521
 </td>
 <td>
-645.171342
+719.412407
 </td>
 <td>
-1.014935
+1.039936
 </td>
 </tr>
 <tr>
@@ -421,34 +422,34 @@ kernel_01
 (7,)
 </th>
 <td>
-kernel_01
+kernel_04
 </td>
 <td>
-111.644020
+114.653244
 </td>
 <td>
-67.200516
+68.110146
 </td>
 <td>
-10.435681
+15.722488
 </td>
 <td>
-104.948242
+109.121391
 </td>
 <td>
-2.337109e+02
+2.334605e+02
 </td>
 <td>
 4000
 </td>
 <td>
-244.085149
+144.603555
 </td>
 <td>
-475.721276
+259.777208
 </td>
 <td>
-1.017609
+1.033663
 </td>
 </tr>
 <tr>
@@ -456,34 +457,34 @@ kernel_01
 (8,)
 </th>
 <td>
-kernel_01
+kernel_04
 </td>
 <td>
-28.792318
+29.835463
 </td>
 <td>
-17.524246
+17.647947
 </td>
 <td>
-2.202152
+3.961023
 </td>
 <td>
-27.455837
+28.399349
 </td>
 <td>
-6.069218e+01
+6.104354e+01
 </td>
 <td>
 4000
 </td>
 <td>
-228.925737
+111.550958
 </td>
 <td>
-385.856747
+254.811488
 </td>
 <td>
-1.020899
+1.048766
 </td>
 </tr>
 <tr>
@@ -494,34 +495,34 @@ loc_np0_tau2_value
 ()
 </th>
 <td>
-kernel_00
+kernel_03
 </td>
 <td>
-720253.937500
+732711.062500
 </td>
 <td>
-486326.312500
+561087.750000
 </td>
 <td>
-257366.581250
+252670.012500
 </td>
 <td>
-591308.312500
+588705.218750
 </td>
 <td>
-1.646430e+06
+1.676414e+06
 </td>
 <td>
 4000
 </td>
 <td>
-1890.629863
+1207.734937
 </td>
 <td>
-2472.727683
+2832.780357
 </td>
 <td>
-1.001899
+1.003479
 </td>
 </tr>
 <tr>
@@ -532,34 +533,34 @@ loc_p0_beta_value
 (0,)
 </th>
 <td>
-kernel_02
+kernel_05
 </td>
 <td>
--24.568300
+-23.971762
 </td>
 <td>
-1.798792
+1.802968
 </td>
 <td>
--27.581183
+-27.230812
 </td>
 <td>
--24.467516
+-23.868549
 </td>
 <td>
--2.187579e+01
+-2.093058e+01
 </td>
 <td>
 4000
 </td>
 <td>
-16.928578
+7.874187
 </td>
 <td>
-33.934520
+19.373105
 </td>
 <td>
-1.176516
+1.475758
 </td>
 </tr>
 <tr>
@@ -570,34 +571,34 @@ scale_np0_beta_value
 (0,)
 </th>
 <td>
-kernel_04
+kernel_01
 </td>
 <td>
-6.429193
+7.073123
 </td>
 <td>
-7.917597
+11.288192
 </td>
 <td>
--3.949329
+-7.711460
 </td>
 <td>
-4.958287
+5.240811
 </td>
 <td>
-2.210393e+01
+3.042840e+01
 </td>
 <td>
 4000
 </td>
 <td>
-62.329368
+18.591045
 </td>
 <td>
-62.625436
+84.850686
 </td>
 <td>
-1.047392
+1.190827
 </td>
 </tr>
 <tr>
@@ -605,34 +606,34 @@ kernel_04
 (1,)
 </th>
 <td>
-kernel_04
+kernel_01
 </td>
 <td>
--0.844249
+-1.583312
 </td>
 <td>
-6.420584
+5.854820
 </td>
 <td>
--10.796793
+-11.653714
 </td>
 <td>
--0.719076
+-1.196289
 </td>
 <td>
-8.953830e+00
+8.011723e+00
 </td>
 <td>
 4000
 </td>
 <td>
-60.485515
+49.972196
 </td>
 <td>
-89.620435
+221.776302
 </td>
 <td>
-1.055760
+1.059100
 </td>
 </tr>
 <tr>
@@ -640,34 +641,34 @@ kernel_04
 (2,)
 </th>
 <td>
-kernel_04
+kernel_01
 </td>
 <td>
--14.543651
+-16.763771
 </td>
 <td>
-8.604739
+10.055695
 </td>
 <td>
--31.966818
+-34.984083
 </td>
 <td>
--12.813149
+-15.423145
 </td>
 <td>
--3.221321e+00
+-2.512168e+00
 </td>
 <td>
 4000
 </td>
 <td>
-44.754935
+13.108076
 </td>
 <td>
-46.606683
+77.963177
 </td>
 <td>
-1.059186
+1.238042
 </td>
 </tr>
 <tr>
@@ -675,34 +676,34 @@ kernel_04
 (3,)
 </th>
 <td>
-kernel_04
+kernel_01
 </td>
 <td>
-8.757330
+10.695534
 </td>
 <td>
-4.395264
+5.185567
 </td>
 <td>
-2.127014
+2.713498
 </td>
 <td>
-8.510785
+10.655252
 </td>
 <td>
-1.613344e+01
+1.887960e+01
 </td>
 <td>
 4000
 </td>
 <td>
-43.713822
+20.185052
 </td>
 <td>
-207.391494
+231.770226
 </td>
 <td>
-1.083672
+1.148924
 </td>
 </tr>
 <tr>
@@ -710,34 +711,34 @@ kernel_04
 (4,)
 </th>
 <td>
-kernel_04
+kernel_01
 </td>
 <td>
--1.344296
+-2.437805
 </td>
 <td>
-4.209912
+4.297496
 </td>
 <td>
--9.322977
+-9.761899
 </td>
 <td>
--1.015017
+-1.990282
 </td>
 <td>
-5.067147e+00
+4.129804e+00
 </td>
 <td>
 4000
 </td>
 <td>
-38.432665
+14.861994
 </td>
 <td>
-27.255761
+118.113220
 </td>
 <td>
-1.078597
+1.213543
 </td>
 </tr>
 <tr>
@@ -745,34 +746,34 @@ kernel_04
 (5,)
 </th>
 <td>
-kernel_04
+kernel_01
 </td>
 <td>
-3.709730
+4.017594
 </td>
 <td>
-1.829208
+1.891968
 </td>
 <td>
-0.818840
+0.862828
 </td>
 <td>
-3.691401
+3.958074
 </td>
 <td>
-6.898891e+00
+7.188039e+00
 </td>
 <td>
 4000
 </td>
 <td>
-68.721534
+14.654025
 </td>
 <td>
-116.002352
+106.364459
 </td>
 <td>
-1.027493
+1.191113
 </td>
 </tr>
 <tr>
@@ -780,34 +781,34 @@ kernel_04
 (6,)
 </th>
 <td>
-kernel_04
+kernel_01
 </td>
 <td>
-0.522969
+-0.316734
 </td>
 <td>
-2.617249
+3.251244
 </td>
 <td>
--4.709338
+-6.013668
 </td>
 <td>
-1.073140
+0.202090
 </td>
 <td>
-3.875310e+00
+4.053662e+00
 </td>
 <td>
 4000
 </td>
 <td>
-35.732689
+11.430888
 </td>
 <td>
-69.548887
+83.437761
 </td>
 <td>
-1.088659
+1.277837
 </td>
 </tr>
 <tr>
@@ -815,34 +816,34 @@ kernel_04
 (7,)
 </th>
 <td>
-kernel_04
+kernel_01
 </td>
 <td>
--1.137452
+-0.233323
 </td>
 <td>
-3.631919
+3.420532
 </td>
 <td>
--7.263342
+-5.495466
 </td>
 <td>
--1.241295
+-0.533906
 </td>
 <td>
-5.061523e+00
+5.871558e+00
 </td>
 <td>
 4000
 </td>
 <td>
-65.055335
+52.673577
 </td>
 <td>
-95.181598
+193.124140
 </td>
 <td>
-1.054235
+1.050747
 </td>
 </tr>
 <tr>
@@ -850,34 +851,34 @@ kernel_04
 (8,)
 </th>
 <td>
-kernel_04
+kernel_01
 </td>
 <td>
--0.619457
+-1.017423
 </td>
 <td>
-1.702731
+1.968827
 </td>
 <td>
--3.915074
+-4.636996
 </td>
 <td>
--0.276503
+-0.683810
 </td>
 <td>
-1.537570e+00
+1.634275e+00
 </td>
 <td>
 4000
 </td>
 <td>
-35.525902
+11.507294
 </td>
 <td>
-59.684818
+91.549336
 </td>
 <td>
-1.067420
+1.275885
 </td>
 </tr>
 <tr>
@@ -888,34 +889,34 @@ scale_np0_tau2_value
 ()
 </th>
 <td>
-kernel_03
+kernel_00
 </td>
 <td>
-95.551109
+134.179840
 </td>
 <td>
-127.029015
+169.470062
 </td>
 <td>
-10.594745
+10.974957
 </td>
 <td>
-55.283794
+74.841915
 </td>
 <td>
-3.109806e+02
+4.529928e+02
 </td>
 <td>
 4000
 </td>
 <td>
-50.197601
+13.729983
 </td>
 <td>
-142.255749
+126.142356
 </td>
 <td>
-1.028855
+1.214373
 </td>
 </tr>
 <tr>
@@ -926,34 +927,34 @@ scale_p0_beta_value
 (0,)
 </th>
 <td>
-kernel_05
+kernel_02
 </td>
 <td>
-2.773644
+2.763654
 </td>
 <td>
-0.068992
+0.069620
 </td>
 <td>
-2.662522
+2.651497
 </td>
 <td>
-2.772745
+2.763374
 </td>
 <td>
-2.890415e+00
+2.880432e+00
 </td>
 <td>
 4000
 </td>
 <td>
-408.181179
+84.591252
 </td>
 <td>
-1309.091828
+556.745930
 </td>
 <td>
-1.003256
+1.040928
 </td>
 </tr>
 </tbody>
@@ -1001,7 +1002,7 @@ phase
 <tbody>
 <tr>
 <th rowspan="2" valign="top">
-kernel_04
+kernel_01
 </th>
 <th rowspan="2" valign="top">
 90
@@ -1013,10 +1014,10 @@ nan acceptance prob
 warmup
 </th>
 <td>
-9
+11
 </td>
 <td>
-0.00045
+0.00055
 </td>
 </tr>
 <tr>
@@ -1032,7 +1033,7 @@ posterior
 </tr>
 <tr>
 <th rowspan="2" valign="top">
-kernel_05
+kernel_02
 </th>
 <th rowspan="2" valign="top">
 90
@@ -1217,35 +1218,35 @@ engine.sample_all_epochs()
 ```
 
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 75 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 41, 42, 50, 61 / 75 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 43, 44, 50, 61 / 75 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 24, 20, 8, 16 / 25 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 24, 21, 4, 11 / 25 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 49, 43, 18, 47 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 46, 49, 33, 35 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 94, 92, 71, 96 / 100 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 94, 88, 93, 99 / 100 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 200 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 191, 193, 142, 189 / 200 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 197, 187, 185, 191 / 200 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 400 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 379, 374, 365, 367 / 400 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 373, 379, 378, 374 / 400 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 800 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 735, 751, 750, 745 / 800 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 776, 767, 755, 761 / 800 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 3300 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3098, 3084, 3034, 3072 / 3300 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3159, 3208, 3179, 3223 / 3300 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 48, 42, 45, 47 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 49, 48, 50, 49 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Finished warmup
     liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 978, 992, 968, 964 / 1000 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 997, 999, 999, 999 / 1000 transitions
     liesel.goose.engine - INFO - Finished epoch
 
 The results are mixed. On the one hand, the NUTS sampler performs much
@@ -1260,30 +1261,30 @@ gs.Summary(results)
 
     Parameter summary:
 
-                                         kernel         mean  ...     ess_tail      rhat
-    parameter                  index                          ...
-    loc_np0_beta               (0,)   kernel_00   184.036636  ...    14.946803  3.236748
-                               (1,)   kernel_00  -273.360443  ...    12.325592  3.363239
-                               (2,)   kernel_00  -740.798828  ...    42.893821  1.411848
-                               (3,)   kernel_00  -252.073593  ...   203.741898  1.190143
-                               (4,)   kernel_00  1085.564331  ...   198.281495  1.050383
-                               (5,)   kernel_00  -110.461342  ...  2275.842903  1.009886
-                               (6,)   kernel_00  -209.517624  ...  1305.586163  1.011247
-                               (7,)   kernel_00   -42.542221  ...   218.267383  1.113177
-                               (8,)   kernel_00    -4.597168  ...   656.371539  1.076956
-    loc_np0_tau2_transformed   ()     kernel_00    12.579103  ...  1279.937733  1.030615
-    loc_p0_beta                (0,)   kernel_00   -21.830856  ...    57.630030  1.164192
-    scale_np0_beta             (0,)   kernel_00     5.307924  ...   481.078983  1.024117
-                               (1,)   kernel_00    -1.240266  ...  2265.030459  1.009408
-                               (2,)   kernel_00   -16.626715  ...  2193.251674  1.017538
-                               (3,)   kernel_00    15.601765  ...   143.618801  1.078908
-                               (4,)   kernel_00    -3.942277  ...  2616.551185  1.034236
-                               (5,)   kernel_00     5.939505  ...  1400.506537  1.043917
-                               (6,)   kernel_00    -0.735045  ...  1296.869985  1.020721
-                               (7,)   kernel_00     2.927418  ...  1495.753775  1.029497
-                               (8,)   kernel_00    -0.888935  ...   962.829040  1.015447
-    scale_np0_tau2_transformed ()     kernel_00     4.630955  ...  1703.860741  1.018547
-    scale_p0_beta              (0,)   kernel_00     2.874944  ...    92.260779  1.139997
+                                         kernel        mean  ...     ess_tail      rhat
+    parameter                  index                         ...
+    loc_np0_beta               (0,)   kernel_00  112.808548  ...    11.496063  4.004832
+                               (1,)   kernel_00 -101.381714  ...    11.450084  3.614009
+                               (2,)   kernel_00  -78.493156  ...    25.473711  2.189577
+                               (3,)   kernel_00  -82.997673  ...    11.447161  2.875846
+                               (4,)   kernel_00  520.973450  ...    17.907814  2.575485
+                               (5,)   kernel_00  -60.874229  ...    44.119444  1.230434
+                               (6,)   kernel_00 -107.799263  ...    15.161721  2.693133
+                               (7,)   kernel_00   22.326500  ...    12.790733  2.171271
+                               (8,)   kernel_00   15.648965  ...    30.195664  2.269841
+    loc_np0_tau2_transformed   ()     kernel_00   10.494014  ...    18.550497  1.728875
+    loc_p0_beta                (0,)   kernel_00  -15.573112  ...    23.851092  1.647181
+    scale_np0_beta             (0,)   kernel_00    2.479368  ...    15.636459  2.596379
+                               (1,)   kernel_00    7.729941  ...    99.882154  1.142289
+                               (2,)   kernel_00  -16.636984  ...    42.946903  1.580868
+                               (3,)   kernel_00   15.459176  ...    37.680018  1.372760
+                               (4,)   kernel_00   -8.674792  ...    44.500339  1.562794
+                               (5,)   kernel_00    6.616967  ...    36.139064  1.530659
+                               (6,)   kernel_00    0.018463  ...    53.694721  1.430559
+                               (7,)   kernel_00    0.993386  ...  1166.093659  1.080550
+                               (8,)   kernel_00   -1.298947  ...    52.449575  1.487767
+    scale_np0_tau2_transformed ()     kernel_00    4.588464  ...    36.309556  1.468392
+    scale_p0_beta              (0,)   kernel_00    3.028978  ...    48.338872  1.406440
 
     [22 rows x 10 columns]
 
@@ -1291,12 +1292,12 @@ gs.Summary(results)
 
                                                                               count  relative
     kernel    error_code error_msg                                 phase
-    kernel_00 1          divergent transition                      warmup      1893   0.09465
+    kernel_00 1          divergent transition                      warmup      2523   0.12615
                                                                    posterior      0   0.00000
-              2          maximum tree depth                        warmup     15910   0.79550
-                                                                   posterior   3900   0.97500
-              3          divergent transition + maximum tree depth warmup       620   0.03100
-                                                                   posterior      2   0.00050
+              2          maximum tree depth                        warmup     15765   0.78825
+                                                                   posterior   3994   0.99850
+              3          divergent transition + maximum tree depth warmup       795   0.03975
+                                                                   posterior      0   0.00000
 
 ``` python
 fig = gs.plot_trace(results, "loc_p0_beta")
