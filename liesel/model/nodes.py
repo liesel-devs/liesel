@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import weakref
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Hashable, Iterable
 from functools import wraps
 from itertools import chain
 from types import MappingProxyType
@@ -46,7 +46,7 @@ Array = Any
 Distribution = Union[jd.Distribution, nd.Distribution]
 Bijector = Union[jb.Bijector, nb.Bijector]
 
-T = TypeVar("T")
+T = TypeVar("T", bound=Hashable)
 
 
 def _unique_tuple(*args: Iterable[T]) -> tuple[T, ...]:
