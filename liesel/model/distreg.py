@@ -259,8 +259,9 @@ class DistRegBuilder(GraphBuilder):
 
 def tau2_gibbs_kernel(group: Mapping[str, Node | Var]) -> GibbsKernel:
     """Builds a Gibbs kernel for a smoothing parameter with an inverse gamma prior."""
-    group = {k: x if isinstance(x, Node) else x.value_node for k, x in group.items()}
     position_key = group["tau2"].name
+
+    group = {k: x if isinstance(x, Node) else x.value_node for k, x in group.items()}
 
     def transition(prng_key, model_state):
         a_prior = model_state[group["a"].name].value
@@ -310,7 +311,7 @@ def dist_reg_mcmc(model: Model, seed: int, num_chains: int) -> EngineBuilder:
             builder.add_kernel(tau2_kernel)
 
         if "beta" in group:
-            position_key = group["beta"].value_node.name  # type: ignore  # var
+            position_key = group["beta"].name
             beta_kernel = IWLSKernel([position_key])
             builder.add_kernel(beta_kernel)
 
