@@ -966,7 +966,7 @@ class _GroupDict(UserDict):
     A modified dictionary that holds :class:`.Group` objects.
     """
 
-    def __init__(self, parent: Node | Var, **groups):
+    def __init__(self, parent: Node | Var, **groups) -> None:
         self._parent = parent
         super().__init__(**groups)
 
@@ -1097,11 +1097,11 @@ class Group(UserDict):
         mappingproxy({'var1': Var<v1>, 'var2': Var<v2>})
     """
 
-    def __init__(self, name: str, **nodes_and_vars):
+    def __init__(self, name: str, **nodes_and_vars) -> None:
         self.name = name
         super().__init__(**nodes_and_vars)
 
-    def __setitem__(self, key: str, obj: Var | Node):
+    def __setitem__(self, key: str, obj: Var | Node) -> None:
         """
         Implements: ``self[key] = obj``
 
@@ -1133,7 +1133,7 @@ class Group(UserDict):
         self.data[key] = obj
         obj.groups[self.name] = self
 
-    def __delitem__(self, key: str):
+    def __delitem__(self, key: str) -> None:
         """
         Implements: ``del self[key]``
         """
