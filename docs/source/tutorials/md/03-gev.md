@@ -213,7 +213,7 @@ index
 <tbody>
 <tr>
 <th rowspan="2" valign="top">
-concentration_p0_beta_value
+concentration_p0_beta
 </th>
 <th>
 (0,)
@@ -286,7 +286,7 @@ kernel_00
 </tr>
 <tr>
 <th rowspan="9" valign="top">
-loc_np0_beta_value
+loc_np0_beta
 </th>
 <th>
 (0,)
@@ -604,7 +604,7 @@ kernel_03
 </tr>
 <tr>
 <th>
-loc_np0_tau2_value
+loc_np0_tau2
 </th>
 <th>
 ()
@@ -642,7 +642,7 @@ kernel_02
 </tr>
 <tr>
 <th>
-loc_p0_beta_value
+loc_p0_beta
 </th>
 <th>
 (0,)
@@ -680,7 +680,7 @@ kernel_04
 </tr>
 <tr>
 <th rowspan="2" valign="top">
-scale_p0_beta_value
+scale_p0_beta
 </th>
 <th>
 (0,)
@@ -924,31 +924,31 @@ posterior
 And the corresponding trace plots:
 
 ``` python
-fig = gs.plot_trace(results, "loc_p0_beta_value")
+fig = gs.plot_trace(results, "loc_p0_beta")
 ```
 
 ![](03-gev_files/figure-commonmark/traces-1.png)
 
 ``` python
-fig = gs.plot_trace(results, "loc_np0_tau2_value")
+fig = gs.plot_trace(results, "loc_np0_tau2")
 ```
 
 ![](03-gev_files/figure-commonmark/traces-2.png)
 
 ``` python
-fig = gs.plot_trace(results, "loc_np0_beta_value")
+fig = gs.plot_trace(results, "loc_np0_beta")
 ```
 
 ![](03-gev_files/figure-commonmark/traces-3.png)
 
 ``` python
-fig = gs.plot_trace(results, "scale_p0_beta_value")
+fig = gs.plot_trace(results, "scale_p0_beta")
 ```
 
 ![](03-gev_files/figure-commonmark/traces-4.png)
 
 ``` python
-fig = gs.plot_trace(results, "concentration_p0_beta_value")
+fig = gs.plot_trace(results, "concentration_p0_beta")
 ```
 
 ![](03-gev_files/figure-commonmark/traces-5.png)
@@ -986,7 +986,7 @@ library(reticulate)
 summary <- py$summary
 
 beta <- summary %>%
-  filter(variable == "loc_np0_beta_value") %>%
+  filter(variable == "loc_np0_beta") %>%
   group_by(var_index) %>%
   summarize(mean = mean(mean)) %>%
   ungroup()
