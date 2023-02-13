@@ -4,6 +4,19 @@ Liesel: A Probabilistic Programming Framework
 .. include:: welcome.md
    :parser: myst_parser.sphinx_
 
+.. toctree::
+   :hidden:
+   :maxdepth: 2
+   :caption: Tutorials
+
+   tutorials/md/01-lin-reg
+   tutorials/md/01a-transform
+   tutorials/md/02-ls-reg
+   tutorials/md/03-gev
+   tutorials/md/04-mcycle
+   tutorials/md/05-reproducibility
+
+
 API Reference
 -------------
 
@@ -23,6 +36,7 @@ API Reference
     :recursive:
 
     ~liesel.experimental
+
 
 Indices and Search
 ------------------

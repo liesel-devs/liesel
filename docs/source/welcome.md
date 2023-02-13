@@ -16,21 +16,36 @@ a focus on semi-parametric regression. It includes:
 The name "Liesel" is an homage to the [Gänseliesel fountain][3], landmark of Liesel's
 birth city [Göttingen][4].
 
+
 # Installation
 
-For installation instructions, see the [README][5] in the main repository.
+You can install Liesel via pip:
+
+```
+$ pip install liesel
+```
+
+If you want to work with the latest development version of Liesel or use PyGraphviz for
+prettier plots of the model graphs, see the [README][5] in the main repository.
+
+
+# Tutorials
+
+To start working with Liesel, our tutorials might come in handy, starting with
+a tutorial on [linear regression](tutorials/md/01-lin-reg.md#linear-regression).
+
 
 # Further Reading
 
 For a scientific discussion of the software, see our [paper][6] on arXiv.
-If you are looking for code examples, the [tutorial book][7] might come in handy.
+
 
 # Acknowledgements
 
 Liesel is being developed by Paul Wiemann and Hannes Riebl at the
-[University of Göttingen][8] with support from Thomas Kneib. Important contributions
+[University of Göttingen][7] with support from Thomas Kneib. Important contributions
 were made by Joel Beck, Alex Afanasev, Gianmarco Callegher and Johannes Brachem. We are
-grateful to the [German Research Foundation (DFG)][9] for funding the development
+grateful to the [German Research Foundation (DFG)][8] for funding the development
 through grant 443179956.
 
 <img src="https://raw.githubusercontent.com/liesel-devs/liesel/main/docs/source/_static/uni-goe.svg" alt="University of Göttingen" style="height: 4em; margin: 1em 2em 1em 0">
@@ -42,6 +57,5 @@ through grant 443179956.
 [4]: https://en.wikipedia.org/wiki/G%C3%B6ttingen
 [5]: https://github.com/liesel-devs/liesel#installation
 [6]: https://arxiv.org/abs/2209.10975
-[7]: https://liesel-devs.github.io/liesel-tutorials
-[8]: https://www.uni-goettingen.de/en
-[9]: https://www.dfg.de/en
+[7]: https://www.uni-goettingen.de/en
+[8]: https://www.dfg.de/en

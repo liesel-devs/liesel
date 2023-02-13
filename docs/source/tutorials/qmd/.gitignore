@@ -1,0 +1,5 @@
+/.quarto/
+/env/
+/*.md
+/*_cache/
+/*_files/
