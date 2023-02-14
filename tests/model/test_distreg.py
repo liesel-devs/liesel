@@ -306,7 +306,7 @@ class TestTau2GibbsKernel:
             prng_key, kernel_state={}, model_state=model_state, epoch=epoch_state
         )
 
-        assert outcome.model_state[g["tau2"].value_node.name] > 0.0
+        assert outcome.model_state[g["tau2"].name] > 0.0
 
 
 class TestDistRegMCMC:

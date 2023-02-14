@@ -70,13 +70,13 @@ gs.Summary(results)
 ```{python}
 #| label: iwls-traces
 
-fig = gs.plot_trace(results, "loc_p0_beta_value")
-fig = gs.plot_trace(results, "loc_np0_tau2_value")
-fig = gs.plot_trace(results, "loc_np0_beta_value")
+fig = gs.plot_trace(results, "loc_p0_beta")
+fig = gs.plot_trace(results, "loc_np0_tau2")
+fig = gs.plot_trace(results, "loc_np0_beta")
 
-fig = gs.plot_trace(results, "scale_p0_beta_value")
-fig = gs.plot_trace(results, "scale_np0_tau2_value")
-fig = gs.plot_trace(results, "scale_np0_beta_value")
+fig = gs.plot_trace(results, "scale_p0_beta")
+fig = gs.plot_trace(results, "scale_np0_tau2")
+fig = gs.plot_trace(results, "scale_np0_beta")
 ```
 
 To confirm that the chains have converged to reasonable values, here is a plot of the estimated mean function:
@@ -97,7 +97,7 @@ library(reticulate)
 summary <- py$summary
 
 beta <- summary %>%
-  filter(variable == "loc_np0_beta_value") %>%
+  filter(variable == "loc_np0_beta") %>%
   group_by(var_index) %>%
   summarize(mean = mean(mean)) %>%
   ungroup()
@@ -107,7 +107,7 @@ X <- py_to_r(model$vars["loc_np0_X"]$value)
 f <- X %*% beta
 
 beta0 <- summary %>%
-  filter(variable == "loc_p0_beta_value") %>%
+  filter(variable == "loc_p0_beta") %>%
   group_by(var_index) %>%
   summarize(mean = mean(mean)) %>%
   ungroup()
