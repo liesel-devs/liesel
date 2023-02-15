@@ -135,6 +135,7 @@ autosummary_ignore_module_all = False
 # Remove auto-generated API docs from the sidebar. They take too long to build.
 remove_from_toctrees = ["generated/liesel.*.*.*.*.rst"]
 
+
 # --------------------------------------------------------------------------------------
 # myst settings
 # --------------------------------------------------------------------------------------

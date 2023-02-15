@@ -115,7 +115,7 @@ beta0 <- summary %>%
 beta0 <- beta0$mean
 
 ggplot(data.frame(times = mcycle$times, mean = beta0 + f)) +
-  geom_line(aes(times, mean), color = palette()[2], linewidth = 1) +
+  geom_line(aes(times, mean), color = palette()[2], size = 1) +
   geom_point(aes(times, accel), data = mcycle) +
   ggtitle("Estimated mean function") +
   theme_minimal()
@@ -225,7 +225,7 @@ beta0 <- summary %>%
 beta0 <- beta0$mean
 
 ggplot(data.frame(times = mcycle$times, mean = beta0 + f)) +
-  geom_line(aes(times, mean), color = palette()[2], linewidth = 1) +
+  geom_line(aes(times, mean), color = palette()[2], size = 1) +
   geom_point(aes(times, accel), data = mcycle) +
   ggtitle("Estimated mean function") +
   theme_minimal()
