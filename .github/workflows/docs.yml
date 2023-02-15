@@ -1,13 +1,38 @@
 name: Docs
-on: [pull_request]
+on: [push]
 
 jobs:
   notebooks:
-    name: "Build the tutorials for the docs"
+    name: "Build tutorials"
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v3
+
+      - name: Install R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: "4.2"
+
+      - name: Install pre-compiled R packages from Ubuntu repository
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends r-cran-tidyverse
+
+      - name: Set R library paths
+        run: echo "R_LIBS_USER=/home/runner/work/_temp/Library:/usr/lib/R/site-library" >> $GITHUB_ENV
+
+      - name: Install additional R packages
+        shell: Rscript {0}
+        run: |
+          install.packages('VGAM')
+          install.packages('MASS')
+
+      - name: Install rliesel
+        shell: Rscript {0}
+        run: |
+          install.packages('remotes')
+          remotes::install_github('liesel-devs/rliesel', auth_token='${{ secrets.GITHUB_TOKEN }}')
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -17,23 +42,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install -U pip
-          python -m pip install -e .[dev]
+          python -m pip install .[dev]
           pip list
-
-      - name: Install R
-        uses: r-lib/actions/setup-r@v2
-        with:
-          r-version: "4.2"
-        run: Rscript -e "print('R installed')"
-
-      - name: Install R packages
-        run: |
-          Rscript -e "install.packages('tidyverse')"
-          Rscript -e "install.packages('remotes')"
-          Rscript -e "remotes::install_github('liesel-devs/rliesel')"
-          Rscript -e "install.packages('VGAM')"
-          Rscript -e "install.packages('reticulate')"
-          Rscript -e "install.packages('MASS')"
 
       - name: Install Quarto
         uses: quarto-dev/quarto-actions/setup@v2
@@ -41,16 +51,16 @@ jobs:
       - name: Render tutorials
         uses: quarto-dev/quarto-actions/render@v2
         with:
-          path: docs/source/tutorials
+          path: docs/source/tutorials/qmd
 
-      # - uses: actions/upload-artifact@v3
-      #   with:
-      #     name: tutorials-for-${{ github.sha }}
-      #     path: docs/source/tutorials/md
+      - uses: actions/upload-artifact@v3
+        with:
+          name: tutorials-for-${{ github.sha }}
+          path: docs/source/tutorials/md
 
-      # - name: Trigger RTDs build
-      #   uses: dfm/rtds-action@v1
-      #   with:
-      #     webhook_url: ${{ secrets.RTDS_WEBHOOK_URL }}
-      #     webhook_token: ${{ secrets.RTDS_WEBHOOK_TOKEN }}
-      #     commit_ref: ${{ github.ref }}
+      - name: Trigger RTDs build
+        uses: dfm/rtds-action@v1
+        with:
+          webhook_url: ${{ secrets.RTDS_WEBHOOK_URL }}
+          webhook_token: ${{ secrets.RTDS_WEBHOOK_TOKEN }}
+          commit_ref: ${{ github.ref }}
