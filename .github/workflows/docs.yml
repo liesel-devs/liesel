@@ -18,6 +18,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends r-cran-tidyverse
+          sudo apt-get install -y --no-install-recommends libgraphviz-dev
 
       - name: Set R library paths
         run: echo "R_LIBS_USER=/home/runner/work/_temp/Library:/usr/lib/R/site-library" >> $GITHUB_ENV
@@ -43,6 +44,7 @@ jobs:
         run: |
           python -m pip install -U pip
           python -m pip install .[dev]
+          python -m pip install pygraphviz
           pip list
 
       - name: Install Quarto
