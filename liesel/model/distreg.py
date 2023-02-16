@@ -25,7 +25,7 @@ from .legacy import (
     SmoothingParam,
 )
 from .model import GraphBuilder, Model
-from .nodes import Array, Bijector, Dist, Distribution, Group, Var
+from .nodes import Array, Bijector, Dist, Distribution, Group, NodeState, Var
 
 matrix_rank = np.linalg.matrix_rank
 
@@ -255,7 +255,7 @@ def tau2_gibbs_kernel(group: Group) -> GibbsKernel:
 
     position_key = group["tau2"].value_node.name  # type: ignore
 
-    def transition(prng_key, model_state):
+    def transition(prng_key, model_state: dict[str, NodeState]):
         a_prior = group.value_from(model_state, "a")
         rank = group.value_from(model_state, "rank")
 

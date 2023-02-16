@@ -997,7 +997,7 @@ class Group:
         """The group's name."""
         return self._name
 
-    def value_from(self, model_state: dict, name: str) -> Array:
+    def value_from(self, model_state: dict[str, NodeState], name: str) -> Array:
         """
         Retrieves the value of a variable that is a member of the group from a model
         state.
@@ -1005,7 +1005,7 @@ class Group:
         Parameters
         ----------
         model_state
-            A goose model state.
+            The state of a Liesel model, i.e. :class:`~.Model.state`.
         name
             Name of the variable within this group.
 
@@ -1018,6 +1018,7 @@ class Group:
             value_name = member.value_node.name
         else:
             value_name = member.name
+
         return model_state[value_name].value
 
     @property
