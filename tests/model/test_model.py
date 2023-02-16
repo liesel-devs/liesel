@@ -137,11 +137,12 @@ class TestModel:
         """
         groups = model.groups()
 
-        assert len(groups["loc"]) == 2
-        assert len(groups["scale"]) == 1
+        assert len(groups["loc"].nodes_and_vars) == 2
+        assert len(groups["scale"].nodes_and_vars) == 1
 
-        assert groups["loc"] == {"X": model.vars["X"], "beta": model.vars["beta_hat"]}
-        assert groups["scale"] == {"scale": model.vars["sigma_hat"]}
+        assert "X" in groups["loc"]
+        assert "beta" in groups["loc"]
+        assert "scale" in groups["scale"]
 
     def test_set_seed_value_errors(self, model: Model) -> None:
         """

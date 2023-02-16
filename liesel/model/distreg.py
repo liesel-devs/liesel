@@ -4,8 +4,6 @@ Distributional regression.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-
 import jax.numpy as jnp
 import jax.random
 import numpy as np
@@ -27,7 +25,7 @@ from .legacy import (
     SmoothingParam,
 )
 from .model import GraphBuilder, Model
-from .nodes import Array, Bijector, Dist, Distribution, Group, Node, Var
+from .nodes import Array, Bijector, Dist, Distribution, Group, Var
 
 matrix_rank = np.linalg.matrix_rank
 
@@ -252,20 +250,19 @@ class DistRegBuilder(GraphBuilder):
         return self
 
 
-def tau2_gibbs_kernel(group: Mapping[str, Node | Var]) -> GibbsKernel:
+def tau2_gibbs_kernel(group: Group) -> GibbsKernel:
     """Builds a Gibbs kernel for a smoothing parameter with an inverse gamma prior."""
-    group = {k: x if isinstance(x, Node) else x.value_node for k, x in group.items()}
-    position_key = group["tau2"].name
+    position_key = group["tau2"].value_node.name  # type: ignore
 
     def transition(prng_key, model_state):
-        a_prior = model_state[group["a"].name].value
-        rank = model_state[group["rank"].name].value
+        a_prior = group.get_value(model_state, "a")
+        rank = group.get_value(model_state, "rank")
 
         a_gibbs = jnp.squeeze(a_prior + 0.5 * rank)
 
-        b_prior = model_state[group["b"].name].value
-        beta = model_state[group["beta"].name].value
-        K = model_state[group["K"].name].value
+        b_prior = group.get_value(model_state, "b")
+        beta = group.get_value(model_state, "beta")
+        K = group.get_value(model_state, "K")
 
         b_gibbs = jnp.squeeze(b_prior + 0.5 * (beta @ K @ beta))
 

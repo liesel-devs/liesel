@@ -269,7 +269,7 @@ class GraphBuilder:
                 raise RuntimeError(
                     f"There is already a group of name '{group.name}' in {self}."
                 )
-            self.add(*group.values())
+            self.add(*group.nodes_and_vars.values())
         return self
 
     def build_model(self, copy: bool = False) -> Model:
