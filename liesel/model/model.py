@@ -105,14 +105,14 @@ class GraphBuilder:
     >>> c.value
     3.0
     >>> gb.vars
-    set()
+    []
     """
 
     def __init__(self):
-        self.nodes: set[Node] = set()
+        self.nodes: list[Node] = []
         """The nodes that were explicitly added to the graph."""
 
-        self.vars: set[Var] = set()
+        self.vars: list[Var] = []
         """The variables that were explicitly added to the graph."""
 
         self._log_lik_node: Node | None = None
@@ -174,9 +174,9 @@ class GraphBuilder:
         Returns all nodes and variables that were explicitly or implicitly
         (as recursive inputs) added to the graph.
         """
-        nodes = list(self.nodes)
-
+        nodes = self.nodes.copy()
         nodes.extend(node for var in self.vars for node in var.nodes)
+        nodes = list(dict.fromkeys(nodes))
 
         if self.log_lik_node:
             nodes.append(self.log_lik_node)
@@ -236,12 +236,12 @@ class GraphBuilder:
 
         for arg in args:
             if isinstance(arg, Node):
-                self.nodes.add(arg)
+                self.nodes.append(arg)
             elif isinstance(arg, Var):
-                self.vars.add(arg)
+                self.vars.append(arg)
             elif isinstance(arg, GraphBuilder):
-                self.nodes.update(arg.nodes)
-                self.vars.update(arg.vars)
+                self.nodes.extend(arg.nodes)
+                self.vars.extend(arg.vars)
             else:
                 raise RuntimeError(f"Cannot add {type(arg).__name__} to graph builder")
 
@@ -305,7 +305,7 @@ class GraphBuilder:
         >>> c.value
         3.0
         >>> gb.vars
-        set()
+        []
 
         Parameters
         ----------
@@ -457,7 +457,7 @@ class GraphBuilder:
 
     def replace_node(self, old: Node, new: Node) -> GraphBuilder:
         """Replaces the ``old`` with the ``new`` node."""
-        self.nodes = {new if x is old else x for x in self.nodes}
+        self.nodes = [new if x is old else x for x in self.nodes]
         nodes, _ = self._all_nodes_and_vars()
 
         for node in nodes:
@@ -469,7 +469,7 @@ class GraphBuilder:
 
     def replace_var(self, old: Var, new: Var) -> GraphBuilder:
         """Replaces the ``old`` with the ``new`` variable."""
-        self.vars = {new if x is old else x for x in self.vars}
+        self.vars = [new if x is old else x for x in self.vars]
         self.replace_node(old.var_value_node, new.var_value_node)
         self.replace_node(old.value_node, new.value_node)
 
