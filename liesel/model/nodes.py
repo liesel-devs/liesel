@@ -130,6 +130,7 @@ class Node(ABC):
         _needs_seed: bool = False,
         **kwinputs: Any,
     ):
+        self._groups: dict[str, Group] = {}
         self._inputs = tuple(self._to_node(_input) for _input in inputs)
         self._kwinputs = {kw: self._to_node(_input) for kw, _input in kwinputs.items()}
         self._kwinputs_proxy = MappingProxyType(self._kwinputs)
@@ -141,7 +142,6 @@ class Node(ABC):
         self._value: Any = None
         self._var: Var | None = None
 
-        self._groups: dict[str, Group] = dict()
         self.monitor = False
         """Whether the node should be monitored by an inference algorithm."""
 
@@ -673,7 +673,6 @@ class Var:
         self._role = ""
 
         self._groups: dict[str, Group] = {}
-        """The groups that this variable belongs to."""
 
         self.info: dict[str, Any] = {}
         """Additional meta-information about the variable as a dict."""
@@ -944,7 +943,7 @@ def Param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
-@deprecated(reason="Use the new `Group` object directly.", version="0.2.2")
+@deprecated(reason="Use the new `Group` object directly", version="0.2.2")
 def add_group(name: str, **kwargs: Node | Var) -> Group:
     """
     Assigns the nodes and variables to a group.
@@ -959,12 +958,11 @@ def add_group(name: str, **kwargs: Node | Var) -> Group:
         The nodes and variables in the group with their keys in the group
         as keywords.
     """
-
     return Group(name, **kwargs)
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Group ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Group ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
@@ -976,7 +974,8 @@ class Group:
         for member in self._nodes_and_vars.values():
             if name in member.groups:
                 raise RuntimeError(
-                    f"Node is already a member of a group with the name {name}."
+                    f"{repr(member)} is already a member of a group "
+                    f"with the name {repr(name)}"
                 )
             member._groups[name] = self
 
@@ -999,21 +998,22 @@ class Group:
 
     def value_from(self, model_state: dict[str, NodeState], name: str) -> Array:
         """
-        Retrieves the value of a variable that is a member of the group from a model
-        state.
+        Retrieves the value of a node or variable that is a member of the group from
+        a model state.
 
         Parameters
         ----------
         model_state
-            The state of a Liesel model, i.e. :class:`~.Model.state`.
+            The state of a Liesel model, i.e. a :class:`~.Model.state`.
         name
-            Name of the variable within this group.
+            The name of the node or variable within this group.
 
         Returns
         -------
-        The variable's value.
+        The value of the node or variable.
         """
         member = self[name]
+
         if isinstance(member, Var):
             value_name = member.value_node.name
         else:
