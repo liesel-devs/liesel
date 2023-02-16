@@ -16,6 +16,7 @@ import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as jd
 import tensorflow_probability.substrates.numpy.bijectors as nb
 import tensorflow_probability.substrates.numpy.distributions as nd
+from deprecated.sphinx import deprecated
 
 from ..distributions.nodist import NoDistribution
 
@@ -129,7 +130,7 @@ class Node(ABC):
         _needs_seed: bool = False,
         **kwinputs: Any,
     ):
-        self._groups: set[tuple[str, str]] = set()
+        self._groups: dict[str, Group] = {}
         self._inputs = tuple(self._to_node(_input) for _input in inputs)
         self._kwinputs = {kw: self._to_node(_input) for kw, _input in kwinputs.items()}
         self._model: weakref.ref[Model] | Callable[[], None] = lambda: None
@@ -208,23 +209,9 @@ class Node(ABC):
         return self
 
     @property
-    def groups(self) -> set[tuple[str, str]]:
-        """
-        The groups the node is part of.
-
-        The groups are defined as a set of tuples, each of which consists of
-        the group name and the key of the node in the group, e.g.::
-
-            {
-                ("group1", "key_in_group1"),
-                ("group2", "key_in_group2"),
-            }
-        """
-        return self._groups
-
-    @groups.setter
-    def groups(self, groups: set[tuple[str, str]]):
-        self._groups = groups
+    def groups(self) -> MappingProxyType[str, Group]:
+        """The groups that this node is a part of."""
+        return MappingProxyType(self._groups)
 
     @property
     def inputs(self) -> tuple[Node, ...]:
@@ -681,7 +668,7 @@ class Var:
         self._parameter = False
         self._role = ""
 
-        self._groups: set[tuple[str, str]] = set()
+        self._groups: dict[str, Group] = {}
 
         self.info: dict[str, Any] = {}
         """Additional meta-information about the variable as a dict."""
@@ -776,23 +763,9 @@ class Var:
         self._dist_node = dist_node
 
     @property
-    def groups(self) -> set[tuple[str, str]]:
-        """
-        The groups the variable belongs to.
-
-        The groups are defined as a set of tuples, each of which consists of
-        the group name and the key of the variable in the group, e.g.::
-
-            {
-                ("group1", "key_in_group1"),
-                ("group2", "key_in_group2"),
-            }
-        """
-        return self._groups
-
-    @groups.setter
-    def groups(self, groups: set[tuple[str, str]]):
-        self._groups = groups
+    def groups(self) -> MappingProxyType[str, Group]:
+        """The groups that this variable is a part of."""
+        return MappingProxyType(self._groups)
 
     @property
     def has_dist(self) -> bool:
@@ -966,7 +939,8 @@ def Param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
-def add_group(name: str, **kwargs: Node | Var) -> None:
+@deprecated(reason="Use the new `Group` object directly", version="0.2.2")
+def add_group(name: str, **kwargs: Node | Var) -> Group:
     """
     Assigns the nodes and variables to a group.
 
@@ -980,6 +954,89 @@ def add_group(name: str, **kwargs: Node | Var) -> None:
         The nodes and variables in the group with their keys in the group
         as keywords.
     """
+    return Group(name, **kwargs)
 
-    for key, arg in kwargs.items():
-        arg.groups.add((name, key))
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Group ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+class Group:
+    def __init__(self, name: str, **nodes_and_vars: Node | Var) -> None:
+        self._name = name
+        self._nodes_and_vars = nodes_and_vars
+
+        for member in self._nodes_and_vars.values():
+            if name in member.groups:
+                raise RuntimeError(
+                    f"{repr(member)} is already a member of a group "
+                    f"with the name {repr(name)}"
+                )
+            member._groups[name] = self
+
+        self._nodes = {
+            name: obj
+            for name, obj in self._nodes_and_vars.items()
+            if isinstance(obj, Node)
+        }
+
+        self._vars = {
+            name: obj
+            for name, obj in self._nodes_and_vars.items()
+            if isinstance(obj, Var)
+        }
+
+    @property
+    def name(self) -> str:
+        """The group's name."""
+        return self._name
+
+    def value_from(self, model_state: dict[str, NodeState], name: str) -> Array:
+        """
+        Retrieves the value of a node or variable that is a member of the group from
+        a model state.
+
+        Parameters
+        ----------
+        model_state
+            The state of a Liesel model, i.e. a :class:`~.Model.state`.
+        name
+            The name of the node or variable within this group.
+
+        Returns
+        -------
+        The value of the node or variable.
+        """
+        member = self[name]
+
+        if isinstance(member, Var):
+            value_name = member.value_node.name
+        else:
+            value_name = member.name
+
+        return model_state[value_name].value
+
+    @property
+    def vars(self) -> MappingProxyType[str, Var]:
+        """A mapping of the variables in the group with their names as keys."""
+        return MappingProxyType(self._vars)
+
+    @property
+    def nodes(self) -> MappingProxyType[str, Node]:
+        """A mapping of the nodes in the group with their names as keys."""
+        return MappingProxyType(self._nodes)
+
+    @property
+    def nodes_and_vars(self) -> MappingProxyType[str, Node | Var]:
+        """A mapping of all group members with their names as keys."""
+        return MappingProxyType(self._nodes_and_vars)
+
+    def __contains__(self, key) -> bool:
+        return key in self._nodes_and_vars
+
+    def __getitem__(self, key) -> Var | Node:
+        return self._nodes_and_vars[key]
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}<{self.name}>"

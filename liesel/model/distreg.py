@@ -4,8 +4,6 @@ Distributional regression.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-
 import jax.numpy as jnp
 import jax.random
 import numpy as np
@@ -27,7 +25,7 @@ from .legacy import (
     SmoothingParam,
 )
 from .model import GraphBuilder, Model
-from .nodes import Array, Bijector, Dist, Distribution, Node, Var
+from .nodes import Array, Bijector, Dist, Distribution, Group, NodeState, Var
 
 matrix_rank = np.linalg.matrix_rank
 
@@ -78,7 +76,7 @@ class DistRegBuilder(GraphBuilder):
         s: float,
         predictor: str,
         name: str | None = None,
-    ) -> dict[str, Var]:
+    ) -> Group:
         """
         Adds a parametric smooth to the model builder.
 
@@ -114,15 +112,9 @@ class DistRegBuilder(GraphBuilder):
         smooth_var = Smooth(X_var, beta_var, name=name)
         self._smooths[predictor].append(smooth_var)
 
-        group = {
-            "smooth": smooth_var,
-            "beta": beta_var,
-            "X": X_var,
-            "m": m_var,
-            "s": s_var,
-        }
+        group = Group(name, smooth=smooth_var, beta=beta_var, X=X_var, m=m_var, s=s_var)
 
-        self.add_group(name, **group)
+        self.add_groups(group)
         return group
 
     def add_np_smooth(
@@ -133,7 +125,7 @@ class DistRegBuilder(GraphBuilder):
         b: float,
         predictor: str,
         name: str | None = None,
-    ) -> dict[str, Var]:
+    ) -> Group:
         """
         Adds a non-parametric smooth to the model builder.
 
@@ -183,18 +175,19 @@ class DistRegBuilder(GraphBuilder):
         smooth_var = Smooth(X_var, beta_var, name=name)
         self._smooths[predictor].append(smooth_var)
 
-        group = {
-            "smooth": smooth_var,
-            "beta": beta_var,
-            "tau2": tau2_var,
-            "rank": rank_var,
-            "X": X_var,
-            "K": K_var,
-            "a": a_var,
-            "b": b_var,
-        }
+        group = Group(
+            name,
+            smooth=smooth_var,
+            beta=beta_var,
+            tau2=tau2_var,
+            rank=rank_var,
+            X=X_var,
+            K=K_var,
+            a=a_var,
+            b=b_var,
+        )
 
-        self.add_group(name, **group)
+        self.add_groups(group)
         return group
 
     def add_predictor(self, name: str, inverse_link: type[Bijector]) -> DistRegBuilder:
@@ -257,21 +250,19 @@ class DistRegBuilder(GraphBuilder):
         return self
 
 
-def tau2_gibbs_kernel(group: Mapping[str, Node | Var]) -> GibbsKernel:
+def tau2_gibbs_kernel(group: Group) -> GibbsKernel:
     """Builds a Gibbs kernel for a smoothing parameter with an inverse gamma prior."""
     position_key = group["tau2"].name
 
-    group = {k: x if isinstance(x, Node) else x.value_node for k, x in group.items()}
-
-    def transition(prng_key, model_state):
-        a_prior = model_state[group["a"].name].value
-        rank = model_state[group["rank"].name].value
+    def transition(prng_key, model_state: dict[str, NodeState]):
+        a_prior = group.value_from(model_state, "a")
+        rank = group.value_from(model_state, "rank")
 
         a_gibbs = jnp.squeeze(a_prior + 0.5 * rank)
 
-        b_prior = model_state[group["b"].name].value
-        beta = model_state[group["beta"].name].value
-        K = model_state[group["K"].name].value
+        b_prior = group.value_from(model_state, "b")
+        beta = group.value_from(model_state, "beta")
+        K = group.value_from(model_state, "K")
 
         b_gibbs = jnp.squeeze(b_prior + 0.5 * (beta @ K @ beta))
 
