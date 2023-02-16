@@ -1,0 +1,7 @@
+project:
+  title: "tutorials"
+  output-dir: ../md
+format: gfm
+engine: knitr
+execute:
+  cache: false

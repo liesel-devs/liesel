@@ -6,10 +6,11 @@ from __future__ import annotations
 
 import weakref
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Hashable, Iterable
 from functools import wraps
+from itertools import chain
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, NamedTuple, Union
+from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar, Union
 
 import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as jd
@@ -45,6 +46,12 @@ __all__ = [
 Array = Any
 Distribution = Union[jd.Distribution, nd.Distribution]
 Bijector = Union[jb.Bijector, nb.Bijector]
+
+T = TypeVar("T", bound=Hashable)
+
+
+def _unique_tuple(*args: Iterable[T]) -> tuple[T, ...]:
+    return tuple(dict.fromkeys(chain(*args)))
 
 
 def in_model_method(fn):
@@ -130,7 +137,7 @@ class Node(ABC):
         self._name = _name
         self._needs_seed = _needs_seed
         self._outdated = True
-        self._outputs: frozenset[Node] = frozenset()
+        self._outputs: tuple[Node, ...] = ()
         self._value: Any = None
         self._var: Var | None = None
 
@@ -139,11 +146,11 @@ class Node(ABC):
         """Whether the node should be monitored by an inference algorithm."""
 
     def _add_output(self, output: Node) -> Node:
-        self._outputs = self._outputs | frozenset({output})
+        self._outputs = _unique_tuple(self._outputs, [output])
         return self
 
     def _clear_outputs(self) -> Node:
-        self._outputs = frozenset()
+        self._outputs = ()
         return self
 
     def _set_model(self, model: Model) -> Node:
@@ -178,13 +185,13 @@ class Node(ABC):
         self._var = None
         return self
 
-    def all_input_nodes(self) -> frozenset[Node]:
-        """Returns all non-keyword and keyword input nodes as a frozen set."""
-        return frozenset(self.inputs) | frozenset(self.kwinputs.values())
+    def all_input_nodes(self) -> tuple[Node, ...]:
+        """Returns all non-keyword and keyword input nodes as a unique tuple."""
+        return _unique_tuple(self.inputs, self.kwinputs.values())
 
     @in_model_method
-    def all_output_nodes(self) -> frozenset[Node]:
-        """Returns all output nodes as a frozen set."""
+    def all_output_nodes(self) -> tuple[Node, ...]:
+        """Returns all output nodes as a unique tuple."""
         return self.outputs
 
     def clear_state(self) -> Node:
@@ -253,7 +260,7 @@ class Node(ABC):
 
     @property
     @in_model_getter
-    def outputs(self) -> frozenset[Node]:
+    def outputs(self) -> tuple[Node, ...]:
         """The output nodes."""
         return self._outputs
 
@@ -510,11 +517,11 @@ class Dist(Node):
         self._distribution = distribution
         self._per_obs = True
 
-    def all_input_nodes(self) -> frozenset[Node]:
+    def all_input_nodes(self) -> tuple[Node, ...]:
         inputs = super().all_input_nodes()
 
         if self.at:
-            inputs = inputs | frozenset({self.at})
+            inputs = _unique_tuple(inputs, [self.at])
 
         return inputs
 
@@ -603,15 +610,15 @@ class NoDist(Dist):
     def __init__(self):
         super().__init__(NoDistribution)
 
-    def all_input_nodes(self) -> frozenset[Node]:
-        return frozenset()
+    def all_input_nodes(self) -> tuple[Node, ...]:
+        return ()
 
-    def all_output_nodes(self) -> frozenset[Node]:
-        return frozenset()
+    def all_output_nodes(self) -> tuple[Node, ...]:
+        return ()
 
     @property
-    def outputs(self) -> frozenset[Node]:
-        return frozenset()
+    def outputs(self) -> tuple[Node, ...]:
+        return ()
 
     def update(self) -> NoDist:
         return self
@@ -671,67 +678,69 @@ class Var:
         self.info: dict[str, Any] = {}
         """Additional meta-information about the variable as a dict."""
 
-    def all_input_nodes(self) -> frozenset[Node]:
-        """Returns all input *nodes* as a frozen set."""
-        return self.value_node.all_input_nodes() | self._dist_node.all_input_nodes()
+    def all_input_nodes(self) -> tuple[Node, ...]:
+        """Returns all input *nodes* as a unique tuple."""
+        inputs1 = self.value_node.all_input_nodes()
+        inputs2 = self._dist_node.all_input_nodes()
+        return _unique_tuple(inputs1, inputs2)
 
-    def all_input_vars(self) -> frozenset[Var]:
+    def all_input_vars(self) -> tuple[Var, ...]:
         """
-        Returns all input *variables* as a frozen set.
+        Returns all input *variables* as a unique tuple.
 
-        The returned set also contains input variables that are indirect inputs
+        The returned tuple also contains input variables that are indirect inputs
         of this variable through nodes without variables.
         """
-        nodes = set(self.all_input_nodes())
+        nodes = list(self.all_input_nodes())
         visited = []
-        _vars = set()
+        _vars = []
 
         while nodes:
             node = nodes.pop()
 
             if node not in visited:
                 if node.var and node.var is not self:
-                    _vars.add(node.var)
+                    _vars.append(node.var)
                 else:
-                    nodes.update(node.all_input_nodes())
+                    nodes.extend(node.all_input_nodes())
 
                 visited.append(node)
 
-        return frozenset(_vars)
+        return _unique_tuple(_vars)
 
     @in_model_method
-    def all_output_nodes(self) -> frozenset[Node]:
-        """Returns all output *nodes* as a frozen set."""
-        nodes = set(self.value_node.all_output_nodes())
-        nodes.update(self.var_value_node.all_output_nodes())
-        nodes.update(self._dist_node.all_output_nodes())
-        nodes.discard(self.var_value_node)
-        return frozenset(nodes)
+    def all_output_nodes(self) -> tuple[Node, ...]:
+        """Returns all output *nodes* as a unique tuple."""
+        nodes = list(self.value_node.all_output_nodes())
+        nodes.extend(self.var_value_node.all_output_nodes())
+        nodes.extend(self._dist_node.all_output_nodes())
+        nodes = [node for node in nodes if node is not self.var_value_node]
+        return _unique_tuple(nodes)
 
     @in_model_method
-    def all_output_vars(self) -> frozenset[Var]:
+    def all_output_vars(self) -> tuple[Var, ...]:
         """
-        Returns all output *variables* as a frozen set.
+        Returns all output *variables* as a unique tuple.
 
-        The returned set also contains output variables that are indirect outputs
+        The returned tuple also contains output variables that are indirect outputs
         of this variable through nodes without variables.
         """
-        nodes = set(self.all_output_nodes())
+        nodes = list(self.all_output_nodes())
         visited = []
-        _vars = set()
+        _vars = []
 
         while nodes:
             node = nodes.pop()
 
             if node not in visited:
                 if node.var and node.var is not self:
-                    _vars.add(node.var)
+                    _vars.append(node.var)
                 else:
-                    nodes.update(node.all_output_nodes())
+                    nodes.extend(node.all_output_nodes())
 
                 visited.append(node)
 
-        return frozenset(_vars)
+        return _unique_tuple(_vars)
 
     @property
     def dist_node(self) -> Dist | None:
