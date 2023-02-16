@@ -1,4 +1,4 @@
-name: quarto
+name: docs
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     types: [published]
 
 jobs:
-  quarto:
+  docs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
