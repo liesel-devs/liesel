@@ -132,7 +132,6 @@ class Node(ABC):
         self._groups: set[tuple[str, str]] = set()
         self._inputs = tuple(self._to_node(_input) for _input in inputs)
         self._kwinputs = {kw: self._to_node(_input) for kw, _input in kwinputs.items()}
-        self._kwinputs_proxy = MappingProxyType(self._kwinputs)
         self._model: weakref.ref[Model] | Callable[[], None] = lambda: None
         self._name = _name
         self._needs_seed = _needs_seed
@@ -235,7 +234,7 @@ class Node(ABC):
     @property
     def kwinputs(self) -> MappingProxyType[str, Node]:
         """The keyword input nodes."""
-        return self._kwinputs_proxy
+        return MappingProxyType(self._kwinputs)
 
     @property
     def model(self) -> Model | None:
@@ -327,14 +326,11 @@ class Node(ABC):
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        state["_kwinputs_proxy"] = None
         state["_model"] = self._model()
         return state
 
     def __setstate__(self, state):
         self.__dict__.update(state)
-
-        self._kwinputs_proxy = MappingProxyType(self._kwinputs)
 
         if self._model is not None:
             self._model = weakref.ref(self._model)
