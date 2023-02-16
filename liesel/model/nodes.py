@@ -971,36 +971,22 @@ class Group:
                 )
             member._groups[name] = self
 
-    @property
-    def name(self) -> str:
-        """The group's name."""
-        return self._name
-
-    @property
-    def vars(self) -> MappingProxyType[str, Var]:
-        """A mapping of the variables in the group with their names as keys."""
-
-        vars_ = {
-            name: obj
-            for name, obj in self._nodes_and_vars.items()
-            if isinstance(obj, Var)
-        }
-        return MappingProxyType(vars_)
-
-    @property
-    def nodes(self) -> MappingProxyType[str, Node]:
-        """A mapping of the nodes in the group with their names as keys."""
-        nodes = {
+        self._nodes = {
             name: obj
             for name, obj in self._nodes_and_vars.items()
             if isinstance(obj, Node)
         }
-        return MappingProxyType(nodes)
+
+        self._vars = {
+            name: obj
+            for name, obj in self._nodes_and_vars.items()
+            if isinstance(obj, Var)
+        }
 
     @property
-    def nodes_and_vars(self) -> MappingProxyType[str, Node | Var]:
-        """A mapping of all group members with their names as keys."""
-        return MappingProxyType(self._nodes_and_vars)
+    def name(self) -> str:
+        """The group's name."""
+        return self._name
 
     def get_value(self, model_state: dict, name: str) -> Array:
         """
@@ -1024,6 +1010,21 @@ class Group:
         else:
             value_name = member.name
         return model_state[value_name].value
+
+    @property
+    def vars(self) -> MappingProxyType[str, Var]:
+        """A mapping of the variables in the group with their names as keys."""
+        return MappingProxyType(self._vars)
+
+    @property
+    def nodes(self) -> MappingProxyType[str, Node]:
+        """A mapping of the nodes in the group with their names as keys."""
+        return MappingProxyType(self._nodes)
+
+    @property
+    def nodes_and_vars(self) -> MappingProxyType[str, Node | Var]:
+        """A mapping of all group members with their names as keys."""
+        return MappingProxyType(self._nodes_and_vars)
 
     def __contains__(self, key) -> bool:
         return key in self._nodes_and_vars
