@@ -1004,7 +1004,7 @@ class Group:
         -------
         The variable's value.
         """
-        member = self.__getitem__(name)
+        member = self[name]
         if isinstance(member, Var):
             value_name = member.value_node.name
         else:
