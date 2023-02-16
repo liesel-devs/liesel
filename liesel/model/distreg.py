@@ -252,8 +252,7 @@ class DistRegBuilder(GraphBuilder):
 
 def tau2_gibbs_kernel(group: Group) -> GibbsKernel:
     """Builds a Gibbs kernel for a smoothing parameter with an inverse gamma prior."""
-
-    position_key = group["tau2"].value_node.name  # type: ignore
+    position_key = group["tau2"].name
 
     def transition(prng_key, model_state: dict[str, NodeState]):
         a_prior = group.value_from(model_state, "a")
