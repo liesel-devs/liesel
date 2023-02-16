@@ -988,7 +988,7 @@ class Group:
         """The group's name."""
         return self._name
 
-    def get_value(self, model_state: dict, name: str) -> Array:
+    def value_from(self, model_state: dict, name: str) -> Array:
         """
         Retrieves the value of a variable that is a member of the group from a model
         state.

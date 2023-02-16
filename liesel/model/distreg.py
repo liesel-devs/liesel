@@ -255,14 +255,14 @@ def tau2_gibbs_kernel(group: Group) -> GibbsKernel:
     position_key = group["tau2"].value_node.name  # type: ignore
 
     def transition(prng_key, model_state):
-        a_prior = group.get_value(model_state, "a")
-        rank = group.get_value(model_state, "rank")
+        a_prior = group.value_from(model_state, "a")
+        rank = group.value_from(model_state, "rank")
 
         a_gibbs = jnp.squeeze(a_prior + 0.5 * rank)
 
-        b_prior = group.get_value(model_state, "b")
-        beta = group.get_value(model_state, "beta")
-        K = group.get_value(model_state, "K")
+        b_prior = group.value_from(model_state, "b")
+        beta = group.value_from(model_state, "beta")
+        K = group.value_from(model_state, "K")
 
         b_gibbs = jnp.squeeze(b_prior + 0.5 * (beta @ K @ beta))
 
