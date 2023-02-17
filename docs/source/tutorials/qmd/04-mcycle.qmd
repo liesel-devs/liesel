@@ -1,3 +1,7 @@
+---
+engine: knitr
+---
+
 ```{python}
 #| label: setup
 #| include: false
@@ -5,7 +9,9 @@
 import liesel.goose as gs
 import pandas as pd
 
+gs.Summary.__repr__ = gs.Summary._repr_html_
 gs.Summary._repr_markdown_ = gs.Summary._repr_html_
+pd.options.display.float_format = lambda x: f"{x:.2f}".rstrip("0").rstrip(".")
 pd.options.display.html.border = 0
 ```
 
@@ -171,6 +177,7 @@ The results are mixed. On the one hand, the NUTS sampler performs much better on
 
 ```{python}
 #| label: nuts-summary
+#| output: asis
 
 results = engine.get_results()
 gs.Summary(results)
