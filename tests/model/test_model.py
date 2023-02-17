@@ -14,6 +14,7 @@ from liesel.model.nodes import (
     Calc,
     Data,
     Dist,
+    Group,
     Obs,
     Param,
     TransientNode,
@@ -290,6 +291,28 @@ class TestModel:
         assert len(nodes) == n_nodes - 3
         assert not model.vars
         assert not model.nodes
+
+    def test_unique_groups(self) -> None:
+        v1 = Var(0.0, name="v1")
+        v2 = Var(0.0, name="v2")
+        g1 = Group("g1", var1=v1, var2=v2)
+        m = Model([v1, v2])
+
+        assert g1 in m.groups().values()
+
+        m.pop_nodes_and_vars()
+        g2 = Group("g2", var1=v1, var2=v2)
+        m = Model([v1, v2])
+
+        assert g1 in m.groups().values()
+        assert g2 in m.groups().values()
+
+        m.pop_nodes_and_vars()
+        v3 = Var(0.0, name="v3")
+        Group("g1", var3=v3)
+
+        with pytest.raises(RuntimeError):
+            Model([v1, v2, v3])
 
 
 @pytest.mark.xfail
