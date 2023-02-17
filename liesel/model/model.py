@@ -673,18 +673,32 @@ class Model:
             nodes_and_vars = [*model.nodes.values(), *model.vars.values()]
             model.pop_nodes_and_vars()
 
-        groups = {g for nv in nodes_and_vars for g in nv.groups.values()}
-        self._nodes = {nv.name: nv for nv in nodes_and_vars if isinstance(nv, Node)}
-        self._vars = {nv.name: nv for nv in nodes_and_vars if isinstance(nv, Var)}
+        nodes = [nv for nv in nodes_and_vars if isinstance(nv, Node)]
+        nodes = list(dict.fromkeys(nodes).keys())
+        counts = Counter(n.name for n in nodes)
+        dups = [k for k, v in counts.items() if v > 1]
 
-        if len({g.name for g in groups}) < len(groups):
-            raise RuntimeError("Model received groups with duplicate names")
+        if dups:
+            raise RuntimeError(f"Duplicate node names: {', '.join(dups)}")
 
-        if len(self._nodes) < sum(isinstance(nv, Node) for nv in nodes_and_vars):
-            raise RuntimeError("Model received nodes with duplicate names")
+        _vars = [nv for nv in nodes_and_vars if isinstance(nv, Var)]
+        _vars = list(dict.fromkeys(_vars).keys())
+        counts = Counter(v.name for v in _vars)
+        dups = [k for k, v in counts.items() if v > 1]
 
-        if len(self._vars) < sum(isinstance(nv, Var) for nv in nodes_and_vars):
-            raise RuntimeError("Model received vars with duplicate names")
+        if dups:
+            raise RuntimeError(f"Duplicate variable names: {', '.join(dups)}")
+
+        groups = [g for nv in nodes_and_vars for g in nv.groups.values()]
+        groups = list(dict.fromkeys(groups).keys())
+        counts = Counter(g.name for g in groups)
+        dups = [k for k, v in counts.items() if v > 1]
+
+        if dups:
+            raise RuntimeError(f"Duplicate group names: {', '.join(dups)}")
+
+        self._nodes = {n.name: n for n in nodes}
+        self._vars = {v.name: v for v in _vars}
 
         if copy:
             self._nodes, self._vars = deepcopy((self._nodes, self._vars))
