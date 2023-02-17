@@ -1,0 +1,117 @@
+---
+engine: knitr
+---
+
+```{python}
+#| label: setup
+#| include: false
+
+import liesel.goose as gs
+import numpy as np
+import pymc as pm
+
+from liesel.experimental.pymc import PyMCInterface
+
+gs.Summary._repr_markdown_ = gs.Summary._repr_html_
+```
+
+# Linear regression
+
+Liesel provides an interface for [PyMC](https://www.pymc.io/welcome.html), a popular Python library for Bayesian Models. In thsis tutorial, we see how to specify a model in PyMC and then fit it using Liesel.
+
+Be sure that you have `pymc` installed. If that's not the case, you can install Liesel with the optional dependency PyMC.
+
+```bash
+pip install liesel[pymc]
+```
+
+We'll deal with a simple linear regression model with two slopes.
+
+$$
+\begin{aligned}
+y_i \sim \mathcal{N}_{} \left( \beta_0 + x_{i, 1} + \beta_2 + _{i, 2}, \sigma^2 \right).
+\end{aligned}
+$$
+
+First, we generate the data according to the model.
+
+```{python}
+RANDOM_SEED = 123
+rng = np.random.RandomState(RANDOM_SEED)
+
+# set parameter values
+n = 100
+sigma_scalar = 1.0
+beta_vec = [1.0, 1.0, 2.0]
+
+# simulate covariates
+x1 = rng.randn(n).astype(np.float32)
+x2 = 0.5 * rng.randn(n).astype(np.float32)
+
+errors = rng.normal(size=n).astype(np.float32)
+
+# Simulate outcome variable
+y = beta_vec[0] + beta_vec[1] * x1 + beta_vec[2] * x2 + sigma_scalar * errors
+```
+
+Then, we can specify the model using PyMC. We assign a Normal prior to the regression coefficients $\mathbf{\beta}$ and an Half-normal to the scale.
+
+```{python}
+basic_model = pm.Model()
+
+with basic_model:
+    # priors
+    beta = pm.Normal("beta", mu=0.0, sigma=10.0, shape=3)
+    sigma = pm.HalfNormal(
+        "sigma", sigma=1.0
+    )  # automatically transformed to real via log
+
+    # predicted value
+    mu = beta[0] + beta[1] * x1 + beta[2] * x2
+
+    # distribution of response (likelihood)
+    pm.Normal("y_obs", mu=mu, sigma=sigma, observed=y)
+```
+
+Let's give a mathematical look at our model
+
+```{python}
+basic_model
+```
+
+The class {class}`.PyMCInterface` offers an interface between PyMC and Goose. By default, the constructor of {class}`.PyMCInterface` keeps track only of non-observed random variables. This includes transformed but not untransformed variables. To make them trackable for the Goose {class}`.Engine`, these variables must be mentioned in the constructor.
+
+The initial position can be extracted with {meth}`.get_initial_state`. The model state is represented as a `Position`.
+
+```{python}
+interface = PyMCInterface(basic_model, additional_vars=["sigma"])
+state = interface.get_initial_state()
+```
+
+Finally, we can sample from the posterior as we do for any other Liesel model. In this case, we use a {class}`.NUTSKernel` both for $\mathbf{\beta}$ and the $\mathbf{\sigma}$.
+
+```{python}
+builder = gs.EngineBuilder(seed=1, num_chains=2)
+builder.set_model(interface)
+builder.set_initial_values(state)
+builder.set_duration(warmup_duration=1000, posterior_duration=2000)
+
+builder.add_kernel(gs.NUTSKernel(["beta", "sigma_log__"]))
+
+builder.positions_included = ["sigma"]
+
+engine = builder.build()
+
+engine.sample_all_epochs()
+```
+
+```{python}
+results = engine.get_results()
+gs.Summary(results)
+```
+
+```{python}
+gs.plot_trace(results)
+```
+
+
