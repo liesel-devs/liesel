@@ -48,8 +48,8 @@ were made by Joel Beck, Alex Afanasev, Gianmarco Callegher and Johannes Brachem.
 grateful to the [German Research Foundation (DFG)][8] for funding the development
 through grant 443179956.
 
-<img src="https://raw.githubusercontent.com/liesel-devs/liesel/main/docs/source/_static/uni-goe.svg" alt="University of Göttingen" style="height: 4em; margin: 1em 2em 1em 0">
-<img src="https://raw.githubusercontent.com/liesel-devs/liesel/main/docs/source/_static/funded-by-dfg.svg" alt="Funded by DFG" style="height: 4em; margin: 1em 0 1em 0">
+<img src="https://raw.githubusercontent.com/liesel-devs/liesel/main/docs/source/_static/uni-goe.svg" alt="University of Göttingen">
+<img src="https://raw.githubusercontent.com/liesel-devs/liesel/main/docs/source/_static/funded-by-dfg.svg" alt="Funded by DFG">
 
 [1]: https://github.com/liesel-devs/liesel
 [2]: https://github.com/liesel-devs/rliesel
