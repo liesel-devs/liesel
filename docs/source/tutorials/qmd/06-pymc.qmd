@@ -105,6 +105,8 @@ engine = builder.build()
 engine.sample_all_epochs()
 ```
 
+As usual, we can give a look at the summary of the results and at the trace plots.
+
 ```{python}
 results = engine.get_results()
 gs.Summary(results)
@@ -113,5 +115,3 @@ gs.Summary(results)
 ```{python}
 gs.plot_trace(results)
 ```
-
-
