@@ -1,3 +1,17 @@
+#acknowledgements img {
+    height: 4em;
+}
+
+/* uni goettingen */
+#acknowledgements img:first-of-type {
+    margin: 1em 2em 1em 0;
+}
+
+/* dfg */
+#acknowledgements img:nth-of-type(2) {
+    margin: 1em 0 1em 0;
+}
+
 /* override no-wrap for inherited kwargs tables */
 .wy-table-responsive table td, .wy-table-responsive table th {
     white-space: normal;

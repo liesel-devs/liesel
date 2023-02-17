@@ -28,6 +28,7 @@ from .nodes import (
     Calc,
     Data,
     Dist,
+    Group,
     InputGroup,
     Node,
     NodeState,
@@ -104,14 +105,14 @@ class GraphBuilder:
     >>> c.value
     3.0
     >>> gb.vars
-    set()
+    []
     """
 
     def __init__(self):
-        self.nodes: set[Node] = set()
+        self.nodes: list[Node] = []
         """The nodes that were explicitly added to the graph."""
 
-        self.vars: set[Var] = set()
+        self.vars: list[Var] = []
         """The variables that were explicitly added to the graph."""
 
         self._log_lik_node: Node | None = None
@@ -173,9 +174,9 @@ class GraphBuilder:
         Returns all nodes and variables that were explicitly or implicitly
         (as recursive inputs) added to the graph.
         """
-        nodes = list(self.nodes)
-
+        nodes = self.nodes.copy()
         nodes.extend(node for var in self.vars for node in var.nodes)
+        nodes = list(dict.fromkeys(nodes))
 
         if self.log_lik_node:
             nodes.append(self.log_lik_node)
@@ -235,37 +236,38 @@ class GraphBuilder:
 
         for arg in args:
             if isinstance(arg, Node):
-                self.nodes.add(arg)
+                self.nodes.append(arg)
             elif isinstance(arg, Var):
-                self.vars.add(arg)
+                self.vars.append(arg)
             elif isinstance(arg, GraphBuilder):
-                self.nodes.update(arg.nodes)
-                self.vars.update(arg.vars)
+                self.nodes.extend(arg.nodes)
+                self.vars.extend(arg.vars)
             else:
                 raise RuntimeError(f"Cannot add {type(arg).__name__} to graph builder")
 
         return self
 
-    def add_group(self, name: str, **kwargs: Node | Var) -> GraphBuilder:
-        """
-        Adds a group to the graph.
+    def groups(self) -> dict[str, Group]:
+        """Collects the groups from all nodes and variables."""
+        nodes, _vars = self._all_nodes_and_vars()
+        g1 = {g.name: g for n in nodes for g in n.groups.values()}
+        g2 = {g.name: g for v in _vars for g in v.groups.values()}
+        return g1 | g2
 
-        Also assigns the nodes and variables to the group,
-        see :attr:`liesel.model.nodes.Node.groups`.
+    def add_groups(self, *groups: Group) -> GraphBuilder:
+        """Adds groups to the graph."""
 
-        Parameters
-        ----------
-        name
-            The name of the group.
-        kwargs
-            The nodes and variables in the group with their keys in the group
-            as keywords.
-        """
+        for group in groups:
+            old = self.groups()
 
-        for key, arg in kwargs.items():
-            arg.groups.add((name, key))
+            if group.name in old and group is not old[group.name]:
+                raise RuntimeError(
+                    f"Group with name {repr(group.name)} already exists "
+                    "in graph builder"
+                )
 
-        self.add(*kwargs.values())
+            self.add(*group.nodes_and_vars.values())
+
         return self
 
     def build_model(self, copy: bool = False) -> Model:
@@ -301,7 +303,7 @@ class GraphBuilder:
         >>> c.value
         3.0
         >>> gb.vars
-        set()
+        []
 
         Parameters
         ----------
@@ -453,7 +455,7 @@ class GraphBuilder:
 
     def replace_node(self, old: Node, new: Node) -> GraphBuilder:
         """Replaces the ``old`` with the ``new`` node."""
-        self.nodes = {new if x is old else x for x in self.nodes}
+        self.nodes = [new if x is old else x for x in self.nodes]
         nodes, _ = self._all_nodes_and_vars()
 
         for node in nodes:
@@ -465,7 +467,7 @@ class GraphBuilder:
 
     def replace_var(self, old: Var, new: Var) -> GraphBuilder:
         """Replaces the ``old`` with the ``new`` variable."""
-        self.vars = {new if x is old else x for x in self.vars}
+        self.vars = [new if x is old else x for x in self.vars]
         self.replace_node(old.var_value_node, new.var_value_node)
         self.replace_node(old.value_node, new.value_node)
 
@@ -671,14 +673,32 @@ class Model:
             nodes_and_vars = [*model.nodes.values(), *model.vars.values()]
             model.pop_nodes_and_vars()
 
-        self._nodes = {nv.name: nv for nv in nodes_and_vars if isinstance(nv, Node)}
-        self._vars = {nv.name: nv for nv in nodes_and_vars if isinstance(nv, Var)}
+        nodes = [nv for nv in nodes_and_vars if isinstance(nv, Node)]
+        nodes = list(dict.fromkeys(nodes).keys())
+        counts = Counter(n.name for n in nodes)
+        dups = [k for k, v in counts.items() if v > 1]
 
-        if len(self._nodes) < sum(isinstance(nv, Node) for nv in nodes_and_vars):
-            raise RuntimeError("Model received nodes with duplicate names")
+        if dups:
+            raise RuntimeError(f"Duplicate node names: {', '.join(dups)}")
 
-        if len(self._vars) < sum(isinstance(nv, Var) for nv in nodes_and_vars):
-            raise RuntimeError("Model received vars with duplicate names")
+        _vars = [nv for nv in nodes_and_vars if isinstance(nv, Var)]
+        _vars = list(dict.fromkeys(_vars).keys())
+        counts = Counter(v.name for v in _vars)
+        dups = [k for k, v in counts.items() if v > 1]
+
+        if dups:
+            raise RuntimeError(f"Duplicate variable names: {', '.join(dups)}")
+
+        groups = [g for nv in nodes_and_vars for g in nv.groups.values()]
+        groups = list(dict.fromkeys(groups).keys())
+        counts = Counter(g.name for g in groups)
+        dups = [k for k, v in counts.items() if v > 1]
+
+        if dups:
+            raise RuntimeError(f"Duplicate group names: {', '.join(dups)}")
+
+        self._nodes = {n.name: n for n in nodes}
+        self._vars = {v.name: v for v in _vars}
 
         if copy:
             self._nodes, self._vars = deepcopy((self._nodes, self._vars))
@@ -771,25 +791,11 @@ class Model:
     def auto_update(self, auto_update: bool):
         self._auto_update = auto_update
 
-    def groups(self) -> dict[str, dict[str, Node | Var]]:
-        """Composes the groups defined in the model nodes and variables."""
-        result: dict[str, dict[str, Node | Var]] = {}
-
-        for node in self._nodes.values():
-            for group, key in node.groups:
-                if group not in result:
-                    result[group] = {}
-
-                result[group][key] = node
-
-        for var in self._vars.values():
-            for group, key in var.groups:
-                if group not in result:
-                    result[group] = {}
-
-                result[group][key] = var
-
-        return result
+    def groups(self) -> dict[str, Group]:
+        """Collects the groups from all nodes and variables."""
+        g1 = {g.name: g for n in self._nodes.values() for g in n.groups.values()}
+        g2 = {g.name: g for v in self._vars.values() for g in v.groups.values()}
+        return g1 | g2
 
     def copy_nodes_and_vars(self) -> tuple[dict[str, Node], dict[str, Var]]:
         """Returns an unfrozen deep copy of the model nodes and variables."""

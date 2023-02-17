@@ -9,7 +9,9 @@ engine: knitr
 import liesel.goose as gs
 import pandas as pd
 
+gs.Summary.__repr__ = gs.Summary._repr_html_
 gs.Summary._repr_markdown_ = gs.Summary._repr_html_
+pd.options.display.float_format = lambda x: f"{x:.2f}".rstrip("0").rstrip(".")
 pd.options.display.html.border = 0
 ```
 
@@ -44,6 +46,7 @@ $$
 Before we can generate the data and build the model graph, we need to load Liesel and a number of other packages. We usually import the model building library `liesel.model` as `lsl`, and the MCMC library `liesel.goose` as `gs`.
 
 ```{python}
+#| label: imports
 import jax
 import jax.numpy as jnp
 import liesel.goose as gs
@@ -61,6 +64,7 @@ rng = np.random.default_rng(42)
 Now we can simulate 500 observations from the linear regression model $y_i \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \;\sigma^2)$ with the true parameters $\boldsymbol{\beta} = (\beta_0, \beta_1)' = (1, 2)'$ and $\sigma = 1$. The relationship between the response $y_i$ and the covariate $x_i$ is visualized in the following scatterplot.
 
 ```{python}
+#| label: generate-data
 # sample size and true parameters
 
 n = 500
@@ -98,27 +102,28 @@ We can use the following classes to build the tree:
 Let's assume the weakly informative prior $\beta_0, \beta_1 \sim \mathcal{N}(0, 100^2)$ for the regression coefficients. To encode this assumption in Liesel, we need to create hyperparameter nodes for the mean and the standard deviation of the normal prior. Setting a name when creating a node is optional, but helps to identify it later.
 
 ```{python}
+#| label: beta-hyperparameters
 beta_loc = lsl.Var(0.0, name="beta_loc")
 beta_scale = lsl.Var(100.0, name="beta_scale") # scale = sqrt(100^2)
 
-beta_loc
+print(beta_loc)
+print(beta_scale)
 ```
 
-```{python}
-beta_scale
-```
 
 Now, let us create the node for the regression coefficients.
 
 To do so, we need to define its initial value and its node distribution using the {class}`.Dist` class. This class wraps distribution classes with the TensorFlow Probability (TFP) API to connect them to our node classes. Here, the node distribution is initialized with three arguments: the TFP distribution object [(`tfd.Normal`)](https://www.tensorflow.org/probability/api_docs/python/tfp/distributions/Normal), and the two hyperparameter nodes representing the parameters of the distribution. TFP uses the names `loc` for the mean and `scale` for the standard deviation, so we have to use the same names here. This is a general feature of {class}`.Dist`, you can always use the parameter names from TFP to refer to the parameters of your distribution.
 
 ```{python}
+#| label: beta-distribution
 beta_dist = lsl.Dist(tfd.Normal, loc=beta_loc, scale=beta_scale)
 ```
 
 With this distribution object, we can now create the node for our regression coefficient with the {func}`.Param` class:
 
 ```{python}
+#| label: beta-parameter
 beta = lsl.Param(value=np.array([0.0, 0.0]), distribution=beta_dist,name="beta")
 ```
 
@@ -127,6 +132,7 @@ beta = lsl.Param(value=np.array([0.0, 0.0]), distribution=beta_dist,name="beta")
 The second branch of the tree contains the residual standard deviation. We build it in a similar way, but this time, using the weakly informative prior $\sigma \sim \text{InverseGamme}(0.01, 0.01)$. Again, we use the parameter names based on TFP.
 
 ```{python}
+#| label: standard-deviation-node
 sigma_a = lsl.Var(0.01, name="a")
 sigma_b = lsl.Var(0.01, name="b")
 
@@ -139,6 +145,7 @@ sigma = lsl.Param(value=10.0, distribution=sigma_dist, name="sigma")
 All nodes we have seen so far are strong nodes. Before we can create a weak node that computes the predictions $\hat{\boldsymbol{y}} = \mathbf{X}\boldsymbol{\beta}$, we need to set up one more strong node for the design matrix. This is done quickly with a {func}`.Obs` node:
 
 ```{python}
+#| label: design-matrix
 X = lsl.Obs(X_mat, name="X")
 ```
 
@@ -146,6 +153,7 @@ X = lsl.Obs(X_mat, name="X")
 To compute the matrix-vector product $\hat{\boldsymbol{y}} = \mathbf{X}\boldsymbol{\beta}$, we make our first use of the {class}`.Calc` class. We can use this class to include computations based on our nodes. It always takes a function as its first argument, and the nodes to be used as function inputs as the following arguments. In this case, we can create the calculator like this:
 
 ```{python}
+#| label: calculator-setup
 yhat_fn = lambda x, beta: jnp.dot(x, beta) # stick to JAX numpy functions in calculators
 calc = lsl.Calc(yhat_fn, x=X, beta=beta)
 ```
@@ -153,6 +161,7 @@ calc = lsl.Calc(yhat_fn, x=X, beta=beta)
 With this calculator in place, we can create a corresponding node that represents the fitted values. For this, the {class}`.Var` class is the right choice. As the node's value, we use the `calc` object we just created.
 
 ```{python}
+#| label: fitted-values-var
 y_hat = lsl.Var(calc, name="y_hat")
 ```
 
@@ -160,6 +169,7 @@ y_hat = lsl.Var(calc, name="y_hat")
 Finally, we can connect the branches of the tree in a response node. The value of the node is the simulated response vector - our observed response values. And since we assumed the model $y_i \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \;\sigma^2)$, we also need to specify the response's distribution. For that, we use `y_hat` to represent the mean (/location) and `sigma` to represent the standard deviation (/scale).
 
 ```{python}
+#| label: response-var
 y_dist = lsl.Dist(tfd.Normal, loc=y_hat, scale=sigma)
 y = lsl.Var(y_vec, distribution=y_dist, name="y")
 ```
@@ -170,6 +180,7 @@ Now, to construct a full-fledged Liesel model from our individual node objects, 
 use the {class}`.GraphBuilder` class. Here, we will only add the response node.
 
 ```{python}
+#| label: graph-builder-init
 gb = lsl.GraphBuilder().add(y)
 gb
 ```
@@ -179,6 +190,7 @@ add those nodes automatically when it builds the model. Let us do that now with 
 {meth}`.build_model()`. The model that is returned by the builder provides a couple of convenience function, for example, to evaluate the model log-probability, or to update the nodes in a topological order.
 
 ```{python}
+#| label: model
 model = gb.build_model()
 model
 ```
@@ -186,6 +198,7 @@ model
 The {func}`.plot_vars()` function visualizes the graph of a model. Strong nodes are shown in blue, weak nodes in red. Nodes with a probability distribution are highlighted with a star. In the figure below, we can see the tree-like structure of the graph and identify the two branches for the mean and the standard deviation of the response. By the way, if the layout of the graph looks messy for you, please make sure you have the `pygraphviz` package installed.
 
 ```{python}
+#| label: plot-vars
 lsl.plot_vars(model)
 ```
 
@@ -194,24 +207,28 @@ lsl.plot_vars(model)
 The log-probability of the model, which can be interpreted as the (unnormalized) log-posterior in a Bayesian context, can be accessed with the `log_prob` property.
 
 ```{python}
+#| label: print-log-prob
 model.log_prob
 ```
 
 The individual nodes also have a `log_prob` property. In fact, because of the conditional independence assumption of the model, the log-probability of the model is given by the sum of the log-probabilities of the nodes with probability distributions. We take the sum for the `.log_prob` attributes of `beta` and `y` because, per default, the attributes return the individual log-probability contributions of each element in the values of the nodes. So for `beta` we would get two log-probability values, and for `y` we would get 500.
 
 ```{python}
+#| label: log-prob-demo
 beta.log_prob.sum() + sigma.log_prob + y.log_prob.sum()
 ```
 
 Nodes without a probability distribution return a log-probability of zero.
 
 ```{python}
+#| label: zero-log-prob-demo
 beta_loc.log_prob
 ```
 
 The log-probability of a node depends on its value and its inputs. Thus, if we change the standard deviation of the response from 10 to 1, the log-probability of the corresponding node, the log-probability of the response node, and the log-probability of the model change as well.
 
 ```{python}
+#| label: log-prob-updating-demo
 print(f"Old value of sigma: {sigma.value}")
 print(f"Old log-prob of sigma: {sigma.log_prob}")
 print(f"Old log-prob of y: {y.log_prob.sum()}\n")
@@ -234,6 +251,7 @@ This section illustrates the key features of Liesel's MCMC framework Goose. To u
 We start with a very simple sampling scheme, keeping $\sigma$ fixed at the true value and using a NUTS sampler for $\boldsymbol{\beta}$. The kernels are added to a {class}`.Engine`, which coordinates the sampling, including the kernel tuning during the warmup, and the MCMC bookkeeping. The engine can be configured step by step with a {class}`.EngineBuilder`. We need to inform the builder about the model, the initial values, the kernels, and the sampling duration. Finally, we can call the {meth}`.EngBuilder.build` method, which returns a fully configured engine.
 
 ```{python}
+#| label: goose-MCMC-engine-setup
 sigma.value = true_sigma
 
 builder = gs.EngineBuilder(seed=1337, num_chains=4)
@@ -251,6 +269,7 @@ engine = builder.build()
 Now we can run the MCMC algorithm for the specified duration by calling the {meth}`.sample_all_epochs` method on the engine. In a first step, the model and the sampling algorithm are compiled, so don't worry if you don't see an output right away. The subsequent samples will be generated much faster. Finally, we can extract the results and print a summary table.
 
 ```{python}
+#| label: sampling
 engine.sample_all_epochs()
 results = engine.get_results()
 gs.Summary.from_result(results)
@@ -259,6 +278,7 @@ gs.Summary.from_result(results)
 If we need more samples, we can append another epoch to the engine and sample it by calling either the {meth}`.sample_next_epoch` or the {meth}`.sample_all_epochs` method. The epochs are described by {class}`.EpochConfig` objects.
 
 ```{python}
+#| label: append-epoch
 engine.append_epoch(
     gs.EpochConfig(gs.EpochType.POSTERIOR, duration=1000, thinning=1, optional=None)
 )
@@ -277,6 +297,7 @@ To retrieve the values of our nodes from the `model_state`, we need to add the s
 added `_value` suffix.
 
 ```{python}
+#| label: define-transition-function
 def draw_sigma(prng_key, model_state):
     a_prior = model_state["a_value"].value
     b_prior = model_state["b_value"].value
@@ -293,6 +314,7 @@ def draw_sigma(prng_key, model_state):
 We build the engine in a similar way as before, but this time adding the Gibbs kernel as well.
 
 ```{python}
+#| label: engine-setup-with-gibbs-sampler
 builder = gs.EngineBuilder(seed=1338, num_chains=4)
 
 builder.set_model(lsl.GooseModel(model))
@@ -310,6 +332,7 @@ engine.sample_all_epochs()
 Goose provides a couple of convenient numerical and graphical summary tools. The {class}`.Summary` class computes several summary statistics that can be either accessed programmatically or displayed as a summary table.
 
 ```{python results="asis"}
+#| label: results-fo-sampling-with-gibbs-sampler
 results = engine.get_results()
 gs.Summary.from_result(results)
 ```
@@ -317,12 +340,14 @@ gs.Summary.from_result(results)
 We can plot the trace plots of the chains with {func}`.plot_trace()`.
 
 ```{python}
+#| label: trace-plot
 g = gs.plot_trace(results)
 ```
 
 We could also take a look at a kernel density estimator with {func}`.plot_density()` and the estimated autocorrelation with {func}`.plot_cor()`. Alternatively, we can output all three diagnostic plots together with {func}`.plot_param()`. The following plot shows the parameter $\beta_0$.
 
 ```{python}
+#| label: parameter-summary-plot
 gs.plot_param(results, param="beta", param_index=0)
 ```
 

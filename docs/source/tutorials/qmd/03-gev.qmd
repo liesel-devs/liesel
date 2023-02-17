@@ -1,3 +1,7 @@
+---
+engine: knitr
+---
+
 ```{python}
 #| label: setup
 #| include: false
@@ -5,7 +9,9 @@
 import liesel.goose as gs
 import pandas as pd
 
+gs.Summary.__repr__ = gs.Summary._repr_html_
 gs.Summary._repr_markdown_ = gs.Summary._repr_html_
+pd.options.display.float_format = lambda x: f"{x:.2f}".rstrip("0").rstrip(".")
 pd.options.display.html.border = 0
 ```
 
@@ -89,11 +95,11 @@ And the corresponding trace plots:
 ```{python}
 #| label: traces
 
-fig = gs.plot_trace(results, "loc_p0_beta_value")
-fig = gs.plot_trace(results, "loc_np0_tau2_value")
-fig = gs.plot_trace(results, "loc_np0_beta_value")
-fig = gs.plot_trace(results, "scale_p0_beta_value")
-fig = gs.plot_trace(results, "concentration_p0_beta_value")
+fig = gs.plot_trace(results, "loc_p0_beta")
+fig = gs.plot_trace(results, "loc_np0_tau2")
+fig = gs.plot_trace(results, "loc_np0_beta")
+fig = gs.plot_trace(results, "scale_p0_beta")
+fig = gs.plot_trace(results, "concentration_p0_beta")
 ```
 
 We need to reset the index of the summary data frame before we can transfer it to R.
@@ -116,7 +122,7 @@ library(reticulate)
 summary <- py$summary
 
 beta <- summary %>%
-  filter(variable == "loc_np0_beta_value") %>%
+  filter(variable == "loc_np0_beta") %>%
   group_by(var_index) %>%
   summarize(mean = mean(mean)) %>%
   ungroup()

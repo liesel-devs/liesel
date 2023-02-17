@@ -1,3 +1,7 @@
+---
+engine: knitr
+---
+
 ```{python}
 #| label: setup
 #| include: false
@@ -5,7 +9,9 @@
 import liesel.goose as gs
 import pandas as pd
 
+gs.Summary.__repr__ = gs.Summary._repr_html_
 gs.Summary._repr_markdown_ = gs.Summary._repr_html_
+pd.options.display.float_format = lambda x: f"{x:.2f}".rstrip("0").rstrip(".")
 pd.options.display.html.border = 0
 ```
 
@@ -70,13 +76,13 @@ gs.Summary(results)
 ```{python}
 #| label: iwls-traces
 
-fig = gs.plot_trace(results, "loc_p0_beta_value")
-fig = gs.plot_trace(results, "loc_np0_tau2_value")
-fig = gs.plot_trace(results, "loc_np0_beta_value")
+fig = gs.plot_trace(results, "loc_p0_beta")
+fig = gs.plot_trace(results, "loc_np0_tau2")
+fig = gs.plot_trace(results, "loc_np0_beta")
 
-fig = gs.plot_trace(results, "scale_p0_beta_value")
-fig = gs.plot_trace(results, "scale_np0_tau2_value")
-fig = gs.plot_trace(results, "scale_np0_beta_value")
+fig = gs.plot_trace(results, "scale_p0_beta")
+fig = gs.plot_trace(results, "scale_np0_tau2")
+fig = gs.plot_trace(results, "scale_np0_beta")
 ```
 
 To confirm that the chains have converged to reasonable values, here is a plot of the estimated mean function:
@@ -97,7 +103,7 @@ library(reticulate)
 summary <- py$summary
 
 beta <- summary %>%
-  filter(variable == "loc_np0_beta_value") %>%
+  filter(variable == "loc_np0_beta") %>%
   group_by(var_index) %>%
   summarize(mean = mean(mean)) %>%
   ungroup()
@@ -107,7 +113,7 @@ X <- py_to_r(model$vars["loc_np0_X"]$value)
 f <- X %*% beta
 
 beta0 <- summary %>%
-  filter(variable == "loc_p0_beta_value") %>%
+  filter(variable == "loc_p0_beta") %>%
   group_by(var_index) %>%
   summarize(mean = mean(mean)) %>%
   ungroup()
@@ -115,7 +121,7 @@ beta0 <- summary %>%
 beta0 <- beta0$mean
 
 ggplot(data.frame(times = mcycle$times, mean = beta0 + f)) +
-  geom_line(aes(times, mean), color = palette()[2], linewidth = 1) +
+  geom_line(aes(times, mean), color = palette()[2], size = 1) +
   geom_point(aes(times, accel), data = mcycle) +
   ggtitle("Estimated mean function") +
   theme_minimal()
@@ -171,6 +177,7 @@ The results are mixed. On the one hand, the NUTS sampler performs much better on
 
 ```{python}
 #| label: nuts-summary
+#| output: asis
 
 results = engine.get_results()
 gs.Summary(results)
@@ -225,7 +232,7 @@ beta0 <- summary %>%
 beta0 <- beta0$mean
 
 ggplot(data.frame(times = mcycle$times, mean = beta0 + f)) +
-  geom_line(aes(times, mean), color = palette()[2], linewidth = 1) +
+  geom_line(aes(times, mean), color = palette()[2], size = 1) +
   geom_point(aes(times, accel), data = mcycle) +
   ggtitle("Estimated mean function") +
   theme_minimal()

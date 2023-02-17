@@ -1,0 +1,59 @@
+name: docs
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Install Ubuntu packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends r-base r-cran-remotes r-cran-tidyverse r-cran-vgam
+          sudo apt-get install -y --no-install-recommends graphviz graphviz-dev
+
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install Liesel
+        run: |
+          pip install --upgrade pip
+          pip install .[dev]
+          pip install pygraphviz
+          pip list
+
+      - name: Install RLiesel
+        run: |
+          sudo Rscript -e "remotes::install_github('liesel-devs/rliesel', auth_token = '${{ secrets.GITHUB_TOKEN }}', upgrade = 'never')"
+
+      - name: Install Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      - name: Render tutorials
+        uses: quarto-dev/quarto-actions/render@v2
+        with:
+          path: docs/source/tutorials/qmd
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: tutorials-for-${{ github.sha }}
+          path: docs/source/tutorials/md
+
+      - name: Trigger RTDs build
+        uses: dfm/rtds-action@v1
+        with:
+          webhook_url: ${{ secrets.RTDS_WEBHOOK_URL }}
+          webhook_token: ${{ secrets.RTDS_WEBHOOK_TOKEN }}
+          commit_ref: ${{ github.ref }}

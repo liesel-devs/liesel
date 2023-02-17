@@ -10,7 +10,8 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-# import os
+import os
+
 # import sys
 # sys.path.insert(0, os.path.abspath("."))
 
@@ -39,6 +40,7 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx_copybutton",
     "myst_nb",
+    "rtds_action",
 ]
 
 intersphinx_mapping = {
@@ -133,7 +135,34 @@ autosummary_ignore_module_all = False
 # Remove auto-generated API docs from the sidebar. They take too long to build.
 remove_from_toctrees = ["generated/liesel.*.*.*.*.rst"]
 
+
+# --------------------------------------------------------------------------------------
+# myst settings
+# --------------------------------------------------------------------------------------
+
 # myst configuration
 myst_heading_anchors = 3  # auto-generate 3 levels of heading anchors
 myst_enable_extensions = ["amsmath", "dollarmath", "html_image"]
 myst_dmath_double_inline = True
+
+
+# --------------------------------------------------------------------------------------
+# rtds-action settings
+# --------------------------------------------------------------------------------------
+
+# The name of your GitHub repository
+rtds_action_github_repo = "liesel-devs/liesel"
+
+# The path where the artifact should be extracted
+# Note: this is relative to the conf.py file!
+rtds_action_path = "tutorials/md"
+
+# The "prefix" used in the `upload-artifact` step of the action
+rtds_action_artifact_prefix = "tutorials-for-"
+
+# A GitHub personal access token is required, more info below
+rtds_action_github_token = os.environ["GITHUB_TOKEN"]
+
+# Whether or not to raise an error on Read the Docs if the
+# artifact containing the notebooks can't be downloaded (optional)
+rtds_action_error_if_missing = False

@@ -9,7 +9,9 @@ engine: knitr
 import liesel.goose as gs
 import pandas as pd
 
+gs.Summary.__repr__ = gs.Summary._repr_html_
 gs.Summary._repr_markdown_ = gs.Summary._repr_html_
+pd.options.display.float_format = lambda x: f"{x:.2f}".rstrip("0").rstrip(".")
 pd.options.display.html.border = 0
 ```
 
@@ -20,6 +22,7 @@ This tutorial builds on the [linear regression tutorial](01-lin-reg.md#linear-re
 First, let's set up our model again. This is the same model as in the [linear regression tutorial](01-lin-reg.md#linear-regression), so we will not go into the details here.
 
 ```{python}
+#| label: model-setup
 import jax
 import jax.numpy as jnp
 import liesel.goose as gs
@@ -67,6 +70,7 @@ y = lsl.Var(y_vec, distribution=y_dist, name="y")
 Now let's try to sample the full parameter vector $(\boldsymbol{\beta}', \sigma)'$ with a single NUTS kernel instead of using a NUTS kernel for $\boldsymbol{\beta}$ and a Gibbs kernel for $\sigma$. Since the standard deviation is a positive-valued parameter, we need to log-transform it to sample it with a NUTS kernel. The {class}`.GraphBuilder` class provides the {meth}`.transform_parameter` method for this purpose.
 
 ```{python}
+#| label: graph-and-transformation
 gb = lsl.GraphBuilder().add(y)
 gb.transform(sigma, tfb.Exp)
 
@@ -80,6 +84,7 @@ The response distribution still requires the standard deviation on the original 
 Now we can set up and run an MCMC algorithm with a NUTS kernel for all parameters.
 
 ```{python}
+#| label: sample
 builder = gs.EngineBuilder(seed=1339, num_chains=4)
 
 builder.set_model(lsl.GooseModel(model))
@@ -100,6 +105,7 @@ engine.sample_all_epochs()
 Judging from the trace plots, it seems that all chains have converged.
 
 ```{python}
+#| label: traceplots
 results = engine.get_results()
 g = gs.plot_trace(results)
 ```
@@ -107,11 +113,13 @@ g = gs.plot_trace(results)
 We can also take a look at the summary table, which includes the original $\sigma$ and the transformed $\log(\sigma)$.
 
 ```{python results="asis"}
+#| label: summary
 gs.Summary.from_result(results)
 ```
 
 The effective sample size is higher for $\sigma$ than for $\boldsymbol{\beta}$. Finally, let's check the autocorrelation of the samples.
 
 ```{python}
+#| label: correlation-plots
 g = gs.plot_cor(results)
 ```

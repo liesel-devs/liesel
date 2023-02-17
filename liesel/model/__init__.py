@@ -26,6 +26,7 @@ from .nodes import (  # TODO: Bijector?
     Data,
     Dist,
     Distribution,
+    Group,
     InputGroup,
     Node,
     NodeState,
