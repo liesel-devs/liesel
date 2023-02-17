@@ -11,7 +11,7 @@ import pandas as pd
 
 gs.Summary.__repr__ = gs.Summary._repr_html_
 gs.Summary._repr_markdown_ = gs.Summary._repr_html_
-pd.options.display.float_format = lambda x: f"{x:.2f}".rstrip("0").rstrip(".")
+pd.options.display.float_format = "{:.3f}".format
 pd.options.display.html.border = 0
 ```
 
