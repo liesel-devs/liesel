@@ -37,6 +37,7 @@ In this notebook, both design matrices only contain one intercept and one regres
 However, the model design naturally generalizes to any (reasonable) number of covariates.
 
 ```{python}
+#| label: imports
 import jax
 import jax.numpy as jnp
 import liesel.goose as gs
@@ -51,10 +52,8 @@ sns.set_theme(style="whitegrid")
 First lets generate the data according to the model
 
 ```{python}
+#| label: data-generation
 key = jax.random.PRNGKey(13)
-```
-
-```{python}
 n = 500
 
 key, key_X, key_Z = jax.random.split(key, 3)
@@ -79,6 +78,7 @@ The right plot shows the relationship between $\mathbf{y}$ and the scale covaria
 Larger values of $\mathbf{ z}$ lead to a larger variance of the response.
 
 ```{python}
+#| label: plot-data
 fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(12, 6))
 sns.regplot(
     x=X_mat[:, 1],
@@ -107,6 +107,7 @@ Hence, setting a normal prior distribution for $\gamma$ is feasible, leading to 
 The variables `beta` and `gamma` are initialized with values far away from zero to support a stable sampling process:
 
 ```{python}
+#| label: beta-var
 beta_loc = lsl.Var(0.0, name="beta_loc")
 beta_scale = lsl.Var(100.0, name="beta_scale")
 
@@ -121,6 +122,7 @@ beta = lsl.Param(
 ```
 
 ```{python}
+#| label: gamma-var
 gamma_loc = lsl.Var(0.0, name="gamma_loc")
 gamma_scale = lsl.Var(3.0, name="gamma_scale")
 
@@ -136,6 +138,7 @@ The additional complexity of the location-scale model compared to the standard l
 Since `gamma` takes values on the whole real line, but the response variable `y` expects a positive scale input, we need to apply the exponential function to the linear predictor to ensure positivity.
 
 ```{python}
+#| label: observation-nodes
 X = lsl.Obs(value=X_mat, name="X")
 Z = lsl.Obs(value=Z_mat, name="Z")
 
@@ -149,6 +152,7 @@ y = lsl.Obs(value=y_vec, distribution=dist_y, name="y")
 We can now combine the nodes in a model and visualize it
 
 ```{python}
+#| label: build-and-plot-graph
 sns.set_theme(style="white")
 
 gb = lsl.GraphBuilder()
@@ -165,6 +169,7 @@ The latter option might lead to better estimation results but lacks the flexibil
 However, we will just fuse everything into one kernel do not use any specific arguments and hope that the default warmup scheme (similar to the warmup used in STAN) will do the trick.
 
 ```{python}
+#| label: sample
 builder = gs.EngineBuilder(seed=73, num_chains=4)
 
 # connects the engine with the model
@@ -189,6 +194,7 @@ engine.sample_all_epochs()
 Now that we have 1000 posterior samples per chain, we can check the results. Starting with the trace plots just using one chain.
 
 ```{python}
+#| label: traceplots
 results = engine.get_results()
 g = gs.plot_trace(results, chain_indices=0, ncol=4)
 ```
@@ -196,6 +202,7 @@ g = gs.plot_trace(results, chain_indices=0, ncol=4)
 Looks decent although we can see some correlation in the tracplots. Let's check at the combined summary:
 
 ```{python}
+#| label: summary
 #| results: asis
 gs.summary_m.Summary(results, per_chain=False)
 ```
@@ -203,6 +210,7 @@ gs.summary_m.Summary(results, per_chain=False)
 Maybe a longer warm-up would give us better samples.
 
 ```{python}
+#| label: sample-with-longer-warmup
 builder = gs.EngineBuilder(seed=3, num_chains=4)
 
 # connects the engine with the model
@@ -225,11 +233,13 @@ engine.sample_all_epochs()
 ```
 
 ```{python}
+#| label: traceplots-of-second-run
 results = engine.get_results()
 g = gs.plot_trace(results, chain_indices=0, ncol=4)
 ```
 
 ```{python}
+#| label: summary-of-second-run
 #| results: asis
 gs.summary_m.Summary(results, per_chain=False)
 ```
