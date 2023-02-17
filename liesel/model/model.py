@@ -248,28 +248,26 @@ class GraphBuilder:
         return self
 
     def groups(self) -> dict[str, Group]:
-        """Collects the groups of all nodes and variables."""
-        node_group_dicts = [n.groups for n in self.nodes if n.groups]
-        var_group_dicts = [v.groups for v in self.vars if v.groups]
-        dictlist = node_group_dicts + var_group_dicts
-
-        return {name: grp for grpdict in dictlist for name, grp in grpdict.items()}
+        """Collects the groups from all nodes and variables."""
+        nodes, _vars = self._all_nodes_and_vars()
+        g1 = {g.name: g for n in nodes for g in n.groups.values()}
+        g2 = {g.name: g for v in _vars for g in v.groups.values()}
+        return g1 | g2
 
     def add_groups(self, *groups: Group) -> GraphBuilder:
         """Adds groups to the graph."""
 
-        unique_names = {group.name for group in groups}
-        if len(unique_names) != len(groups):
-            raise RuntimeError("Groups must have unique names.")
-
-        existing_groups = self.groups()
-
         for group in groups:
-            if group.name in existing_groups:
+            old = self.groups()
+
+            if group.name in old and group is not old[group.name]:
                 raise RuntimeError(
-                    f"There is already a group of name '{group.name}' in {self}."
+                    f"Group with name {repr(group.name)} already exists "
+                    "in graph builder"
                 )
+
             self.add(*group.nodes_and_vars.values())
+
         return self
 
     def build_model(self, copy: bool = False) -> Model:
@@ -675,8 +673,12 @@ class Model:
             nodes_and_vars = [*model.nodes.values(), *model.vars.values()]
             model.pop_nodes_and_vars()
 
+        groups = {g for nv in nodes_and_vars for g in nv.groups.values()}
         self._nodes = {nv.name: nv for nv in nodes_and_vars if isinstance(nv, Node)}
         self._vars = {nv.name: nv for nv in nodes_and_vars if isinstance(nv, Var)}
+
+        if len({g.name for g in groups}) < len(groups):
+            raise RuntimeError("Model received groups with duplicate names")
 
         if len(self._nodes) < sum(isinstance(nv, Node) for nv in nodes_and_vars):
             raise RuntimeError("Model received nodes with duplicate names")
@@ -776,12 +778,10 @@ class Model:
         self._auto_update = auto_update
 
     def groups(self) -> dict[str, Group]:
-        """Collects the groups in the model's nodes and variables."""
-        node_group_dicts = [n.groups for n in self._nodes.values() if n.groups]
-        var_group_dicts = [v.groups for v in self._vars.values() if v.groups]
-        dictlist = node_group_dicts + var_group_dicts
-
-        return {name: grp for grpdict in dictlist for name, grp in grpdict.items()}
+        """Collects the groups from all nodes and variables."""
+        g1 = {g.name: g for n in self._nodes.values() for g in n.groups.values()}
+        g2 = {g.name: g for v in self._vars.values() for g in v.groups.values()}
+        return g1 | g2
 
     def copy_nodes_and_vars(self) -> tuple[dict[str, Node], dict[str, Var]]:
         """Returns an unfrozen deep copy of the model nodes and variables."""

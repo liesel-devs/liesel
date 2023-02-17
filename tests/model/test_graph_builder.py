@@ -310,3 +310,10 @@ def test_add_group_with_duplicate_name() -> None:
     g2 = lnodes.Group("g1", var1=v2)
     with pytest.raises(RuntimeError):
         lmodel.GraphBuilder().add_groups(g1, g2)
+
+
+def test_add_same_group_twice() -> None:
+    v1 = lnodes.Var(0.0, name="v1")
+    g1 = lnodes.Group("g1", var1=v1)
+    gb = lmodel.GraphBuilder().add_groups(g1, g1)
+    assert v1 in gb.vars
