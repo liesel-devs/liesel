@@ -969,9 +969,9 @@ class Group:
 
     They allow you to do three basic things:
 
-    1. Store related notes together for easier access.
-    2. Access their member nodes and vars via ``group["name"]``, where ``"name"`` is the
-       group-specific name, which can be different from the :attr:`.Var.name` /
+    1. Store related nodes together for easier access.
+    2. Access their member nodes and variables via ``group["name"]``, where ``"name"``
+       is the group-specific name, which can be different from the :attr:`.Var.name` /
        :attr:`.Node.name`.
     3. Easily retrieve a variable's or a node's value from a :attr:`.Model.state` based
        on their group-specific name via :meth:`.value_from`.
@@ -979,15 +979,14 @@ class Group:
     Parameters
     ----------
     name
-        The group's name. Must be unique among the groups of its memebers, and within a
-        model.
+        The group's name. Must be unique among the groups of its members, and within
+        a model.
     **nodes_and_vars
         An arbitrary number of nodes or variables. The keywords will be used as the
         group-specific names of the respective objects.
 
     See Also
     --------
-
     * :attr:`.Node.groups` and :attr:`.Var.groups` are :obj:`MappingProxyType` objects
       (basically read-only dictionaries) of the groups whose member the respective
       object is.
@@ -998,16 +997,14 @@ class Group:
     -----
     Note the following:
 
-    - Groups can only be filled upon initialisation.
-    - After initialisation, variables and nodes cannot be removed from a group.
-
+    - Groups can only be filled upon initialization.
+    - After initialization, variables and nodes cannot be removed from a group.
 
     Examples
     --------
-
     Add a variable to a group:
 
-    >>> my_var = lsl.Var(0., name="long_unique_variable_name")
+    >>> my_var = lsl.Var(0.0, name="long_unique_variable_name")
     >>> grp = lsl.Group(name="demo_group", short_name=my_var)
     >>> grp
     Group<demo_group>
@@ -1022,7 +1019,6 @@ class Group:
     >>> model_state = {my_var.value_node.name: lsl.NodeState(10., False)}
     >>> grp.value_from(model_state, "short_name")
     10.0
-
     """
 
     def __init__(self, name: str, **nodes_and_vars: Node | Var) -> None:
