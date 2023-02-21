@@ -15,6 +15,7 @@ import os
 # import sys
 # sys.path.insert(0, os.path.abspath("."))
 
+on_rtd = os.environ.get("READTHEDOCS") == "True"
 
 # -- Project information -----------------------------------------------------
 
@@ -40,8 +41,10 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx_copybutton",
     "myst_nb",
-    "rtds_action",
 ]
+
+if on_rtd:
+    extensions.append("rtds_action")
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3/", None),
@@ -150,19 +153,20 @@ myst_dmath_double_inline = True
 # rtds-action settings
 # --------------------------------------------------------------------------------------
 
-# The name of your GitHub repository
-rtds_action_github_repo = "liesel-devs/liesel"
+if on_rtd:
+    # The name of your GitHub repository
+    rtds_action_github_repo = "liesel-devs/liesel"
 
-# The path where the artifact should be extracted
-# Note: this is relative to the conf.py file!
-rtds_action_path = "tutorials/md"
+    # The path where the artifact should be extracted
+    # Note: this is relative to the conf.py file!
+    rtds_action_path = "tutorials/md"
 
-# The "prefix" used in the `upload-artifact` step of the action
-rtds_action_artifact_prefix = "tutorials-for-"
+    # The "prefix" used in the `upload-artifact` step of the action
+    rtds_action_artifact_prefix = "tutorials-for-"
 
-# A GitHub personal access token is required, more info below
-rtds_action_github_token = os.environ["GITHUB_TOKEN"]
+    # A GitHub personal access token is required, more info below
+    rtds_action_github_token = os.environ["GITHUB_TOKEN"]
 
-# Whether or not to raise an error on Read the Docs if the
-# artifact containing the notebooks can't be downloaded (optional)
-rtds_action_error_if_missing = False
+    # Whether or not to raise an error on Read the Docs if the
+    # artifact containing the notebooks can't be downloaded (optional)
+    rtds_action_error_if_missing = False
