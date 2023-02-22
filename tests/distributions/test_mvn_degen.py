@@ -1,6 +1,7 @@
 """
 Tests for the multivariate normal degenerate distribution.
 """
+import jax
 import jax.numpy as jnp
 import jax.random as jrd
 import numpy as np
@@ -668,7 +669,7 @@ class TestMVNDegenerateAgainstTensorFlow:
         assert mvn.log_prob(sample).shape == mvnd.log_prob(sample).shape
         assert jnp.allclose(mvn.log_prob(sample), mvnd.log_prob(sample))
 
-    def test_x(self, beta) -> None:
+    def test_x(self) -> None:
         """
         When location is a 1d array, it must have the dimension of the event size.
         """
@@ -868,3 +869,108 @@ class TestMVNDegenerateAgainstTensorFlow:
         sample = jnp.expand_dims(sample, axis=(2, 3))
         assert mvn.log_prob(sample).shape == mvnd.log_prob(sample).shape
         assert jnp.allclose(mvn.log_prob(sample), mvnd.log_prob(sample))
+
+
+class TestSampleFromMVNDegenerate:
+    def test_one_sample(self, K, tau2) -> None:
+        log_det, rank = determinant_structure_degen(K)
+
+        mvn = tfd.MultivariateNormalFullCovariance(covariance_matrix=jnp.eye(5))
+        mvnd = MultivariateNormalDegenerate.from_penalty(
+            loc=0.0, var=tau2, pen=K, rank=rank, log_pdet=log_det
+        )
+
+        key = jax.random.PRNGKey(42)
+        s1 = mvn.sample(seed=key)
+        s2 = mvnd.sample(seed=key)
+
+        assert s2.shape == (5,)
+        assert s1.shape == s2.shape
+
+    def test_two_samples(self, K, tau2) -> None:
+        log_det, rank = determinant_structure_degen(K)
+
+        mvn = tfd.MultivariateNormalFullCovariance(covariance_matrix=jnp.eye(5))
+        mvnd = MultivariateNormalDegenerate.from_penalty(
+            loc=0.0, var=tau2, pen=K, rank=rank, log_pdet=log_det
+        )
+
+        key = jax.random.PRNGKey(42)
+        s1 = mvn.sample(2, seed=key)
+        s2 = mvnd.sample(2, seed=key)
+
+        assert s2.shape == (2, 5)
+        assert s1.shape == s2.shape
+
+    def test_two_samples_2d_location(self) -> None:
+        """
+        When location is a 2d array, defining one batch.
+
+        This is one distribution with event shape 5. So we get a return array of shape
+        [2, 1, 5], which corresponds to [n, batch_shape, event_shape].
+        """
+        vcov = jnp.diag(jnp.full(5, 0.01))
+        prec = jnp.diag(jnp.full(5, 1 / 0.01))
+        loc = jnp.array([jnp.zeros(5), jnp.full(5, 100.0)])
+
+        mvn = tfd.MultivariateNormalFullCovariance(loc=loc, covariance_matrix=vcov)
+        mvnd = MultivariateNormalDegenerate(loc=loc, prec=prec)
+
+        key = jax.random.PRNGKey(42)
+        s1 = mvn.sample(2, seed=key).round()
+        s2 = mvnd.sample(2, seed=key).round()
+
+        assert s1.shape == s2.shape
+        assert np.allclose(s1[0, 0, :], 0.0)
+        assert np.allclose(s1[0, 1, :], 100.0)
+        assert np.allclose(s2[0, 0, :], 0.0)
+        assert np.allclose(s2[0, 1, :], 100.0)
+
+    def test_two_samples_3d_location(self) -> None:
+        """
+        When location is a 3d array, defining one batch.
+
+        This is one distribution with event shape 5. So we get a return array of shape
+        [2, 3, 1, 5], which corresponds to [n, batch_shape, event_shape].
+        """
+        vcov = jnp.eye(5)
+        loc = jnp.zeros((3, 1, 5))
+
+        mvn = tfd.MultivariateNormalFullCovariance(loc=loc, covariance_matrix=vcov)
+        mvnd = MultivariateNormalDegenerate(loc=loc, prec=vcov)
+
+        key = jax.random.PRNGKey(42)
+        s1 = mvn.sample(2, seed=key)
+        s2 = mvnd.sample(2, seed=key)
+
+        assert s1.shape == s2.shape
+
+    def test_two_samples_2d_vcov(self) -> None:
+        """
+        When location is a 2d array, defining one batch.
+
+        This is one distribution with event shape 5. So we get a return array of shape
+        [2, 1, 5], which corresponds to [n, batch_shape, event_shape].
+        """
+        vcov_low = jnp.diag(jnp.full(5, 0.01))
+        vcov_high = jnp.diag(jnp.full(5, 100.0))
+        vcov = jnp.array([vcov_low, vcov_high])
+
+        prec_high = jnp.diag(jnp.full(5, 100.0))
+        prec_low = jnp.diag(jnp.full(5, 0.01))
+        prec = jnp.array([prec_high, prec_low])
+
+        loc = 0.0
+
+        mvn = tfd.MultivariateNormalFullCovariance(loc=loc, covariance_matrix=vcov)
+        mvnd = MultivariateNormalDegenerate(loc=loc, prec=prec)
+
+        key = jax.random.PRNGKey(42)
+        s1 = mvn.sample(3, seed=key)
+        s2 = mvnd.sample(3, seed=key)
+
+        assert s1.shape == s2.shape
+        assert jnp.var(s1[:, 0, :]) < 0.5
+        assert jnp.var(s1[:, 1, :]) > 80
+        assert jnp.var(s2[:, 0, :]) < 0.5
+        assert jnp.var(s2[:, 1, :]) > 80

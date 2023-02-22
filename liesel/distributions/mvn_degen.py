@@ -178,12 +178,23 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         return jax.scipy.linalg.eigh(self._prec)
 
     @cached_property
-    def _sqrt_eval_mat(self) -> Array:
-        eigenvalues, _ = self.eig
+    def _sample_transformer(self) -> Array:
+        eigenvalues, evecs = self.eig
+
         numerically_zero = eigenvalues < 1e-6
-        sqrt_eval = jnp.sqrt(eigenvalues)
-        sqrt_eval = sqrt_eval.at[numerically_zero].set(0)
-        return jnp.diag(sqrt_eval)
+        sqrt_eval = jnp.sqrt(1 / eigenvalues).at[numerically_zero].set(0)
+
+        event_shape = sqrt_eval.shape[-1]
+        shape = sqrt_eval.shape + (event_shape,)
+
+        r = jnp.arange(event_shape)
+        diags = jnp.zeros(shape).at[..., r, r].set(sqrt_eval)
+        transformer = evecs @ diags
+
+        transformer_batches = jnp.shape(transformer)[:-2]
+        n_missing_axes = len(self.batch_shape) - len(transformer_batches)
+
+        return jnp.expand_dims(transformer, jnp.arange(n_missing_axes))
 
     @cached_property
     def rank(self) -> Array | float:
@@ -276,6 +287,19 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         )
 
         return mvnd
+
+    def _sample_n(self, n, seed=None) -> Array:
+        shape = [n] + self.batch_shape + self.event_shape
+        samples_normal = jax.random.normal(key=seed, shape=shape)
+
+        transformer = jnp.expand_dims(self._sample_transformer, 0)
+
+        samples = transformer @ jnp.expand_dims(samples_normal, -1)
+
+        n_missing_axes = len(self.batch_shape) - len(self._loc.shape[:-1])
+        loc = jnp.expand_dims(self._loc, jnp.arange(n_missing_axes + 1) + (-1))
+
+        return jnp.reshape(samples + loc, shape)
 
     def _log_prob(self, x: Array) -> Array | float:
         x = x - self._loc
