@@ -115,7 +115,7 @@ def mvn_batch():
 
 
 class TestComputePseudoLogDet:
-    def test_rank_and_log_pdet(self):
+    def test_rank_and_log_pdet(self) -> None:
         """
         Test that pseudo-log-determinant computation works with and without given rank.
         """
@@ -136,7 +136,7 @@ class TestComputePseudoLogDet:
         assert ldet2a[1] == pytest.approx(ldet2b[1])
         assert ldet3a[1] == pytest.approx(ldet3b[1])
 
-    def test_jit_rank_and_log_pdet(self):
+    def test_jit_rank_and_log_pdet(self) -> None:
         """Test that pseudo-log-determinant computation can be jitted."""
         K = jnp.eye(5)
         prec = K / 2.0
@@ -151,7 +151,7 @@ class TestComputePseudoLogDet:
         assert ldet1[1] == pytest.approx(ldet3[1])
         assert ldet1[1] == pytest.approx(ldet4[1])
 
-    def test_rank_and_log_pdet_batch_full_computation(self):
+    def test_rank_and_log_pdet_batch_full_computation(self) -> None:
         """Test that pseudo-log-determinant computation works for batches."""
         K1 = jnp.diag(jnp.array([2.0, 0.0, 0.0]))
         K2 = jnp.diag(jnp.array([2.0, 3.0, 0.0]))
@@ -163,12 +163,12 @@ class TestComputePseudoLogDet:
 
         ldet = _rank_and_log_pdet(K_batch)
 
-        assert ldet1[0] == pytest.approx(ldet[0][0])
-        assert ldet1[1] == pytest.approx(ldet[1][0])
-        assert ldet2[0] == pytest.approx(ldet[0][1])
-        assert ldet2[1] == pytest.approx(ldet[1][1])
+        assert ldet1[0] == pytest.approx(ldet[0][0])  # type: ignore
+        assert ldet1[1] == pytest.approx(ldet[1][0])  # type: ignore
+        assert ldet2[0] == pytest.approx(ldet[0][1])  # type: ignore
+        assert ldet2[1] == pytest.approx(ldet[1][1])  # type: ignore
 
-    def test_rank_and_log_pdet_batch_given_rank(self):
+    def test_rank_and_log_pdet_batch_given_rank(self) -> None:
         """
         Test that pseudo-log-determinant computation with given ranks works for simple
         batches.
@@ -188,7 +188,7 @@ class TestComputePseudoLogDet:
         assert ldet2[0] == pytest.approx(ldet[0][1])
         assert ldet2[1] == pytest.approx(ldet[1][1])
 
-    def test_rank_and_log_pdet_big_batch_given_rank(self):
+    def test_rank_and_log_pdet_big_batch_given_rank(self) -> None:
         """
         Test that pseudo-log-determinant computation with given ranks works for nested
         batches.
@@ -209,10 +209,10 @@ class TestComputePseudoLogDet:
             K_batch, rank=jnp.array([[ldet1[0], ldet2[0]], [ldet3[0], ldet4[0]]])
         )
 
-        assert ldet1[0] == pytest.approx(ldet[0][0, 0])
-        assert ldet1[1] == pytest.approx(ldet[1][0, 0])
-        assert ldet2[0] == pytest.approx(ldet[0][0, 1])
-        assert ldet2[1] == pytest.approx(ldet[1][0, 1])
+        assert ldet1[0] == pytest.approx(ldet[0][0, 0])  # type: ignore
+        assert ldet1[1] == pytest.approx(ldet[1][0, 0])  # type: ignore
+        assert ldet2[0] == pytest.approx(ldet[0][0, 1])  # type: ignore
+        assert ldet2[1] == pytest.approx(ldet[1][0, 1])  # type: ignore
 
 
 class TestMVNDegenerateValues:
@@ -221,7 +221,7 @@ class TestMVNDegenerateValues:
     correctly.
     """
 
-    def test_log_prob_from_penalty(self, beta, K, tau2, log_prob_baseline):
+    def test_log_prob_from_penalty(self, beta, K, tau2, log_prob_baseline) -> None:
         """
         Log prob obtained from MultivariateNormalDegenerate constructed from penalty
         matrix should be equal to the baseline log prob.
@@ -235,7 +235,7 @@ class TestMVNDegenerateValues:
 
         assert log_prob == pytest.approx(log_prob_baseline)
 
-    def test_log_prob_from_init(self, beta, K, tau2, log_prob_baseline):
+    def test_log_prob_from_init(self, beta, K, tau2, log_prob_baseline) -> None:
         """
         Log prob obtained from MultivariateNormalDegenerate constructed directly from
         the init should be equal to the baseline log prob.
@@ -256,25 +256,25 @@ class TestMVNDegenerateValues:
 
 
 class TestMVNDegenerateBatches:
-    def test_shape_single_sample(self, beta, K, tau2):
+    def test_shape_single_sample(self, beta, K, tau2) -> None:
         """Log prob should be a scalar."""
         mvn = MultivariateNormalDegenerate(loc=0.0, prec=K / tau2)
         log_prob = mvn.log_prob(beta)
         assert jnp.ndim(log_prob) == 0
 
-    def test_shape_two_samples(self, beta, K, tau2):
+    def test_shape_two_samples(self, beta, K, tau2) -> None:
         """Log prob should have shape (2,)."""
         mvn = MultivariateNormalDegenerate(loc=0.0, prec=K / tau2)
         log_prob = mvn.log_prob([beta, beta])
         assert log_prob.shape == (2,)
 
-    def test_shape_nested_samples(self, beta, K, tau2):
+    def test_shape_nested_samples(self, beta, K, tau2) -> None:
         """Log prob should have shape (2, 2)."""
         mvn = MultivariateNormalDegenerate(loc=0.0, prec=K / tau2)
         log_prob = mvn.log_prob([[beta, beta], [beta, beta]])
         assert log_prob.shape == (2, 2)
 
-    def test_shape_unequal_sample_shapes(self, beta, K, tau2):
+    def test_shape_unequal_sample_shapes(self, beta, K, tau2) -> None:
         """Input samples must be of the same size."""
         mvn = MultivariateNormalDegenerate(loc=0.0, prec=K / tau2)
         with pytest.raises(ValueError):
@@ -283,7 +283,7 @@ class TestMVNDegenerateBatches:
         with pytest.raises(ValueError):
             mvn.log_prob([[beta, beta], beta])
 
-    def test_from_penalty_batch(self, beta, K, tau2):
+    def test_from_penalty_batch(self, beta, K, tau2) -> None:
         """The from_penalty constructor should be able to deal with batches."""
         rank, log_det = determinant_structure_degen(K)
         rank2, log_det2 = determinant_structure_degen(jnp.eye(5))
@@ -297,7 +297,7 @@ class TestMVNDegenerateBatches:
 
         assert mvn.log_prob(beta).shape == (2,)
 
-    def test_batch_precision(self, beta, K):
+    def test_batch_precision(self, beta, K) -> None:
         """
         Tests the distribution with two precision matrices while the location remains
         constant.
@@ -329,7 +329,7 @@ class TestMVNDegenerateBatches:
         lp2 = mvn2.log_prob(beta)
         assert lp[1] == lp2
 
-    def test_batch_precision_2_beta_samples(self, beta, K):
+    def test_batch_precision_2_beta_samples(self, beta, K) -> None:
         """
         Tests the distribution with two precision matrices while the location remains
         constant.
@@ -352,7 +352,7 @@ class TestMVNDegenerateBatches:
         assert lp.shape == (2,)
         assert jnp.allclose(lp, mvn.log_prob(beta))
 
-    def test_batch_loc(self, beta, K):
+    def test_batch_loc(self, beta, K) -> None:
         """
         Tests the distribution with two location values while the precision matrix
         remains constant.
@@ -381,7 +381,7 @@ class TestMVNDegenerateBatches:
         lp2 = mvn2.log_prob(beta)
         assert lp[1] == lp2
 
-    def test_batch_loc_prec(self, beta, K):
+    def test_batch_loc_prec(self, beta, K) -> None:
         """
         Tests the distribution with two location values and two precision matrices.
 
@@ -416,7 +416,7 @@ class TestMVNDegenerateBatches:
         lp2 = mvn2.log_prob(beta)
         assert lp[1] == lp2
 
-    def test_batch_2loc_3prec(self, beta, mvn_batch):
+    def test_batch_2loc_3prec(self, beta, mvn_batch) -> None:
         """
         Tests the distribution with three precision matrices and two locations.
 
@@ -461,7 +461,7 @@ class TestMVNDegenerateBatches:
         assert lp[1, 1] == pytest.approx(lp5)
         assert lp[1, 2] == pytest.approx(lp6)
 
-    def test_batch_2loc_3prec_multiple_samples(self, beta, mvn_batch):
+    def test_batch_2loc_3prec_multiple_samples(self, beta, mvn_batch) -> None:
         """
         Sample shape has to be (1,) or be broadcastable with batch shape.
 
@@ -486,7 +486,7 @@ class TestMVNDegenerateBatches:
         lp = mvn.log_prob(samples_reshaped)
         assert lp.shape == (4, 2, 3)
 
-    def test_batch_2loc_3prec_multiple_samples_loc(self, beta, mvn_batch):
+    def test_batch_2loc_3prec_multiple_samples_loc(self, beta, mvn_batch) -> None:
         """
         Tests a distribution with batch size (2, 3) and multiple samples.
 
@@ -521,7 +521,7 @@ class TestMVNDegenerateBatches:
         assert jnp.allclose(lp2[0], lp1)
         assert jnp.allclose(lp2[1], lp1)
 
-    def test_batch_2loc_3prec_multiple_samples_prec(self, beta, mvn_batch):
+    def test_batch_2loc_3prec_multiple_samples_prec(self, beta, mvn_batch) -> None:
         """
         Tests a distribution with batch size (2, 3) and multiple samples.
 
@@ -560,7 +560,7 @@ class TestMVNDegenerateBatches:
         assert jnp.allclose(lp4[0], lp3)
         assert jnp.allclose(lp4[1], lp3)
 
-    def test_batch_2by2_loc_3_prec(self, beta, K):
+    def test_batch_2by2_loc_3_prec(self, beta, K) -> None:
         """
         Tests the distribution with 2x2 locations and three precision matrices.
 
@@ -587,7 +587,7 @@ class TestMVNDegenerateBatches:
         # assert correct output shape
         assert lp.shape == (2, 2, 3)
 
-    def test_batch_of_smoothing_parameters(self, beta, K):
+    def test_batch_of_smoothing_parameters(self, beta, K) -> None:
         """Tests that batches of smoothing parameters can be handled."""
         var = jnp.array([1.0, 2.0, 3.0])
         mvnd1 = MultivariateNormalDegenerate.from_penalty(0.0, var=var, pen=K)
@@ -604,7 +604,7 @@ class TestMVNDegenerateAgainstTensorFlow:
     probability.
     """
 
-    def test_scalar_location(self, beta):
+    def test_scalar_location(self, beta) -> None:
         """When location is a scalar."""
         vcov = jnp.eye(5)
         mvn = tfd.MultivariateNormalFullCovariance(loc=0.0, covariance_matrix=vcov)
@@ -616,7 +616,7 @@ class TestMVNDegenerateAgainstTensorFlow:
         assert mvn.log_prob(beta).shape == mvnd.log_prob(beta).shape
         assert jnp.allclose(mvn.log_prob(beta), mvnd.log_prob(beta))
 
-    def test_1darray_location(self, beta):
+    def test_1darray_location(self, beta) -> None:
         """When location is a 1d array."""
         vcov = jnp.eye(5)
         mvn = tfd.MultivariateNormalFullCovariance(
@@ -630,7 +630,7 @@ class TestMVNDegenerateAgainstTensorFlow:
         assert mvn.log_prob(beta).shape == mvnd.log_prob(beta).shape
         assert jnp.allclose(mvn.log_prob(beta), mvnd.log_prob(beta))
 
-    def test_2darray_location_1batch(self, beta):
+    def test_2darray_location_1batch(self, beta) -> None:
         """
         When location is a 2d array, defining one batch.
 
@@ -649,7 +649,7 @@ class TestMVNDegenerateAgainstTensorFlow:
         assert mvn.log_prob(sample).shape == mvnd.log_prob(sample).shape
         assert jnp.allclose(mvn.log_prob(sample), mvnd.log_prob(sample))
 
-    def test_2darray_location_2batches(self, beta):
+    def test_2darray_location_2batches(self, beta) -> None:
         """
         When location is a 2d array, defining two batches.
 
@@ -668,7 +668,7 @@ class TestMVNDegenerateAgainstTensorFlow:
         assert mvn.log_prob(sample).shape == mvnd.log_prob(sample).shape
         assert jnp.allclose(mvn.log_prob(sample), mvnd.log_prob(sample))
 
-    def test_x(self, beta):
+    def test_x(self, beta) -> None:
         """
         When location is a 1d array, it must have the dimension of the event size.
         """
@@ -681,7 +681,7 @@ class TestMVNDegenerateAgainstTensorFlow:
         with pytest.raises(ValueError):
             MultivariateNormalDegenerate(loc=loc, prec=vcov)
 
-    def test_3darray_location(self, beta):
+    def test_3darray_location(self, beta) -> None:
         """
         When location is a 3d array.
 
@@ -700,7 +700,7 @@ class TestMVNDegenerateAgainstTensorFlow:
         assert mvn.log_prob(sample).shape == mvnd.log_prob(sample).shape
         assert jnp.allclose(mvn.log_prob(sample), mvnd.log_prob(sample))
 
-    def test_3darray_location_multiple_samples(self, beta):
+    def test_3darray_location_multiple_samples(self, beta) -> None:
         """
         When location is a 3d array.
 
@@ -722,7 +722,7 @@ class TestMVNDegenerateAgainstTensorFlow:
         assert mvn.log_prob(sample).shape == mvnd.log_prob(sample).shape
         assert jnp.allclose(mvn.log_prob(sample), mvnd.log_prob(sample))
 
-    def test_multiple_precisions(self, beta):
+    def test_multiple_precisions(self, beta) -> None:
         """
         When two precision matrices are used.
 
@@ -742,7 +742,7 @@ class TestMVNDegenerateAgainstTensorFlow:
         assert mvn.log_prob(sample).shape == mvnd.log_prob(sample).shape
         assert jnp.allclose(mvn.log_prob(sample), mvnd.log_prob(sample))
 
-    def test_multiple_precisions_nested(self, beta):
+    def test_multiple_precisions_nested(self, beta) -> None:
         """
         When two x two precision matrices are used.
 
@@ -762,7 +762,7 @@ class TestMVNDegenerateAgainstTensorFlow:
         assert mvn.log_prob(sample).shape == mvnd.log_prob(sample).shape
         assert jnp.allclose(mvn.log_prob(sample), mvnd.log_prob(sample))
 
-    def test_incompatible_shapes(self):
+    def test_incompatible_shapes(self) -> None:
         """
         The :class:`.MultivariateNormalDegenerate` should behave similar to the
         TensorFlow probability distribution when initialized with parameter arrays that
@@ -781,7 +781,7 @@ class TestMVNDegenerateAgainstTensorFlow:
         with pytest.raises(ValueError):
             MultivariateNormalDegenerate(loc=loc, prec=vcov)
 
-    def test_multiple_samples(self, beta):
+    def test_multiple_samples(self, beta) -> None:
         """
         Tests that :class:`.MultivariateNormalDegenerate` handles multiple samples in
         the same way as the TFD baseline class ``MultivariateNormalFullCovariance``.
