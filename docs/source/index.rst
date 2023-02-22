@@ -15,6 +15,7 @@ Liesel: A Probabilistic Programming Framework
    tutorials/md/03-gev
    tutorials/md/04-mcycle
    tutorials/md/05-reproducibility
+   tutorials/md/06-pymc
 
 
 API Reference
