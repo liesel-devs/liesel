@@ -15,7 +15,7 @@ from liesel.experimental.pymc import PyMCInterface
 gs.Summary._repr_markdown_ = gs.Summary._repr_html_
 ```
 
-# Linear regression
+# PyMC and Liesel: Linear regression
 
 Liesel provides an interface for [PyMC](https://www.pymc.io/welcome.html), a popular Python library for Bayesian Models. In thsis tutorial, we see how to specify a model in PyMC and then fit it using Liesel.
 
