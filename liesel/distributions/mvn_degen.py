@@ -4,6 +4,7 @@ The degenerate, i.e. rank-deficient, multivariate normal distribution.
 
 from __future__ import annotations
 
+from functools import cached_property
 from typing import Any
 
 import jax
@@ -24,21 +25,16 @@ def _rank_and_log_pdet(
     """
     Computes the rank and the log-pseudo-determinant of the positive semi-definite
     precision matrix ``prec``.
-
     Can handle batches.
-
     If both the rank and the determinant are provided, the function does nothing and
     just returns the provided arguments. If the rank is provided, it is used to select
     the non-zero eigenvalues. If the rank is not provided, it is computed by counting
     the non-zero eigenvalues. An eigenvalue is deemed to be non-zero if it is greater
     than the numerical tolerance ``tol``.
     """
-
     if log_pdet is not None and rank is not None:
         return rank, log_pdet
-
     eigenvals = jnp.linalg.eigvalsh(prec)
-
     if rank is None:
         mask = eigenvals > tol
         rank = jnp.sum(mask, axis=-1)
@@ -49,12 +45,49 @@ def _rank_and_log_pdet(
             return x.at[..., i].set(i >= max_index)
 
         mask = jax.lax.fori_loop(0, eigenvals.shape[-1], fn, eigenvals)
-
     if log_pdet is None:
         selected = jnp.where(mask, eigenvals, 1.0)
         log_pdet = jnp.sum(jnp.log(selected), axis=-1)
-
     return rank, log_pdet
+
+
+def _rank(eigenvalues: Array, tol: float = 1e-6) -> Array | float:
+    """
+    Computes the rank of a matrix based on the provided eigenvalues. The rank is taken
+    to be the number of non-zero eigenvalues.
+
+    Can handle batches.
+    """
+    mask = eigenvalues > tol
+    rank = jnp.sum(mask, axis=-1)
+    return rank
+
+
+def _log_pdet(
+    eigenvalues: Array, rank: Array | float | None = None, tol: float = 1e-6
+) -> Array | float:
+    """
+    Computes the log of the pseudo-determinant of a matrix based on the provided
+    eigenvalues. If the rank is provided, it is used to select the non-zero eigenvalues.
+    If the rank is not provided, it is computed by counting the non-zero eigenvalues. An
+    eigenvalue is deemed to be non-zero if it is greater than the numerical tolerance
+    ``tol``.
+
+    Can handle batches.
+    """
+    if rank is None:
+        mask = eigenvalues > tol
+    else:
+        max_index = eigenvalues.shape[-1] - rank
+
+        def fn(i, x):
+            return x.at[..., i].set(i >= max_index)
+
+        mask = jax.lax.fori_loop(0, eigenvalues.shape[-1], fn, eigenvalues)
+
+    selected = jnp.where(mask, eigenvalues, 1.0)
+    log_pdet = jnp.sum(jnp.log(selected), axis=-1)
+    return log_pdet
 
 
 class MultivariateNormalDegenerate(tfd.Distribution):
@@ -105,6 +138,8 @@ class MultivariateNormalDegenerate(tfd.Distribution):
     ):
         parameters = dict(locals())
 
+        self._rank = rank
+        self._log_pdet = log_pdet
         self._prec = prec
         # necessary for correct broadcasting over event size
         self._loc = jnp.atleast_1d(loc)
@@ -128,10 +163,6 @@ class MultivariateNormalDegenerate(tfd.Distribution):
             jnp.shape(self._prec)[:-2], jnp.shape(self._loc)[:-1]
         )
 
-        self._rank, self._log_pdet = _rank_and_log_pdet(
-            self._prec, rank, log_pdet, tol=1e-6
-        )
-
         super().__init__(
             dtype=prec.dtype,
             reparameterization_type=reparameterization.FULLY_REPARAMETERIZED,
@@ -140,6 +171,34 @@ class MultivariateNormalDegenerate(tfd.Distribution):
             parameters=parameters,
             name=name,
         )
+
+    @cached_property
+    def eig(self) -> tuple[Array, Array]:
+        """Eigenvalues and eigenvectors of the precision."""
+        return jax.scipy.linalg.eigh(self._prec)
+
+    @cached_property
+    def _sqrt_eval_mat(self) -> Array:
+        eigenvalues, _ = self.eig
+        numerically_zero = eigenvalues < 1e-6
+        sqrt_eval = jnp.sqrt(eigenvalues)
+        sqrt_eval = sqrt_eval.at[numerically_zero].set(0)
+        return jnp.diag(sqrt_eval)
+
+    @cached_property
+    def rank(self) -> Array | float:
+        if self._rank is not None:
+            return self._rank
+        evals, _ = self.eig
+        return _rank(evals)
+
+    @cached_property
+    def log_pdet(self) -> Array | float:
+        """Log pseudo-determinant."""
+        if self._log_pdet is not None:
+            return self._log_pdet
+        evals, _ = self.eig
+        return _log_pdet(evals, self.rank)
 
     @classmethod
     def from_penalty(
@@ -200,7 +259,10 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         """
 
         prec = pen / jnp.expand_dims(var, axis=(-2, -1))
-        rank, log_pdet = _rank_and_log_pdet(pen, rank, log_pdet, tol=1e-6)
+
+        evals = jax.numpy.linalg.eigvalsh(pen)
+        rank = _rank(evals) if rank is None else rank
+        log_pdet = _log_pdet(evals, rank=rank) if log_pdet is None else log_pdet
         log_pdet_prec = log_pdet - rank * jnp.log(var)
 
         mvnd = cls(
@@ -222,7 +284,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         x_T = jnp.swapaxes(x, -2, -1)
 
         prob1 = -jnp.squeeze(x @ self._prec @ x_T, axis=(-2, -1))
-        prob2 = self._rank * jnp.log(2 * jnp.pi) - self._log_pdet
+        prob2 = self.rank * jnp.log(2 * jnp.pi) - self.log_pdet
         return 0.5 * (prob1 - prob2)
 
     def _event_shape(self):
