@@ -140,28 +140,32 @@ class MultivariateNormalDegenerate(tfd.Distribution):
 
         self._rank = rank
         self._log_pdet = log_pdet
-        self._prec = prec
-        # necessary for correct broadcasting over event size
-        self._loc = jnp.atleast_1d(loc)
 
-        if not self._prec.shape[-2] == self._prec.shape[-1]:
+        # necessary for correct broadcasting over event size
+        loc = jnp.atleast_1d(loc)
+
+        if not prec.shape[-2] == prec.shape[-1]:
             raise ValueError(
                 "`prec` must be square (the last two dimensions must be equal)."
             )
 
         try:
-            jnp.broadcast_shapes(self._prec.shape[-1], self._loc.shape[-1])
+            jnp.broadcast_shapes(prec.shape[-1], loc.shape[-1])
         except ValueError:
             raise ValueError(
-                f"The event sizes of `prec` ({self._prec.shape[-1]}) and `loc` "
-                f"({self._loc.shape[-1]}) cannot be broadcast together. If you "
+                f"The event sizes of `prec` ({prec.shape[-1]}) and `loc` "
+                f"({loc.shape[-1]}) cannot be broadcast together. If you "
                 "are trying to use batches for `loc`, you may need to add a "
                 "dimension for the event size."
             )
 
-        self._broadcast_batch_shape = jnp.broadcast_shapes(
-            jnp.shape(self._prec)[:-2], jnp.shape(self._loc)[:-1]
-        )
+        prec_batches = jnp.shape(prec)[:-2]
+        loc_batches = jnp.shape(loc)[:-1]
+        self._broadcast_batch_shape = jnp.broadcast_shapes(prec_batches, loc_batches)
+        nbatch = len(self.batch_shape)
+
+        self._prec = jnp.expand_dims(prec, jnp.arange(nbatch - len(prec_batches)))
+        self._loc = jnp.expand_dims(loc, jnp.arange(nbatch - len(loc_batches)))
 
         super().__init__(
             dtype=prec.dtype,
@@ -189,12 +193,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
 
         r = jnp.arange(event_shape)
         diags = jnp.zeros(shape).at[..., r, r].set(sqrt_eval)
-        transformer = evecs @ diags
-
-        transformer_batches = jnp.shape(transformer)[:-2]
-        n_missing_axes = len(self.batch_shape) - len(transformer_batches)
-
-        return jnp.expand_dims(transformer, jnp.arange(n_missing_axes))
+        return evecs @ diags
 
     @cached_property
     def rank(self) -> Array | float:
@@ -296,8 +295,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
 
         samples = transformer @ jnp.expand_dims(samples_normal, -1)
 
-        n_missing_axes = len(self.batch_shape) - len(self._loc.shape[:-1])
-        loc = jnp.expand_dims(self._loc, jnp.arange(n_missing_axes + 1) + (-1))
+        loc = jnp.expand_dims(self._loc, (0, -1))
 
         return jnp.reshape(samples + loc, shape)
 
