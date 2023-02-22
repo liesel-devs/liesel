@@ -29,7 +29,7 @@ jobs:
       - name: Install Liesel
         run: |
           pip install --upgrade pip
-          pip install .[dev]
+          pip install .[dev,pymc]
           pip install pygraphviz
           pip list
 
