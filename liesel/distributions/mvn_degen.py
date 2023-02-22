@@ -289,15 +289,19 @@ class MultivariateNormalDegenerate(tfd.Distribution):
 
     def _sample_n(self, n, seed=None) -> Array:
         shape = [n] + self.batch_shape + self.event_shape
-        samples_normal = jax.random.normal(key=seed, shape=shape)
 
+        # The added dimension at the end here makes sure that matrix multiplication
+        # with the "transformer" matrices works out correctly.
+        z = jax.random.normal(key=seed, shape=shape + [1])
+
+        # Add a dimension at 0 for the sample size.
         transformer = jnp.expand_dims(self._sample_transformer, 0)
+        centered_samples = jnp.reshape(transformer @ z, shape)
 
-        samples = transformer @ jnp.expand_dims(samples_normal, -1)
+        # Add a dimension at 0 for the sample size.
+        loc = jnp.expand_dims(self._loc, 0)
 
-        loc = jnp.expand_dims(self._loc, (0, -1))
-
-        return jnp.reshape(samples + loc, shape)
+        return centered_samples + loc
 
     def _log_prob(self, x: Array) -> Array | float:
         x = x - self._loc
