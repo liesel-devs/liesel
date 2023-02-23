@@ -72,13 +72,13 @@ class MultivariateNormalDegenerate(tfd.Distribution):
     log_pdet
         The log-pseudo-determinant of the precision matrix. Optional.
     validate_args
-        Python ``bool``, default ``False``. When ``True``, distribution parameters \\
-        are checked for validity despite possibly degrading runtime performance. \\ When
-        ``False``, invalid inputs may silently render incorrect outputs.
+        Python ``bool``, default ``False``. When ``True``, distribution parameters \
+        are checked for validity despite possibly degrading runtime performance. \
+        When ``False``, invalid inputs may silently render incorrect outputs.
     allow_nan_stats
         Python ``bool``, default ``True``. When ``True``, statistics (e.g., mean, \
         mode, variance) use the value ``NaN`` to indicate the result is undefined. \
-        When ``False``, an exception is raised if one or more of the statistic's \\
+        When ``False``, an exception is raised if one or more of the statistic's \
         batch members are undefined.
     name
         Python ``str``, name prefixed to ``Ops`` created by this class.
@@ -88,9 +88,10 @@ class MultivariateNormalDegenerate(tfd.Distribution):
     * If they are not provided as arguments, ``rank`` and ``log_pdet`` are computed
       based on the eigenvalues of the precision matrix ``prec``. This is an expensive
       operation and can be avoided by specifying the corresponding arguments.
-    * When you draw samples from the distribution via `:meth:.sample`, an
-      eigendecomposition of the distribution's precision matrices is always computed
-      once, because sampling requires both the eigenvalues and eigenvectors.
+    * When you draw samples from the distribution via :meth:`.sample`, it is always
+      necessary to compute the eigendecomposition of the distribution's precision
+      matrices once and cache it, because sampling requires both the eigenvalues
+      and eigenvectors.
     """
 
     def __init__(
