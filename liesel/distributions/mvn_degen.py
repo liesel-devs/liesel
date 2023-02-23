@@ -234,7 +234,6 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         """
         eigenvalues, evecs = self.eig
 
-        # numerically_zero = eigenvalues < 1e-6
         sqrt_eval = jnp.sqrt(1 / eigenvalues)
         sqrt_eval = jnp.where(eigenvalues < 1e-6, 0.0, sqrt_eval)
 
@@ -265,7 +264,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         shape = [n] + self.batch_shape + self.event_shape
 
         # The added dimension at the end here makes sure that matrix multiplication
-        # with the "transformer" matrices works out correctly.
+        # with the "projector" matrices works out correctly.
         z = jax.random.normal(key=seed, shape=shape + [1])
 
         # Add a dimension at 0 for the sample size.
