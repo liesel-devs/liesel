@@ -16,41 +16,6 @@ from tensorflow_probability.substrates.jax import tf2jax as tf
 Array = Any
 
 
-def _rank_and_log_pdet(
-    prec: Array,
-    rank: Array | int | None = None,
-    log_pdet: Array | float | None = None,
-    tol: float = 1e-6,
-) -> tuple[Array | float, Array | int]:
-    """
-    Computes the rank and the log-pseudo-determinant of the positive semi-definite
-    precision matrix ``prec``.
-    Can handle batches.
-    If both the rank and the determinant are provided, the function does nothing and
-    just returns the provided arguments. If the rank is provided, it is used to select
-    the non-zero eigenvalues. If the rank is not provided, it is computed by counting
-    the non-zero eigenvalues. An eigenvalue is deemed to be non-zero if it is greater
-    than the numerical tolerance ``tol``.
-    """
-    if log_pdet is not None and rank is not None:
-        return rank, log_pdet
-    eigenvals = jnp.linalg.eigvalsh(prec)
-    if rank is None:
-        mask = eigenvals > tol
-        rank = jnp.sum(mask, axis=-1)
-    else:
-        max_index = eigenvals.shape[-1] - rank
-
-        def fn(i, x):
-            return x.at[..., i].set(i >= max_index)
-
-        mask = jax.lax.fori_loop(0, eigenvals.shape[-1], fn, eigenvals)
-    if log_pdet is None:
-        selected = jnp.where(mask, eigenvals, 1.0)
-        log_pdet = jnp.sum(jnp.log(selected), axis=-1)
-    return rank, log_pdet
-
-
 def _rank(eigenvalues: Array, tol: float = 1e-6) -> Array | float:
     """
     Computes the rank of a matrix based on the provided eigenvalues. The rank is taken

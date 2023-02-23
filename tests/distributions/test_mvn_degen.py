@@ -12,7 +12,8 @@ from jax import jit
 from liesel.distributions.mvn_degen import (
     Array,
     MultivariateNormalDegenerate,
-    _rank_and_log_pdet,
+    _log_pdet,
+    _rank,
 )
 
 key = jrd.PRNGKey(24605)
@@ -116,7 +117,7 @@ def mvn_batch():
 
 
 class TestComputePseudoLogDet:
-    def test_rank_and_log_pdet(self) -> None:
+    def test_log_pdet_with_and_without_rank(self) -> None:
         """
         Test that pseudo-log-determinant computation works with and without given rank.
         """
@@ -125,51 +126,50 @@ class TestComputePseudoLogDet:
         prec2 = K / 2.0
         prec3 = K / 3.0
 
-        ldet1a = _rank_and_log_pdet(prec1)
-        ldet2a = _rank_and_log_pdet(prec2)
-        ldet3a = _rank_and_log_pdet(prec3)
+        ldet1a = _log_pdet(jnp.linalg.eigvalsh(prec1))
+        ldet2a = _log_pdet(jnp.linalg.eigvalsh(prec2))
+        ldet3a = _log_pdet(jnp.linalg.eigvalsh(prec3))
 
-        ldet1b = _rank_and_log_pdet(prec1, rank=5)
-        ldet2b = _rank_and_log_pdet(prec2, rank=5)
-        ldet3b = _rank_and_log_pdet(prec3, rank=5)
+        ldet1b = _log_pdet(jnp.linalg.eigvalsh(prec1), rank=5)
+        ldet2b = _log_pdet(jnp.linalg.eigvalsh(prec2), rank=5)
+        ldet3b = _log_pdet(jnp.linalg.eigvalsh(prec3), rank=5)
 
-        assert ldet1a[1] == pytest.approx(ldet1b[1])
-        assert ldet2a[1] == pytest.approx(ldet2b[1])
-        assert ldet3a[1] == pytest.approx(ldet3b[1])
+        assert ldet1a == pytest.approx(ldet1b)
+        assert ldet2a == pytest.approx(ldet2b)
+        assert ldet3a == pytest.approx(ldet3b)
 
-    def test_jit_rank_and_log_pdet(self) -> None:
+    def test_jit_log_pdet(self) -> None:
         """Test that pseudo-log-determinant computation can be jitted."""
         K = jnp.eye(5)
         prec = K / 2.0
+        evals = jnp.linalg.eigvalsh(prec)
+        jitted_log_pdet = jit(_log_pdet)
+        ldet1 = _log_pdet(evals)
+        ldet2 = jitted_log_pdet(evals)
+        ldet3 = jitted_log_pdet(evals, rank=5)
 
-        jitted_rank_and_log_pdet = jit(_rank_and_log_pdet)
-        ldet1 = _rank_and_log_pdet(prec)
-        ldet2 = jitted_rank_and_log_pdet(prec)
-        ldet3 = jitted_rank_and_log_pdet(prec, rank=5, log_pdet=ldet1[1])
-        ldet4 = jitted_rank_and_log_pdet(prec, rank=5)
+        assert ldet1 == pytest.approx(ldet2)
+        assert ldet1 == pytest.approx(ldet3)
 
-        assert ldet1[1] == pytest.approx(ldet2[1])
-        assert ldet1[1] == pytest.approx(ldet3[1])
-        assert ldet1[1] == pytest.approx(ldet4[1])
-
-    def test_rank_and_log_pdet_batch_full_computation(self) -> None:
+    def test_log_pdet_batch_full_computation(self) -> None:
         """Test that pseudo-log-determinant computation works for batches."""
         K1 = jnp.diag(jnp.array([2.0, 0.0, 0.0]))
         K2 = jnp.diag(jnp.array([2.0, 3.0, 0.0]))
 
-        ldet1 = _rank_and_log_pdet(K1)
-        ldet2 = _rank_and_log_pdet(K2)
+        evals1 = jnp.linalg.eigvalsh(K1)
+        evals2 = jnp.linalg.eigvalsh(K2)
 
-        K_batch = jnp.array([K1, K2])
+        ldet1 = _log_pdet(evals1)
+        ldet2 = _log_pdet(evals2)
 
-        ldet = _rank_and_log_pdet(K_batch)
+        evals_batch = jnp.linalg.eigvalsh(jnp.array([K1, K2]))
 
-        assert ldet1[0] == pytest.approx(ldet[0][0])  # type: ignore
-        assert ldet1[1] == pytest.approx(ldet[1][0])  # type: ignore
-        assert ldet2[0] == pytest.approx(ldet[0][1])  # type: ignore
-        assert ldet2[1] == pytest.approx(ldet[1][1])  # type: ignore
+        ldet = _log_pdet(evals_batch)
 
-    def test_rank_and_log_pdet_batch_given_rank(self) -> None:
+        assert ldet1 == pytest.approx(ldet[0])  # type: ignore
+        assert ldet2 == pytest.approx(ldet[1])  # type: ignore
+
+    def test_log_pdet_batch_given_rank(self) -> None:
         """
         Test that pseudo-log-determinant computation with given ranks works for simple
         batches.
@@ -177,17 +177,19 @@ class TestComputePseudoLogDet:
         K1 = jnp.diag(jnp.array([2.0, 0.0, 0.0]))
         K2 = jnp.diag(jnp.array([2.0, 3.0, 0.0]))
 
-        ldet1 = _rank_and_log_pdet(K1)
-        ldet2 = _rank_and_log_pdet(K2)
+        evals1 = jnp.linalg.eigvalsh(K1)
+        evals2 = jnp.linalg.eigvalsh(K2)
 
-        K_batch = jnp.array([K1, K2])
+        ldet1 = _log_pdet(evals1)
+        ldet2 = _log_pdet(evals2)
 
-        ldet = jit(_rank_and_log_pdet)(K_batch, rank=jnp.array([ldet1[0], ldet2[0]]))
+        evals_batch = jnp.linalg.eigvalsh(jnp.array([K1, K2]))
+        rank_batch = _rank(evals_batch)
 
-        assert ldet1[0] == pytest.approx(ldet[0][0])
-        assert ldet1[1] == pytest.approx(ldet[1][0])
-        assert ldet2[0] == pytest.approx(ldet[0][1])
-        assert ldet2[1] == pytest.approx(ldet[1][1])
+        ldet = jit(_log_pdet)(evals_batch, rank=rank_batch)
+
+        assert ldet1 == pytest.approx(ldet[0])
+        assert ldet2 == pytest.approx(ldet[1])
 
     def test_rank_and_log_pdet_big_batch_given_rank(self) -> None:
         """
@@ -199,21 +201,25 @@ class TestComputePseudoLogDet:
         K3 = jnp.diag(jnp.array([4.0, 3.0, 1.0]))
         K4 = jnp.diag(jnp.array([8.0, 1.0, 3.0]))
 
-        ldet1 = _rank_and_log_pdet(K1)
-        ldet2 = _rank_and_log_pdet(K2)
-        ldet3 = _rank_and_log_pdet(K3)
-        ldet4 = _rank_and_log_pdet(K4)
+        evals1 = jnp.linalg.eigvalsh(K1)
+        evals2 = jnp.linalg.eigvalsh(K2)
+        evals3 = jnp.linalg.eigvalsh(K3)
+        evals4 = jnp.linalg.eigvalsh(K4)
 
-        K_batch = jnp.array([[K1, K2], [K3, K4]])
+        ldet1 = _log_pdet(evals1)
+        ldet2 = _log_pdet(evals2)
+        ldet3 = _log_pdet(evals3)
+        ldet4 = _log_pdet(evals4)
 
-        ldet = _rank_and_log_pdet(
-            K_batch, rank=jnp.array([[ldet1[0], ldet2[0]], [ldet3[0], ldet4[0]]])
-        )
+        evals_batch = jnp.linalg.eigvalsh(jnp.array([[K1, K2], [K3, K4]]))
+        _rank_batch = _rank(evals_batch)
 
-        assert ldet1[0] == pytest.approx(ldet[0][0, 0])  # type: ignore
-        assert ldet1[1] == pytest.approx(ldet[1][0, 0])  # type: ignore
-        assert ldet2[0] == pytest.approx(ldet[0][0, 1])  # type: ignore
-        assert ldet2[1] == pytest.approx(ldet[1][0, 1])  # type: ignore
+        ldet = _log_pdet(evals_batch, rank=_rank_batch)
+
+        assert ldet1 == pytest.approx(ldet[0, 0])  # type: ignore
+        assert ldet2 == pytest.approx(ldet[0, 1])  # type: ignore
+        assert ldet3 == pytest.approx(ldet[1, 0])  # type: ignore
+        assert ldet4 == pytest.approx(ldet[1, 1])  # type: ignore
 
 
 class TestMVNDegenerateValues:
