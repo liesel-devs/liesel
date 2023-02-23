@@ -131,8 +131,8 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         self._broadcast_batch_shape = jnp.broadcast_shapes(prec_batches, loc_batches)
         nbatch = len(self.batch_shape)
 
-        self._prec = jnp.expand_dims(prec, jnp.arange(nbatch - len(prec_batches)))
-        self._loc = jnp.expand_dims(loc, jnp.arange(nbatch - len(loc_batches)))
+        self._prec = jnp.expand_dims(prec, tuple(range(nbatch - len(prec_batches))))
+        self._loc = jnp.expand_dims(loc, tuple(range(nbatch - len(loc_batches))))
 
         super().__init__(
             dtype=prec.dtype,
@@ -239,7 +239,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         event_shape = sqrt_eval.shape[-1]
         shape = sqrt_eval.shape + (event_shape,)
 
-        r = jnp.arange(event_shape)
+        r = tuple(range(event_shape))
         diags = jnp.zeros(shape).at[..., r, r].set(sqrt_eval)
         return evecs @ diags
 
