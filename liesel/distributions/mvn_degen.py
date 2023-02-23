@@ -143,7 +143,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
 
     @cached_property
     def eig(self) -> tuple[Array, Array]:
-        """Eigenvalues and eigenvectors of the precision matrices."""
+        """Eigenvalues and eigenvectors of the distribution's precision matrices."""
         return jnp.linalg.eigh(self._prec)
 
     @cached_property
@@ -166,7 +166,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
 
     @cached_property
     def rank(self) -> Array | float:
-        """Ranks of the precision matrices."""
+        """Ranks of the distribution's precision matrices."""
         if self._rank is not None:
             return self._rank
         evals, _ = self.eig
@@ -174,7 +174,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
 
     @cached_property
     def log_pdet(self) -> Array | float:
-        """Log pseudo-determinant of the precision matrices."""
+        """Log pseudo-determinant of the distribution's precision matrices."""
         if self._log_pdet is not None:
             return self._log_pdet
         evals, _ = self.eig
