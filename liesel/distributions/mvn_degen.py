@@ -234,8 +234,10 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         return jnp.linalg.eigh(self._prec)
 
     @cached_property
-    def _projector(self) -> Array:
+    def _sqrt_pcov(self) -> Array:
         """
+        Square-roots of the distribution's pseudo-covariance matrices.
+
         Let ``prec = Q @ A @ Q.T`` be the eigendecomposition of the precision matrix.
         In essence, this property returns ``Q @ jnp.sqrt(1/A)``.
         """
@@ -275,8 +277,8 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         z = jax.random.normal(key=seed, shape=shape + [1])
 
         # Add a dimension at 0 for the sample size.
-        projector = jnp.expand_dims(self._projector, 0)
-        centered_samples = jnp.reshape(projector @ z, shape)
+        sqrt_pcov = jnp.expand_dims(self._sqrt_pcov, 0)
+        centered_samples = jnp.reshape(sqrt_pcov @ z, shape)
 
         # Add a dimension at 0 for the sample size.
         loc = jnp.expand_dims(self._loc, 0)
