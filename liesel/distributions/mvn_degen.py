@@ -82,6 +82,11 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         batch members are undefined.
     name
         Python ``str``, name prefixed to ``Ops`` created by this class.
+    tol
+        Numerical tolerance for determining which eigenvalues of the distribution's \
+        precision matrices should be treated as zero. Used in :attr:`.rank` and \
+        :attr:`.log_pdet`, if they are computed by the class. Also used in \
+        :meth:`.sample`.
 
     Notes
     -----
@@ -103,9 +108,11 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         validate_args: bool = False,
         allow_nan_stats: bool = True,
         name: str = "MultivariateNormalDegenerate",
+        tol: float = 1e-6,
     ):
         parameters = dict(locals())
 
+        self._tol = tol
         self._rank = rank
         self._log_pdet = log_pdet
 
@@ -235,7 +242,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         eigenvalues, evecs = self.eig
 
         sqrt_eval = jnp.sqrt(1 / eigenvalues)
-        sqrt_eval = jnp.where(eigenvalues < 1e-6, 0.0, sqrt_eval)
+        sqrt_eval = jnp.where(eigenvalues < self._tol, 0.0, sqrt_eval)
 
         event_shape = sqrt_eval.shape[-1]
         shape = sqrt_eval.shape + (event_shape,)
@@ -250,7 +257,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         if self._rank is not None:
             return self._rank
         evals, _ = self.eig
-        return _rank(evals)
+        return _rank(evals, tol=self._tol)
 
     @cached_property
     def log_pdet(self) -> Array | float:
@@ -258,7 +265,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         if self._log_pdet is not None:
             return self._log_pdet
         evals, _ = self.eig
-        return _log_pdet(evals, self.rank)
+        return _log_pdet(evals, self.rank, tol=self._tol)
 
     def _sample_n(self, n, seed=None) -> Array:
         shape = [n] + self.batch_shape + self.event_shape
