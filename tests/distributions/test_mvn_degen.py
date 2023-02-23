@@ -878,13 +878,17 @@ class TestMVNDegenerateAgainstTensorFlow:
 
 
 class TestSampleFromMVNDegenerate:
-    def test_one_sample(self, K, tau2) -> None:
-        log_det, rank = determinant_structure_degen(K)
+    def test_seed_required(self, K, tau2) -> None:
+        """Validates that we MUST supply a seed."""
+        mvnd = MultivariateNormalDegenerate.from_penalty(loc=0.0, var=tau2, pen=K)
 
+        with pytest.raises(ValueError):
+            mvnd.sample()
+
+    def test_one_sample(self, K, tau2) -> None:
+        """Tests that we can draw one sample of correct shape."""
         mvn = tfd.MultivariateNormalFullCovariance(covariance_matrix=jnp.eye(5))
-        mvnd = MultivariateNormalDegenerate.from_penalty(
-            loc=0.0, var=tau2, pen=K, rank=rank, log_pdet=log_det
-        )
+        mvnd = MultivariateNormalDegenerate.from_penalty(loc=0.0, var=tau2, pen=K)
 
         key = jax.random.PRNGKey(42)
         s1 = mvn.sample(seed=key)
@@ -894,12 +898,9 @@ class TestSampleFromMVNDegenerate:
         assert s1.shape == s2.shape
 
     def test_two_samples(self, K, tau2) -> None:
-        log_det, rank = determinant_structure_degen(K)
-
+        """Validates that we can draw two samples of correct shape."""
         mvn = tfd.MultivariateNormalFullCovariance(covariance_matrix=jnp.eye(5))
-        mvnd = MultivariateNormalDegenerate.from_penalty(
-            loc=0.0, var=tau2, pen=K, rank=rank, log_pdet=log_det
-        )
+        mvnd = MultivariateNormalDegenerate.from_penalty(loc=0.0, var=tau2, pen=K)
 
         key = jax.random.PRNGKey(42)
         s1 = mvn.sample(2, seed=key)
@@ -914,6 +915,9 @@ class TestSampleFromMVNDegenerate:
 
         This is one distribution with event shape 5. So we get a return array of shape
         [2, 1, 5], which corresponds to [n, batch_shape, event_shape].
+
+        Apart from the shape, this test also validates that the location of the samples
+        is plausible.
         """
         vcov = jnp.diag(jnp.full(5, 0.01))
         prec = jnp.diag(jnp.full(5, 1 / 0.01))
@@ -951,12 +955,15 @@ class TestSampleFromMVNDegenerate:
 
         assert s1.shape == s2.shape
 
-    def test_two_samples_2d_vcov(self) -> None:
+    def test_two_samples_2d_prec(self) -> None:
         """
-        When location is a 2d array, defining one batch.
+        When we have two precision matrices, i.e. two batches.
 
         This is one distribution with event shape 5. So we get a return array of shape
-        [2, 1, 5], which corresponds to [n, batch_shape, event_shape].
+        [3, 2, 5], which corresponds to [n, batch_shape, event_shape].
+
+        Apart from the shape, this test also validates that the variance of the samples
+        is plausible.
         """
         vcov_low = jnp.diag(jnp.full(5, 0.01))
         vcov_high = jnp.diag(jnp.full(5, 100.0))
