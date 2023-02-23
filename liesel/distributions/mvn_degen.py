@@ -233,8 +233,9 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         """
         eigenvalues, evecs = self.eig
 
-        numerically_zero = eigenvalues < 1e-6
-        sqrt_eval = jnp.sqrt(1 / eigenvalues).at[numerically_zero].set(0)
+        # numerically_zero = eigenvalues < 1e-6
+        sqrt_eval = jnp.sqrt(1 / eigenvalues)
+        sqrt_eval = jnp.where(eigenvalues < 1e-6, 0.0, sqrt_eval)
 
         event_shape = sqrt_eval.shape[-1]
         shape = sqrt_eval.shape + (event_shape,)
