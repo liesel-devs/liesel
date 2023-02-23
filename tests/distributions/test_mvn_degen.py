@@ -8,7 +8,10 @@ import numpy as np
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 from jax import jit
+from scipy.interpolate import BSpline
 
+import liesel.goose as gs
+import liesel.model as lsl
 from liesel.distributions.mvn_degen import (
     Array,
     MultivariateNormalDegenerate,
@@ -987,3 +990,73 @@ class TestSampleFromMVNDegenerate:
         assert jnp.var(s1[:, 1, :]) > 80
         assert jnp.var(s2[:, 0, :]) < 0.5
         assert jnp.var(s2[:, 1, :]) > 80
+
+
+def test_jit1() -> None:
+    D = jnp.diff(jnp.eye(5))
+
+    @jax.jit
+    def fn(x):
+        mvnd = MultivariateNormalDegenerate.from_penalty(loc=0.0, var=1.0, pen=D.T @ D)
+        return mvnd.log_prob(x)
+
+    fn(jnp.zeros(4))
+
+
+def test_jit2() -> None:
+    D = jnp.diff(jnp.eye(5))
+
+    @jax.jit
+    def fn(x, loc, var, pen):
+        mvnd = MultivariateNormalDegenerate.from_penalty(loc=loc, var=var, pen=pen)
+        return mvnd.log_prob(x)
+
+    fn(jnp.zeros(4), loc=0.0, var=1.0, pen=D.T @ D)
+
+
+def _create_equidistant_knots(x: Array, order: int, internal_k: int) -> Array:
+    min_x = jnp.min(x)
+    max_x = jnp.max(x)
+
+    internal_knots = jnp.linspace(min_x, max_x, internal_k)
+
+    step = internal_knots[1] - internal_knots[0]
+
+    left_knots = jnp.linspace(min_x - (step * (order - 1)), min_x - step, order - 1)
+    right_knots = jnp.linspace(max_x + step, max_x + (step * (order - 1)), order - 1)
+
+    return jnp.concatenate((left_knots, internal_knots, right_knots))
+
+
+def test_sampling() -> None:
+    key = jrd.PRNGKey(42)
+    x = jrd.uniform(key, shape=(100,))
+    y = jnp.exp(x) + jrd.normal(key, shape=(100,))
+
+    D = jnp.diff(jnp.eye(6))
+    K = D.T @ D
+
+    mvnd = lsl.Dist(
+        MultivariateNormalDegenerate.from_penalty,
+        loc=lsl.Var(0.0),
+        var=lsl.Var(1.0),
+        pen=lsl.Var(K),
+    )
+
+    beta = lsl.Param(jnp.zeros(5), mvnd, name="beta")
+
+    knots = _create_equidistant_knots(x, order=4, internal_k=4)
+    basis_mat = BSpline.design_matrix(x, knots, 3).toarray()
+    X = lsl.Obs(basis_mat[:, 1:])
+
+    smooth = lsl.Smooth(X, beta)
+    Y = lsl.Obs(y, distribution=lsl.Dist(tfd.Normal, loc=smooth, scale=lsl.Var(1.0)))
+    model = lsl.GraphBuilder().add(Y).build_model()
+
+    builder = gs.EngineBuilder(1337, 1)
+    builder.set_model(lsl.GooseModel(model))
+    builder.set_initial_values(model.state)
+    builder.add_kernel(gs.IWLSKernel(["beta"]))
+    builder.set_duration(warmup_duration=500, posterior_duration=20)
+    engine = builder.build()
+    engine.sample_all_epochs()
