@@ -84,7 +84,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         Python ``str``, name prefixed to ``Ops`` created by this class.
     tol
         Numerical tolerance for determining which eigenvalues of the distribution's \
-        precision matrices should be treated as zero. Used in :attr:`.rank` and \
+        precision matrices should be treated as zeros. Used in :attr:`.rank` and \
         :attr:`.log_pdet`, if they are computed by the class. Also used in \
         :meth:`.sample`.
 
@@ -236,7 +236,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
     @cached_property
     def _sqrt_pcov(self) -> Array:
         """
-        Square-roots of the distribution's pseudo-covariance matrices.
+        Square roots of the distribution's pseudo-covariance matrices.
 
         Let ``prec = Q @ A @ Q.T`` be the eigendecomposition of the precision matrix.
         In essence, this property returns ``Q @ jnp.sqrt(1/A)``.
@@ -263,7 +263,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
 
     @cached_property
     def log_pdet(self) -> Array | float:
-        """Log pseudo-determinant of the distribution's precision matrices."""
+        """Log-pseudo-determinants of the distribution's precision matrices."""
         if self._log_pdet is not None:
             return self._log_pdet
         evals, _ = self.eig
@@ -273,7 +273,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         shape = [n] + self.batch_shape + self.event_shape
 
         # The added dimension at the end here makes sure that matrix multiplication
-        # with the "projector" matrices works out correctly.
+        # with the "sqrt pcov" matrices works out correctly.
         z = jax.random.normal(key=seed, shape=shape + [1])
 
         # Add a dimension at 0 for the sample size.
