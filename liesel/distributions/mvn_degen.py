@@ -143,45 +143,6 @@ class MultivariateNormalDegenerate(tfd.Distribution):
             name=name,
         )
 
-    @cached_property
-    def eig(self) -> tuple[Array, Array]:
-        """Eigenvalues and eigenvectors of the distribution's precision matrices."""
-        return jnp.linalg.eigh(self._prec)
-
-    @cached_property
-    def _projector(self) -> Array:
-        """
-        Let ``prec = Q @ A @ Q.T`` be the eigendecomposition of the precision matrix.
-        In essence, this property returns ``Q @ jnp.sqrt(1/A)``.
-        """
-        eigenvalues, evecs = self.eig
-
-        numerically_zero = eigenvalues < 1e-6
-        sqrt_eval = jnp.sqrt(1 / eigenvalues).at[numerically_zero].set(0)
-
-        event_shape = sqrt_eval.shape[-1]
-        shape = sqrt_eval.shape + (event_shape,)
-
-        r = jnp.arange(event_shape)
-        diags = jnp.zeros(shape).at[..., r, r].set(sqrt_eval)
-        return evecs @ diags
-
-    @cached_property
-    def rank(self) -> Array | float:
-        """Ranks of the distribution's precision matrices."""
-        if self._rank is not None:
-            return self._rank
-        evals, _ = self.eig
-        return _rank(evals)
-
-    @cached_property
-    def log_pdet(self) -> Array | float:
-        """Log pseudo-determinant of the distribution's precision matrices."""
-        if self._log_pdet is not None:
-            return self._log_pdet
-        evals, _ = self.eig
-        return _log_pdet(evals, self.rank)
-
     @classmethod
     def from_penalty(
         cls,
@@ -258,6 +219,45 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         )
 
         return mvnd
+
+    @cached_property
+    def eig(self) -> tuple[Array, Array]:
+        """Eigenvalues and eigenvectors of the distribution's precision matrices."""
+        return jnp.linalg.eigh(self._prec)
+
+    @cached_property
+    def _projector(self) -> Array:
+        """
+        Let ``prec = Q @ A @ Q.T`` be the eigendecomposition of the precision matrix.
+        In essence, this property returns ``Q @ jnp.sqrt(1/A)``.
+        """
+        eigenvalues, evecs = self.eig
+
+        numerically_zero = eigenvalues < 1e-6
+        sqrt_eval = jnp.sqrt(1 / eigenvalues).at[numerically_zero].set(0)
+
+        event_shape = sqrt_eval.shape[-1]
+        shape = sqrt_eval.shape + (event_shape,)
+
+        r = jnp.arange(event_shape)
+        diags = jnp.zeros(shape).at[..., r, r].set(sqrt_eval)
+        return evecs @ diags
+
+    @cached_property
+    def rank(self) -> Array | float:
+        """Ranks of the distribution's precision matrices."""
+        if self._rank is not None:
+            return self._rank
+        evals, _ = self.eig
+        return _rank(evals)
+
+    @cached_property
+    def log_pdet(self) -> Array | float:
+        """Log pseudo-determinant of the distribution's precision matrices."""
+        if self._log_pdet is not None:
+            return self._log_pdet
+        evals, _ = self.eig
+        return _log_pdet(evals, self.rank)
 
     def _sample_n(self, n, seed=None) -> Array:
         shape = [n] + self.batch_shape + self.event_shape
