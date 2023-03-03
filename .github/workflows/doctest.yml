@@ -1,0 +1,27 @@
+name: doctest
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install liesel
+        run: |
+          pip install .[dev]
+          pip list
+
+      - name: Run pytest
+        run: pytest --doctest-modules liesel
