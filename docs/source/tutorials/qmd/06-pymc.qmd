@@ -7,17 +7,18 @@ engine: knitr
 #| include: false
 
 import liesel.goose as gs
-import numpy as np
 import pymc as pm
+import numpy as np
 
 from liesel.experimental.pymc import PyMCInterface
+import jax
 
 gs.Summary._repr_markdown_ = gs.Summary._repr_html_
 ```
 
-# PyMC and Liesel: Linear regression
+# PyMC and Liesel: Spike and Slab
 
-Liesel provides an interface for [PyMC](https://www.pymc.io/welcome.html), a popular Python library for Bayesian Models. In thsis tutorial, we see how to specify a model in PyMC and then fit it using Liesel.
+Liesel provides an interface for [PyMC](https://www.pymc.io/welcome.html), a popular Python library for Bayesian Models. In this tutorial, we see how to specify a model in PyMC and then fit it using Liesel.
 
 Be sure that you have `pymc` installed. If that's not the case, you can install Liesel with the optional dependency PyMC.
 
@@ -25,93 +26,150 @@ Be sure that you have `pymc` installed. If that's not the case, you can install 
 pip install liesel[pymc]
 ```
 
-We'll deal with a simple linear regression model with two slopes.
+We will build a Spike and Slab model, a Bayesian approach that allows for variable selection by assuming a mixture of two distributions for the prior distribution of the regression coefficients: a point mass at zero (the "spike") and a continuous distribution centered around zero (the "slab"). The model assumes that each coefficient $\beta_j$ has a corresponding indicator variable $\delta_j$ that takes a value of either 0 or 1, indicating whether the variable is included in the model or not. The prior distribution of the indicator variables is a Bernoulli distribution, with a parameter $\theta$ that controls the sparsity of the model. When the parameter is close to 1, the model is more likely to include all variables, while when it is close to 0, the model is more likely to select only a few variables. In our case, we assign a Beta hyperprior to $\theta$:
 
 $$
-\begin{aligned}
-y_i \sim \mathcal{N}_{} \left( \beta_0 + x_{i, 1} + \beta_2 + _{i, 2}, \sigma^2 \right).
-\end{aligned}
+\begin{eqnarray}
+\mathbf{y} &\sim& \mathcal{N} \left( \mathbf{X}\boldsymbol{\beta}, \sigma^2 \mathbf{I} \right)\\
+\boldsymbol{\beta}_j &\sim& \mathbfcal{N}\left(0, (1 - \delta_j)\nu + \delta_j\tau^2_j / \sigma^2 \right)\\
+\tau^2_j &\sim& \mathcal{IG}(\text{a}_{\tau}, \text{b}_{\tau})\\
+\delta_j &\sim& \text{Bernoulli}(\theta)\\
+\theta &\sim& \text{Beta}(\text{a}_\theta, \text{b}_\theta)\\
+\sigma^2 &\sim& \mathcal{IG}(\text{a}_{\sigma^2}, \text{b}_{\sigma^2})
+\end{eqnarray}.
 $$
 
-First, we generate the data according to the model.
+where $\nu$ is a hyperparameter that we set to a fixed small value. That way, when $\delta_j = 0$,
+the prior variance for $\beta_j$ is extremely small, practically forcing it to be close
+to zero.
+
+First, we generate the data. We use a model with four coefficients but assume that only two variables are relevant, namely the first and the third one.
 
 ```{python}
+#| label: data-generation
+
 RANDOM_SEED = 123
 rng = np.random.RandomState(RANDOM_SEED)
 
-# set parameter values
-n = 100
-sigma_scalar = 1.0
-beta_vec = [1.0, 1.0, 2.0]
+n = 1000
+p = 4
 
-# simulate covariates
-x1 = rng.randn(n).astype(np.float32)
-x2 = 0.5 * rng.randn(n).astype(np.float32)
+sigma_scalar = 1.0
+beta_vec = np.array([3.0, 0.0, 4.0, 0.0])
+
+X = rng.randn(n, p).astype(np.float32)
 
 errors = rng.normal(size=n).astype(np.float32)
 
-# Simulate outcome variable
-y = beta_vec[0] + beta_vec[1] * x1 + beta_vec[2] * x2 + sigma_scalar * errors
+y = X @ beta_vec + sigma_scalar * errors
 ```
 
-Then, we can specify the model using PyMC. We assign a Normal prior to the regression coefficients $\mathbf{\beta}$ and an Half-normal to the scale.
+Then, we can specify the model using PyMC.
 
 ```{python}
-basic_model = pm.Model()
+#| label: model
 
-with basic_model:
+spike_and_slab_model = pm.Model()
+
+mu = 0.
+
+alpha_tau = 1.0
+beta_tau = 1.0
+
+alpha_sigma = 1.0
+beta_sigma = 1.0
+
+alpha_theta = 8.0
+beta_theta = 8.0
+
+nu = 0.1
+
+with spike_and_slab_model:
     # priors
-    beta = pm.Normal("beta", mu=0.0, sigma=10.0, shape=3)
-    sigma = pm.HalfNormal(
-        "sigma", sigma=1.0
-    )  # automatically transformed to real via log
+    sigma2 = pm.InverseGamma(
+        "sigma2", alpha=alpha_sigma, beta=beta_sigma
+    )
 
-    # predicted value
-    mu = beta[0] + beta[1] * x1 + beta[2] * x2
+    theta = pm.Beta("theta", alpha=alpha_theta, beta=beta_theta)
+    delta = pm.Bernoulli("delta", p=theta, size=p)
+    tau = pm.InverseGamma("tau", alpha=alpha_tau, beta=beta_tau)
 
-    # distribution of response (likelihood)
-    pm.Normal("y_obs", mu=mu, sigma=sigma, observed=y)
+    beta = pm.Normal("beta", mu=0.0, sigma=nu * (1 - delta) + delta * pm.math.sqrt(tau / sigma2), shape=p)
+
+    # likelihood
+    pm.Normal("y", mu=X @ beta, sigma=pm.math.sqrt(sigma2), observed=y)
 ```
 
-Let's give a mathematical look at our model
+Let's take a look at our model:
 
 ```{python}
-basic_model
+#| label: model-output
+
+spike_and_slab_model
 ```
 
-The class {class}`.PyMCInterface` offers an interface between PyMC and Goose. By default, the constructor of {class}`.PyMCInterface` keeps track only of non-observed random variables. This includes transformed but not untransformed variables. To make them trackable for the Goose {class}`.Engine`, these variables must be mentioned in the constructor.
+The class {class}`.PyMCInterface` offers an interface between PyMC and Goose. By default, the constructor of {class}`.PyMCInterface` keeps track only of a representation of random variables that can be used in sampling. For example, `theta` is transformed to the real-numbers space with a log-odds transformation, and therefore the model only keeps track of `theta_log_odds__`. However, we would like to access the untransformed samples as well. We can do this by including them in the `additional_vars` argument of the constructor of the interface.
 
 The initial position can be extracted with {meth}`.get_initial_state`. The model state is represented as a `Position`.
 
 ```{python}
-interface = PyMCInterface(basic_model, additional_vars=["sigma"])
+#| label: pymc-interface
+
+interface = PyMCInterface(spike_and_slab_model, additional_vars=["sigma2", "tau", "theta"])
 state = interface.get_initial_state()
 ```
 
-Finally, we can sample from the posterior as we do for any other Liesel model. In this case, we use a {class}`.NUTSKernel` both for $\mathbf{\beta}$ and the $\mathbf{\sigma}$.
+Since $\delta_j$ is a discrete variable, we need to use a Gibbs sampler to draw samples for it. Unfortunately, we cannot derive the posterior analytically, but what we can do is use a Metropolis-Hastings step as a transition function:
 
 ```{python}
-builder = gs.EngineBuilder(seed=1, num_chains=2)
+#| label: delta-transition-fn
+
+def delta_transition_fn(prng_key, model_state):
+    draw_key, mh_key = jax.random.split(prng_key)
+    theta_logodds = model_state["theta_logodds__"]
+    p = jax.numpy.exp(theta_logodds) / (1 + jax.numpy.exp(theta_logodds))
+    draw = jax.random.bernoulli(draw_key, p=p, shape=(4,))
+    proposal = {"delta": jax.numpy.asarray(draw,dtype=np.int64)}
+    _, state = gs.mh.mh_step(prng_key=mh_key, model=interface, proposal=proposal, model_state=model_state)
+    return state
+```
+
+Finally, we can sample from the posterior as we do for any other Liesel model. In this case, we use a {class}`.GibbsKernel` for $\boldsymbol{\delta}$ and a {class}`.NUTSKernel` both for the remaining parameters.
+
+```{python}
+#| label: model-init-sampling
+
+builder = gs.EngineBuilder(seed=13, num_chains=4)
 builder.set_model(interface)
 builder.set_initial_values(state)
 builder.set_duration(warmup_duration=1000, posterior_duration=2000)
 
-builder.add_kernel(gs.NUTSKernel(["beta", "sigma_log__"]))
+builder.add_kernel(gs.NUTSKernel(position_keys=["beta", "sigma2_log__", "tau_log__", "theta_logodds__"]))
+builder.add_kernel(gs.GibbsKernel(["delta"], transition_fn=delta_transition_fn))
 
-builder.positions_included = ["sigma"]
+builder.positions_included = ["sigma2", "tau"]
 
 engine = builder.build()
 
 engine.sample_all_epochs()
 ```
 
-As usual, we can give a look at the summary of the results and at the trace plots.
+Now, we can take a look at the summary of the results and at the trace plots.
 
 ```{python}
+#| label: results-summary
+
 results = engine.get_results()
-gs.Summary(results)
+print(gs.Summary(results))
 ```
 
+As we can see from the posterior means of the $\boldsymbol{\delta}$ parameters, the model was able to recognize those variable with no influence on the respose $\mathbf{y}$:
+
+1. $\delta_1$ and $\delta_3$ (`delta[0]` and `delta[2]` in the table) have a posterior mean of $1$, indicating inclusion.
+2. $\delta_2$ and $\delta_4$ (`delta[1]` and `delta[3]` in the table) have a posterior mean of $0.06$, indicating exclusion.
+
 ```{python}
+#| label: results-plot
+
 gs.plot_trace(results)
 ```
