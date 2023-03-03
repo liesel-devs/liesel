@@ -22,7 +22,7 @@ jobs:
 
       - name: Install liesel
         run: |
-          pip install .[dev]
+          pip install .[dev,pymc]
           pip list
 
       - name: Run pytest
