@@ -108,7 +108,7 @@ Let's take a look at our model:
 spike_and_slab_model
 ```
 
-The class {class}`.PyMCInterface` offers an interface between PyMC and Goose. By default, the constructor of {class}`.PyMCInterface` keeps track only of non-observed random variables. This includes transformed but not untransformed variables. To make them trackable for the Goose {class}`.Engine`, these variables must be mentioned in the constructor.
+The class {class}`.PyMCInterface` offers an interface between PyMC and Goose. By default, the constructor of {class}`.PyMCInterface` keeps track only of transformed random variables. To make the untransformed ones trackable for the Goose {class}`.Engine`, we must specify them in the constructor.
 
 The initial position can be extracted with {meth}`.get_initial_state`. The model state is represented as a `Position`.
 
@@ -119,7 +119,7 @@ interface = PyMCInterface(spike_and_slab_model, additional_vars=["sigma2", "tau"
 state = interface.get_initial_state()
 ```
 
-Since $\delta_j$ is a discrete variable, we need to use a Gibbs sampler to draw samples for it. The {class}`.GibbsKernel` requires a function to perform the MCMC transition.
+Since $\delta_j$ is a discrete variable, we need to use a Gibbs sampler to draw samples for it. Unfortunately, we cannot derive the posterior analytically, but what we can do is use a Metropolis-Hastings step as a transition function:
 
 ```{python}
 #| label: delta-transition-fn
