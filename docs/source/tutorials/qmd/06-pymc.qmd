@@ -128,12 +128,8 @@ def delta_transition_fn(prng_key, model_state):
     draw_key, mh_key = jax.random.split(prng_key)
     theta_logodds = model_state["theta_logodds__"]
     p = jax.numpy.exp(theta_logodds) / (1 + jax.numpy.exp(theta_logodds))
-    proposal = {
-        "delta": jax.numpy.asarray(
-        jax.random.bernoulli(draw_key, p=p, shape=(4,)),
-        dtype=np.int64
-        )
-    }
+    draw = jax.random.bernoulli(draw_key, p=p, shape=(4,))
+    proposal = {"delta": jax.numpy.asarray(draw,dtype=np.int64)}
     _, state = gs.mh.mh_step(prng_key=mh_key, model=interface, proposal=proposal, model_state=model_state)
     return state
 ```
