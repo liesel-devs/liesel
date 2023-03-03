@@ -108,7 +108,7 @@ Let's take a look at our model:
 spike_and_slab_model
 ```
 
-The class {class}`.PyMCInterface` offers an interface between PyMC and Goose. By default, the constructor of {class}`.PyMCInterface` keeps track only of transformed random variables. To make the untransformed ones trackable for the Goose {class}`.Engine`, we must specify them in the constructor.
+The class {class}`.PyMCInterface` offers an interface between PyMC and Goose. By default, the constructor of {class}`.PyMCInterface` keeps track only of a representation of random variables that can be used in sampling. For example, `theta` is transformed to the real-numbers space with a log-odds transformation, and therefore the model only keeps track of `theta_log_odds__`. However, we would like to access the untransformed samples as well. We can do this by including them in the `additional_vars` argument of the constructor of the interface.
 
 The initial position can be extracted with {meth}`.get_initial_state`. The model state is represented as a `Position`.
 
