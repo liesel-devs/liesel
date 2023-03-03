@@ -18,7 +18,7 @@ gs.Summary._repr_markdown_ = gs.Summary._repr_html_
 
 # PyMC and Liesel: Spike and Slab
 
-Liesel provides an interface for [PyMC](https://www.pymc.io/welcome.html), a popular Python library for Bayesian Models. In thsis tutorial, we see how to specify a model in PyMC and then fit it using Liesel.
+Liesel provides an interface for [PyMC](https://www.pymc.io/welcome.html), a popular Python library for Bayesian Models. In this tutorial, we see how to specify a model in PyMC and then fit it using Liesel.
 
 Be sure that you have `pymc` installed. If that's not the case, you can install Liesel with the optional dependency PyMC.
 
@@ -26,7 +26,7 @@ Be sure that you have `pymc` installed. If that's not the case, you can install 
 pip install liesel[pymc]
 ```
 
-We'll deal with a Spike and Slab model,a Bayesian approach that allows for variable selection by assuming a mixture of two distributions for the prior distribution of the regression coefficients: a point mass at zero (the "spike") and a continuous distribution centered around zero (the "slab"). The model assumes that each coefficient $\beta_j$ has a corresponding indicator variable $\delta_j$ that takes a value of either 0 or 1, indicating whether the variable is included in the model or not. The prior distribution of the indicator variables is a Bernoulli distribution, with a parameter $\theta$ that controls the sparsity of the model. When the parameter is close to 1, the model is more likely to include all variables, while when it is close to 0, the model is more likely to select only a few variables. In our case, we also assign Beta hyperprior to $\theta$:
+We will build a Spike and Slab model, a Bayesian approach that allows for variable selection by assuming a mixture of two distributions for the prior distribution of the regression coefficients: a point mass at zero (the "spike") and a continuous distribution centered around zero (the "slab"). The model assumes that each coefficient $\beta_j$ has a corresponding indicator variable $\delta_j$ that takes a value of either 0 or 1, indicating whether the variable is included in the model or not. The prior distribution of the indicator variables is a Bernoulli distribution, with a parameter $\theta$ that controls the sparsity of the model. When the parameter is close to 1, the model is more likely to include all variables, while when it is close to 0, the model is more likely to select only a few variables. In our case, we assign a Beta hyperprior to $\theta$:
 
 $$
 \begin{eqnarray}
@@ -39,9 +39,11 @@ $$
 \end{eqnarray}.
 $$
 
-where $\nu$ is an hyper-parameter initialized to a small value.
+where $\nu$ is a hyperparameter that we set to a fixed small value. That way, when $\delta_j = 0$,
+the prior variance for $\beta_j$ is extremely small, practically forcing it to be close
+to zero.
 
-First, we generate the data. We use a model with four intercepts but assume that only two variables are relvant, namely the first and the third one.
+First, we generate the data. We use a model with four coefficients but assume that only two variables are relevant, namely the first and the third one.
 
 ```{python}
 #| label: data-generation
@@ -98,7 +100,7 @@ with spike_and_slab_model:
     pm.Normal("y", mu=X @ beta, sigma=pm.math.sqrt(sigma2), observed=y)
 ```
 
-Let's give a mathematical look at our model
+Let's take a look at our model:
 
 ```{python}
 #| label: model-output
@@ -117,7 +119,7 @@ interface = PyMCInterface(spike_and_slab_model, additional_vars=["sigma2", "tau"
 state = interface.get_initial_state()
 ```
 
-Since $\delta_j$ is a discrete variable, we need to use a Gibbs sampler for it. The {class}`.GibbsKernel` requires a function to perform the MCMC transition.
+Since $\delta_j$ is a discrete variable, we need to use a Gibbs sampler to draw samples for it. The {class}`.GibbsKernel` requires a function to perform the MCMC transition.
 
 ```{python}
 #| label: delta-transition-fn
@@ -136,7 +138,7 @@ def delta_transition_fn(prng_key, model_state):
     return state
 ```
 
-Finally, we can sample from the posterior as we do for any other Liesel model. In this case, we use a {class}`.NUTSKernel` both for each model parameter and a {class}`.GibbsKernel` for $\boldsymbol{\delta}$.
+Finally, we can sample from the posterior as we do for any other Liesel model. In this case, we use a {class}`.GibbsKernel` for $\boldsymbol{\delta}$ and a {class}`.NUTSKernel` both for the remaining parameters.
 
 ```{python}
 #| label: model-init-sampling
@@ -156,7 +158,7 @@ engine = builder.build()
 engine.sample_all_epochs()
 ```
 
-As usual, we can give a look at the summary of the results and at the trace plots.
+Now, we can take a look at the summary of the results and at the trace plots.
 
 ```{python}
 #| label: results-summary
@@ -165,7 +167,10 @@ results = engine.get_results()
 print(gs.Summary(results))
 ```
 
-As we can see from the values of the $\boldsymbol{\delta}$, the model was able to recognize those variable with no influence on the respose $\mathbf{y}$.
+As we can see from the posterior means of the $\boldsymbol{\delta}$ parameters, the model was able to recognize those variable with no influence on the respose $\mathbf{y}$:
+
+1. $\delta_1$ and $\delta_3$ (`delta[0]` and `delta[2]` in the table) have a posterior mean of $1$, indicating inclusion.
+2. $\delta_2$ and $\delta_4$ (`delta[1]` and `delta[3]` in the table) have a posterior mean of $0.06$, indicating exclusion.
 
 ```{python}
 #| label: results-plot
