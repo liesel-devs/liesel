@@ -2,8 +2,14 @@ import logging
 from collections.abc import Generator
 from contextlib import contextmanager
 
+import jax
+import jax.numpy as jnp
+import numpy as np
 import pytest
 from _pytest.logging import LogCaptureHandler
+
+import liesel.goose as gs
+import liesel.model as lsl
 
 
 def pytest_addoption(parser):
@@ -93,3 +99,12 @@ def local_caplog():
     """
 
     yield local_caplog_fn
+
+
+@pytest.fixture(autouse=True)
+def add_doctest_imports(doctest_namespace):
+    doctest_namespace["np"] = np
+    doctest_namespace["jax"] = jax
+    doctest_namespace["jnp"] = jnp
+    doctest_namespace["gs"] = gs
+    doctest_namespace["lsl"] = lsl
