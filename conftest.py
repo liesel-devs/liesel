@@ -102,7 +102,7 @@ def local_caplog():
 
 
 @pytest.fixture(autouse=True)
-def add_np(doctest_namespace):
+def add_doctest_imports(doctest_namespace):
     doctest_namespace["np"] = np
     doctest_namespace["jax"] = jax
     doctest_namespace["jnp"] = jnp
