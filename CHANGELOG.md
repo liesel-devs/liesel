@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.2] - 2023-03-08
+
+### What's new?
+
+- :truck: The [tutorials](https://docs.liesel-project.org/en/latest/#tutorials) have been updated to v.0.2.2 and are now part of the documentation (@jobrachem, @wiep, @hriebl, @GianmarcoCallegher)
+- :sparkles:  Added [new tutorial](https://docs.liesel-project.org/en/latest/tutorials/md/06-pymc.html) showcasing the interface to PyMC (@GianmarcoCallegher)
+- :sparkles: Added node / variable groups (#28, @jobrachem)
+- :sparkles: Sampling from the `MultivariateNormalDegenerate` is now possible (#34, @jobrachem)
+- :construction: Fixed undefined behaviour in the distreg module (#20, @hriebl)
+- :construction: The distreg module will now use variables names as position keys (#22, @hriebl)
+
+[All commits since 0.2.1](https://github.com/liesel-devs/liesel/compare/v0.2.1...v0.2.2)
+
 ## [0.2.1] - 2022-12-25
 
 ### What's new?
