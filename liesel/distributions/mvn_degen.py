@@ -59,7 +59,15 @@ class MultivariateNormalDegenerate(tfd.Distribution):
     """
     A potentially degenerate multivariate normal distribution.
 
-    Provides the alternative constructor :meth:`.from_penalty`.
+    Provides the alternative constructor :meth:`.from_penalty`. Also implements sampling
+    via :meth:`.sample`.
+
+    This is a simplified code-based illustration of how the log-probability for an array
+    ``x`` is evaluated::
+
+        xc = x - loc
+        log_prob = -0.5 * (rank * np.log(2*np.pi) - log_pdet) -0.5 * (xc.T @ prec @ xc)
+
 
     Parameters
     ----------
@@ -72,13 +80,13 @@ class MultivariateNormalDegenerate(tfd.Distribution):
     log_pdet
         The log-pseudo-determinant of the precision matrix. Optional.
     validate_args
-        Python ``bool``, default ``False``. When ``True``, distribution parameters \
-        are checked for validity despite possibly degrading runtime performance. \
+        Python ``bool``, default ``False``. When ``True``, distribution parameters \\
+        are checked for validity despite possibly degrading runtime performance. \\
         When ``False``, invalid inputs may silently render incorrect outputs.
     allow_nan_stats
         Python ``bool``, default ``True``. When ``True``, statistics (e.g., mean, \
         mode, variance) use the value ``NaN`` to indicate the result is undefined. \
-        When ``False``, an exception is raised if one or more of the statistic's \
+        When ``False``, an exception is raised if one or more of the statistic's \\
         batch members are undefined.
     name
         Python ``str``, name prefixed to ``Ops`` created by this class.
@@ -95,8 +103,37 @@ class MultivariateNormalDegenerate(tfd.Distribution):
       operation and can be avoided by specifying the corresponding arguments.
     * When you draw samples from the distribution via :meth:`.sample`, it is always
       necessary to compute the eigendecomposition of the distribution's precision
-      matrices once and cache it, because sampling requires both the eigenvalues
-      and eigenvectors.
+      matrices once and cache it, because sampling requires both the eigenvalues and
+      eigenvectors.
+
+    **Details on sampling**
+
+    If we have a singular precision matrix :math:`P`, we can view it as the
+    pseudo-inverse :math:`\\Sigma^+` of the variance-covariance matrix :math:`\\Sigma`.
+    We can obtain :math:`\\Sigma` by finding the singular value decomposition
+
+    .. math::
+        \\Sigma^+ = QA^+Q^T,
+
+    where :math:`Q` is the orthogonal matrix of eigenvectors and :math:`A^+` is the
+    diagonal matrix of singular values of :math:`\\Sigma^+ = P`. If the precision matrix
+    is singular, then :math:`\\text{diag}(A^+)` contains zeroes. Now we take the inverse
+    of the non-zero entries of :math:`\\text{diag}(A^+)`, while the zero entries remain
+    at zero, resulting in a matrix :math:`A`. We can now write
+
+    .. math::
+        \\Sigma = Q A Q^T.
+
+    To sample from :math:`N(\\mu, \\Sigma)`, we first draw a sample
+    :math:`z \\sim N(0, I)` from a standard normal distribution. Next, we transform the
+    sample by applying :math:`x = Q A^{1/2}z`, such that
+    :math:`\\text{Cov}(x) = \\Sigma`:
+
+    .. math::
+        \\text{Cov}(x)  & = Q A^{1/2} I (A^{1/2})^T Q^T \\
+
+                        & = Q A Q^T = \\Sigma
+
     """
 
     def __init__(
@@ -171,6 +208,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         distribution is decomposed into a penalty matrix ``pen`` and an inverse
         smoothing parameter ``var``. Using this constructor, a degenerate multivariate
         normal distribution can be initialized from such a decomposition.
+
 
         Parameters
         ----------
@@ -268,6 +306,16 @@ class MultivariateNormalDegenerate(tfd.Distribution):
             return self._log_pdet
         evals, _ = self.eig
         return _log_pdet(evals, self.rank, tol=self._tol)
+
+    @property
+    def prec(self) -> Array:
+        """Precision matrices."""
+        return self._prec
+
+    @property
+    def loc(self) -> Array:
+        """Locations."""
+        return self._loc
 
     def _sample_n(self, n, seed=None) -> Array:
         shape = [n] + self.batch_shape + self.event_shape
