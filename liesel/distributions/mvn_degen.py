@@ -59,7 +59,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
     """
     A potentially degenerate multivariate normal distribution.
 
-    Provides the alternative constructor :meth:`.from_penalty`. Also implements sampling
+    Provides the alternative constructor :meth:`.from_penalty` and sampling
     via :meth:`.sample`.
 
     This is a simplified code-based illustration of how the log-probability for an array
@@ -80,13 +80,13 @@ class MultivariateNormalDegenerate(tfd.Distribution):
     log_pdet
         The log-pseudo-determinant of the precision matrix. Optional.
     validate_args
-        Python ``bool``, default ``False``. When ``True``, distribution parameters \\
-        are checked for validity despite possibly degrading runtime performance. \\
+        Python ``bool``, default ``False``. When ``True``, distribution parameters \
+        are checked for validity despite possibly degrading runtime performance. \
         When ``False``, invalid inputs may silently render incorrect outputs.
     allow_nan_stats
         Python ``bool``, default ``True``. When ``True``, statistics (e.g., mean, \
         mode, variance) use the value ``NaN`` to indicate the result is undefined. \
-        When ``False``, an exception is raised if one or more of the statistic's \\
+        When ``False``, an exception is raised if one or more of the statistic's \
         batch members are undefined.
     name
         Python ``str``, name prefixed to ``Ops`` created by this class.
@@ -108,15 +108,21 @@ class MultivariateNormalDegenerate(tfd.Distribution):
 
     **Details on sampling**
 
-    If we have a singular precision matrix :math:`P`, we can view it as the
-    pseudo-inverse :math:`\\Sigma^+` of the variance-covariance matrix :math:`\\Sigma`.
-    We can obtain :math:`\\Sigma` by finding the singular value decomposition
+    To draw samples from a denegerate multivariate normal distribution, we 1) draw
+    standard normal samples with mean zero and variance one, 2) transform these samples
+    to have the desired covariance structure, and 3) add the desired mean.
+
+    The main problem is to find out how we have to transform the standard normal
+    samples in step 2. Say that we have a singular precision matrix :math:`P`.
+    We can view it as the generalized inverse of a variance-covariance
+    matrix :math:`\\Sigma`. We can obtain :math:`\\Sigma` by finding the singular
+    value decomposition of the precision matrix, i.e.
 
     .. math::
-        \\Sigma^+ = QA^+Q^T,
+        P = QA^+Q^T,
 
     where :math:`Q` is the orthogonal matrix of eigenvectors and :math:`A^+` is the
-    diagonal matrix of singular values of :math:`\\Sigma^+ = P`. If the precision matrix
+    diagonal matrix of singular values. Note that, if the precision matrix
     is singular, then :math:`\\text{diag}(A^+)` contains zeroes. Now we take the inverse
     of the non-zero entries of :math:`\\text{diag}(A^+)`, while the zero entries remain
     at zero, resulting in a matrix :math:`A`. We can now write
@@ -124,16 +130,21 @@ class MultivariateNormalDegenerate(tfd.Distribution):
     .. math::
         \\Sigma = Q A Q^T.
 
-    To sample from :math:`N(\\mu, \\Sigma)`, we first draw a sample
-    :math:`z \\sim N(0, I)` from a standard normal distribution. Next, we transform the
+    Now we can go through the three steps in detail.
+    To sample from :math:`N(\\mu, \\Sigma)`, we first draw a vector of the desired
+    length :math:`z \\sim N(0, I)` from a standard normal distribution. :math:`I` is the
+    identity matrix of appropriate dimension. Next, we transform the
     sample by applying :math:`x = Q A^{1/2}z`, such that
     :math:`\\text{Cov}(x) = \\Sigma`:
 
     .. math::
         \\text{Cov}(x)  & = Q A^{1/2} I (A^{1/2})^T Q^T \\
 
-                        & = Q A Q^T = \\Sigma
+                        & = Q A Q^T \\
 
+                        & = \\Sigma
+
+    In the last step, we add the desired mean :math:`\\mu` to :math:`x`.
     """
 
     def __init__(
