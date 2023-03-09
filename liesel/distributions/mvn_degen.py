@@ -112,30 +112,29 @@ class MultivariateNormalDegenerate(tfd.Distribution):
     standard normal samples with mean zero and variance one, 2) transform these samples
     to have the desired covariance structure, and 3) add the desired mean.
 
-    The main problem is to find out how we have to transform the standard normal
-    samples in step 2. Say that we have a singular precision matrix :math:`P`.
-    We can view it as the generalized inverse of a variance-covariance
-    matrix :math:`\\Sigma`. We can obtain :math:`\\Sigma` by finding the singular
-    value decomposition of the precision matrix, i.e.
+    The main problem is to find out how we have to transform the standard normal samples
+    in step 2. Say that we have a singular precision matrix :math:`P`. We can view it as
+    the generalized inverse of a variance-covariance matrix :math:`\\Sigma`. We can
+    obtain :math:`\\Sigma` by finding the eigenvalue decomposition of the precision
+    matrix, i.e.
 
     .. math::
         P = QA^+Q^T,
 
     where :math:`Q` is the orthogonal matrix of eigenvectors and :math:`A^+` is the
-    diagonal matrix of singular values. Note that, if the precision matrix
-    is singular, then :math:`\\text{diag}(A^+)` contains zeroes. Now we take the inverse
-    of the non-zero entries of :math:`\\text{diag}(A^+)`, while the zero entries remain
-    at zero, resulting in a matrix :math:`A`. We can now write
+    diagonal matrix of eigenvalues. Note that, if the precision matrix is singular, then
+    :math:`\\text{diag}(A^+)` contains zeroes. Now we take the inverse of the non-zero
+    entries of :math:`\\text{diag}(A^+)`, while the zero entries remain at zero,
+    resulting in a matrix :math:`A`. We can now write
 
     .. math::
         \\Sigma = Q A Q^T.
 
-    Now we can go through the three steps in detail.
-    To sample from :math:`N(\\mu, \\Sigma)`, we first draw a vector of the desired
-    length :math:`z \\sim N(0, I)` from a standard normal distribution. :math:`I` is the
-    identity matrix of appropriate dimension. Next, we transform the
-    sample by applying :math:`x = Q A^{1/2}z`, such that
-    :math:`\\text{Cov}(x) = \\Sigma`:
+    Now we can go through the three steps in detail. We first draw a vector of the
+    desired length :math:`z \\sim N(0, I)` from a standard normal distribution.
+    :math:`I` is the identity matrix of appropriate dimension. Next, we transform the
+    sample by applying :math:`x = Q A^{1/2}z`, such that :math:`\\text{Cov}(x) =
+    \\Sigma`:
 
     .. math::
         \\text{Cov}(x)  & = Q A^{1/2} I (A^{1/2})^T Q^T \\
