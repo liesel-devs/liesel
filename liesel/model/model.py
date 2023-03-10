@@ -341,6 +341,32 @@ class GraphBuilder:
 
         return model
 
+    def convert_dtype(self, dtype: str | jax.numpy.dtype) -> GraphBuilder:
+        """
+        Tries to convert the node values in the graph to the specified data type.
+
+        Works for nodes whose value is an array or pytree_. Nodes whose value is of
+        another type are silently ignored.
+
+        .. _pytree: https://jax.readthedocs.io/en/latest/pytrees.html
+        """
+        nodes, _ = self._all_nodes_and_vars()
+
+        def try_astype(x):
+            try:
+                return x.astype(dtype, copy=False)
+            except AttributeError:
+                return x
+
+        for node in nodes:
+            try:
+                value = jax.tree_map(try_astype, node.value)
+                node.value = value  # type: ignore # data node
+            except AttributeError:
+                pass
+
+        return self
+
     def copy(self) -> GraphBuilder:
         """Returns a shallow copy of the graph builder."""
         gb = GraphBuilder()
