@@ -113,7 +113,8 @@ class MultivariateNormalDegenerate(tfd.Distribution):
     to have the desired covariance structure, and 3) add the desired mean.
 
     The main problem is to find out how we have to transform the standard normal samples
-    in step 2. Say that we have a singular precision matrix :math:`P`. We can view it as
+    in step 2. Say that we have a singular :math:`(m \\times m)`  precision matrix
+    :math:`P`. We can view it as
     the generalized inverse of a variance-covariance matrix :math:`\\Sigma`. We can
     obtain :math:`\\Sigma` by finding the eigenvalue decomposition of the precision
     matrix, i.e.
@@ -141,9 +142,14 @@ class MultivariateNormalDegenerate(tfd.Distribution):
 
                         & = Q A Q^T \\
 
-                        & = \\Sigma
+                        & = \\Sigma.
 
     In the last step, we add the desired mean :math:`\\mu` to :math:`x`.
+    Note that the distribution is not a proper distribution on :math:`\\mathbb{R}^m`,
+    where :math:`m` refers to the number of columns and rows of :math:`P`.
+    Any vector in the null space of :math:`P` can be added to any
+    :math:`x \\in \\mathbb{R}^m` without changing the density. The samples generated
+    using the procedure described above are orthogonal to the null space of :math:`P`.
     """
 
     def __init__(
