@@ -163,28 +163,40 @@ def test_structure(result: SamplingResults):
     infdat = to_arviz_inference_data(result)
     assert infdat.groups() == ["posterior"]
 
-    assert infdat.posterior["foo"].shape == (3, 250, 3)
-    assert infdat.posterior["bar"].shape == (3, 250, 3, 5, 7)
-    assert infdat.posterior["baz"].shape == (
+    assert infdat["posterior"]["foo"].shape == (3, 250, 3)
+    assert infdat["posterior"]["bar"].shape == (3, 250, 3, 5, 7)
+    assert infdat["posterior"]["baz"].shape == (
         3,
         250,
     )
 
 
+def test_structure_warmup(result: SamplingResults):
+    infdat = to_arviz_inference_data(result, include_warmup=True)
+    print(infdat)
+
+    assert "posterior" in infdat.groups() and "warmup_posterior" in infdat.groups()
+
+    assert infdat["warmup_posterior"]["foo"].shape == (3, 50, 3)
+    assert infdat["warmup_posterior"]["bar"].shape == (3, 50, 3, 5, 7)
+    assert infdat["warmup_posterior"]["baz"].shape == (
+        3,
+        50,
+    )
+
+
 def test_attributes(result: SamplingResults):
     infdat = to_arviz_inference_data(result)
-    infdat.posterior.attrs["inference_library"] == "liesel"
-    infdat.posterior.attrs["inference_library_version"] == liesel.__version__
+    infdat["posterior"].attrs["inference_library"] == "liesel"
+    infdat["posterior"].attrs["inference_library_version"] == liesel.__version__
 
 
 def test_posterior_mean(result: SamplingResults):
     infdat = to_arviz_inference_data(result)
-    assert np.allclose(
-        infdat.posterior["foo"].mean(["chain", "draw"]), [175.5, 176.5, 177.5]
-    )
+    means = infdat["posterior"].mean(["chain", "draw"])
 
-    assert np.allclose(
-        infdat.posterior["bar"].mean(["chain", "draw"]), 175.5 * jnp.ones((3, 5, 7))
-    )
+    assert np.allclose(means["foo"], [175.5, 176.5, 177.5])
 
-    assert infdat.posterior["baz"].mean(["chain", "draw"]) == 176.5
+    assert np.allclose(means["bar"], 175.5 * jnp.ones((3, 5, 7)))
+
+    assert means["baz"] == 176.5
