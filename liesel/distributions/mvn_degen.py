@@ -59,7 +59,15 @@ class MultivariateNormalDegenerate(tfd.Distribution):
     """
     A potentially degenerate multivariate normal distribution.
 
-    Provides the alternative constructor :meth:`.from_penalty`.
+    Provides the alternative constructor :meth:`.from_penalty` and sampling
+    via :meth:`.sample`.
+
+    This is a simplified code-based illustration of how the log-probability for an array
+    ``x`` is evaluated::
+
+        xc = x - loc
+        log_prob = -0.5 * (rank * np.log(2*np.pi) - log_pdet) -0.5 * (xc.T @ prec @ xc)
+
 
     Parameters
     ----------
@@ -95,8 +103,53 @@ class MultivariateNormalDegenerate(tfd.Distribution):
       operation and can be avoided by specifying the corresponding arguments.
     * When you draw samples from the distribution via :meth:`.sample`, it is always
       necessary to compute the eigendecomposition of the distribution's precision
-      matrices once and cache it, because sampling requires both the eigenvalues
-      and eigenvectors.
+      matrices once and cache it, because sampling requires both the eigenvalues and
+      eigenvectors.
+
+    **Details on sampling**
+
+    To draw samples from a denegerate multivariate normal distribution, we 1) draw
+    standard normal samples with mean zero and variance one, 2) transform these samples
+    to have the desired covariance structure, and 3) add the desired mean.
+
+    The main problem is to find out how we have to transform the standard normal samples
+    in step 2. Say that we have a singular :math:`(m \\times m)`  precision matrix
+    :math:`P`. We can view it as
+    the generalized inverse of a variance-covariance matrix :math:`\\Sigma`. We can
+    obtain :math:`\\Sigma` by finding the eigenvalue decomposition of the precision
+    matrix, i.e.
+
+    .. math::
+        P = QA^+Q^T,
+
+    where :math:`Q` is the orthogonal matrix of eigenvectors and :math:`A^+` is the
+    diagonal matrix of eigenvalues. Note that, if the precision matrix is singular, then
+    :math:`\\text{diag}(A^+)` contains zeroes. Now we take the inverse of the non-zero
+    entries of :math:`\\text{diag}(A^+)`, while the zero entries remain at zero,
+    resulting in a matrix :math:`A`. We can now write
+
+    .. math::
+        \\Sigma = Q A Q^T.
+
+    Now we can go through the three steps in detail. We first draw a vector of the
+    desired length :math:`z \\sim N(0, I)` from a standard normal distribution.
+    :math:`I` is the identity matrix of appropriate dimension. Next, we transform the
+    sample by applying :math:`x = Q A^{1/2}z`, such that :math:`\\text{Cov}(x) =
+    \\Sigma`:
+
+    .. math::
+        \\text{Cov}(x)  & = Q A^{1/2} I (A^{1/2})^T Q^T \\
+
+                        & = Q A Q^T \\
+
+                        & = \\Sigma.
+
+    In the last step, we add the desired mean :math:`\\mu` to :math:`x`.
+    Note that the distribution is not a proper distribution on :math:`\\mathbb{R}^m`,
+    where :math:`m` refers to the number of columns and rows of :math:`P`.
+    Any vector in the null space of :math:`P` can be added to any
+    :math:`x \\in \\mathbb{R}^m` without changing the density. The samples generated
+    using the procedure described above are orthogonal to the null space of :math:`P`.
     """
 
     def __init__(
@@ -171,6 +224,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         distribution is decomposed into a penalty matrix ``pen`` and an inverse
         smoothing parameter ``var``. Using this constructor, a degenerate multivariate
         normal distribution can be initialized from such a decomposition.
+
 
         Parameters
         ----------
@@ -268,6 +322,16 @@ class MultivariateNormalDegenerate(tfd.Distribution):
             return self._log_pdet
         evals, _ = self.eig
         return _log_pdet(evals, self.rank, tol=self._tol)
+
+    @property
+    def prec(self) -> Array:
+        """Precision matrices."""
+        return self._prec
+
+    @property
+    def loc(self) -> Array:
+        """Locations."""
+        return self._loc
 
     def _sample_n(self, n, seed=None) -> Array:
         shape = [n] + self.batch_shape + self.event_shape
