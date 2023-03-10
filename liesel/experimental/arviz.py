@@ -7,7 +7,20 @@ from ..goose.engine import SamplingResults
 def to_arviz_inference_data(
     results: SamplingResults, include_warmup: bool = False
 ) -> az.InferenceData:
-    """Converts goose's SamplingResults into InferenceData from arviz"""
+    """
+    Converts goose's SamplingResults into InferenceData from arviz.
+
+    Arviz' InferenceData seperates samples from the posterior and the warmup in
+    the groups 'posterior' and 'warmup_posterior'. By default, all summaries and
+    plots use only the data in the group 'posterior'.
+
+    Parameters
+    ----------
+    results
+        The sampling results.
+    include_warmup
+        Whether to include the warmup in the returned object.
+    """
 
     posterior_samples = results.get_posterior_samples()
 
