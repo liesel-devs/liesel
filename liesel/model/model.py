@@ -341,7 +341,9 @@ class GraphBuilder:
 
         return model
 
-    def convert_dtype(self, dtype: str | jax.numpy.dtype) -> GraphBuilder:
+    def convert_dtype(
+        self, _from: str | jax.numpy.dtype, _to: str | jax.numpy.dtype
+    ) -> GraphBuilder:
         """
         Tries to convert the node values in the graph to the specified data type.
 
@@ -354,7 +356,10 @@ class GraphBuilder:
 
         def try_astype(x):
             try:
-                return x.astype(dtype, copy=False)
+                if x.dtype == _from:
+                    return x.astype(_to)
+                else:
+                    return x
             except AttributeError:
                 return x
 
