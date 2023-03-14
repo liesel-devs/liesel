@@ -10,6 +10,12 @@ from _pytest.logging import LogCaptureHandler
 
 import liesel.goose as gs
 import liesel.model as lsl
+from liesel.goose.builder import EngineBuilder
+from liesel.goose.engine import SamplingResults
+from liesel.goose.epoch import EpochConfig, EpochType
+from liesel.goose.models import DictModel
+
+from .mock_kernel import MockKernel
 
 
 def pytest_addoption(parser):
@@ -108,3 +114,75 @@ def add_doctest_imports(doctest_namespace):
     doctest_namespace["jnp"] = jnp
     doctest_namespace["gs"] = gs
     doctest_namespace["lsl"] = lsl
+
+
+@pytest.fixture(scope="module")
+def result() -> SamplingResults:
+    builder = EngineBuilder(0, 3)
+    state = {
+        "foo": jnp.arange(3, dtype=jnp.float32),
+        "bar": jnp.zeros((3, 5, 7)),
+        "baz": jnp.array(1.0),
+    }
+
+    builder.add_kernel(MockKernel(list(state.keys())))
+    builder.set_model(DictModel(log_prob_fn=lambda state: 0.0))
+    builder.set_initial_values(state)
+    builder.set_epochs(
+        [
+            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
+            EpochConfig(EpochType.BURNIN, 50, 1, None),
+            EpochConfig(EpochType.POSTERIOR, 250, 1, None),
+        ]
+    )
+    engine = builder.build()
+    engine.sample_all_epochs()
+    return engine.get_results()
+
+
+@pytest.fixture(scope="module")
+def result_for_quants() -> SamplingResults:
+    builder = EngineBuilder(0, 4)
+    state = {
+        "foo": jnp.arange(5, dtype=jnp.float32),
+        "bar": jnp.zeros((3, 5, 7)),
+        "baz": jnp.array(1.0),
+    }
+
+    builder.add_kernel(MockKernel(list(state.keys())))
+    builder.set_model(DictModel(log_prob_fn=lambda state: 0.0))
+    builder.set_initial_values(state)
+    builder.set_epochs(
+        [
+            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
+            EpochConfig(EpochType.BURNIN, 50, 1, None),
+            EpochConfig(EpochType.POSTERIOR, 250, 1, None),
+        ]
+    )
+    engine = builder.build()
+    engine.sample_all_epochs()
+    return engine.get_results()
+
+
+@pytest.fixture(scope="module")
+def single_chain_result() -> SamplingResults:
+    builder = EngineBuilder(0, 1)
+    state = {
+        "foo": jnp.arange(3, dtype=jnp.float32),
+        "bar": jnp.zeros((3, 5, 7)),
+        "baz": jnp.array(1.0),
+    }
+
+    builder.add_kernel(MockKernel(list(state.keys())))
+    builder.set_model(DictModel(log_prob_fn=lambda state: 0.0))
+    builder.set_initial_values(state)
+    builder.set_epochs(
+        [
+            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
+            EpochConfig(EpochType.BURNIN, 50, 1, None),
+            EpochConfig(EpochType.POSTERIOR, 250, 1, None),
+        ]
+    )
+    engine = builder.build()
+    engine.sample_all_epochs()
+    return engine.get_results()
