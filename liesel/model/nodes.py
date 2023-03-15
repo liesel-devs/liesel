@@ -275,6 +275,14 @@ class Node(ABC):
 
         return self
 
+    @no_model_method
+    def add_inputs(self, *inputs: Any, **kwinputs: Any) -> Node:
+        """Adds non-keyword and keyword input nodes to the existing ones."""
+        inputs = self.inputs + inputs
+        kwinputs = self.kwinputs | kwinputs
+        self.set_inputs(*inputs, **kwinputs)
+        return self
+
     @property
     def state(self) -> NodeState:
         """
