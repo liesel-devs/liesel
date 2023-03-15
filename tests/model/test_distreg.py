@@ -33,39 +33,136 @@ def y(X: jnp.ndarray):
     yield np.asarray(y, dtype=np.float32)
 
 
+class TestDistRegBuilder:
+    def test_init(self) -> None:
+        drb = dr.DistRegBuilder()
+        assert drb is not None
+
+    def test_add_response(self, y) -> None:
+        drb = dr.DistRegBuilder().add_response(y, tfd.Normal)
+
+        assert np.allclose(drb.response.value, y)
+
+    def test_add_predictor(self, y) -> None:
+        drb = (
+            dr.DistRegBuilder()
+            .add_response(y, tfd.Normal)
+            .add_predictor("loc", tfb.Identity)
+        )
+
+        assert "loc" in drb._distributional_parameters
+        assert "loc" in drb.response.dist_node.kwinputs  # type: ignore
+
+    def test_add_p_smooth(self, y, X) -> None:
+        drb = (
+            dr.DistRegBuilder()
+            .add_response(y, tfd.Normal)
+            .add_predictor("loc", tfb.Identity)
+            .add_p_smooth(X, m=0.0, s=0.0, predictor="loc", name="x")
+        )
+
+        assert "x" in drb.groups()
+        smooth_value = drb.groups()["x"]["smooth"].update().value
+        predictor_value = drb._predictors["loc"].update().value
+        assert np.allclose(smooth_value, predictor_value)
+
+    def test_add_np_smooth(self, y, X) -> None:
+        K = jnp.eye(X.shape[1])
+        drb = (
+            dr.DistRegBuilder()
+            .add_response(y, tfd.Normal)
+            .add_predictor("loc", tfb.Identity)
+            .add_np_smooth(X, K=K, a=0.5, b=0.001, predictor="loc", name="x")
+        )
+
+        assert "x" in drb.groups()
+        smooth_value = drb.groups()["x"]["smooth"].update().value
+        predictor_value = drb._predictors["loc"].update().value
+        assert np.allclose(smooth_value, predictor_value)
+
+    def test_build_model(self, y, X) -> None:
+        drb = (
+            dr.DistRegBuilder()
+            .add_response(y, tfd.Normal)
+            .add_predictor("loc", tfb.Identity)
+            .add_predictor("scale", tfb.Exp)
+            .add_p_smooth(X, m=0.0, s=0.0, predictor="loc", name="xloc")
+            .add_p_smooth(X, m=0.0, s=0.0, predictor="scale", name="xscale")
+        )
+
+        model = drb.build_model()
+
+        assert "xloc" in model.groups()
+        assert "xscale" in model.groups()
+
+    def test_build_empty(self, local_caplog) -> None:
+        """An empty model can be built with a warning."""
+        with local_caplog() as caplog:
+            drb = dr.DistRegBuilder()
+            model = drb.build_model()
+            assert len(caplog.records) == 1
+            assert caplog.records[0].levelname == "WARNING"
+            assert model
+
+    def test_wrong_order_not_allowed(self, y, X) -> None:
+        with pytest.raises(RuntimeError, match="No response"):
+            dr.DistRegBuilder().add_predictor("loc", tfb.Identity)
+
+        with pytest.raises(RuntimeError, match="No predictor 'loc' found."):
+            drb = dr.DistRegBuilder().add_response(y, tfd.Normal)
+            drb.add_p_smooth(X, m=0.0, s=0.0, predictor="loc", name="xloc")
+
+    def test_name(self, y, X) -> None:
+        drb = (
+            dr.DistRegBuilder()
+            .add_response(y, tfd.Normal)
+            .add_predictor("loc", tfb.Identity)
+        )
+
+        # returns 'name' argument, if the name is free
+        name = drb._smooth_name(name="x", predictor="loc", prefix="p")
+        assert name == "x"
+
+        # raises error if manually selected name is taken
+        drb.add_p_smooth(X, m=0.0, s=10.0, predictor="loc", name="x")
+        with pytest.raises(RuntimeError, match="already exists"):
+            drb._smooth_name(name="x", predictor="loc", prefix="p")
+
+        # automatically assigns name
+        name = drb._smooth_name(name=None, predictor="loc", prefix="p")
+        assert name == "loc_p0"
+
+        # up-counting works
+        drb.add_p_smooth(X, m=0.0, s=10.0, predictor="loc")
+        name = drb._smooth_name(name=None, predictor="loc", prefix="p")
+        assert name == "loc_p1"
+
+
 @pytest.fixture
-def drb(X: jnp.ndarray, y: jnp.ndarray):
-    drb = dr.DistRegBuilder()
-    m = jnp.zeros(X.shape[1])
-    s = jnp.array([10.0] * (X.shape[1]))
-
-    drb.add_p_smooth(X, m=m, s=s, predictor="loc")
-    drb.add_p_smooth(X, m=m, s=s, predictor="scale")
-
-    drb.add_predictor("loc", tfb.Identity)
-    drb.add_predictor("scale", tfb.Exp)
-
-    drb.add_response(y, tfd.Normal)
+def drb(y, X):
+    drb = (
+        dr.DistRegBuilder()
+        .add_response(y, tfd.Normal)
+        .add_predictor("loc", tfb.Identity)
+        .add_predictor("scale", tfb.Exp)
+        .add_p_smooth(X, m=0.0, s=0.0, predictor="loc", name="xloc")
+        .add_p_smooth(X, m=0.0, s=0.0, predictor="scale", name="xscale")
+    )
 
     yield drb
 
 
 @pytest.fixture
-def drb_np_smooth(X: jnp.ndarray, y: jnp.ndarray):
-    m = jnp.zeros(X.shape[1])
-    s = jnp.array([10.0] * (X.shape[1]))
-
-    drb = dr.DistRegBuilder()
-
+def drb_np_smooth(y, X):
     K = jnp.eye(X.shape[1])
-    name = "np_smooth_test"
-    drb.add_np_smooth(X, K, a=1.0, b=0.001, predictor="loc", name=name)
-    drb.add_p_smooth(X, m=m, s=s, predictor="scale")
-
-    drb.add_predictor("loc", tfb.Identity)
-    drb.add_predictor("scale", tfb.Exp)
-
-    drb.add_response(y, tfd.Normal)
+    drb = (
+        dr.DistRegBuilder()
+        .add_response(y, tfd.Normal)
+        .add_predictor("loc", tfb.Identity)
+        .add_predictor("scale", tfb.Exp)
+        .add_np_smooth(X, K=K, a=0.5, b=0.001, predictor="loc", name="xloc")
+        .add_np_smooth(X, K=K, a=0.5, b=0.001, predictor="scale", name="xscale")
+    )
 
     yield drb
 
@@ -80,205 +177,10 @@ def construct_model_state_from_np_smooth(group: dict[str, Var]) -> dict:
     return model_state
 
 
-class TestDistRegBuilder:
-    def test_add_p_smooth(self, X: jnp.ndarray) -> None:
-        """Tests basic plausibility of adding a parametric smooth."""
-        p = X.shape[1]
-        drb = dr.DistRegBuilder()
-
-        m = jnp.zeros(p)
-        s = jnp.array([10.0] * (p))
-        name = "linreg"
-
-        group = drb.add_p_smooth(X, m=m, s=s, predictor="loc", name=name)  # noqa: F841
-        expected_names = [name + x for x in ["_X", "_m", "_s", "_beta"]]
-        node_names = [node.name for node in drb.vars]
-
-        # assert group is drb.groups[0]
-        # assert len(drb.groups) == 1
-        assert len(drb.vars) == 5
-        # assert drb.groups[0].name == name
-        assert all([name in node_names for name in expected_names])
-
-    def test_add_p_smooth_no_name(self, X: jnp.ndarray) -> None:
-        """If no name is provided, a name should be generated automatically."""
-        p = X.shape[1]
-        drb = dr.DistRegBuilder()
-
-        m = jnp.zeros(p)
-        s = jnp.array([10.0] * (p))
-
-        drb.add_p_smooth(X, m=m, s=s, predictor="loc")
-        # assert drb.groups[0].name == "loc_p0"
-
-    def test_add_p_smooth_two_smooths(self, X: jnp.ndarray) -> None:
-        """It should be possible to add two smooths to the DistRegBuilder."""
-        p = X.shape[1]
-        drb = dr.DistRegBuilder()
-
-        m = jnp.zeros(p)
-        s = jnp.array([10.0] * (p))
-
-        group1 = drb.add_p_smooth(X, m=m, s=s, predictor="loc")  # noqa: F841
-        group2 = drb.add_p_smooth(X, m=m, s=s, predictor="loc")  # noqa: F841
-
-        # assert group1 is not group2
-        # assert drb.groups[0].name != drb.groups[1].name
-        assert len(drb.vars) == 10
-
-    def test_add_p_smooth_two_smooths_equal_names(self, X: jnp.ndarray) -> None:
-        """It should not be possible to add two smooths with equal names."""
-        p = X.shape[1]
-        drb = dr.DistRegBuilder()
-
-        m = jnp.zeros(p)
-        s = jnp.array([10.0] * (p))
-
-        drb.add_p_smooth(X, m=m, s=s, predictor="loc", name="test")
-
-        with pytest.raises(RuntimeError):
-            drb.add_p_smooth(X, m=m, s=s, predictor="loc", name="test")
-
-        len_before_build = len(drb.vars)
-        drb.build_model()
-        len_after_build = len(drb.vars)
-
-        assert len_before_build == 5
-        assert len_after_build == 0
-
-    def test_add_predictor(self, X: jnp.ndarray) -> None:
-        """Tests basic plausibility of adding a predictor corresponding to a smooth."""
-        p = X.shape[1]
-        drb = dr.DistRegBuilder()
-
-        m = jnp.zeros(p)
-        s = jnp.array([10.0] * (p))
-        name = "linreg"
-
-        drb.add_p_smooth(X, m=m, s=s, predictor="loc", name=name)
-        drb_return = drb.add_predictor("loc", tfb.Identity)
-
-        node_names = [node.name for node in drb.vars]
-
-        assert drb_return is drb
-        assert len(drb.vars) == 7
-        assert "loc_pdt" in node_names
-        assert "loc" in node_names
-
-    def test_add_predictor_wrong_name(self, X: jnp.ndarray) -> None:
-        """
-        Adding a predictor with a name that is not already associated with a smooth
-        should lead to an error.
-        """
-        p = X.shape[1]
-        drb = dr.DistRegBuilder()
-
-        m = jnp.zeros(p)
-        s = jnp.array([10.0] * (p))
-        name = "linreg"
-
-        drb.add_p_smooth(X, m=m, s=s, predictor="loc", name=name)
-
-        with pytest.raises(RuntimeError):
-            drb.add_predictor("wrong_name", tfb.Identity)
-
-    def test_add_np_smooth(self, X: jnp.ndarray) -> None:
-        """
-        Tests basic plausibility of adding a non-parametric smooth.
-
-        Note: This test does not include a valid matrix of basis function evaluations,
-        it simply reuses the design matrix X. For the purpose of this test, that should
-        be fine.
-        """
-        drb = dr.DistRegBuilder()
-
-        K = jnp.eye(X.shape[1])
-        name = "np_smooth_test"
-        group = drb.add_np_smooth(  # noqa: F841
-            X, K, a=1.0, b=0.001, predictor="loc", name=name
-        )
-
-        expected_names = [name + x for x in ["_X", "_K", "_a", "_b", "_tau2", "_beta"]]
-        node_names = [node.name for node in drb.vars]
-
-        # assert len(drb.groups) == 1
-        # assert drb.groups[0] is group
-        assert all([name in node_names for name in expected_names])
-
-    def test_add_np_smooth_beta(self, X: jnp.ndarray) -> None:
-        """
-        Asserts that beta is initialized with zeros and has the expected inputs.
-
-        Note: This test does not include a valid matrix of basis function evaluations,
-        it simply reuses the design matrix X. For the purpose of this test, that should
-        be fine.
-        """
-        drb = dr.DistRegBuilder()
-
-        K = jnp.eye(X.shape[1])
-        name = "np_smooth_test"
-        drb.add_np_smooth(X, K, a=1.0, b=0.001, predictor="loc", name=name)
-
-        beta = [n for n in drb.vars if n.name == name + "_beta"][0]
-        expected_input_names = [
-            name + x for x in ["_K_var_value", "_rank_var_value", "_tau2_var_value"]
-        ]
-        input_names = [ip.name for ip in list(beta.all_input_nodes())]
-
-        assert all(beta.value == jnp.zeros(jnp.shape(X)[1]))
-        assert all([name in input_names for name in expected_input_names])
-
-    def test_add_np_smooth_tau2(self, X: jnp.ndarray) -> None:
-        """Asserts that `tau2` is initialized with a value of 10000."""
-        drb = dr.DistRegBuilder()
-
-        K = jnp.eye(X.shape[1])
-        name = "np_smooth_test"
-        drb.add_np_smooth(X, K, a=1.0, b=0.001, predictor="loc", name=name)
-
-        tau2 = [n for n in drb.vars if n.name == name + "_tau2"][0]
-
-        assert tau2.value == 10_000.0
-
-    def test_add_response(self, X: jnp.ndarray, y: jnp.ndarray) -> None:
-        """Tests basic plausibility of adding a response."""
-        drb = dr.DistRegBuilder()
-        m = jnp.zeros(X.shape[1])
-        s = jnp.array([10.0] * (X.shape[1]))
-
-        drb.add_p_smooth(X, m=m, s=s, predictor="loc")
-        drb.add_p_smooth(X, m=m, s=s, predictor="scale")
-
-        drb.add_predictor("loc", tfb.Identity)
-        drb.add_predictor("scale", tfb.Exp)
-
-        drb.add_response(y, tfd.Normal)
-
-        assert drb.response
-        assert drb.build_model()
-
-    def test_add_response_first(self, y: jnp.ndarray) -> None:
-        """
-        Adding a response before the smooths and predictors are set leads to an error.
-        """
-        drb = dr.DistRegBuilder()
-        with pytest.raises(RuntimeError):
-            drb.add_response(y, tfd.Normal)
-
-    def test_build_empty(self, local_caplog) -> None:
-        """An empty model can be built with a warning."""
-        with local_caplog() as caplog:
-            drb = dr.DistRegBuilder()
-            model = drb.build_model()
-            assert len(caplog.records) == 1
-            assert caplog.records[0].levelname == "WARNING"
-            assert model
-
-
 class TestTau2GibbsKernel:
     def test_return_gibbs_kernel(self, drb_np_smooth: dr.DistRegBuilder) -> None:
         """The function should successfully return a Gibbs kernel."""
-        g = drb_np_smooth.build_model().groups()["np_smooth_test"]
+        g = drb_np_smooth.build_model().groups()["xloc"]
         kernel = dr.tau2_gibbs_kernel(g)
         assert isinstance(kernel, gs.GibbsKernel)
 
@@ -287,13 +189,10 @@ class TestTau2GibbsKernel:
         The transition outcome of a single Gibbs transition should be plausible, i.e.
         the drawn value should be within the support of the inverse gamma distribution.
         """
-        g = drb_np_smooth.build_model().groups()["np_smooth_test"]
+        g = drb_np_smooth.build_model().groups()["xloc"]
         kernel = dr.tau2_gibbs_kernel(g)
 
-        def log_prob(model_state):
-            return 0.0
-
-        kernel.set_model(gs.DictModel(log_prob))
+        kernel.set_model(gs.DictModel(lambda model_state: 0.0))
         model_state = construct_model_state_from_np_smooth(g)
 
         epoch_config = gs.EpochConfig(
@@ -336,23 +235,23 @@ class TestDistRegMCMC:
 
     def test_dist_reg_mcmc_np_smooth(self, drb_np_smooth: dr.DistRegBuilder) -> None:
         """
-        When used with a DistRegBuilder that includes one parametric and one
-        non-parametric smooth, the function returns an engine builder with two
-        IWLS kernels and a Gibbs kernel.
+        When used with a DistRegBuilder that includes two
+        non-parametric smooths, the function returns an engine builder with two
+        IWLS kernels and two Gibbs kernel.
         """
         drb = drb_np_smooth
         model = drb.build_model()
         ebuilder = dr.dist_reg_mcmc(model, 42, 2)
-        assert len(ebuilder.kernels) == 3
+        assert len(ebuilder.kernels) == 4
         assert sum(isinstance(k, gs.IWLSKernel) for k in ebuilder.kernels) == 2
-        assert sum(isinstance(k, gs.GibbsKernel) for k in ebuilder.kernels) == 1
+        assert sum(isinstance(k, gs.GibbsKernel) for k in ebuilder.kernels) == 2
 
     def test_dist_reg_mcmc_build_np_smooth(
         self, drb_np_smooth: dr.DistRegBuilder
     ) -> None:
         """
-        When used with a DistRegBuilder that includes one parametric and one
-        non-parametric smooth, the engine builder successfully builds an engine.
+        When used with a DistRegBuilder that includes two
+        non-parametric smooths, the engine builder successfully builds an engine.
         """
         drb = drb_np_smooth
         model = drb.build_model()
