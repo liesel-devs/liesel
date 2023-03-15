@@ -34,7 +34,7 @@ def to_arviz_inference_data(
     parameters. Goose can track more values if specified in the field
     ``position_included``. This might be helpful to let arviz calculate
     information criteria like WAIC. Assuming that the position key
-    ``loglik_pointwise`` correspond to the point-wise evaluated log-likelihood
+    ``loglik_pointwise`` corresponds to the point-wise evaluated log-likelihood
     then the inference data can be slightly changed so that arviz interprets
     these values as intended.
 
