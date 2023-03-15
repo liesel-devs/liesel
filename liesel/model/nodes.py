@@ -133,12 +133,16 @@ class Node(ABC):
 
     Nodes can cache the result of the operations they represent, improving
     the efficiency of the graph. The cached values are part of the model state
-    (see :attr:`.Model.state`), and this way, they can be stored in a chain by
-    Liesel's MCMC engine Goose.
+    (see :attr:`.Model.state`), and can be stored in a chain by Liesel's MCMC engine
+    Goose.
 
-    Additional meta-information can be added by wrapping a node in a :class:`.Var`,
-    which is especially useful if the node represents a random variable, but can also
-    be a good idea in a few other situations.
+    This class is an abstract class that cannot be initialized without defining the
+    :meth:`.update` method. See below for the most important concrete node classes.
+
+    Additional meta-information can be added by wrapping a :class:`.Data` or
+    :class:`.Calc` node in a :class:`.Var`, which is particularly useful if the node
+    represents a random variable, but can also be a good idea in a few other
+    situations.
 
     See Also
     --------
@@ -664,21 +668,24 @@ class NoDist(Dist):
 
 class Var:
     """
-    A variable of a statistical model, typically with a probability distribution.
+    A variable in a statistical model, typically with a probability distribution.
 
     A variable in Liesel is typically a random variable, e.g. an observed or
-    latent variable with a probability distribution or a model parameter with a
-    prior distribution. However, other quantities can also be declared as variables,
-    e.g. fixed data like hyperparameters or design matrices, or quantities that are
-    computed from other nodes, e.g. structured additive predictors in semi-parametric
+    latent variable with a probability distribution, or a model parameter with
+    a prior distribution. Note that observed variables and model parameters should
+    typically be declared with the :func:`.Obs` and :func:`.Param` helper functions.
+    Other quantities can also be declared as variables, e.g. fixed data like
+    hyperparameters or design matrices, or quantities that are computed from
+    other nodes, e.g. structured additive predictors in semi-parametric
     regression models.
 
-    When a :class:`.Node` does not have an associated probability distribution, it is
-    not strictly necessary to declare it as a variable. There is no hard and fast rule
-    when such a node should be declared as a variable and when not. The advantages of
-    declaring a node as a variable are: (1) easier access via the :attr:`.Model.vars`
-    attribute, and (2) more explicit visualization with the :func:`.plot_vars`
-    function.
+    If a :class:`.Data` or :class:`.Calc` node does not have an associated probability
+    distribution, it is possible but not necessary to declare it as a variable. There
+    is no hard and fast rule when a node without a probability distribution should be
+    declared as a variable and when not. The advantages of a variable in this case are:
+    (1) easier access via the :attr:`.Model.vars` attribute, and (2) more explicit
+    visualization with the :func:`.plot_vars` function. This might be particularly
+    desirable for the hyperparameters of a prior distribution.
 
     See Also
     --------
@@ -977,9 +984,10 @@ def Obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> 
     """
     Declares an observed variable.
 
-    If the observed variable is a random variable, i.e. if it has an associated
-    probability distribution, its log-probability is automatically added to the
-    model log-likelihood (see :attr:`.Model.log_lik`).
+    Sets the :attr:`.Var.observed` flag. If the observed variable is a
+    random variable, i.e. if it has an associated probability distribution,
+    its log-probability is automatically added to the model log-likelihood
+    (see :attr:`.Model.log_lik`).
     """
     var = Var(value, distribution, name)
     var.observed = True
@@ -990,9 +998,10 @@ def Param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -
     """
     Declares a parameter variable.
 
-    If the parameter variable is a random variable, i.e. if it has an associated
-    probability distribution, its log-probability is automatically added to the
-    model log-prior (see :attr:`.Model.log_prior`).
+    Sets the :attr:`.Var.parameter` flag. If the parameter variable is a
+    random variable, i.e. if it has an associated probability distribution,
+    its log-probability is automatically added to the model log-prior
+    (see :attr:`.Model.log_prior`).
     """
     var = Var(value, distribution, name)
     var.value_node.monitor = True
