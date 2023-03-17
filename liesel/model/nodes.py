@@ -122,7 +122,43 @@ class NodeState(NamedTuple):
 
 
 class Node(ABC):
-    """A node of a computational graph."""
+    """
+    A node of a computational graph that can cache its value.
+
+    Liesel represents statistical models as directed acyclic graphs (DAGs) of
+    random variables (see :class:`.Var`) and computational nodes. The graph of
+    random variables is built on top of the computational graph. The nodes of the
+    computational graph will typically express computations in JAX returning arrays
+    or pytrees_, but in general, they can represent arbitrary operations in Python.
+
+    Nodes can cache the result of the operations they represent, improving
+    the efficiency of the graph. The cached values are part of the model state
+    (see :attr:`.Model.state`), and can be stored in a chain by Liesel's MCMC engine
+    Goose.
+
+    This class is an abstract class that cannot be initialized without defining the
+    :meth:`.update` method. See below for the most important concrete node classes.
+
+    Additional meta-information can be added by wrapping a :class:`.Data` or
+    :class:`.Calc` node in a :class:`.Var`, which is particularly useful if the node
+    represents a random variable, but can also be a good idea in a few other
+    situations.
+
+    See Also
+    --------
+    .Calc :
+        A node representing a general calculation/operation
+        in JAX or Python.
+    .Data :
+        A node representing some static data.
+    .Dist :
+        A node representing a `TensorFlow Probability`_ distribution,
+        typically for the evaluation of the log-probability.
+
+
+    .. _pytrees: https://jax.readthedocs.io/en/latest/pytrees.html
+    .. _TensorFlow Probability: https://www.tensorflow.org/probability
+    """
 
     def __init__(
         self,
@@ -631,7 +667,31 @@ class NoDist(Dist):
 
 
 class Var:
-    """A variable wrapping a value and a distribution node."""
+    """
+    A variable in a statistical model, typically with a probability distribution.
+
+    A variable in Liesel is typically a random variable, e.g. an observed or
+    latent variable with a probability distribution, or a model parameter with
+    a prior distribution. Note that observed variables and model parameters should
+    typically be declared with the :func:`.Obs` and :func:`.Param` helper functions.
+    Other quantities can also be declared as variables, e.g. fixed data like
+    hyperparameters or design matrices, or quantities that are computed from
+    other nodes, e.g. structured additive predictors in semi-parametric
+    regression models.
+
+    If a :class:`.Data` or :class:`.Calc` node does not have an associated probability
+    distribution, it is possible but not necessary to declare it as a variable. There
+    is no hard and fast rule when a node without a probability distribution should be
+    declared as a variable and when not. The advantages of a variable in this case are:
+    (1) easier access via the :attr:`.Model.vars` attribute, and (2) more explicit
+    visualization with the :func:`.plot_vars` function. This might be particularly
+    desirable for the hyperparameters of a prior distribution.
+
+    See Also
+    --------
+    .Obs : Helper function to declare a variable as an observed quantity.
+    .Param : Helper function to declare a variable as a model parameter.
+    """
 
     __slots__ = (
         "_dist_node",
@@ -921,14 +981,28 @@ class Var:
 
 
 def Obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> Var:
-    """Defines an observed variable."""
+    """
+    Declares an observed variable.
+
+    Sets the :attr:`.Var.observed` flag. If the observed variable is a
+    random variable, i.e. if it has an associated probability distribution,
+    its log-probability is automatically added to the model log-likelihood
+    (see :attr:`.Model.log_lik`).
+    """
     var = Var(value, distribution, name)
     var.observed = True
     return var
 
 
 def Param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> Var:
-    """Defines a parameter variable."""
+    """
+    Declares a parameter variable.
+
+    Sets the :attr:`.Var.parameter` flag. If the parameter variable is a
+    random variable, i.e. if it has an associated probability distribution,
+    its log-probability is automatically added to the model log-prior
+    (see :attr:`.Model.log_prior`).
+    """
     var = Var(value, distribution, name)
     var.value_node.monitor = True
     var.parameter = True
