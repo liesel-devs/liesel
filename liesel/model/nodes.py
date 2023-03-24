@@ -1081,12 +1081,12 @@ class Group:
     >>> my_var = lsl.Var(0.0, name="long_unique_variable_name")
     >>> grp = lsl.Group(name="demo_group", short_name=my_var)
     >>> grp
-    Group<demo_group>
+    Group(demo_group)
 
     Access the variable by its group-specific name:
 
     >>> grp["short_name"]
-    Var<long_unique_variable_name>
+    Var(long_unique_variable_name)
 
     Retrieve the value of a variable from a model state:
 

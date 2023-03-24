@@ -98,10 +98,10 @@ class GraphBuilder:
     >>> c = lsl.Var(lsl.Calc(lambda x, y: x + y, a, b), name="c")
     >>> gb = lsl.GraphBuilder()
     >>> gb.add(c)
-    GraphBuilder<0 nodes, 1 vars>
+    GraphBuilder(0 nodes, 1 vars)
     >>> model = gb.build_model()
     >>> model
-    Model<9 nodes, 3 vars>
+    Model(9 nodes, 3 vars)
     >>> c.value
     3.0
     >>> gb.vars
@@ -296,10 +296,10 @@ class GraphBuilder:
         >>> c = lsl.Var(lsl.Calc(lambda x, y: x + y, a, b), name="c")
         >>> gb = lsl.GraphBuilder()
         >>> gb.add(c)
-        GraphBuilder<0 nodes, 1 vars>
+        GraphBuilder(0 nodes, 1 vars)
         >>> model = gb.build_model()
         >>> model
-        Model<9 nodes, 3 vars>
+        Model(9 nodes, 3 vars)
         >>> c.value
         3.0
         >>> gb.vars
