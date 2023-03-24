@@ -638,7 +638,7 @@ class GraphBuilder:
         return self
 
     def __repr__(self) -> str:
-        brackets = f"<{len(self.nodes)} nodes, {len(self.vars)} vars>"
+        brackets = f"({len(self.nodes)} nodes, {len(self.vars)} vars)"
         return type(self).__name__ + brackets
 
 
@@ -938,7 +938,7 @@ class Model:
         return MappingProxyType(self._vars)
 
     def __repr__(self) -> str:
-        brackets = f"<{len(self._nodes)} nodes, {len(self._vars)} vars>"
+        brackets = f"({len(self._nodes)} nodes, {len(self._vars)} vars)"
         return type(self).__name__ + brackets
 
 

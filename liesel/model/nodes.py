@@ -362,7 +362,7 @@ class Node(ABC):
             self._model = lambda: None
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}<{self.name}>"
+        return f"{type(self).__name__}({self.name})"
 
 
 class TransientNode(Node):
@@ -972,7 +972,7 @@ class Var:
         return not self.strong
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}<{self.name}>"
+        return f"{type(self).__name__}({self.name})"
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1171,4 +1171,4 @@ class Group:
         return self._nodes_and_vars[key]
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}<{self.name}>"
+        return f"{type(self).__name__}({self.name})"
