@@ -140,7 +140,11 @@ Again, the installation is a bit more challenging on Windows, but there are [ins
 
 ## Development
 
-Please run `pre-commit run -a` before committing your work, and make sure the tests don't fail with `pytest --run-mcmc`.
+Please run
+
+1. `pre-commit run -a` before committing your work,
+2. sure the tests don't fail with `pytest --run-mcmc`, and
+3. make sure the examples in your docstrings are up-to-date with `pytest --doctest-modules liesel`
 
 ## Acknowledgements
 
