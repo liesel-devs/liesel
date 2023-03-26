@@ -373,25 +373,27 @@ class GraphBuilder:
 
         class ConversionWrapper:
             def __init__(self, value):
-                self.converted = False
                 self.value = value
+                self.converted = False
 
                 try:
                     if value.dtype == from_dtype:
-                        self.converted = True
                         self.value = value.astype(to_dtype)
+                        self.converted = True
                 except AttributeError:
                     pass
 
         for node in nodes:
             try:
                 wrappers = jax.tree_map(ConversionWrapper, node.value)
-                converted = jax.tree_map(lambda x: x.converted, wrappers)
+
                 value = jax.tree_map(lambda x: x.value, wrappers)
                 node.value = value  # type: ignore # data node
 
+                converted = jax.tree_map(lambda x: x.converted, wrappers)
+
                 if any(jax.tree_util.tree_flatten(converted)[0]):
-                    logger.info(f"Converted dtype of {repr(node)}'s value")
+                    logger.info(f"Converted dtype of {repr(node)}.value")
             except AttributeError:
                 pass
 

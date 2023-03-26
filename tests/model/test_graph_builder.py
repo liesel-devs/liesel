@@ -336,7 +336,7 @@ def test_manual_dtype_conversion(local_caplog) -> None:
 
         assert len(caplog.records) == 1
         assert caplog.records[0].levelname == "INFO"
-        assert caplog.records[0].msg == "Converted dtype of Data<float_node>'s value"
+        assert caplog.records[0].msg == "Converted dtype of Data<float_node>.value"
 
     gb.convert_dtype("int64", "int32")
     assert float_node.value.dtype == "float32"
