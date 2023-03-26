@@ -143,8 +143,8 @@ Again, the installation is a bit more challenging on Windows, but there are [ins
 Please run
 
 1. `pre-commit run -a` before committing your work,
-2. sure the tests don't fail with `pytest --run-mcmc`, and
-3. make sure the examples in your docstrings are up-to-date with `pytest --doctest-modules liesel`
+2. make sure the tests don't fail with `pytest --run-mcmc`, and
+3. make sure the examples in your docstrings are up-to-date with `pytest --doctest-modules liesel`.
 
 ## Acknowledgements
 

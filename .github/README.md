@@ -75,7 +75,7 @@ which is updated automatically if the value of a node is modified.
 model.log_prob
 ```
 
-    Array(-8.635652, dtype=float32)
+    Array(-8.635653, dtype=float32)
 
 ``` python
 model.vars["loc"].value = -0.5
@@ -116,16 +116,16 @@ engine.sample_all_epochs()
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 1, 1, 2 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 1, 1 / 100 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 1, 1 / 100 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 200 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 2, 1 / 200 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 1, 1 / 200 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 500 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 2, 2, 2 / 500 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 1, 2 / 500 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 1, 1 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 1, 1 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Finished warmup
     liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
@@ -140,15 +140,15 @@ gs.Summary(results)
 
 **Parameter summary:**
 
-|             | kernel    |       mean |       sd |    q_0.05 |      q_0.5 |   q_0.95 | sample_size | ess_bulk | ess_tail |    rhat |
-|:------------|:----------|-----------:|---------:|----------:|-----------:|---------:|------------:|---------:|---------:|--------:|
-| (‘loc’, ()) | kernel_00 | -0.0929582 | 0.445374 | -0.834403 | -0.0933727 | 0.624101 |        4000 |  1517.53 |  2235.08 | 1.00088 |
+|             | kernel    |       mean |       sd |    q_0.05 |      q_0.5 |  q_0.95 | sample_size | ess_bulk | ess_tail |    rhat |
+|:------------|:----------|-----------:|---------:|----------:|-----------:|--------:|------------:|---------:|---------:|--------:|
+| (‘loc’, ()) | kernel_00 | -0.0913915 | 0.446812 | -0.832265 | -0.0940755 | 0.63899 |        4000 |  1495.18 |  2133.35 | 1.00132 |
 
 **Error summary:**
 
 |                                                       | count | relative |
 |:------------------------------------------------------|------:|---------:|
-| (‘kernel_00’, 1, ‘divergent transition’, ‘warmup’)    |    43 |  0.01075 |
+| (‘kernel_00’, 1, ‘divergent transition’, ‘warmup’)    |    40 |     0.01 |
 | (‘kernel_00’, 1, ‘divergent transition’, ‘posterior’) |     0 |        0 |
 
 ``` python
@@ -196,9 +196,9 @@ website](https://pygraphviz.github.io/documentation/stable/install.html#windows)
 Please run
 
 1.  `pre-commit run -a` before committing your work,
-2.  sure the tests don’t fail with `pytest --run-mcmc`, and
+2.  make sure the tests don’t fail with `pytest --run-mcmc`, and
 3.  make sure the examples in your docstrings are up-to-date with
-    `pytest --doctest-modules liesel`
+    `pytest --doctest-modules liesel`.
 
 ## Acknowledgements
 
