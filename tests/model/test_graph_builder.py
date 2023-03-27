@@ -1,4 +1,5 @@
 import jax.numpy as jnp
+import numpy as np
 import pytest
 import tensorflow_probability.substrates.jax as tfp
 import tensorflow_probability.substrates.numpy.distributions as nd
@@ -317,3 +318,36 @@ def test_add_same_group_twice() -> None:
     g1 = lnodes.Group("g1", var1=v1)
     gb = lmodel.GraphBuilder().add_groups(g1, g1)
     assert v1 in gb.vars
+
+
+def test_manual_dtype_conversion(local_caplog) -> None:
+    float_node = lnodes.Data(np.zeros(5, dtype="float64"), _name="float_node")
+    int_node = lnodes.Data(np.zeros(5, dtype="int64"), _name="int_node")
+
+    gb = lmodel.GraphBuilder()
+    gb.add(float_node, int_node, to_float32=False)
+    assert float_node.value.dtype == "float64"
+    assert int_node.value.dtype == "int64"
+
+    with local_caplog() as caplog:
+        gb.convert_dtype("float64", "float32")
+        assert float_node.value.dtype == "float32"
+        assert int_node.value.dtype == "int64"
+
+        assert len(caplog.records) == 1
+        assert caplog.records[0].levelname == "INFO"
+        assert caplog.records[0].msg == "Converted dtype of Data<float_node>.value"
+
+    gb.convert_dtype("int64", "int32")
+    assert float_node.value.dtype == "float32"
+    assert int_node.value.dtype == "int32"
+
+
+def test_auto_dtype_conversion() -> None:
+    float_node = lnodes.Data(np.zeros(5, dtype="float64"), _name="float_node")
+    int_node = lnodes.Data(np.zeros(5, dtype="int64"), _name="int_node")
+
+    gb = lmodel.GraphBuilder()
+    gb.add(float_node, int_node)
+    assert float_node.value.dtype == "float32"
+    assert int_node.value.dtype == "int64"
