@@ -138,18 +138,191 @@ results = engine.get_results()
 gs.Summary(results)
 ```
 
-**Parameter summary:**
-
-|             | kernel    |       mean |       sd |    q_0.05 |      q_0.5 |  q_0.95 | sample_size | ess_bulk | ess_tail |    rhat |
-|:------------|:----------|-----------:|---------:|----------:|-----------:|--------:|------------:|---------:|---------:|--------:|
-| (‘loc’, ()) | kernel_00 | -0.0913915 | 0.446812 | -0.832265 | -0.0940755 | 0.63899 |        4000 |  1495.18 |  2133.35 | 1.00132 |
-
-**Error summary:**
-
-|                                                       | count | relative |
-|:------------------------------------------------------|------:|---------:|
-| (‘kernel_00’, 1, ‘divergent transition’, ‘warmup’)    |    40 |     0.01 |
-| (‘kernel_00’, 1, ‘divergent transition’, ‘posterior’) |     0 |        0 |
+<p>
+<strong>Parameter summary:</strong>
+</p>
+<table border="0" class="dataframe">
+<thead>
+<tr style="text-align: right;">
+<th>
+</th>
+<th>
+</th>
+<th>
+kernel
+</th>
+<th>
+mean
+</th>
+<th>
+sd
+</th>
+<th>
+q_0.05
+</th>
+<th>
+q_0.5
+</th>
+<th>
+q_0.95
+</th>
+<th>
+sample_size
+</th>
+<th>
+ess_bulk
+</th>
+<th>
+ess_tail
+</th>
+<th>
+rhat
+</th>
+</tr>
+<tr>
+<th>
+parameter
+</th>
+<th>
+index
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th>
+loc
+</th>
+<th>
+()
+</th>
+<td>
+kernel_00
+</td>
+<td>
+-0.091
+</td>
+<td>
+0.447
+</td>
+<td>
+-0.832
+</td>
+<td>
+-0.094
+</td>
+<td>
+0.639
+</td>
+<td>
+4000
+</td>
+<td>
+1495.178
+</td>
+<td>
+2133.346
+</td>
+<td>
+1.001
+</td>
+</tr>
+</tbody>
+</table>
+<p>
+<strong>Error summary:</strong>
+</p>
+<table border="0" class="dataframe">
+<thead>
+<tr style="text-align: right;">
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+count
+</th>
+<th>
+relative
+</th>
+</tr>
+<tr>
+<th>
+kernel
+</th>
+<th>
+error_code
+</th>
+<th>
+error_msg
+</th>
+<th>
+phase
+</th>
+<th>
+</th>
+<th>
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th rowspan="2" valign="top">
+kernel_00
+</th>
+<th rowspan="2" valign="top">
+1
+</th>
+<th rowspan="2" valign="top">
+divergent transition
+</th>
+<th>
+warmup
+</th>
+<td>
+40
+</td>
+<td>
+0.010
+</td>
+</tr>
+<tr>
+<th>
+posterior
+</th>
+<td>
+0
+</td>
+<td>
+0.000
+</td>
+</tr>
+</tbody>
+</table>
 
 ``` python
 gs.plot_param(results, param="loc")
