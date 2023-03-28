@@ -11,20 +11,26 @@ knitr:
 <!-- README.md is generated from README.qmd. Please edit that file -->
 
 ```{r}
+#| label: r-setup
 #| include: false
 
 unlink("README-files", recursive = TRUE)
-rliesel::use_liesel_venv()
 ```
 
 ```{python}
+#| label: py-setup
 #| include: false
 
 import logging
 
+import liesel.goose as gs
 import pandas as pd
 
 logging.getLogger("jax._src.lib.xla_bridge").setLevel(logging.ERROR)
+
+gs.Summary.__repr__ = gs.Summary._repr_html_
+gs.Summary._repr_markdown_ = gs.Summary._repr_html_
+pd.options.display.float_format = "{:.3f}".format
 pd.options.display.html.border = 0
 ```
 
@@ -140,7 +146,11 @@ Again, the installation is a bit more challenging on Windows, but there are [ins
 
 ## Development
 
-Please run `pre-commit run -a` before committing your work, and make sure the tests don't fail with `pytest --run-mcmc`.
+Please run
+
+1. `pre-commit run -a` before committing your work,
+2. make sure the tests don't fail with `pytest --run-mcmc`, and
+3. make sure the examples in your docstrings are up-to-date with `pytest --doctest-modules liesel`.
 
 ## Acknowledgements
 

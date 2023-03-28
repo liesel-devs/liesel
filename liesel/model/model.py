@@ -231,8 +231,18 @@ class GraphBuilder:
         self._do_set_missing_names(nodes, prefix="n")
         return self
 
-    def add(self, *args: Node | Var | GraphBuilder) -> GraphBuilder:
-        """Adds nodes, variables or other graph builders to the graph."""
+    def add(
+        self, *args: Node | Var | GraphBuilder, to_float32: bool = True
+    ) -> GraphBuilder:
+        """
+        Adds nodes, variables or other graph builders to the graph.
+
+        Parameters
+        ----------
+        to_float32
+            Whether to convert the dtype of the values of the added nodes \
+            from float64 to float32.
+        """
 
         for arg in args:
             if isinstance(arg, Node):
@@ -245,17 +255,21 @@ class GraphBuilder:
             else:
                 raise RuntimeError(f"Cannot add {type(arg).__name__} to graph builder")
 
+        if to_float32:
+            self.convert_dtype("float64", "float32")
+
         return self
 
-    def groups(self) -> dict[str, Group]:
-        """Collects the groups from all nodes and variables."""
-        nodes, _vars = self._all_nodes_and_vars()
-        g1 = {g.name: g for n in nodes for g in n.groups.values()}
-        g2 = {g.name: g for v in _vars for g in v.groups.values()}
-        return g1 | g2
+    def add_groups(self, *groups: Group, to_float32: bool = True) -> GraphBuilder:
+        """
+        Adds groups to the graph.
 
-    def add_groups(self, *groups: Group) -> GraphBuilder:
-        """Adds groups to the graph."""
+        Parameters
+        ----------
+        to_float32
+            Whether to convert the dtype of the values of the added nodes \
+            from float64 to float32.
+        """
 
         for group in groups:
             old = self.groups()
@@ -267,6 +281,9 @@ class GraphBuilder:
                 )
 
             self.add(*group.nodes_and_vars.values())
+
+        if to_float32:
+            self.convert_dtype("float64", "float32")
 
         return self
 
@@ -341,6 +358,47 @@ class GraphBuilder:
 
         return model
 
+    def convert_dtype(
+        self, from_dtype: str | jax.numpy.dtype, to_dtype: str | jax.numpy.dtype
+    ) -> GraphBuilder:
+        """
+        Tries to convert the node values in the graph to the specified data type.
+
+        Works for nodes whose value is an array or pytree_. Nodes whose value is of
+        another type are silently ignored.
+
+        .. _pytree: https://jax.readthedocs.io/en/latest/pytrees.html
+        """
+        nodes, _ = self._all_nodes_and_vars()
+
+        class ConversionWrapper:
+            def __init__(self, value):
+                self.value = value
+                self.converted = False
+
+                try:
+                    if value.dtype == from_dtype:
+                        self.value = value.astype(to_dtype)
+                        self.converted = True
+                except AttributeError:
+                    pass
+
+        for node in nodes:
+            try:
+                wrappers = jax.tree_map(ConversionWrapper, node.value)
+
+                value = jax.tree_map(lambda x: x.value, wrappers)
+                node.value = value  # type: ignore # data node
+
+                converted = jax.tree_map(lambda x: x.converted, wrappers)
+
+                if any(jax.tree_util.tree_flatten(converted)[0]):
+                    logger.info(f"Converted dtype of {repr(node)}.value")
+            except AttributeError:
+                pass
+
+        return self
+
     def copy(self) -> GraphBuilder:
         """Returns a shallow copy of the graph builder."""
         gb = GraphBuilder()
@@ -364,6 +422,13 @@ class GraphBuilder:
         _, _vars = self._all_nodes_and_vars()
         counter = Counter(var.name for var in _vars if var.name)
         return dict(counter.most_common())
+
+    def groups(self) -> dict[str, Group]:
+        """Collects the groups from all nodes and variables."""
+        nodes, _vars = self._all_nodes_and_vars()
+        g1 = {g.name: g for n in nodes for g in n.groups.values()}
+        g2 = {g.name: g for v in _vars for g in v.groups.values()}
+        return g1 | g2
 
     @property
     def log_lik_node(self) -> Node | None:

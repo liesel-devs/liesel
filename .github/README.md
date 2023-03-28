@@ -75,14 +75,14 @@ which is updated automatically if the value of a node is modified.
 model.log_prob
 ```
 
-    DeviceArray(-8.635653, dtype=float32)
+    Array(-8.635653, dtype=float32)
 
 ``` python
 model.vars["loc"].value = -0.5
 model.log_prob
 ```
 
-    DeviceArray(-9.031153, dtype=float32)
+    Array(-9.031153, dtype=float32)
 
 We can estimate the mean parameter with Goose and a NUTS sampler.
 Goose’s workhorse to run an MCMC algorithm is the `Engine`, which can be
@@ -138,90 +138,190 @@ results = engine.get_results()
 gs.Summary(results)
 ```
 
-<p><strong>Parameter summary:</strong></p>
+<p>
+<strong>Parameter summary:</strong>
+</p>
 <table border="0" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th></th>
-      <th>kernel</th>
-      <th>mean</th>
-      <th>sd</th>
-      <th>q_0.05</th>
-      <th>q_0.5</th>
-      <th>q_0.95</th>
-      <th>sample_size</th>
-      <th>ess_bulk</th>
-      <th>ess_tail</th>
-      <th>rhat</th>
-    </tr>
-    <tr>
-      <th>parameter</th>
-      <th>index</th>
-      <th></th>
-      <th></th>
-      <th></th>
-      <th></th>
-      <th></th>
-      <th></th>
-      <th></th>
-      <th></th>
-      <th></th>
-      <th></th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>loc</th>
-      <th>()</th>
-      <td>kernel_00</td>
-      <td>-0.091391</td>
-      <td>0.446812</td>
-      <td>-0.832265</td>
-      <td>-0.094075</td>
-      <td>0.63899</td>
-      <td>4000</td>
-      <td>1495.17777</td>
-      <td>2133.345866</td>
-      <td>1.001324</td>
-    </tr>
-  </tbody>
+<thead>
+<tr style="text-align: right;">
+<th>
+</th>
+<th>
+</th>
+<th>
+kernel
+</th>
+<th>
+mean
+</th>
+<th>
+sd
+</th>
+<th>
+q_0.05
+</th>
+<th>
+q_0.5
+</th>
+<th>
+q_0.95
+</th>
+<th>
+sample_size
+</th>
+<th>
+ess_bulk
+</th>
+<th>
+ess_tail
+</th>
+<th>
+rhat
+</th>
+</tr>
+<tr>
+<th>
+parameter
+</th>
+<th>
+index
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th>
+loc
+</th>
+<th>
+()
+</th>
+<td>
+kernel_00
+</td>
+<td>
+-0.091
+</td>
+<td>
+0.447
+</td>
+<td>
+-0.832
+</td>
+<td>
+-0.094
+</td>
+<td>
+0.639
+</td>
+<td>
+4000
+</td>
+<td>
+1495.178
+</td>
+<td>
+2133.346
+</td>
+<td>
+1.001
+</td>
+</tr>
+</tbody>
 </table>
-<p><strong>Error summary:</strong></p>
+<p>
+<strong>Error summary:</strong>
+</p>
 <table border="0" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th></th>
-      <th></th>
-      <th></th>
-      <th>count</th>
-      <th>relative</th>
-    </tr>
-    <tr>
-      <th>kernel</th>
-      <th>error_code</th>
-      <th>error_msg</th>
-      <th>phase</th>
-      <th></th>
-      <th></th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th rowspan="2" valign="top">kernel_00</th>
-      <th rowspan="2" valign="top">1</th>
-      <th rowspan="2" valign="top">divergent transition</th>
-      <th>warmup</th>
-      <td>40</td>
-      <td>0.01</td>
-    </tr>
-    <tr>
-      <th>posterior</th>
-      <td>0</td>
-      <td>0.00</td>
-    </tr>
-  </tbody>
+<thead>
+<tr style="text-align: right;">
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+count
+</th>
+<th>
+relative
+</th>
+</tr>
+<tr>
+<th>
+kernel
+</th>
+<th>
+error_code
+</th>
+<th>
+error_msg
+</th>
+<th>
+phase
+</th>
+<th>
+</th>
+<th>
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th rowspan="2" valign="top">
+kernel_00
+</th>
+<th rowspan="2" valign="top">
+1
+</th>
+<th rowspan="2" valign="top">
+divergent transition
+</th>
+<th>
+warmup
+</th>
+<td>
+40
+</td>
+<td>
+0.010
+</td>
+</tr>
+<tr>
+<th>
+posterior
+</th>
+<td>
+0
+</td>
+<td>
+0.000
+</td>
+</tr>
+</tbody>
 </table>
 
 ``` python
@@ -266,8 +366,12 @@ website](https://pygraphviz.github.io/documentation/stable/install.html#windows)
 
 ## Development
 
-Please run `pre-commit run -a` before committing your work, and make
-sure the tests don’t fail with `pytest --run-mcmc`.
+Please run
+
+1.  `pre-commit run -a` before committing your work,
+2.  make sure the tests don’t fail with `pytest --run-mcmc`, and
+3.  make sure the examples in your docstrings are up-to-date with
+    `pytest --doctest-modules liesel`.
 
 ## Acknowledgements
 
