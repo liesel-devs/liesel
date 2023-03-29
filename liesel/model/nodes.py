@@ -362,7 +362,7 @@ class Node(ABC):
             self._model = lambda: None
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}<{self.name}>"
+        return f'{type(self).__name__}(name="{self.name}")'
 
 
 class TransientNode(Node):
@@ -972,7 +972,7 @@ class Var:
         return not self.strong
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}<{self.name}>"
+        return f'{type(self).__name__}(name="{self.name}")'
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1081,12 +1081,12 @@ class Group:
     >>> my_var = lsl.Var(0.0, name="long_unique_variable_name")
     >>> grp = lsl.Group(name="demo_group", short_name=my_var)
     >>> grp
-    Group<demo_group>
+    Group(name="demo_group")
 
     Access the variable by its group-specific name:
 
     >>> grp["short_name"]
-    Var<long_unique_variable_name>
+    Var(name="long_unique_variable_name")
 
     Retrieve the value of a variable from a model state:
 
@@ -1171,4 +1171,4 @@ class Group:
         return self._nodes_and_vars[key]
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}<{self.name}>"
+        return f'{type(self).__name__}(name="{self.name}")'

@@ -98,10 +98,10 @@ class GraphBuilder:
     >>> c = lsl.Var(lsl.Calc(lambda x, y: x + y, a, b), name="c")
     >>> gb = lsl.GraphBuilder()
     >>> gb.add(c)
-    GraphBuilder<0 nodes, 1 vars>
+    GraphBuilder(0 nodes, 1 vars)
     >>> model = gb.build_model()
     >>> model
-    Model<9 nodes, 3 vars>
+    Model(9 nodes, 3 vars)
     >>> c.value
     3.0
     >>> gb.vars
@@ -313,10 +313,10 @@ class GraphBuilder:
         >>> c = lsl.Var(lsl.Calc(lambda x, y: x + y, a, b), name="c")
         >>> gb = lsl.GraphBuilder()
         >>> gb.add(c)
-        GraphBuilder<0 nodes, 1 vars>
+        GraphBuilder(0 nodes, 1 vars)
         >>> model = gb.build_model()
         >>> model
-        Model<9 nodes, 3 vars>
+        Model(9 nodes, 3 vars)
         >>> c.value
         3.0
         >>> gb.vars
@@ -703,7 +703,7 @@ class GraphBuilder:
         return self
 
     def __repr__(self) -> str:
-        brackets = f"<{len(self.nodes)} nodes, {len(self.vars)} vars>"
+        brackets = f"({len(self.nodes)} nodes, {len(self.vars)} vars)"
         return type(self).__name__ + brackets
 
 
@@ -1003,7 +1003,7 @@ class Model:
         return MappingProxyType(self._vars)
 
     def __repr__(self) -> str:
-        brackets = f"<{len(self._nodes)} nodes, {len(self._vars)} vars>"
+        brackets = f"({len(self._nodes)} nodes, {len(self._vars)} vars)"
         return type(self).__name__ + brackets
 
 
