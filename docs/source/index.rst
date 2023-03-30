@@ -6,16 +6,9 @@ Liesel: A Probabilistic Programming Framework
 
 .. toctree::
    :hidden:
-   :maxdepth: 2
-   :caption: Tutorials
+   :maxdepth: 1
 
-   tutorials/md/01-lin-reg
-   tutorials/md/01a-transform
-   tutorials/md/02-ls-reg
-   tutorials/md/03-gev
-   tutorials/md/04-mcycle
-   tutorials/md/05-reproducibility
-   tutorials/md/06-pymc
+   tutorials_overview
 
 
 API Reference
