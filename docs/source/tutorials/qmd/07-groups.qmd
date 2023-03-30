@@ -4,7 +4,7 @@ engine: knitr
 
 # Advanced Group Usage
 
-This is a tutorial on how liesel's {class}`.Group` class can be used to derive new
+This is a tutorial on how Liesel's {class}`.Group` class can be used to derive new
 classes that represent re-usable model parts. This tutorial covers the following parts:
 
 1. Derive new classes from {class}`.Group` to represent related {class}`.Var`s.
@@ -16,17 +16,15 @@ classes that represent re-usable model parts. This tutorial covers the following
 As the topic for this group tutorial, we will create groups for a semiparametric regression model
 using Bayesian P-Splines. In this tutorial, we only give minimal background on the model itself - instead, for details on the model, the interested reader should consider the original paper by [Lang & Brezger (2012)](https://doi.org/10.1198/1061860043010).
 
-In Bayesian P-Splines, we are working with a rank-deficient (generate) multivariate
+In Bayesian P-Splines, we are working with a rank-deficient (degenerate) multivariate
 normal prior on a vector of spline coefficients $\boldsymbol{\beta}$. The unnormalized prior can be written as
-
 $$
 p(\boldsymbol{\beta}) \propto \exp\left(
     - \frac{1}{2\tau^2}
     \boldsymbol{\beta}^T \boldsymbol{K} \boldsymbol{\beta}
     \right),
 $$
-
-where the variance parameter $\tau^2$ controls the amount of smoothness (high $\tau^2$ means low smoothness) and corresponds to an inverse smoothing parameter. $\boldsymbol{K}$ is an appropriately defined penalty matrix, commonly a rank-deficient squared second order difference matrix.
+where $\boldsymbol{K}$ is an appropriately defined penalty matrix, commonly a rank-deficient squared second order difference matrix where the variance and tje parameter $\tau^2$ controls the amount of strength of the penalty (usually a large $\tau^2$ allows for a wiggly function) and corresponds to an inverse smoothing parameter.
 
 In Bayesian P-Splines, the variance parameter $\tau^2$ receives a
 hyperprior. A common choice is to set
@@ -74,8 +72,8 @@ class VarianceIG(lsl.Group):
     def __init__(
         self, name: str, a: float, b: float, start_value: float = 1000.0
     ) -> None:
-        a_var = lsl.Var(a, name=name + "_a")
-        b_var = lsl.Var(b, name=name + "_b")
+        a_var = lsl.Var(a, name=f"{name}_a")
+        b_var = lsl.Var(b, name=f"{name}_b")
 
         prior = lsl.Dist(tfd.InverseGamma, concentration=a_var, scale=b_var)
         tau2 = lsl.Param(start_value, distribution=prior, name=name)
@@ -91,11 +89,11 @@ Next, we create the group for our spline coefficient in a very similar way.
 ```{python}
 class SplineCoef(lsl.Group):
     def __init__(self, name: str, penalty: Array, tau2: lsl.Param) -> None:
-        penalty_var = lsl.Var(penalty, name=name + "_penalty")
+        penalty_var = lsl.Var(penalty, name=f"{name}_penalty")
 
         # we save the rank of the penalty matrix here to use it later in our
         # gibbs kernel
-        rank = lsl.Data(np.linalg.matrix_rank(penalty), _name=name + "_rank")
+        rank = lsl.Data(np.linalg.matrix_rank(penalty), _name=f"{name}_rank")
 
         prior = lsl.Dist(
             MultivariateNormalDegenerate.from_penalty,
@@ -166,7 +164,7 @@ class PSpline(lsl.Group):
         self, name, basis_matrix: Array, penalty: Array, tau2_group: lsl.Group
     ) -> None:
         coef_group = SplineCoef(
-            name=name + "_coef", penalty=penalty, tau2=tau2_group["tau2"]
+            name=f"{name}_coef", penalty=penalty, tau2=tau2_group["tau2"]
         )
 
         basis_matrix = lsl.Obs(basis_matrix, name="basis_matrix")
@@ -196,13 +194,13 @@ To see what we have created, let's initialize a toy example of our group to look
 resulting graph. First, we create the group:
 
 ```{python}
-x = np.random.uniform(size=(15, 10)) # NOT a valid basis matrix, just for show!
+basis_matrix = np.random.uniform(size=(15, 10)) # NOT a valid basis matrix, just for show!
 
 second_diff = np.diff(np.eye(10), n=2, axis=0)
 penalty = second_diff.T @ second_diff
 
 tau2_group = VarianceIG(name="tau2", a=0.01, b=0.01)
-p_spline = PSpline(name="p_spline", basis_matrix=x, penalty=penalty, tau2_group=tau2_group)
+p_spline = PSpline(name="p_spline", basis_matrix=basis_matrix, penalty=penalty, tau2_group=tau2_group)
 ```
 
 Next, we add this group to a {class}`.GraphBuilder`, build a model and plot the graph:
@@ -292,10 +290,10 @@ class VarianceIG(lsl.Group):
     def __init__(
         self, name: str, a: float, b: float, start_value: float = 1000.0
     ) -> None:
-        self.a = lsl.Var(a, name=name + "_a")
+        self.a = lsl.Var(a, name="f{name}_a")
         """Prior shape variable."""
 
-        self.b = lsl.Var(b, name=name + "_b")
+        self.b = lsl.Var(b, name="f{name}_b")
         """Prior scale variable."""
 
         prior = lsl.Dist(tfd.InverseGamma, concentration=a_var, scale=b_var)
