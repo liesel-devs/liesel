@@ -302,7 +302,7 @@ class VarianceIG(lsl.Group):
         self.tau2 = lsl.Param(start_value, distribution=prior, name=name)
         """Variance parameter variable."""
 
-        super().__init__(name=name, a=a_var, b=b_var, tau2=tau2)
+        super().__init__(name=name, a=self.a, b=self.b, tau2=self.tau2)
 ```
 
 This concludes our tutorial on group usage.
