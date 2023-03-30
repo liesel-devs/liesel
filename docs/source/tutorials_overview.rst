@@ -22,8 +22,9 @@ a comparison of different samplers, and more:
    :maxdepth: 1
    :caption: Advanced
 
-   tutorials/md/07-groups
    tutorials/md/03-gev
    tutorials/md/04-mcycle
    tutorials/md/05-reproducibility
    tutorials/md/06-pymc
+   tutorials/md/07-groups
+
