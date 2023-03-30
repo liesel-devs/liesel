@@ -32,7 +32,7 @@ prettier plots of the model graphs, see the [README][5] in the main repository.
 # Tutorials
 
 To start working with Liesel, our tutorials might come in handy, starting with
-a tutorial on [linear regression](tutorials/md/01-lin-reg.md#linear-regression).
+a tutorial on [linear regression](tutorials/md/01-lin-reg.md#linear-regression). An overview of our tutorials can be found here: [Liesel tutorials](tutorials_overview.rst).
 
 
 # Further Reading
