@@ -93,7 +93,6 @@ html_logo = "../../misc/logo/logo-light.png"
 html_theme_options = {
     "repository_url": "https://github.com/liesel-devs/liesel",
     "use_repository_button": True,
-    "logo_only": True,
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,
