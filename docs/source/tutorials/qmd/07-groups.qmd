@@ -20,8 +20,14 @@ minimal background on the model itself - instead, for details on the model, the
 interested reader should consider the original paper by [Lang & Brezger
 (2012)](https://doi.org/10.1198/1061860043010).
 
-In Bayesian P-Splines, we are working with a rank-deficient (degenerate)
-multivariate normal prior on a vector of spline coefficients
+In Bayesian P-Splines, we try to estimate a function $f(x)$ of a covariate $x$ - which
+may, for example represented the relationship between $x$ and the response's mean. To
+implement the estination, we parameterize the functione estimate by the product of
+a design matrix of basis function evaluations $\boldsymbol{B}(x)$ and a vector of
+spline coefficients $\boldsymbol{\beta}$, i.e.
+$f(x) \approx \boldsymbol{B}(x)\boldsymbol{\beta}$.
+The goal is to estimate $\boldsymbol{\beta}$. In Bayesian P-Splines, we are commonly
+working with a rank-deficient (degenerate) multivariate normal prior on
 $\boldsymbol{\beta}$. The unnormalized prior can be written as
 
 $$
@@ -159,9 +165,9 @@ coef_group.vars
 
 ## A complete P-Spline group
 
-In this last step, we create overarching group that incorporates the observed
-basis matrix of our spline and uses the parameter groups to evaluate the smooth
-function. Note the following:
+In this last step, we create an overarching group that incorporates the observed
+basis matrix of our spline and evaluates the estimated
+function $\hat{f}(x) = \boldsymbol{B}(x)\hat{\boldsymbol{\beta}}$. Note the following:
 
 1. Here, we create a `SplineCoef` instance *inside* the new group's `__init__`, because
    this step is always the same with P-Splines, once we know the penalty and the variance
@@ -171,7 +177,9 @@ function. Note the following:
    our `PSpline` class very flexible: we could easily replace the `IGVariance` group
    with another group that represents a different prior for $\tau^2$. For this `PSpline`
    group, it is only important that there is a key `"tau2"` in the `tau2_group`.
-3. In our `super().__init__` call at the end, we make sure to add not only the
+3. In the code below, we represent $\hat{f}(x)$ with a variable named `smooth` to stay
+   consistent with the terminology used in {class}`.DistRegBuilder`.
+4. In our `super().__init__` call at the end, we make sure to add not only the
    Vars `basis_matrix` and `smooth` that we directly created, but also all
    members of the `coef_group` and `tau2_group`. That way, we can access all
    relevant vars just from this overarching `PSpline` group.
