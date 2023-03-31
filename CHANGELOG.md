@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.3] - 2023-03-31
+
+### What's new?
+
+- :book: Improved documentation (#47, #48, @jobrachem, @hriebl)
+- :sparkles:  Added convert_dtype to graph builder (#50, @hriebl)
+- :sparkles: [New overview page](https://docs.liesel-project.org/en/latest/tutorials_overview.html) for tutorials (#62, @jobrachem)
+- ✨ [New tutorial](https://docs.liesel-project.org/en/latest/tutorials/md/07-groups.html) on advanced group usage (#63, @jobrachem)
+- :sparkles: Added a method to convert sampling results to arviz's inference data (#49, @wiep)
+- :construction: Changes `__repr__` for multiple classes in `liesel.model` (#57, @wiep)
+
 ## [0.2.2] - 2023-03-08
 
 ### What's new?
