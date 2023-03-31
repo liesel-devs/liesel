@@ -1,3 +1,14 @@
+#########################
+#### Liesel specific ####
+#########################
+
+# ignore compiled tutorials
+/docs/source/tutorials/
+
+#########################
+####     General    #####
+#########################
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
