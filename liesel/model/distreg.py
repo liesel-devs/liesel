@@ -4,6 +4,8 @@ Distributional regression.
 
 from __future__ import annotations
 
+from collections import defaultdict
+
 import jax.numpy as jnp
 import jax.random
 import numpy as np
@@ -33,13 +35,12 @@ matrix_rank = np.linalg.matrix_rank
 class DistRegBuilder(GraphBuilder):
     """A model builder for distributional regression models."""
 
-    _howto = "Smooths need to be added first, then the predictors, then the response"
-
     def __init__(self) -> None:
         super().__init__()
 
-        self._smooths: dict[str, list[Var]] = {}
+        self._smooths: dict[str, list[Var]] = defaultdict(list)
         self._distributional_parameters: dict[str, Var] = {}
+        self._predictors: dict[str, Var] = {}
         self._response: Option[Var] = Option(None)
 
     @property
@@ -76,7 +77,7 @@ class DistRegBuilder(GraphBuilder):
         s: float,
         predictor: str,
         name: str | None = None,
-    ) -> Group:
+    ) -> DistRegBuilder:
         """
         Adds a parametric smooth to the model builder.
 
@@ -94,10 +95,11 @@ class DistRegBuilder(GraphBuilder):
             The name of the smooth.
         """
 
-        try:
-            self._smooths[predictor]
-        except KeyError:
-            self._smooths[predictor] = []
+        if predictor not in self._distributional_parameters:
+            raise RuntimeError(
+                f"No predictor '{predictor}' found. You need to add this predictor to"
+                " the builder first."
+            )
 
         name = self._smooth_name(name, predictor, "p")
 
@@ -112,10 +114,13 @@ class DistRegBuilder(GraphBuilder):
         smooth_var = Smooth(X_var, beta_var, name=name)
         self._smooths[predictor].append(smooth_var)
 
-        group = Group(name, smooth=smooth_var, beta=beta_var, X=X_var, m=m_var, s=s_var)
+        predictor_var = self._predictors[predictor]
+        predictor_var.value_node.add_inputs(smooth_var)
 
+        group = Group(name, smooth=smooth_var, beta=beta_var, X=X_var, m=m_var, s=s_var)
         self.add_groups(group)
-        return group
+
+        return self
 
     def add_np_smooth(
         self,
@@ -125,7 +130,7 @@ class DistRegBuilder(GraphBuilder):
         b: float,
         predictor: str,
         name: str | None = None,
-    ) -> Group:
+    ) -> DistRegBuilder:
         """
         Adds a non-parametric smooth to the model builder.
 
@@ -145,12 +150,6 @@ class DistRegBuilder(GraphBuilder):
         name
             The name of the smooth.
         """
-
-        try:
-            self._smooths[predictor]
-        except KeyError:
-            self._smooths[predictor] = []
-
         name = self._smooth_name(name, predictor, "np")
 
         X_var = DesignMatrix(X, name=name + "_X")
@@ -175,6 +174,9 @@ class DistRegBuilder(GraphBuilder):
         smooth_var = Smooth(X_var, beta_var, name=name)
         self._smooths[predictor].append(smooth_var)
 
+        predictor_var = self._predictors[predictor]
+        predictor_var.value_node.add_inputs(smooth_var)
+
         group = Group(
             name,
             smooth=smooth_var,
@@ -188,7 +190,7 @@ class DistRegBuilder(GraphBuilder):
         )
 
         self.add_groups(group)
-        return group
+        return self
 
     def add_predictor(self, name: str, inverse_link: type[Bijector]) -> DistRegBuilder:
         """
@@ -206,17 +208,17 @@ class DistRegBuilder(GraphBuilder):
             instead of a string, the user needs to make sure it uses the right NumPy
             implementation.
         """
-
-        if name not in self._smooths or not self._smooths[name]:
-            msg = f"No smooths in {repr(self)} for predictor {repr(name)}. "
-            raise RuntimeError(msg + self._howto)
-
-        smooth_vars = self._smooths[name]
-        predictor_var = Predictor(name=name + "_pdt", *smooth_vars)
+        if self.response is None:
+            raise RuntimeError("No response found. Add a response first.")
+        predictor_var = Predictor(name=name + "_pdt")
         parameter_var = InverseLink(predictor_var, inverse_link, name=name)
+        self._predictors[name] = predictor_var
         self._distributional_parameters[name] = parameter_var
-        self.add(predictor_var, parameter_var)
 
+        dist_node = self.response.dist_node
+        dist_node.set_inputs(**self._distributional_parameters)  # type: ignore
+
+        self.add(predictor_var, parameter_var)
         return self
 
     def add_response(
@@ -236,14 +238,7 @@ class DistRegBuilder(GraphBuilder):
             needs to make sure it uses the right NumPy implementation.
         """
 
-        if not self._distributional_parameters:
-            raise RuntimeError(f"No predictors in {repr(self)}. {self._howto}")
-
-        response_distribution = Dist(
-            distribution, **self._distributional_parameters  # type: ignore
-        )
-
-        response_var = Response(response, response_distribution, "response")
+        response_var = Response(response, Dist(distribution), "response")
         self._response = Option(response_var)
         self.add(response_var)
 
