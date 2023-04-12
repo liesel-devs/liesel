@@ -185,6 +185,14 @@ class Node(ABC):
         self._var = None
         return self
 
+    @no_model_method
+    def add_inputs(self, *inputs: Any, **kwinputs: Any) -> Node:
+        """Adds non-keyword and keyword input nodes to the existing ones."""
+        inputs = self.inputs + inputs
+        kwinputs = self.kwinputs | kwinputs
+        self.set_inputs(*inputs, **kwinputs)
+        return self
+
     def all_input_nodes(self) -> tuple[Node, ...]:
         """Returns all non-keyword and keyword input nodes as a unique tuple."""
         return _unique_tuple(self.inputs, self.kwinputs.values())
@@ -273,14 +281,6 @@ class Node(ABC):
         kwinputs = {kw: self._to_node(_input) for kw, _input in kwinputs.items()}
         self._kwinputs.update(kwinputs)
 
-        return self
-
-    @no_model_method
-    def add_inputs(self, *inputs: Any, **kwinputs: Any) -> Node:
-        """Adds non-keyword and keyword input nodes to the existing ones."""
-        inputs = self.inputs + inputs
-        kwinputs = self.kwinputs | kwinputs
-        self.set_inputs(*inputs, **kwinputs)
         return self
 
     @property
