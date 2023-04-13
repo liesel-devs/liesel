@@ -153,6 +153,7 @@ def finite_discrete_gibbs_kernel(name: str, model: Model) -> GibbsKernel:
     outcomes = list(outcomes_array)
 
     model = model._copy_computational_model()
+    model.auto_update = False
 
     def transition_fn(prng_key, model_state):
 
@@ -166,6 +167,7 @@ def finite_discrete_gibbs_kernel(name: str, model: Model) -> GibbsKernel:
             given the input value.
             """
             model.vars[name].value = value
+            model.update("_model_log_prob")
             return model.log_prob
 
         conditional_log_probs = jax.tree_map(conditional_log_prob_fn, outcomes)
