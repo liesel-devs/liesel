@@ -115,9 +115,6 @@ def finite_discrete_gibbs_kernel(
     possible value of the variable to sample. It then draws a new value for the variable
     from the categorical distribution defined by the full conditional log probabilities.
 
-    Usually, you can define more efficient specialized kernels if you know the actual
-    full conditional distribution of the variable to sample.
-
     Parameters
     ----------
     name
