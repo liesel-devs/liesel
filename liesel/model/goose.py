@@ -131,7 +131,7 @@ def finite_discrete_gibbs_kernel(name: str, model: Model) -> GibbsKernel:
 
     >>> import tensorflow_probability.substrates.jax.distributions as tfd
 
-    >>> values = [0, 1, 2]
+    >>> values = [0.0, 1.0, 2.0]
     >>> prior_probs = [0.1, 0.2, 0.7]
     >>> value_grid = lsl.Var(values, name="value_grid")
 
