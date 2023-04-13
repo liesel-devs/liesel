@@ -124,8 +124,8 @@ def finite_discrete_gibbs_kernel(name: str, model: Model) -> GibbsKernel:
     --------
 
     In the following example, we create a categorical Gibbs kernel for a variable
-    with three possible values. The prior distribution of the variable is a categorical
-    distribution with probabilities ``[0.1, 0.2, 0.7]``.
+    with three possible values. The prior distribution of the variable is a
+    finite discrete (categorical) distribution with probabilities ``[0.1, 0.2, 0.7]``.
 
     You can then use the kernel to sample from the model.
 
@@ -143,7 +143,7 @@ def finite_discrete_gibbs_kernel(name: str, model: Model) -> GibbsKernel:
     ... )
 
     >>> model = lsl.GraphBuilder().add(categorical_var).build_model()
-    >>> kernel = create_categorical_gibbs_kernel("categorical_var", values, model)
+    >>> kernel = finite_discrete_gibbs_kernel("categorical_var", model)
     >>> type(kernel)
     <class 'liesel.goose.gibbs.GibbsKernel'>
 
