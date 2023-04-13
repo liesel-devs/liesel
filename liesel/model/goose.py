@@ -4,8 +4,7 @@ Goose model interface.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
-from typing import Any
+from collections.abc import Iterable
 
 import jax
 import jax.numpy as jnp
@@ -13,8 +12,6 @@ import jax.numpy as jnp
 from ..goose.gibbs import GibbsKernel
 from ..goose.types import ModelState, Position
 from .model import Model
-
-Array = Any
 
 
 class GooseModel:
@@ -102,9 +99,7 @@ class GooseModel:
         return model_state["_model_log_prob"].value
 
 
-def finite_discrete_gibbs_kernel(
-    name: str, outcomes: Sequence[Array], model: Model
-) -> GibbsKernel:
+def finite_discrete_gibbs_kernel(name: str, model: Model) -> GibbsKernel:
     """
     Creates a Gibbs kernel for a parameter with finite discrete (categorical) prior.
 
@@ -115,12 +110,13 @@ def finite_discrete_gibbs_kernel(
     possible value of the variable to sample. It then draws a new value for the variable
     from the categorical distribution defined by the full conditional log probabilities.
 
+    The possible outcome values are taken directly from the prior distribution of the
+    variable to sample.
+
     Parameters
     ----------
     name
         The name of the variable to sample.
-    outcomes
-        List of possible outcomes.
     model
         The model to sample from.
 
@@ -153,6 +149,9 @@ def finite_discrete_gibbs_kernel(
 
     """
 
+    outcomes_array = model.vars[name].dist_node.init_dist().outcomes  # type: ignore
+    outcomes = list(outcomes_array)
+
     model = model._copy_computational_model()
 
     def transition_fn(prng_key, model_state):
@@ -161,7 +160,7 @@ def finite_discrete_gibbs_kernel(
         for node in model.nodes.values():
             node._outdated = False
 
-        def conditional_log_prob_fn(value: Array):
+        def conditional_log_prob_fn(value):
             """
             Evaluates the full conditional log probability of the model
             given the input value.
@@ -174,7 +173,7 @@ def finite_discrete_gibbs_kernel(
         draw_index = jax.random.categorical(
             prng_key, logits=jnp.stack(conditional_log_probs)
         )
-        draw = jnp.array(outcomes)[draw_index]
+        draw = outcomes_array[draw_index]
 
         return {name: draw}
 

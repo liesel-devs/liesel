@@ -123,7 +123,7 @@ class TestFiniteDiscreteGibbsKernel:
         )
 
         model = lsl.GraphBuilder().add(categorical_var).build_model()
-        kernel = finite_discrete_gibbs_kernel("categorical_var", values, model)
+        kernel = finite_discrete_gibbs_kernel("categorical_var", model)
 
         draw = kernel._transition_fn(jax.random.PRNGKey(0), model.state)
         assert draw["categorical_var"] == pytest.approx(0)
@@ -147,14 +147,14 @@ class TestFiniteDiscreteGibbsKernel:
         )
 
         model = lsl.GraphBuilder().add(categorical_var).build_model()
-        kernel = finite_discrete_gibbs_kernel("categorical_var", values, model)
+        kernel = finite_discrete_gibbs_kernel("categorical_var", model)
 
         draw = jax.jit(kernel._transition_fn)(jax.random.PRNGKey(1), model.state)
         assert draw["categorical_var"] == pytest.approx(2)
 
-    @pytest.mark.mcmc
+    # @pytest.mark.mcmc
     def test_sample(self):
-        values = [0, 1, 2]
+        values = [0.0, 1.0, 2.0]
         prior_probs = [0.1, 0.2, 0.7]
         value_grid = lsl.Var(values, name="value_grid")
 
@@ -166,7 +166,7 @@ class TestFiniteDiscreteGibbsKernel:
         )
 
         model = lsl.GraphBuilder().add(categorical_var).build_model()
-        kernel = finite_discrete_gibbs_kernel("categorical_var", values, model)
+        kernel = finite_discrete_gibbs_kernel("categorical_var", model)
 
         eb = gs.EngineBuilder(1, num_chains=1)
         eb.add_kernel(kernel)
