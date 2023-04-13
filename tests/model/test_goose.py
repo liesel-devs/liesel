@@ -1,11 +1,13 @@
+import jax
 import jax.random as rd
 import numpy as np
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.goose as gs
+import liesel.model as lsl
 from liesel.goose.types import Position
-from liesel.model.goose import GooseModel
+from liesel.model.goose import GooseModel, create_categorical_gibbs_kernel
 from liesel.model.model import GraphBuilder, Model
 from liesel.model.nodes import Dist, Var
 
@@ -105,3 +107,80 @@ def test_sample_transformed_model(model: Model):
 
     assert avg_mu == pytest.approx(0.0, abs=0.05)
     assert avg_sigma == pytest.approx(1.0, abs=0.05)
+
+
+class TestGeneralCategoricalGibbsKernel:
+    def test_transition(self):
+        values = [0, 1, 2]
+        prior_probs = [0.1, 0.2, 0.7]
+        value_grid = lsl.Var(values, name="value_grid")
+
+        prior = lsl.Dist(tfd.FiniteDiscrete, outcomes=value_grid, probs=prior_probs)
+        categorical_var = lsl.Var(
+            value=values[0],
+            distribution=prior,
+            name="categorical_var",
+        )
+
+        model = lsl.GraphBuilder().add(categorical_var).build_model()
+        kernel = create_categorical_gibbs_kernel("categorical_var", values, model)
+
+        draw = kernel._transition_fn(jax.random.PRNGKey(0), model.state)
+        assert draw["categorical_var"] == pytest.approx(0)
+
+        draw = kernel._transition_fn(jax.random.PRNGKey(1), model.state)
+        assert draw["categorical_var"] == pytest.approx(2)
+
+        draw = kernel._transition_fn(jax.random.PRNGKey(2), model.state)
+        assert draw["categorical_var"] == pytest.approx(1)
+
+    def test_transition_jit(self):
+        values = [0, 1, 2]
+        prior_probs = [0.1, 0.2, 0.7]
+        value_grid = lsl.Var(values, name="value_grid")
+
+        prior = lsl.Dist(tfd.FiniteDiscrete, outcomes=value_grid, probs=prior_probs)
+        categorical_var = lsl.Var(
+            value=values[0],
+            distribution=prior,
+            name="categorical_var",
+        )
+
+        model = lsl.GraphBuilder().add(categorical_var).build_model()
+        kernel = create_categorical_gibbs_kernel("categorical_var", values, model)
+
+        draw = jax.jit(kernel._transition_fn)(jax.random.PRNGKey(1), model.state)
+        assert draw["categorical_var"] == pytest.approx(2)
+
+    @pytest.mark.mcmc
+    def test_sample(self):
+        values = [0, 1, 2]
+        prior_probs = [0.1, 0.2, 0.7]
+        value_grid = lsl.Var(values, name="value_grid")
+
+        prior = lsl.Dist(tfd.FiniteDiscrete, outcomes=value_grid, probs=prior_probs)
+        categorical_var = lsl.Var(
+            value=values[0],
+            distribution=prior,
+            name="categorical_var",
+        )
+
+        model = lsl.GraphBuilder().add(categorical_var).build_model()
+        kernel = create_categorical_gibbs_kernel("categorical_var", values, model)
+
+        eb = gs.EngineBuilder(1, num_chains=1)
+        eb.add_kernel(kernel)
+        eb.set_model(lsl.GooseModel(model))
+        eb.set_initial_values(model.state)
+        eb.set_duration(warmup_duration=500, posterior_duration=2000)
+
+        engine = eb.build()
+        engine.sample_all_epochs()
+
+        results = engine.get_results()
+        samples = results.get_posterior_samples()
+
+        values, counts = np.unique(samples["categorical_var"], return_counts=True)
+        relative_freq = counts / np.sum(counts)
+
+        assert np.allclose(relative_freq, prior_probs, atol=0.1)
