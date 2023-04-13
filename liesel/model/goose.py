@@ -4,7 +4,7 @@ Goose model interface.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 
 import jax
 import jax.numpy as jnp
@@ -99,7 +99,9 @@ class GooseModel:
         return model_state["_model_log_prob"].value
 
 
-def finite_discrete_gibbs_kernel(name: str, model: Model) -> GibbsKernel:
+def finite_discrete_gibbs_kernel(
+    name: str, model: Model, outcomes: Sequence | None = None
+) -> GibbsKernel:
     """
     Creates a Gibbs kernel for a parameter with finite discrete (categorical) prior.
 
@@ -110,15 +112,18 @@ def finite_discrete_gibbs_kernel(name: str, model: Model) -> GibbsKernel:
     possible value of the variable to sample. It then draws a new value for the variable
     from the categorical distribution defined by the full conditional log probabilities.
 
-    The possible outcome values are taken directly from the prior distribution of the
-    variable to sample.
-
     Parameters
     ----------
     name
         The name of the variable to sample.
     model
         The model to sample from.
+    outcomes
+        The possible outcomes of the variable to sample. If ``outcomes=None``, the\
+        possible outcome values are taken directly from the prior distribution of the\
+        variable to sample. Note however, that this only works for\
+        variables with a finite discrete prior distribution. If the prior distribution\
+        is not finite discrete, you must specify the possible outcomes manually.
 
     Examples
     --------
@@ -147,10 +152,33 @@ def finite_discrete_gibbs_kernel(name: str, model: Model) -> GibbsKernel:
     >>> type(kernel)
     <class 'liesel.goose.gibbs.GibbsKernel'>
 
-    """
+    Example for a variable with a bernoulli prior distribution:
 
-    outcomes_array = model.vars[name].dist_node.init_dist().outcomes  # type: ignore
-    outcomes = list(outcomes_array)
+    >>> prior = lsl.Dist(tfd.Bernoulli, probs=lsl.Data(0.7))
+    >>> dummy_var = lsl.Var(
+    ...     value=1.0,
+    ...     distribution=prior,
+    ...     name="dummy_var",
+    ... )
+
+    >>> model = lsl.GraphBuilder().add(dummy_var).build_model()
+    >>> kernel = finite_discrete_gibbs_kernel("dummy_var", model, outcomes=[0.0, 1.0])
+    >>> type(kernel)
+    <class 'liesel.goose.gibbs.GibbsKernel'>
+
+    """
+    if outcomes is not None:
+        outcomes_array = jnp.array(outcomes)
+    else:
+        try:
+            finite_discrete = model.vars[name].dist_node.init_dist()  # type: ignore
+            outcomes_array = finite_discrete.outcomes  # type: ignore
+            outcomes = list(outcomes_array)
+        except AttributeError:
+            raise ValueError(
+                f"The variable '{name}' does not seem to have a tfd.FiniteDiscrete "
+                "distribution as prior. Please specify the possible outcomes manually."
+            )
 
     model = model._copy_computational_model()
     model.auto_update = False
