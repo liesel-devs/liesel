@@ -102,11 +102,11 @@ class GooseModel:
         return model_state["_model_log_prob"].value
 
 
-def create_categorical_gibbs_kernel(
+def finite_discrete_gibbs_kernel(
     name: str, outcomes: Sequence[Array], model: Model
 ) -> GibbsKernel:
     """
-    Creates a categorical Gibbs kernel.
+    Creates a Gibbs kernel for a parameter with finite discrete (categorical) prior.
 
     The prior distribution of the variable to sample must be a categorical distribution,
     usually implemented via :class:`tfd.FiniteDiscrete`.

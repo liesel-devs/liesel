@@ -7,7 +7,7 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 import liesel.goose as gs
 import liesel.model as lsl
 from liesel.goose.types import Position
-from liesel.model.goose import GooseModel, create_categorical_gibbs_kernel
+from liesel.model.goose import GooseModel, finite_discrete_gibbs_kernel
 from liesel.model.model import GraphBuilder, Model
 from liesel.model.nodes import Dist, Var
 
@@ -109,7 +109,7 @@ def test_sample_transformed_model(model: Model):
     assert avg_sigma == pytest.approx(1.0, abs=0.05)
 
 
-class TestGeneralCategoricalGibbsKernel:
+class TestFiniteDiscreteGibbsKernel:
     def test_transition(self):
         values = [0, 1, 2]
         prior_probs = [0.1, 0.2, 0.7]
@@ -123,7 +123,7 @@ class TestGeneralCategoricalGibbsKernel:
         )
 
         model = lsl.GraphBuilder().add(categorical_var).build_model()
-        kernel = create_categorical_gibbs_kernel("categorical_var", values, model)
+        kernel = finite_discrete_gibbs_kernel("categorical_var", values, model)
 
         draw = kernel._transition_fn(jax.random.PRNGKey(0), model.state)
         assert draw["categorical_var"] == pytest.approx(0)
@@ -147,7 +147,7 @@ class TestGeneralCategoricalGibbsKernel:
         )
 
         model = lsl.GraphBuilder().add(categorical_var).build_model()
-        kernel = create_categorical_gibbs_kernel("categorical_var", values, model)
+        kernel = finite_discrete_gibbs_kernel("categorical_var", values, model)
 
         draw = jax.jit(kernel._transition_fn)(jax.random.PRNGKey(1), model.state)
         assert draw["categorical_var"] == pytest.approx(2)
@@ -166,7 +166,7 @@ class TestGeneralCategoricalGibbsKernel:
         )
 
         model = lsl.GraphBuilder().add(categorical_var).build_model()
-        kernel = create_categorical_gibbs_kernel("categorical_var", values, model)
+        kernel = finite_discrete_gibbs_kernel("categorical_var", values, model)
 
         eb = gs.EngineBuilder(1, num_chains=1)
         eb.add_kernel(kernel)
