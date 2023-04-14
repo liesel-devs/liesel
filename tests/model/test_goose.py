@@ -215,6 +215,7 @@ class TestFiniteDiscreteGibbsKernel:
 
         assert np.allclose(relative_freq, [1 - prior_prob, prior_prob], atol=0.1)
 
+    @pytest.mark.mcmc
     def test_bernoulli_no_outcomes(self):
         prior_prob = 0.7
         prior = lsl.Dist(tfd.Bernoulli, probs=lsl.Data(prior_prob))
