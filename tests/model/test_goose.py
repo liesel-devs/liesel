@@ -190,13 +190,13 @@ class TestFiniteDiscreteGibbsKernel:
         prior_prob = 0.7
         prior = lsl.Dist(tfd.Bernoulli, probs=lsl.Data(prior_prob))
         dummy_var = lsl.Var(
-            value=1.0,
+            value=1,
             distribution=prior,
             name="dummy_var",
         )
 
         model = lsl.GraphBuilder().add(dummy_var).build_model()
-        kernel = finite_discrete_gibbs_kernel("dummy_var", model, outcomes=[0.0, 1.0])
+        kernel = finite_discrete_gibbs_kernel("dummy_var", model, outcomes=[0, 1])
 
         eb = gs.EngineBuilder(1, num_chains=1)
         eb.add_kernel(kernel)
@@ -219,11 +219,27 @@ class TestFiniteDiscreteGibbsKernel:
         prior_prob = 0.7
         prior = lsl.Dist(tfd.Bernoulli, probs=lsl.Data(prior_prob))
         dummy_var = lsl.Var(
-            value=1.0,
+            value=1,
             distribution=prior,
             name="dummy_var",
         )
 
         model = lsl.GraphBuilder().add(dummy_var).build_model()
-        with pytest.raises(ValueError, match="specify the possible outcomes manually"):
-            finite_discrete_gibbs_kernel("dummy_var", model)
+        kernel = finite_discrete_gibbs_kernel("dummy_var", model)
+
+        eb = gs.EngineBuilder(1, num_chains=1)
+        eb.add_kernel(kernel)
+        eb.set_model(lsl.GooseModel(model))
+        eb.set_initial_values(model.state)
+        eb.set_duration(warmup_duration=500, posterior_duration=2000)
+
+        engine = eb.build()
+        engine.sample_all_epochs()
+
+        results = engine.get_results()
+        samples = results.get_posterior_samples()
+
+        _, counts = np.unique(samples["dummy_var"], return_counts=True)
+        relative_freq = counts / np.sum(counts)
+
+        assert np.allclose(relative_freq, [1 - prior_prob, prior_prob], atol=0.1)
