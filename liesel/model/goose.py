@@ -189,8 +189,8 @@ def finite_discrete_gibbs_kernel(
     model.auto_update = False
 
     def transition_fn(prng_key, model_state):
-
         model.state = model_state
+
         for node in model.nodes.values():
             node._outdated = False
 
@@ -204,10 +204,7 @@ def finite_discrete_gibbs_kernel(
             return model.log_prob
 
         conditional_log_probs = jax.vmap(conditional_log_prob_fn)(outcomes)
-
-        draw_index = jax.random.categorical(
-            prng_key, logits=jnp.stack(conditional_log_probs)
-        )
+        draw_index = jax.random.categorical(prng_key, logits=conditional_log_probs)
         draw = outcomes[draw_index]
 
         return {name: draw}
