@@ -8,6 +8,7 @@ from collections.abc import Iterable, Sequence
 
 import jax
 import jax.numpy as jnp
+import tensorflow_probability.substrates.jax.distributions as tfd
 
 from ..goose.gibbs import GibbsKernel
 from ..goose.types import ModelState, Position
@@ -168,24 +169,28 @@ def finite_discrete_gibbs_kernel(
 
     """
     if outcomes is not None:
-        outcomes_array = jnp.array(outcomes)
+        outcomes = jnp.asarray(outcomes)
     else:
-        try:
-            finite_discrete = model.vars[name].dist_node.init_dist()  # type: ignore
-            outcomes_array = finite_discrete.outcomes  # type: ignore
-            outcomes = list(outcomes_array)
-        except AttributeError:
-            raise ValueError(
-                f"The variable '{name}' does not seem to have a tfd.FiniteDiscrete "
-                "distribution as prior. Please specify the possible outcomes manually."
-            )
+        dist = model.vars[name].dist_node.init_dist()  # type: ignore
+        assert dist.batch_shape == ()
+
+        match dist:
+            case tfd.Bernoulli():
+                outcomes = jnp.array([0, 1], dtype=dist.dtype)
+            case tfd.FiniteDiscrete():
+                outcomes = dist.outcomes
+            case _:
+                raise ValueError(
+                    "Cannot extract outcomes from the distribution of variable "
+                    f"'{name}'. Please provide the argument 'outcomes'."
+                )
 
     model = model._copy_computational_model()
     model.auto_update = False
 
     def transition_fn(prng_key, model_state):
-
         model.state = model_state
+
         for node in model.nodes.values():
             node._outdated = False
 
@@ -198,12 +203,9 @@ def finite_discrete_gibbs_kernel(
             model.update("_model_log_prob")
             return model.log_prob
 
-        conditional_log_probs = jax.tree_map(conditional_log_prob_fn, outcomes)
-
-        draw_index = jax.random.categorical(
-            prng_key, logits=jnp.stack(conditional_log_probs)
-        )
-        draw = outcomes_array[draw_index]
+        conditional_log_probs = jax.vmap(conditional_log_prob_fn)(outcomes)
+        draw_index = jax.random.categorical(prng_key, logits=conditional_log_probs)
+        draw = outcomes[draw_index]
 
         return {name: draw}
 
