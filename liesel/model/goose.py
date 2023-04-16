@@ -104,7 +104,7 @@ def finite_discrete_gibbs_kernel(
     name: str, model: Model, outcomes: Sequence | None = None
 ) -> GibbsKernel:
     """
-    Creates a Gibbs kernel for a parameter with finite discrete (categorical) prior.
+    Creates a Gibbs kernel for a parameter with a finite discrete (categorical) prior.
 
     The prior distribution of the variable to sample must be a categorical distribution,
     usually implemented via :class:`tfd.FiniteDiscrete`.
