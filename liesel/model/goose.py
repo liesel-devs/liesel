@@ -120,20 +120,19 @@ def finite_discrete_gibbs_kernel(
     model
         The model to sample from.
     outcomes
-        The possible outcomes of the variable to sample. If ``outcomes=None``, the\
-        possible outcome values are taken directly from the prior distribution of the\
-        variable to sample. Note however, that this only works for\
-        variables with a finite discrete prior distribution. If the prior distribution\
-        is not finite discrete, you must specify the possible outcomes manually.
+        The possible outcomes of the variable to sample. If ``outcomes=None``, the \
+        possible outcomes are extracted from the prior distribution of the variable \
+        to sample. Note however, that this only works for some prior distributions. \
+        If the possible outcomes cannot be extracted from the prior distribution, \
+        you must specify them manually via this argument.
 
     Examples
     --------
+    In the following example, we create a categorical Gibbs kernel for a variable with
+    three possible values. The prior distribution of the variable is a finite discrete
+    (categorical) distribution with the probabilities ``[0.1, 0.2, 0.7]``.
 
-    In the following example, we create a categorical Gibbs kernel for a variable
-    with three possible values. The prior distribution of the variable is a
-    finite discrete (categorical) distribution with probabilities ``[0.1, 0.2, 0.7]``.
-
-    You can then use the kernel to sample from the model.
+    You can then use the kernel to sample from the model:
 
     >>> import tensorflow_probability.substrates.jax.distributions as tfd
 
@@ -153,17 +152,17 @@ def finite_discrete_gibbs_kernel(
     >>> type(kernel)
     <class 'liesel.goose.gibbs.GibbsKernel'>
 
-    Example for a variable with a bernoulli prior distribution:
+    Example for a variable with a Bernoulli prior distribution:
 
     >>> prior = lsl.Dist(tfd.Bernoulli, probs=lsl.Data(0.7))
     >>> dummy_var = lsl.Var(
-    ...     value=1.0,
+    ...     value=1,
     ...     distribution=prior,
     ...     name="dummy_var",
     ... )
 
     >>> model = lsl.GraphBuilder().add(dummy_var).build_model()
-    >>> kernel = finite_discrete_gibbs_kernel("dummy_var", model, outcomes=[0.0, 1.0])
+    >>> kernel = finite_discrete_gibbs_kernel("dummy_var", model, outcomes=[0, 1])
     >>> type(kernel)
     <class 'liesel.goose.gibbs.GibbsKernel'>
 
