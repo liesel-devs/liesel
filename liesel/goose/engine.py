@@ -359,11 +359,13 @@ class Engine:
             apply_thinning=True
         )
 
+        logger.info("Initializing kernels...")
         # initialize kernel state
         keys = self._split_prng_key_one()
         self._kernel_states = jax.vmap(self._kernel_sequence.init_states)(
             keys, self._model_states
         )
+        logger.info("Done")
 
         # current epoch
         self._epoch: EpochState | None = None
