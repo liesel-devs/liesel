@@ -826,11 +826,13 @@ class TestMVNDegenerateAgainstTensorFlow:
             mvnd.log_prob(sample)
 
         # The tfd version apparently does not always raise the same error if shapes
-        # are not compatible for broadcasting. Here, it raises a TypeError.
+        # are not compatible for broadcasting.
+        # Here, it raises a TypeError for TFP v0.19 and smaller and a ValueError from
+        # TFP v0.20.1.
         # Sample shape: (1, 3, 5)
         # Batch shape: (2, 2)
         sample = jnp.array([[beta, beta, beta]])
-        with pytest.raises(TypeError):
+        with pytest.raises((TypeError, ValueError)):
             mvn.log_prob(sample)
 
         with pytest.raises(ValueError):
