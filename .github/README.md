@@ -103,6 +103,12 @@ builder.set_initial_values(model.state)
 builder.set_duration(warmup_duration=1000, posterior_duration=1000)
 
 engine = builder.build()
+```
+
+    liesel.goose.engine - INFO - Initializing kernels...
+    liesel.goose.engine - INFO - Done
+
+``` python
 engine.sample_all_epochs()
 ```
 
@@ -375,8 +381,8 @@ Please run
 
 ## Acknowledgements
 
-Liesel is being developed by Paul Wiemann and Hannes Riebl with support
-from Thomas Kneib. Important contributions were made by Joel Beck, Alex
-Afanasev, Gianmarco Callegher and Johannes Brachem. We are grateful to
-the German Research Foundation (DFG) for funding the development through
-grant 443179956.
+Liesel is being developed by Paul Wiemann, Hannes Riebl, Johannes
+Brachem and Gianmarco Callegher with support from Thomas Kneib.
+Important contributions were made by Joel Beck and Alex Afanasev. We are
+grateful to the German Research Foundation (DFG) for funding the
+development through grant KN 922/11-1.

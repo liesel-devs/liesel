@@ -26,7 +26,7 @@ import logging
 import liesel.goose as gs
 import pandas as pd
 
-logging.getLogger("jax._src.lib.xla_bridge").setLevel(logging.ERROR)
+logging.getLogger("jax._src.xla_bridge").setLevel(logging.ERROR)
 
 gs.Summary.__repr__ = gs.Summary._repr_html_
 gs.Summary._repr_markdown_ = gs.Summary._repr_html_
@@ -154,4 +154,4 @@ Please run
 
 ## Acknowledgements
 
-Liesel is being developed by Paul Wiemann and Hannes Riebl with support from Thomas Kneib. Important contributions were made by Joel Beck, Alex Afanasev, Gianmarco Callegher and Johannes Brachem. We are grateful to the German Research Foundation (DFG) for funding the development through grant 443179956.
+Liesel is being developed by Paul Wiemann, Hannes Riebl, Johannes Brachem and Gianmarco Callegher with support from Thomas Kneib. Important contributions were made by Joel Beck and Alex Afanasev. We are grateful to the German Research Foundation (DFG) for funding the development through grant KN 922/11-1.
