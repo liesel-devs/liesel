@@ -43,7 +43,8 @@ Liesel’s birth city
   docs](https://docs.liesel-project.org)
 - :registered::computer: [RLiesel
   repo](https://github.com/liesel-devs/rliesel)
-- :book: [Tutorials](https://liesel-devs.github.io/liesel-tutorials)
+- :book:
+  [Tutorials](https://docs.liesel-project.org/en/latest/tutorials_overview.html)
 
 ## Usage
 

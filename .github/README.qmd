@@ -59,7 +59,7 @@ The name "Liesel" is an homage to the [Gänseliesel fountain](https://en.wikiped
 - :girl::swan::computer: [Liesel & Goose repo](https://github.com/liesel-devs/liesel)
 - :girl::swan::book: [Liesel & Goose API docs](https://docs.liesel-project.org)
 - :registered::computer: [RLiesel repo](https://github.com/liesel-devs/rliesel)
-- :book: [Tutorials](https://liesel-devs.github.io/liesel-tutorials)
+- :book: [Tutorials](https://docs.liesel-project.org/en/latest/tutorials_overview.html)
 
 ## Usage
 
