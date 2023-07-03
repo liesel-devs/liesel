@@ -9,7 +9,7 @@ import jax.random as rnd
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
-from liesel.model.model import Model, save_model
+from liesel.model.model import GraphBuilder, Model, save_model
 from liesel.model.nodes import (
     Calc,
     Data,
@@ -366,6 +366,58 @@ class TestUserDefinedModelNodes:
         for comb in combinations(model_nodes, 2):
             with pytest.raises(RuntimeError):
                 Model(variables=[y_var], nodes=comb)
+
+
+class TestSimulate:
+    @pytest.fixture
+    def model(self) -> Model:
+        mu = Var(0.0, name="mu")
+        sigma = Var(1.0, name="sigma")
+        x = Var(0.0, Dist(tfd.Normal, mu, sigma), name="x")
+        return GraphBuilder().add(x).build_model()
+
+    def test_simulate_scalar(self, model):
+        model.simulate(rnd.PRNGKey(42))
+        assert jnp.all(model.vars["x"].value != 0.0)
+        assert model.vars["x"].value.shape == ()
+
+    def test_simulate_vector(self, model):
+        model.vars["x"].value = jnp.zeros(5)
+
+        model.simulate(rnd.PRNGKey(42))
+        assert jnp.all(model.vars["x"].value != 0.0)
+        assert model.vars["x"].value.shape == (5,)
+
+    def test_simulate_matrix(self, model):
+        model.vars["x"].value = jnp.zeros((5, 5))
+
+        model.simulate(rnd.PRNGKey(42))
+        assert jnp.all(model.vars["x"].value != 0.0)
+        assert model.vars["x"].value.shape == (5, 5)
+
+    def test_simulate_with_skipped_dist(self, model):
+        model.simulate(rnd.PRNGKey(42), ["x_log_prob"])
+        assert model.vars["x"].value == 0.0
+
+    def test_simulate_with_skipped_at(self, model):
+        model.simulate(rnd.PRNGKey(42), ["x_var_value"])
+        assert model.vars["x"].value == 0.0
+
+    def test_simulate_with_skipped_var(self, model):
+        model.simulate(rnd.PRNGKey(42), ["x"])
+        assert model.vars["x"].value == 0.0
+
+    def test_simulate_with_empty_model(self):
+        Model([]).simulate(rnd.PRNGKey(42))
+
+    def test_simulate_with_unsettable_value(self):
+        mu = Var(0.0, name="mu")
+        sigma = Var(1.0, name="sigma")
+        x = Var(Calc(lambda: 0.0), Dist(tfd.Normal, mu, sigma), name="x")
+        model = GraphBuilder().add(x).build_model()
+
+        with pytest.raises(AttributeError, match="Cannot set value of Calc"):
+            model.simulate(rnd.PRNGKey(42))
 
 
 def test_save_model() -> None:

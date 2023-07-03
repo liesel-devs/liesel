@@ -14,6 +14,7 @@ from typing import IO, Any, TypeVar
 
 import dill
 import jax
+import jax.numpy as jnp
 import jax.random
 import networkx as nx
 import tensorflow_probability.substrates.jax.bijectors as jb
@@ -34,6 +35,7 @@ from .nodes import (
     NodeState,
     TransientIdentity,
     Var,
+    VarValue,
 )
 from .viz import plot_nodes, plot_vars
 
@@ -781,6 +783,9 @@ class Model:
 
         self._sorted_nodes = list(nx.topological_sort(self._node_graph))
 
+        self._simulation_graph = self._build_simulation_graph(self._nodes.values())
+        self._simulation_nodes = list(nx.topological_sort(self._simulation_graph))
+
         self._auto_update = True
         self._seed_nodes = []
 
@@ -797,6 +802,22 @@ class Model:
 
         for node in nodes:
             edges.extend((_input, node) for _input in node.all_input_nodes())
+
+        graph = nx.DiGraph(edges)
+        graph.add_nodes_from(nodes)
+        return graph
+
+    @staticmethod
+    def _build_simulation_graph(nodes: Iterable[Node]) -> nx.DiGraph:
+        """Builds the simulation graph of the model nodes."""
+        edges: list[tuple[Node, Node]] = []
+
+        for node in nodes:
+            for _input in node.all_input_nodes():
+                if isinstance(node, Dist) and _input is node.at:
+                    edges.append((node, _input))
+                else:
+                    edges.append((_input, node))
 
         graph = nx.DiGraph(edges)
         graph.add_nodes_from(nodes)
@@ -952,6 +973,74 @@ class Model:
 
         for node, seed in zip(self._seed_nodes, seeds):
             node.value = seed  # type: ignore  # data node
+
+        return self
+
+    def simulate(self, seed: jax.random.KeyArray, skip: Iterable[str] = ()) -> Model:
+        """
+        Updates the model state simulating from the probability distributions in the
+        model using a provided random seed, optionally skipping specified nodes.
+
+        Parameters
+        ----------
+        seed
+            The seed is split and distributed to the distribution nodes in the model.
+            Must be a ``KeyArray``, i.e. an array of shape (2,) and dtype ``uint32``.
+            See :mod:`jax.random` for more details.
+        skip
+            The names of the nodes or variables to be excluded from the simulation. \
+            By default, no nodes or variables are skipped.
+
+        Returns
+        -------
+        The model instance itself after updating its state with the simulated values.
+
+        Raises
+        ------
+        AttributeError
+            If the value of the :attr:`.Dist.at` node of a distribution node cannot be
+            set.
+
+        Notes
+        -----
+        The simulation is based on the shapes of the current values of the
+        :attr:`.Dist.at` nodes of the distribution nodes. If the :attr:`.Dist.at` node
+        of a distribution node is a :Class:`.VarValue` node, the value of its input is
+        updated.
+        """
+        dists = [
+            node
+            for node in self._simulation_nodes
+            if isinstance(node, Dist)
+            and node.at is not None
+            and node.name not in skip
+            and node.at.name not in skip
+            and (node.var is not None and node.var.name not in skip)
+        ]
+
+        seeds = jax.random.split(seed, len(dists))
+
+        for dist, seed in zip(dists, seeds):
+            tfp_dist = dist.init_dist()
+
+            event_shape = tfp_dist.event_shape
+            batch_shape = tfp_dist.batch_shape
+            value_shape = jnp.asarray(dist.at.value).shape  # type: ignore
+            sample_index = len(value_shape) - len(batch_shape) - len(event_shape)
+            sample_shape = value_shape[:sample_index]
+
+            value = tfp_dist.sample(sample_shape, seed)
+
+            if isinstance(dist.at, VarValue):
+                try:
+                    dist.at.inputs[0].value = value  # type: ignore
+                except AttributeError:
+                    raise AttributeError(f"Cannot set value of {dist.at.inputs[0]}")
+            else:
+                try:
+                    dist.at.value = value  # type: ignore
+                except AttributeError:
+                    raise AttributeError(f"Cannot set value of {dist.at}")
 
         return self
 
