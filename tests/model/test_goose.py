@@ -9,7 +9,7 @@ import liesel.model as lsl
 from liesel.goose.types import Position
 from liesel.model.goose import GooseModel, finite_discrete_gibbs_kernel
 from liesel.model.model import GraphBuilder, Model
-from liesel.model.nodes import Dist, Var
+from liesel.model.nodes import Dist, Param, Var
 
 
 @pytest.fixture
@@ -234,6 +234,7 @@ class TestFiniteDiscreteGibbsKernel:
         eb.set_initial_values(model.state)
         eb.set_duration(warmup_duration=500, posterior_duration=2000)
 
+
         engine = eb.build()
         engine.sample_all_epochs()
 
@@ -244,3 +245,31 @@ class TestFiniteDiscreteGibbsKernel:
         relative_freq = counts / np.sum(counts)
 
         assert np.allclose(relative_freq, [1 - prior_prob, prior_prob], atol=0.1)
+
+
+def test_monitor_keys():
+    key = rd.PRNGKey(1337)
+    mu = Param(0.0, name="mu")
+    sigma = Param(1.0, name="sigma")
+
+    x = Var(rd.normal(key, shape=(500,)), name="x")
+    y = Var(x, Dist(tfd.Normal, loc=mu, scale=sigma), "y")
+
+    model = lsl.GraphBuilder().add(y).build_model()
+
+    eb = gs.EngineBuilder(1, num_chains=1)
+    mi = lsl.GooseModel(model)
+
+    # assert monitor keys returnes the correct values
+    assert len(mi.monitored_keys()) == 2
+    assert "mu_value" in mi.monitored_keys()
+    assert "sigma_value" in mi.monitored_keys()
+    eb.set_model(lsl.GooseModel(model))
+
+    eb.set_initial_values(model.state)
+    eb.set_duration(warmup_duration=500, posterior_duration=2000)
+
+    engine = eb.build()
+    assert len(engine._position_keys) == 2
+    assert "mu_value" in engine._position_keys
+    assert "sigma_value" in engine._position_keys

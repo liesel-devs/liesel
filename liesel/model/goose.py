@@ -99,6 +99,12 @@ class GooseModel:
         """
         return model_state["_model_log_prob"].value
 
+    def monitored_keys(self) -> Iterable[str]:
+        """
+        Returns a list of node names that should be monitored during sampling.
+        """
+        return [name for name, node in self._model.nodes.items() if node.monitor]
+
 
 def finite_discrete_gibbs_kernel(
     name: str, model: Model, outcomes: Sequence | None = None
