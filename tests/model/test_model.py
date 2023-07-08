@@ -419,6 +419,16 @@ class TestSimulate:
         with pytest.raises(AttributeError, match="Cannot set value of Calc"):
             model.simulate(rnd.PRNGKey(42))
 
+    def test_simulate_hierarchical_model(self):
+        mu = Var(0.0, Dist(tfd.Normal, loc=2.0, scale=1.0), name="mu")
+        sigma = Var(1.0, name="sigma")
+        x = Var(0.0, Dist(tfd.Normal, mu, sigma), name="x")
+        model = GraphBuilder().add(x).build_model()
+
+        model.simulate(rnd.PRNGKey(42))
+        assert jnp.all(model.vars["mu"].value != 0.0)
+        assert jnp.all(model.vars["x"].value != 0.0)
+
 
 def test_save_model() -> None:
     x = Var(1.0, name="x")
