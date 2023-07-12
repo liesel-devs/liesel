@@ -7,6 +7,7 @@ engine in a well-defined state. Furthermore, the builder can return different en
 implementations.
 """
 
+
 import math
 from collections.abc import Iterable
 from typing import cast
@@ -20,7 +21,14 @@ from .engine import Engine
 from .epoch import EpochConfig, EpochManager
 from .kernel_sequence import KernelSequence
 from .pytree import stack_leaves
-from .types import Kernel, KeyArray, ModelInterface, ModelState, QuantityGenerator
+from .types import (
+    InitStrategies,
+    Kernel,
+    KeyArray,
+    ModelInterface,
+    ModelState,
+    QuantityGenerator,
+)
 from .warmup import stan_epochs
 
 
@@ -57,15 +65,17 @@ class EngineBuilder:
     """
 
     def __init__(self, seed: int, num_chains: int):
-        keys = jax.random.split(jax.random.PRNGKey(seed))
+        keys = jax.random.split(jax.random.PRNGKey(seed), 3)
         self._prng_key: KeyArray = keys[0]
         self._engine_key: KeyArray = keys[1]
+        self._init_strategy_key: KeyArray = keys[2]
         self._num_chains: int = num_chains
         self._kernels: list[Kernel] = []
         self._quantity_generators: list[QuantityGenerator] = []
         self._model_state: Option[ModelState] = Option(None)
-
         self._model: Option[ModelInterface] = Option(None)
+        # self._init_strategies: Option[InitStrategy] = Option({})
+        self._init_strategies: InitStrategies = {}
 
         # public fields, only simple states
         self.store_kernel_states: bool = False
@@ -124,6 +134,14 @@ class EngineBuilder:
 
         self._model_state = Option(model_states)
 
+    def set_init_startegies(self, init_strategies: InitStrategies):
+        self._init_strategies = init_strategies
+
+    @property
+    def init_startegies(self) -> InitStrategies:
+        """Initialization strategies."""
+        return self._init_strategies
+
     @property
     def model_state(self) -> Option[ModelState]:
         """Model state."""
@@ -177,9 +195,6 @@ class EngineBuilder:
                 f"The position key {dupl.unwrap()} is claimed by multiple kernels"
             )
 
-        pos_keys.extend(self.positions_included)
-        pos_keys = [key for key in pos_keys if key not in self.positions_excluded]
-
         # find good jittable number
         epochs = self._epochs._configs  # FIXME: use of private field
         durations = [e.duration for e in epochs[1:]]
@@ -222,9 +237,53 @@ class EngineBuilder:
             if not ker.identifier:
                 ker.identifier = f"kernel_{idx:02d}"
 
+        # set initial values
+        model_states = self._model_state.expect("Model state must be set")
+        # init_strategies = self._init_strategies.value
+        init_strategies = self._init_strategies
+
+        # not_present_strategies = []
+        # for pos_key in pos_keys:
+        #     if pos_key not in init_strategies:
+        #         not_present_strategies.append(pos_key)
+
+        # if not_present_strategies:
+        #     raise Warning(
+        #         f"The strategies for {not_present_strategies} have not been set. "
+        #         "The values will be jittered with a U(-1, 1) noise"
+        #     )
+
+        for pos_key in pos_keys:
+            if pos_key not in init_strategies.keys():
+                init_strategies[
+                    pos_key
+                ] = lambda key, current_value: current_value + jax.random.uniform(
+                    key=key,
+                    shape=current_value.shape,
+                    dtype=current_value.dtype,
+                    minval=-1.0,
+                    maxval=1.0,
+                )
+
+        init_strategy_keys = jax.random.split(self._init_strategy_key, len(pos_keys))
+
+        current_position = model.extract_position(pos_keys, model_states)
+        jittered_position = {}
+
+        for i, pos_key in enumerate(pos_keys):
+            jittered_position[pos_key] = init_strategies[pos_key](
+                init_strategy_keys[i], current_position[pos_key]
+            )
+
+        model_states = jax.vmap(model.update_state)(jittered_position, model_states)
+
+        # extending position keys
+        pos_keys.extend(self.positions_included)
+        pos_keys = [key for key in pos_keys if key not in self.positions_excluded]
+
         return Engine(
             seeds=seeds,
-            model_states=self._model_state.expect("Model state must be set"),
+            model_states=model_states,
             kernel_sequence=KernelSequence(self.kernels),
             epoch_configs=epochs,
             jitted_sample_duration=jit_duration,

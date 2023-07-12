@@ -5,7 +5,7 @@ Type aliases, type variables and protocols.
 from __future__ import annotations
 
 from abc import abstractmethod
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, NewType, Protocol, TypeVar
 
 if TYPE_CHECKING:
@@ -26,6 +26,7 @@ ModelState = PyTree
 Position = NewType("Position", dict[str, Array])
 KernelState = PyTree
 KeyArray = Any
+InitStrategies = dict[str, Callable[[KeyArray, Array], Array]]
 
 
 class TuningInfo(Protocol):

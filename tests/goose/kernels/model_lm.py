@@ -50,6 +50,9 @@ def run_kernel_test(mcmc_seed: int, kernels: Sequence[Kernel]) -> None:
     builder.set_model(model)
 
     builder.set_initial_values(model_state)
+    builder.set_init_startegies(
+        {"beta": lambda key, cv: cv, "log_sigma": lambda key, cv: cv}
+    )
 
     builder.set_duration(
         warmup_duration=5000,

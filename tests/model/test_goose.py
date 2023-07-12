@@ -233,6 +233,7 @@ class TestFiniteDiscreteGibbsKernel:
         eb.set_model(lsl.GooseModel(model))
         eb.set_initial_values(model.state)
         eb.set_duration(warmup_duration=500, posterior_duration=2000)
+        eb.set_init_startegies({"dummy_var": lambda key, cv: cv})
 
         engine = eb.build()
         engine.sample_all_epochs()

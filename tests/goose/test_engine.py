@@ -8,6 +8,7 @@ from typing import ClassVar
 import jax
 import jax.numpy as jnp
 import numpy as np
+import tensorflow_probability.substrates.jax.distributions as tfd
 
 from liesel.goose.builder import EngineBuilder
 from liesel.goose.chain import EpochChainManager
@@ -159,6 +160,12 @@ def t_test_engine_builder() -> None:
     )
     ms = {"x": jnp.array(1), "y": jnp.array(-1)}
     builder.set_initial_values(ms, multiple_chains=False)
+    builder.set_init_startegies(
+        {
+            "x": lambda cv, key: tfd.Uniform(-1.0, 1.0).sample(cv.shape, key),
+            "y": lambda cv, key: tfd.Uniform(-1.0, 1.0).sample(cv.shape, key),
+        }
+    )
     con = DictModel(lambda ms: -0.5 * ms["x"] ** 2 - 0.5 * ms["y"])
     builder.set_model(con)
     builder.add_kernel(DetCountingKernel(["x"], DetCountingKernelState.default()))
