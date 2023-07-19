@@ -160,7 +160,7 @@ def t_test_engine_builder() -> None:
     )
     ms = {"x": jnp.array(1), "y": jnp.array(-1)}
     builder.set_initial_values(ms, multiple_chains=False)
-    builder.set_init_startegies(
+    builder.set_jitter_fns(
         {
             "x": lambda cv, key: tfd.Uniform(-1.0, 1.0).sample(cv.shape, key),
             "y": lambda cv, key: tfd.Uniform(-1.0, 1.0).sample(cv.shape, key),

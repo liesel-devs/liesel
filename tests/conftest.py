@@ -115,9 +115,6 @@ def result() -> SamplingResults:
     builder.add_kernel(MockKernel(list(state.keys())))
     builder.set_model(DictModel(log_prob_fn=lambda state: 0.0))
     builder.set_initial_values(state)
-    builder.set_init_startegies(
-        {pos_key: lambda key, cv: cv for pos_key in state.keys()}
-    )
     builder.set_epochs(
         [
             EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
@@ -142,9 +139,6 @@ def result_for_quants() -> SamplingResults:
     builder.add_kernel(MockKernel(list(state.keys())))
     builder.set_model(DictModel(log_prob_fn=lambda state: 0.0))
     builder.set_initial_values(state)
-    builder.set_init_startegies(
-        {pos_key: lambda key, cv: cv for pos_key in state.keys()}
-    )
     builder.set_epochs(
         [
             EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
@@ -169,9 +163,6 @@ def single_chain_result() -> SamplingResults:
     builder.add_kernel(MockKernel(list(state.keys())))
     builder.set_model(DictModel(log_prob_fn=lambda state: 0.0))
     builder.set_initial_values(state)
-    builder.set_init_startegies(
-        {pos_key: lambda key, cv: cv for pos_key in state.keys()}
-    )
     builder.set_epochs(
         [
             EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),

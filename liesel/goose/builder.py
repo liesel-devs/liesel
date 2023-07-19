@@ -22,7 +22,7 @@ from .epoch import EpochConfig, EpochManager
 from .kernel_sequence import KernelSequence
 from .pytree import stack_leaves
 from .types import (
-    InitStrategies,
+    JitterFunctions,
     Kernel,
     KeyArray,
     ModelInterface,
@@ -68,14 +68,13 @@ class EngineBuilder:
         keys = jax.random.split(jax.random.PRNGKey(seed), 3)
         self._prng_key: KeyArray = keys[0]
         self._engine_key: KeyArray = keys[1]
-        self._init_strategy_key: KeyArray = keys[2]
+        self._jitter_fns_key: KeyArray = keys[2]
         self._num_chains: int = num_chains
         self._kernels: list[Kernel] = []
         self._quantity_generators: list[QuantityGenerator] = []
         self._model_state: Option[ModelState] = Option(None)
         self._model: Option[ModelInterface] = Option(None)
-        # self._init_strategies: Option[InitStrategy] = Option({})
-        self._init_strategies: InitStrategies = {}
+        self._jitter_fns: Option[JitterFunctions] = Option(None)
 
         # public fields, only simple states
         self.store_kernel_states: bool = False
@@ -134,13 +133,16 @@ class EngineBuilder:
 
         self._model_state = Option(model_states)
 
-    def set_init_startegies(self, init_strategies: InitStrategies):
-        self._init_strategies = init_strategies
+    def set_jitter_fns(self, jitter_fns: JitterFunctions):
+        """
+        Set the jittering functions.
+        """
+        self._jitter_fns = Option(jitter_fns)
 
     @property
-    def init_startegies(self) -> InitStrategies:
-        """Initialization strategies."""
-        return self._init_strategies
+    def jitter_fns(self) -> Option[JitterFunctions]:
+        """Jittering functions."""
+        return self._jitter_fns
 
     @property
     def model_state(self) -> Option[ModelState]:
@@ -239,43 +241,24 @@ class EngineBuilder:
 
         # set initial values
         model_states = self._model_state.expect("Model state must be set")
-        # init_strategies = self._init_strategies.value
-        init_strategies = self._init_strategies
 
-        # not_present_strategies = []
-        # for pos_key in pos_keys:
-        #     if pos_key not in init_strategies:
-        #         not_present_strategies.append(pos_key)
+        if self._jitter_fns.is_some():
+            jitter_fns = self._jitter_fns.unwrap()
+            jitter_fns_pos_keys = list(jitter_fns.keys())
 
-        # if not_present_strategies:
-        #     raise Warning(
-        #         f"The strategies for {not_present_strategies} have not been set. "
-        #         "The values will be jittered with a U(-1, 1) noise"
-        #     )
-
-        for pos_key in pos_keys:
-            if pos_key not in init_strategies.keys():
-                init_strategies[
-                    pos_key
-                ] = lambda key, current_value: current_value + jax.random.uniform(
-                    key=key,
-                    shape=current_value.shape,
-                    dtype=current_value.dtype,
-                    minval=-1.0,
-                    maxval=1.0,
-                )
-
-        init_strategy_keys = jax.random.split(self._init_strategy_key, len(pos_keys))
-
-        current_position = model.extract_position(pos_keys, model_states)
-        jittered_position = {}
-
-        for i, pos_key in enumerate(pos_keys):
-            jittered_position[pos_key] = init_strategies[pos_key](
-                init_strategy_keys[i], current_position[pos_key]
+            jitter_fns_keys = jax.random.split(
+                self._jitter_fns_key, len(jitter_fns_pos_keys)
             )
 
-        model_states = jax.vmap(model.update_state)(jittered_position, model_states)
+            current_position = model.extract_position(jitter_fns_pos_keys, model_states)
+            jittered_position = {}
+
+            for i, pos_key in enumerate(jitter_fns_pos_keys):
+                jittered_position[pos_key] = jitter_fns[pos_key](
+                    jitter_fns_keys[i], current_position[pos_key]
+                )
+
+            model_states = jax.vmap(model.update_state)(jittered_position, model_states)
 
         # extending position keys
         pos_keys.extend(self.positions_included)
