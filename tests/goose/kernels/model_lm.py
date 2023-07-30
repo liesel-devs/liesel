@@ -30,6 +30,10 @@ sigma_ols = np.sqrt(rss_ols / (n - p))
 model_state = {"y": y, "X": X, "beta": beta, "log_sigma": np.log(sigma)}
 
 
+def identity_jitter_fn(key, value):
+    return value
+
+
 def log_prob(model_state):
     y = model_state["y"]
     mu = model_state["X"] @ model_state["beta"]
@@ -50,7 +54,9 @@ def run_kernel_test(mcmc_seed: int, kernels: Sequence[Kernel]) -> None:
     builder.set_model(model)
 
     builder.set_initial_values(model_state)
-
+    builder.set_jitter_fns(
+        {"beta": identity_jitter_fn, "log_sigma": identity_jitter_fn}
+    )
     builder.set_duration(
         warmup_duration=5000,
         posterior_duration=5000,

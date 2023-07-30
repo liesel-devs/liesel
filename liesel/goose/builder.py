@@ -9,6 +9,7 @@ implementations.
 
 
 import math
+import warnings
 from collections.abc import Iterable
 from typing import cast
 
@@ -246,6 +247,18 @@ class EngineBuilder:
             jitter_fns = self._jitter_fns.unwrap()
             jitter_fns_pos_keys = list(jitter_fns.keys())
 
+            missing_keys = []
+
+            for pos_key in pos_keys:
+                if pos_key not in jitter_fns_pos_keys:
+                    missing_keys.append(pos_key)
+
+            if missing_keys:
+                warnings.warn(
+                    f"No jitter function for {missing_keys} has been provide. \
+                    The initial values won't be jittered."
+                )
+
             jitter_fns_keys = jax.random.split(
                 self._jitter_fns_key, len(jitter_fns_pos_keys)
             )
@@ -259,6 +272,11 @@ class EngineBuilder:
                 )
 
             model_states = jax.vmap(model.update_state)(jittered_position, model_states)
+        else:
+            warnings.warn(
+                "No jitter function has been provided. \
+                The initial value of each position key won't be jittered."
+            )
 
         # extending position keys
         pos_keys.extend(self.positions_included)

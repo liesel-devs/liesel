@@ -1058,6 +1058,12 @@ def test_sampling() -> None:
     builder = gs.EngineBuilder(1337, 1)
     builder.set_model(lsl.GooseModel(model))
     builder.set_initial_values(model.state)
+    builder.set_jitter_fns(
+        {
+            "beta": lambda key, current_value: current_value
+            + jax.random.uniform(key, current_value.shape)
+        }
+    )
     builder.add_kernel(gs.IWLSKernel(["beta"]))
     builder.set_duration(warmup_duration=500, posterior_duration=20)
     engine = builder.build()

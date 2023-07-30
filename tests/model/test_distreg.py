@@ -227,9 +227,9 @@ class TestDistRegMCMC:
         model = drb.build_model()
         ebuilder = dr.dist_reg_mcmc(model, 42, 2)
         ebuilder.set_duration(1000, 1000)
-        engine = ebuilder.build()
+        with pytest.warns(UserWarning):
+            engine = ebuilder.build()
         assert engine
-
         engine.sample_next_epoch()
         assert engine.get_results()
 
@@ -257,5 +257,6 @@ class TestDistRegMCMC:
         model = drb.build_model()
         ebuilder = dr.dist_reg_mcmc(model, 42, 2)
         ebuilder.set_duration(1000, 100)
-        engine = ebuilder.build()
+        with pytest.warns(UserWarning):
+            engine = ebuilder.build()
         assert engine
