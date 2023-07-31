@@ -14,10 +14,6 @@ from liesel.goose.models import DictModel
 from .mock_kernel import MockKernel
 
 
-def identity_jitter_fn(key, value):
-    return value
-
-
 def pytest_addoption(parser):
     parser.addoption(
         "--run-mcmc", action="store_true", default=False, help="run mcmc tests"
@@ -119,7 +115,7 @@ def result() -> SamplingResults:
     builder.add_kernel(MockKernel(list(state.keys())))
     builder.set_model(DictModel(log_prob_fn=lambda state: 0.0))
     builder.set_initial_values(state)
-    builder.set_jitter_fns({pos_key: identity_jitter_fn for pos_key in state.keys()})
+    builder.set_jitter_fns({pos_key: lambda _, v: v for pos_key in state.keys()})
     builder.set_epochs(
         [
             EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
@@ -144,7 +140,7 @@ def result_for_quants() -> SamplingResults:
     builder.add_kernel(MockKernel(list(state.keys())))
     builder.set_model(DictModel(log_prob_fn=lambda state: 0.0))
     builder.set_initial_values(state)
-    builder.set_jitter_fns({pos_key: identity_jitter_fn for pos_key in state.keys()})
+    builder.set_jitter_fns({pos_key: lambda _, v: v for pos_key in state.keys()})
     builder.set_epochs(
         [
             EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
@@ -169,7 +165,7 @@ def single_chain_result() -> SamplingResults:
     builder.add_kernel(MockKernel(list(state.keys())))
     builder.set_model(DictModel(log_prob_fn=lambda state: 0.0))
     builder.set_initial_values(state)
-    builder.set_jitter_fns({pos_key: identity_jitter_fn for pos_key in state.keys()})
+    builder.set_jitter_fns({pos_key: lambda _, v: v for pos_key in state.keys()})
     builder.set_epochs(
         [
             EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),

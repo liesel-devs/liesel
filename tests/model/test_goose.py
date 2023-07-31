@@ -12,10 +12,6 @@ from liesel.model.model import GraphBuilder, Model
 from liesel.model.nodes import Dist, Var
 
 
-def identity_jitter_fn(key, value):
-    return value
-
-
 @pytest.fixture
 def model():
     key = rd.PRNGKey(1337)
@@ -62,7 +58,7 @@ def test_sample_model(model) -> None:
     builder.set_model(goose_model)
 
     builder.set_initial_values(model.state)
-    builder.set_jitter_fns({"mu_value": identity_jitter_fn})
+    builder.set_jitter_fns({"mu_value": lambda _, v: v})
 
     builder.set_duration(
         warmup_duration=1000,
@@ -98,7 +94,7 @@ def test_sample_transformed_model(model: Model):
 
     builder.set_initial_values(model.state)
     builder.set_jitter_fns(
-        {"sigma_transformed_value": identity_jitter_fn, "mu_value": identity_jitter_fn}
+        {"sigma_transformed_value": lambda _, v: v, "mu_value": lambda _, v: v}
     )
 
     builder.set_duration(
@@ -181,7 +177,7 @@ class TestFiniteDiscreteGibbsKernel:
         eb.set_model(lsl.GooseModel(model))
         eb.set_initial_values(model.state)
 
-        eb.set_jitter_fns({"categorical_var": identity_jitter_fn})
+        eb.set_jitter_fns({"categorical_var": lambda _, v: v})
         eb.set_duration(warmup_duration=500, posterior_duration=2000)
 
         engine = eb.build()
@@ -212,7 +208,7 @@ class TestFiniteDiscreteGibbsKernel:
         eb.add_kernel(kernel)
         eb.set_model(lsl.GooseModel(model))
         eb.set_initial_values(model.state)
-        eb.set_jitter_fns({"dummy_var": identity_jitter_fn})
+        eb.set_jitter_fns({"dummy_var": lambda _, v: v})
 
         eb.set_duration(warmup_duration=500, posterior_duration=2000)
 
@@ -244,7 +240,7 @@ class TestFiniteDiscreteGibbsKernel:
         eb.add_kernel(kernel)
         eb.set_model(lsl.GooseModel(model))
         eb.set_initial_values(model.state)
-        eb.set_jitter_fns({"dummy_var": identity_jitter_fn})
+        eb.set_jitter_fns({"dummy_var": lambda _, v: v})
 
         eb.set_duration(warmup_duration=500, posterior_duration=2000)
 

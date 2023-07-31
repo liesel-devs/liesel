@@ -256,7 +256,8 @@ class EngineBuilder:
             if missing_keys:
                 warnings.warn(
                     f"No jitter function for {missing_keys} has been provide. \
-                    The initial values won't be jittered."
+                    The initial values won't be jittered.",
+                    UserWarning,
                 )
 
             jitter_fns_keys = jax.random.split(
@@ -275,7 +276,8 @@ class EngineBuilder:
         else:
             warnings.warn(
                 "No jitter function has been provided. \
-                The initial value of each position key won't be jittered."
+                The initial value of each position key won't be jittered.",
+                UserWarning,
             )
 
         # extending position keys

@@ -18,10 +18,6 @@ except ImportError:
 roughly_close = partial(np.allclose, rtol=0.1, atol=0.01)
 
 
-def identity_jitter_fn(key, value):
-    return value
-
-
 @pytest.fixture
 def basic_lm():
     RANDOM_SEED = 123
@@ -123,10 +119,7 @@ def test_mcmc(basic_lm: pm.Model):  # type: ignore
     state = interface.get_initial_state()
     builder = gs.EngineBuilder(1, 2)
     builder.set_initial_values(state)
-
-    builder.set_jitter_fns(
-        {"beta": identity_jitter_fn, "sigma_log__": identity_jitter_fn}
-    )
+    builder.set_jitter_fns({"beta": lambda _, v: v, "sigma_log__": lambda _, v: v})
     builder.set_model(interface)
     builder.set_duration(1000, 2000)
 
@@ -154,9 +147,7 @@ def test_mcmc_two_kernels(basic_lm: pm.Model):  # type: ignore
     state = interface.get_initial_state()
     builder = gs.EngineBuilder(1, 2)
     builder.set_initial_values(state)
-    builder.set_jitter_fns(
-        {"beta": identity_jitter_fn, "sigma_log__": identity_jitter_fn}
-    )
+    builder.set_jitter_fns({"beta": lambda _, v: v, "sigma_log__": lambda _, v: v})
     builder.set_model(interface)
     builder.set_duration(1000, 2000)
 
