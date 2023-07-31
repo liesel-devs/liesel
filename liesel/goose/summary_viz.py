@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from typing import Any
 
 import arviz
+import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
@@ -104,7 +105,7 @@ def _move_col_first(df: pd.DataFrame, colname: str) -> pd.DataFrame:
 
 
 def _validate_params(
-    posterior_samples: dict[str, jnp.Array], params: str | list[str] | None
+    posterior_samples: dict[str, jax.Array], params: str | list[str] | None
 ) -> list[str]:
     """Convert ``str`` or ``None`` input of ``params`` to sequence of strings."""
     posterior_keys = list(posterior_samples.keys())
@@ -142,7 +143,7 @@ def _subparam_chains_to_df(
 
 
 def _preprocess_param_chains(
-    posterior_samples: dict[str, jnp.Array], param: str
+    posterior_samples: dict[str, jax.Array], param: str
 ) -> np.ndarray:
     """Convert array of posteror samples for each parameter to equal dimensions."""
 
@@ -222,7 +223,7 @@ def _postprocess_param_df(
 
 
 def _collect_subparam_dfs(
-    posterior_samples: dict[str, jnp.DeviceArray],
+    posterior_samples: dict[str, jax.Array],
     param: str,
     param_indices: int | Sequence[int] | None,
     chain_indices: int | Sequence[int] | None,
