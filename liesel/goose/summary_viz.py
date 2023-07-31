@@ -104,7 +104,7 @@ def _move_col_first(df: pd.DataFrame, colname: str) -> pd.DataFrame:
 
 
 def _validate_params(
-    posterior_samples: dict[str, jnp.DeviceArray], params: str | list[str] | None
+    posterior_samples: dict[str, jnp.Array], params: str | list[str] | None
 ) -> list[str]:
     """Convert ``str`` or ``None`` input of ``params`` to sequence of strings."""
     posterior_keys = list(posterior_samples.keys())
@@ -142,7 +142,7 @@ def _subparam_chains_to_df(
 
 
 def _preprocess_param_chains(
-    posterior_samples: dict[str, jnp.DeviceArray], param: str
+    posterior_samples: dict[str, jnp.Array], param: str
 ) -> np.ndarray:
     """Convert array of posteror samples for each parameter to equal dimensions."""
 
