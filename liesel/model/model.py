@@ -171,6 +171,38 @@ class GraphBuilder:
 
         return self
 
+    def _transform_vars(self) -> GraphBuilder:
+        """Transform all the varaibles having ``auto_transform`` set to ``True``
+        on the unconstrained space ``R**n``."""
+        _, _vars = self._all_nodes_and_vars()
+
+        for var in _vars:
+            if var.auto_transform:
+                if var.weak:
+                    raise RuntimeError(f"{repr(var)} is weak")
+
+                if var.dist_node is None:
+                    raise RuntimeError(f"{repr(var)} has no distribution")
+
+                tfp_dist = var.dist_node.init_dist()
+                default_bijector = tfp_dist.experimental_default_event_space_bijector()
+
+                if default_bijector is None:
+                    raise RuntimeError(
+                        f"{repr(var)} has distribution without"
+                        "default event space bijector"
+                    )
+
+                if isinstance(tfp_dist, jd.Distribution):
+                    has_identity_bijector = default_bijector == jb.Identity()
+                elif isinstance(tfp_dist, nd.Distribution):
+                    has_identity_bijector = default_bijector == nb.Identity()
+
+                if not has_identity_bijector:
+                    self._do_transform(var)
+
+        return self
+
     def _all_nodes_and_vars(self) -> tuple[list[Node], list[Var]]:
         """
         Returns all nodes and variables that were explicitly or implicitly
@@ -339,6 +371,7 @@ class GraphBuilder:
                 raise RuntimeError(f"{repr(node)} has reserved name '_model*'")
 
         gb = self.copy()
+        gb._transform_vars()
         gb._set_missing_names()
         gb._add_model_log_lik_node()
         gb._add_model_log_prior_node()
@@ -549,8 +582,9 @@ class GraphBuilder:
 
         return self
 
-    def transform(
-        self, var: Var, bijector: type[Bijector] | None = None, *args, **kwargs
+    @staticmethod
+    def _do_transform(
+        var: Var, bijector: type[Bijector] | None = None, *args, **kwargs
     ) -> Var:
         """
         Transforms a variable by adding a new transformed variable as an input.
@@ -559,57 +593,12 @@ class GraphBuilder:
         transformed distribution, turning the original variable into a weak variable
         without an associated distribution. The transformation is performed using
         TFP's bijector classes.
-
-        The value of the attribute :attr:`~liesel.model.nodes.Var.parameter` is
-        transferred to the transformed variable and set to ``False`` on the original
-        variable. The attributes :attr:`~liesel.model.nodes.Var.observed` and
-        :attr:`~liesel.model.nodes.Var.role` are set to the default values for
-        the transformed variable and remain unchanged on the original variable.
-
-        Parameters
-        ----------
-        var
-            The variable to transform (and add to the graph).
-        bijector
-            The bijector used to map the new transformed variable to this variable \
-            (forward transformation). If ``None``, the experimental default event \
-            space bijector (see TFP documentation) is used.
-        args
-            The arguments passed on to the init function of the bijector.
-        kwargs
-            The keyword arguments passed on to the init function of the bijector.
-
-        Returns
-        -------
-        The new transformed variable which acts as an input to this variable.
-
-        Raises
-        ------
-        RuntimeError
-            If the variable is weak, has no TFP distribution, the distribution has
-            no default event space bijector and the argument ``bijector`` is ``None``,
-            or the local model for the variable cannot be built.
         """
-
         if var.weak:
             raise RuntimeError(f"{repr(var)} is weak")
 
         if var.dist_node is None:
             raise RuntimeError(f"{repr(var)} has no distribution")
-
-        # avoid name clashes
-        self._set_missing_names()
-
-        try:
-            Model([var])
-        except Exception:
-            raise RuntimeError(f"Cannot build local model for {repr(var)}")
-
-        self.add(var)
-
-        # if we got this far, we can assume:
-        # - the var and its inputs have numeric values
-        # - the var and its inputs are up-to-date
 
         tfp_dist = var.dist_node.init_dist()
         default_bijector = tfp_dist.experimental_default_event_space_bijector()
@@ -690,8 +679,75 @@ class GraphBuilder:
         var.value_node = _transform_back(var_transformed)
         var.dist_node = None
         var.parameter = False
+        var.auto_transform = False
 
         return var_transformed
+
+    def transform(
+        self, var: Var, bijector: type[Bijector] | None = None, *args, **kwargs
+    ) -> Var:
+        """
+        Transforms a variable by adding a new transformed variable as an input.
+
+        Creates a new variable on the unconstrained space ``R**n`` with the appropriate
+        transformed distribution, turning the original variable into a weak variable
+        without an associated distribution. The transformation is performed using
+        TFP's bijector classes.
+
+        The value of the attribute :attr:`~liesel.model.nodes.Var.parameter` is
+        transferred to the transformed variable and set to ``False`` on the original
+        variable. The attributes :attr:`~liesel.model.nodes.Var.observed` and
+        :attr:`~liesel.model.nodes.Var.role` are set to the default values for
+        the transformed variable and remain unchanged on the original variable.
+        :attr:`~liesel.model.nodes.Var.auto_transform` in the transformed variable
+        is set to ``False``.
+
+        Parameters
+        ----------
+        var
+            The variable to transform (and add to the graph).
+        bijector
+            The bijector used to map the new transformed variable to this variable \
+            (forward transformation). If ``None``, the experimental default event \
+            space bijector (see TFP documentation) is used.
+        args
+            The arguments passed on to the init function of the bijector.
+        kwargs
+            The keyword arguments passed on to the init function of the bijector.
+
+        Returns
+        -------
+        The new transformed variable which acts as an input to this variable.
+
+        Raises
+        ------
+        RuntimeError
+            If the variable is weak, has no TFP distribution, the distribution has
+            no default event space bijector and the argument ``bijector`` is ``None``,
+            or the local model for the variable cannot be built.
+        """
+
+        if var.weak:
+            raise RuntimeError(f"{repr(var)} is weak")
+
+        if var.dist_node is None:
+            raise RuntimeError(f"{repr(var)} has no distribution")
+
+        # avoid name clashes
+        self._set_missing_names()
+
+        try:
+            Model([var])
+        except Exception:
+            raise RuntimeError(f"Cannot build local model for {repr(var)}")
+
+        self.add(var)
+
+        # if we got this far, we can assume:
+        # - the var and its inputs have numeric values
+        # - the var and its inputs are up-to-date
+
+        return self._do_transform(var, bijector, *args, **kwargs)
 
     def update(self) -> GraphBuilder:
         """Updates all nodes in the graph."""

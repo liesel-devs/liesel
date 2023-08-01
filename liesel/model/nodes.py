@@ -707,6 +707,7 @@ class Var:
         "_name",
         "_observed",
         "_parameter",
+        "_auto_transform",
         "_role",
         "_value_node",
         "_var_value_node",
@@ -735,6 +736,7 @@ class Var:
 
         self._observed = False
         self._parameter = False
+        self._auto_transform = False
         self._role = ""
 
         self._groups: dict[str, Group] = {}
@@ -910,6 +912,15 @@ class Var:
     @role.setter
     def role(self, role: str):
         self._role = role
+
+    @property
+    def auto_transform(self) -> bool:
+        """Whether the variable should be transformed to the real line."""
+        return self._auto_transform
+
+    @auto_transform.setter
+    def auto_transform(self, auto_transform: bool):
+        self._auto_transform = auto_transform
 
     @property
     def strong(self) -> bool:

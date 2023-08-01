@@ -211,6 +211,17 @@ def test_property_model() -> None:
     assert not var.model
 
 
+def test_auto_transform():
+    var = lnodes.Var(1, name="var")
+    var.auto_transform = True
+
+    assert var.auto_transform
+
+    var.auto_transform = False
+
+    assert not var.auto_transform
+
+
 def test_method_nodes() -> None:
     in0 = lnodes.Data(0)
     calc = lnodes.Calc(lambda x: x + 1, in0)
