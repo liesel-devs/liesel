@@ -69,7 +69,7 @@ def plot_vars(model, show=True, save_path=None, width=14, height=10, prog="dot")
     _add_nodes_without_distribution_to_plot(model.var_graph, axis, pos)
     _add_labels(model.var_graph, axis, pos)
     _draw_edges(model.var_graph, axis, pos, True)
-    _add_legend(axis)
+    _add_legend(axis, True)
 
     if save_path:
         plt.savefig(save_path)
@@ -192,7 +192,7 @@ def _draw_edges(graph, axis, pos, is_var: bool = False):
     )
 
 
-def _add_legend(axis):
+def _add_legend(axis, is_var: bool = False):
     """Adds a legend to the figure."""
 
     legend_elements = [
@@ -217,5 +217,31 @@ def _add_legend(axis):
             markersize=12,
         ),
     ]
+
+    if is_var:
+        legend_elements.extend(
+            [
+                Line2D(
+                    [0],
+                    [0],
+                    marker=r"$\rightarrow$",
+                    lw=0,
+                    color="#aaaaaa",
+                    label="Value input",
+                    markerfacecolor="k",
+                    markersize=12,
+                ),
+                Line2D(
+                    [0],
+                    [0],
+                    marker=r"$\rightarrow$",
+                    lw=0,
+                    color="#000000",
+                    label="Dist or Calc input",
+                    markerfacecolor="k",
+                    markersize=12,
+                ),
+            ]
+        )
 
     axis.legend(handles=legend_elements, loc="best")
