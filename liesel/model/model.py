@@ -178,28 +178,7 @@ class GraphBuilder:
 
         for var in _vars:
             if var.auto_transform:
-                if var.weak:
-                    raise RuntimeError(f"{repr(var)} is weak")
-
-                if var.dist_node is None:
-                    raise RuntimeError(f"{repr(var)} has no distribution")
-
-                tfp_dist = var.dist_node.init_dist()
-                default_bijector = tfp_dist.experimental_default_event_space_bijector()
-
-                if default_bijector is None:
-                    raise RuntimeError(
-                        f"{repr(var)} has distribution without"
-                        "default event space bijector"
-                    )
-
-                if isinstance(tfp_dist, jd.Distribution):
-                    has_identity_bijector = default_bijector == jb.Identity()
-                elif isinstance(tfp_dist, nd.Distribution):
-                    has_identity_bijector = default_bijector == nb.Identity()
-
-                if not has_identity_bijector:
-                    self._do_transform(var)
+                self._do_transform(var)
 
         return self
 
