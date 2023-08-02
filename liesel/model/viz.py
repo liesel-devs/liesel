@@ -68,7 +68,7 @@ def plot_vars(model, show=True, save_path=None, width=14, height=10, prog="dot")
     _add_nodes_with_distribution_to_plot(model.var_graph, axis, pos)
     _add_nodes_without_distribution_to_plot(model.var_graph, axis, pos)
     _add_labels(model.var_graph, axis, pos)
-    _draw_edges(model.var_graph, axis, pos)
+    _draw_edges(model.var_graph, axis, pos, True)
     _add_legend(axis)
 
     if save_path:
@@ -155,13 +155,36 @@ def _add_labels(graph, axis, pos):
     nx.draw_networkx_labels(graph, pos, labels=labels, ax=axis, font_size=10)
 
 
-def _draw_edges(graph, axis, pos):
+def _draw_edges(graph, axis, pos, is_var: bool = False):
     """Adds edges to the figure."""
+    edges = list(graph.edges)
+
+    if is_var:
+        edges_dist = []
+        edges_non_dist = []
+
+        for e in edges:
+            if e[1].has_dist:
+                edges_dist.append(e)
+            else:
+                edges_non_dist.append(e)
+
+        nx.draw_networkx_edges(
+            graph,
+            pos,
+            edgelist=edges_dist,
+            edge_color="#000000",
+            arrows=True,
+            ax=axis,
+            node_size=500,
+        )
+
+        edges = edges_non_dist
 
     nx.draw_networkx_edges(
         graph,
         pos,
-        edgelist=graph.edges,
+        edgelist=edges,
         edge_color="#aaaaaa",
         arrows=True,
         ax=axis,
