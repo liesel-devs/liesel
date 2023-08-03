@@ -6,10 +6,11 @@ from __future__ import annotations
 
 import logging
 import re
+import warnings
 from collections import Counter
 from collections.abc import Iterable
 from copy import deepcopy
-from types import MappingProxyType
+from types import MappingProxyType, ModuleType
 from typing import IO, Any, TypeVar
 
 import dill
@@ -29,6 +30,7 @@ from .nodes import (
     Calc,
     Data,
     Dist,
+    Distribution,
     Group,
     InputGroup,
     Node,
@@ -178,7 +180,41 @@ class GraphBuilder:
 
         for var in _vars:
             if var.auto_transform:
-                self._do_transform(var)
+                if var.weak:
+                    raise RuntimeError(f"{repr(var)} is weak")
+
+                if var.dist_node is None:
+                    raise RuntimeError(f"{repr(var)} has no distribution")
+
+                tfp_dist = var.dist_node.init_dist()
+
+                if isinstance(tfp_dist, jd.Distribution):
+                    tfd = jd
+                    tfb = jb
+                elif isinstance(tfp_dist, nd.Distribution):
+                    tfd = nd
+                    tfb = nb
+                else:
+                    raise RuntimeError(f"{repr(var)} has no TFP distribution")
+
+                default_bijector = tfp_dist.experimental_default_event_space_bijector()
+
+                if default_bijector is None:
+                    raise RuntimeError(
+                        f"{repr(var)} has distribution without default"
+                        "event space bijector and no bijector was given"
+                    )
+
+                if default_bijector != tfb.Identity:
+                    bijector = tfp_dist.experimental_default_event_space_bijector
+                    tfp_dist_cls = var.dist_node.distribution
+                    self._do_transform(var, bijector, tfp_dist_cls, tfd, tfb)
+                else:
+                    warnings.warn(
+                        f"{repr(var)} has identity bijector."
+                        "No transformation will take place",
+                        UserWarning,
+                    )
 
         return self
 
@@ -563,7 +599,13 @@ class GraphBuilder:
 
     @staticmethod
     def _do_transform(
-        var: Var, bijector: type[Bijector] | None = None, *args, **kwargs
+        var: Var,
+        bijector: type[Bijector],
+        tfp_dist_cls: Distribution,
+        tfd: ModuleType,
+        tfb: ModuleType,
+        *args,
+        **kwargs,
     ) -> Var:
         """
         Transforms a variable by adding a new transformed variable as an input.
@@ -573,43 +615,9 @@ class GraphBuilder:
         without an associated distribution. The transformation is performed using
         TFP's bijector classes.
         """
-        if var.weak:
-            raise RuntimeError(f"{repr(var)} is weak")
-
-        if var.dist_node is None:
-            raise RuntimeError(f"{repr(var)} has no distribution")
-
-        tfp_dist = var.dist_node.init_dist()
-        default_bijector = tfp_dist.experimental_default_event_space_bijector()
-        has_default_bijector = default_bijector is not None
-        use_default_bijector = bijector is None
-
-        if use_default_bijector and not has_default_bijector:
-            raise RuntimeError(
-                f"{repr(var)} has distribution without default event space bijector "
-                "and no bijector was given"
-            )
-
-        if isinstance(tfp_dist, jd.Distribution):
-            tfd = jd
-            tfb = jb
-        elif isinstance(tfp_dist, nd.Distribution):
-            tfd = nd
-            tfb = nb
-        else:
-            raise RuntimeError(f"{repr(var)} has no TFP distribution")
-
-        # no copy necessary:
-        # >>> from copy import copy
-        # >>> import tensorflow_probability.substrates.numpy.distributions as tfd
-        # >>> CopiedNormal = copy(tfd.Normal)
-        # >>> CopiedNormal is tfd.Normal
-        # True
-
-        tfp_dist_cls = var.dist_node.distribution
 
         dist_inputs = InputGroup(
-            *var.dist_node.inputs,
+            *var.dist_node.inputs,  # type: ignore
             **var.dist_node.kwinputs,  # type: ignore
         )
 
@@ -619,15 +627,8 @@ class GraphBuilder:
         def make_transformed_distribution(dist_args: ArgGroup, bijector_args: ArgGroup):
             tfp_dist = tfp_dist_cls(*dist_args.args, **dist_args.kwargs)
 
-            if bijector is None:
-                bijector_obj = tfp_dist.experimental_default_event_space_bijector(
-                    *bijector_args.args, **bijector_args.kwargs
-                )
-
-                bijector_inv = tfb.Invert(bijector_obj)
-            else:
-                bijector_obj = bijector(*bijector_args.args, **bijector_args.kwargs)
-                bijector_inv = tfb.Invert(bijector_obj)
+            bijector_obj = bijector(*bijector_args.args, **bijector_args.kwargs)
+            bijector_inv = tfb.Invert(bijector_obj)
 
             return tfd.TransformedDistribution(
                 tfp_dist, bijector_inv, validate_args=tfp_dist.validate_args
@@ -639,8 +640,8 @@ class GraphBuilder:
         )
 
         # transfer flags
-        dist_node_transformed.needs_seed = var.dist_node.needs_seed
-        dist_node_transformed.per_obs = var.dist_node.per_obs
+        dist_node_transformed.needs_seed = var.dist_node.needs_seed  # type: ignore
+        dist_node_transformed.per_obs = var.dist_node.per_obs  # type: ignore
 
         # transform value
         bijector_obj = dist_node_transformed.init_dist().bijector
@@ -726,7 +727,32 @@ class GraphBuilder:
         # - the var and its inputs have numeric values
         # - the var and its inputs are up-to-date
 
-        return self._do_transform(var, bijector, *args, **kwargs)
+        tfp_dist = var.dist_node.init_dist()
+
+        if isinstance(tfp_dist, jd.Distribution):
+            tfd = jd
+            tfb = jb
+        elif isinstance(tfp_dist, nd.Distribution):
+            tfd = nd
+            tfb = nb
+        else:
+            raise RuntimeError(f"{repr(var)} has no TFP distribution")
+
+        if bijector is None:
+            default_bijector = tfp_dist.experimental_default_event_space_bijector()
+
+            if default_bijector is None:
+                raise RuntimeError(
+                    f"{repr(var)} has distribution without default event space bijector"
+                    "and no bijector was given"
+                )
+            bijector = tfp_dist.experimental_default_event_space_bijector
+
+        tfp_dist_cls = var.dist_node.distribution
+
+        return self._do_transform(
+            var, bijector, tfp_dist_cls, tfd, tfb, *args, **kwargs
+        )
 
     def update(self) -> GraphBuilder:
         """Updates all nodes in the graph."""
