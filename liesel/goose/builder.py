@@ -7,7 +7,6 @@ engine in a well-defined state. Furthermore, the builder can return different en
 implementations.
 """
 
-
 import math
 import warnings
 from collections.abc import Iterable
@@ -69,7 +68,7 @@ class EngineBuilder:
         keys = jax.random.split(jax.random.PRNGKey(seed), 3)
         self._prng_key: KeyArray = keys[0]
         self._engine_key: KeyArray = keys[1]
-        self._jitter_fns_key: KeyArray = keys[2]
+        self._jitter_key: KeyArray = keys[2]
         self._num_chains: int = num_chains
         self._kernels: list[Kernel] = []
         self._quantity_generators: list[QuantityGenerator] = []
@@ -258,16 +257,14 @@ class EngineBuilder:
                     UserWarning,
                 )
 
-            jitter_fns_keys = jax.random.split(
-                self._jitter_fns_key, len(jitter_fns_pos_keys)
-            )
+            jitter_keys = jax.random.split(self._jitter_key, len(jitter_fns_pos_keys))
 
             current_position = model.extract_position(jitter_fns_pos_keys, model_states)
             jittered_position = {}
 
             for i, pos_key in enumerate(jitter_fns_pos_keys):
                 jittered_position[pos_key] = jitter_fns[pos_key](
-                    jitter_fns_keys[i], current_position[pos_key]
+                    jitter_keys[i], current_position[pos_key]
                 )
 
             model_states = jax.vmap(model.update_state)(jittered_position, model_states)
