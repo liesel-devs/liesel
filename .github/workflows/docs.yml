@@ -14,8 +14,8 @@ jobs:
     steps:
       - name: Install Ubuntu packages
         run: |
-          sudo apt-get update -qq
-          sudo apt-get upgrade -y --no-install-recommends
+          sudo apt-get update
+          sudo apt-get upgrade
           sudo apt-get install -y --no-install-recommends r-base r-cran-remotes r-cran-tidyverse r-cran-vgam
           sudo apt-get install -y --no-install-recommends graphviz graphviz-dev
 
