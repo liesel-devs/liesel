@@ -255,7 +255,7 @@ class EngineBuilder:
 
             if missing_keys:
                 warnings.warn(
-                    f"No jitter function for {missing_keys} has been provide. \
+                    f"No jitter function for {missing_keys} has been provided. \
                     The initial values won't be jittered.",
                     UserWarning,
                 )
