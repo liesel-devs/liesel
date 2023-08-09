@@ -134,10 +134,8 @@ class EngineBuilder:
 
         self._model_state = Option(model_states)
 
-    def set_jitter_fns(self, jitter_fns: JitterFunctions):
-        """
-        Set the jittering functions.
-        """
+    def set_jitter_fns(self, jitter_fns: JitterFunctions | None):
+        """Set the jittering functions."""
         self._jitter_fns = Option(jitter_fns)
 
     @property
