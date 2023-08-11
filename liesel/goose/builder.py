@@ -7,8 +7,8 @@ engine in a well-defined state. Furthermore, the builder can return different en
 implementations.
 """
 
+import logging
 import math
-import warnings
 from collections.abc import Iterable
 from typing import cast
 
@@ -30,6 +30,8 @@ from .types import (
     QuantityGenerator,
 )
 from .warmup import stan_epochs
+
+logger = logging.getLogger(__name__)
 
 
 def _find_duplicate(xs: list[str]) -> Option[str]:
@@ -251,10 +253,9 @@ class EngineBuilder:
                     missing_keys.append(pos_key)
 
             if missing_keys:
-                warnings.warn(
+                logger.warning(
                     f"No jitter function for {missing_keys} has been provided. \
-                    The initial values won't be jittered.",
-                    UserWarning,
+                    The initial values won't be jittered."
                 )
 
             jitter_keys = jax.random.split(self._jitter_key, len(jitter_fns_pos_keys))
@@ -263,16 +264,19 @@ class EngineBuilder:
             jittered_position = {}
 
             for i, pos_key in enumerate(jitter_fns_pos_keys):
-                jittered_position[pos_key] = jitter_fns[pos_key](
-                    jitter_keys[i], current_position[pos_key]
+                jittered_position[pos_key] = jax.vmap(jitter_fns[pos_key])(
+                    jax.random.split(jitter_keys[i], self._num_chains),
+                    current_position[pos_key],
                 )
+                # jittered_position[pos_key] = jitter_fns[pos_key](
+                #     jitter_keys[i], current_position[pos_key]
+                # )
 
             model_states = jax.vmap(model.update_state)(jittered_position, model_states)
         else:
-            warnings.warn(
+            logger.warning(
                 "No jitter function has been provided. \
-                The initial value of each position key won't be jittered.",
-                UserWarning,
+                The initial value of each position key won't be jittered."
             )
 
         # extending position keys
