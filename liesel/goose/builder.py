@@ -268,9 +268,6 @@ class EngineBuilder:
                     jax.random.split(jitter_keys[i], self._num_chains),
                     current_position[pos_key],
                 )
-                # jittered_position[pos_key] = jitter_fns[pos_key](
-                #     jitter_keys[i], current_position[pos_key]
-                # )
 
             model_states = jax.vmap(model.update_state)(jittered_position, model_states)
         else:
