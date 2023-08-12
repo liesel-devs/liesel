@@ -35,7 +35,7 @@ def plot_nodes(model, show=True, save_path=None, width=14, height=10, prog="dot"
     _, axis, pos = _prepare_figure(model.node_graph, width, height, prog)
     nx.draw_networkx_nodes(model.node_graph, pos, node_color=colors, ax=axis)
     _add_labels(model.node_graph, axis, pos)
-    _draw_edges(model.node_graph, axis, pos)
+    _draw_edges(model.node_graph, axis, pos, False)
 
     if save_path:
         plt.savefig(save_path)
@@ -69,7 +69,7 @@ def plot_vars(model, show=True, save_path=None, width=14, height=10, prog="dot")
     _add_nodes_without_distribution_to_plot(model.var_graph, axis, pos)
     _add_labels(model.var_graph, axis, pos)
     _draw_edges(model.var_graph, axis, pos, True)
-    _add_legend(axis, True)
+    _add_legend(axis)
 
     if save_path:
         plt.savefig(save_path)
@@ -155,44 +155,47 @@ def _add_labels(graph, axis, pos):
     nx.draw_networkx_labels(graph, pos, labels=labels, ax=axis, font_size=10)
 
 
-def _draw_edges(graph, axis, pos, is_var: bool = False):
+def _draw_edges(graph, axis, pos, is_var):
     """Adds edges to the figure."""
+
     edges = list(graph.edges)
 
     if is_var:
-        edges_dist = []
-        edges_non_dist = []
+        dist_edges = []
+        non_dist_edges = []
 
-        for e in edges:
-            if e[1].has_dist:
-                edges_dist.append(e)
+        for edge in edges:
+            if edge[1].has_dist and bool(
+                set(edge[0].nodes) & set(edge[1].dist_node.all_input_nodes())
+            ):
+                dist_edges.append(edge)
             else:
-                edges_non_dist.append(e)
+                non_dist_edges.append(edge)
 
         nx.draw_networkx_edges(
             graph,
             pos,
-            edgelist=edges_dist,
-            edge_color="#000000",
+            edgelist=dist_edges,
+            edge_color="#aaaaaa",
             arrows=True,
             ax=axis,
             node_size=500,
         )
 
-        edges = edges_non_dist
+        edges = non_dist_edges
 
     nx.draw_networkx_edges(
         graph,
         pos,
         edgelist=edges,
-        edge_color="#aaaaaa",
+        edge_color="#111111",
         arrows=True,
         ax=axis,
         node_size=500,
     )
 
 
-def _add_legend(axis, is_var: bool = False):
+def _add_legend(axis):
     """Adds a legend to the figure."""
 
     legend_elements = [
@@ -216,32 +219,16 @@ def _add_legend(axis, is_var: bool = False):
             markerfacecolor="k",
             markersize=12,
         ),
+        Line2D(
+            [0],
+            [0],
+            marker=r"$\rightarrow$",
+            color="#aaaaaa",
+            label="Distribution input",
+            markerfacecolor="k",
+            markersize=12,
+            lw=0,
+        ),
     ]
-
-    if is_var:
-        legend_elements.extend(
-            [
-                Line2D(
-                    [0],
-                    [0],
-                    marker=r"$\rightarrow$",
-                    lw=0,
-                    color="#aaaaaa",
-                    label="Value input",
-                    markerfacecolor="k",
-                    markersize=12,
-                ),
-                Line2D(
-                    [0],
-                    [0],
-                    marker=r"$\rightarrow$",
-                    lw=0,
-                    color="#000000",
-                    label="Dist or Calc input",
-                    markerfacecolor="k",
-                    markersize=12,
-                ),
-            ]
-        )
 
     axis.legend(handles=legend_elements, loc="best")
