@@ -617,7 +617,7 @@ def _compute_max_lags(
     plot.
     """
 
-    num_iterations = plot_df["iteration"].max().item()
+    num_iterations = plot_df["iteration"].max()
     max_lags = np.min([num_iterations, 30]) if max_lags is None else max_lags
     return max_lags
 
