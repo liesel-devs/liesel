@@ -224,7 +224,7 @@ def _add_legend(axis):
             [0],
             marker=r"$\rightarrow$",
             color="#111111",
-            label="Used in value or calculator",
+            label="Used in value",
             markerfacecolor="k",
             markersize=12,
             lw=0,
