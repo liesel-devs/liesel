@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.4] - 2023-08-18
+
+### What's new?
+
+- :construction: Removed all references to `jax.numpy.DeviceArray` to make Liesel compatible with Jax 0.4.14 (#73, @jobrachem)
+- ✨ Added a visual distinction for edges that represent a connection to a variable's distribution or value (#76, @GianmarcoCallegher)
+- ✨ Added `ls.Model.simulate()`, which provides a convenient way to draw random samples from a Liesel model using the specified priors. (#70, @hriebl)
+- ✨ Added `liesel.model.goose.finite_discrete_gibbs_kernel`, which helps you to automatically set up a `gs.GibbsKernel` for a discrete variable (#64 & #65, @jobrachem and @hriebl)
+- ✨ Added an intialization message to `gs.Engine` (#66, @GianmarcoCallegher)
+
 ## [0.2.3] - 2023-03-31
 
 ### What's new?
