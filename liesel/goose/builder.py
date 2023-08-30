@@ -78,6 +78,8 @@ class EngineBuilder:
         """List of position keys that should not be tracked. Excluded keys override
         additional keys."""
 
+        self._epochs: EpochManager = EpochManager(None)
+
     def set_engine_seed(self, seed: int | KeyArray):
         """Sets a seed used to initialize the MCMC engine."""
         if jnp.isscalar(seed):
@@ -167,16 +169,32 @@ class EngineBuilder:
 
     def build(self) -> Engine:
         """Builds the MCMC engine with the provided setup."""
+        # get the model interface
+        model = self._model.expect("Model interface must be set.")
+
         # build list of position keys
         pos_keys: list[str] = []
+
+        # first, collect all keys used by kernels
+        # this is always necessary to check for duplicates
         for ker in self._kernels:
             pos_keys.extend(ker.position_keys)
         dupl = _find_duplicate(pos_keys)
         if dupl.is_some():
             raise RuntimeError(
-                f"The position key {dupl.unwrap()} is claimed by multiple kernels"
+                f"The position key {dupl.unwrap()} is claimed by multiple kernels."
             )
 
+        # second, if the model provides monitored keys use them instead
+
+        if hasattr(model, "monitored_keys"):
+            # if the model provides monitored keys use them
+            from ..model.goose import GooseModel as LieselModelInterface
+
+            model = cast(LieselModelInterface, model)
+            pos_keys = list(model.monitored_keys())
+
+        # third, add and remove keys as specified by the user
         pos_keys.extend(self.positions_included)
         pos_keys = [key for key in pos_keys if key not in self.positions_excluded]
 
@@ -209,7 +227,6 @@ class EngineBuilder:
             )
 
         # set model interface for all kernels and quantity generators
-        model = self._model.expect("Model interface must be set")
         for ker in self.kernels:
             if not ker.has_model():
                 ker.set_model(model)

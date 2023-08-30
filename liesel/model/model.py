@@ -58,7 +58,7 @@ def _reduced_sum(*args: Array) -> Array:
     return sum(reduced)
 
 
-def _transform_back(var_transformed: Var) -> Calc:
+def _transform_back(var_transformed: Var, monitor: bool) -> Calc:
     """
     Creates a :class:`.Calc` mapping a transformed parameter back to
     the original domain.
@@ -78,7 +78,9 @@ def _transform_back(var_transformed: Var) -> Calc:
     inputs = var_transformed.dist_node.inputs
     kwinputs = var_transformed.dist_node.kwinputs
 
-    return Calc(fn, var_transformed.value_node, *inputs, **kwinputs)  # type: ignore
+    new_calc = Calc(fn, var_transformed.value_node, *inputs, **kwinputs)  # type: ignore
+    new_calc.monitor = monitor
+    return new_calc
 
 
 class GraphBuilder:
@@ -687,7 +689,9 @@ class GraphBuilder:
         var_transformed.parameter = var.parameter
 
         # var is now the forward transformation (a weak node without distribution)
-        var.value_node = _transform_back(var_transformed)
+        var.value_node = _transform_back(
+            var_transformed, monitor=var.value_node.monitor
+        )
         var.dist_node = None
         var.parameter = False
 

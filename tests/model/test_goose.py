@@ -9,14 +9,14 @@ import liesel.model as lsl
 from liesel.goose.types import Position
 from liesel.model.goose import GooseModel, finite_discrete_gibbs_kernel
 from liesel.model.model import GraphBuilder, Model
-from liesel.model.nodes import Dist, Var
+from liesel.model.nodes import Dist, Param, Var
 
 
 @pytest.fixture
 def model():
     key = rd.PRNGKey(1337)
-    mu = Var(0.0, name="mu")
-    sigma = Var(1.0, name="sigma")
+    mu = Param(0.0, name="mu")
+    sigma = Param(1.0, name="sigma")
 
     x = Var(rd.normal(key, shape=(500,)), name="x")
     y = Var(x, Dist(tfd.Normal, loc=mu, scale=sigma), "y")
@@ -86,9 +86,13 @@ def test_sample_transformed_model(model: Model):
     builder = gs.EngineBuilder(mcmc_seed, num_chains=1)
 
     builder.add_kernel(gs.NUTSKernel(["mu_value", "sigma_transformed_value"]))
-    builder.positions_included = ["sigma"]
+
+    # variable must be tracked for the kernel to work
+    # since the histroy is needed
+    builder.positions_included = ["sigma_transformed_value"]
 
     goose_model = GooseModel(model)
+    print(goose_model.monitored_keys())
     builder.set_model(goose_model)
 
     builder.set_initial_values(model.state)
@@ -103,7 +107,7 @@ def test_sample_transformed_model(model: Model):
     results = engine.get_results()
     samples = results.get_posterior_samples()
     avg_mu = np.mean(samples["mu_value"], axis=(0, 1))
-    avg_sigma = np.mean(samples["sigma"], axis=(0, 1))
+    avg_sigma = np.mean(samples["sigma_value"], axis=(0, 1))
 
     assert avg_mu == pytest.approx(0.0, abs=0.05)
     assert avg_sigma == pytest.approx(1.0, abs=0.05)
@@ -244,3 +248,31 @@ class TestFiniteDiscreteGibbsKernel:
         relative_freq = counts / np.sum(counts)
 
         assert np.allclose(relative_freq, [1 - prior_prob, prior_prob], atol=0.1)
+
+
+def test_monitor_keys():
+    key = rd.PRNGKey(1337)
+    mu = Param(0.0, name="mu")
+    sigma = Param(1.0, name="sigma")
+
+    x = Var(rd.normal(key, shape=(500,)), name="x")
+    y = Var(x, Dist(tfd.Normal, loc=mu, scale=sigma), "y")
+
+    model = lsl.GraphBuilder().add(y).build_model()
+
+    eb = gs.EngineBuilder(1, num_chains=1)
+    mi = lsl.GooseModel(model)
+
+    # assert monitor keys returnes the correct values
+    assert len(mi.monitored_keys()) == 2
+    assert "mu_value" in mi.monitored_keys()
+    assert "sigma_value" in mi.monitored_keys()
+    eb.set_model(lsl.GooseModel(model))
+
+    eb.set_initial_values(model.state)
+    eb.set_duration(warmup_duration=500, posterior_duration=2000)
+
+    engine = eb.build()
+    assert len(engine._position_keys) == 2
+    assert "mu_value" in engine._position_keys
+    assert "sigma_value" in engine._position_keys
