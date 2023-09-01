@@ -326,7 +326,7 @@ class TestModel:
         assert "lambda_transformed" not in model.vars
         assert model.vars["x_transformed"].value == pytest.approx(0.54132485)
 
-    def test_transform_vars_waek(self) -> None:
+    def test_transform_vars_weak(self) -> None:
         x = Var(Calc(lambda x: x), name="x")
         x.auto_transform = True
 
