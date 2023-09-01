@@ -657,15 +657,16 @@ class GraphBuilder:
 
         bijector_inputs = InputGroup(*args, **kwargs)
 
-        bijector = (
-            bijector if bijector else tfp_dist.experimental_default_event_space_bijector
-        )
-
         # define distribution "class" for the transformed var
         def make_transformed_distribution(dist_args: ArgGroup, bijector_args: ArgGroup):
             tfp_dist = tfp_dist_cls(*dist_args.args, **dist_args.kwargs)
 
-            bijector_obj = bijector(*bijector_args.args, **bijector_args.kwargs)
+            if use_default_bijector:
+                bijector_cls = tfp_dist.experimental_default_event_space_bijector
+            else:
+                bijector_cls = bijector
+
+            bijector_obj = bijector_cls(*bijector_args.args, **bijector_args.kwargs)
             bijector_inv = tfb.Invert(bijector_obj)
 
             return tfd.TransformedDistribution(
