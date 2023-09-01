@@ -162,8 +162,8 @@ def t_test_engine_builder() -> None:
     builder.set_initial_values(ms, multiple_chains=False)
     builder.set_jitter_fns(
         {
-            "x": lambda cv, key: tfd.Uniform(-1.0, 1.0).sample(cv.shape, key),
-            "y": lambda cv, key: tfd.Uniform(-1.0, 1.0).sample(cv.shape, key),
+            "x": lambda key, cv: cv + tfd.Uniform(-1.0, 1.0).sample(cv.shape, key),
+            "y": lambda key, cv: cv + tfd.Uniform(-1.0, 1.0).sample(cv.shape, key),
         }
     )
     con = DictModel(lambda ms: -0.5 * ms["x"] ** 2 - 0.5 * ms["y"])
