@@ -314,6 +314,32 @@ class TestModel:
         with pytest.raises(RuntimeError):
             Model([v1, v2, v3])
 
+    def test_transform_vars(self) -> None:
+        lmbd = Var(1.0, name="lambda")
+        dist = Dist(tfd.Exponential, lmbd)
+        x = Var(1.0, dist, name="x")
+        x.auto_transform = True
+
+        model = GraphBuilder().add(x).build_model()
+
+        assert "x_transformed" in model.vars
+        assert "lambda_transformed" not in model.vars
+        assert model.vars["x_transformed"].value == pytest.approx(0.54132485)
+
+    def test_transform_vars_weak(self) -> None:
+        x = Var(Calc(lambda x: x), name="x")
+        x.auto_transform = True
+
+        with pytest.raises(RuntimeError, match="is weak"):
+            GraphBuilder().add(x).build_model()
+
+    def test_transform_vars_no_dist(self) -> None:
+        x = Var(1.0, name="x")
+        x.auto_transform = True
+
+        with pytest.raises(RuntimeError, match="has no distribution"):
+            GraphBuilder().add(x).build_model()
+
 
 @pytest.mark.xfail
 class TestUserDefinedModelNodes:

@@ -339,6 +339,13 @@ class GraphBuilder:
                 raise RuntimeError(f"{repr(node)} has reserved name '_model*'")
 
         gb = self.copy()
+
+        nodes, _vars = gb._all_nodes_and_vars()
+
+        for var in _vars:
+            if var.auto_transform:
+                gb.transform(var)
+
         gb._set_missing_names()
         gb._add_model_log_lik_node()
         gb._add_model_log_prior_node()
@@ -600,6 +607,9 @@ class GraphBuilder:
         # avoid name clashes
         self._set_missing_names()
 
+        # avoid infinite recursion
+        var.auto_transform = False
+
         try:
             Model([var])
         except Exception:
@@ -651,15 +661,13 @@ class GraphBuilder:
         def make_transformed_distribution(dist_args: ArgGroup, bijector_args: ArgGroup):
             tfp_dist = tfp_dist_cls(*dist_args.args, **dist_args.kwargs)
 
-            if bijector is None:
-                bijector_obj = tfp_dist.experimental_default_event_space_bijector(
-                    *bijector_args.args, **bijector_args.kwargs
-                )
-
-                bijector_inv = tfb.Invert(bijector_obj)
+            if use_default_bijector:
+                bijector_cls = tfp_dist.experimental_default_event_space_bijector
             else:
-                bijector_obj = bijector(*bijector_args.args, **bijector_args.kwargs)
-                bijector_inv = tfb.Invert(bijector_obj)
+                bijector_cls = bijector
+
+            bijector_obj = bijector_cls(*bijector_args.args, **bijector_args.kwargs)
+            bijector_inv = tfb.Invert(bijector_obj)
 
             return tfd.TransformedDistribution(
                 tfp_dist, bijector_inv, validate_args=tfp_dist.validate_args
