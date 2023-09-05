@@ -262,7 +262,7 @@ def test_calculator_kwinput_manipulation() -> None:
 
     calc.set_inputs(y=Data(1))
 
-    with pytest.raises(TypeError):
+    with pytest.raises(RuntimeError):
         calc.update()
 
 
@@ -274,7 +274,7 @@ def test_transient_calculator_kwinput_manipulation() -> None:
 
     calc.set_inputs(y=Data(1))
 
-    with pytest.raises(TypeError):
+    with pytest.raises(RuntimeError):
         calc.value
 
 
