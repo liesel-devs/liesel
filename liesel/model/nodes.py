@@ -506,7 +506,10 @@ class Calc(Node):
     def update(self) -> Calc:
         args = [_input.value for _input in self.inputs]
         kwargs = {kw: _input.value for kw, _input in self.kwinputs.items()}
-        self._value = self.function(*args, **kwargs)
+        try:
+            self._value = self.function(*args, **kwargs)
+        except Exception as e:
+            raise RuntimeError(f"Error while updating {self}.") from e
         self._outdated = False
         return self
 
@@ -518,7 +521,12 @@ class TransientCalc(TransientNode, Calc):
     def value(self) -> Any:
         args = [_input.value for _input in self.inputs]
         kwargs = {kw: _input.value for kw, _input in self.kwinputs.items()}
-        return self.function(*args, **kwargs)
+        try:
+            value = self.function(*args, **kwargs)
+        except Exception as e:
+            raise RuntimeError(f"Error while updating {self}.") from e
+
+        return value
 
 
 class TransientIdentity(TransientCalc):
