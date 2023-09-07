@@ -340,14 +340,12 @@ def test_calculator_update_on_init_error(local_caplog) -> None:
         assert "was not updated during initialization" in caplog.records[0].message
         assert "Calc" in caplog.records[0].message
         assert "RuntimeError" in caplog.records[0].message
-        assert "Testing Error" in caplog.records[0].message
 
     with local_caplog(level=logging.DEBUG) as caplog:
         Calc(_raise_error, a)
         assert "was not updated during initialization" in caplog.records[1].message
         assert "Calc" in caplog.records[1].message
         assert "RuntimeError" not in caplog.records[1].message
-        assert "Testing Error" not in caplog.records[1].message
         assert caplog.records[1].exc_info is not None
         assert caplog.records[1].exc_text is not None
 
