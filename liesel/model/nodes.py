@@ -5,6 +5,7 @@ Nodes and variables.
 from __future__ import annotations
 
 import warnings
+import logging
 import weakref
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Hashable, Iterable
@@ -49,6 +50,8 @@ Distribution = Union[jd.Distribution, nd.Distribution]
 Bijector = Union[jb.Bijector, nb.Bijector]
 
 T = TypeVar("T", bound=Hashable)
+
+logger = logging.getLogger(__name__)
 
 
 def _unique_tuple(*args: Iterable[T]) -> tuple[T, ...]:
@@ -666,6 +669,19 @@ class Calc(Node):
     ):
         super().__init__(*inputs, **kwinputs, _name=_name, _needs_seed=_needs_seed)
         self._function = function
+
+        try:
+            self.update()
+        except Exception as e:
+            logger.warning(
+                f"{self} was not updated during initialization, because the following"
+                f" exception occured: {repr(e)}. See debug log for the full traceback."
+            )
+            logger.debug(
+                f"{self} was not updated during initialization, because the following"
+                f" exception occured:",
+                exc_info=e,
+            )
 
     @property
     def function(self) -> Callable[..., Any]:
