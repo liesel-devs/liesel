@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 import pytest
 import tensorflow_probability.substrates.numpy.distributions as tfd
@@ -326,6 +328,35 @@ def test_transient_calculator_error_in_update() -> None:
     calc = TransientCalc(lambda x: x / 0, x=x)
     with pytest.raises(RuntimeError):
         calc.value
+
+
+def test_calculator_update_on_init_error(local_caplog) -> None:
+    def _raise_error(a):
+        raise RuntimeError("Testing Error")
+
+    a = Data(1.0)
+    with local_caplog() as caplog:
+        Calc(_raise_error, a)
+        assert "was not updated during initialization" in caplog.records[0].message
+        assert "Calc" in caplog.records[0].message
+        assert "RuntimeError" in caplog.records[0].message
+        assert "Testing Error" in caplog.records[0].message
+
+    with local_caplog(level=logging.DEBUG) as caplog:
+        Calc(_raise_error, a)
+        assert "was not updated during initialization" in caplog.records[1].message
+        assert "Calc" in caplog.records[1].message
+        assert "RuntimeError" not in caplog.records[1].message
+        assert "Testing Error" not in caplog.records[1].message
+        assert caplog.records[1].exc_info is not None
+        assert caplog.records[1].exc_text is not None
+
+
+@pytest.mark.parametrize("Calc", [Calc, TransientCalc])
+def test_calculator_update_on_init(Calc, local_caplog) -> None:
+    a = Data(0.0)
+    b = Calc(np.exp, a)
+    assert b.value == pytest.approx(1.0)
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
