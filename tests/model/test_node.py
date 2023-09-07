@@ -262,7 +262,7 @@ def test_calculator_kwinput_manipulation() -> None:
 
     calc.set_inputs(y=Data(1))
 
-    with pytest.raises(TypeError):
+    with pytest.raises(RuntimeError):
         calc.update()
 
 
@@ -274,7 +274,7 @@ def test_transient_calculator_kwinput_manipulation() -> None:
 
     calc.set_inputs(y=Data(1))
 
-    with pytest.raises(TypeError):
+    with pytest.raises(RuntimeError):
         calc.value
 
 
@@ -296,6 +296,36 @@ def test_n_to_n_calculator(Calc) -> None:
     calc.update()
 
     assert np.allclose(calc.value, np.transpose(x_vec))
+
+
+def test_calculator_error_in_update() -> None:
+    x = Data(2.0, _name="x")
+
+    def update_fn(x):
+        raise ValueError("Testing error message.")
+
+    calc = Calc(update_fn, x=x)
+    with pytest.raises(RuntimeError):
+        calc.update()
+
+    calc = Calc(lambda x: x / 0, x=x)
+    with pytest.raises(RuntimeError):
+        calc.update()
+
+
+def test_transient_calculator_error_in_update() -> None:
+    x = Data(2.0, _name="x")
+
+    def update_fn(x):
+        raise ValueError("Testing error message.")
+
+    calc = TransientCalc(update_fn, x=x)
+    with pytest.raises(RuntimeError):
+        calc.value
+
+    calc = TransientCalc(lambda x: x / 0, x=x)
+    with pytest.raises(RuntimeError):
+        calc.value
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
