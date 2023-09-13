@@ -14,7 +14,7 @@ def test_jitter_fns():
     con = DictModel(lambda ms: -0.5 * ms["x"] ** 2 - 0.5 * ms["y"])
     ms = {"x": jnp.array(1), "y": jnp.array(-1)}
 
-    num_chains = 4
+    num_chains = 2
 
     builder = EngineBuilder(seed=1, num_chains=num_chains)
     builder.set_model(con)
@@ -31,6 +31,9 @@ def test_jitter_fns():
     builder.set_duration(warmup_duration=200, posterior_duration=10, term_duration=10)
     engine = builder.build()
 
-    for c in range(num_chains):
-        assert not jnp.allclose(ms["x"], engine._model_states["x"][c])
-        assert not jnp.allclose(ms["y"], engine._model_states["y"][c])
+    assert not jnp.allclose(ms["x"], engine._model_states["x"][0])
+    assert not jnp.allclose(ms["y"], engine._model_states["y"][0])
+    assert not jnp.allclose(ms["x"], engine._model_states["x"][1])
+    assert not jnp.allclose(ms["y"], engine._model_states["y"][1])
+
+    assert not jnp.allclose(engine._model_states["x"][0], engine._model_states["x"][1])
