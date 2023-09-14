@@ -245,7 +245,6 @@ class EngineBuilder:
         if self._jitter_fns.is_some():
             jitter_fns = self._jitter_fns.unwrap()
             jitter_fns_pos_keys = list(jitter_fns.keys())
-
             missing_keys = []
 
             for pos_key in pos_keys:
@@ -260,7 +259,6 @@ class EngineBuilder:
                 )
 
             jitter_keys = jax.random.split(self._jitter_key, len(jitter_fns_pos_keys))
-
             current_position = model.extract_position(jitter_fns_pos_keys, model_states)
             jittered_position = {}
 
