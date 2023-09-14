@@ -50,7 +50,7 @@ def run_kernel_test(mcmc_seed: int, kernels: Sequence[Kernel]) -> None:
     builder.set_model(model)
 
     builder.set_initial_values(model_state)
-    builder.set_jitter_fns({"beta": lambda k, v: v, "log_sigma": lambda k, v: v})
+
     builder.set_duration(
         warmup_duration=5000,
         posterior_duration=5000,

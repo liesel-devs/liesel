@@ -229,6 +229,7 @@ class TestDistRegMCMC:
         ebuilder.set_duration(1000, 1000)
         engine = ebuilder.build()
         assert engine
+
         engine.sample_next_epoch()
         assert engine.get_results()
 

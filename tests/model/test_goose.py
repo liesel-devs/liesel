@@ -58,7 +58,6 @@ def test_sample_model(model) -> None:
     builder.set_model(goose_model)
 
     builder.set_initial_values(model.state)
-    builder.set_jitter_fns({"mu_value": lambda _, v: v})
 
     builder.set_duration(
         warmup_duration=1000,
@@ -93,9 +92,6 @@ def test_sample_transformed_model(model: Model):
     builder.set_model(goose_model)
 
     builder.set_initial_values(model.state)
-    builder.set_jitter_fns(
-        {"sigma_transformed_value": lambda _, v: v, "mu_value": lambda _, v: v}
-    )
 
     builder.set_duration(
         warmup_duration=1000,
@@ -176,8 +172,6 @@ class TestFiniteDiscreteGibbsKernel:
         eb.add_kernel(kernel)
         eb.set_model(lsl.GooseModel(model))
         eb.set_initial_values(model.state)
-
-        eb.set_jitter_fns({"categorical_var": lambda _, v: v})
         eb.set_duration(warmup_duration=500, posterior_duration=2000)
 
         engine = eb.build()
@@ -208,8 +202,6 @@ class TestFiniteDiscreteGibbsKernel:
         eb.add_kernel(kernel)
         eb.set_model(lsl.GooseModel(model))
         eb.set_initial_values(model.state)
-        eb.set_jitter_fns({"dummy_var": lambda _, v: v})
-
         eb.set_duration(warmup_duration=500, posterior_duration=2000)
 
         engine = eb.build()
@@ -240,8 +232,6 @@ class TestFiniteDiscreteGibbsKernel:
         eb.add_kernel(kernel)
         eb.set_model(lsl.GooseModel(model))
         eb.set_initial_values(model.state)
-        eb.set_jitter_fns({"dummy_var": lambda _, v: v})
-
         eb.set_duration(warmup_duration=500, posterior_duration=2000)
 
         engine = eb.build()
