@@ -253,9 +253,10 @@ class EngineBuilder:
                     missing_keys.append(pos_key)
 
             if missing_keys:
+                pretty_keys = str(missing_keys)[1:-1]
                 logger.warning(
-                    f"No jitter function for {missing_keys} has been provided. \
-                    The initial values won't be jittered."
+                    f"No jitter functions provided for position keys {pretty_keys}. "
+                    "The initial values for these keys won't be jittered"
                 )
 
             jitter_keys = jax.random.split(self._jitter_key, len(jitter_fns_pos_keys))
@@ -272,8 +273,7 @@ class EngineBuilder:
             model_states = jax.vmap(model.update_state)(jittered_position, model_states)
         else:
             logger.warning(
-                "No jitter function has been provided. \
-                The initial value of each position key won't be jittered."
+                "No jitter functions provided. The initial values won't be jittered"
             )
 
         # extending position keys
