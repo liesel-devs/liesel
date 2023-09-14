@@ -7,6 +7,7 @@ engine in a well-defined state. Furthermore, the builder can return different en
 implementations.
 """
 
+import logging
 import math
 from collections.abc import Iterable
 from typing import cast
@@ -20,8 +21,17 @@ from .engine import Engine
 from .epoch import EpochConfig, EpochManager
 from .kernel_sequence import KernelSequence
 from .pytree import stack_leaves
-from .types import Kernel, KeyArray, ModelInterface, ModelState, QuantityGenerator
+from .types import (
+    JitterFunctions,
+    Kernel,
+    KeyArray,
+    ModelInterface,
+    ModelState,
+    QuantityGenerator,
+)
 from .warmup import stan_epochs
+
+logger = logging.getLogger(__name__)
 
 
 def _find_duplicate(xs: list[str]) -> Option[str]:
@@ -57,15 +67,16 @@ class EngineBuilder:
     """
 
     def __init__(self, seed: int, num_chains: int):
-        keys = jax.random.split(jax.random.PRNGKey(seed))
+        keys = jax.random.split(jax.random.PRNGKey(seed), 3)
         self._prng_key: KeyArray = keys[0]
         self._engine_key: KeyArray = keys[1]
+        self._jitter_key: KeyArray = keys[2]
         self._num_chains: int = num_chains
         self._kernels: list[Kernel] = []
         self._quantity_generators: list[QuantityGenerator] = []
         self._model_state: Option[ModelState] = Option(None)
-
         self._model: Option[ModelInterface] = Option(None)
+        self._jitter_fns: Option[JitterFunctions] = Option(None)
 
         # public fields, only simple states
         self.store_kernel_states: bool = False
@@ -124,6 +135,15 @@ class EngineBuilder:
 
         self._model_state = Option(model_states)
 
+    def set_jitter_fns(self, jitter_fns: JitterFunctions | None):
+        """Set the jittering functions."""
+        self._jitter_fns = Option(jitter_fns)
+
+    @property
+    def jitter_fns(self) -> Option[JitterFunctions]:
+        """Jittering functions."""
+        return self._jitter_fns
+
     @property
     def model_state(self) -> Option[ModelState]:
         """Model state."""
@@ -177,9 +197,6 @@ class EngineBuilder:
                 f"The position key {dupl.unwrap()} is claimed by multiple kernels"
             )
 
-        pos_keys.extend(self.positions_included)
-        pos_keys = [key for key in pos_keys if key not in self.positions_excluded]
-
         # find good jittable number
         epochs = self._epochs._configs  # FIXME: use of private field
         durations = [e.duration for e in epochs[1:]]
@@ -222,9 +239,48 @@ class EngineBuilder:
             if not ker.identifier:
                 ker.identifier = f"kernel_{idx:02d}"
 
+        # set initial values
+        model_states = self._model_state.expect("Model state must be set")
+
+        if self._jitter_fns.is_some():
+            jitter_fns = self._jitter_fns.unwrap()
+            jitter_fns_pos_keys = list(jitter_fns.keys())
+            missing_keys = []
+
+            for pos_key in pos_keys:
+                if pos_key not in jitter_fns_pos_keys:
+                    missing_keys.append(pos_key)
+
+            if missing_keys:
+                pretty_keys = str(missing_keys)[1:-1]
+                logger.warning(
+                    f"No jitter functions provided for position keys {pretty_keys}. "
+                    "The initial values for these keys won't be jittered"
+                )
+
+            jitter_keys = jax.random.split(self._jitter_key, len(jitter_fns_pos_keys))
+            current_position = model.extract_position(jitter_fns_pos_keys, model_states)
+            jittered_position = {}
+
+            for i, pos_key in enumerate(jitter_fns_pos_keys):
+                jittered_position[pos_key] = jax.vmap(jitter_fns[pos_key])(
+                    jax.random.split(jitter_keys[i], self._num_chains),
+                    current_position[pos_key],
+                )
+
+            model_states = jax.vmap(model.update_state)(jittered_position, model_states)
+        else:
+            logger.warning(
+                "No jitter functions provided. The initial values won't be jittered"
+            )
+
+        # extending position keys
+        pos_keys.extend(self.positions_included)
+        pos_keys = [key for key in pos_keys if key not in self.positions_excluded]
+
         return Engine(
             seeds=seeds,
-            model_states=self._model_state.expect("Model state must be set"),
+            model_states=model_states,
             kernel_sequence=KernelSequence(self.kernels),
             epoch_configs=epochs,
             jitted_sample_duration=jit_duration,

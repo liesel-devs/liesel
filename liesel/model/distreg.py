@@ -291,14 +291,25 @@ def dist_reg_mcmc(model: Model, seed: int, num_chains: int) -> EngineBuilder:
     builder.set_model(GooseModel(model))
     builder.set_initial_values(model.state)
 
+    jitter_fns = {}
+
     for group in model.groups().values():
         if "tau2" in group:
+            position_key = group["tau2"].name
             tau2_kernel = tau2_gibbs_kernel(group)  # type: ignore  # only vars
             builder.add_kernel(tau2_kernel)
+            jitter_fns[position_key] = lambda key, val: jax.random.uniform(
+                key, val.shape, val.dtype, 1.0, 1000.0
+            )
 
         if "beta" in group:
             position_key = group["beta"].name
             beta_kernel = IWLSKernel([position_key])
             builder.add_kernel(beta_kernel)
+            jitter_fns[position_key] = lambda key, val: val + jax.random.uniform(
+                key, val.shape, val.dtype, -2.0, 2.0
+            )
+
+    builder.set_jitter_fns(jitter_fns)
 
     return builder
