@@ -506,7 +506,10 @@ class Calc(Node):
     def update(self) -> Calc:
         args = [_input.value for _input in self.inputs]
         kwargs = {kw: _input.value for kw, _input in self.kwinputs.items()}
-        self._value = self.function(*args, **kwargs)
+        try:
+            self._value = self.function(*args, **kwargs)
+        except Exception as e:
+            raise RuntimeError(f"Error while updating {self}.") from e
         self._outdated = False
         return self
 
@@ -518,7 +521,12 @@ class TransientCalc(TransientNode, Calc):
     def value(self) -> Any:
         args = [_input.value for _input in self.inputs]
         kwargs = {kw: _input.value for kw, _input in self.kwinputs.items()}
-        return self.function(*args, **kwargs)
+        try:
+            value = self.function(*args, **kwargs)
+        except Exception as e:
+            raise RuntimeError(f"Error while updating {self}.") from e
+
+        return value
 
 
 class TransientIdentity(TransientCalc):
@@ -702,6 +710,8 @@ class Var:
     """
 
     __slots__ = (
+        "info",
+        "_auto_transform",
         "_dist_node",
         "_groups",
         "_name",
@@ -710,7 +720,6 @@ class Var:
         "_role",
         "_value_node",
         "_var_value_node",
-        "info",
     )
 
     def __init__(
@@ -733,11 +742,11 @@ class Var:
         self.value_node = value  # type: ignore  # unfrozen
         self.dist_node = distribution  # type: ignore  # unfrozen
 
+        self._auto_transform = False
+        self._groups: dict[str, Group] = {}
         self._observed = False
         self._parameter = False
         self._role = ""
-
-        self._groups: dict[str, Group] = {}
 
         self.info: dict[str, Any] = {}
         """Additional meta-information about the variable as a dict."""
@@ -805,6 +814,18 @@ class Var:
                 visited.append(node)
 
         return _unique_tuple(_vars)
+
+    @property
+    def auto_transform(self) -> bool:
+        """
+        Whether the variable should automatically be transformed to the unconstrained
+        space ``R**n`` upon model initialization.
+        """
+        return self._auto_transform
+
+    @auto_transform.setter
+    def auto_transform(self, auto_transform: bool):
+        self._auto_transform = auto_transform
 
     @property
     def dist_node(self) -> Dist | None:
