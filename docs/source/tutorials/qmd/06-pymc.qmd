@@ -96,8 +96,11 @@ with spike_and_slab_model:
 
     beta = pm.Normal("beta", mu=0.0, sigma=nu * (1 - delta) + delta * pm.math.sqrt(tau / sigma2), shape=p)
 
+    # make a data node
+    Xx = pm.Data("X", X)
+
     # likelihood
-    pm.Normal("y", mu=X @ beta, sigma=pm.math.sqrt(sigma2), observed=y)
+    pm.Normal("y", mu=Xx @ beta, sigma=pm.math.sqrt(sigma2), observed=y)
 ```
 
 Let's take a look at our model:
