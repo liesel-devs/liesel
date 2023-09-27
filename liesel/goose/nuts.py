@@ -8,6 +8,7 @@ from functools import partial
 from typing import ClassVar
 
 import jax.numpy as jnp
+from blackjax import nuts as nuts_kernal
 from blackjax.adaptation.step_size import find_reasonable_step_size
 from blackjax.mcmc import hmc, nuts
 from jax.flatten_util import ravel_pytree
@@ -81,7 +82,7 @@ def _goose_info(nuts_info: nuts.NUTSInfo, max_treedepth: int) -> NUTSTransitionI
 
     return NUTSTransitionInfo(
         error_code=error_code,
-        acceptance_prob=nuts_info.acceptance_probability,
+        acceptance_prob=nuts_info.acceptance_rate,
         position_moved=99,
         divergent=nuts_info.is_divergent,
         turning=nuts_info.is_turning,
@@ -148,7 +149,8 @@ class NUTSKernel(
         return nuts.init(self.position(model_state), self.log_prob_fn(model_state))
 
     def _blackjax_kernel(self) -> Callable:
-        return nuts.kernel(max_num_doublings=self.max_treedepth)
+
+        return partial(nuts_kernal, max_num_doublings=self.max_treedepth)
 
     def init_state(self, prng_key, model_state):
         """
@@ -172,16 +174,15 @@ class NUTSKernel(
             log_prob_fn = self.log_prob_fn(model_state)
 
             def kernel_generator(step_size: float) -> Callable:
-                return partial(
-                    blackjax_kernel,
-                    logprob_fn=log_prob_fn,
+                return blackjax_kernel(
+                    logdensity_fn=log_prob_fn,
                     step_size=step_size,
                     inverse_mass_matrix=inverse_mass_matrix,
                 )
 
             step_size = find_reasonable_step_size(
                 prng_key,
-                kernel_generator,
+                lambda ss: kernel_generator(ss).step,
                 blackjax_state,
                 initial_step_size=0.001,
                 target_accept=self.da_target_accept,
@@ -202,16 +203,18 @@ class NUTSKernel(
         Performs an MCMC transition *without* dual averaging.
         """
 
-        blackjax_kernel = self._blackjax_kernel()
         blackjax_state = self._blackjax_state(model_state)
         log_prob_fn = self.log_prob_fn(model_state)
 
-        blackjax_state, blackjax_info = blackjax_kernel(
+        blackjax_kernel = self._blackjax_kernel()(
+            logdensity_fn=log_prob_fn,
+            step_size=kernel_state.step_size,
+            inverse_mass_matrix=kernel_state.inverse_mass_matrix,
+        )
+
+        blackjax_state, blackjax_info = blackjax_kernel.step(
             prng_key,
             blackjax_state,
-            log_prob_fn,
-            kernel_state.step_size,
-            kernel_state.inverse_mass_matrix,
         )
 
         info = _goose_info(blackjax_info, self.max_treedepth)
