@@ -8,6 +8,7 @@ from functools import partial
 from typing import ClassVar
 
 import jax.numpy as jnp
+from blackjax import hmc as hmc_kernel
 from blackjax.adaptation.step_size import find_reasonable_step_size
 from blackjax.mcmc import hmc
 from jax.flatten_util import ravel_pytree
@@ -62,7 +63,7 @@ class HMCTransitionInfo(DefaultTransitionInfo):
 
 def _goose_info(hmc_info: hmc.HMCInfo) -> HMCTransitionInfo:
     error_code = 1 * hmc_info.is_divergent
-    acceptance_prob = hmc_info.acceptance_probability
+    acceptance_prob = hmc_info.acceptance_rate
     position_moved = hmc_info.is_accepted
 
     return HMCTransitionInfo(
@@ -125,7 +126,7 @@ class HMCKernel(
         return hmc.init(self.position(model_state), self.log_prob_fn(model_state))
 
     def _blackjax_kernel(self) -> Callable:
-        return hmc.kernel()
+        return hmc_kernel
 
     def init_state(self, prng_key, model_state):
         """
@@ -152,11 +153,11 @@ class HMCKernel(
             def kernel_generator(step_size: float) -> Callable:
                 return partial(
                     blackjax_kernel,
-                    logprob_fn=log_prob_fn,
+                    logdensity_fn=log_prob_fn,
                     step_size=step_size,
                     inverse_mass_matrix=inverse_mass_matrix,
                     num_integration_steps=self.num_integration_steps,
-                )
+                )().step
 
             step_size = find_reasonable_step_size(
                 prng_key,
@@ -181,18 +182,17 @@ class HMCKernel(
         Performs an MCMC transition *without* dual averaging.
         """
 
-        blackjax_kernel = self._blackjax_kernel()
         blackjax_state = self._blackjax_state(model_state)
         log_prob_fn = self.log_prob_fn(model_state)
 
-        blackjax_state, blackjax_info = blackjax_kernel(
-            prng_key,
-            blackjax_state,
-            log_prob_fn,
-            kernel_state.step_size,
-            kernel_state.inverse_mass_matrix,
-            self.num_integration_steps,
+        blackjax_kernel = self._blackjax_kernel()(
+            logdensity_fn=log_prob_fn,
+            step_size=kernel_state.step_size,
+            inverse_mass_matrix=kernel_state.inverse_mass_matrix,
+            num_integration_steps=self.num_integration_steps,
         )
+
+        blackjax_state, blackjax_info = blackjax_kernel.step(prng_key, blackjax_state)
 
         info = _goose_info(blackjax_info)
         model_state = self.model.update_state(blackjax_state.position, model_state)
