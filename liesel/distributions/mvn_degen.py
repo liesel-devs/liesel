@@ -9,6 +9,7 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
+import jax.numpy.linalg as jnpla
 import tensorflow_probability.substrates.jax.distributions as tfd
 from tensorflow_probability.python.internal import reparameterization
 from tensorflow_probability.substrates.jax import tf2jax as tf
@@ -285,7 +286,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
     @cached_property
     def eig(self) -> tuple[Array, Array]:
         """Eigenvalues and eigenvectors of the distribution's precision matrices."""
-        return jnp.linalg.eigh(self._prec)
+        return jnpla.eigh(self._prec)
 
     @cached_property
     def _sqrt_pcov(self) -> Array:

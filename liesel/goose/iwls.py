@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import ClassVar
 
 import jax
-import jax.numpy as jnp
+import jax.numpy.linalg as jnpla
 from jax import grad, jacfwd
 from jax.flatten_util import ravel_pytree
 
@@ -127,7 +127,7 @@ class IWLSKernel(ModelMixin, TransitionMixin[IWLSKernelState, IWLSTransitionInfo
 
         if self.chol_info_fn is None:
             flat_position, _ = ravel_pytree(self.position(model_state))
-            return jnp.linalg.cholesky(-flat_hessian_fn(flat_position))
+            return jnpla.cholesky(-flat_hessian_fn(flat_position))
 
         return self.chol_info_fn(model_state)
 
