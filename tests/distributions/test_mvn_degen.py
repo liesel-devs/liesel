@@ -3,6 +3,7 @@ Tests for the multivariate normal degenerate distribution.
 """
 import jax
 import jax.numpy as jnp
+import jax.numpy.linalg as jnpl
 import jax.random as jrd
 import numpy as np
 import pytest
@@ -129,13 +130,13 @@ class TestComputePseudoLogDet:
         prec2 = K / 2.0
         prec3 = K / 3.0
 
-        ldet1a = _log_pdet(jnp.linalg.eigvalsh(prec1))
-        ldet2a = _log_pdet(jnp.linalg.eigvalsh(prec2))
-        ldet3a = _log_pdet(jnp.linalg.eigvalsh(prec3))
+        ldet1a = _log_pdet(jnpl.eigvalsh(prec1))
+        ldet2a = _log_pdet(jnpl.eigvalsh(prec2))
+        ldet3a = _log_pdet(jnpl.eigvalsh(prec3))
 
-        ldet1b = _log_pdet(jnp.linalg.eigvalsh(prec1), rank=5)
-        ldet2b = _log_pdet(jnp.linalg.eigvalsh(prec2), rank=5)
-        ldet3b = _log_pdet(jnp.linalg.eigvalsh(prec3), rank=5)
+        ldet1b = _log_pdet(jnpl.eigvalsh(prec1), rank=5)
+        ldet2b = _log_pdet(jnpl.eigvalsh(prec2), rank=5)
+        ldet3b = _log_pdet(jnpl.eigvalsh(prec3), rank=5)
 
         assert ldet1a == pytest.approx(ldet1b)
         assert ldet2a == pytest.approx(ldet2b)
@@ -145,7 +146,7 @@ class TestComputePseudoLogDet:
         """Test that pseudo-log-determinant computation can be jitted."""
         K = jnp.eye(5)
         prec = K / 2.0
-        evals = jnp.linalg.eigvalsh(prec)
+        evals = jnpl.eigvalsh(prec)
         jitted_log_pdet = jit(_log_pdet)
         ldet1 = _log_pdet(evals)
         ldet2 = jitted_log_pdet(evals)
@@ -159,13 +160,13 @@ class TestComputePseudoLogDet:
         K1 = jnp.diag(jnp.array([2.0, 0.0, 0.0]))
         K2 = jnp.diag(jnp.array([2.0, 3.0, 0.0]))
 
-        evals1 = jnp.linalg.eigvalsh(K1)
-        evals2 = jnp.linalg.eigvalsh(K2)
+        evals1 = jnpl.eigvalsh(K1)
+        evals2 = jnpl.eigvalsh(K2)
 
         ldet1 = _log_pdet(evals1)
         ldet2 = _log_pdet(evals2)
 
-        evals_batch = jnp.linalg.eigvalsh(jnp.array([K1, K2]))
+        evals_batch = jnpl.eigvalsh(jnp.array([K1, K2]))
 
         ldet = _log_pdet(evals_batch)
 
@@ -180,13 +181,13 @@ class TestComputePseudoLogDet:
         K1 = jnp.diag(jnp.array([2.0, 0.0, 0.0]))
         K2 = jnp.diag(jnp.array([2.0, 3.0, 0.0]))
 
-        evals1 = jnp.linalg.eigvalsh(K1)
-        evals2 = jnp.linalg.eigvalsh(K2)
+        evals1 = jnpl.eigvalsh(K1)
+        evals2 = jnpl.eigvalsh(K2)
 
         ldet1 = _log_pdet(evals1)
         ldet2 = _log_pdet(evals2)
 
-        evals_batch = jnp.linalg.eigvalsh(jnp.array([K1, K2]))
+        evals_batch = jnpl.eigvalsh(jnp.array([K1, K2]))
         rank_batch = _rank(evals_batch)
 
         ldet = jit(_log_pdet)(evals_batch, rank=rank_batch)
@@ -204,17 +205,17 @@ class TestComputePseudoLogDet:
         K3 = jnp.diag(jnp.array([4.0, 3.0, 1.0]))
         K4 = jnp.diag(jnp.array([8.0, 1.0, 3.0]))
 
-        evals1 = jnp.linalg.eigvalsh(K1)
-        evals2 = jnp.linalg.eigvalsh(K2)
-        evals3 = jnp.linalg.eigvalsh(K3)
-        evals4 = jnp.linalg.eigvalsh(K4)
+        evals1 = jnpl.eigvalsh(K1)
+        evals2 = jnpl.eigvalsh(K2)
+        evals3 = jnpl.eigvalsh(K3)
+        evals4 = jnpl.eigvalsh(K4)
 
         ldet1 = _log_pdet(evals1)
         ldet2 = _log_pdet(evals2)
         ldet3 = _log_pdet(evals3)
         ldet4 = _log_pdet(evals4)
 
-        evals_batch = jnp.linalg.eigvalsh(jnp.array([[K1, K2], [K3, K4]]))
+        evals_batch = jnpl.eigvalsh(jnp.array([[K1, K2], [K3, K4]]))
         _rank_batch = _rank(evals_batch)
 
         ldet = _log_pdet(evals_batch, rank=_rank_batch)

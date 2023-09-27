@@ -1063,7 +1063,7 @@ def plot_scatter(
         ax=axis,
     )
     if title is not None:
-        fig.suptitle()
+        fig.suptitle("")
         fig.subplots_adjust(top=title_spacing)
 
     axis.legend(title="Chain", loc=legend_position, frameon=False)
