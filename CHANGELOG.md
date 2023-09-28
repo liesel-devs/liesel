@@ -2,7 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.2.5] - 2023-09-28
+
+- :construction: Updated for compatibility with Blackjax 1.0.0 (#100, @wiep & @hriebl)
+- :construction: Updated for compatibility with the latest mypy update (#97, @wiep & @hriebl)
+- :sparkles: Added functionality for easy setup and customization of initial value jittering (#72, @GianmarcoCallegher & @hriebl)
+- :sparkles: Improved error messages in `lsl.Calc.update()` (#84, @jobrachem)
+- :construction: Fixed a bug in `gs.plot_param()` (#81, @viktoriussuwandi)
+- :construction: Fixed an error in the tutorial on linear regression (#85, @jobrachem)
+- :construction: Fixed the display of the plot title in `gs.plot_scatter()` (#98, @hriebl)
 
 ## [0.2.4] - 2023-08-18
 
