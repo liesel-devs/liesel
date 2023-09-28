@@ -8,6 +8,7 @@ from functools import partial
 from typing import ClassVar
 
 import jax.numpy as jnp
+from blackjax import nuts as nuts_kernel
 from blackjax.adaptation.step_size import find_reasonable_step_size
 from blackjax.mcmc import hmc, nuts
 from jax.flatten_util import ravel_pytree
@@ -81,7 +82,7 @@ def _goose_info(nuts_info: nuts.NUTSInfo, max_treedepth: int) -> NUTSTransitionI
 
     return NUTSTransitionInfo(
         error_code=error_code,
-        acceptance_prob=nuts_info.acceptance_probability,
+        acceptance_prob=nuts_info.acceptance_rate,
         position_moved=99,
         divergent=nuts_info.is_divergent,
         turning=nuts_info.is_turning,
@@ -147,8 +148,9 @@ class NUTSKernel(
     def _blackjax_state(self, model_state: ModelState) -> hmc.HMCState:
         return nuts.init(self.position(model_state), self.log_prob_fn(model_state))
 
+    @property
     def _blackjax_kernel(self) -> Callable:
-        return nuts.kernel(max_num_doublings=self.max_treedepth)
+        return partial(nuts_kernel, max_num_doublings=self.max_treedepth)
 
     def init_state(self, prng_key, model_state):
         """
@@ -167,17 +169,16 @@ class NUTSKernel(
             inverse_mass_matrix = self.initial_inverse_mass_matrix
 
         if self.initial_step_size is None:
-            blackjax_kernel = self._blackjax_kernel()
+            blackjax_kernel = self._blackjax_kernel
             blackjax_state = self._blackjax_state(model_state)
             log_prob_fn = self.log_prob_fn(model_state)
 
             def kernel_generator(step_size: float) -> Callable:
-                return partial(
-                    blackjax_kernel,
-                    logprob_fn=log_prob_fn,
+                return blackjax_kernel(
+                    logdensity_fn=log_prob_fn,
                     step_size=step_size,
                     inverse_mass_matrix=inverse_mass_matrix,
-                )
+                ).step
 
             step_size = find_reasonable_step_size(
                 prng_key,
@@ -202,17 +203,16 @@ class NUTSKernel(
         Performs an MCMC transition *without* dual averaging.
         """
 
-        blackjax_kernel = self._blackjax_kernel()
         blackjax_state = self._blackjax_state(model_state)
         log_prob_fn = self.log_prob_fn(model_state)
 
-        blackjax_state, blackjax_info = blackjax_kernel(
-            prng_key,
-            blackjax_state,
-            log_prob_fn,
-            kernel_state.step_size,
-            kernel_state.inverse_mass_matrix,
+        blackjax_kernel = self._blackjax_kernel(
+            logdensity_fn=log_prob_fn,
+            step_size=kernel_state.step_size,
+            inverse_mass_matrix=kernel_state.inverse_mass_matrix,
         )
+
+        blackjax_state, blackjax_info = blackjax_kernel.step(prng_key, blackjax_state)
 
         info = _goose_info(blackjax_info, self.max_treedepth)
         model_state = self.model.update_state(blackjax_state.position, model_state)
