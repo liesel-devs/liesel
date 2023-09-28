@@ -2,6 +2,8 @@
 
 All notable changes to this project will be documented in this file.
 
+## [unreleased]
+
 ## [0.2.5] - 2023-09-28
 
 - :construction: Updated for compatibility with Blackjax 1.0.0 (#100, @wiep & @hriebl)
