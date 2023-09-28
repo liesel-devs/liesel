@@ -4,7 +4,6 @@ Hamiltonian/Hybrid Monte Carlo (HMC).
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from functools import partial
 from typing import ClassVar
 
 import jax.numpy as jnp
@@ -125,6 +124,7 @@ class HMCKernel(
     def _blackjax_state(self, model_state: ModelState) -> hmc.HMCState:
         return hmc.init(self.position(model_state), self.log_prob_fn(model_state))
 
+    @property
     def _blackjax_kernel(self) -> Callable:
         return hmc_kernel
 
@@ -146,18 +146,17 @@ class HMCKernel(
             inverse_mass_matrix = self.initial_inverse_mass_matrix
 
         if self.initial_step_size is None:
-            blackjax_kernel = self._blackjax_kernel()
+            blackjax_kernel = self._blackjax_kernel
             blackjax_state = self._blackjax_state(model_state)
             log_prob_fn = self.log_prob_fn(model_state)
 
             def kernel_generator(step_size: float) -> Callable:
-                return partial(
-                    blackjax_kernel,
+                return blackjax_kernel(
                     logdensity_fn=log_prob_fn,
                     step_size=step_size,
                     inverse_mass_matrix=inverse_mass_matrix,
                     num_integration_steps=self.num_integration_steps,
-                )().step
+                ).step
 
             step_size = find_reasonable_step_size(
                 prng_key,
@@ -185,7 +184,7 @@ class HMCKernel(
         blackjax_state = self._blackjax_state(model_state)
         log_prob_fn = self.log_prob_fn(model_state)
 
-        blackjax_kernel = self._blackjax_kernel()(
+        blackjax_kernel = self._blackjax_kernel(
             logdensity_fn=log_prob_fn,
             step_size=kernel_state.step_size,
             inverse_mass_matrix=kernel_state.inverse_mass_matrix,
