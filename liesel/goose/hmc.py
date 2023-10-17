@@ -62,7 +62,7 @@ class HMCTransitionInfo(DefaultTransitionInfo):
 
 def _goose_info(hmc_info: hmc.HMCInfo) -> HMCTransitionInfo:
     error_code = 1 * hmc_info.is_divergent
-    acceptance_prob = hmc_info.acceptance_probability
+    acceptance_prob = hmc_info.acceptance_rate
     position_moved = hmc_info.is_accepted
 
     return HMCTransitionInfo(
@@ -152,7 +152,7 @@ class HMCKernel(
 
             def kernel_generator(step_size: float) -> Callable:
                 return blackjax_kernel(
-                    logprob_fn=log_prob_fn,
+                    logdensity_fn=log_prob_fn,
                     step_size=step_size,
                     inverse_mass_matrix=inverse_mass_matrix,
                     num_integration_steps=self.num_integration_steps,
@@ -185,7 +185,7 @@ class HMCKernel(
         log_prob_fn = self.log_prob_fn(model_state)
 
         blackjax_kernel = self._blackjax_kernel(
-            logprob_fn=log_prob_fn,
+            logdensity_fn=log_prob_fn,
             step_size=kernel_state.step_size,
             inverse_mass_matrix=kernel_state.inverse_mass_matrix,
             num_integration_steps=self.num_integration_steps,
