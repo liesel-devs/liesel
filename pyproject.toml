@@ -10,6 +10,7 @@ py_version = 310
 files = ["liesel", "tests"]
 ignore_missing_imports = true
 scripts_are_modules = true
+disable_error_code = "annotation-unchecked"
 
 [[tool.mypy.overrides]]
 module = "jax.*"
