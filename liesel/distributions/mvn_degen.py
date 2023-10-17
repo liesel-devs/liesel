@@ -266,9 +266,11 @@ class MultivariateNormalDegenerate(tfd.Distribution):
 
         prec = pen / jnp.expand_dims(var, axis=(-2, -1))
 
-        evals = jax.numpy.linalg.eigvalsh(pen)
-        rank = _rank(evals) if rank is None else rank
-        log_pdet = _log_pdet(evals, rank=rank) if log_pdet is None else log_pdet
+        if rank is None or log_pdet is None:
+            evals = jax.numpy.linalg.eigvalsh(pen)
+            rank = _rank(evals) if rank is None else rank
+            log_pdet = _log_pdet(evals, rank=rank) if log_pdet is None else log_pdet
+
         log_pdet_prec = log_pdet - rank * jnp.log(var)
 
         mvnd = cls(

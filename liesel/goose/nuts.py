@@ -82,7 +82,7 @@ def _goose_info(nuts_info: nuts.NUTSInfo, max_treedepth: int) -> NUTSTransitionI
 
     return NUTSTransitionInfo(
         error_code=error_code,
-        acceptance_prob=nuts_info.acceptance_rate,
+        acceptance_prob=nuts_info.acceptance_probability,
         position_moved=99,
         divergent=nuts_info.is_divergent,
         turning=nuts_info.is_turning,
@@ -175,7 +175,7 @@ class NUTSKernel(
 
             def kernel_generator(step_size: float) -> Callable:
                 return blackjax_kernel(
-                    logdensity_fn=log_prob_fn,
+                    logprob_fn=log_prob_fn,
                     step_size=step_size,
                     inverse_mass_matrix=inverse_mass_matrix,
                 ).step
@@ -207,7 +207,7 @@ class NUTSKernel(
         log_prob_fn = self.log_prob_fn(model_state)
 
         blackjax_kernel = self._blackjax_kernel(
-            logdensity_fn=log_prob_fn,
+            logprob_fn=log_prob_fn,
             step_size=kernel_state.step_size,
             inverse_mass_matrix=kernel_state.inverse_mass_matrix,
         )
