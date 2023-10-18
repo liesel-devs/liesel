@@ -275,10 +275,10 @@ class NUTSKernel(
 
             if self.mm_diag:
                 new_inv_mm = tune_inv_mm_diag(history)
-                trace_fn = jnp.sum
+                trace_fn = jnp.sum  # type: ignore
             else:
                 new_inv_mm = tune_inv_mm_full(history)
-                trace_fn = jnp.trace
+                trace_fn = jnp.trace  # type: ignore
 
             old_inv_mm = kernel_state.inverse_mass_matrix
             adjustment = jnp.sqrt(trace_fn(old_inv_mm) / trace_fn(new_inv_mm))
