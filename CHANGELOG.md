@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+- :sparkles: Improved the efficiency of the `liesel.distributions.mvn_degen.MultivariateNormalDegenerate.from_penalty` constructor (#101, @GianmarcoCallegher)
+
 ## [0.2.5] - 2023-09-28
 
 - :construction: Updated for compatibility with Blackjax 1.0.0 (#100, @wiep & @hriebl)
