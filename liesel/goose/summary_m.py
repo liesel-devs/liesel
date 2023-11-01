@@ -453,7 +453,12 @@ class Summary:
         return str(self.to_dataframe())
 
     @classmethod
-    @deprecated(reason="Functionality moved directly to the __init__.", version="0.1.4")
+    @deprecated(
+        reason=(
+            "Functionality moved directly to the __init__. Will be removed in v0.4.0."
+        ),
+        version="0.1.4",
+    )
     def from_result(
         cls,
         result: SamplingResults,
@@ -487,7 +492,12 @@ class Summary:
         )
 
     @staticmethod
-    @deprecated(reason="Functionality moved directly to the __init__.", version="0.1.4")
+    @deprecated(
+        reason=(
+            "Functionality moved directly to the __init__. Will be removed in v0.4.0."
+        ),
+        version="0.1.4",
+    )
     def from_results(
         results: SamplingResults,
         additional_chain: Position | None = None,
