@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [unreleased]
 
 - :sparkles: Improved the efficiency of the `liesel.distributions.mvn_degen.MultivariateNormalDegenerate.from_penalty` constructor (#101, @GianmarcoCallegher)
+- :construction: Added `observed=True` to a `pd.DataFrame.groupby()` call in `goose/summary_m.py` to silence a warning due to a deprecation in [pandas v2.1.0](https://pandas.pydata.org/docs/whatsnew/v2.1.0.html#deprecations)
 
 ## [0.2.5] - 2023-09-28
 
