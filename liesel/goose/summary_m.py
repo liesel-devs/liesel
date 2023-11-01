@@ -388,7 +388,7 @@ class Summary:
         df["phase"] = pd.Categorical(df["phase"], categories=["warmup", "posterior"])
 
         df = df.set_index("phase", append=True)
-        df["chain"] = df.groupby(level=[0, 1, 2, 3]).cumcount()
+        df["chain"] = df.groupby(level=[0, 1, 2, 3], observed=True).cumcount()
         df = df.set_index("chain", append=True)
         df = df.sort_index()
 
