@@ -57,10 +57,10 @@ import jax.numpy as jnp
 import tensorflow_probability.substrates.jax.distributions as tfd
 import liesel.model as lsl
 
-loc = lsl.Param(0.0, name="loc")
-scale = lsl.Param(1.0, name="scale")
+loc = lsl.param(0.0, name="loc")
+scale = lsl.param(1.0, name="scale")
 
-y = lsl.Obs(
+y = lsl.obs(
     value=jnp.array([1.314, 0.861, -1.813, 0.587, -1.408]),
     distribution=lsl.Dist(tfd.Normal, loc=loc, scale=scale),
     name="y",

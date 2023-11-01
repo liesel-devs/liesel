@@ -4,12 +4,13 @@ Imitates the API from v0.1.
 
 from __future__ import annotations
 
+import warnings
 from typing import Any, cast
 
 import jax.numpy as jnp
 
 from .nodes import Bijector as TFPBijector
-from .nodes import Calc, Dist, Node, Obs, Param, Var
+from .nodes import Calc, Dist, Node, Var, obs, param
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Strong variables ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -20,7 +21,7 @@ def DesignMatrix(
     value: Any | Calc, distribution: Dist | None = None, name: str = ""
 ) -> Var:
     """A strong variable representing a design matrix."""
-    var = Obs(value, distribution, name)
+    var = obs(value, distribution, name)
     var.role = "DesignMatrix"
     return var
 
@@ -38,7 +39,7 @@ def Parameter(
     value: Any | Calc, distribution: Dist | None = None, name: str = ""
 ) -> Var:
     """A strong variable representing a model parameter."""
-    var = Param(value, distribution, name)
+    var = param(value, distribution, name)
     var.role = "Parameter"
     return var
 
@@ -47,7 +48,7 @@ def RegressionCoef(
     value: Any | Calc, distribution: Dist | None = None, name: str = ""
 ) -> Var:
     """A strong variable representing a vector of regression coefficients."""
-    var = Param(value, distribution, name)
+    var = param(value, distribution, name)
     var.role = "RegressionCoef"
     return var
 
@@ -56,7 +57,7 @@ def Response(
     value: Any | Calc, distribution: Dist | None = None, name: str = ""
 ) -> Var:
     """A strong variable representing a response vector."""
-    var = Obs(value, distribution, name)
+    var = obs(value, distribution, name)
     var.role = "Response"
     return var
 
@@ -65,7 +66,7 @@ def SmoothingParam(
     value: Any | Calc, distribution: Dist | None = None, name: str = ""
 ) -> Var:
     """A strong variable representing a smoothing parameter."""
-    var = Param(value, distribution, name)
+    var = param(value, distribution, name)
     var.role = "SmoothingParam"
     return var
 
@@ -186,3 +187,57 @@ def Smooth(
     var = Var(calc, distribution, name)
     var.role = "Smooth"
     return var
+
+
+def Obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> Var:
+    """
+    Declares an observed variable.
+
+    .. deprecated:: 0.2.6
+        Use lsl.obs() instead. This alias will be removed in v0.4.0
+
+    Sets the :attr:`.Var.observed` flag. If the observed variable is a
+    random variable, i.e. if it has an associated probability distribution,
+    its log-probability is automatically added to the model log-likelihood
+    (see :attr:`.Model.log_lik`).
+
+    Returns
+    -------
+    An observed variable.
+
+    See Also
+    --------
+    :func:`.obs` : New alias. Sould be used in future code.
+    """
+    warnings.warn(
+        "Use lsl.obs() instead. This alias will be removed in v0.4.0", FutureWarning
+    )
+    return obs(value, distribution, name)
+
+
+def Param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> Var:
+    """
+    Declares a parameter variable.
+
+    .. deprecated:: 0.2.6
+        Use lsl.param() instead. This alias will be removed in v0.4.0
+
+    Sets the :attr:`.Var.parameter` flag. If the parameter variable is a
+    random variable, i.e. if it has an associated probability distribution,
+    its log-probability is automatically added to the model log-prior
+    (see :attr:`.Model.log_prior`).
+
+
+    Returns
+    -------
+    A parameter variable.
+
+
+    See Also
+    --------
+    :func:`.param` : New alias. Sould be used in future code.
+    """
+    warnings.warn(
+        "Use lsl.param() instead. This alias will be removed in v0.4.0", FutureWarning
+    )
+    return param(value, distribution, name)
