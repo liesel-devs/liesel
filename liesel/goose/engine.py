@@ -283,7 +283,9 @@ class SamplingResults:
             return pickle.load(f)
 
 
-@deprecated(reason="Use SamplingResults", version="0.1.4")
+@deprecated(
+    reason="Use SamplingResults. This alias will be removed in v0.4.0", version="0.1.4"
+)
 class SamplingResult(SamplingResults):
     """Alias of :class:`.SamplingResults` for backwards compatibility."""
 
