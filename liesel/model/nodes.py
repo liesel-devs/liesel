@@ -34,8 +34,8 @@ __all__ = [
     "InputGroup",
     "Node",
     "NodeState",
-    "Obs",
-    "Param",
+    "obs",
+    "param",
     "TransientCalc",
     "TransientDist",
     "TransientIdentity",
@@ -689,7 +689,7 @@ class Var:
     A variable in Liesel is typically a random variable, e.g. an observed or
     latent variable with a probability distribution, or a model parameter with
     a prior distribution. Note that observed variables and model parameters should
-    typically be declared with the :func:`.Obs` and :func:`.Param` helper functions.
+    typically be declared with the :func:`.obs` and :func:`.param` helper functions.
     Other quantities can also be declared as variables, e.g. fixed data like
     hyperparameters or design matrices, or quantities that are computed from
     other nodes, e.g. structured additive predictors in semi-parametric
@@ -705,8 +705,8 @@ class Var:
 
     See Also
     --------
-    .Obs : Helper function to declare a variable as an observed quantity.
-    .Param : Helper function to declare a variable as a model parameter.
+    .obs : Helper function to declare a variable as an observed quantity.
+    .param : Helper function to declare a variable as a model parameter.
     """
 
     __slots__ = (
@@ -1009,7 +1009,7 @@ class Var:
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
-def Obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> Var:
+def obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> Var:
     """
     Declares an observed variable.
 
@@ -1017,13 +1017,18 @@ def Obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> 
     random variable, i.e. if it has an associated probability distribution,
     its log-probability is automatically added to the model log-likelihood
     (see :attr:`.Model.log_lik`).
+
+    Returns
+    -------
+    An observed variable.
+
     """
     var = Var(value, distribution, name)
     var.observed = True
     return var
 
 
-def Param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> Var:
+def param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> Var:
     """
     Declares a parameter variable.
 
@@ -1031,6 +1036,10 @@ def Param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -
     random variable, i.e. if it has an associated probability distribution,
     its log-probability is automatically added to the model log-prior
     (see :attr:`.Model.log_prior`).
+
+    Returns
+    -------
+    A parameter variable.
     """
     var = Var(value, distribution, name)
     var.value_node.monitor = True
