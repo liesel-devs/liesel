@@ -18,7 +18,7 @@ from liesel.model.legacy import (
     Smooth,
     SmoothingParam,
 )
-from liesel.model.nodes import Data, Dist, Param, Var
+from liesel.model.nodes import Data, Dist, Var, param
 
 
 def test_design_matrix() -> None:
@@ -32,8 +32,8 @@ def test_hyperparameter() -> None:
 
 
 def test_parameter() -> None:
-    loc = Param(0.0, name="loc")
-    scale = Param(1.0, name="scale")
+    loc = param(0.0, name="loc")
+    scale = param(1.0, name="scale")
     dist = Dist(tfd.Normal, loc, scale)
     x = Parameter(value=1.0, distribution=dist, name="x")
     x.update()
@@ -45,8 +45,8 @@ def test_parameter() -> None:
 def test_regression_coef() -> None:
     arr = jnp.array([1.0, 3.0, 2.3])
 
-    loc = Param(0.0, name="loc")
-    scale = Param(1.0, name="scale")
+    loc = param(0.0, name="loc")
+    scale = param(1.0, name="scale")
     dist = Dist(tfd.Normal, loc, scale)
     beta = RegressionCoef(value=arr, distribution=dist, name="beta")
     beta.update()
@@ -58,8 +58,8 @@ def test_regression_coef() -> None:
 def test_response() -> None:
     arr = jnp.array([1.0, 0.0, 2.0])
 
-    loc = Param(0.0, name="loc")
-    scale = Param(1.0, name="scale")
+    loc = param(0.0, name="loc")
+    scale = param(1.0, name="scale")
     dist = Dist(tfd.Normal, loc, scale)
     y = Response(value=arr, distribution=dist, name="y")
     y.update()
@@ -69,8 +69,8 @@ def test_response() -> None:
 
 
 def test_smoothing_param() -> None:
-    loc = Param(0.0, name="loc")
-    scale = Param(1.0, name="scale")
+    loc = param(0.0, name="loc")
+    scale = param(1.0, name="scale")
     dist = Dist(tfd.Normal, loc, scale)
     tau2 = SmoothingParam(value=1.0, distribution=dist, name="tau2")
     tau2.update()

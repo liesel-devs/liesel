@@ -15,11 +15,11 @@ from liesel.model.nodes import (
     Data,
     Dist,
     Group,
-    Obs,
-    Param,
     TransientNode,
     Var,
     add_group,
+    obs,
+    param,
 )
 
 
@@ -44,7 +44,7 @@ def beta() -> Generator:
     beta_prior_scale = Var(100.0, name="beta_scale")
     beta_prior = Dist(tfd.Normal, loc=beta_prior_loc, scale=beta_prior_scale)
 
-    beta_hat = Param(
+    beta_hat = param(
         value=jnp.array([0.0, 0.0]), distribution=beta_prior, name="beta_hat"
     )
     yield beta_hat
@@ -61,7 +61,7 @@ def sigma() -> Generator:
         scale=sigma_prior_scale,
     )
 
-    sigma_hat = Param(
+    sigma_hat = param(
         value=10.0,
         distribution=sigma_prior,
         name="sigma_hat",
@@ -73,13 +73,13 @@ def sigma() -> Generator:
 @pytest.fixture
 def y_var(data, beta, sigma) -> Generator:
     x, y = data
-    x_var = Obs(x, name="X")
+    x_var = obs(x, name="X")
 
     mu_calc = Calc(lambda X, beta: X @ beta, x_var, beta)
     mu_hat = Var(mu_calc, name="mu")
 
     likelihood = Dist(tfd.Normal, loc=mu_hat, scale=sigma)
-    y_var = Obs(value=y, distribution=likelihood, name="y_var")
+    y_var = obs(value=y, distribution=likelihood, name="y_var")
 
     add_group("loc", X=x_var, beta=beta)
     add_group("scale", scale=sigma)
