@@ -4,6 +4,7 @@ Goose MCMC framework.
 
 from .builder import EngineBuilder as EngineBuilder
 from .engine import Engine as Engine
+from .engine import SamplingResults
 from .epoch import EpochConfig, EpochType
 from .gibbs import GibbsKernel
 from .hmc import HMCKernel
@@ -40,6 +41,7 @@ __all__ = [
     "Position",
     "RWKernel",
     "Summary",
+    "SamplingResults",
     "plot_cor",
     "plot_density",
     "plot_param",
