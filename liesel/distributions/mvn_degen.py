@@ -285,6 +285,86 @@ class MultivariateNormalDegenerate(tfd.Distribution):
 
         return mvnd
 
+    @classmethod
+    def from_penalty_smooth(
+        cls,
+        loc: Array,
+        smooth: Array,
+        pen: Array,
+        rank: Array | int | None = None,
+        log_pdet: Array | float | None = None,
+        validate_args: bool = False,
+        allow_nan_stats: bool = True,
+        name: str = "MultivariateNormalDegenerate",
+    ) -> MultivariateNormalDegenerate:
+        """
+        Alternative constructor based on a penalty matrix and an inverse smoothing
+        parameter.
+
+        Sometimes, the precision matrix of a degenerate multivariate normal
+        distribution is decomposed into a penalty matrix ``pen`` and an inverse
+        smoothing parameter ``var``. Using this constructor, a degenerate multivariate
+        normal distribution can be initialized from such a decomposition.
+
+
+        Parameters
+        ----------
+        loc
+            The location (= mean) vector.
+        smooth
+            The smoothing (= inverse variance) parameter.
+        pen
+            The (potentially rank-deficient) penalty matrix.
+        rank
+            The rank of the penalty matrix. Optional.
+        log_pdet
+            The log-pseudo-determinant of the penalty matrix. Optional.
+        validate_args
+            Python ``bool``, default ``False``. When ``True`` distribution parameters
+            are checked for validity despite possibly degrading runtime performance.
+            When ``False`` invalid inputs may silently render incorrect outputs.
+        allow_nan_stats
+            Python ``bool``, default ``True``. When ``True``, statistics (e.g., mean,
+            mode, variance) use the value ``NaN`` to indicate the result is undefined.
+            When ``False``, an exception is raised if one or more of the statistic's
+            batch members are undefined.
+        name
+            Python ``str`` name prefixed to ``Ops`` created by this class.
+
+        Warnings
+        --------
+        If the log-pseudo-determinant is provided as an argument, it must be
+        of the penalty matrix ``pen``, **not** of the precision matrix.
+
+        Notes
+        -----
+        If they are not provided as arguments, the constructor computes ``rank`` and
+        ``log_pdet`` based on the eigenvalues of the penalty matrix ``pen``. This is
+        an expensive operation and can be avoided by specifying the corresponding
+        arguments.
+        """
+
+        prec = pen * jnp.expand_dims(smooth, axis=(-2, -1))
+
+        if rank is None or log_pdet is None:
+            evals = jax.numpy.linalg.eigvalsh(pen)
+            rank = _rank(evals) if rank is None else rank
+            log_pdet = _log_pdet(evals, rank=rank) if log_pdet is None else log_pdet
+
+        log_pdet_prec = log_pdet + rank * jnp.log(smooth)
+
+        mvnd = cls(
+            loc=loc,
+            prec=prec,
+            rank=rank,
+            log_pdet=log_pdet_prec,
+            validate_args=validate_args,
+            allow_nan_stats=allow_nan_stats,
+            name=name,
+        )
+
+        return mvnd
+
     @cached_property
     def eig(self) -> tuple[Array, Array]:
         """Eigenvalues and eigenvectors of the distribution's precision matrices."""

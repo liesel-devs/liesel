@@ -246,6 +246,22 @@ class TestMVNDegenerateValues:
 
         assert log_prob == pytest.approx(log_prob_baseline)
 
+    def test_log_prob_from_penalty_smooth(
+        self, beta, K, tau2, log_prob_baseline
+    ) -> None:
+        """
+        Log prob obtained from MultivariateNormalDegenerate constructed from penalty
+        matrix should be equal to the baseline log prob.
+        """
+        log_det, rank = determinant_structure_degen(K)
+
+        mvn = MultivariateNormalDegenerate.from_penalty_smooth(
+            loc=0.0, smooth=1 / tau2, pen=K, rank=rank, log_pdet=log_det
+        )
+        log_prob = mvn.log_prob(beta)
+
+        assert log_prob == pytest.approx(log_prob_baseline)
+
     def test_log_prob_from_init(self, beta, K, tau2, log_prob_baseline) -> None:
         """
         Log prob obtained from MultivariateNormalDegenerate constructed directly from
