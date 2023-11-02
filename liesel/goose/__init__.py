@@ -7,7 +7,13 @@ from .engine import Engine as Engine
 from .epoch import EpochConfig, EpochType
 from .gibbs import GibbsKernel
 from .hmc import HMCKernel
-from .interfaces import DataclassInterface, DataClassModel, DictInterface, DictModel
+from .interface import (
+    DataclassInterface,
+    DataClassModel,
+    DictInterface,
+    DictModel,
+    LieselInterface,
+)
 from .iwls import IWLSKernel
 from .mh_kernel import MHKernel, MHProposal
 from .nuts import NUTSKernel
@@ -29,6 +35,7 @@ __all__ = [
     "DataclassInterface",
     "DictModel",
     "DataClassModel",
+    "LieselInterface",
     "Engine",
     "EngineBuilder",
     "EpochConfig",

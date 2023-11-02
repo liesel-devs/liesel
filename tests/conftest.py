@@ -9,7 +9,7 @@ from _pytest.logging import LogCaptureHandler
 from liesel.goose.builder import EngineBuilder
 from liesel.goose.engine import SamplingResults
 from liesel.goose.epoch import EpochConfig, EpochType
-from liesel.goose.interfaces import DictInterface
+from liesel.goose.interface import DictInterface
 
 from .mock_kernel import MockKernel
 
