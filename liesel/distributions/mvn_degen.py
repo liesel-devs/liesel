@@ -206,7 +206,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         )
 
     @classmethod
-    def from_penalty_variance(
+    def from_penalty(
         cls,
         loc: Array,
         var: Array,

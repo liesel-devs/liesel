@@ -232,16 +232,14 @@ class TestMVNDegenerateValues:
     correctly.
     """
 
-    def test_log_prob_from_penalty_variance(
-        self, beta, K, tau2, log_prob_baseline
-    ) -> None:
+    def test_log_prob_from_penalty(self, beta, K, tau2, log_prob_baseline) -> None:
         """
         Log prob obtained from MultivariateNormalDegenerate constructed from penalty
         matrix should be equal to the baseline log prob.
         """
         log_det, rank = determinant_structure_degen(K)
 
-        mvn = MultivariateNormalDegenerate.from_penalty_variance(
+        mvn = MultivariateNormalDegenerate.from_penalty(
             loc=0.0, var=tau2, pen=K, rank=rank, log_pdet=log_det
         )
         log_prob = mvn.log_prob(beta)
@@ -312,11 +310,11 @@ class TestMVNDegenerateBatches:
         with pytest.raises(ValueError):
             mvn.log_prob([[beta, beta], beta])
 
-    def test_from_penalty_variance_batch(self, beta, K, tau2) -> None:
-        """The from_penalty_variance constructor should be able to deal with batches."""
+    def test_from_penalty_batch(self, beta, K, tau2) -> None:
+        """The from_penalty constructor should be able to deal with batches."""
         rank, log_det = determinant_structure_degen(K)
         rank2, log_det2 = determinant_structure_degen(jnp.eye(5))
-        mvn = MultivariateNormalDegenerate.from_penalty_variance(
+        mvn = MultivariateNormalDegenerate.from_penalty(
             loc=0.0,
             var=jnp.array([tau2, tau2]),
             pen=jnp.array([K, jnp.eye(5)]),
@@ -619,7 +617,7 @@ class TestMVNDegenerateBatches:
     def test_batch_of_smoothing_parameters(self, beta, K) -> None:
         """Tests that batches of smoothing parameters can be handled."""
         var = jnp.array([1.0, 2.0, 3.0])
-        mvnd1 = MultivariateNormalDegenerate.from_penalty_variance(0.0, var=var, pen=K)
+        mvnd1 = MultivariateNormalDegenerate.from_penalty(0.0, var=var, pen=K)
 
         prec = K / jnp.expand_dims(var, axis=(-2, -1))
         mvnd2 = MultivariateNormalDegenerate(0.0, prec=prec)
@@ -904,9 +902,7 @@ class TestMVNDegenerateAgainstTensorFlow:
 class TestSampleFromMVNDegenerate:
     def test_seed_required(self, K, tau2) -> None:
         """Validates that we MUST supply a seed."""
-        mvnd = MultivariateNormalDegenerate.from_penalty_variance(
-            loc=0.0, var=tau2, pen=K
-        )
+        mvnd = MultivariateNormalDegenerate.from_penalty(loc=0.0, var=tau2, pen=K)
 
         with pytest.raises(ValueError):
             mvnd.sample()
@@ -914,9 +910,7 @@ class TestSampleFromMVNDegenerate:
     def test_one_sample(self, K, tau2) -> None:
         """Tests that we can draw one sample of correct shape."""
         mvn = tfd.MultivariateNormalFullCovariance(covariance_matrix=jnp.eye(5))
-        mvnd = MultivariateNormalDegenerate.from_penalty_variance(
-            loc=0.0, var=tau2, pen=K
-        )
+        mvnd = MultivariateNormalDegenerate.from_penalty(loc=0.0, var=tau2, pen=K)
 
         key = jax.random.PRNGKey(42)
         s1 = mvn.sample(seed=key)
@@ -928,9 +922,7 @@ class TestSampleFromMVNDegenerate:
     def test_two_samples(self, K, tau2) -> None:
         """Validates that we can draw two samples of correct shape."""
         mvn = tfd.MultivariateNormalFullCovariance(covariance_matrix=jnp.eye(5))
-        mvnd = MultivariateNormalDegenerate.from_penalty_variance(
-            loc=0.0, var=tau2, pen=K
-        )
+        mvnd = MultivariateNormalDegenerate.from_penalty(loc=0.0, var=tau2, pen=K)
 
         key = jax.random.PRNGKey(42)
         s1 = mvn.sample(2, seed=key)
@@ -1024,9 +1016,7 @@ def test_jit1() -> None:
 
     @jax.jit
     def fn(x):
-        mvnd = MultivariateNormalDegenerate.from_penalty_variance(
-            loc=0.0, var=1.0, pen=D.T @ D
-        )
+        mvnd = MultivariateNormalDegenerate.from_penalty(loc=0.0, var=1.0, pen=D.T @ D)
         return mvnd.log_prob(x)
 
     fn(jnp.zeros(4))
@@ -1037,9 +1027,7 @@ def test_jit2() -> None:
 
     @jax.jit
     def fn(x, loc, var, pen):
-        mvnd = MultivariateNormalDegenerate.from_penalty_variance(
-            loc=loc, var=var, pen=pen
-        )
+        mvnd = MultivariateNormalDegenerate.from_penalty(loc=loc, var=var, pen=pen)
         return mvnd.log_prob(x)
 
     fn(jnp.zeros(4), loc=0.0, var=1.0, pen=D.T @ D)
@@ -1068,7 +1056,7 @@ def test_sampling() -> None:
     K = D.T @ D
 
     mvnd = lsl.Dist(
-        MultivariateNormalDegenerate.from_penalty_variance,
+        MultivariateNormalDegenerate.from_penalty,
         loc=lsl.Var(0.0),
         var=lsl.Var(1.0),
         pen=lsl.Var(K),

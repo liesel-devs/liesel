@@ -163,7 +163,7 @@ class DistRegBuilder(GraphBuilder):
 
         beta = np.zeros(np.shape(X)[-1], np.float32)
         beta_distribution = Dist(
-            MultivariateNormalDegenerate.from_penalty_variance,
+            MultivariateNormalDegenerate.from_penalty,
             loc=0.0,
             var=tau2_var,
             pen=K_var,
