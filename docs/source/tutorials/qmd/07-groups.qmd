@@ -110,18 +110,23 @@ Next, we create the group for our spline coefficient in a very similar way.
 
 ```{python}
 class SplineCoef(lsl.Group):
-    def __init__(self, name: str, penalty: Array, tau2: lsl.Param) -> None:
+    def __init__(self, name: str, penalty: Array, tau2: lsl.param) -> None:
         penalty_var = lsl.Var(penalty, name=f"{name}_penalty")
 
         # we save the rank of the penalty matrix here to use it later in our
         # gibbs kernel
-        rank = lsl.Data(np.linalg.matrix_rank(penalty), _name=f"{name}_rank")
+        evals = jax.numpy.linalg.eigvalsh(penalty)
+        rank = lsl.Data(jnp.sum(evals > 0.0), _name=f"{name}_rank")
+        _log_pdet = jnp.log(jnp.where(evals > 0.0, evals, 1.0)).sum()
+        log_pdet = lsl.Data(_log_pdet, _name=f"{name}_log_pdet")
 
         prior = lsl.Dist(
             MultivariateNormalDegenerate.from_penalty,
             loc=0.0,
             var=tau2,
             pen=penalty_var,
+            rank=rank,
+            log_pdet=log_pdet
         )
         start_value = np.zeros(np.shape(penalty)[-1], np.float32)
 
