@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+- :sparkles: The method `gs.Summary.error_df()` is now publicly available. (#137, @jobrachem)
 - :sparkles: Improved the efficiency of the `liesel.distributions.mvn_degen.MultivariateNormalDegenerate.from_penalty` constructor (#101, @GianmarcoCallegher)
 - :construction: Added `observed=True` to a `pd.DataFrame.groupby()` call in `goose/summary_m.py` to silence a warning due to a deprecation in [pandas v2.1.0](https://pandas.pydata.org/docs/whatsnew/v2.1.0.html#deprecations)
 - :construction: Renamed `lsl.Param` to `lsl.param` and `lsl.Obs` to `lsl.obs` to reflect the fact that those are functions, not classes. The old names are deprecated and scheduled for removal in v0.4.0. (#130, @jobrachem)
@@ -11,6 +12,7 @@ All notable changes to this project will be documented in this file.
     - `liesel.model.goose.GooseModel` -> (renamed/moved) `liesel.goose.interface.LieselInterface`
     - `liesel.goose.models.DictModel` -> (renamed/moved) `liesel.goose.interface.DictInterface`
     - `liesel.goose.models.DataClassModel` -> (renamed/moved) `liesel.goose.interface.DataclassInterface`
+
 
 
 
