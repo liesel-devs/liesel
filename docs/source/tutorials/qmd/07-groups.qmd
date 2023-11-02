@@ -113,8 +113,6 @@ class SplineCoef(lsl.Group):
     def __init__(self, name: str, penalty: Array, tau2: lsl.param) -> None:
         penalty_var = lsl.Var(penalty, name=f"{name}_penalty")
 
-        # we save the rank of the penalty matrix here to use it later in our
-        # gibbs kernel
         evals = jax.numpy.linalg.eigvalsh(penalty)
         rank = lsl.Data(jnp.sum(evals > 0.0), _name=f"{name}_rank")
         _log_pdet = jnp.log(jnp.where(evals > 0.0, evals, 1.0)).sum()
@@ -333,7 +331,8 @@ class VarianceIG(lsl.Group):
         self.b = lsl.Var(b, name="f{name}_b")
         """Prior scale variable."""
 
-        prior = lsl.Dist(tfd.InverseGamma, concentration=a_var, scale=b_var)
+        prior = lsl.Dist(tfd.InverseGamma, concentration=self.a, scale=self.b)
+
         self.tau2 = lsl.param(start_value, distribution=prior, name=name)
         """Variance parameter variable."""
 
