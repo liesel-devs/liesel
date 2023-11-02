@@ -259,7 +259,7 @@ sigma_sq.value = true_sigma**2
 
 builder = gs.EngineBuilder(seed=1337, num_chains=4)
 
-builder.set_model(lsl.GooseModel(model))
+builder.set_model(gs.LieselInterface(model))
 builder.set_initial_values(model.state)
 
 builder.add_kernel(gs.NUTSKernel(["beta"]))
@@ -320,7 +320,7 @@ We build the engine in a similar way as before, but this time adding the Gibbs k
 #| label: engine-setup-with-gibbs-sampler
 builder = gs.EngineBuilder(seed=1338, num_chains=4)
 
-builder.set_model(lsl.GooseModel(model))
+builder.set_model(gs.LieselInterface(model))
 builder.set_initial_values(model.state)
 
 builder.add_kernel(gs.NUTSKernel(["beta"]))

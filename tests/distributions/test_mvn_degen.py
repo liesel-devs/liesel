@@ -1057,7 +1057,7 @@ def test_sampling() -> None:
     model = lsl.GraphBuilder().add(Y).build_model()
 
     builder = gs.EngineBuilder(1337, 1)
-    builder.set_model(lsl.GooseModel(model))
+    builder.set_model(gs.LieselInterface(model))
     builder.set_initial_values(model.state)
     builder.add_kernel(gs.IWLSKernel(["beta"]))
     builder.set_duration(warmup_duration=500, posterior_duration=20)

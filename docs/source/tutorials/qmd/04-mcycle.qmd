@@ -165,12 +165,13 @@ is pretty much the same strategy that we apply to the IWLS sampler, too.
 
 builder = gs.EngineBuilder(seed=42, num_chains=4)
 
-builder.set_model(lsl.GooseModel(model))
+builder.set_model(gs.LieselInterface(model))
 
 # add NUTS kernels
 parameters = [name for name, var in model.vars.items() if var.parameter]
 for parameter in parameters:
   builder.add_kernel(gs.NUTSKernel([parameter]))
+
 
 builder.set_initial_values(model.state)
 

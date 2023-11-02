@@ -19,9 +19,9 @@ from liesel.goose.engine import (
     stack_for_multi,
 )
 from liesel.goose.epoch import EpochConfig, EpochState, EpochType
+from liesel.goose.interface import DictInterface
 from liesel.goose.kernel import DefaultTransitionInfo
 from liesel.goose.kernel_sequence import KernelSequence
-from liesel.goose.models import DictModel
 from liesel.goose.pytree import register_dataclass_as_pytree
 from liesel.goose.types import Array, KeyArray, ModelInterface, ModelState
 from liesel.option import Option
@@ -110,7 +110,7 @@ def t_test_engine():
 
     ms = {"x": jnp.array(1), "y": jnp.array(-1)}
     mss = stack_for_multi([ms for _ in range(num_chains)])
-    con = DictModel(lambda ms: -0.5 * ms["x"] ** 2 - 0.5 * ms["y"])
+    con = DictInterface(lambda ms: -0.5 * ms["x"] ** 2 - 0.5 * ms["y"])
     ker0 = DetCountingKernel(["x"], DetCountingKernelState.default())
     ker1 = DetCountingKernel(["y"], DetCountingKernelState.default())
     ker0.set_model(con)
@@ -166,7 +166,7 @@ def t_test_engine_builder() -> None:
             "y": lambda key, cv: cv + tfd.Uniform(-1.0, 1.0).sample(cv.shape, key),
         }
     )
-    con = DictModel(lambda ms: -0.5 * ms["x"] ** 2 - 0.5 * ms["y"])
+    con = DictInterface(lambda ms: -0.5 * ms["x"] ** 2 - 0.5 * ms["y"])
     builder.set_model(con)
     builder.add_kernel(DetCountingKernel(["x"], DetCountingKernelState.default()))
     builder.add_kernel(DetCountingKernel(["y"], DetCountingKernelState.default()))

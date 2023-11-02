@@ -46,7 +46,7 @@ def run_kernel_test(mcmc_seed: int, kernels: Sequence[Kernel]) -> None:
     for kernel in kernels:
         builder.add_kernel(kernel)
 
-    model = gs.DictModel(log_prob)
+    model = gs.DictInterface(log_prob)
     builder.set_model(model)
 
     builder.set_initial_values(model_state)

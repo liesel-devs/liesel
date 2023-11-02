@@ -5,8 +5,8 @@ import jax.numpy as jnp
 import numpy as np
 
 from liesel.goose.engine import Engine, SamplingResults, stack_for_multi
+from liesel.goose.interface import DictInterface
 from liesel.goose.kernel_sequence import KernelSequence
-from liesel.goose.models import DictModel
 from liesel.goose.rw import RWKernel
 from liesel.goose.warmup import stan_epochs
 
@@ -32,7 +32,7 @@ def setup_tests(beta_dim: int, num_chains: int = 3) -> SamplingResults:
 
     model_state = {"y": y, "X": X, "beta": beta, "log_sigma": np.log(sigma)}
 
-    model = DictModel(log_prob_log_sigma)
+    model = DictInterface(log_prob_log_sigma)
     kernel = RWKernel(["beta", "log_sigma"])
     kernel.set_model(model)
     kernel.identifier = "kernel_01"

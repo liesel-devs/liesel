@@ -4,7 +4,7 @@ from typing import Any
 import jax.numpy as jnp
 import pytest
 
-from liesel.goose.models import DataClassModel
+from liesel.goose.interface import DataclassInterface
 from liesel.goose.pytree import register_dataclass_as_pytree
 from liesel.goose.types import ModelInterface, Position
 
@@ -26,14 +26,14 @@ def create_state():
 
 
 def test_log_prob() -> None:
-    conn: ModelInterface = DataClassModel(log_prob)
+    conn: ModelInterface = DataclassInterface(log_prob)
     state = create_state()
     lp = float(conn.log_prob(state))
     assert lp == pytest.approx(-2.0)
 
 
 def test_extract() -> None:
-    conn = DataClassModel(log_prob)
+    conn = DataclassInterface(log_prob)
     state = create_state()
 
     pos1 = conn.extract_position(["x"], state)
@@ -51,7 +51,7 @@ def test_extract() -> None:
 
 
 def test_update() -> None:
-    conn = DataClassModel(log_prob)
+    conn = DataclassInterface(log_prob)
     state0 = create_state()
 
     state1 = conn.update_state(Position({"y": 2}), state0)

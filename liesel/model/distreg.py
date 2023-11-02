@@ -12,10 +12,9 @@ import numpy as np
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 from liesel.distributions import MultivariateNormalDegenerate
-from liesel.goose import EngineBuilder, GibbsKernel, IWLSKernel
+from liesel.goose import EngineBuilder, GibbsKernel, IWLSKernel, LieselInterface
 from liesel.option import Option
 
-from .goose import GooseModel
 from .legacy import (
     DesignMatrix,
     Hyperparameter,
@@ -288,7 +287,7 @@ def dist_reg_mcmc(model: Model, seed: int, num_chains: int) -> EngineBuilder:
 
     builder = EngineBuilder(seed, num_chains)
 
-    builder.set_model(GooseModel(model))
+    builder.set_model(LieselInterface(model))
     builder.set_initial_values(model.state)
 
     jitter_fns = {}
