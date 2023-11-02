@@ -3,7 +3,6 @@ Model interfaces.
 """
 
 import copy
-import warnings
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING
 
@@ -66,40 +65,6 @@ class DataclassInterface:
                     f"ModelState {model_state!r} does not have field with name {key}"
                 )
         return new_state
-
-
-class DictModel(DictInterface):
-    """
-    Alias for :class:`.DictInterface`, provided for backwards compatibility.
-
-    .. deprecated:: v0.2.6
-        Use :class:`.DictInterface` instead. This alias will be removed in v0.4.0.
-    """
-
-    def __init__(self, log_prob_fn: LogProbFunction):
-        self._log_prob_fn = log_prob_fn
-
-        warnings.warn(
-            "Use gs.DictInterface instead. This alias will be removed in v0.4.0.",
-            FutureWarning,
-        )
-
-
-class DataClassModel(DataclassInterface):
-    """
-    Alias for :class:`.DataclassInterface`, provided for backwards compatibility.
-
-    .. deprecated:: v0.2.6
-        Use :class:`.DataclassInterface` instead. This alias will be removed in v0.4.0.
-    """
-
-    def __init__(self, log_prob_fn: LogProbFunction):
-        self._log_prob_fn = log_prob_fn
-
-        warnings.warn(
-            "Use gs.DataclassInterface instead. This alias will be removed in v0.4.0.",
-            FutureWarning,
-        )
 
 
 class LieselInterface:
