@@ -1,7 +1,7 @@
 from jax.random import PRNGKey
 
 from liesel.goose.epoch import EpochConfig, EpochType
-from liesel.goose.interfaces import DictInterface
+from liesel.goose.interface import DictInterface
 from liesel.goose.types import Kernel
 
 from .deterministic_kernels import (

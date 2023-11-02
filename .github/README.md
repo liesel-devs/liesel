@@ -76,7 +76,7 @@ which is updated automatically if the value of a node is modified.
 model.log_prob
 ```
 
-    Array(-8.635653, dtype=float32)
+    Array(-8.635652, dtype=float32)
 
 ``` python
 model.vars["loc"].value = -0.5
@@ -98,7 +98,7 @@ import liesel.goose as gs
 builder = gs.EngineBuilder(seed=42, num_chains=4)
 
 builder.add_kernel(gs.NUTSKernel(["loc"]))
-builder.set_model(lsl.GooseModel(model))
+builder.set_model(gs.LieselInterface(model))
 builder.set_initial_values(model.state)
 
 builder.set_duration(warmup_duration=1000, posterior_duration=1000)
@@ -106,6 +106,7 @@ builder.set_duration(warmup_duration=1000, posterior_duration=1000)
 engine = builder.build()
 ```
 
+    liesel.goose.builder - WARNING - No jitter functions provided. The initial values won't be jittered
     liesel.goose.engine - INFO - Initializing kernels...
     liesel.goose.engine - INFO - Done
 
@@ -114,25 +115,25 @@ engine.sample_all_epochs()
 ```
 
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 75 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 2, 2 / 75 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 1, 2, 0 / 75 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 25 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 1, 1, 2 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 1, 1 / 100 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 2, 1 / 100 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 200 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 1, 1 / 200 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 4, 1, 1 / 200 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 500 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 1, 2 / 500 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 1, 1, 2 / 500 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 1, 1 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 2, 2 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Finished warmup
     liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
@@ -227,31 +228,31 @@ loc
 kernel_00
 </td>
 <td>
+-0.083
+</td>
+<td>
+0.445
+</td>
+<td>
+-0.810
+</td>
+<td>
 -0.091
 </td>
 <td>
-0.447
-</td>
-<td>
--0.832
-</td>
-<td>
--0.094
-</td>
-<td>
-0.639
+0.652
 </td>
 <td>
 4000
 </td>
 <td>
-1495.178
+1459.234
 </td>
 <td>
-2133.346
+1874.643
 </td>
 <td>
-1.001
+1.002
 </td>
 </tr>
 </tbody>
@@ -311,10 +312,10 @@ divergent transition
 warmup
 </th>
 <td>
-40
+38
 </td>
 <td>
-0.010
+0.009
 </td>
 </tr>
 <tr>
@@ -334,6 +335,59 @@ posterior
 ``` python
 gs.plot_param(results, param="loc")
 ```
+
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
+      if pd.api.types.is_categorical_dtype(vector):
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
+      if pd.api.types.is_categorical_dtype(vector):
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
+      if pd.api.types.is_categorical_dtype(vector):
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
+      with pd.option_context('mode.use_inf_as_na', True):
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
+      with pd.option_context('mode.use_inf_as_na', True):
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1057: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+      grouped_data = data.groupby(
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
+      if pd.api.types.is_categorical_dtype(vector):
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
+      if pd.api.types.is_categorical_dtype(vector):
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
+      with pd.option_context('mode.use_inf_as_na', True):
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1057: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+      grouped_data = data.groupby(
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
+      if pd.api.types.is_categorical_dtype(vector):
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
+      if pd.api.types.is_categorical_dtype(vector):
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
+      with pd.option_context('mode.use_inf_as_na', True):
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
+      with pd.option_context('mode.use_inf_as_na', True):
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
+      if pd.api.types.is_categorical_dtype(vector):
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
+      if pd.api.types.is_categorical_dtype(vector):
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
+      with pd.option_context('mode.use_inf_as_na', True):
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
+      with pd.option_context('mode.use_inf_as_na', True):
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
+      if pd.api.types.is_categorical_dtype(vector):
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
+      if pd.api.types.is_categorical_dtype(vector):
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
+      with pd.option_context('mode.use_inf_as_na', True):
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
+      with pd.option_context('mode.use_inf_as_na', True):
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
+      if pd.api.types.is_categorical_dtype(vector):
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
+      if pd.api.types.is_categorical_dtype(vector):
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
+      with pd.option_context('mode.use_inf_as_na', True):
+    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
+      with pd.option_context('mode.use_inf_as_na', True):
 
 <img src="README-files/goose-plot-1.png" style="width:70.0%" />
 

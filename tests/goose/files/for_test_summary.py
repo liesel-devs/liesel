@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from liesel.goose.engine import Engine, SamplingResults, stack_for_multi
-from liesel.goose.interfaces import DictInterface
+from liesel.goose.interface import DictInterface
 from liesel.goose.kernel_sequence import KernelSequence
 from liesel.goose.rw import RWKernel
 from liesel.goose.warmup import stan_epochs

@@ -4,6 +4,7 @@ Goose model interface.
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Iterable, Sequence
 
 import jax
@@ -19,6 +20,11 @@ class GooseModel:
     """
     A :class:`.ModelInterface` for a Liesel :class:`.Model`.
 
+    This is an alias for :class:`.LieselInterface` provided for backwards compatibility.
+
+    .. deprecated:: v0.2.6
+        Use :class:`.LieselInterface` instead. This alias will be removed in v0.4.0.
+
     Parameters
     ----------
     model
@@ -27,6 +33,10 @@ class GooseModel:
 
     def __init__(self, model: Model):
         self._model = model._copy_computational_model()
+        warnings.warn(
+            "Use gs.LieselInterface instead. This alias will be removed in v0.4.0.",
+            FutureWarning,
+        )
 
     def extract_position(
         self, position_keys: Iterable[str], model_state: ModelState

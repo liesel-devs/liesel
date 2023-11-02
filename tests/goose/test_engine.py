@@ -19,7 +19,7 @@ from liesel.goose.engine import (
     stack_for_multi,
 )
 from liesel.goose.epoch import EpochConfig, EpochState, EpochType
-from liesel.goose.interfaces import DictInterface
+from liesel.goose.interface import DictInterface
 from liesel.goose.kernel import DefaultTransitionInfo
 from liesel.goose.kernel_sequence import KernelSequence
 from liesel.goose.pytree import register_dataclass_as_pytree

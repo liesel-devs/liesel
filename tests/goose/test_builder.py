@@ -7,7 +7,7 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.goose as gs
 from liesel.goose.builder import EngineBuilder
-from liesel.goose.interfaces import DictInterface
+from liesel.goose.interface import DictInterface
 
 
 def test_jitter_fns():
