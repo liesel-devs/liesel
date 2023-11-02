@@ -12,7 +12,7 @@ class DictModel(DictInterface):
     """
 
     def __init__(self, log_prob_fn: LogProbFunction):
-        self._log_prob_fn = log_prob_fn
+        super().__init__(log_prob_fn)
 
         warnings.warn(
             "Use gs.DictInterface instead. This alias will be removed in v0.4.0.",
@@ -29,7 +29,7 @@ class DataClassModel(DataclassInterface):
     """
 
     def __init__(self, log_prob_fn: LogProbFunction):
-        self._log_prob_fn = log_prob_fn
+        super().__init__(log_prob_fn)
 
         warnings.warn(
             "Use gs.DataclassInterface instead. This alias will be removed in v0.4.0.",
