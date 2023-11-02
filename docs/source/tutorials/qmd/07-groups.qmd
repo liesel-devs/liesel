@@ -332,6 +332,7 @@ class VarianceIG(lsl.Group):
         """Prior scale variable."""
 
         prior = lsl.Dist(tfd.InverseGamma, concentration=self.a, scale=self.b)
+
         self.tau2 = lsl.param(start_value, distribution=prior, name=name)
         """Variance parameter variable."""
 

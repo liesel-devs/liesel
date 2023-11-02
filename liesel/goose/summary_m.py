@@ -351,7 +351,13 @@ class Summary:
 
         return df
 
-    def _error_df(self, per_chain=False):
+    def error_df(self, per_chain: bool = False) -> pd.DataFrame:
+        """
+        Returns an overview of the errors recorded during sampling as a dataframe.
+        """
+        return self._error_df(per_chain=per_chain)
+
+    def _error_df(self, per_chain: bool = False) -> pd.DataFrame:
         # fmt: off
         df = pd.concat({
             kernel: pd.DataFrame.from_dict(code_summary, orient="index")
