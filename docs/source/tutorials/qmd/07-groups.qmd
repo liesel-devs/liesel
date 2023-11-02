@@ -12,6 +12,7 @@ following parts:
 2. Use these groups to create a Gibbs kernel.
 
 
+
 ## Background
 
 As the topic for this group tutorial, we will create groups for a semiparametric
@@ -57,6 +58,7 @@ group that represents a complete P-Spline.
 ## Setup
 
 We start by importing the modules that we are going to use in this tutorial.
+
 ```{python}
 import numpy as np
 import jax.numpy as jnp
@@ -67,7 +69,6 @@ import liesel.model as lsl
 import liesel.goose as gs
 from liesel.distributions.mvn_degen import MultivariateNormalDegenerate
 from liesel.goose.types import Array
-
 
 ```
 
@@ -97,7 +98,7 @@ class VarianceIG(lsl.Group):
         b_var = lsl.Var(b, name=f"{name}_b")
 
         prior = lsl.Dist(tfd.InverseGamma, concentration=a_var, scale=b_var)
-        tau2 = lsl.Param(start_value, distribution=prior, name=name)
+        tau2 = lsl.param(start_value, distribution=prior, name=name)
         super().__init__(name=name, a=a_var, b=b_var, tau2=tau2)
 ```
 
@@ -109,22 +110,27 @@ Next, we create the group for our spline coefficient in a very similar way.
 
 ```{python}
 class SplineCoef(lsl.Group):
-    def __init__(self, name: str, penalty: Array, tau2: lsl.Param) -> None:
+    def __init__(self, name: str, penalty: Array, tau2: lsl.param) -> None:
         penalty_var = lsl.Var(penalty, name=f"{name}_penalty")
 
         # we save the rank of the penalty matrix here to use it later in our
         # gibbs kernel
-        rank = lsl.Data(np.linalg.matrix_rank(penalty), _name=f"{name}_rank")
+        evals = jax.numpy.linalg.eigvalsh(penalty)
+        rank = lsl.Data(jnp.sum(evals > 0.0), _name=f"{name}_rank")
+        _log_pdet = jnp.log(jnp.where(evals > 0.0, evals, 1.0)).sum()
+        log_pdet = lsl.Data(_log_pdet, _name=f"{name}_log_pdet")
 
         prior = lsl.Dist(
             MultivariateNormalDegenerate.from_penalty,
             loc=0.0,
             var=tau2,
             pen=penalty_var,
+            rank=rank,
+            log_pdet=log_pdet
         )
         start_value = np.zeros(np.shape(penalty)[-1], np.float32)
 
-        coef = lsl.Param(start_value, distribution=prior, name=name)
+        coef = lsl.param(start_value, distribution=prior, name=name)
 
         super().__init__(name, coef=coef, penalty=penalty_var, tau2=tau2, rank=rank)
 
@@ -193,7 +199,7 @@ class PSpline(lsl.Group):
             name=f"{name}_coef", penalty=penalty, tau2=tau2_group["tau2"]
         )
 
-        basis_matrix = lsl.Obs(basis_matrix, name="basis_matrix")
+        basis_matrix = lsl.obs(basis_matrix, name="basis_matrix")
         smooth = lsl.Var(
             lsl.Calc(jnp.dot, basis_matrix, coef_group["coef"]), name=name
         )
@@ -239,7 +245,6 @@ model = lsl.GraphBuilder().add_groups(p_spline).build_model()
 
 lsl.plot_vars(model)
 ```
-
 
 ## Use group to build a Gibbs sampler
 
@@ -329,7 +334,7 @@ class VarianceIG(lsl.Group):
         """Prior scale variable."""
 
         prior = lsl.Dist(tfd.InverseGamma, concentration=a_var, scale=b_var)
-        self.tau2 = lsl.Param(start_value, distribution=prior, name=name)
+        self.tau2 = lsl.param(start_value, distribution=prior, name=name)
         """Variance parameter variable."""
 
         super().__init__(name=name, a=self.a, b=self.b, tau2=self.tau2)
