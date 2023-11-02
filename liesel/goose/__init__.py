@@ -7,9 +7,9 @@ from .engine import Engine as Engine
 from .epoch import EpochConfig, EpochType
 from .gibbs import GibbsKernel
 from .hmc import HMCKernel
+from .interfaces import DataclassInterface, DataClassModel, DictInterface, DictModel
 from .iwls import IWLSKernel
 from .mh_kernel import MHKernel, MHProposal
-from .models import DictModel
 from .nuts import NUTSKernel
 from .rw import RWKernel
 from .summary_m import Summary
@@ -25,7 +25,10 @@ from .types import ModelInterface, Position
 from .warmup import stan_epochs
 
 __all__ = [
+    "DictInterface",
+    "DataclassInterface",
     "DictModel",
+    "DataClassModel",
     "Engine",
     "EngineBuilder",
     "EpochConfig",

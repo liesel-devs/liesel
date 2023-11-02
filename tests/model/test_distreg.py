@@ -192,7 +192,7 @@ class TestTau2GibbsKernel:
         g = drb_np_smooth.build_model().groups()["xloc"]
         kernel = dr.tau2_gibbs_kernel(g)
 
-        kernel.set_model(gs.DictModel(lambda model_state: 0.0))
+        kernel.set_model(gs.DictInterface(lambda model_state: 0.0))
         model_state = construct_model_state_from_np_smooth(g)
 
         epoch_config = gs.EpochConfig(

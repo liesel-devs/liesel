@@ -7,11 +7,11 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.goose as gs
 from liesel.goose.builder import EngineBuilder
-from liesel.goose.models import DictModel
+from liesel.goose.interfaces import DictInterface
 
 
 def test_jitter_fns():
-    con = DictModel(lambda ms: -0.5 * ms["x"] ** 2 - 0.5 * ms["y"])
+    con = DictInterface(lambda ms: -0.5 * ms["x"] ** 2 - 0.5 * ms["y"])
     ms = {"x": jnp.array(1), "y": jnp.array(-1)}
 
     num_chains = 2

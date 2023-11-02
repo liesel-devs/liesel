@@ -12,7 +12,7 @@ LogProbFunction = Callable[[ModelState], float]
 
 
 @usedocs(ModelInterface)
-class DictModel:
+class DictInterface:
     """
     A model interface for a model state represented by a ``dict[str, Array]`` and a
     corresponding log-probability function.
@@ -34,7 +34,7 @@ class DictModel:
 
 
 @usedocs(ModelInterface)
-class DataClassModel:
+class DataclassInterface:
     """
     A model interface for a model state represented by a :obj:`~dataclasses.dataclass`
     and a corresponding log-probability function.
@@ -61,3 +61,25 @@ class DataClassModel:
                     f"ModelState {model_state!r} does not have field with name {key}"
                 )
         return new_state
+
+
+class DictModel(DictInterface):
+    """
+    Alias for :class:`.DictInterface`, provided for backwards compatibility.
+
+    .. deprecated:: v0.2.6
+        Use :class:`.DictInterface` instead. This alias will be removed in v0.4.0.
+    """
+
+    pass
+
+
+class DataClassModel(DataclassInterface):
+    """
+    Alias for :class:`.DataclassInterface`, provided for backwards compatibility.
+
+    .. deprecated:: v0.2.6
+        Use :class:`.DataclassInterface` instead. This alias will be removed in v0.4.0.
+    """
+
+    pass

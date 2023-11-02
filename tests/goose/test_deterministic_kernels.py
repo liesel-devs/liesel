@@ -1,7 +1,7 @@
 from jax.random import PRNGKey
 
 from liesel.goose.epoch import EpochConfig, EpochType
-from liesel.goose.models import DictModel
+from liesel.goose.interfaces import DictInterface
 from liesel.goose.types import Kernel
 
 from .deterministic_kernels import (
@@ -15,7 +15,7 @@ from .deterministic_kernels import (
 def test_counting_kernel() -> None:
     mstate = {"x": 0}
     kstate = DetCountingKernelState.default()
-    model = DictModel(lambda state: 0.0)
+    model = DictInterface(lambda state: 0.0)
     kernel: Kernel[
         DetCountingKernelState, DetCountingTransInfo, DetCountingKernelTuningInfo
     ] = DetCountingKernel(["x"], kstate)

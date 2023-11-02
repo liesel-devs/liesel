@@ -9,7 +9,7 @@ from _pytest.logging import LogCaptureHandler
 from liesel.goose.builder import EngineBuilder
 from liesel.goose.engine import SamplingResults
 from liesel.goose.epoch import EpochConfig, EpochType
-from liesel.goose.models import DictModel
+from liesel.goose.interfaces import DictInterface
 
 from .mock_kernel import MockKernel
 
@@ -113,7 +113,7 @@ def result() -> SamplingResults:
     }
 
     builder.add_kernel(MockKernel(list(state.keys())))
-    builder.set_model(DictModel(log_prob_fn=lambda state: 0.0))
+    builder.set_model(DictInterface(log_prob_fn=lambda state: 0.0))
     builder.set_initial_values(state)
     builder.set_epochs(
         [
@@ -137,7 +137,7 @@ def result_for_quants() -> SamplingResults:
     }
 
     builder.add_kernel(MockKernel(list(state.keys())))
-    builder.set_model(DictModel(log_prob_fn=lambda state: 0.0))
+    builder.set_model(DictInterface(log_prob_fn=lambda state: 0.0))
     builder.set_initial_values(state)
     builder.set_epochs(
         [
@@ -161,7 +161,7 @@ def single_chain_result() -> SamplingResults:
     }
 
     builder.add_kernel(MockKernel(list(state.keys())))
-    builder.set_model(DictModel(log_prob_fn=lambda state: 0.0))
+    builder.set_model(DictInterface(log_prob_fn=lambda state: 0.0))
     builder.set_initial_values(state)
     builder.set_epochs(
         [
