@@ -154,17 +154,24 @@ model = gb.build_model()
 lsl.plot_vars(model)
 ```
 
-Now we can set up the NUTS sampler, which is straightforward because we are using only one kernel.
+Now we can set up the NUTS sampler. In complex models like this one it can be
+very beneficial to use individual NUTS samplers for blocks of parameters. This
+is pretty much the same strategy that we apply to the IWLS sampler, too.
+
 
 ```{python}
 #| label: nuts-sampling
 
-parameters = [name for name, var in model.vars.items() if var.parameter]
 
 builder = gs.EngineBuilder(seed=42, num_chains=4)
 
 builder.set_model(lsl.GooseModel(model))
-builder.add_kernel(gs.NUTSKernel(parameters))
+
+# add NUTS kernels
+parameters = [name for name, var in model.vars.items() if var.parameter]
+for parameter in parameters:
+  builder.add_kernel(gs.NUTSKernel([parameter]))
+
 builder.set_initial_values(model.state)
 
 builder.set_duration(warmup_duration=5000, posterior_duration=1000)
@@ -173,7 +180,9 @@ engine = builder.build()
 engine.sample_all_epochs()
 ```
 
-The results are mixed. On the one hand, the NUTS sampler performs much better on the intercepts (for both the mean and the standard deviation), but on the other hand, the Metropolis-in-Gibbs sampler with the IWLS kernels seems to work better for the spline coefficients.
+The NUTS sampler overall seems to do a good job - and even yields higher
+effective sample sizes than the IWLS sampler, especially for the spline
+coefficients of the scale model.
 
 ```{python}
 #| label: nuts-summary
