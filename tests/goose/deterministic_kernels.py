@@ -110,7 +110,6 @@ class DetCountingKernel(TransitionMixin[DetCountingKernelState, DetCountingTrans
         model_state: ModelState,
         epoch: EpochState,
     ) -> DetCountingKernelState:
-
         kernel_state.in_epoch = False
         return kernel_state
 
