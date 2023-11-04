@@ -8,7 +8,6 @@ import liesel.model.nodes as lnodes
 
 
 def test_initialization() -> None:
-
     # simple data variable
     var0 = lnodes.Var(0, None, "")
     assert var0.value == 0
