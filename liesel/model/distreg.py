@@ -13,6 +13,7 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 
 from liesel.distributions import MultivariateNormalDegenerate
 from liesel.goose import EngineBuilder, GibbsKernel, IWLSKernel, LieselInterface
+from liesel.goose.types import JitterFunction
 from liesel.option import Option
 
 from .legacy import (
@@ -29,6 +30,13 @@ from .model import GraphBuilder, Model
 from .nodes import Array, Bijector, Dist, Distribution, Group, NodeState, Var
 
 matrix_rank = np.linalg.matrix_rank
+
+tau2_jitter_fn: JitterFunction = lambda key, val: jax.random.uniform(
+    key, val.shape, val.dtype, 1.0, 1000.0
+)
+beta_jitter_fn: JitterFunction = lambda key, val: val + jax.random.uniform(
+    key, val.shape, val.dtype, -2.0, 2.0
+)
 
 
 class DistRegBuilder(GraphBuilder):
@@ -267,7 +275,13 @@ def tau2_gibbs_kernel(group: Group) -> GibbsKernel:
     return GibbsKernel([position_key], transition)
 
 
-def dist_reg_mcmc(model: Model, seed: int, num_chains: int) -> EngineBuilder:
+def dist_reg_mcmc(
+    model: Model,
+    seed: int,
+    num_chains: int,
+    tau2_jitter_fn: JitterFunction = tau2_jitter_fn,
+    beta_jitter_fn: JitterFunction = beta_jitter_fn,
+) -> EngineBuilder:
     """
     Configures an :class:`.EngineBuilder` for a distributional regression model.
 
@@ -283,6 +297,10 @@ def dist_reg_mcmc(model: Model, seed: int, num_chains: int) -> EngineBuilder:
         The PRNG seed for the engine builder.
     num_chains
         The number of chains to be sampled.
+    tau2_jitter_fn
+        Jittering function for the smoothing parameters.
+    beta_jitter_fn
+        Jittering function for the regression coefficients.
     """
 
     builder = EngineBuilder(seed, num_chains)
@@ -297,17 +315,13 @@ def dist_reg_mcmc(model: Model, seed: int, num_chains: int) -> EngineBuilder:
             position_key = group["tau2"].name
             tau2_kernel = tau2_gibbs_kernel(group)  # type: ignore  # only vars
             builder.add_kernel(tau2_kernel)
-            jitter_fns[position_key] = lambda key, val: jax.random.uniform(
-                key, val.shape, val.dtype, 1.0, 1000.0
-            )
+            jitter_fns[position_key] = tau2_jitter_fn
 
         if "beta" in group:
             position_key = group["beta"].name
             beta_kernel = IWLSKernel([position_key])
             builder.add_kernel(beta_kernel)
-            jitter_fns[position_key] = lambda key, val: val + jax.random.uniform(
-                key, val.shape, val.dtype, -2.0, 2.0
-            )
+            jitter_fns[position_key] = beta_jitter_fn
 
     builder.set_jitter_fns(jitter_fns)
 
