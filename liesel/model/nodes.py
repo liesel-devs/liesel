@@ -961,10 +961,50 @@ class Var:
     visualization with the :func:`.plot_vars` function. This might be particularly
     desirable for the hyperparameters of a prior distribution.
 
+    Parameters
+    ----------
+    value
+        The value of the variable.
+    distribution
+        The probability distribution of the variable.
+    name
+        The name of the variable. If you do not specify a name, a unique name will be \
+        automatically generated upon initialization of a :class:`.Model`.
+
     See Also
     --------
     .obs : Helper function to declare a variable as an observed quantity.
     .param : Helper function to declare a variable as a model parameter.
+    .Calc :
+        A node representing a general calculation/operation
+        in JAX or Python.
+    .Data :
+        A node representing some static data.
+    .Dist :
+        A node representing a ``tensorflow_probability``
+        :class:`~tfp.distributions.Distribution`.
+
+    Examples
+    --------
+
+    A simple variable without a distribution and without a name:
+
+    >>> x = lsl.Var(1.0)
+    >>> x
+    Var(name="")
+
+    Adding this variable to a model leads to an automatically generated name:
+
+    >>> model = lsl.GraphBuilder().add(x).build_model()
+    >>> x
+    Var(name="v0")
+
+    A simple variable with a name:
+
+    >>> x = lsl.Var(1.0, name="x")
+    >>> x
+    Var(name="x")
+
     """
 
     __slots__ = (
@@ -1163,7 +1203,26 @@ class Var:
 
     @property
     def observed(self) -> bool:
-        """Whether the variable is observed."""
+        """
+        Whether the variable is observed.
+
+        If a variable is observed and has an associated
+        probability distribution, its log-probability is automatically added to the
+        model log-likelihood (see :attr:`.Model.log_lik`).
+
+        See Also
+        --------
+        .obs : Helper function to declare a variable as a parameter.
+        .Model.log_prior : The log-prior of a Liesel model.
+        .Var.parameter : Whether the variable is a parameter. If a variable is \
+            a parameter, it is not observed.
+
+        Notes
+        -----
+
+        We recommend to use the :func:`.obs` helper function to declare an observed
+        variable.
+        """
         return self._observed
 
     @observed.setter
@@ -1173,7 +1232,27 @@ class Var:
 
     @property
     def parameter(self) -> bool:
-        """Whether the variable is a parameter."""
+        """
+        Whether the variable is a parameter.
+
+        If the variable is a parameter and has an associated
+        probability distribution, its log-probability is added to the
+        model's :attr:`~.Model.log_prior`.
+
+        See Also
+        --------
+        .param : Helper function to declare a variable as a parameter.
+        .Model.log_prior : The log-prior of a Liesel model.
+        .Var.observed : Whether the variable is observed. If a variable is \
+            a parameter, it is not observed.
+
+        Notes
+        -----
+
+        We recommend to use the :func:`.param` helper function to declare a variable
+        as a parameter.
+
+        """
         return self._parameter
 
     @parameter.setter
@@ -1192,7 +1271,22 @@ class Var:
 
     @property
     def strong(self) -> bool:
-        """Whether the variable is strong."""
+        """
+        Whether the variable is strong.
+
+        A strong node is a node whose value is defined outside of the model, for
+        example, if the node represents some observed data or a parameter (parameters
+        are usually set by an inference algorithm such as an optimizer or sampler). In
+        contrast, a weak node is a node whose value is defined within the model, that
+        is, it is a deterministic function of some other nodes. An exp-transformation
+        mapping a real-valued parameter to a positive number, for example, would be a
+        weak node.
+
+        See Also
+        --------
+        .weak : Whether the variable is weak. In general, ``strong = not weak``.
+
+        """
         return isinstance(self.value_node, Data)
 
     def update(self) -> Var:
@@ -1255,7 +1349,16 @@ class Var:
 
     @property
     def weak(self) -> bool:
-        """Whether the variable is weak."""
+        """
+        Whether the variable is weak.
+
+        A weak variable is a variable whose value is defined within the model, that
+        is, it is a deterministic function of some other nodes.
+
+        See Also
+        --------
+        .strong : Whether the variable is strong. In general, ``weak = not strong``.
+        """
         return not self.strong
 
     def __repr__(self) -> str:
