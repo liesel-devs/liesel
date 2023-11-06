@@ -887,6 +887,10 @@ class Model:
     """
     A model with a static graph.
 
+    .. tip::
+        While you can create a model directly, it is usually more convenient to use a
+        :class:`.GraphBuilder` to construct the model.
+
     Parameters
     ----------
     nodes_and_vars
@@ -896,6 +900,61 @@ class Model:
         the recursive inputs of the nodes and variables), and to add the model nodes.
     copy
         Whether the nodes and variables should be copied upon initialization.
+
+    See Also
+    --------
+    :class:`.GraphBuilder` : A graph builder, used to set up a model.
+
+    Examples
+    --------
+
+    For basic examples on how to set up a model, please refer to the
+    :class:`.GraphBuilder` documentation.
+
+    .. rubric:: Modifying an existing model
+
+    If you have an existing model and want to make changes to it, you can use the
+    :meth:`.Model.copy_nodes_and_vars` or the :meth:`.Model.copy_nodes_and_vars`
+    method to obtain the nodes and variables of the model, make changes to them, and
+    then create a new model from the modified nodes and variables.
+
+    >>> a = lsl.Var(1.0, name="a")
+    >>> b = lsl.Var(2.0, name="b")
+    >>> c = lsl.Var(lsl.Calc(lambda x, y: x + y, a, b), name="c")
+
+    We now build a model:
+
+    >>> model = lsl.GraphBuilder().add(c).build_model()
+    >>> model
+    Model(9 nodes, 3 vars)
+
+    >>> nodes, vars_ = model.pop_nodes_and_vars()
+    >>> vars_
+    {'c': Var(name="c"), 'b': Var(name="b"), 'a': Var(name="a")}
+
+    >>> from pprint import pprint # for nicer formatting of the output dicts
+    >>> pprint(nodes)
+    {'a_value': Data(name="a_value"),
+     'a_var_value': VarValue(name="a_var_value"),
+     'b_value': Data(name="b_value"),
+     'b_var_value': VarValue(name="b_var_value"),
+     'c_value': Calc(name="c_value"),
+     'c_var_value': VarValue(name="c_var_value")}
+
+    We can now make changes to the nodes and variables.
+    Just for show, let's add a distribution to the node ``a``:
+
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+    >>> vars_["a"].dist_node = lsl.Dist(tfd.Normal, loc=0.0, scale=1.0)
+
+    Now we create a new GraphBuilder and build a new model:
+
+    >>> gb = lsl.GraphBuilder()
+    >>> gb = gb.add(*nodes.values(), *vars_.values())
+    >>> model = gb.build_model()
+    >>> model
+    Model(12 nodes, 3 vars)
+
     """
 
     def __init__(
