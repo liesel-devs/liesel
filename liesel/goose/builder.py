@@ -136,7 +136,75 @@ class EngineBuilder:
         self._model_state = Option(model_states)
 
     def set_jitter_fns(self, jitter_fns: JitterFunctions | None):
-        """Set the jittering functions."""
+        """
+        Set the jittering functions.
+
+        A jittering function is a function that takes as input a key and a value,
+        and applies a random jittering (noise) to the input value
+        based on the given key.
+        This function takes as input a dictionary where a jittering function is
+        assigned to a position key.
+
+        Examples
+        --------
+
+        >>> import jax
+        >>> import jax.numpy as jnp
+        >>> import liesel.goose as gs
+        >>> import liesel.model as lsl
+        >>> import tensorflow_probability.substrates.jax.distributions as tfd
+        >>> import numpy as np
+
+        >>> rng = np.random.default_rng(42)
+
+        >>> n = 500
+        >>> true_beta = np.array([1.0, 2.0])
+        >>> true_sigma = 1.0
+
+        >>> X_mat = jnp.c_[jnp.ones(n), rng.uniform(size=n)]
+        >>> y_vec = X_mat @ true_beta + rng.normal(scale=true_sigma, size=n)
+
+        >>> beta_loc = lsl.Var(0.0, name="beta_loc")
+        >>> beta_scale = lsl.Var(100.0, name="beta_scale")
+        >>> beta_dist = lsl.Dist(tfd.Normal, loc=beta_loc, scale=beta_scale)
+        >>> beta = lsl.param(
+        ...     value=np.array([0.0, 0.0]), distribution=beta_dist, name="beta")
+
+        >>> a = lsl.Var(0.01, name="a")
+        >>> b = lsl.Var(0.01, name="b")
+
+        >>> sigma_dist = lsl.Dist(tfd.InverseGamma, concentration=a, scale=b)
+        >>> sigma = lsl.param(value=10.0, distribution=sigma_dist, name="sigma")
+
+        >>> X = lsl.obs(X_mat, name="X")
+
+        >>> yhat_fn = lambda x, beta: jnp.dot(x, beta)
+        >>> calc = lsl.Calc(yhat_fn, x=X, beta=beta)
+        >>> y_hat = lsl.Var(calc, name="y_hat")
+        >>> y_dist = lsl.Dist(tfd.Normal, loc=y_hat, scale=sigma)
+        >>> y = lsl.Var(y_vec, distribution=y_dist, name="y")
+
+        >>> gb = lsl.GraphBuilder().add(y)
+        >>> model = gb.build_model()
+
+        >>> builder = gs.EngineBuilder(seed=1337, num_chains=4)
+        >>> builder.set_model(gs.LieselInterface(model))
+        >>> builder.set_initial_values(model.state)
+        >>> builder.add_kernel(gs.NUTSKernel(["beta"]))
+        >>> builder.add_kernel(gs.NUTSKernel(["sigma"]))
+
+        >>> builder.set_jitter_fns = {
+        ...     "beta": lambda key, val: val + jax.random.uniform(
+        ...         key, val.shape, val.dtype, -1.0, 1.0),
+        ...     "sigma": lambda key, val: jax.random.uniform(
+        ...         key, val.shape, val.dtype, 1.0, 10.0)
+        ... }
+        >>> builder.set_duration(warmup_duration=1000, posterior_duration=1000)
+
+        >>> engine = builder.build()
+
+        }
+        """
         self._jitter_fns = Option(jitter_fns)
 
     @property

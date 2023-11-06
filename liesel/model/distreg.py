@@ -283,6 +283,10 @@ def dist_reg_mcmc(model: Model, seed: int, num_chains: int) -> EngineBuilder:
         The PRNG seed for the engine builder.
     num_chains
         The number of chains to be sampled.
+
+    See Also
+    --------
+    :meth:`.EngineBuilder.set_jitter_fns` : Method for setting the jittering functions
     """
 
     builder = EngineBuilder(seed, num_chains)
