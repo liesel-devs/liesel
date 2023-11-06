@@ -22,7 +22,7 @@ interested reader should consider the original paper by [Lang & Brezger
 (2012)](https://doi.org/10.1198/1061860043010).
 
 In Bayesian P-Splines, we try to estimate a function $f(x)$ of a covariate $x$ - which
-may, for example represented the relationship between $x$ and the response's mean. To
+may, for example, represent the relationship between $x$ and the response's mean. To
 implement the estination, we parameterize the functione estimate by the product of
 a design matrix of basis function evaluations $\boldsymbol{B}(x)$ and a vector of
 spline coefficients $\boldsymbol{\beta}$, i.e.
