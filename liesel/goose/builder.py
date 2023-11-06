@@ -51,19 +51,82 @@ class EngineBuilder:
     """
     The :class:`.EngineBuilder` is used to construct an MCMC Engine.
 
-    Currently, the :class:`.EngineBuilder` builds an object of the class
-    :class:`.Engine`.
+    .. rubric:: Workflow
 
-    By default, every position key associated with an MCMC kernel is tracked.
-    This behavior can be adjusted with the fields :attr:`.positions_included`
-    and :attr:`.positions_excluded`.
+    The general workflow usually looks something like this:
+
+    #. Create a builder with :class:`.EngineBuilder`.
+    #. Set the desired number of warmup and posterior samples :meth:`.set_duration`.
+    #. Set the model interface with :meth:`.set_model`.
+    #. Set the initial values with :meth:`.set_initial_values`.
+    #. Add MCMC kernels with :meth:`.add_kernel`.
+    #. Build an :class:`.Engine` with :meth:`.build`.
+
+    Optionally, you can also:
+
+    - Add position keys to :attr:`.positions_included` for tracking. If you are using a
+      :class:`.Model` object, position keys are the names of variables or nodes in the
+      model. Refer to :attr:`.positions_included` for more information.
+    - Add custom jittering for start values with :meth:`.set_jitter_fns`.
 
     Parameters
     ----------
     seed
-        Used to initialize the PRNG for the building process. The PRNG state
+        Used for jittering initial values and MCMC sampling.
     num_chains
         The number of chains to be used.
+
+    See Also
+    --------
+    .Engine : The MCMC engine, output of :meth:`.build`.
+    .LieselInterface : Interface for a :class:`~liesel.model.model.Model` object.
+    .NUTSKernel : The NUTS kernel.
+    .HMCKernel : The HMC kernel.
+    .IWLSKernel : The IWLS kernel.
+    .RWKernel : The random walk kernel.
+
+    Notes
+    -----
+
+    By default, only position keys associated with an MCMC kernel is tracked. This
+    behavior can be adjusted with the fields :attr:`.positions_included` and
+    :attr:`.positions_excluded`.
+
+    Examples
+    --------
+
+    For this example, we import ``tensorflow_probability`` as follows:
+
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+
+    First, we set up a minimal model:
+
+    >>> mu = lsl.param(0.0, name="mu")
+    >>> dist = lsl.Dist(tfd.Normal, loc=mu, scale=1.0)
+    >>> y = lsl.obs(jnp.array([1.0, 2.0, 3.0]), dist, name="y")
+    >>> model = lsl.GraphBuilder().add(y).build_model()
+
+    Now we initialize the EngineBuilder and set the desired number of warmup and
+    posterior samples:
+
+    >>> builder = gs.EngineBuilder(seed=1, num_chains=4)
+    >>> builder.set_duration(warmup_duration=1000, posterior_duration=1000)
+
+    Next, we set the model interface and initial values:
+
+    >>> builder.set_model(gs.LieselInterface(model))
+    >>> builder.set_initial_values(model.state)
+
+    We add a NUTS kernel for the parameter ``"mu"``:
+
+    >>> builder.add_kernel(gs.NUTSKernel(["mu"]))
+
+    Finally, we build the engine:
+
+    >>> engine = builder.build()
+
+    From here, you can continue with :meth:`.Engine.sample_all_epochs` to draw samples
+    from your posterior distribution.
     """
 
     def __init__(self, seed: int, num_chains: int):
@@ -82,9 +145,56 @@ class EngineBuilder:
         self.store_kernel_states: bool = False
         self.minimize_transition_infos: bool = False
         self.show_progress: bool = True
+        """Whether to show progress bars curing sampling."""
 
         self.positions_included: list[str] = []
-        """List of additional position keys that should be tracked."""
+        """
+        List of additional position keys that should be tracked.
+
+        If a position key is tracked that means the correspond element of the model
+        state will be saved and included in the :class:`.SamplingResults` and the
+        posterior samples returned by :meth:`.SamplingResults.get_posterior_samples`.
+
+        By default, only position keys associated with an MCMC kernel are tracked.
+        You can easily add additional position keys by appending to this list.
+
+        Examples
+        --------
+
+        For this example, we import ``tensorflow_probability`` as follows:
+
+        >>> import tensorflow_probability.substrates.jax.distributions as tfd
+
+        Consider the following simple model, in which we use the logarithm of the
+        scale parameter in a normal distribution and take the exponential value for
+        including the actual scale:
+
+        >>> log_scale = lsl.param(0.0, name="log_scale")
+        >>> scale = lsl.Calc(jnp.exp, variance, _name="scale")
+        >>> dist = lsl.Dist(tfd.Normal, loc=0.0, scale=scale)
+        >>> y = lsl.obs(jnp.array([1.0, 2.0, 3.0]), dist, name="y")
+        >>> model = lsl.GraphBuilder().add(y).build_model()
+
+        Now we might want to set up an engine builder with a NUTS kernel for the
+        parameter ``"log_scale"``:
+
+        >>> builder = gs.EngineBuilder(seed=1, num_chains=4)
+        >>> builder.set_model(gs.LieselInterface(model))
+        >>> builder.add_kernel(gs.NUTSKernel(["log_scale"]))
+
+        By default, only the position key ``"log_scale"`` is tracked and will be
+        included in the results. Now, if you also want the value of ``"scale"`` to be
+        included, you can add it to the list of included position keys:
+
+        >>> builder.position_keys.append("scale")
+        >>> builder.position_keys
+        ['scale']
+
+        Beware however that including many intermediate position keys can lead to
+        large results. In some cases it may be preferable to keep the tracked positions
+        to a minimum and recompute the intermediate values from the posterior samples.
+
+        """
         self.positions_excluded: list[str] = []
         """List of position keys that should not be tracked. Excluded keys override
         additional keys."""
