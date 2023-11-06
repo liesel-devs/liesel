@@ -10,7 +10,7 @@ The import path for ``liesel.goose`` is::
 
     import liesel.goose as gs
 
-The workflow for MCMC sampling goose consists of two steps:
+The workflow for MCMC sampling goose consists of the following steps:
 
 1. Set up your model
 2. Set up an :class:`.Engine` with MCMC kernels for your parameters and draw posterior samples
