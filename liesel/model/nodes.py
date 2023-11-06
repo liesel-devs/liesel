@@ -136,13 +136,20 @@ class Node(ABC):
     (see :attr:`.Model.state`), and can be stored in a chain by Liesel's MCMC engine
     Goose.
 
-    This class is an abstract class that cannot be initialized without defining the
-    :meth:`.update` method. See below for the most important concrete node classes.
+    .. note::
+        This class is an abstract class that cannot be initialized without defining the
+        :meth:`.update` method. See below for the most important concrete node classes.
 
-    Additional meta-information can be added by wrapping a :class:`.Data` or
-    :class:`.Calc` node in a :class:`.Var`, which is particularly useful if the node
-    represents a random variable, but can also be a good idea in a few other
-    situations.
+    Parameters
+    ----------
+    inputs
+        Non-keyword inputs. Any inputs that are not already nodes or :class:`.Var`
+        will be converted to :class:`.Data` nodes.
+    _name
+        The name of the node. If you do not specify a name, a unique name will be \
+        automatically generated upon initialization of a :class:`.Model`.
+    _needs_seed
+        Whether the node needs a seed / PRNG key.
 
     See Also
     --------
@@ -152,8 +159,14 @@ class Node(ABC):
     .Data :
         A node representing some static data.
     .Dist :
-        A node representing a `TensorFlow Probability`_ distribution,
-        typically for the evaluation of the log-probability.
+        A node representing a ``tensorflow_probability``
+        :class:`~tfp.distributions.Distribution`.
+    .Var : A variable in a statistical model, typically with a probability
+        distribution.
+    .param :
+        A helper function to initialize a :class:`.Var` as a model parameter.
+    .obs :
+        A helper function to initialize a :class:`.Var` as an observed variable.
 
 
     .. _pytrees: https://jax.readthedocs.io/en/latest/pytrees.html
