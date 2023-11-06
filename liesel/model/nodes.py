@@ -4,6 +4,7 @@ Nodes and variables.
 
 from __future__ import annotations
 
+import warnings
 import weakref
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Hashable, Iterable
@@ -16,7 +17,6 @@ import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as jd
 import tensorflow_probability.substrates.numpy.bijectors as nb
 import tensorflow_probability.substrates.numpy.distributions as nd
-from deprecated.sphinx import deprecated
 
 from ..distributions.nodist import NoDistribution
 
@@ -1548,21 +1548,31 @@ def param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
-@deprecated(reason="Use the new `Group` object directly", version="0.2.2")
 def add_group(name: str, **kwargs: Node | Var) -> Group:
     """
     Assigns the nodes and variables to a group.
 
-    See :attr:`liesel.model.nodes.Node.groups`.
+    .. deprecated:: 0.2.2
+        Use the :class:`.Group` object directly. This function will be removed in
+        v0.4.0.
 
     Parameters
     ----------
     name
         The name of the group.
     kwargs
-        The nodes and variables in the group with their keys in the group
-        as keywords.
+        The nodes and variables in the group with their keys in the group as keywords.
+
+    See Also
+    --------
+    .Node.groups : The groups that a node is a part of.
+    .Group : A group of nodes and variables.
     """
+    warnings.warn(
+        "The `add_group` function is deprecated and will be removed in v0.4.0. "
+        "Use the `Group` object directly.",
+        FutureWarning,
+    )
     return Group(name, **kwargs)
 
 
