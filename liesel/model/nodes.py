@@ -548,7 +548,113 @@ class Data(Node):
 
 
 class Calc(Node):
-    """A calculator node."""
+    """
+    A node that calculates its value based its inputs nodes.
+
+    Calculator nodes are a central element block of the Liesel graph building toolkit.
+    They wrap arbitrary calculations in pure JAX functions.
+
+    - By default, calculator nodes *will* appear in the node graph created by
+      :func:`.viz.plot_nodes`, but they will *not* appear in the model graph created by
+      :func:`.viz.plot_vars`.
+    - You can wrap a calculator node in a :class:`.Var` to make it appear in the model
+      graph.
+
+    .. tip::
+        The wrapped function must be jit-compilable by JAX. This mainly means that
+        it must be a pure function, i.e. it must not have any side effects and, given
+        the same input, it must always return the same output. Some special
+        consideration is also required for loops and conditionals.
+
+        Please consult the JAX docs_ for details.
+
+    Parameters
+    ----------
+    function
+        The function to be wrapped. Must be jit-compilable by JAX.
+    *inputs
+        Non-keyword inputs. Any inputs that are not already nodes or :class:`.Var`
+        will be converted to :class:`.Data` nodes. The values of these inputs will be
+        passed to the wrapped function in the same order they are entered here.
+    _name
+        The name of the node. If you do not specify a name, a unique name will be \
+        automatically generated upon initialization of a :class:`.Model`.
+    _needs_seed
+        Whether the node needs a seed / PRNG key.
+    **kwinputs
+        Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
+        will be converted to :class:`.Data` nodes. The values of these inputs will be
+        passed to the wrapped function as keyword arguments.
+
+    See Also
+    --------
+    .Data :
+        A node representing some static data.
+    .Dist :
+        A node representing a ``tensorflow_probability``
+        :class:`~tfp.distributions.Distribution`.
+    .Var : A variable in a statistical model, typically with a probability
+        distribution.
+    .param :
+        A helper function to initialize a :class:`.Var` as a model parameter.
+    .obs :
+        A helper function to initialize a :class:`.Var` as an observed variable.
+
+    Notes
+    -----
+
+    A calculator node will compute its value only when :meth:`.Calc.update` is called.
+    This does not happen automatically upon initialization. Commonly, the first time
+    this method is called is during the initialization of a :class:`.Model`, which might
+    make it hard to spot errors in the wrapped computations. To update the value
+    immediately, you can call :meth:`.Calc.update` manually.
+
+    Examples
+    --------
+
+    A simple calculator node, taking the exponential value of an input parameter. This
+    calculator node has not updated its value yet.
+
+    >>> log_scale = lsl.param(0.0, name="log_scale")
+    >>> scale = lsl.Calc(jnp.exp, log_scale)
+    >>> print(scale.value)
+    None
+
+    The value of the calculator node is updated when :meth:`.Calc.update` is called.
+
+    >>> scale.update()
+    Calc(name="")
+    >>> print(scale.value)
+    1.0
+
+    You can also update the value of the calculator node in one step upon initilization.
+
+    >>> log_scale = lsl.param(0.0, name="log_scale")
+    >>> scale = lsl.Calc(jnp.exp, log_scale).update()
+    >>> print(scale.value)
+    1.0
+
+    You can also use your own functions as long as they are jit-compilable by JAX.
+
+    >>> def compute_variance(x):
+    ...     return jnp.exp(x)**2
+    >>> log_scale = lsl.param(0.0, name="log_scale")
+    >>> variance = lsl.Calc(compute_variance, log_scale).update()
+    >>> print(variance.value)
+    1.0
+
+    You can wrap a calculator node in a :class:`.Var` to declare its role as a
+    statistical model variable and make it appear in the variable graph.
+
+    >>> log_scale = lsl.param(0.0, name="log_scale")
+    >>> scale = lsl.Var(lsl.Calc(jnp.exp, log_scale).update())
+    >>> print(scale.value)
+    1.0
+
+
+    .. _docs: https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html
+
+    """
 
     def __init__(
         self,
