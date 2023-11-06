@@ -458,7 +458,62 @@ class InputGroup(TransientNode):
 
 
 class Data(Node):
-    """A data node. Always up-to-date."""
+    """
+    A node that holds constant data.
+
+    Since the value represented by a data node does not change, it is always up-to-date.
+    A common usecase for data nodes is to cache computed values.
+
+    - By default, data nodes *will* appear in the node graph created by
+      :func:`.viz.plot_nodes`, but they will *not* appear in the model graph created by
+      :func:`.viz.plot_vars`.
+    - You can wrap a data node in a :class:`.Var` to make it appear in the model graph.
+
+    Parameters
+    ----------
+    value
+        The value of the data node.
+    _name
+        The name of the data node. If you do not specify a name, a unique name will be \
+        automatically generated upon initialization of a :class:`.Model`.
+
+    See Also
+    --------
+    .Calc :
+        A node representing a general calculation/operation
+        in JAX or Python.
+    .Dist :
+        A node representing a ``tensorflow_probability``
+        :class:`~tfp.distributions.Distribution`.
+    .Var : A variable in a statistical model, typically with a probability
+        distribution.
+    .param :
+        A helper function to initialize a :class:`.Var` as a model parameter.
+    .obs :
+        A helper function to initialize a :class:`.Var` as an observed variable.
+
+
+    Examples
+    --------
+
+    A simple data node representing a constant value without a name:
+
+    >>> nameless_node = lsl.Data(1.0)
+    >>> nameless_node
+    Data(name="")
+
+    Adding this node to a model leads to an automatically generated name:
+
+    >>> model = lsl.GraphBuilder().add(nameless_node).build_model()
+    >>> nameless_node
+    Data(name="n0")
+
+    A data node with a name:
+
+    >>> node = lsl.Data(1.0, _name="my_name")
+    >>> node
+    Data(name="my_name")
+    """
 
     def __init__(self, value: Any, _name: str = ""):
         super().__init__(_name=_name)
