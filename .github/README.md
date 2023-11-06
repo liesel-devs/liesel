@@ -336,59 +336,6 @@ posterior
 gs.plot_param(results, param="loc")
 ```
 
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
-      if pd.api.types.is_categorical_dtype(vector):
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
-      if pd.api.types.is_categorical_dtype(vector):
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
-      if pd.api.types.is_categorical_dtype(vector):
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
-      with pd.option_context('mode.use_inf_as_na', True):
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
-      with pd.option_context('mode.use_inf_as_na', True):
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1057: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
-      grouped_data = data.groupby(
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
-      if pd.api.types.is_categorical_dtype(vector):
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
-      if pd.api.types.is_categorical_dtype(vector):
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
-      with pd.option_context('mode.use_inf_as_na', True):
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1057: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
-      grouped_data = data.groupby(
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
-      if pd.api.types.is_categorical_dtype(vector):
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
-      if pd.api.types.is_categorical_dtype(vector):
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
-      with pd.option_context('mode.use_inf_as_na', True):
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
-      with pd.option_context('mode.use_inf_as_na', True):
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
-      if pd.api.types.is_categorical_dtype(vector):
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
-      if pd.api.types.is_categorical_dtype(vector):
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
-      with pd.option_context('mode.use_inf_as_na', True):
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
-      with pd.option_context('mode.use_inf_as_na', True):
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
-      if pd.api.types.is_categorical_dtype(vector):
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
-      if pd.api.types.is_categorical_dtype(vector):
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
-      with pd.option_context('mode.use_inf_as_na', True):
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
-      with pd.option_context('mode.use_inf_as_na', True):
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
-      if pd.api.types.is_categorical_dtype(vector):
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1498: FutureWarning: is_categorical_dtype is deprecated and will be removed in a future version. Use isinstance(dtype, CategoricalDtype) instead
-      if pd.api.types.is_categorical_dtype(vector):
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
-      with pd.option_context('mode.use_inf_as_na', True):
-    /Users/johannesbrachem/.pyenv/versions/3.11.3/envs/liesel-2023-09/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
-      with pd.option_context('mode.use_inf_as_na', True):
-
 <img src="README-files/goose-plot-1.png" style="width:70.0%" />
 
 ## Installation
