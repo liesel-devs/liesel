@@ -1374,14 +1374,73 @@ def obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> 
     """
     Declares an observed variable.
 
-    Sets the :attr:`.Var.observed` flag. If the observed variable is a
-    random variable, i.e. if it has an associated probability distribution,
-    its log-probability is automatically added to the model log-likelihood
-    (see :attr:`.Model.log_lik`).
+    Sets the :attr:`.Var.observed` flag. If the observed variable is a random variable,
+    i.e. if it has an associated probability distribution, its log-probability is
+    automatically added to the model log-likelihood (see :attr:`.Model.log_lik`).
+
+    Parameters
+    ----------
+    value
+        The value of the variable.
+    distribution
+        The probability distribution of the variable.
+    name
+        The name of the variable. If you do not specify a name, a unique name will be \
+        automatically generated upon initialization of a :class:`.Model`.
+
 
     Returns
     -------
     An observed variable.
+
+    See Also
+    --------
+    .Calc :
+        A node representing a general calculation/operation in JAX or Python.
+    .Data :
+        A node representing some static data.
+    .Dist :
+        A node representing a ``tensorflow_probability``
+        :class:`~tfp.distributions.Distribution`.
+    .Var : A variable in a statistical model, typically with a probability
+        distribution.
+    .param :
+        A helper function to initialize a :class:`.Var` as a model parameter.
+
+    Notes
+    -----
+
+    A variable will compute its log probability only when :meth:`.Calc.update` is
+    called. This does not happen automatically upon initialization. Commonly, the first
+    time this method is called is during the initialization of a :class:`.Model`. To
+    update the value immediately, you can call :meth:`.Var.update` manually.
+
+
+    Examples
+    --------
+
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+
+    We can declare an observed variable with a normal distribution as the observation
+    model:
+
+    >>> dist = lsl.Dist(tfd.Normal, loc=0.0, scale=1.0)
+    >>> y = lsl.obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y")
+    >>> y
+    Var(name="y")
+
+    Now we build the model graph:
+
+    >>> model = lsl.GraphBuilder().add(y).build_model()
+
+    The log-likelihood of the model is the sum of the log-probabilities of all observed
+    variables. In this case this is only our ``y`` variable:
+
+    >>> model.log_lik
+    Array(-3.0068154, dtype=float32)
+
+    >>> jnp.sum(y.log_prob)
+    Array(-3.0068154, dtype=float32)
 
     """
     var = Var(value, distribution, name)
@@ -1398,9 +1457,85 @@ def param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -
     its log-probability is automatically added to the model log-prior
     (see :attr:`.Model.log_prior`).
 
+    Parameters
+    ----------
+    value
+        The value of the parameter.
+    distribution
+        The probability distribution of the parameter.
+    name
+        The name of the parameter. If you do not specify a name, a unique name will be \
+        automatically generated upon initialization of a :class:`.Model`.
+
     Returns
     -------
     A parameter variable.
+
+    See Also
+    --------
+    .Calc :
+        A node representing a general calculation/operation
+        in JAX or Python.
+    .Data :
+        A node representing some static data.
+    .Dist :
+        A node representing a ``tensorflow_probability``
+        :class:`~tfp.distributions.Distribution`.
+    .Var : A variable in a statistical model, typically with a probability
+        distribution.
+    .obs :
+        A helper function to initialize a :class:`.Var` as an observed variable.
+
+    Notes
+    -----
+
+    A variable will compute its log probability only when :meth:`.Calc.update` is
+    called. This does not happen automatically upon initialization. Commonly, the first
+    time this method is called is during the initialization of a :class:`.Model`. To
+    update the value immediately, you can call :meth:`.Var.update` manually.
+
+    Examples
+    --------
+
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+
+    A variance parameter with an inverse-gamma prior:
+
+    >>> prior = lsl.Dist(tfd.InverseGamma, concentration=0.1, scale=0.1)
+    >>> variance = lsl.param(1.0, prior, name="variance")
+    >>> variance
+    Var(name="variance")
+
+    We can use this parameter variable in the distribution of an observed variable:
+
+    >>> scale = lsl.Calc(jnp.sqrt, variance)
+    >>> dist = lsl.Dist(tfd.Normal, loc=0.0, scale=scale)
+    >>> y = lsl.obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y")
+    >>> y
+    Var(name="y")
+
+    Now we can build the model graph:
+
+    >>> model = lsl.GraphBuilder().add(y).build_model()
+
+    The log_prior of the model is the sum of the log-priors of all parameters. In this
+    case this is only our ``variance`` parameter:
+
+    >>> model.log_prior
+    Array(-2.582971, dtype=float32)
+
+    >>> variance.log_prob
+    Array(-2.582971, dtype=float32)
+
+    The log-likelihood of the model is the sum of the log-probabilities of all observed
+    variables. In this case this is only our ``y`` variable:
+
+    >>> model.log_lik
+    Array(-3.0068154, dtype=float32)
+
+    >>> jnp.sum(y.log_prob)
+    Array(-3.0068154, dtype=float32)
+
     """
     var = Var(value, distribution, name)
     var.value_node.monitor = True
