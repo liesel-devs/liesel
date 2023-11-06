@@ -8,6 +8,8 @@ Liesel: A Probabilistic Programming Framework
    :hidden:
    :maxdepth: 1
 
+   model
+   goose
    tutorials_overview
 
 
