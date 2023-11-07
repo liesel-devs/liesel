@@ -7,7 +7,7 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 import liesel.goose as gs
 import liesel.model as lsl
 from liesel.goose.types import Position
-from liesel.model.goose import GooseModel, finite_discrete_gibbs_kernel
+from liesel.model.goose import finite_discrete_gibbs_kernel
 from liesel.model.model import GraphBuilder, Model
 from liesel.model.nodes import Dist, Var
 
@@ -25,23 +25,23 @@ def model():
 
 class TestGooseModel:
     def test_get_position(self, model) -> None:
-        gm = GooseModel(model)
-        pos = gm.extract_position(["mu_value"], model.state)
+        liesel_interface = gs.LieselInterface(model)
+        pos = liesel_interface.extract_position(["mu_value"], model.state)
         assert pos["mu_value"] == 0.0
 
     def test_update_state(self, model) -> None:
-        gm = GooseModel(model)
+        liesel_interface = gs.LieselInterface(model)
         pos = Position({"mu_value": 10.0})
-        new_state = gm.update_state(pos, model.state)
+        new_state = liesel_interface.update_state(pos, model.state)
         assert new_state["mu_value"].value == 10.0
 
     def test_get_log_prob(self, model) -> None:
-        gm = GooseModel(model)
-        lp_before = gm.log_prob(model.state)
+        liesel_interface = gs.LieselInterface(model)
+        lp_before = liesel_interface.log_prob(model.state)
 
         pos = Position({"mu_value": 10.0})
-        new_state = gm.update_state(pos, model.state)
-        lp_after = gm.log_prob(new_state)
+        new_state = liesel_interface.update_state(pos, model.state)
+        lp_after = liesel_interface.log_prob(new_state)
 
         assert lp_before == pytest.approx(-722.714)
         assert lp_after == pytest.approx(-25841.498)
@@ -54,7 +54,7 @@ def test_sample_model(model) -> None:
 
     builder.add_kernel(gs.NUTSKernel(["mu_value"]))
 
-    goose_model = GooseModel(model)
+    goose_model = gs.LieselInterface(model)
     builder.set_model(goose_model)
 
     builder.set_initial_values(model.state)
@@ -88,7 +88,7 @@ def test_sample_transformed_model(model: Model):
     builder.add_kernel(gs.NUTSKernel(["mu_value", "sigma_transformed_value"]))
     builder.positions_included = ["sigma"]
 
-    goose_model = GooseModel(model)
+    goose_model = gs.LieselInterface(model)
     builder.set_model(goose_model)
 
     builder.set_initial_values(model.state)
@@ -170,7 +170,7 @@ class TestFiniteDiscreteGibbsKernel:
 
         eb = gs.EngineBuilder(1, num_chains=1)
         eb.add_kernel(kernel)
-        eb.set_model(lsl.GooseModel(model))
+        eb.set_model(gs.LieselInterface(model))
         eb.set_initial_values(model.state)
         eb.set_duration(warmup_duration=500, posterior_duration=2000)
 
@@ -200,7 +200,7 @@ class TestFiniteDiscreteGibbsKernel:
 
         eb = gs.EngineBuilder(1, num_chains=1)
         eb.add_kernel(kernel)
-        eb.set_model(lsl.GooseModel(model))
+        eb.set_model(gs.LieselInterface(model))
         eb.set_initial_values(model.state)
         eb.set_duration(warmup_duration=500, posterior_duration=2000)
 
@@ -230,7 +230,7 @@ class TestFiniteDiscreteGibbsKernel:
 
         eb = gs.EngineBuilder(1, num_chains=1)
         eb.add_kernel(kernel)
-        eb.set_model(lsl.GooseModel(model))
+        eb.set_model(gs.LieselInterface(model))
         eb.set_initial_values(model.state)
         eb.set_duration(warmup_duration=500, posterior_duration=2000)
 

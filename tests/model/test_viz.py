@@ -52,6 +52,7 @@ model = Model([y])
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_plot_nodes() -> None:
     fp = tempfile.TemporaryFile()
     plot_nodes(model, save_path=fp)
@@ -79,6 +80,7 @@ def test_plot_nodes_negative_height() -> None:
     fp.close()
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_plot_nodes_circo_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_nodes(model, save_path=fp, prog="circo")
@@ -86,6 +88,7 @@ def test_plot_nodes_circo_prog() -> None:
     fp.close()
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_plot_nodes_dot_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_nodes(model, save_path=fp, prog="dot")
@@ -93,6 +96,7 @@ def test_plot_nodes_dot_prog() -> None:
     fp.close()
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_plot_nodes_fdp_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_nodes(model, save_path=fp, prog="fdp")
@@ -100,6 +104,7 @@ def test_plot_nodes_fdp_prog() -> None:
     fp.close()
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_plot_nodes_neato_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_nodes(model, save_path=fp, prog="neato")
@@ -107,6 +112,7 @@ def test_plot_nodes_neato_prog() -> None:
     fp.close()
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_plot_nodes_osage_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_nodes(model, save_path=fp, prog="osage")
@@ -114,6 +120,7 @@ def test_plot_nodes_osage_prog() -> None:
     fp.close()
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_plot_nodes_patchwork_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_nodes(model, save_path=fp, prog="patchwork")
@@ -121,6 +128,7 @@ def test_plot_nodes_patchwork_prog() -> None:
     fp.close()
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_plot_nodes_twopi_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_nodes(model, save_path=fp, prog="twopi")
@@ -128,6 +136,7 @@ def test_plot_nodes_twopi_prog() -> None:
     fp.close()
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_plot_nodes_sfdp_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_nodes(model, save_path=fp, prog="sfdp")
@@ -140,6 +149,7 @@ def test_plot_nodes_sfdp_prog() -> None:
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_plot_vars() -> None:
     fp = tempfile.TemporaryFile()
     plot_vars(model, save_path=fp)
@@ -167,6 +177,7 @@ def test_plot_vars_negative_height() -> None:
     fp.close()
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_plot_vars_circo_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_vars(model, save_path=fp, prog="circo")
@@ -174,6 +185,7 @@ def test_plot_vars_circo_prog() -> None:
     fp.close()
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_plot_vars_dot_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_vars(model, save_path=fp, prog="dot")
@@ -181,6 +193,7 @@ def test_plot_vars_dot_prog() -> None:
     fp.close()
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_plot_vars_fdp_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_vars(model, save_path=fp, prog="fdp")
@@ -188,6 +201,7 @@ def test_plot_vars_fdp_prog() -> None:
     fp.close()
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_plot_vars_neato_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_vars(model, save_path=fp, prog="neato")
@@ -195,6 +209,7 @@ def test_plot_vars_neato_prog() -> None:
     fp.close()
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_plot_vars_osage_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_vars(model, save_path=fp, prog="osage")
@@ -202,6 +217,7 @@ def test_plot_vars_osage_prog() -> None:
     fp.close()
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_plot_vars_patchwork_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_vars(model, save_path=fp, prog="patchwork")
@@ -209,6 +225,7 @@ def test_plot_vars_patchwork_prog() -> None:
     fp.close()
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_plot_vars_twopi_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_vars(model, save_path=fp, prog="twopi")
@@ -216,6 +233,7 @@ def test_plot_vars_twopi_prog() -> None:
     fp.close()
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_plot_vars_sfdp_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_vars(model, save_path=fp, prog="sfdp")
