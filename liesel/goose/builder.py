@@ -155,42 +155,57 @@ class EngineBuilder:
         >>> import jax.numpy as jnp
         >>> import tensorflow_probability.substrates.jax.distributions as tfd
 
-
         >>> key = jax.random.PRNGKey(42)
-        >>> key_data, key_y = jax.random.split(key)
+
+        In this example, we show how to use the method
+        :meth:`.EngineBuilder.set_jitter_fns` to apply jittering
+        to the initial values of each chain.
+
+        First, we sample 500 data points from a Normal Distrbution
+        with mean 2.0 and standard deviation 1.0.
 
         >>> n = 500
-        >>> true_beta = np.array([1.0, 2.0])
+        >>> true_mu = 2.0
         >>> true_sigma = 1.0
 
-        >>> X_mat = jnp.c_[jnp.ones(n), jax.random.uniform(key_data, (n, ))]
-        >>> y_vec = tfd.Normal(loc=X_mat @ true_beta, scale=true_sigma).sample(
-        ...     (n, ), key_y)
+        >>> x_vec = tfd.Normal(loc=true_mu, scale=true_sigma).sample((n, ), key)
 
-        >>> beta_dist = lsl.Dist(tfd.Normal, loc=0.0, scale=100.)
-        >>> beta = lsl.param(
-        ...     value=np.array([0.0, 0.0]), distribution=beta_dist, name="beta")
+        Then, we define the prior for mu
 
-        >>> X = lsl.obs(X_mat, name="X")
+        >>> mu_dist = lsl.Dist(tfd.Normal, loc=0.0, scale=100.)
+        >>> mu = lsl.param(value=0.0, distribution=mu_dist, name="mu")
 
-        >>> calc = lsl.Calc(lambda x, beta: x @ beta, x=X, beta=beta)
-        >>> y_hat = lsl.Var(calc, name="y_hat")
-        >>> y_dist = lsl.Dist(tfd.Normal, loc=y_hat, scale=true_sigma)
-        >>> y = lsl.Var(y_vec, distribution=y_dist, name="y")
+        and the response distribution.
 
-        >>> gb = lsl.GraphBuilder().add(y)
+        >>> x_dist = lsl.Dist(tfd.Normal, loc=mu, scale=true_sigma)
+        >>> x = lsl.Var(x_vec, distribution=x_dist, name="x")
+
+        Now, we can create the model with :class:`.GraphBuilder`.
+
+        >>> gb = lsl.GraphBuilder().add(x)
         >>> model = gb.build_model()
+
+        Finally, we build the model with :class:`.EngineBuilder`. We will use 4
+        parallel chains and sample our varaible using a :class:`.NUTSKernel`.
 
         >>> builder = gs.EngineBuilder(seed=1337, num_chains=4)
         >>> builder.set_model(gs.LieselInterface(model))
         >>> builder.set_initial_values(model.state)
-        >>> builder.add_kernel(gs.NUTSKernel(["beta"]))
+        >>> builder.add_kernel(gs.NUTSKernel(["mu"]))
+
+        A jitter function takes as input a key and value and applies random jittering
+        to the given value using the key. In this case, we apply a uniform noise with
+        a minimum value of -1.0 and maximum value of 1.0. Notice that the shape of `val`
+        is `(4, 1)`, where the first dimension corresponds to the number of chains.
 
         >>> def jitter_fn(key, val):
         ...     jitter = jax.random.uniform(key, val.shape, val.dtype, -1.0, 1.0)
         ...     return val + jitter
 
-        >>> builder.set_jitter_fns = {"beta": jitter_fn}
+        The method takes as input a dictionary where a
+        jittering function is assigned to each position key.
+
+        >>> builder.set_jitter_fns = {"mu": jitter_fn}
         >>> builder.set_duration(warmup_duration=1000, posterior_duration=1000)
 
         >>> engine = builder.build()
