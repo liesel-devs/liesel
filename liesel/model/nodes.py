@@ -459,7 +459,7 @@ class InputGroup(TransientNode):
 
 class Data(Node):
     """
-    A node that holds constant data.
+    A :class:`.Node` subclass that holds constant data.
 
     Since the value represented by a data node does not change, it is always up-to-date.
     A common usecase for data nodes is to cache computed values.
@@ -549,7 +549,7 @@ class Data(Node):
 
 class Calc(Node):
     """
-    A node that calculates its value based its inputs nodes.
+    A :class:`.Node` subclass that calculates its value based its inputs nodes.
 
     Calculator nodes are a central element block of the Liesel graph building toolkit.
     They wrap arbitrary calculations in pure JAX functions.
@@ -725,7 +725,7 @@ class VarValue(TransientIdentity):
 
 class Dist(Node):
     """
-    A distribution node.
+    A :class:`.Node` subclass that wraps a probability distribution.
 
     Distribution nodes wrap distribution classes that follow the
     ``tensorflow_probability`` :class:`~tfp.distributions.Distribution` interface.
@@ -1372,7 +1372,7 @@ class Var:
 
 def obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> Var:
     """
-    Declares an observed variable.
+    Helper function that returns an observed :class:`.Var`.
 
     Sets the :attr:`.Var.observed` flag. If the observed variable is a random variable,
     i.e. if it has an associated probability distribution, its log-probability is
@@ -1450,7 +1450,7 @@ def obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> 
 
 def param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> Var:
     """
-    Declares a parameter variable.
+    Helper function that returns a parameter :class:`.Var`.
 
     Sets the :attr:`.Var.parameter` flag. If the parameter variable is a
     random variable, i.e. if it has an associated probability distribution,

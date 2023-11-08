@@ -28,6 +28,16 @@ $ pip install liesel
 If you want to work with the latest development version of Liesel or use PyGraphviz for
 prettier plots of the model graphs, see the [README][5] in the main repository.
 
+Now you can get started. We recommend using the following import paths:
+
+```python
+import liesel.model as lsl
+import liesel.goose as gs
+```
+
+We provide overviews of the most important building blocks provided by `liesel.model`
+and `liesel.goose` in [Model Building (liesel.model)](model_overview) and
+[MCMC Sampling (liesel.goose)](goose_overview), respectively.
 
 # Tutorials
 
