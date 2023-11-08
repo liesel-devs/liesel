@@ -32,7 +32,7 @@ from .nodes import Array, Bijector, Dist, Distribution, Group, NodeState, Var
 matrix_rank = np.linalg.matrix_rank
 
 tau2_jitter_fn: JitterFunction = lambda key, val: jax.random.truncated_normal(
-    key, 0.0, 1e2, val.shape, val.dtype, 1.0
+    key, 0.0, 1e2, val.shape, val.dtype
 )
 beta_jitter_fn: JitterFunction = lambda key, val: val + jax.random.uniform(
     key, val.shape, val.dtype, -2.0, 2.0
