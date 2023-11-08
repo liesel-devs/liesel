@@ -142,6 +142,8 @@ class EngineBuilder:
         A jittering function is a function that takes as input a key and a value,
         and applies a random jittering (noise) to the input value
         based on the given key.
+        If no jitter function is provided a `Warning` will be raised and the
+        values won't be jittered.
 
         Parameters
         ----------
