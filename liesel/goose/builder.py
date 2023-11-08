@@ -170,14 +170,9 @@ class EngineBuilder:
 
         >>> x_vec = tfd.Normal(loc=true_mu, scale=true_sigma).sample((n, ), key)
 
-        Then, we define the prior for mu
+        Then, we define the distribution we want to sample from.
 
-        >>> mu_dist = lsl.Dist(tfd.Normal, loc=0.0, scale=100.)
-        >>> mu = lsl.param(value=0.0, distribution=mu_dist, name="mu")
-
-        and the response distribution.
-
-        >>> x_dist = lsl.Dist(tfd.Normal, loc=mu, scale=true_sigma)
+        >>> x_dist = lsl.Dist(tfd.Normal, loc=true_mu, scale=true_sigma)
         >>> x = lsl.Var(x_vec, distribution=x_dist, name="x")
 
         Now, we can create the model with :class:`.GraphBuilder`.
@@ -191,7 +186,7 @@ class EngineBuilder:
         >>> builder = gs.EngineBuilder(seed=1337, num_chains=4)
         >>> builder.set_model(gs.LieselInterface(model))
         >>> builder.set_initial_values(model.state)
-        >>> builder.add_kernel(gs.NUTSKernel(["mu"]))
+        >>> builder.add_kernel(gs.NUTSKernel(["x"]))
 
         A jitter function takes as input a key and value and applies random jittering
         to the given value using the key. In this case, we apply a uniform noise with
@@ -205,7 +200,7 @@ class EngineBuilder:
         The method takes as input a dictionary where a
         jittering function is assigned to each position key.
 
-        >>> builder.set_jitter_fns = {"mu": jitter_fn}
+        >>> builder.set_jitter_fns({"x": jitter_fn})
         >>> builder.set_duration(warmup_duration=1000, posterior_duration=1000)
 
         >>> engine = builder.build()
