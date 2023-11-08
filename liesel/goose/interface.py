@@ -20,6 +20,53 @@ class DictInterface:
     """
     A model interface for a model state represented by a ``dict[str, Array]`` and a
     corresponding log-probability function.
+
+    Parameters
+    ----------
+    log_prob_fn
+        A function that takes a model state and returns the log-probability. The
+        model state is expected to be a ``dict[str, Array]``.
+
+    See Also
+    --------
+    .DataclassInterface : A model interface for a model state represented by a
+        :obj:`~dataclasses.dataclass` and a corresponding log-probability function.
+    .LieselInterface : A model interface for a Liesel :class:`.Model`.
+
+    Examples
+    --------
+
+    For this example, we import ``tensorflow_probability`` as follows:
+
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+
+    Now we define a very simple log_prob_fn for the sake of demonstration:
+
+    >>> def log_prob_fn(model_state):
+    ...     loc = model_state["loc"]
+    ...     scale = model_state["scale"]
+    ...     x = model_state["x"]
+    ...     return tfd.Normal(loc, scale).log_prob(x)
+
+    We initialize the interface by passing the log_prob_fn to the constructor:
+
+    >>> interface = gs.DictInterface(log_prob_fn)
+
+    We evaluate the log-probability of a model state by calling the log_prob method:
+
+    >>> state = {"x": jnp.array(0.0), "loc": jnp.array(0.0), "scale": jnp.array(1.0)}
+    >>> interface.log_prob(state)
+    Array(-0.9189385, dtype=float32)
+
+    We update the model state by passing a position to the update_state method:
+
+    >>> position = {"x": jnp.array(1.0)}
+    >>> state = interface.update_state(position, state)
+
+    We can now evaluate the log-probability of the updated model state:
+
+    >>> interface.log_prob(state)
+    Array(-1.4189385, dtype=float32)
     """
 
     def __init__(self, log_prob_fn: LogProbFunction):
@@ -28,12 +75,40 @@ class DictInterface:
     def extract_position(
         self, position_keys: Sequence[str], model_state: ModelState
     ) -> Position:
+        """
+        Extracts a position from a model state.
+
+        Parameters
+        ----------
+        position_keys
+            An iterable of variable or node names.
+        model_state
+            A dictionary of variable or node names and values.
+        """
         return Position({key: model_state[key] for key in position_keys})
 
     def update_state(self, position: Position, model_state: ModelState) -> ModelState:
+        """
+        Updates and returns a model state given a position.
+
+        Parameters
+        ----------
+        position
+            A dictionary of variable or node names and values.
+        model_state
+            An dictionary of variable or node names and values.
+        """
         return model_state | position
 
     def log_prob(self, model_state: ModelState) -> float:
+        """
+        Returns the log-probability from a model state.
+
+        Parameters
+        ----------
+        model_state
+            A dictionary of variable or node names and values.
+        """
         return self._log_prob_fn(model_state)
 
 
@@ -42,6 +117,63 @@ class DataclassInterface:
     """
     A model interface for a model state represented by a :obj:`~dataclasses.dataclass`
     and a corresponding log-probability function.
+
+    Parameters
+    ----------
+    log_prob_fn
+        A function that takes a model state and returns the log-probability. The
+        model state is expected to be a :obj:`~dataclasses.dataclass`.
+
+    See Also
+    --------
+    .DictInterface : A model interface for a model state represented by a
+        ``dict[str, Array]`` and a corresponding log-probability function.
+    .LieselInterface : A model interface for a Liesel :class:`.Model`.
+
+    Examples
+    --------
+
+    For this example, we import ``tensorflow_probability`` as follows:
+
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+
+    We define a dataclass representing the model state:
+
+    >>> from dataclasses import dataclass
+    ...
+    >>> @dataclass
+    ... class State:
+    ...     x: jnp.ndarray
+    ...     loc: jnp.ndarray
+    ...     scale: jnp.ndarray
+
+    Now we define a very simple log_prob_fn for the sake of demonstration:
+
+    >>> def log_prob_fn(model_state):
+    ...     loc = model_state.loc
+    ...     scale = model_state.scale
+    ...     x = model_state.x
+    ...     return tfd.Normal(loc, scale).log_prob(x)
+
+    We initialize the interface by passing the log_prob_fn to the constructor:
+
+    >>> interface = gs.DataclassInterface(log_prob_fn)
+
+    We evaluate the log-probability of a model state by calling the log_prob method:
+
+    >>> state = State(x=jnp.array(0.0), loc=jnp.array(0.0), scale=jnp.array(1.0))
+    >>> interface.log_prob(state)
+    Array(-0.9189385, dtype=float32)
+
+    We update the model state by passing a position to the update_state method:
+
+    >>> position = {"x": jnp.array(1.0)}
+    >>> state = interface.update_state(position, state)
+
+    We can now evaluate the log-probability of the updated model state:
+
+    >>> interface.log_prob(state)
+    Array(-1.4189385, dtype=float32)
     """
 
     def __init__(self, log_prob_fn: LogProbFunction):
@@ -50,12 +182,40 @@ class DataclassInterface:
     def extract_position(
         self, position_keys: Sequence[str], model_state: ModelState
     ) -> Position:
+        """
+        Extracts a position from a model state.
+
+        Parameters
+        ----------
+        position_keys
+            An iterable of variable or node names.
+        model_state
+            An instance of the dataclass representing the model state.
+        """
         return Position({key: getattr(model_state, key) for key in position_keys})
 
     def log_prob(self, model_state: ModelState) -> float:
+        """
+        Returns the log-probability from a model state.
+
+        Parameters
+        ----------
+        model_state
+            An instance of the dataclass representing the model state.
+        """
         return self._log_prob_fn(model_state)
 
     def update_state(self, position: Position, model_state: ModelState) -> ModelState:
+        """
+        Updates and returns a model state given a position.
+
+        Parameters
+        ----------
+        position
+            A dictionary of variable or node names and values.
+        model_state
+            An instance of the dataclass representing the model state.
+        """
         new_state = copy.copy(model_state)  # don't change the input
         for key, value in position.items():
             if hasattr(new_state, key):
@@ -78,7 +238,30 @@ class LieselInterface:
 
     See Also
     --------
-    :class:`.Model` : The liesel model class.
+    .GraphBuilder : The graph builder class, used to set up a :class:`.Model`.
+
+    See Also
+    --------
+    .DictInterface : A model interface for a model state represented by a
+        ``dict[str, Array]`` and a corresponding log-probability function.
+    .DataclassInterface : A model interface for a model state represented by a
+        :obj:`~dataclasses.dataclass` and a corresponding log-probability function.
+    .LieselInterface : A model interface for a Liesel :class:`.Model`.
+
+    Examples
+    --------
+
+    First, we initialize a Liesel model. This is a minimal example only for the purpose
+    of demonstrating how to use the interface.
+
+    >>> y = lsl.obs(jnp.array([1.0, 2.0, 3.0]), name="y")
+    >>> model = lsl.GraphBuilder().add(y).build_model()
+
+    The interface is initialized by passing the model to the constructor.
+
+    >>> interface = gs.LieselInterface(model)
+
+    The interface instance can now be used in :meth:`.EngineBuilder.set_model`.
     """
 
     def __init__(self, model: "Model"):
