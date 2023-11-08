@@ -170,7 +170,7 @@ class EngineBuilder:
 
         >>> x_vec = tfd.Normal(loc=true_mu, scale=true_sigma).sample((n, ), key)
 
-        Then, we define the distribution we want to sample from, which is 
+        Then, we define the distribution we want to sample from, which is
         parametrized by a single parameter `mu`.
 
         >>> mu = lsl.param(1.0, name="mu")
