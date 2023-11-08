@@ -4,6 +4,7 @@ Nodes and variables.
 
 from __future__ import annotations
 
+import warnings
 import weakref
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Hashable, Iterable
@@ -16,7 +17,6 @@ import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as jd
 import tensorflow_probability.substrates.numpy.bijectors as nb
 import tensorflow_probability.substrates.numpy.distributions as nd
-from deprecated.sphinx import deprecated
 
 from ..distributions.nodist import NoDistribution
 
@@ -136,13 +136,20 @@ class Node(ABC):
     (see :attr:`.Model.state`), and can be stored in a chain by Liesel's MCMC engine
     Goose.
 
-    This class is an abstract class that cannot be initialized without defining the
-    :meth:`.update` method. See below for the most important concrete node classes.
+    .. note::
+        This class is an abstract class that cannot be initialized without defining the
+        :meth:`.update` method. See below for the most important concrete node classes.
 
-    Additional meta-information can be added by wrapping a :class:`.Data` or
-    :class:`.Calc` node in a :class:`.Var`, which is particularly useful if the node
-    represents a random variable, but can also be a good idea in a few other
-    situations.
+    Parameters
+    ----------
+    inputs
+        Non-keyword inputs. Any inputs that are not already nodes or :class:`.Var`
+        will be converted to :class:`.Data` nodes.
+    _name
+        The name of the node. If you do not specify a name, a unique name will be \
+        automatically generated upon initialization of a :class:`.Model`.
+    _needs_seed
+        Whether the node needs a seed / PRNG key.
 
     See Also
     --------
@@ -152,8 +159,14 @@ class Node(ABC):
     .Data :
         A node representing some static data.
     .Dist :
-        A node representing a `TensorFlow Probability`_ distribution,
-        typically for the evaluation of the log-probability.
+        A node representing a ``tensorflow_probability``
+        :class:`~tfp.distributions.Distribution`.
+    .Var : A variable in a statistical model, typically with a probability
+        distribution.
+    .param :
+        A helper function to initialize a :class:`.Var` as a model parameter.
+    .obs :
+        A helper function to initialize a :class:`.Var` as an observed variable.
 
 
     .. _pytrees: https://jax.readthedocs.io/en/latest/pytrees.html
@@ -445,7 +458,62 @@ class InputGroup(TransientNode):
 
 
 class Data(Node):
-    """A data node. Always up-to-date."""
+    """
+    A node that holds constant data.
+
+    Since the value represented by a data node does not change, it is always up-to-date.
+    A common usecase for data nodes is to cache computed values.
+
+    - By default, data nodes *will* appear in the node graph created by
+      :func:`.viz.plot_nodes`, but they will *not* appear in the model graph created by
+      :func:`.viz.plot_vars`.
+    - You can wrap a data node in a :class:`.Var` to make it appear in the model graph.
+
+    Parameters
+    ----------
+    value
+        The value of the data node.
+    _name
+        The name of the data node. If you do not specify a name, a unique name will be \
+        automatically generated upon initialization of a :class:`.Model`.
+
+    See Also
+    --------
+    .Calc :
+        A node representing a general calculation/operation
+        in JAX or Python.
+    .Dist :
+        A node representing a ``tensorflow_probability``
+        :class:`~tfp.distributions.Distribution`.
+    .Var : A variable in a statistical model, typically with a probability
+        distribution.
+    .param :
+        A helper function to initialize a :class:`.Var` as a model parameter.
+    .obs :
+        A helper function to initialize a :class:`.Var` as an observed variable.
+
+
+    Examples
+    --------
+
+    A simple data node representing a constant value without a name:
+
+    >>> nameless_node = lsl.Data(1.0)
+    >>> nameless_node
+    Data(name="")
+
+    Adding this node to a model leads to an automatically generated name:
+
+    >>> model = lsl.GraphBuilder().add(nameless_node).build_model()
+    >>> nameless_node
+    Data(name="n0")
+
+    A data node with a name:
+
+    >>> node = lsl.Data(1.0, _name="my_name")
+    >>> node
+    Data(name="my_name")
+    """
 
     def __init__(self, value: Any, _name: str = ""):
         super().__init__(_name=_name)
@@ -480,7 +548,113 @@ class Data(Node):
 
 
 class Calc(Node):
-    """A calculator node."""
+    """
+    A node that calculates its value based its inputs nodes.
+
+    Calculator nodes are a central element block of the Liesel graph building toolkit.
+    They wrap arbitrary calculations in pure JAX functions.
+
+    - By default, calculator nodes *will* appear in the node graph created by
+      :func:`.viz.plot_nodes`, but they will *not* appear in the model graph created by
+      :func:`.viz.plot_vars`.
+    - You can wrap a calculator node in a :class:`.Var` to make it appear in the model
+      graph.
+
+    .. tip::
+        The wrapped function must be jit-compilable by JAX. This mainly means that
+        it must be a pure function, i.e. it must not have any side effects and, given
+        the same input, it must always return the same output. Some special
+        consideration is also required for loops and conditionals.
+
+        Please consult the JAX docs_ for details.
+
+    Parameters
+    ----------
+    function
+        The function to be wrapped. Must be jit-compilable by JAX.
+    *inputs
+        Non-keyword inputs. Any inputs that are not already nodes or :class:`.Var`
+        will be converted to :class:`.Data` nodes. The values of these inputs will be
+        passed to the wrapped function in the same order they are entered here.
+    _name
+        The name of the node. If you do not specify a name, a unique name will be \
+        automatically generated upon initialization of a :class:`.Model`.
+    _needs_seed
+        Whether the node needs a seed / PRNG key.
+    **kwinputs
+        Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
+        will be converted to :class:`.Data` nodes. The values of these inputs will be
+        passed to the wrapped function as keyword arguments.
+
+    See Also
+    --------
+    .Data :
+        A node representing some static data.
+    .Dist :
+        A node representing a ``tensorflow_probability``
+        :class:`~tfp.distributions.Distribution`.
+    .Var : A variable in a statistical model, typically with a probability
+        distribution.
+    .param :
+        A helper function to initialize a :class:`.Var` as a model parameter.
+    .obs :
+        A helper function to initialize a :class:`.Var` as an observed variable.
+
+    Notes
+    -----
+
+    A calculator node will compute its value only when :meth:`.Calc.update` is called.
+    This does not happen automatically upon initialization. Commonly, the first time
+    this method is called is during the initialization of a :class:`.Model`, which might
+    make it hard to spot errors in the wrapped computations. To update the value
+    immediately, you can call :meth:`.Calc.update` manually.
+
+    Examples
+    --------
+
+    A simple calculator node, taking the exponential value of an input parameter. This
+    calculator node has not updated its value yet.
+
+    >>> log_scale = lsl.param(0.0, name="log_scale")
+    >>> scale = lsl.Calc(jnp.exp, log_scale)
+    >>> print(scale.value)
+    None
+
+    The value of the calculator node is updated when :meth:`.Calc.update` is called.
+
+    >>> scale.update()
+    Calc(name="")
+    >>> print(scale.value)
+    1.0
+
+    You can also update the value of the calculator node in one step upon initilization.
+
+    >>> log_scale = lsl.param(0.0, name="log_scale")
+    >>> scale = lsl.Calc(jnp.exp, log_scale).update()
+    >>> print(scale.value)
+    1.0
+
+    You can also use your own functions as long as they are jit-compilable by JAX.
+
+    >>> def compute_variance(x):
+    ...     return jnp.exp(x)**2
+    >>> log_scale = lsl.param(0.0, name="log_scale")
+    >>> variance = lsl.Calc(compute_variance, log_scale).update()
+    >>> print(variance.value)
+    1.0
+
+    You can wrap a calculator node in a :class:`.Var` to declare its role as a
+    statistical model variable and make it appear in the variable graph.
+
+    >>> log_scale = lsl.param(0.0, name="log_scale")
+    >>> scale = lsl.Var(lsl.Calc(jnp.exp, log_scale).update())
+    >>> print(scale.value)
+    1.0
+
+
+    .. _docs: https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html
+
+    """
 
     def __init__(
         self,
@@ -550,7 +724,91 @@ class VarValue(TransientIdentity):
 
 
 class Dist(Node):
-    """A distribution node."""
+    """
+    A distribution node.
+
+    Distribution nodes wrap distribution classes that follow the
+    ``tensorflow_probability`` :class:`~tfp.distributions.Distribution` interface.
+    They can be used to represent observation models and priors.
+
+    Distribution nodes *will* appear in the node graph created by
+    :func:`.viz.plot_nodes`, but they will *not* appear in the model graph created by
+    :func:`.viz.plot_vars`.
+
+    Parameters
+    ----------
+    distribution
+        The wrapped distribution class that follows the ``tensorflow_probability``
+        :class:`~tfp.distributions.Distribution` interface.
+    *inputs
+        Non-keyword inputs. Any inputs that are not already nodes or :class:`.Var`
+        will be converted to :class:`.Data` nodes. The values of these inputs will be
+        passed to the wrapped distribution in the same order they are entered here.
+    _name
+        The name of the node. If you do not specify a name, a unique name will be \
+        automatically generated upon initialization of a :class:`.Model`.
+    _needs_seed
+        Whether the node needs a seed / PRNG key.
+    **kwinputs
+        Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
+        will be converted to :class:`.Data` nodes. The values of these inputs will be
+        passed to the wrapped distribution as keyword arguments.
+
+    See Also
+    --------
+    .Var : A variable in a statistical model, typically with a probability
+        distribution.
+    .param :
+        A helper function to initialize a :class:`.Var` as a model parameter.
+    .obs :
+        A helper function to initialize a :class:`.Var` as an observed variable.
+    .MultivariateNormalDegenerate : A custom distribution class that implements
+        a degenerate multivariate normal distribution in the ``tensorflow_probability``
+        :class:`~tfp.distributions.Distribution` interface.
+
+
+    Examples
+    --------
+
+    For the examples below, we import ``tensorflow_probability``:
+
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+
+    Creating an observation model for a normally distributed variable with fixed
+    mean and scale. The log probability of the node ``y`` in the example below is
+    ``None``, until the variable is updated.
+
+
+    >>> dist = lsl.Dist(tfd.Normal, loc=0.0, scale=1.0)
+    >>> y = lsl.obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y")
+    >>> print(y.log_prob)
+    None
+
+    >>> y.update()
+    Var(name="y")
+    >>> y.log_prob
+    Array([-1.0439385, -0.9189385, -1.0439385], dtype=float32)
+
+    Now we define the same observation model, but include the location and scale
+    as parameters:
+
+    >>> loc = lsl.param(0.0, name="loc")
+    >>> scale = lsl.param(1.0, name="scale")
+    >>> dist = lsl.Dist(tfd.Normal, loc=loc, scale=scale)
+    >>> y = lsl.obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y").update()
+    >>> y.log_prob
+    Array([-1.0439385, -0.9189385, -1.0439385], dtype=float32)
+
+    .. rubric:: Summed-up log-probability
+
+    You can set the ``per_obs`` attribute of a distribution node to ``False`` to
+    sum up the log-probability of the distribution over all observations.
+
+    >>> dist.per_obs = False
+    >>> y.update().log_prob
+    Array(-3.0068154, dtype=float32)
+
+    """
 
     def __init__(
         self,
@@ -703,10 +961,50 @@ class Var:
     visualization with the :func:`.plot_vars` function. This might be particularly
     desirable for the hyperparameters of a prior distribution.
 
+    Parameters
+    ----------
+    value
+        The value of the variable.
+    distribution
+        The probability distribution of the variable.
+    name
+        The name of the variable. If you do not specify a name, a unique name will be \
+        automatically generated upon initialization of a :class:`.Model`.
+
     See Also
     --------
     .obs : Helper function to declare a variable as an observed quantity.
     .param : Helper function to declare a variable as a model parameter.
+    .Calc :
+        A node representing a general calculation/operation
+        in JAX or Python.
+    .Data :
+        A node representing some static data.
+    .Dist :
+        A node representing a ``tensorflow_probability``
+        :class:`~tfp.distributions.Distribution`.
+
+    Examples
+    --------
+
+    A simple variable without a distribution and without a name:
+
+    >>> x = lsl.Var(1.0)
+    >>> x
+    Var(name="")
+
+    Adding this variable to a model leads to an automatically generated name:
+
+    >>> model = lsl.GraphBuilder().add(x).build_model()
+    >>> x
+    Var(name="v0")
+
+    A simple variable with a name:
+
+    >>> x = lsl.Var(1.0, name="x")
+    >>> x
+    Var(name="x")
+
     """
 
     __slots__ = (
@@ -905,7 +1203,26 @@ class Var:
 
     @property
     def observed(self) -> bool:
-        """Whether the variable is observed."""
+        """
+        Whether the variable is observed.
+
+        If a variable is observed and has an associated
+        probability distribution, its log-probability is automatically added to the
+        model log-likelihood (see :attr:`.Model.log_lik`).
+
+        See Also
+        --------
+        .obs : Helper function to declare a variable as a parameter.
+        .Model.log_prior : The log-prior of a Liesel model.
+        .Var.parameter : Whether the variable is a parameter. If a variable is \
+            a parameter, it is not observed.
+
+        Notes
+        -----
+
+        We recommend to use the :func:`.obs` helper function to declare an observed
+        variable.
+        """
         return self._observed
 
     @observed.setter
@@ -915,7 +1232,27 @@ class Var:
 
     @property
     def parameter(self) -> bool:
-        """Whether the variable is a parameter."""
+        """
+        Whether the variable is a parameter.
+
+        If the variable is a parameter and has an associated
+        probability distribution, its log-probability is added to the
+        model's :attr:`~.Model.log_prior`.
+
+        See Also
+        --------
+        .param : Helper function to declare a variable as a parameter.
+        .Model.log_prior : The log-prior of a Liesel model.
+        .Var.observed : Whether the variable is observed. If a variable is \
+            a parameter, it is not observed.
+
+        Notes
+        -----
+
+        We recommend to use the :func:`.param` helper function to declare a variable
+        as a parameter.
+
+        """
         return self._parameter
 
     @parameter.setter
@@ -934,7 +1271,22 @@ class Var:
 
     @property
     def strong(self) -> bool:
-        """Whether the variable is strong."""
+        """
+        Whether the variable is strong.
+
+        A strong node is a node whose value is defined outside of the model, for
+        example, if the node represents some observed data or a parameter (parameters
+        are usually set by an inference algorithm such as an optimizer or sampler). In
+        contrast, a weak node is a node whose value is defined within the model, that
+        is, it is a deterministic function of some other nodes. An exp-transformation
+        mapping a real-valued parameter to a positive number, for example, would be a
+        weak node.
+
+        See Also
+        --------
+        .weak : Whether the variable is weak. In general, ``strong = not weak``.
+
+        """
         return isinstance(self.value_node, Data)
 
     def update(self) -> Var:
@@ -997,7 +1349,16 @@ class Var:
 
     @property
     def weak(self) -> bool:
-        """Whether the variable is weak."""
+        """
+        Whether the variable is weak.
+
+        A weak variable is a variable whose value is defined within the model, that
+        is, it is a deterministic function of some other nodes.
+
+        See Also
+        --------
+        .strong : Whether the variable is strong. In general, ``weak = not strong``.
+        """
         return not self.strong
 
     def __repr__(self) -> str:
@@ -1013,14 +1374,73 @@ def obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> 
     """
     Declares an observed variable.
 
-    Sets the :attr:`.Var.observed` flag. If the observed variable is a
-    random variable, i.e. if it has an associated probability distribution,
-    its log-probability is automatically added to the model log-likelihood
-    (see :attr:`.Model.log_lik`).
+    Sets the :attr:`.Var.observed` flag. If the observed variable is a random variable,
+    i.e. if it has an associated probability distribution, its log-probability is
+    automatically added to the model log-likelihood (see :attr:`.Model.log_lik`).
+
+    Parameters
+    ----------
+    value
+        The value of the variable.
+    distribution
+        The probability distribution of the variable.
+    name
+        The name of the variable. If you do not specify a name, a unique name will be \
+        automatically generated upon initialization of a :class:`.Model`.
+
 
     Returns
     -------
     An observed variable.
+
+    See Also
+    --------
+    .Calc :
+        A node representing a general calculation/operation in JAX or Python.
+    .Data :
+        A node representing some static data.
+    .Dist :
+        A node representing a ``tensorflow_probability``
+        :class:`~tfp.distributions.Distribution`.
+    .Var : A variable in a statistical model, typically with a probability
+        distribution.
+    .param :
+        A helper function to initialize a :class:`.Var` as a model parameter.
+
+    Notes
+    -----
+
+    A variable will compute its log probability only when :meth:`.Calc.update` is
+    called. This does not happen automatically upon initialization. Commonly, the first
+    time this method is called is during the initialization of a :class:`.Model`. To
+    update the value immediately, you can call :meth:`.Var.update` manually.
+
+
+    Examples
+    --------
+
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+
+    We can declare an observed variable with a normal distribution as the observation
+    model:
+
+    >>> dist = lsl.Dist(tfd.Normal, loc=0.0, scale=1.0)
+    >>> y = lsl.obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y")
+    >>> y
+    Var(name="y")
+
+    Now we build the model graph:
+
+    >>> model = lsl.GraphBuilder().add(y).build_model()
+
+    The log-likelihood of the model is the sum of the log-probabilities of all observed
+    variables. In this case this is only our ``y`` variable:
+
+    >>> model.log_lik
+    Array(-3.0068154, dtype=float32)
+
+    >>> jnp.sum(y.log_prob)
+    Array(-3.0068154, dtype=float32)
 
     """
     var = Var(value, distribution, name)
@@ -1037,9 +1457,85 @@ def param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -
     its log-probability is automatically added to the model log-prior
     (see :attr:`.Model.log_prior`).
 
+    Parameters
+    ----------
+    value
+        The value of the parameter.
+    distribution
+        The probability distribution of the parameter.
+    name
+        The name of the parameter. If you do not specify a name, a unique name will be \
+        automatically generated upon initialization of a :class:`.Model`.
+
     Returns
     -------
     A parameter variable.
+
+    See Also
+    --------
+    .Calc :
+        A node representing a general calculation/operation
+        in JAX or Python.
+    .Data :
+        A node representing some static data.
+    .Dist :
+        A node representing a ``tensorflow_probability``
+        :class:`~tfp.distributions.Distribution`.
+    .Var : A variable in a statistical model, typically with a probability
+        distribution.
+    .obs :
+        A helper function to initialize a :class:`.Var` as an observed variable.
+
+    Notes
+    -----
+
+    A variable will compute its log probability only when :meth:`.Calc.update` is
+    called. This does not happen automatically upon initialization. Commonly, the first
+    time this method is called is during the initialization of a :class:`.Model`. To
+    update the value immediately, you can call :meth:`.Var.update` manually.
+
+    Examples
+    --------
+
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+
+    A variance parameter with an inverse-gamma prior:
+
+    >>> prior = lsl.Dist(tfd.InverseGamma, concentration=0.1, scale=0.1)
+    >>> variance = lsl.param(1.0, prior, name="variance")
+    >>> variance
+    Var(name="variance")
+
+    We can use this parameter variable in the distribution of an observed variable:
+
+    >>> scale = lsl.Calc(jnp.sqrt, variance)
+    >>> dist = lsl.Dist(tfd.Normal, loc=0.0, scale=scale)
+    >>> y = lsl.obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y")
+    >>> y
+    Var(name="y")
+
+    Now we can build the model graph:
+
+    >>> model = lsl.GraphBuilder().add(y).build_model()
+
+    The log_prior of the model is the sum of the log-priors of all parameters. In this
+    case this is only our ``variance`` parameter:
+
+    >>> model.log_prior
+    Array(-2.582971, dtype=float32)
+
+    >>> variance.log_prob
+    Array(-2.582971, dtype=float32)
+
+    The log-likelihood of the model is the sum of the log-probabilities of all observed
+    variables. In this case this is only our ``y`` variable:
+
+    >>> model.log_lik
+    Array(-3.0068154, dtype=float32)
+
+    >>> jnp.sum(y.log_prob)
+    Array(-3.0068154, dtype=float32)
+
     """
     var = Var(value, distribution, name)
     var.value_node.monitor = True
@@ -1052,21 +1548,31 @@ def param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
-@deprecated(reason="Use the new `Group` object directly", version="0.2.2")
 def add_group(name: str, **kwargs: Node | Var) -> Group:
     """
     Assigns the nodes and variables to a group.
 
-    See :attr:`liesel.model.nodes.Node.groups`.
+    .. deprecated:: 0.2.2
+        Use the :class:`.Group` object directly. This function will be removed in
+        v0.4.0.
 
     Parameters
     ----------
     name
         The name of the group.
     kwargs
-        The nodes and variables in the group with their keys in the group
-        as keywords.
+        The nodes and variables in the group with their keys in the group as keywords.
+
+    See Also
+    --------
+    .Node.groups : The groups that a node is a part of.
+    .Group : A group of nodes and variables.
     """
+    warnings.warn(
+        "The `add_group` function is deprecated and will be removed in v0.4.0. "
+        "Use the `Group` object directly.",
+        FutureWarning,
+    )
     return Group(name, **kwargs)
 
 

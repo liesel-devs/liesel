@@ -83,29 +83,66 @@ def _transform_back(var_transformed: Var) -> Calc:
 
 class GraphBuilder:
     """
-    A graph builder to prepare a :class:`.Model`.
+    A graph builder, used to set up a :class:`.Model`.
 
     Constructs a model containing all nodes and variables that were added to the graph
-    builder and their recursive inputs. The outputs of the nodes are not added to the
-    model automatically, so the root nodes always need to be added explicitly.
+    builder and their recursive inputs.
 
-    The standard workflow is to create the nodes and variables, add them to a graph
-    builder, and construct a model from the graph builder. After the model has been
-    constructed, some methods of the graph builder are not available anymore.
+    .. important::
+        - In :meth:`.build_model` , the graph builder will automatically find all
+          **inputs** to its nodes - and the inputs to these inputs
+          (i.e. it finds inputs recursively).
+        - The **outputs** of the nodes, however, are not added to the model
+          automatically, so all **root nodes** need to be added explicitly.
+        - Root nodes are nodes that are not inputs to any other node in the graph.
+          The response in a regression model is an example of a root node.
 
-    Example
-    -------
+    The standard workflow is to create the nodes and variables, add the root var to a
+    graph builder, and construct a model from the graph builder. After the model has
+    been constructed, some methods of the graph builder are not available anymore,
+    because the graph is considered static.
+
+    See Also
+    --------
+
+    :class:`.Model` : The liesel model class, representing a static graph.
+    :meth:`.GraphBuilder.add` : Method for adding variables and nodes to the
+        GraphBuilder.
+    :meth:`.GraphBuilder.build_model` : Method for building a model from the
+        GraphBuilder.
+    :meth:`GraphBuilder.transform` : Transforms a variable by adding a new transformed
+        variable as an input. This is useful for variables that are constrained to a
+        certain domain, e.g. positive values.
+
+    Examples
+    --------
+
+    We start by creating some variables:
+
     >>> a = lsl.Var(1.0, name="a")
     >>> b = lsl.Var(2.0, name="b")
     >>> c = lsl.Var(lsl.Calc(lambda x, y: x + y, a, b), name="c")
+
+    We now initialize a GraphBuilder and add the root node ``c`` to it:
+
     >>> gb = lsl.GraphBuilder()
     >>> gb.add(c)
     GraphBuilder(0 nodes, 1 vars)
+
+    We are now ready to build the model:
+
     >>> model = gb.build_model()
     >>> model
     Model(9 nodes, 3 vars)
+
+    Note that when :meth:`.build_model` is called, all :attr:`~.Var.weak` variables in
+    the graph will be updated. So the value of ``c`` is now available:
+
     >>> c.value
     3.0
+
+    The graph builder is now empty:
+
     >>> gb.vars
     []
     """
@@ -241,9 +278,41 @@ class GraphBuilder:
 
         Parameters
         ----------
+        *args
+            The nodes, variables or graph builders to add to the graph. Note that \
+            the GraphBuilder will find input nodes recursively for all nodes and \
+            variables that are added to it, so you only need to add root nodes.
         to_float32
             Whether to convert the dtype of the values of the added nodes \
             from float64 to float32.
+
+        See Also
+        --------
+        :meth:`.GraphBuilder.build_model` : Method for building a model from the \
+            GraphBuilder.
+        :meth:`GraphBuilder.transform` : Transforms a variable by adding a new
+            transformed variable as an input.
+
+        Examples
+        --------
+
+        We start by creating some variables:
+
+        >>> a = lsl.Var(1.0, name="a")
+        >>> b = lsl.Var(2.0, name="b")
+        >>> c = lsl.Var(lsl.Calc(lambda x, y: x + y, a, b), name="c")
+
+        We now initialize a GraphBuilder and add the root node ``c`` to it:
+
+        >>> gb = lsl.GraphBuilder()
+        >>> gb.add(c)
+        GraphBuilder(0 nodes, 1 vars)
+
+        We are now ready to build the model:
+
+        >>> model = gb.build_model()
+        >>> model
+        Model(9 nodes, 3 vars)
         """
 
         for arg in args:
@@ -268,9 +337,15 @@ class GraphBuilder:
 
         Parameters
         ----------
+        *groups
+            The groups to add to the graph.
         to_float32
             Whether to convert the dtype of the values of the added nodes \
             from float64 to float32.
+
+        Returns
+        -------
+        The graph builder.
         """
 
         for group in groups:
@@ -294,40 +369,60 @@ class GraphBuilder:
         Builds a model from the graph.
 
         Constructs a model containing all nodes and variables that were added to the
-        graph builder and their recursive inputs. The outputs of the nodes are not
-        added to the model automatically, so the root nodes always need to be added
+        graph builder and their recursive inputs. The outputs of the nodes are not added
+        to the model automatically, so the root nodes always need to be added
         explicitly.
 
         The standard workflow is to create the nodes and variables, add them to a graph
         builder, and construct a model from the graph builder. After the model has been
         constructed, some methods of the graph builder are not available anymore.
 
-        Notes
-        -----
-        If this method is called with the argument ``copy=False``, all nodes and
-        variables are removed from the graph builder, because most methods of the
-        graph builder do not work with nodes that are part of a model.
-
-        Example
-        -------
-        >>> a = lsl.Var(1.0, name="a")
-        >>> b = lsl.Var(2.0, name="b")
-        >>> c = lsl.Var(lsl.Calc(lambda x, y: x + y, a, b), name="c")
-        >>> gb = lsl.GraphBuilder()
-        >>> gb.add(c)
-        GraphBuilder(0 nodes, 1 vars)
-        >>> model = gb.build_model()
-        >>> model
-        Model(9 nodes, 3 vars)
-        >>> c.value
-        3.0
-        >>> gb.vars
-        []
-
         Parameters
         ----------
         copy
             Whether the nodes and variables should be copied when building the model.
+
+        Returns
+        -------
+        The liesel model, which is a static graph built from the GraphBuilder.
+
+        Notes
+        -----
+        If this method is called with the argument ``copy=False``, all nodes and
+        variables are removed from the graph builder, because most methods of the graph
+        builder do not work with nodes that are part of a model.
+
+        Examples
+        --------
+
+        We start by creating some variables:
+
+        >>> a = lsl.Var(1.0, name="a")
+        >>> b = lsl.Var(2.0, name="b")
+        >>> c = lsl.Var(lsl.Calc(lambda x, y: x + y, a, b), name="c")
+
+        We now initialize a GraphBuilder and add the root node ``c`` to it:
+
+        >>> gb = lsl.GraphBuilder()
+        >>> gb.add(c)
+        GraphBuilder(0 nodes, 1 vars)
+
+        We are now ready to build the model:
+
+        >>> model = gb.build_model()
+        >>> model
+        Model(9 nodes, 3 vars)
+
+        Note that when :meth:`.build_model` is called, all :attr:`~.Var.weak` variables
+        in the graph will be updated. So the value of ``c`` is now available:
+
+        >>> c.value
+        3.0
+
+        The graph builder is now empty:
+
+        >>> gb.vars
+        []
         """
         nodes, _vars = self._all_nodes_and_vars()
 
@@ -377,6 +472,19 @@ class GraphBuilder:
         another type are silently ignored.
 
         .. _pytree: https://jax.readthedocs.io/en/latest/pytrees.html
+
+        Parameters
+        ----------
+        from_dtype
+            The data type to convert from.
+        to_dtype
+            The data type to convert to.
+
+        Returns
+        -------
+        The graph builder.
+
+
         """
         nodes, _ = self._all_nodes_and_vars()
 
@@ -441,7 +549,7 @@ class GraphBuilder:
 
     @property
     def log_lik_node(self) -> Node | None:
-        """The user-defined log-likelihood node."""
+        """User-defined log-likelihood node, if there is one."""
         return self._log_lik_node
 
     @log_lik_node.setter
@@ -453,7 +561,7 @@ class GraphBuilder:
 
     @property
     def log_prior_node(self) -> Node | None:
-        """The user-defined log-prior node."""
+        """User-defined log-prior node, if there is one."""
         return self._log_prior_node
 
     @log_prior_node.setter
@@ -465,7 +573,7 @@ class GraphBuilder:
 
     @property
     def log_prob_node(self) -> Node | None:
-        """The user-defined log-probability node."""
+        """User-defined log-probability node, if there is one."""
         return self._log_prob_node
 
     @log_prob_node.setter
@@ -476,7 +584,14 @@ class GraphBuilder:
         self._log_prob_node = log_prob_node
 
     def plot_nodes(self) -> GraphBuilder:
-        """Plots all nodes in the graph."""
+        """
+        Plots all nodes in the graph.
+
+        See Also
+        --------
+        :meth:`.viz.plot_nodes` : The function used to plot the nodes.
+
+        """
         nodes, _vars = self._all_nodes_and_vars()
         nodes_and_vars = nodes + _vars
 
@@ -489,7 +604,17 @@ class GraphBuilder:
         return self
 
     def plot_vars(self) -> GraphBuilder:
-        """Plots all variables in the graph."""
+        """
+        Plots all variables in the graph.
+
+        Returns
+        -------
+        The graph builder.
+
+        See Also
+        --------
+        :meth:`.viz.plot_vars` : The function used to plot the variables.
+        """
         nodes, _vars = self._all_nodes_and_vars()
         nodes_and_vars = nodes + _vars
 
@@ -596,6 +721,36 @@ class GraphBuilder:
             If the variable is weak, has no TFP distribution, the distribution has
             no default event space bijector and the argument ``bijector`` is ``None``,
             or the local model for the variable cannot be built.
+
+        Examples
+        --------
+
+        >>> import tensorflow_probability.substrates.jax.distributions as tfd
+        >>> import tensorflow_probability.substrates.jax.bijectors as tfb
+
+        Assume we have a variable ``scale`` that is constrained to be positive, and
+        we want to include the log-transformation of this variable in the model.
+        We first set up the parameter var with its distribution:
+
+        >>> prior = lsl.Dist(tfd.HalfCauchy, loc=0.0, scale=25.0)
+        >>> scale = lsl.param(1.0, prior, name="scale")
+
+        Then we create a GraphBuilder and use the ``transform`` method to transform
+        the ``scale`` variable.
+
+        >>> gb = lsl.GraphBuilder()
+        >>> log_scale = gb.transform(scale, bijector=tfb.Exp)
+        >>> log_scale
+        Var(name="scale_transformed")
+
+        Now the ``log_scale`` has a log probability, and the ``scale`` variable is
+        has not:
+
+        >>> log_scale.update().log_prob
+        Array(-3.6720574, dtype=float32)
+
+        >>> scale.update().log_prob
+        0.0
         """
 
         if var.weak:
@@ -702,7 +857,13 @@ class GraphBuilder:
         return var_transformed
 
     def update(self) -> GraphBuilder:
-        """Updates all nodes in the graph."""
+        """
+        Updates all nodes in the graph.
+
+        Returns
+        -------
+        The graph builder.
+        """
         nodes, _vars = self._all_nodes_and_vars()
         nodes_and_vars = nodes + _vars
 
@@ -726,6 +887,10 @@ class Model:
     """
     A model with a static graph.
 
+    .. tip::
+        While you can create a model directly, it is usually more convenient to use a
+        :class:`.GraphBuilder` to construct the model.
+
     Parameters
     ----------
     nodes_and_vars
@@ -735,6 +900,61 @@ class Model:
         the recursive inputs of the nodes and variables), and to add the model nodes.
     copy
         Whether the nodes and variables should be copied upon initialization.
+
+    See Also
+    --------
+    :class:`.GraphBuilder` : A graph builder, used to set up a model.
+
+    Examples
+    --------
+
+    For basic examples on how to set up a model, please refer to the
+    :class:`.GraphBuilder` documentation.
+
+    .. rubric:: Modifying an existing model
+
+    If you have an existing model and want to make changes to it, you can use the
+    :meth:`.Model.copy_nodes_and_vars` or the :meth:`.Model.copy_nodes_and_vars`
+    method to obtain the nodes and variables of the model, make changes to them, and
+    then create a new model from the modified nodes and variables.
+
+    >>> a = lsl.Var(1.0, name="a")
+    >>> b = lsl.Var(2.0, name="b")
+    >>> c = lsl.Var(lsl.Calc(lambda x, y: x + y, a, b), name="c")
+
+    We now build a model:
+
+    >>> model = lsl.GraphBuilder().add(c).build_model()
+    >>> model
+    Model(9 nodes, 3 vars)
+
+    >>> nodes, vars_ = model.pop_nodes_and_vars()
+    >>> vars_
+    {'c': Var(name="c"), 'b': Var(name="b"), 'a': Var(name="a")}
+
+    >>> from pprint import pprint # for nicer formatting of the output dicts
+    >>> pprint(nodes)
+    {'a_value': Data(name="a_value"),
+     'a_var_value': VarValue(name="a_var_value"),
+     'b_value': Data(name="b_value"),
+     'b_var_value': VarValue(name="b_var_value"),
+     'c_value': Calc(name="c_value"),
+     'c_var_value': VarValue(name="c_var_value")}
+
+    We can now make changes to the nodes and variables.
+    Just for show, let's add a distribution to the node ``a``:
+
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+    >>> vars_["a"].dist_node = lsl.Dist(tfd.Normal, loc=0.0, scale=1.0)
+
+    Now we create a new GraphBuilder and build a new model:
+
+    >>> gb = lsl.GraphBuilder()
+    >>> gb = gb.add(*nodes.values(), *vars_.values())
+    >>> model = gb.build_model()
+    >>> model
+    Model(12 nodes, 3 vars)
+
     """
 
     def __init__(
