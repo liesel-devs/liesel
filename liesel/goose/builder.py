@@ -170,8 +170,10 @@ class EngineBuilder:
 
         >>> x_vec = tfd.Normal(loc=true_mu, scale=true_sigma).sample((n, ), key)
 
-        Then, we define the distribution we want to sample from.
+        Then, we define the distribution we want to sample from, which is 
+        parametrized by a single parameter `mu`.
 
+        >>> mu = lsl.param(1.0, name="mu")
         >>> x_dist = lsl.Dist(tfd.Normal, loc=true_mu, scale=true_sigma)
         >>> x = lsl.Var(x_vec, distribution=x_dist, name="x")
 
@@ -186,7 +188,7 @@ class EngineBuilder:
         >>> builder = gs.EngineBuilder(seed=1337, num_chains=4)
         >>> builder.set_model(gs.LieselInterface(model))
         >>> builder.set_initial_values(model.state)
-        >>> builder.add_kernel(gs.NUTSKernel(["x"]))
+        >>> builder.add_kernel(gs.NUTSKernel(["mu"]))
 
         A jitter function takes as input a key and value and applies random jittering
         to the given value using the key. In this case, we apply a uniform noise with
@@ -200,7 +202,7 @@ class EngineBuilder:
         The method takes as input a dictionary where a
         jittering function is assigned to each position key.
 
-        >>> builder.set_jitter_fns({"x": jitter_fn})
+        >>> builder.set_jitter_fns({"mu": jitter_fn})
         """
         self._jitter_fns = Option(jitter_fns)
 
