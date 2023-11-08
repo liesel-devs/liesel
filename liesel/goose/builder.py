@@ -201,9 +201,6 @@ class EngineBuilder:
         jittering function is assigned to each position key.
 
         >>> builder.set_jitter_fns({"x": jitter_fn})
-        >>> builder.set_duration(warmup_duration=1000, posterior_duration=1000)
-
-        >>> engine = builder.build()
         """
         self._jitter_fns = Option(jitter_fns)
 
