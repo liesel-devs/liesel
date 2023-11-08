@@ -549,7 +549,7 @@ class Data(Node):
 
 class Calc(Node):
     """
-    A :class:`.Node` subclass that calculates its value based its inputs nodes.
+    A :class:`.Node` subclass that calculates its value based on its inputs nodes.
 
     Calculator nodes are a central element block of the Liesel graph building toolkit.
     They wrap arbitrary calculations in pure JAX functions.
