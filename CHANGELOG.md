@@ -4,17 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+- :sparkles: Large documentation updates! (#149, #146, #145, #143, #135, #134, @jobrachem; #144, #140, @GianmarcoCallegher)
 - :sparkles: The method `gs.Summary.error_df()` is now publicly available. (#137, @jobrachem)
 - :sparkles: The class `liesel.goose.engine.SamplingResults` is now exported via `liesel.goose`, which means it can be used as `gs.SamplingResults`. (@jobrachem)
 - :sparkles: Improved the efficiency of the `liesel.distributions.mvn_degen.MultivariateNormalDegenerate.from_penalty` constructor (#101, @GianmarcoCallegher)
+- :sparkles: Added alternative constructor `.from_penalty_smooth` to `MultivariateNormalDegenerate` (#133, @GianmarcoCallegher)
 - :construction: Added `observed=True` to a `pd.DataFrame.groupby()` call in `goose/summary_m.py` to silence a warning due to a deprecation in [pandas v2.1.0](https://pandas.pydata.org/docs/whatsnew/v2.1.0.html#deprecations)
 - :construction: Renamed `lsl.Param` to `lsl.param` and `lsl.Obs` to `lsl.obs` to reflect the fact that those are functions, not classes. The old names are deprecated and scheduled for removal in v0.4.0. (#130, @jobrachem)
 - :construction: Renamed/moved the following symbols. The old names are deprecated and scheduled for removal in v0.4.0. (#136, @jobrachem)
     - `liesel.model.goose.GooseModel` -> (renamed/moved) `liesel.goose.interface.LieselInterface`
     - `liesel.goose.models.DictModel` -> (renamed/moved) `liesel.goose.interface.DictInterface`
     - `liesel.goose.models.DataClassModel` -> (renamed/moved) `liesel.goose.interface.DataclassInterface`
-
-
+- :construction: Some maintenance updates to stay up to date with dependencies (#147, #141, #102, @GianmarcoCallegher; #139, @wiep; #109, @jobrachem)
 
 
 ## [0.2.5] - 2023-09-28
