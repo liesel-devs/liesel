@@ -301,6 +301,9 @@ def dist_reg_mcmc(
         Jittering function for the smoothing parameters.
     beta_jitter_fn
         Jittering function for the regression coefficients.
+    See Also
+    --------
+    :meth:`.EngineBuilder.set_jitter_fns` : Method for setting the jittering functions
     """
 
     builder = EngineBuilder(seed, num_chains)
