@@ -16,3 +16,7 @@ AutoAppendNewline: Yes
 StripTrailingWhitespace: Yes
 
 BuildType: Makefile
+
+PythonType: virtualenv
+PythonVersion: 3.11.3
+PythonPath: ~/.pyenv/versions/liesel-2023-09/bin/python
