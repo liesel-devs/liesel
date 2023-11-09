@@ -34,7 +34,10 @@ class GooseModel:
     def __init__(self, model: Model):
         self._model = model._copy_computational_model()
         warnings.warn(
-            "Use gs.LieselInterface instead. This alias will be removed in v0.4.0.",
+            (
+                "lsl.GooseModel is deprecated. Use gs.LieselInterface instead."
+                "This alias will be removed in v0.4.0."
+            ),
             FutureWarning,
         )
 
