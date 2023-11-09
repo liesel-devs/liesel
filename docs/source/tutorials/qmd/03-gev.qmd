@@ -59,7 +59,10 @@ model <- liesel(
 )
 ```
 
-Now, we can continue in Python and use the `lsl.dist_reg_mcmc()` function to set up a sampling algorithm with IWLS kernels for the regression coefficients ($\boldsymbol{\beta}$) and a Gibbs kernel for the smoothing parameter ($\tau^2$) of the spline. Note that we need to set $\beta_0$ for $\xi$ to 0.1 manually, because $\xi = 0$ breaks the sampler.
+Now, we can continue in Python and use the `lsl.dist_reg_mcmc()` function to set up a sampling algorithm with IWLS kernels for the regression coefficients ($\boldsymbol{\beta}$) and a Gibbs kernel for the smoothing parameter ($\tau^2$) of the spline.
+
+The support of the GEV distribution changes with the parameter values (compare [Wikipedia](https://en.wikipedia.org/wiki/Generalized_extreme_value_distribution)). To ensure that the initial parameters support the observed data we set $xi = 0.1$ and disable jittering of the the variance and regression parameters. For the latter, we supply user-defined jitter functions to `lsl.dist_reg_mcmc` that are essentially the identity function w.r.t. the parameter value.
+
 
 ```{python}
 #| label: sampling
@@ -72,7 +75,7 @@ model = r.model
 # concentration == 0.0 seems to break the sampler
 model.vars["concentration_p0_beta"].value = jnp.array([0.1, 0.0])
 
-builder = lsl.dist_reg_mcmc(model, seed=42, num_chains=4)
+builder = lsl.dist_reg_mcmc(model, seed=42, num_chains=4, tau2_jitter_fn=lambda key, val: val, beta_jitter_fn=lambda key, val: val)
 builder.set_duration(warmup_duration=1000, posterior_duration=1000)
 
 engine = builder.build()

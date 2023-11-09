@@ -26,7 +26,8 @@ ModelState = PyTree
 Position = NewType("Position", dict[str, Array])
 KernelState = PyTree
 KeyArray = Any
-JitterFunctions = dict[str, Callable[[KeyArray, Array], Array]]
+JitterFunction = Callable[[KeyArray, Array], Array]
+JitterFunctions = dict[str, JitterFunction]
 
 
 class TuningInfo(Protocol):
