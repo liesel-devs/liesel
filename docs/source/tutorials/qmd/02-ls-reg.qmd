@@ -40,11 +40,13 @@ However, the model design naturally generalizes to any (reasonable) number of co
 #| label: imports
 import jax
 import jax.numpy as jnp
-import liesel.goose as gs
-import liesel.model as lsl
+import tensorflow_probability.substrates.jax.distributions as tfd
+
 import matplotlib.pyplot as plt
 import seaborn as sns
-import tensorflow_probability.substrates.jax.distributions as tfd
+
+import liesel.goose as gs
+import liesel.model as lsl
 
 sns.set_theme(style="whitegrid")
 ```
@@ -67,9 +69,9 @@ Z_mat = jnp.column_stack([jnp.ones(n), tfd.Normal(loc=2., scale=1.).sample(n, se
 y_vec = jnp.zeros(n)
 key_y = jax.random.split(key, n)
 
-y_vec = jax.vmap(
-    lambda x, beta, z, gamma, key: tfd.Normal(loc=x @ beta, scale=jnp.exp(z @ gamma)).sample(seed=key),
-    (0, None, 0, None, 0))(X_mat, true_beta, Z_mat, true_gamma, key_y)
+true_mean = X_mat @ true_beta
+true_scale = jnp.exp(Z_mat @ true_gamma)
+y_vec = tfd.Normal(loc=true_mean, scale=true_scale).sample(seed=key)
 ```
 
 The simulated data displays a linear relationship between the response $\mathbf{y}$ and the covariate $\mathbf{x}$.
@@ -107,31 +109,12 @@ Hence, setting a normal prior distribution for $\gamma$ is feasible, leading to 
 The variables `beta` and `gamma` are initialized with values far away from zero to support a stable sampling process:
 
 ```{python}
-#| label: beta-var
-beta_loc = lsl.Var(0.0, name="beta_loc")
-beta_scale = lsl.Var(100.0, name="beta_scale")
+#| label: coefficients
+dist_beta = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
+beta = lsl.param(jnp.array([10., 10.]), dist_beta, name="beta")
 
-dist_beta = lsl.Dist(
-    distribution=tfd.Normal, loc=beta_loc, scale=beta_scale
-)
-dist_beta = lsl.Dist(tfd.Normal, loc=beta_loc, scale=beta_scale)
-
-beta = lsl.Param(
-    value=jnp.array([10., 10.]), distribution=dist_beta, name="beta"
-)
-```
-
-```{python}
-#| label: gamma-var
-gamma_loc = lsl.Var(0.0, name="gamma_loc")
-gamma_scale = lsl.Var(3.0, name="gamma_scale")
-
-dist_gamma = lsl.Dist(
-    distribution=tfd.Normal, loc=gamma_loc, scale=gamma_scale
-)
-gamma = lsl.Param(
-    value=jnp.array([5.0, 5.0]), distribution=dist_gamma, name="gamma"
-)
+dist_gamma = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
+gamma = lsl.param(jnp.array([5., 5.]), dist_gamma, name="gamma")
 ```
 
 The additional complexity of the location-scale model compared to the standard linear model is handled in the next step.
@@ -139,14 +122,16 @@ Since `gamma` takes values on the whole real line, but the response variable `y`
 
 ```{python}
 #| label: observation-nodes
-X = lsl.Obs(value=X_mat, name="X")
-Z = lsl.Obs(value=Z_mat, name="Z")
+X = lsl.obs(X_mat, name="X")
+Z = lsl.obs(Z_mat, name="Z")
 
-mu = lsl.Var(lsl.Calc(lambda X, beta: X @ beta, X, beta), name="mu")
-scale = lsl.Var(lsl.Calc(lambda Z, gamma: jnp.exp(Z @ gamma), Z, gamma), name="scale")
+mu = lsl.Var(lsl.Calc(jnp.dot, X, beta), name="mu")
 
-dist_y = lsl.Dist(distribution=tfd.Normal, loc=mu, scale=scale)
-y = lsl.Obs(value=y_vec, distribution=dist_y, name="y")
+log_scale = lsl.Calc(jnp.dot, Z, gamma)
+scale = lsl.Var(lsl.Calc(jnp.exp, log_scale), name="scale")
+
+dist_y = lsl.Dist(tfd.Normal, loc=mu, scale=scale)
+y = lsl.obs(y_vec, dist_y, name="y")
 ```
 
 We can now combine the nodes in a model and visualize it
@@ -166,28 +151,19 @@ We choose the No U-Turn sampler for generating posterior samples.
 Therefore the location and scale parameters can be drawn by separate NUTS kernels, or, if all remaining inputs to the kernel coincide, by one common kernel.
 The latter option might lead to better estimation results but lacks the flexibility to e.g. choose different step sizes during the sampling process.
 
-However, we will just fuse everything into one kernel do not use any specific arguments and hope that the default warmup scheme (similar to the warmup used in STAN) will do the trick.
+However, we will just fuse everything into one kernel, do not use any specific arguments and hope that the default warmup scheme (similar to the warmup used in STAN) will do the trick.
 
 ```{python}
 #| label: sample
 builder = gs.EngineBuilder(seed=73, num_chains=4)
 
-# connects the engine with the model
 builder.set_model(gs.LieselInterface(model))
-
-# we use the same initial values for all chains
 builder.set_initial_values(model.state)
 
-# add the kernel
 builder.add_kernel(gs.NUTSKernel(["beta", "gamma"]))
-
-# set number of iterations in warmup and posterior
 builder.set_duration(warmup_duration=1500, posterior_duration=1000, term_duration=500)
 
-# create the engine
 engine = builder.build()
-
-# generate samples
 engine.sample_all_epochs()
 ```
 
@@ -196,52 +172,5 @@ Now that we have 1000 posterior samples per chain, we can check the results. Sta
 ```{python}
 #| label: traceplots
 results = engine.get_results()
-g = gs.plot_trace(results, chain_indices=0, ncol=4)
+g = gs.plot_trace(results, ncol=4)
 ```
-
-Looks decent although we can see some correlation in the tracplots. Let's check at the combined summary:
-
-```{python}
-#| label: summary
-#| results: asis
-gs.summary_m.Summary(results, per_chain=False)
-```
-
-Maybe a longer warm-up would give us better samples.
-
-```{python}
-#| label: sample-with-longer-warmup
-builder = gs.EngineBuilder(seed=3, num_chains=4)
-
-# connects the engine with the model
-builder.set_model(lsl.GooseModel(model))
-
-# we use the same initial values for all chains
-builder.set_initial_values(model.state)
-
-# add the kernel
-builder.add_kernel(gs.NUTSKernel(["beta", "gamma"]))
-
-# set number of iterations in warmup and posterior
-builder.set_duration(warmup_duration=4000, posterior_duration=1000, term_duration=1000)
-
-# create the engine
-engine = builder.build()
-
-# generate samples
-engine.sample_all_epochs()
-```
-
-```{python}
-#| label: traceplots-of-second-run
-results = engine.get_results()
-g = gs.plot_trace(results, chain_indices=0, ncol=4)
-```
-
-```{python}
-#| label: summary-of-second-run
-#| results: asis
-gs.summary_m.Summary(results, per_chain=False)
-```
-
-The trace plots for $\boldsymbol{\gamma}$ improved but those for $\boldsymbol{\beta}$ still show some corelation.
