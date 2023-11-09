@@ -1,3 +1,8 @@
+"""
+This test module still uses the old API. It will be removed in the future, when
+lsl.GooseModel is removed.
+"""
+
 import jax
 import jax.random as rd
 import numpy as np
@@ -24,17 +29,20 @@ def model():
 
 
 class TestGooseModel:
+    @pytest.mark.filterwarnings("ignore::FutureWarning")
     def test_get_position(self, model) -> None:
         gm = GooseModel(model)
         pos = gm.extract_position(["mu_value"], model.state)
         assert pos["mu_value"] == 0.0
 
+    @pytest.mark.filterwarnings("ignore::FutureWarning")
     def test_update_state(self, model) -> None:
         gm = GooseModel(model)
         pos = Position({"mu_value": 10.0})
         new_state = gm.update_state(pos, model.state)
         assert new_state["mu_value"].value == 10.0
 
+    @pytest.mark.filterwarnings("ignore::FutureWarning")
     def test_get_log_prob(self, model) -> None:
         gm = GooseModel(model)
         lp_before = gm.log_prob(model.state)
@@ -47,6 +55,7 @@ class TestGooseModel:
         assert lp_after == pytest.approx(-25841.498)
 
 
+@pytest.mark.filterwarnings("ignore::FutureWarning")
 @pytest.mark.mcmc
 def test_sample_model(model) -> None:
     mcmc_seed = 1337
@@ -73,6 +82,7 @@ def test_sample_model(model) -> None:
     assert avg_mu == pytest.approx(0.0, abs=0.05)
 
 
+@pytest.mark.filterwarnings("ignore::FutureWarning")
 @pytest.mark.mcmc
 def test_sample_transformed_model(model: Model):
     _, vars = model.copy_nodes_and_vars()
@@ -170,7 +180,7 @@ class TestFiniteDiscreteGibbsKernel:
 
         eb = gs.EngineBuilder(1, num_chains=1)
         eb.add_kernel(kernel)
-        eb.set_model(lsl.GooseModel(model))
+        eb.set_model(gs.LieselInterface(model))
         eb.set_initial_values(model.state)
         eb.set_duration(warmup_duration=500, posterior_duration=2000)
 
@@ -200,7 +210,7 @@ class TestFiniteDiscreteGibbsKernel:
 
         eb = gs.EngineBuilder(1, num_chains=1)
         eb.add_kernel(kernel)
-        eb.set_model(lsl.GooseModel(model))
+        eb.set_model(gs.LieselInterface(model))
         eb.set_initial_values(model.state)
         eb.set_duration(warmup_duration=500, posterior_duration=2000)
 
@@ -230,7 +240,7 @@ class TestFiniteDiscreteGibbsKernel:
 
         eb = gs.EngineBuilder(1, num_chains=1)
         eb.add_kernel(kernel)
-        eb.set_model(lsl.GooseModel(model))
+        eb.set_model(gs.LieselInterface(model))
         eb.set_initial_values(model.state)
         eb.set_duration(warmup_duration=500, posterior_duration=2000)
 

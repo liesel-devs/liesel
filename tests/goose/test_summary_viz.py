@@ -87,6 +87,7 @@ def test_max_chains():
     assert data_max_chains_small["chain_index"].unique().tolist() == [0, 3]
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_plot_defaults():
     plot_trace(results)
     plot_density(results)
@@ -95,6 +96,7 @@ def test_plot_defaults():
     plot_param(results, param="log_sigma")
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_plot_aesthetics():
     plot_trace(
         results,
