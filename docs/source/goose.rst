@@ -16,6 +16,10 @@ The workflow for MCMC sampling goose consists of the following steps:
 2. Set up an :class:`.Engine` with MCMC kernels for your parameters and draw posterior samples
 3. Inspect your results
 
+.. note::
+    This document provides an overview of the most important classes for MCMC sampling.
+    You find more guidance on *how* to use them in the respective API documentation
+    and in the :doc:`tutorials <tutorials_overview>`.
 
 Set up your model
 -----------------

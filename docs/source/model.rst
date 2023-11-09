@@ -16,6 +16,12 @@ The model building workflow in Liesel consists of two steps:
 1. Set up the nodes and variables that make up your model.
 2. Set up a :class:`.GraphBuilder`, add your root node(s) to it, and call :meth:`.GraphBuilder.build_model` to build your model graph.
 
+.. note::
+    This document provides an overview of the most important classes for model building.
+    You find more guidance on *how* to use them in the respective API documentation
+    and in the :doc:`tutorials <tutorials_overview>`.
+
+
 Nodes and Variables
 -------------------
 
