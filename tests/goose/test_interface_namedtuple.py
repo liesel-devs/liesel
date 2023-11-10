@@ -1,8 +1,9 @@
+from typing import NamedTuple
+
 import jax
 import jax.numpy as jnp
 import pytest
 
-from typing import NamedTuple
 from liesel.goose.interface import NamedTupleInterface
 from liesel.goose.types import ModelInterface, Position
 
@@ -11,13 +12,14 @@ class State(NamedTuple):
     x: jax.Array
     y: int
 
+
 def log_prob(state: State) -> float:
     x = state.x
     return -jnp.sum(x**2)
 
 
 def create_state() -> State:
-    return State(x = jnp.array([-1.0, 0.0, 1.0]), y = 1)
+    return State(x=jnp.array([-1.0, 0.0, 1.0]), y=1)
 
 
 def test_log_prob() -> None:
