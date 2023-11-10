@@ -337,3 +337,18 @@ class LieselInterface:
             A dictionary of node names and their corresponding :class:`.NodeState`.
         """
         return model_state["_model_log_prob"].value
+
+
+class NamedTupleInterface:
+    def __init__(self, log_prob_fn: LogProbFunction):
+        self._log_prob_fn = log_prob_fn
+
+    def extract_position(self, position_keys: Sequence[str], model_state: ModelState):
+        return {key: getattr(model_state, key) for key in position_keys}
+
+    def log_prob(self, model_state: ModelState) -> float:
+        return self._log_prob_fn(model_state)
+
+    def update_state(self, position, model_state: ModelState) -> ModelState:
+        new_state = model_state._replace(**position)
+        return new_state
