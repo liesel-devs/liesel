@@ -31,7 +31,7 @@ After simulating the data, we can configure the model with a single call to the 
 library(rliesel)
 library(VGAM)
 
-set.seed(1337)
+set.seed(13)
 
 n <- 1000
 
