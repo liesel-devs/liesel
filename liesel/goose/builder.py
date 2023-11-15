@@ -72,6 +72,7 @@ class EngineBuilder:
     Parameters
     ----------
     seed
+        Either an int or a key generated from jax.random.PRNGKey.
         Used for jittering initial values and MCMC sampling.
     num_chains
         The number of chains to be used.
@@ -129,8 +130,16 @@ class EngineBuilder:
     from your posterior distribution.
     """
 
-    def __init__(self, seed: int, num_chains: int):
-        keys = jax.random.split(jax.random.PRNGKey(seed), 3)
+    def __init__(self, seed: int | jax.Array, num_chains: int):
+        if isinstance(seed, int):
+            keys = jax.random.split(jax.random.PRNGKey(seed), 3)
+        elif isinstance(seed, jax.Array):
+            keys = jax.random.split(seed, 3)
+        else:
+            raise TypeError(
+                "Provide either an int or a key from jax.random.PRNGKey as seed."
+            )
+
         self._prng_key: KeyArray = keys[0]
         self._engine_key: KeyArray = keys[1]
         self._jitter_key: KeyArray = keys[2]
