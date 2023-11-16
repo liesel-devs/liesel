@@ -2,12 +2,24 @@
 some tests for the engine builder
 """
 
+import jax
 import jax.numpy as jnp
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.goose as gs
 from liesel.goose.builder import EngineBuilder
 from liesel.goose.interface import DictInterface
+
+
+def test_seed_input():
+    int_seed = 0
+    key_seed = jax.random.PRNGKey(int_seed)
+    builder = EngineBuilder(seed=int_seed, num_chains=2)
+    builder2 = EngineBuilder(seed=key_seed, num_chains=2)
+
+    assert jnp.all(builder._prng_key == builder2._prng_key)
+    assert jnp.all(builder._engine_key == builder2._engine_key)
+    assert jnp.all(builder._jitter_key == builder2._jitter_key)
 
 
 def test_jitter_fns():
