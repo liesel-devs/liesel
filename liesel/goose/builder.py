@@ -130,7 +130,7 @@ class EngineBuilder:
     from your posterior distribution.
     """
 
-    def __init__(self, seed: int | jax.Array, num_chains: int):
+    def __init__(self, seed: int | KeyArray, num_chains: int):
         if isinstance(seed, int):
             keys = jax.random.split(jax.random.PRNGKey(seed), 3)
         elif isinstance(seed, jax.Array):
