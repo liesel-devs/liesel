@@ -8,7 +8,7 @@ from .engine import SamplingResults
 from .epoch import EpochConfig, EpochType
 from .gibbs import GibbsKernel
 from .hmc import HMCKernel
-from .interface import DataclassInterface, DictInterface, LieselInterface
+from .interface import DataclassInterface, DictInterface, LieselInterface, NamedTupleInterface
 from .iwls import IWLSKernel
 from .mh_kernel import MHKernel, MHProposal
 from .models import DataClassModel, DictModel
@@ -42,6 +42,7 @@ __all__ = [
     "MHKernel",
     "MHProposal",
     "ModelInterface",
+    "NamedTupleInterface",
     "NUTSKernel",
     "Position",
     "RWKernel",
