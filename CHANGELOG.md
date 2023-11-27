@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - :sparkles: The class `liesel.goose.engine.SamplingResults` is now exported via `liesel.goose`, which means it can be used as `gs.SamplingResults`. (@jobrachem)
 - :sparkles: Improved the efficiency of the `liesel.distributions.mvn_degen.MultivariateNormalDegenerate.from_penalty` constructor (#101, @GianmarcoCallegher)
 - :sparkles: Added alternative constructor `.from_penalty_smooth` to `MultivariateNormalDegenerate` (#133, @GianmarcoCallegher)
+- :sparkles: Added `NamedTupleInterface` (#151, @wiep)
 - :construction: Added `observed=True` to a `pd.DataFrame.groupby()` call in `goose/summary_m.py` to silence a warning due to a deprecation in [pandas v2.1.0](https://pandas.pydata.org/docs/whatsnew/v2.1.0.html#deprecations)
 - :construction: Renamed `lsl.Param` to `lsl.param` and `lsl.Obs` to `lsl.obs` to reflect the fact that those are functions, not classes. The old names are deprecated and scheduled for removal in v0.4.0. (#130, @jobrachem)
 - :construction: Renamed/moved the following symbols. The old names are deprecated and scheduled for removal in v0.4.0. (#136, @jobrachem)

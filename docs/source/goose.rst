@@ -34,8 +34,9 @@ in to using :class:`.Model`. Goose currently includes the following interfaces:
     :nosignatures:
 
     ~liesel.goose.interface.LieselInterface
-    ~liesel.goose.interface.DictInterface
     ~liesel.goose.interface.DataclassInterface
+    ~liesel.goose.interface.DictInterface
+    ~liesel.goose.interface.NamedTupleInterface
     ~liesel.experimental.pymc.PyMCInterface
 
 

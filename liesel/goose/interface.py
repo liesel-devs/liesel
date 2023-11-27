@@ -419,7 +419,7 @@ class NamedTupleInterface:
         """
         return {key: getattr(model_state, key) for key in position_keys}
 
-    def log_prob(self, model_state: ModelState) -> float:
+    def update_state(self, position, model_state: ModelState) -> ModelState:
         """
         Updates and returns a model state given a position.
 
@@ -437,9 +437,10 @@ class NamedTupleInterface:
         ``position``. If you supply a ``model_state`` with outdated nodes, these nodes
         and their outputs will not be updated.
         """
-        return self._log_prob_fn(model_state)
+        new_state = model_state._replace(**position)
+        return new_state
 
-    def update_state(self, position, model_state: ModelState) -> ModelState:
+    def log_prob(self, model_state: ModelState) -> float:
         """
         Returns the log-probability from a model state.
 
@@ -448,5 +449,4 @@ class NamedTupleInterface:
         model_state
             A dictionary of node names and their corresponding :class:`.NodeState`.
         """
-        new_state = model_state._replace(**position)
-        return new_state
+        return self._log_prob_fn(model_state)
