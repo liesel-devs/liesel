@@ -197,7 +197,7 @@ class PSpline(lsl.Group):
             name=f"{name}_coef", penalty=penalty, tau2=tau2_group["tau2"]
         )
 
-        basis_matrix = lsl.obs(basis_matrix, name="basis_matrix")
+        basis_matrix = lsl.obs(basis_matrix, name=f"{name}_basis_matrix")
         smooth = lsl.Var(
             lsl.Calc(jnp.dot, basis_matrix, coef_group["coef"]), name=name
         )
