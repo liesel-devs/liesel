@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [unreleased]
+## [0.2.8] - 2023-12-03
 
 - :sparkles: Large documentation updates! (#149, #146, #145, #143, #135, #134, @jobrachem; #144, #140, @GianmarcoCallegher)
 - :sparkles: The method `gs.Summary.error_df()` is now publicly available. (#137, @jobrachem)
