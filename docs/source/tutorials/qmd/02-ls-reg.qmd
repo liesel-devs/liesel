@@ -30,7 +30,7 @@ y_i \sim \mathcal{N}_{} \left( \mathbf{x}_i^T \boldsymbol{\beta}, \exp \left( \m
 $$
 in which the single observation are conditionally independent.
 
-From the equation we see that *location* covariates are collected in the design matrix $\mathbf{X}$ and *scale* covariates are contained in the design matrix $\mathbf{ Z}$. Both matrices can, but generally do not have to, share common regressors.
+From the equation we see that *location* covariates are collected in the design matrix $\mathbf{X}$ and *scale* covariates are contained in the design matrix $\mathbf{Z}$. Both matrices can, but generally do not have to, share common regressors.
 We refer to $\boldsymbol{\beta}$ as location parameter and to $\boldsymbol{\gamma}$ as scale parameter.
 
 In this notebook, both design matrices only contain one intercept and one regressor column.
@@ -58,7 +58,7 @@ First lets generate the data according to the model
 key = jax.random.PRNGKey(13)
 n = 500
 
-key, key_X, key_Z = jax.random.split(key, 3)
+key, key_X, key_Z, key_y = jax.random.split(key, 4)
 
 true_beta = jnp.array([1.0, 3.0])
 true_gamma = jnp.array([0.0, 0.5])
@@ -66,12 +66,9 @@ true_gamma = jnp.array([0.0, 0.5])
 X_mat = jnp.column_stack([jnp.ones(n), tfd.Uniform(low=0., high=5.).sample(n, seed=key_X)])
 Z_mat = jnp.column_stack([jnp.ones(n), tfd.Normal(loc=2., scale=1.).sample(n, seed=key_Z)])
 
-y_vec = jnp.zeros(n)
-key_y = jax.random.split(key, n)
-
 true_mean = X_mat @ true_beta
 true_scale = jnp.exp(Z_mat @ true_gamma)
-y_vec = tfd.Normal(loc=true_mean, scale=true_scale).sample(seed=key)
+y_vec = tfd.Normal(loc=true_mean, scale=true_scale).sample(seed=key_y)
 ```
 
 The simulated data displays a linear relationship between the response $\mathbf{y}$ and the covariate $\mathbf{x}$.
