@@ -214,7 +214,13 @@ class GraphBuilder:
         (as recursive inputs) added to the graph.
         """
         nodes = self.nodes.copy()
-        nodes.extend(node for var in self.vars for node in var.nodes)
+        # nodes.extend(node for var in self.vars for node in var.nodes)
+
+        for var in self.vars:
+            for node in var.nodes:
+                if node not in nodes:
+                    nodes.append(node)
+
         nodes = list(dict.fromkeys(nodes))
 
         if self.log_lik_node:
@@ -761,6 +767,14 @@ class GraphBuilder:
 
         # avoid name clashes
         self._set_missing_names()
+
+        # nodes_names = [node.name for node in self._all_nodes_and_vars()[0]]
+
+        if var.value_node in self.nodes:
+            raise RuntimeError(
+                f"{var.value_node.name} already present in GraphBuilder. "
+                + "Have you manually added some duplcated nodes with the method add?"
+            )
 
         # avoid infinite recursion
         var.auto_transform = False
