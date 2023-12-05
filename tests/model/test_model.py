@@ -10,17 +10,7 @@ import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 from liesel.model.model import GraphBuilder, Model, save_model
-from liesel.model.nodes import (
-    Calc,
-    Data,
-    Dist,
-    Group,
-    TransientNode,
-    Var,
-    add_group,
-    obs,
-    param,
-)
+from liesel.model.nodes import Calc, Data, Dist, Group, TransientNode, Var, obs, param
 
 
 @pytest.fixture
@@ -81,8 +71,8 @@ def y_var(data, beta, sigma) -> Generator:
     likelihood = Dist(tfd.Normal, loc=mu_hat, scale=sigma)
     y_var = obs(value=y, distribution=likelihood, name="y_var")
 
-    add_group("loc", X=x_var, beta=beta)
-    add_group("scale", scale=sigma)
+    Group("loc", X=x_var, beta=beta)
+    Group("scale", scale=sigma)
 
     yield y_var
 
