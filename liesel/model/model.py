@@ -773,7 +773,8 @@ class GraphBuilder:
         if var.value_node in self.nodes:
             raise RuntimeError(
                 f"{var.value_node.name} already present in GraphBuilder. "
-                + "Have you manually added some duplcated nodes with the method add?"
+                + "If you have added some nodes with the method `add`, "
+                "try to add only the variables."
             )
 
         # avoid infinite recursion
