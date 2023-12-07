@@ -34,7 +34,7 @@ sure to check them out.
     :recursive:
     :nosignatures:
 
-    ~liesel.model.nodes.Data
+    ~liesel.model.nodes.Const
     ~liesel.model.nodes.Calc
     ~liesel.model.nodes.Dist
     ~liesel.model.nodes.obs
