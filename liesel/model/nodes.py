@@ -459,7 +459,7 @@ class InputGroup(TransientNode):
 
 class Data(Node):
     """
-    A :class:`.Node` subclass that holds constant data.
+    A :class:`.Node` subclass that holds constant values.
 
     Since the value represented by a data node does not change, it is always up-to-date.
     A common usecase for data nodes is to cache computed values.
