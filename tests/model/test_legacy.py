@@ -18,7 +18,7 @@ from liesel.model.legacy import (
     Smooth,
     SmoothingParam,
 )
-from liesel.model.nodes import Data, Dist, Var, param
+from liesel.model.nodes import Const, Dist, Var, param
 
 
 def test_design_matrix() -> None:
@@ -80,8 +80,8 @@ def test_smoothing_param() -> None:
 
 
 def test_addition() -> None:
-    a = Data(1.0, _name="a")
-    b = Data(2.0, _name="b")
+    a = Const(1.0, _name="a")
+    b = Const(2.0, _name="b")
     addition = Addition(a, b)
     addition.update()
 
@@ -89,8 +89,8 @@ def test_addition() -> None:
 
 
 def test_predictor() -> None:
-    a = Data(1.0, _name="a")
-    b = Data(2.0, _name="b")
+    a = Const(1.0, _name="a")
+    b = Const(2.0, _name="b")
     predictor = Predictor(a, b)
     predictor.update()
 
@@ -98,7 +98,7 @@ def test_predictor() -> None:
 
 
 def test_bijector() -> None:
-    a = Data(1.0, _name="a")
+    a = Const(1.0, _name="a")
     exp_bijector = Bijector(a, jb.Exp)
     exp_bijector.update()
 
@@ -111,7 +111,7 @@ def test_bijector() -> None:
 
 
 def test_inverse_link() -> None:
-    a = Data(0.5, _name="a")
+    a = Const(0.5, _name="a")
     log_inverse_link = InverseLink(a, jb.Log)
     log_inverse_link.update()
 
@@ -119,9 +119,9 @@ def test_inverse_link() -> None:
 
 
 def test_column_stack() -> None:
-    a = Data(13.0, _name="a")
-    b = Data(73.0, _name="b")
-    c = Data(10.0, _name="c")
+    a = Const(13.0, _name="a")
+    b = Const(73.0, _name="b")
+    c = Const(10.0, _name="c")
 
     cs = ColumnStack(a, b, c)
     cs.update()
@@ -130,12 +130,12 @@ def test_column_stack() -> None:
 
 
 def test_column_stack_with_distribution() -> None:
-    a = Data(1.0, _name="a")
-    b = Data(0.5, _name="b")
-    c = Data(0.0, _name="c")
+    a = Const(1.0, _name="a")
+    b = Const(0.5, _name="b")
+    c = Const(0.0, _name="c")
 
-    loc = Data(jnp.zeros(3), _name="loc")
-    cov = Data(jnp.eye(3), _name="cov")
+    loc = Const(jnp.zeros(3), _name="loc")
+    cov = Const(jnp.eye(3), _name="cov")
     dist = Dist(tfd.MultivariateNormalFullCovariance, loc, cov)
 
     cs = ColumnStack(a, b, c, distribution=dist)
@@ -151,8 +151,8 @@ def test_pit_var() -> None:
     with pytest.raises(RuntimeError):
         pit = PIT(x)
 
-    loc = Data(0.0, _name="loc")
-    scale = Data(1.0, _name="scale")
+    loc = Const(0.0, _name="loc")
+    scale = Const(1.0, _name="scale")
     dist = Dist(tfd.Normal, loc, scale)
     x.dist_node = dist
 
@@ -163,10 +163,10 @@ def test_pit_var() -> None:
 
 
 def test_pit_dist() -> None:
-    loc = Data(0.0, _name="loc")
-    scale = Data(1.0, _name="scale")
+    loc = Const(0.0, _name="loc")
+    scale = Const(1.0, _name="scale")
     dist = Dist(tfd.Normal, loc, scale)
-    dist.at = Data(1.0, _name="x")
+    dist.at = Const(1.0, _name="x")
 
     pit = PIT(dist)
     pit.update()
