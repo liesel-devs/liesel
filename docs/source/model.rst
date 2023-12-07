@@ -6,7 +6,7 @@ Model Building (liesel.model)
 This is an overview of the most important building blocks for setting up your model
 graph with ``liesel.model``.
 
-The import path for ``liesel.model`` is::
+We usually import ``liesel.model`` as follows::
 
     import liesel.model as lsl
 
