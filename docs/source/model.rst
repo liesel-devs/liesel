@@ -35,7 +35,7 @@ sure to check them out.
     :nosignatures:
 
     ~liesel.model.nodes.Var
-    ~liesel.model.nodes.Data
+    ~liesel.model.nodes.Const
     ~liesel.model.nodes.Calc
     ~liesel.model.nodes.Dist
 

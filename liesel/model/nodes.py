@@ -147,7 +147,7 @@ class Node(ABC):
     ----------
     inputs
         Non-keyword inputs. Any inputs that are not already nodes or :class:`.Var`
-        will be converted to :class:`.Data` nodes.
+        will be converted to :class:`.Const` nodes.
     _name
         The name of the node. If you do not specify a name, a unique name will be \
         automatically generated upon initialization of a :class:`.Model`.
@@ -159,7 +159,7 @@ class Node(ABC):
     .Calc :
         A node representing a general calculation/operation
         in JAX or Python.
-    .Data :
+    .Const :
         A node representing some static data.
     .Dist :
         A node representing a ``tensorflow_probability``
@@ -359,7 +359,7 @@ class Node(ABC):
         """
         The value of the node.
 
-        Can only be set for a :class:`.Data` node, but not a :class:`.Calc` or
+        Can only be set for a :class:`.Const` node, but not a :class:`.Calc` or
         :class:`.Dist` node. If the node is part of a :class:`.Model` ``m`` with
         ``m.auto_update == True``, setting the value of the node triggers an update
         of the model. The auto-update can be disabled to improve the performance if
@@ -559,7 +559,7 @@ class Data(Const):
     See Also
     --------
     .Const :
-        Alias for :class:`.Data`. For full documentation, please consult
+        Alias for :class:`.Const`. For full documentation, please consult
         :class:`.Const`.
     """
 
@@ -593,7 +593,7 @@ class Calc(Node):
         The function to be wrapped. Must be jit-compilable by JAX.
     *inputs
         Non-keyword inputs. Any inputs that are not already nodes or :class:`.Var`
-        will be converted to :class:`.Data` nodes. The values of these inputs will be
+        will be converted to :class:`.Const` nodes. The values of these inputs will be
         passed to the wrapped function in the same order they are entered here.
     _name
         The name of the node. If you do not specify a name, a unique name will be \
@@ -605,12 +605,12 @@ class Calc(Node):
         initialization.
     **kwinputs
         Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
-        will be converted to :class:`.Data` nodes. The values of these inputs will be
+        will be converted to :class:`.Const` nodes. The values of these inputs will be
         passed to the wrapped function as keyword arguments.
 
     See Also
     --------
-    .Data :
+    .Const :
         A node representing some static data.
     .Dist :
         A node representing a ``tensorflow_probability``
@@ -779,7 +779,7 @@ class Dist(Node):
         :class:`~tfp.distributions.Distribution` interface.
     *inputs
         Non-keyword inputs. Any inputs that are not already nodes or :class:`.Var`
-        will be converted to :class:`.Data` nodes. The values of these inputs will be
+        will be converted to :class:`.Const` nodes. The values of these inputs will be
         passed to the wrapped distribution in the same order they are entered here.
     _name
         The name of the node. If you do not specify a name, a unique name will be \
@@ -788,7 +788,7 @@ class Dist(Node):
         Whether the node needs a seed / PRNG key.
     **kwinputs
         Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
-        will be converted to :class:`.Data` nodes. The values of these inputs will be
+        will be converted to :class:`.Const` nodes. The values of these inputs will be
         passed to the wrapped distribution as keyword arguments.
 
     See Also
@@ -990,7 +990,7 @@ class Var:
     other nodes, e.g. structured additive predictors in semi-parametric
     regression models.
 
-    If a :class:`.Data` or :class:`.Calc` node does not have an associated probability
+    If a :class:`.Const` or :class:`.Calc` node does not have an associated probability
     distribution, it is possible but not necessary to declare it as a variable. There
     is no hard and fast rule when a node without a probability distribution should be
     declared as a variable and when not. The advantages of a variable in this case are:
@@ -1015,7 +1015,7 @@ class Var:
     .Calc :
         A node representing a general calculation/operation
         in JAX or Python.
-    .Data :
+    .Const :
         A node representing some static data.
     .Dist :
         A node representing a ``tensorflow_probability``
@@ -1434,7 +1434,7 @@ def obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> 
     --------
     .Calc :
         A node representing a general calculation/operation in JAX or Python.
-    .Data :
+    .Const :
         A node representing some static data.
     .Dist :
         A node representing a ``tensorflow_probability``
@@ -1513,7 +1513,7 @@ def param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -
     .Calc :
         A node representing a general calculation/operation
         in JAX or Python.
-    .Data :
+    .Const :
         A node representing some static data.
     .Dist :
         A node representing a ``tensorflow_probability``
