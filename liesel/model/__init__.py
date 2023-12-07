@@ -25,6 +25,7 @@ from .model import GraphBuilder, Model, load_model, save_model
 from .nodes import (  # TODO: Bijector?
     Array,
     Calc,
+    Const,
     Data,
     Dist,
     Distribution,

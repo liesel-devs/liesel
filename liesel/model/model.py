@@ -27,7 +27,7 @@ from .nodes import (
     Array,
     Bijector,
     Calc,
-    Data,
+    Const,
     Dist,
     Group,
     InputGroup,
@@ -207,7 +207,7 @@ class GraphBuilder:
 
         for node in nodes:
             if node.needs_seed:
-                seed = Data(jax.random.PRNGKey(0), _name=f"_model_{node.name}_seed")
+                seed = Const(jax.random.PRNGKey(0), _name=f"_model_{node.name}_seed")
                 node.set_inputs(*node.inputs, **{"seed": seed} | node.kwinputs)
 
         return self

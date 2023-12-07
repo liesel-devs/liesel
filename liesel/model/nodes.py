@@ -28,7 +28,7 @@ __all__ = [
     "Array",
     "Bijector",
     "Calc",
-    "Data",
+    "Const",
     "Dist",
     "Distribution",
     "Group",
@@ -225,7 +225,7 @@ class Node(ABC):
             return x.var_value_node
 
         if not isinstance(x, Node):
-            return Data(x)
+            return Const(x)
 
         return x
 
@@ -460,31 +460,31 @@ class InputGroup(TransientNode):
         return ArgGroup(args, kwargs)
 
 
-class Data(Node):
-    """
-    A :class:`.Node` subclass that holds constant values.
+class Const(Node):
+    r"""
+    A :class:`.Node` subclass that holds constant data.
 
     Since the value represented by a data node does not change, it is always up-to-date.
     A common usecase for data nodes is to cache computed values.
 
-    - By default, data nodes *will* appear in the node graph created by
+    - By default, constant nodes *will* appear in the node graph created by
       :func:`.viz.plot_nodes`, but they will *not* appear in the model graph created by
       :func:`.viz.plot_vars`.
-    - You can wrap a data node in a :class:`.Var` to make it appear in the model graph.
+    - You can wrap a constant node in a :class:`.Var` to make it appear in the model
+      graph.
 
     Parameters
     ----------
     value
-        The value of the data node.
+        The value of the constant node.
     _name
-        The name of the data node. If you do not specify a name, a unique name will be \
-        automatically generated upon initialization of a :class:`.Model`.
+        The name of the constant node. If you do not specify a name, a unique name will
+        be \ automatically generated upon initialization of a :class:`.Model`.
 
     See Also
     --------
     .Calc :
-        A node representing a general calculation/operation
-        in JAX or Python.
+        A node representing a general calculation/operation in JAX or Python.
     .Dist :
         A node representing a ``tensorflow_probability``
         :class:`~tfp.distributions.Distribution`.
@@ -499,30 +499,30 @@ class Data(Node):
     Examples
     --------
 
-    A simple data node representing a constant value without a name:
+    A simple constant node representing a constant value without a name:
 
-    >>> nameless_node = lsl.Data(1.0)
+    >>> nameless_node = lsl.Const(1.0)
     >>> nameless_node
-    Data(name="")
+    Const(name="")
 
     Adding this node to a model leads to an automatically generated name:
 
     >>> model = lsl.GraphBuilder().add(nameless_node).build_model()
     >>> nameless_node
-    Data(name="n0")
+    Const(name="n0")
 
-    A data node with a name:
+    A constant node with a name:
 
-    >>> node = lsl.Data(1.0, _name="my_name")
+    >>> node = lsl.Const(1.0, _name="my_name")
     >>> node
-    Data(name="my_name")
+    Const(name="my_name")
     """
 
     def __init__(self, value: Any, _name: str = ""):
         super().__init__(_name=_name)
         self._value = value
 
-    def flag_outdated(self) -> Data:
+    def flag_outdated(self) -> Const:
         """Stops the recursion setting outdated flags."""
         return self
 
@@ -530,7 +530,7 @@ class Data(Node):
     def outdated(self) -> bool:
         return False
 
-    def update(self) -> Data:
+    def update(self) -> Const:
         """Does nothing."""
         return self
 
@@ -548,6 +548,22 @@ class Data(Node):
 
             if self.model.auto_update:
                 self.model.update()
+
+
+class Data(Const):
+    """
+    A :class:`.Node` subclass that holds constant data.
+
+    This is an alias for :class:`.Const`.
+
+    See Also
+    --------
+    .Const :
+        Alias for :class:`.Data`. For full documentation, please consult
+        :class:`.Const`.
+    """
+
+    pass
 
 
 class Calc(Node):
@@ -1048,7 +1064,7 @@ class Var:
         name: str = "",
     ):
         self._name = name
-        self._value_node: Node = Data(None)
+        self._value_node: Node = Const(None)
         self._dist_node: Dist = NoDist()
 
         self._var_value_node: VarValue = VarValue(
@@ -1308,7 +1324,7 @@ class Var:
         .weak : Whether the variable is weak. In general, ``strong = not weak``.
 
         """
-        return isinstance(self.value_node, Data)
+        return isinstance(self.value_node, Const)
 
     def update(self) -> Var:
         """Updates the variable."""
@@ -1347,7 +1363,7 @@ class Var:
             value_node = Calc(lambda x: x, value_node)
 
         if not isinstance(value_node, Node):
-            value_node = Data(value_node)
+            value_node = Const(value_node)
 
         if value_node.model:
             raise RuntimeError(
