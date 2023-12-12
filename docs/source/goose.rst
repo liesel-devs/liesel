@@ -6,7 +6,7 @@ MCMC Sampling (liesel.goose)
 This is an overview of the most important building blocks for sampling from the
 posterior of your model ``liesel.goose``.
 
-The import path for ``liesel.goose`` is::
+We usually import ``liesel.goose`` as follows::
 
     import liesel.goose as gs
 

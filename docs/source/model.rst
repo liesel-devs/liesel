@@ -6,7 +6,7 @@ Model Building (liesel.model)
 This is an overview of the most important building blocks for setting up your model
 graph with ``liesel.model``.
 
-The import path for ``liesel.model`` is::
+We usually import ``liesel.model`` as follows::
 
     import liesel.model as lsl
 
@@ -25,8 +25,8 @@ The model building workflow in Liesel consists of two steps:
 Nodes and Variables
 -------------------
 
-The fundamental building blocks of your model graph are given by just three classes
-and two functions. Each of these building blocks is documented with examples, so make
+The fundamental building blocks of your model graph are given by just four classes.
+Each of these building blocks is documented with examples, so make
 sure to check them out.
 
 .. autosummary::
@@ -34,11 +34,21 @@ sure to check them out.
     :recursive:
     :nosignatures:
 
+    ~liesel.model.nodes.Var
     ~liesel.model.nodes.Data
     ~liesel.model.nodes.Calc
     ~liesel.model.nodes.Dist
+
+To set up :class:`.Var` objects, Liesel provides two helper functions:
+
     ~liesel.model.nodes.obs
     ~liesel.model.nodes.param
+
+Defining :class:`.Var` objects with these functions makes sure that the respective
+:attr:`.Var.observerd` and :attr:`.Var.parameter` flags are correctly set. This in
+turn ensures that the :attr:`.Var.log_prob` of an *observed* variable will be included
+in the :attr:`.Model.log_lik` and the :attr:`.Var.log_prob` of a *parameter* variable
+will be included in the :attr:`.Model.log_prior`.
 
 
 Build and plot your model
