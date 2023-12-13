@@ -41,6 +41,11 @@ sure to check them out.
 
 To set up :class:`.Var` objects, Liesel provides two helper functions:
 
+.. autosummary::
+    :toctree: generated
+    :recursive:
+    :nosignatures:
+
     ~liesel.model.nodes.obs
     ~liesel.model.nodes.param
 
