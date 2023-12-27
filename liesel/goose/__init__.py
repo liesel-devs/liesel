@@ -18,6 +18,7 @@ from .iwls import IWLSKernel
 from .mh_kernel import MHKernel, MHProposal
 from .models import DataClassModel, DictModel
 from .nuts import NUTSKernel
+from .optim import OptimResult, optim
 from .rw import RWKernel
 from .summary_m import Summary
 from .summary_viz import (
@@ -60,4 +61,6 @@ __all__ = [
     "plot_scatter",
     "plot_pairs",
     "stan_epochs",
+    "optim",
+    "OptimResult",
 ]
