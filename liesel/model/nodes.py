@@ -994,6 +994,9 @@ class Var:
 
     See Also
     --------
+    :meth:`.Var.transform` : Transforms a variable by adding a new transformed
+        variable as an input. This is useful for variables that are constrained to a
+        certain domain, e.g. positive values.
     .obs : Helper function to declare a variable as an observed quantity.
     .param : Helper function to declare a variable as a model parameter.
     .Calc :
