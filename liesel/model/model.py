@@ -444,7 +444,13 @@ class GraphBuilder:
 
         for var in _vars:
             if var.auto_transform:
-                gb.transform(var)
+                tname = f"{var.name}_transformed"
+                if tname in nodes or tname in _vars:
+                    raise RuntimeError(
+                        f"Auto-transform of {var} failed, because a variable of the "
+                        f"name {tname} is already present in {gb}."
+                    )
+                var.transform(bijector=None)
 
         gb._set_missing_names()
         gb._add_model_log_lik_node()
