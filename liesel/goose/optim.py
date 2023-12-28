@@ -202,10 +202,11 @@ def optim(
             0, n_batches_inside, _batched_update, init
         )
 
-        init = (position, opt_state)
-        position, opt_state = jax.lax.fori_loop(
-            n_batches_inside, n_batches_inside + 1, _last_batched_update, init
-        )
+        if last_batch_indices:
+            init = (position, opt_state)
+            position, opt_state = jax.lax.fori_loop(
+                n_batches_inside, n_batches_inside + 1, _last_batched_update, init
+            )
 
         nlp_new = _batched_neg_log_prob(position, batch_indices=None)
 
