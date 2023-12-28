@@ -202,7 +202,7 @@ def optim(
             0, n_batches_inside, _batched_update, init
         )
 
-        if last_batch_indices:
+        if len(last_batch_indices.shape) > 0:
             init = (position, opt_state)
             position, opt_state = jax.lax.fori_loop(
                 n_batches_inside, n_batches_inside + 1, _last_batched_update, init
