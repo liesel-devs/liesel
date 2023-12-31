@@ -214,12 +214,7 @@ class GraphBuilder:
         (as recursive inputs) added to the graph.
         """
         nodes = self.nodes.copy()
-        # nodes.extend(node for var in self.vars for node in var.nodes)
-
-        for var in self.vars:
-            for node in var.nodes:
-                if node not in nodes:
-                    nodes.append(node)
+        nodes.extend(node for var in self.vars for node in var.nodes)
 
         nodes = list(dict.fromkeys(nodes))
 
