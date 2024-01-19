@@ -1525,7 +1525,7 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
         transform_dist,
         *inputs,
         **kwinputs,
-        _name=var.dist_node.name,
+        _name="",
         _needs_seed=var.dist_node.needs_seed,
     )
 
@@ -1572,7 +1572,7 @@ def _transform_var_with_bijector_class(
         transform_dist,
         dist_inputs,
         bijector_inputs,
-        _name=var.dist_node.name,
+        _name="",
         _needs_seed=var.dist_node.needs_seed,
     )
 
