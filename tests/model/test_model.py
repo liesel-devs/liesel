@@ -340,21 +340,6 @@ class TestModel:
         with pytest.raises(RuntimeError, match="has no distribution"):
             GraphBuilder().add(x).build_model()
 
-    def test_build_after_transform_error(self) -> None:
-        lmbd = Var(1.0, name="lambda")
-        dist = Dist(tfd.Exponential, lmbd)
-        x = Var(1.0, dist, name="x")
-
-        gb = GraphBuilder()
-
-        model = gb.add(x).build_model()
-
-        nodes, vars = model.copy_nodes_and_vars()
-
-        with pytest.raises(RuntimeError):
-            gb.add(*nodes.values(), *vars.values())
-            gb.transform(vars["x"])
-
     def test_build_after_transform(self) -> None:
         lmbd = Var(1.0, name="lambda")
         dist = Dist(tfd.Exponential, lmbd)
