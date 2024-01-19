@@ -767,9 +767,9 @@ class GraphBuilder:
 
         if var.value_node in self.nodes:
             raise RuntimeError(
-                f"{var.value_node.name} already present in GraphBuilder. "
-                + "If you have added some nodes with the method `add`, "
-                "try to add only the variables."
+                f"{var.value_node.name} is already present in the GraphBuilder. "
+                + "If you have added some Node objects to the GraphBuilder, "
+                "try to add only the Var objects instead."
             )
 
         # avoid infinite recursion
