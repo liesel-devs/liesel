@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import re
+import warnings
 from collections import Counter
 from collections.abc import Iterable
 from copy import deepcopy
@@ -110,7 +111,7 @@ class GraphBuilder:
         GraphBuilder.
     :meth:`.GraphBuilder.build_model` : Method for building a model from the
         GraphBuilder.
-    :meth:`GraphBuilder.transform` : Transforms a variable by adding a new transformed
+    :meth:`.Var.transform` : Transforms a variable by adding a new transformed
         variable as an input. This is useful for variables that are constrained to a
         certain domain, e.g. positive values.
 
@@ -290,7 +291,7 @@ class GraphBuilder:
         --------
         :meth:`.GraphBuilder.build_model` : Method for building a model from the \
             GraphBuilder.
-        :meth:`GraphBuilder.transform` : Transforms a variable by adding a new
+        :meth:`.Var.transform` : Transforms a variable by adding a new
             transformed variable as an input.
 
         Examples
@@ -439,7 +440,13 @@ class GraphBuilder:
 
         for var in _vars:
             if var.auto_transform:
-                gb.transform(var)
+                tname = f"{var.name}_transformed"
+                if tname in nodes or tname in _vars:
+                    raise RuntimeError(
+                        f"Auto-transform of {var} failed, because a variable of the "
+                        f"name {tname} is already present in {gb}."
+                    )
+                var.transform(bijector=None)
 
         gb._set_missing_names()
         gb._add_model_log_lik_node()
@@ -687,6 +694,10 @@ class GraphBuilder:
         """
         Transforms a variable by adding a new transformed variable as an input.
 
+        .. deprecated:: 0.2.9
+            ``GraphBuilder.transform`` is deprecated.
+            Use :meth:`.Var.transform` instead. This method will be removed in v0.4.0.
+
         Creates a new variable on the unconstrained space ``R**n`` with the appropriate
         transformed distribution, turning the original variable into a weak variable
         without an associated distribution. The transformation is performed using
@@ -752,6 +763,12 @@ class GraphBuilder:
         >>> scale.update().log_prob
         0.0
         """
+
+        warnings.warn(
+            "GraphBuilder.transform is deprecated. Use Var.transform instead. "
+            "This method will be removed in v0.4.0",
+            FutureWarning,
+        )
 
         if var.weak:
             raise RuntimeError(f"{repr(var)} is weak")

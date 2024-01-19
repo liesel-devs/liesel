@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [unreleased]
+
+- :sparkles: New method `Var.transform` supersedes `GraphBuilder.transform`. The latter
+  is deprecated and scheduled for removal in v0.4.0. (#174, @jobrachem)
+
+
 ## [0.2.8] - 2023-12-03
 
 - :sparkles: Added `NamedTupleInterface` (#151, @wiep)
