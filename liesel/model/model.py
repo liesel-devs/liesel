@@ -763,8 +763,6 @@ class GraphBuilder:
         # avoid name clashes
         self._set_missing_names()
 
-        # nodes_names = [node.name for node in self._all_nodes_and_vars()[0]]
-
         if var.value_node in self.nodes:
             raise RuntimeError(
                 f"{var.value_node.name} is already present in the GraphBuilder. "
