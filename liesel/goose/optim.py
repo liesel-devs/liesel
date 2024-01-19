@@ -36,12 +36,6 @@ def _find_observed(graph: lsl.Model) -> dict[str, lsl.Var | lsl.Node]:
         for var_ in graph.vars.values()
         if var_.observed
     }
-    for node in graph.nodes.values():
-        try:
-            if node.observed:  # type: ignore
-                obs[node.name] = jnp.array(node.value)
-        except AttributeError:
-            pass
     return obs
 
 
@@ -60,7 +54,7 @@ def _find_sample_size(graph: lsl.Model) -> int:
     return n_set.pop()
 
 
-def optim(
+def optim_flat(
     model: lsl.Model,
     params: Sequence[str],
     optimizer: optax.GradientTransformation | None = None,
@@ -73,7 +67,9 @@ def optim(
     Optimize the parameters of a  Liesel :class:`.Model`.
 
     Approximates maximum a posteriori (MAP) parameter estimates by minimizing the
-    negative log probability of the model.
+    negative log probability of the model. If you use batching, be aware that the
+    batching functionality implemented here assumes a "flat" model structure. See below
+    for details.
 
     Parameters
     ----------
@@ -99,6 +95,19 @@ def optim(
     Returns
     -------
     A dataclass of type :class:`.OptimResult`, giving access to the results.
+
+    Notes
+    -----
+
+    If you use batching, be aware that the
+    batching functionality implemented here assumes a "flat" model structure. This means
+    that this function assumes that, for all :class:`.Var` objects in your model, it
+    is valid to index their values like this::
+
+        var_object.value[batch_indices, ...]
+
+    The batching functionality also assumes that all objects that should be batched
+    are included as :class:`.Var` objects with ``Var.observed`` set to ``True``.
 
     Examples
     --------
@@ -126,7 +135,7 @@ def optim(
 
     Now, we are ready to run the optimization.
 
-    >>> result = gs.optim(model, params=["coef"])
+    >>> result = gs.optim_flat(model, params=["coef"])
     >>> result.position
     {'coef': Array([0.5227438, 1.2980561], dtype=float32)}
 

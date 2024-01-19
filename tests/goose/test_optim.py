@@ -27,22 +27,22 @@ model = gb.build_model()
 
 
 def test_optim_jointly():
-    result = gs.optim(model, ["coef", "log_sigma"], batch_size=20)
+    result = gs.optim_flat(model, ["coef", "log_sigma"], batch_size=20)
     assert jnp.allclose(result.position["coef"], target_params, atol=0.2)
     assert jnp.allclose(result.position["log_sigma"], 0.0, atol=0.2)
 
 
 def test_optim_no_batching():
-    result = gs.optim(model, ["coef", "log_sigma"], batch_size=None)
+    result = gs.optim_flat(model, ["coef", "log_sigma"], batch_size=None)
     assert jnp.allclose(result.position["coef"], target_params, atol=0.2)
     assert jnp.allclose(result.position["log_sigma"], 0.0, atol=0.2)
 
 
 def test_optim_individually():
     interface = gs.LieselInterface(model)
-    result_coef = gs.optim(model, ["coef"])
+    result_coef = gs.optim_flat(model, ["coef"])
     new_state = interface.update_state(result_coef.position, model.state)
     model.state = new_state
-    result_sigma = gs.optim(model, ["log_sigma"])
+    result_sigma = gs.optim_flat(model, ["log_sigma"])
     assert jnp.allclose(result_coef.position["coef"], target_params, atol=0.2)
     assert jnp.allclose(result_sigma.position["log_sigma"], 0.0, atol=0.2)
