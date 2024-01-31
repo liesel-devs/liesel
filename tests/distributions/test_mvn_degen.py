@@ -1,6 +1,7 @@
 """
 Tests for the multivariate normal degenerate distribution.
 """
+
 import jax
 import jax.numpy as jnp
 import jax.numpy.linalg as jnpla

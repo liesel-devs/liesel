@@ -60,7 +60,7 @@ class EngineBuilder:
     #. Set the model interface with :meth:`.set_model`.
     #. Set the initial values with :meth:`.set_initial_values`.
     #. Add MCMC kernels with :meth:`.add_kernel`.
-    #. Build an :class:`.Engine` with :meth:`.build`.
+    #. Build an :class:`~.goose.Engine` with :meth:`.build`.
 
     Optionally, you can also:
 
@@ -72,19 +72,17 @@ class EngineBuilder:
     Parameters
     ----------
     seed
-        Either an int or a key generated from jax.random.PRNGKey.
-        Used for jittering initial values and MCMC sampling.
+        Either an int or a key generated from jax.random.PRNGKey. Used for jittering
+        initial values and MCMC sampling.
     num_chains
         The number of chains to be used.
 
     See Also
     --------
-    .Engine : The MCMC engine, output of :meth:`.build`.
-    .LieselInterface : Interface for a :class:`~liesel.model.model.Model` object.
-    .NUTSKernel : The NUTS kernel.
-    .HMCKernel : The HMC kernel.
-    .IWLSKernel : The IWLS kernel.
-    .RWKernel : The random walk kernel.
+    ~.goose.Engine : The MCMC engine, output of :meth:`.build`. ~.goose.LieselInterface
+    : Interface for a :class:`~liesel.model.model.Model` object. ~.goose.NUTSKernel :
+    The NUTS kernel. ~.goose.HMCKernel : The HMC kernel. ~.goose.IWLSKernel : The IWLS
+    kernel. ~.goose.RWKernel : The random walk kernel.
 
     Notes
     -----
@@ -126,8 +124,8 @@ class EngineBuilder:
 
     >>> engine = builder.build()
 
-    From here, you can continue with :meth:`.Engine.sample_all_epochs` to draw samples
-    from your posterior distribution.
+    From here, you can continue with :meth:`~.goose.Engine.sample_all_epochs` to draw
+    samples from your posterior distribution.
     """
 
     def __init__(self, seed: int | KeyArray, num_chains: int):
@@ -161,11 +159,12 @@ class EngineBuilder:
         List of additional position keys that should be tracked.
 
         If a position key is tracked that means the correspond element of the model
-        state will be saved and included in the :class:`.SamplingResults` and the
-        posterior samples returned by :meth:`.SamplingResults.get_posterior_samples`.
+        state will be saved and included in the :class:`~.goose.SamplingResults` and the
+        posterior samples returned by
+        :meth:`~.goose.SamplingResults.get_posterior_samples`.
 
-        By default, only position keys associated with an MCMC kernel are tracked.
-        You can easily add additional position keys by appending to this list.
+        By default, only position keys associated with an MCMC kernel are tracked. You
+        can easily add additional position keys by appending to this list.
 
         Examples
         --------
@@ -174,9 +173,9 @@ class EngineBuilder:
 
         >>> import tensorflow_probability.substrates.jax.distributions as tfd
 
-        Consider the following simple model, in which we use the logarithm of the
-        scale parameter in a normal distribution and take the exponential value for
-        including the actual scale:
+        Consider the following simple model, in which we use the logarithm of the scale
+        parameter in a normal distribution and take the exponential value for including
+        the actual scale:
 
         >>> log_scale = lsl.param(0.0, name="log_scale")
         >>> scale = lsl.Calc(jnp.exp, variance, _name="scale")
@@ -199,9 +198,9 @@ class EngineBuilder:
         >>> builder.position_keys
         ['scale']
 
-        Beware however that including many intermediate position keys can lead to
-        large results. In some cases it may be preferable to keep the tracked positions
-        to a minimum and recompute the intermediate values from the posterior samples.
+        Beware however that including many intermediate position keys can lead to large
+        results. In some cases it may be preferable to keep the tracked positions to a
+        minimum and recompute the intermediate values from the posterior samples.
 
         """
         self.positions_excluded: list[str] = []
@@ -304,7 +303,7 @@ class EngineBuilder:
         >>> model = gb.build_model()
 
         Finally, we build the model with :class:`.EngineBuilder`. We will use 4
-        parallel chains and sample our varaible using a :class:`.NUTSKernel`.
+        parallel chains and sample our varaible using a :class:`~.goose.NUTSKernel`.
 
         >>> builder = gs.EngineBuilder(seed=1337, num_chains=4)
         >>> builder.set_model(gs.LieselInterface(model))
