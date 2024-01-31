@@ -4,8 +4,8 @@ Nodes and variables.
 
 from __future__ import annotations
 
-import warnings
 import logging
+import warnings
 import weakref
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Hashable, Iterable
@@ -665,23 +665,26 @@ class Calc(Node):
         *inputs: Any,
         _name: str = "",
         _needs_seed: bool = False,
+        update_on_init: bool = True,
         **kwinputs: Any,
     ):
         super().__init__(*inputs, **kwinputs, _name=_name, _needs_seed=_needs_seed)
         self._function = function
 
-        try:
-            self.update()
-        except Exception as e:
-            logger.warning(
-                f"{self} was not updated during initialization, because the following"
-                f" exception occured: {repr(e)}. See debug log for the full traceback."
-            )
-            logger.debug(
-                f"{self} was not updated during initialization, because the following"
-                f" exception occured:",
-                exc_info=e,
-            )
+        if update_on_init:
+            try:
+                self.update()
+            except Exception as e:
+                logger.warning(
+                    f"{self} was not updated during initialization, because the"
+                    f" following exception occured: {repr(e)}. See debug log for the"
+                    " full traceback."
+                )
+                logger.debug(
+                    f"{self} was not updated during initialization, because the"
+                    " following exception occured:",
+                    exc_info=e,
+                )
 
     @property
     def function(self) -> Callable[..., Any]:
