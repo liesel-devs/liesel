@@ -586,6 +586,9 @@ class Calc(Node):
         automatically generated upon initialization of a :class:`.Model`.
     _needs_seed
         Whether the node needs a seed / PRNG key.
+    update_on_init
+        If ``True``, the calculator will try to evaluate its function upon \
+        initialization.
     **kwinputs
         Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
         will be converted to :class:`.Data` nodes. The values of these inputs will be
@@ -617,13 +620,12 @@ class Calc(Node):
     Examples
     --------
 
-    A simple calculator node, taking the exponential value of an input parameter. This
-    calculator node has not updated its value yet.
+    A simple calculator node, taking the exponential value of an input parameter.
 
     >>> log_scale = lsl.param(0.0, name="log_scale")
     >>> scale = lsl.Calc(jnp.exp, log_scale)
     >>> print(scale.value)
-    None
+    1.0
 
     The value of the calculator node is updated when :meth:`.Calc.update` is called.
 
