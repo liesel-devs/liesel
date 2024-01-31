@@ -261,7 +261,7 @@ class LieselInterface:
 
     >>> interface = gs.LieselInterface(model)
 
-    The interface instance can now be used in :meth:`.EngineBuilder.set_model`.
+    The interface instance can now be used in :meth:`~.goose.EngineBuilder.set_model`.
     """
 
     def __init__(self, model: "Model"):
