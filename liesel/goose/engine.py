@@ -289,14 +289,7 @@ class SamplingResults:
 class SamplingResult(SamplingResults):
     """Alias of :class:`.SamplingResults` for backwards compatibility."""
 
-    positions: EpochChainManager
-    transition_infos: EpochChainManager
-    generated_quantities: Option[EpochChainManager]
-    tuning_infos: Option[Chain]
-    kernel_states: Option[EpochChainManager]
-    full_model_states: Option[EpochChainManager]
-    kernel_classes: Option[dict[str, type]]
-    kernels_by_pos_key: Option[dict[str, str]]
+    pass
 
 
 class Engine:
