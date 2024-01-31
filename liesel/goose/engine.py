@@ -145,7 +145,7 @@ class SamplingResults:
     Contains the results of the MCMC engine.
 
     Easy access to the samples is provided via the methods
-    :func:`.get_samples` and :func:`.get_posterior_samples`.
+    :meth:`.get_samples` and :meth:`.get_posterior_samples`.
     """
 
     positions: EpochChainManager
