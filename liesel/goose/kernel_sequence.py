@@ -69,7 +69,7 @@ class KernelSequence:
         for ker in kernels:
             if not ker.identifier:
                 raise RuntimeError(
-                    f"Kernel identifier must be a non-empty string. "
+                    "Kernel identifier must be a non-empty string. "
                     f"The field is empty in {ker!r}."
                 )
             identifiers.add(ker.identifier)
