@@ -115,7 +115,7 @@ class NUTSKernel(
     needs_history: ClassVar[bool] = True
     """Whether this kernel needs its history for tuning."""
     identifier: str = ""
-    """Kernel identifier, set by :class:`.EngineBuilder`"""
+    """Kernel identifier, set by :class:`~.goose.EngineBuilder`"""
     position_keys: tuple[str, ...]
     """Tuple of position keys handled by this kernel."""
 

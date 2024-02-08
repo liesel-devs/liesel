@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.9] - 2023-12-03
+
+- :construction: Handeled error in `liesel.model.model.transform` for duplicated nodes (#167, @GianmarcoCallegher)
+
 ## [0.2.8] - 2023-12-03
 
 - :sparkles: Added `NamedTupleInterface` (#151, @wiep)

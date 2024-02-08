@@ -13,7 +13,7 @@ We usually import ``liesel.goose`` as follows::
 The workflow for MCMC sampling goose consists of the following steps:
 
 1. Set up your model
-2. Set up an :class:`.Engine` with MCMC kernels for your parameters and draw posterior samples
+2. Set up an :class:`~.goose.Engine` with MCMC kernels for your parameters and draw posterior samples
 3. Inspect your results
 
 .. note::
@@ -43,7 +43,7 @@ in to using :class:`.Model`. Goose currently includes the following interfaces:
 Set up an MCMC Engine and draw posterior samples
 ------------------------------------------------
 
-To set up an MCMC engine, goose provides the :class:`.EngineBuilder`. Please refer to
+To set up an MCMC engine, goose provides the :class:`~.goose.EngineBuilder`. Please refer to
 the linked EngineBuilder documentation to learn how to use it.
 
 .. autosummary::
@@ -51,7 +51,7 @@ the linked EngineBuilder documentation to learn how to use it.
     :recursive:
     :nosignatures:
 
-    ~liesel.goose.builder.EngineBuilder
+    ~liesel.goose.EngineBuilder
     ~liesel.goose.engine.Engine
 
 
@@ -74,8 +74,8 @@ model parameters. Currently, the available MCMC kernels are:
 You can also define your own kernel by implementing the :class:`.Kernel` protocol.
 
 To draw samples from your posterior, you will want to call
-:meth:`.Engine.sample_all_epochs`. Once sampling is done, you can obtain the results
-with :meth:`.Engine.get_results`, which will return a :class:`.SamplingResults`
+:meth:`~.goose.Engine.sample_all_epochs`. Once sampling is done, you can obtain the results
+with :meth:`~.goose.Engine.get_results`, which will return a :class:`~.goose.SamplingResults`
 instance.
 
 
@@ -93,7 +93,7 @@ The two central classes for handling your sampling results are:
     ~liesel.goose.summary_m.Summary
 
 You can obtain your posterior samples as a dictionary via
-:meth:`.SamplingResults.get_posterior_samples`. There is also experimental support
+:meth:`~.goose.SamplingResults.get_posterior_samples`. There is also experimental support
 for turning your samples into an ``arviz.InferenceData`` object via
 :func:`.to_arviz_inference_data`.
 
