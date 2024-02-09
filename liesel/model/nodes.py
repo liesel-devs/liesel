@@ -53,8 +53,6 @@ T = TypeVar("T", bound=Hashable)
 
 logger = logging.getLogger(__name__)
 
-logger = logging.getLogger(__name__)
-
 
 def _unique_tuple(*args: Iterable[T]) -> tuple[T, ...]:
     return tuple(dict.fromkeys(chain(*args)))
