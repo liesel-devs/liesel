@@ -283,11 +283,12 @@ def dist_reg_mcmc(
     beta_jitter_fn: JitterFunction = beta_jitter_fn,
 ) -> EngineBuilder:
     """
-    Configures an :class:`.EngineBuilder` for a distributional regression model.
+    Configures an :class:`~.goose.EngineBuilder` for a distributional regression model.
 
     The EngineBuilder uses a Metropolis-in-Gibbs MCMC algorithm with an
-    :class:`.IWLSKernel` for the regression coefficients and a :class:`.GibbsKernel` for
-    the smoothing parameters for a distributional regression model.
+    :class:`~.goose.IWLSKernel` for the regression coefficients and a
+    :class:`~.goose.GibbsKernel` for the smoothing parameters for a distributional
+    regression model.
 
     Parameters
     ----------
@@ -303,7 +304,8 @@ def dist_reg_mcmc(
         Jittering function for the regression coefficients.
     See Also
     --------
-    :meth:`.EngineBuilder.set_jitter_fns` : Method for setting the jittering functions
+    :meth:`~.goose.EngineBuilder.set_jitter_fns` : Method for setting the jittering
+        functions
     """
 
     builder = EngineBuilder(seed, num_chains)

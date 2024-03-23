@@ -20,10 +20,12 @@ class GooseModel:
     """
     A :class:`.ModelInterface` for a Liesel :class:`.Model`.
 
-    This is an alias for :class:`.LieselInterface` provided for backwards compatibility.
+    This is an alias for :class:`~.goose.LieselInterface` provided for backwards
+    compatibility.
 
     .. deprecated:: v0.2.6
-        Use :class:`.LieselInterface` instead. This alias will be removed in v0.4.0.
+        Use :class:`~.goose.LieselInterface` instead. This alias will be removed in
+        v0.4.0.
 
     Parameters
     ----------
@@ -34,10 +36,8 @@ class GooseModel:
     def __init__(self, model: Model):
         self._model = model._copy_computational_model()
         warnings.warn(
-            (
-                "lsl.GooseModel is deprecated. Use gs.LieselInterface instead."
-                "This alias will be removed in v0.4.0."
-            ),
+            "lsl.GooseModel is deprecated. Use gs.LieselInterface instead."
+            "This alias will be removed in v0.4.0.",
             FutureWarning,
         )
 
