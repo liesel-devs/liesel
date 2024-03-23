@@ -130,7 +130,7 @@ class TestOptim:
         )
 
 
-def test_history_to_df(models):
+def test_position_history_to_df(models):
     model, _ = models
     stopper = Stopper(max_iter=1_000, patience=10)
     result = optim_flat(
@@ -144,6 +144,22 @@ def test_history_to_df(models):
     df = history_to_df(result.history["position"])
 
     assert df.shape == (1000, 4)
+
+
+def test_full_history_to_df(models):
+    model, _ = models
+    stopper = Stopper(max_iter=1_000, patience=10)
+    result = optim_flat(
+        model,
+        ["coef", "log_sigma"],
+        batch_size=20,
+        stopper=stopper,
+        batch_seed=1,
+        prune_history=False,
+    )
+    df = history_to_df(result.history)
+
+    assert df.shape == (1000, 6)
 
 
 def test_history_to_df_pruned(models):

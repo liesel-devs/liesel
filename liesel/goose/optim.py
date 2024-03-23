@@ -465,7 +465,7 @@ def history_to_df(history: dict[str, Array]) -> pd.DataFrame:
     """
     data: dict[str, Array] = dict()
 
-    position_history = history.get("position", None)
+    position_history = history.pop("position", None)
 
     for name, value in history.items():
         data |= array_to_dict(value, names_prefix=name)
