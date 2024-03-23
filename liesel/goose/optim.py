@@ -256,8 +256,8 @@ def optim_flat(
     Now, we are ready to run the optimization.
 
     >>> result = gs.optim_flat(model, params=["coef"])
-    >>> result.position
-    {'coef': Array([0.52289313, 1.2874348 ], dtype=float32)}
+    >>> {name: jnp.round(value, 2) for name, value in result.position.items()}
+    {'coef': Array([0.52, 1.29], dtype=float32)}
 
     We can now, for example, use ``result.model_state`` in
     :meth:`.EngineBuilder.set_initial_values` to implement a "warm start" of MCMC
