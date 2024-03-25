@@ -167,10 +167,13 @@ def _draw_edges(graph, axis, pos, is_var):
         non_dist_edges = []
 
         for edge in edges:
-            if edge[1].has_dist and bool(
-                set(edge[0].nodes) & set(edge[1].dist_node.all_input_nodes())
-            ):
-                dist_edges.append(edge)
+            if edge[1].has_dist:
+                edge_0_output_nodes = set(edge[0].all_output_nodes())
+                edge_0_nodes = edge[0].nodes
+                edge_1_input_nodes = set(edge[1].dist_node.all_input_nodes())
+
+                if bool(edge_0_output_nodes.union(edge_0_nodes) & edge_1_input_nodes):
+                    dist_edges.append(edge)
             else:
                 non_dist_edges.append(edge)
 
