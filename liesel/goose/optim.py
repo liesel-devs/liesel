@@ -181,7 +181,7 @@ def optim_flat(
         fixed.
     optimizer
         An optimizer from the ``optax`` library. If ``None`` , \
-        ``optax.adam(learning_rate=1e-1)`` is used.
+        ``optax.adam(learning_rate=1e-2)`` is used.
     stopper
         A :class:`.Stopper` that carries information about the maximum number of\
         iterations and early stopping.
