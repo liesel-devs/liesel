@@ -10,17 +10,7 @@ import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 from liesel.model.model import GraphBuilder, Model, save_model
-from liesel.model.nodes import (
-    Calc,
-    Data,
-    Dist,
-    Group,
-    TransientNode,
-    Var,
-    add_group,
-    obs,
-    param,
-)
+from liesel.model.nodes import Calc, Data, Dist, Group, TransientNode, Var, obs, param
 
 
 @pytest.fixture
@@ -81,8 +71,8 @@ def y_var(data, beta, sigma) -> Generator:
     likelihood = Dist(tfd.Normal, loc=mu_hat, scale=sigma)
     y_var = obs(value=y, distribution=likelihood, name="y_var")
 
-    add_group("loc", X=x_var, beta=beta)
-    add_group("scale", scale=sigma)
+    Group("loc", X=x_var, beta=beta)
+    Group("scale", scale=sigma)
 
     yield y_var
 
@@ -339,6 +329,24 @@ class TestModel:
 
         with pytest.raises(RuntimeError, match="has no distribution"):
             GraphBuilder().add(x).build_model()
+
+    def test_build_after_transform(self) -> None:
+        lmbd = Var(1.0, name="lambda")
+        dist = Dist(tfd.Exponential, lmbd)
+        x = Var(1.0, dist, name="x")
+
+        gb = GraphBuilder()
+
+        model = gb.add(x).build_model()
+
+        _, vars = model.copy_nodes_and_vars()
+
+        gb.add(*vars.values())
+        gb.transform(vars["x"])
+        new_model = gb.build_model()
+
+        assert "x_transformed" in new_model.vars
+        assert new_model.vars["x_transformed"].value == pytest.approx(0.54132485)
 
 
 @pytest.mark.xfail

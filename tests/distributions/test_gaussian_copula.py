@@ -25,7 +25,7 @@ def test_scalar_batch():
     assert distribution.log_prob(x2) == approx(p2)
     assert distribution.log_prob(x3) == approx(p3)
 
-    x4 = jnp.row_stack([x1, x2, x3])
+    x4 = jnp.vstack([x1, x2, x3])
     p4 = jnp.array([p1, p2, p3])
 
     assert distribution.log_prob(x4) == approx(p4)

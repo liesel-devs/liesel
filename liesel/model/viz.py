@@ -146,9 +146,11 @@ def _add_labels(graph, axis, pos):
     """Adds labels to the figure."""
 
     labels = {
-        node: f"{type(node).__name__}\n{node.name}"
-        if node.name is not None
-        else node.role.name
+        node: (
+            f"{type(node).__name__}\n{node.name}"
+            if node.name is not None
+            else node.role.name
+        )
         for node in pos
     }
 

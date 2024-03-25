@@ -114,7 +114,7 @@ class Summary:
     additional_chain
         can be supplied to add more parameters to the summary output. Must be a position
         chain which matches chain and time dimension of the posterior chain as returned
-        by :meth:`.SamplingResults.get_posterior_samples`.
+        by :meth:`~.goose.SamplingResults.get_posterior_samples`.
     hdi_prob
         Level on which to return posterior highest density intervals.
     selected, deselected

@@ -42,7 +42,8 @@ class EpochType(IntEnum):
         """
         rhs = EpochType.INITIAL_VALUES < epoch_type
         lhs = epoch_type < EpochType.POSTERIOR
-        # using `*` instead of `and` for jax.jit
+
+        # using ``*``` instead of ``and`` for jax.jit
         # `cast` is a no-op used to satisfy mypy
         return cast(bool, lhs * rhs)
 

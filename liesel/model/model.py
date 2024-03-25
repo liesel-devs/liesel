@@ -215,6 +215,7 @@ class GraphBuilder:
         """
         nodes = self.nodes.copy()
         nodes.extend(node for var in self.vars for node in var.nodes)
+
         nodes = list(dict.fromkeys(nodes))
 
         if self.log_lik_node:
@@ -761,6 +762,13 @@ class GraphBuilder:
 
         # avoid name clashes
         self._set_missing_names()
+
+        if var.value_node in self.nodes:
+            raise RuntimeError(
+                f"{var.value_node.name} is already present in the GraphBuilder. "
+                + "If you have added some Node objects to the GraphBuilder, "
+                "try to add only the Var objects instead."
+            )
 
         # avoid infinite recursion
         var.auto_transform = False

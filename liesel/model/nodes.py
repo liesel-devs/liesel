@@ -4,6 +4,7 @@ Nodes and variables.
 
 from __future__ import annotations
 
+import logging
 import warnings
 import weakref
 from abc import ABC, abstractmethod
@@ -49,6 +50,8 @@ Distribution = Union[jd.Distribution, nd.Distribution]
 Bijector = Union[jb.Bijector, nb.Bijector]
 
 T = TypeVar("T", bound=Hashable)
+
+logger = logging.getLogger(__name__)
 
 
 def _unique_tuple(*args: Iterable[T]) -> tuple[T, ...]:
@@ -459,7 +462,7 @@ class InputGroup(TransientNode):
 
 class Data(Node):
     """
-    A :class:`.Node` subclass that holds constant data.
+    A :class:`.Node` subclass that holds constant values.
 
     Since the value represented by a data node does not change, it is always up-to-date.
     A common usecase for data nodes is to cache computed values.
@@ -581,6 +584,9 @@ class Calc(Node):
         automatically generated upon initialization of a :class:`.Model`.
     _needs_seed
         Whether the node needs a seed / PRNG key.
+    update_on_init
+        If ``True``, the calculator will try to evaluate its function upon \
+        initialization.
     **kwinputs
         Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
         will be converted to :class:`.Data` nodes. The values of these inputs will be
@@ -612,13 +618,12 @@ class Calc(Node):
     Examples
     --------
 
-    A simple calculator node, taking the exponential value of an input parameter. This
-    calculator node has not updated its value yet.
+    A simple calculator node, taking the exponential value of an input parameter.
 
     >>> log_scale = lsl.param(0.0, name="log_scale")
     >>> scale = lsl.Calc(jnp.exp, log_scale)
     >>> print(scale.value)
-    None
+    1.0
 
     The value of the calculator node is updated when :meth:`.Calc.update` is called.
 
@@ -662,10 +667,26 @@ class Calc(Node):
         *inputs: Any,
         _name: str = "",
         _needs_seed: bool = False,
+        update_on_init: bool = True,
         **kwinputs: Any,
     ):
         super().__init__(*inputs, **kwinputs, _name=_name, _needs_seed=_needs_seed)
         self._function = function
+
+        if update_on_init:
+            try:
+                self.update()
+            except Exception as e:
+                logger.warning(
+                    f"{self} was not updated during initialization, because the"
+                    f" following exception occured: {repr(e)}. See debug log for the"
+                    " full traceback."
+                )
+                logger.debug(
+                    f"{self} was not updated during initialization, because the"
+                    " following exception occured:",
+                    exc_info=e,
+                )
 
     @property
     def function(self) -> Callable[..., Any]:
