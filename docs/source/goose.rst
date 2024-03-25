@@ -40,6 +40,22 @@ in to using :class:`.Model`. Goose currently includes the following interfaces:
     ~liesel.experimental.pymc.PyMCInterface
 
 
+Find good starting values
+-------------------------
+
+It can often be beneficial to find good starting values to get your MCMC sampling scheme
+going. Goose provides the function :func:`.optim` for this purpose, which allows you
+to run stochastic gradient descent on a liesel model.
+
+.. autosummary::
+    :toctree: generated
+    :recursive:
+    :nosignatures:
+
+    ~liesel.goose.optim.optim
+    ~liesel.goose.optim.OptimResult
+
+
 Set up an MCMC Engine and draw posterior samples
 ------------------------------------------------
 
