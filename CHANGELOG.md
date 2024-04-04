@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [0.2.9] - unreleased
 
+- :construction: Pinned scipy version to <=1.12 (@jobrachem)
 - :construction: Handeled error in `liesel.model.model.transform` for duplicated nodes (#167, @GianmarcoCallegher)
 - :sparkles: `lsl.Calc` nodes will now try to evaluate their function upon initialization. This can make it much easier to spot errors early. The behavior can be turned off by passing `update_on_init=False`.  (#92, @jobrachem)
 
