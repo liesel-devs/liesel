@@ -106,34 +106,54 @@ class Stopper:
     max_iter: int
     patience: int
     atol: float = 1e-3
-    rtol: float = 1e-6
+    rtol: float = 1e-12
 
-    def stop_early(self, i: int, loss_history: Array):
+    def stop_early(self, i: int | Array, loss_history: Array):
         """
         Includes loss at iterations *before* i, but excluding i itself.
         """
         p = self.patience
-        lower = jnp.max(jnp.array([i - p, 0]))
+        lower = jnp.max(jnp.array([(i - 1) - p, 0]))
         recent_history = jax.lax.dynamic_slice(
             loss_history, start_indices=(lower,), slice_sizes=(p,)
         )
-        recent_changes = jnp.diff(recent_history)
 
-        abs_changes = jnp.abs(recent_changes)
-        rel_changes = jnp.abs(abs_changes / recent_history[:-1])
+        best_loss_in_recent = jnp.min(recent_history)
+        current_loss = loss_history[i]
 
-        no_abs_change = (abs_changes > self.atol).sum() < 1
-        no_rel_change = (rel_changes > self.rtol).sum() < 1
-        return no_abs_change & no_rel_change & (i > p)
+        change = current_loss - best_loss_in_recent
+        """
+        If current_loss is better than best_loss_in_recent, this is negative.
+        If current_loss is worse, this is positive.
+        """
+        rel_change = jnp.abs(jnp.abs(change) / best_loss_in_recent)
 
-    def stop_now(self, i: int, loss_history: Array):
+        no_improvement = change > self.atol
+        """
+        If the current loss has not improved upon the best loss in the patience
+        period, we always want to stop. However, we actually allow for slightly
+        worse losses, defined by the absolute tolerance here.
+        """
+
+        no_rel_change = ~no_improvement & (rel_change < self.rtol)
+        """
+        Let's say the current value *does* improve upon the best value within patience,
+        such that no_improvement=False.
+
+        In this case, if the improvement is very small compared to the best observed
+        loss in the patience period, we may still want to stop.
+        """
+
+        return (no_improvement | no_rel_change) & (i > p)
+
+    def stop_now(self, i: int | Array, loss_history: Array):
         """Whether optimization should stop now."""
         stop_early = self.stop_early(i=i, loss_history=loss_history)
         stop_max_iter = i >= self.max_iter
 
         return stop_early | stop_max_iter
 
-    def continue_(self, i: int, loss_history: Array):
+    def continue_(self, i: int | Array, loss_history: Array):
         """Whether optimization should continue (inverse of :meth:`.stop_now`)."""
         return ~self.stop_now(i=i, loss_history=loss_history)
 
@@ -401,13 +421,13 @@ def optim_flat(
 
     val = jax.lax.while_loop(
         cond_fun=lambda val: stopper.continue_(
-            val["while_i"], val["history"]["loss_test"]
+            jnp.clip(val["while_i"] - 1, a_min=0), val["history"]["loss_test"]
         ),
         body_fun=body_fun,
         init_val=init_val,
     )
 
-    max_iter = val["while_i"]
+    max_iter = val["while_i"] - 1
 
     # ---------------------------------------------------------------------------------
     # Set final position and model state
