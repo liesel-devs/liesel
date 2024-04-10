@@ -277,7 +277,11 @@ def optim_flat(
     batch_seed = (
         batch_seed if batch_seed is not None else np.random.randint(low=1, high=1000)
     )
-    model_test = model_test if model_test is not None else model
+
+    user_patience = stopper.patience
+    if model_test is None:
+        model_test = model_test if model_test is not None else model
+        stopper.patience = stopper.max_iter
 
     if optimizer is None:
         optimizer = optax.adam(learning_rate=1e-2)
@@ -407,7 +411,7 @@ def optim_flat(
 
     # ---------------------------------------------------------------------------------
     # Set final position and model state
-
+    stopper.patience = user_patience
     ibest = stopper.which_best_in_recent_history(
         i=max_iter, loss_history=val["history"]["loss_test"]
     )

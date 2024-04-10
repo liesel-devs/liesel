@@ -91,12 +91,24 @@ class TestOptim:
 
         stopper = Stopper(max_iter=1000, patience=30)
         result_batched_small = optim_flat(
-            model, ["coef", "log_sigma"], batch_size=10, batch_seed=1, stopper=stopper
+            model,
+            ["coef", "log_sigma"],
+            batch_size=10,
+            batch_seed=1,
+            stopper=stopper,
+            model_test=model,
         )
         result_batched_big = optim_flat(
-            model, ["coef", "log_sigma"], batch_size=40, batch_seed=1, stopper=stopper
+            model,
+            ["coef", "log_sigma"],
+            batch_size=40,
+            batch_seed=1,
+            stopper=stopper,
+            model_test=model,
         )
-        result_nonbatched = optim_flat(model, ["coef", "log_sigma"], stopper=stopper)
+        result_nonbatched = optim_flat(
+            model, ["coef", "log_sigma"], stopper=stopper, model_test=model
+        )
 
         assert result_batched_small.iteration != result_nonbatched.iteration
         assert result_batched_small.iteration != result_batched_big.iteration
@@ -172,6 +184,7 @@ def test_history_to_df_pruned(models):
         stopper=stopper,
         batch_seed=1,
         prune_history=True,
+        model_test=model,
     )
     df = history_to_df(result.history["position"])
 
