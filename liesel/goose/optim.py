@@ -172,6 +172,24 @@ class Stopper:
         return i - self.patience + imin
 
 
+def _validate_log_prob_decomposition(
+    interface: LieselInterface, position: Position, state: ModelState
+) -> None:
+    updated_state = interface.update_state(position, state)
+    log_prob = updated_state["_model_log_prob"].value
+
+    log_lik = updated_state["_model_log_lik"].value
+    log_prior = updated_state["_model_log_prior"].value
+
+    if not jnp.allclose(log_prob, log_lik + log_prior):
+        raise ValueError(
+            f"You model's {log_prob=} cannot correctly be decomposed into the"
+            f" {log_prior=} and the {log_lik=}. Check whether your observed variables"
+            " have the attribute observed=True and whether your parameter variables"
+            " have the attribute parameter=True."
+        )
+
+
 def optim_flat(
     model: Model,
     params: Sequence[str],
@@ -320,7 +338,19 @@ def optim_flat(
     interface_test._model.auto_update = False
 
     # ---------------------------------------------------------------------------------
+    # Validate model log prob decomposition
+    _validate_log_prob_decomposition(
+        interface_train, position=position, state=model.state
+    )
+    _validate_log_prob_decomposition(
+        interface_test, position=position, state=model_validation.state
+    )
+
+    # ---------------------------------------------------------------------------------
     # Define loss function(s)
+
+    likelihood_scalar = n_train / batch_size
+    likelihood_scalar_validation = n_train / n_test
 
     def _batched_neg_log_prob(position: Position, batch_indices: Array | None = None):
         if batch_indices is not None:
@@ -328,7 +358,10 @@ def optim_flat(
             position = position | batched_observed  # type: ignore
 
         updated_state = interface_train.update_state(position, model.state)
-        return -updated_state["_model_log_prob"].value
+        log_lik = likelihood_scalar * updated_state["_model_log_lik"].value
+        log_prior = updated_state["_model_log_prior"].value
+        log_prob = log_lik + log_prior
+        return -log_prob
 
     def _neg_log_prob_train(position: Position):
         updated_state = interface_test.update_state(position, model.state)
@@ -336,7 +369,10 @@ def optim_flat(
 
     def _neg_log_prob_test(position: Position):
         updated_state = interface_test.update_state(position, model_validation.state)
-        return -updated_state["_model_log_prob"].value
+        log_lik = likelihood_scalar_validation * updated_state["_model_log_lik"].value
+        log_prior = updated_state["_model_log_prior"].value
+        log_prob = log_lik + log_prior
+        return -log_prob
 
     neg_log_prob_grad = jax.grad(_batched_neg_log_prob, argnums=0)
 
