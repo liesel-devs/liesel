@@ -135,10 +135,10 @@ class TestOptim:
 
         assert not jnp.allclose(
             result_train_test.history["loss_train"],
-            result_train_test.history["loss_test"],
+            result_train_test.history["loss_validation"],
         )
         assert jnp.allclose(
-            result_train.history["loss_train"], result_train.history["loss_test"]
+            result_train.history["loss_train"], result_train.history["loss_validation"]
         )
 
 

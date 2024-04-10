@@ -345,7 +345,7 @@ def optim_flat(
 
     history: dict[str, Any] = dict()
     history["loss_train"] = jnp.zeros(shape=stopper.max_iter)
-    history["loss_test"] = jnp.zeros(shape=stopper.max_iter)
+    history["loss_validation"] = jnp.zeros(shape=stopper.max_iter)
 
     if save_position_history:
         history["position"] = {
@@ -356,9 +356,11 @@ def optim_flat(
         history["position"] = None
 
     loss_train_start = _neg_log_prob_train(position=position)
-    loss_test_start = _neg_log_prob_test(position=position)
+    loss_validation_start = _neg_log_prob_test(position=position)
     history["loss_train"] = history["loss_train"].at[0].set(loss_train_start)
-    history["loss_test"] = history["loss_test"].at[0].set(loss_test_start)
+    history["loss_validation"] = (
+        history["loss_validation"].at[0].set(loss_validation_start)
+    )
 
     # ---------------------------------------------------------------------------------
     # Initialize while loop carry dictionary
@@ -402,9 +404,9 @@ def optim_flat(
             val["history"]["loss_train"].at[val["while_i"]].set(loss_train)
         )
 
-        loss_test = _neg_log_prob_test(val["position"])
-        val["history"]["loss_test"] = (
-            val["history"]["loss_test"].at[val["while_i"]].set(loss_test)
+        loss_validation = _neg_log_prob_test(val["position"])
+        val["history"]["loss_validation"] = (
+            val["history"]["loss_validation"].at[val["while_i"]].set(loss_validation)
         )
 
         if save_position_history:
@@ -421,7 +423,7 @@ def optim_flat(
 
     val = jax.lax.while_loop(
         cond_fun=lambda val: stopper.continue_(
-            jnp.clip(val["while_i"] - 1, a_min=0), val["history"]["loss_test"]
+            jnp.clip(val["while_i"] - 1, a_min=0), val["history"]["loss_validation"]
         ),
         body_fun=body_fun,
         init_val=init_val,
@@ -433,7 +435,7 @@ def optim_flat(
     # Set final position and model state
     stopper.patience = user_patience
     ibest = stopper.which_best_in_recent_history(
-        i=max_iter, loss_history=val["history"]["loss_test"]
+        i=max_iter, loss_history=val["history"]["loss_validation"]
     )
 
     if restore_best_position:
@@ -451,7 +453,9 @@ def optim_flat(
     val["history"]["loss_train"] = (
         val["history"]["loss_train"].at[max_iter:].set(jnp.nan)
     )
-    val["history"]["loss_test"] = val["history"]["loss_test"].at[max_iter:].set(jnp.nan)
+    val["history"]["loss_validation"] = (
+        val["history"]["loss_validation"].at[max_iter:].set(jnp.nan)
+    )
     if save_position_history:
         for name, value in val["history"]["position"].items():
             val["history"]["position"][name] = value.at[max_iter:, ...].set(jnp.nan)
@@ -461,7 +465,7 @@ def optim_flat(
 
     if prune_history:
         val["history"]["loss_train"] = val["history"]["loss_train"][:max_iter]
-        val["history"]["loss_test"] = val["history"]["loss_test"][:max_iter]
+        val["history"]["loss_validation"] = val["history"]["loss_validation"][:max_iter]
         if save_position_history:
             for name, value in val["history"]["position"].items():
                 val["history"]["position"][name] = value[:max_iter, ...]
