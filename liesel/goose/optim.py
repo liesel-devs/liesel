@@ -191,7 +191,7 @@ def _validate_log_prob_decomposition(
 
 
 def optim_flat(
-    model: Model,
+    model_train: Model,
     params: Sequence[str],
     optimizer: optax.GradientTransformation | None = None,
     stopper: Stopper = Stopper(max_iter=10_000, patience=10),
@@ -318,20 +318,20 @@ def optim_flat(
 
     user_patience = stopper.patience
     if model_validation is None:
-        model_validation = model
+        model_validation = model_train
         stopper.patience = stopper.max_iter
 
     if optimizer is None:
         optimizer = optax.adam(learning_rate=1e-2)
 
-    n_train = _find_sample_size(model)
+    n_train = _find_sample_size(model_train)
     n_validation = _find_sample_size(model_validation)
-    observed = _find_observed(model)
+    observed = _find_observed(model_train)
 
     batch_size = batch_size if batch_size is not None else n_train
 
-    interface_train = LieselInterface(model)
-    position = interface_train.extract_position(params, model.state)
+    interface_train = LieselInterface(model_train)
+    position = interface_train.extract_position(params, model_train.state)
     interface_train._model.auto_update = False
 
     interface_validation = LieselInterface(model_validation)
@@ -340,7 +340,7 @@ def optim_flat(
     # ---------------------------------------------------------------------------------
     # Validate model log prob decomposition
     _validate_log_prob_decomposition(
-        interface_train, position=position, state=model.state
+        interface_train, position=position, state=model_train.state
     )
     _validate_log_prob_decomposition(
         interface_validation, position=position, state=model_validation.state
@@ -357,14 +357,14 @@ def optim_flat(
             batched_observed = batched_nodes(observed, batch_indices)
             position = position | batched_observed  # type: ignore
 
-        updated_state = interface_train.update_state(position, model.state)
+        updated_state = interface_train.update_state(position, model_train.state)
         log_lik = likelihood_scalar * updated_state["_model_log_lik"].value
         log_prior = updated_state["_model_log_prior"].value
         log_prob = log_lik + log_prior
         return -log_prob
 
     def _neg_log_prob_train(position: Position):
-        updated_state = interface_validation.update_state(position, model.state)
+        updated_state = interface_validation.update_state(position, model_train.state)
         return -updated_state["_model_log_prob"].value
 
     def _neg_log_prob_validation(position: Position):
@@ -483,7 +483,7 @@ def optim_flat(
     else:
         final_position = val["position"]
 
-    final_state = interface_train.update_state(final_position, model.state)
+    final_state = interface_train.update_state(final_position, model_train.state)
 
     # ---------------------------------------------------------------------------------
     # Set unused values in history to nan
