@@ -93,14 +93,15 @@ class Stopper:
     max_iter
         The maximum number of optimization steps.
     patience
-        Early stop happens only, if there was no improvement for the number of patience
-        iterations.
+        Early stopping happens only, if there was no improvement for the number of\
+        patience iterations.
     atol
-        The absolute tolerance for early stopping. If the change in the negative log
-        probability is smaller than this value, the optimization stops.
+        The absolute tolerance for early stopping. If the change in the negative log\
+        probability (compared to the best value observed within the patience period)\
+        is smaller than this value, optimization stops early.
     rtol
-        The relative tolerance for early stopping. If the relative change in the
-        negative log probability is smaller than this value, the optimization stops.
+        The relative tolerance for early stopping. If the relative absolute change in \
+        the negative log probability is smaller than this value, the optimization stops.
     """
 
     max_iter: int
