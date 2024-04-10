@@ -6,10 +6,12 @@ import numpy as np
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
+import liesel.goose as gs
 import liesel.model as lsl
 from liesel.goose.optim import (
     Stopper,
     _generate_batch_indices,
+    _validate_log_prob_decomposition,
     history_to_df,
     optim_flat,
 )
@@ -140,6 +142,94 @@ class TestOptim:
         assert jnp.allclose(
             result_train.history["loss_train"], result_train.history["loss_validation"]
         )
+
+
+class TestLogProbDecompositionValidation:
+    def test_const_priors(self):
+        x = lsl.obs(xs, name="x")
+        coef = lsl.param(jnp.zeros(2), name="coef")
+        mu = lsl.Var(lsl.Calc(jnp.dot, x, coef), name="mu")
+        log_sigma = lsl.Var(2.0, name="log_sigma")
+        sigma = lsl.Var(lsl.Calc(jnp.exp, log_sigma), name="sigma")
+
+        ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
+        y = lsl.obs(ys, ydist, name="y")
+
+        gb = lsl.GraphBuilder().add(y)
+        model = gb.build_model()
+
+        interface = gs.LieselInterface(model)
+        position = interface.extract_position(["coef", "log_sigma"], model.state)
+
+        assert _validate_log_prob_decomposition(interface, position, model.state)
+
+    def test_prior(self):
+        x = lsl.obs(xs, name="x")
+        coef = lsl.param(
+            jnp.zeros(2),
+            distribution=lsl.Dist(tfd.Normal, loc=0.0, scale=10.0),
+            name="coef",
+        )
+        mu = lsl.Var(lsl.Calc(jnp.dot, x, coef), name="mu")
+        log_sigma = lsl.Var(2.0, name="log_sigma")
+        sigma = lsl.Var(lsl.Calc(jnp.exp, log_sigma), name="sigma")
+
+        ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
+        y = lsl.obs(ys, ydist, name="y")
+
+        gb = lsl.GraphBuilder().add(y)
+        model = gb.build_model()
+
+        interface = gs.LieselInterface(model)
+        position = interface.extract_position(["coef", "log_sigma"], model.state)
+
+        assert _validate_log_prob_decomposition(interface, position, model.state)
+
+    def test_prior_but_not_param(self):
+        x = lsl.obs(xs, name="x")
+        coef = lsl.Var(
+            jnp.zeros(2),
+            distribution=lsl.Dist(tfd.Normal, loc=0.0, scale=10.0),
+            name="coef",
+        )
+        mu = lsl.Var(lsl.Calc(jnp.dot, x, coef), name="mu")
+        log_sigma = lsl.Var(2.0, name="log_sigma")
+        sigma = lsl.Var(lsl.Calc(jnp.exp, log_sigma), name="sigma")
+
+        ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
+        y = lsl.obs(ys, ydist, name="y")
+
+        gb = lsl.GraphBuilder().add(y)
+        model = gb.build_model()
+
+        interface = gs.LieselInterface(model)
+        position = interface.extract_position(["coef", "log_sigma"], model.state)
+
+        with pytest.raises(ValueError, match="cannot correctly be decomposed"):
+            _validate_log_prob_decomposition(interface, position, model.state)
+
+    def test_not_obs(self):
+        x = lsl.obs(xs, name="x")
+        coef = lsl.param(
+            jnp.zeros(2),
+            distribution=lsl.Dist(tfd.Normal, loc=0.0, scale=10.0),
+            name="coef",
+        )
+        mu = lsl.Var(lsl.Calc(jnp.dot, x, coef), name="mu")
+        log_sigma = lsl.Var(2.0, name="log_sigma")
+        sigma = lsl.Var(lsl.Calc(jnp.exp, log_sigma), name="sigma")
+
+        ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
+        y = lsl.Var(ys, ydist, name="y")
+
+        gb = lsl.GraphBuilder().add(y)
+        model = gb.build_model()
+
+        interface = gs.LieselInterface(model)
+        position = interface.extract_position(["coef", "log_sigma"], model.state)
+
+        with pytest.raises(ValueError, match="cannot correctly be decomposed"):
+            _validate_log_prob_decomposition(interface, position, model.state)
 
 
 def test_position_history_to_df(models):

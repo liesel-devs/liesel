@@ -175,7 +175,7 @@ class Stopper:
 
 def _validate_log_prob_decomposition(
     interface: LieselInterface, position: Position, state: ModelState
-) -> None:
+) -> bool:
     updated_state = interface.update_state(position, state)
     log_prob = updated_state["_model_log_prob"].value
 
@@ -189,6 +189,8 @@ def _validate_log_prob_decomposition(
             " have the attribute observed=True and whether your parameter variables"
             " have the attribute parameter=True."
         )
+
+    return True
 
 
 def optim_flat(
