@@ -493,9 +493,11 @@ def history_to_df(history: dict[str, Array]) -> pd.DataFrame:
     """
     data: dict[str, Array] = dict()
 
-    position_history = history.pop("position", None)
+    position_history = history.get("position", None)
 
     for name, value in history.items():
+        if name == "position":
+            continue
         data |= array_to_dict(value, names_prefix=name)
 
     if position_history is not None:
