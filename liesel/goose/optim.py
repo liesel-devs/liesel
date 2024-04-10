@@ -160,7 +160,7 @@ def optim_flat(
     batch_size: int | None = None,
     batch_seed: int | None = None,
     save_position_history: bool = True,
-    model_test: Model | None = None,
+    model_validation: Model | None = None,
     restore_best_position: bool = True,
     prune_history: bool = True,
 ) -> OptimResult:
@@ -193,8 +193,8 @@ def optim_flat(
         shuffling in this step.
     save_position_history
         If ``True``, the position history is saved to the results object.
-    model_test
-        If supplied, this model serves as a test model, which means that early\
+    model_validation
+        If supplied, this model serves as a validation model, which means that early\
         stopping is based on the negative log likelihood evaluated using the observed\
         data in this model. If ``None``, the training data are used instead.
     restore_best_position
@@ -279,15 +279,15 @@ def optim_flat(
     )
 
     user_patience = stopper.patience
-    if model_test is None:
-        model_test = model_test if model_test is not None else model
+    if model_validation is None:
+        model_validation = model_validation if model_validation is not None else model
         stopper.patience = stopper.max_iter
 
     if optimizer is None:
         optimizer = optax.adam(learning_rate=1e-2)
 
     n_train = _find_sample_size(model)
-    n_test = _find_sample_size(model_test)
+    n_test = _find_sample_size(model_validation)
     observed = _find_observed(model)
 
     batch_size = batch_size if batch_size is not None else n_train
@@ -296,7 +296,7 @@ def optim_flat(
     position = interface_train.extract_position(params, model.state)
     interface_train._model.auto_update = False
 
-    interface_test = LieselInterface(model_test)
+    interface_test = LieselInterface(model_validation)
     interface_test._model.auto_update = False
 
     # ---------------------------------------------------------------------------------
@@ -315,7 +315,7 @@ def optim_flat(
         return -updated_state["_model_log_prob"].value
 
     def _neg_log_prob_test(position: Position):
-        updated_state = interface_test.update_state(position, model_test.state)
+        updated_state = interface_test.update_state(position, model_validation.state)
         return -updated_state["_model_log_prob"].value
 
     neg_log_prob_grad = jax.grad(_batched_neg_log_prob, argnums=0)

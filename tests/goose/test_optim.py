@@ -96,7 +96,7 @@ class TestOptim:
             batch_size=10,
             batch_seed=1,
             stopper=stopper,
-            model_test=model,
+            model_validation=model,
         )
         result_batched_big = optim_flat(
             model,
@@ -104,10 +104,10 @@ class TestOptim:
             batch_size=40,
             batch_seed=1,
             stopper=stopper,
-            model_test=model,
+            model_validation=model,
         )
         result_nonbatched = optim_flat(
-            model, ["coef", "log_sigma"], stopper=stopper, model_test=model
+            model, ["coef", "log_sigma"], stopper=stopper, model_validation=model
         )
 
         assert result_batched_small.iteration != result_nonbatched.iteration
@@ -127,7 +127,7 @@ class TestOptim:
             ["coef", "log_sigma"],
             batch_size=None,
             stopper=stopper,
-            model_test=model_test,
+            model_validation=model_test,
         )
 
         assert result_train.n_train == result_train.n_test
@@ -184,7 +184,7 @@ def test_history_to_df_pruned(models):
         stopper=stopper,
         batch_seed=1,
         prune_history=True,
-        model_test=model,
+        model_validation=model,
     )
     df = history_to_df(result.history["position"])
 
