@@ -47,7 +47,7 @@ class OptimResult:
     """Maximum number of iterations."""
     n_train: int
     """Number of training observations."""
-    n_test: int
+    n_validation: int
     """Number of test observations."""
 
 
@@ -234,7 +234,7 @@ def optim_flat(
     model_validation
         If supplied, this model serves as a validation model, which means that early\
         stopping is based on the negative log likelihood evaluated using the observed\
-        data in this model. If ``None``, the training data are used instead.
+        data in this model. If ``None``, no early stopping is conducted.
     restore_best_position
         If ``True``, the position with the lowest loss within the patience defined\
         by the supplied :class:`.Stopper` is restored as the final postion. If \
@@ -318,14 +318,14 @@ def optim_flat(
 
     user_patience = stopper.patience
     if model_validation is None:
-        model_validation = model_validation if model_validation is not None else model
+        model_validation = model
         stopper.patience = stopper.max_iter
 
     if optimizer is None:
         optimizer = optax.adam(learning_rate=1e-2)
 
     n_train = _find_sample_size(model)
-    n_test = _find_sample_size(model_validation)
+    n_validation = _find_sample_size(model_validation)
     observed = _find_observed(model)
 
     batch_size = batch_size if batch_size is not None else n_train
@@ -334,8 +334,8 @@ def optim_flat(
     position = interface_train.extract_position(params, model.state)
     interface_train._model.auto_update = False
 
-    interface_test = LieselInterface(model_validation)
-    interface_test._model.auto_update = False
+    interface_validation = LieselInterface(model_validation)
+    interface_validation._model.auto_update = False
 
     # ---------------------------------------------------------------------------------
     # Validate model log prob decomposition
@@ -343,14 +343,14 @@ def optim_flat(
         interface_train, position=position, state=model.state
     )
     _validate_log_prob_decomposition(
-        interface_test, position=position, state=model_validation.state
+        interface_validation, position=position, state=model_validation.state
     )
 
     # ---------------------------------------------------------------------------------
     # Define loss function(s)
 
     likelihood_scalar = n_train / batch_size
-    likelihood_scalar_validation = n_train / n_test
+    likelihood_scalar_validation = n_train / n_validation
 
     def _batched_neg_log_prob(position: Position, batch_indices: Array | None = None):
         if batch_indices is not None:
@@ -364,11 +364,13 @@ def optim_flat(
         return -log_prob
 
     def _neg_log_prob_train(position: Position):
-        updated_state = interface_test.update_state(position, model.state)
+        updated_state = interface_validation.update_state(position, model.state)
         return -updated_state["_model_log_prob"].value
 
-    def _neg_log_prob_test(position: Position):
-        updated_state = interface_test.update_state(position, model_validation.state)
+    def _neg_log_prob_validation(position: Position):
+        updated_state = interface_validation.update_state(
+            position, model_validation.state
+        )
         log_lik = likelihood_scalar_validation * updated_state["_model_log_lik"].value
         log_prior = updated_state["_model_log_prior"].value
         log_prob = log_lik + log_prior
@@ -392,7 +394,7 @@ def optim_flat(
         history["position"] = None
 
     loss_train_start = _neg_log_prob_train(position=position)
-    loss_validation_start = _neg_log_prob_test(position=position)
+    loss_validation_start = _neg_log_prob_validation(position=position)
     history["loss_train"] = history["loss_train"].at[0].set(loss_train_start)
     history["loss_validation"] = (
         history["loss_validation"].at[0].set(loss_validation_start)
@@ -440,7 +442,7 @@ def optim_flat(
             val["history"]["loss_train"].at[val["while_i"]].set(loss_train)
         )
 
-        loss_validation = _neg_log_prob_test(val["position"])
+        loss_validation = _neg_log_prob_validation(val["position"])
         val["history"]["loss_validation"] = (
             val["history"]["loss_validation"].at[val["while_i"]].set(loss_validation)
         )
@@ -517,7 +519,7 @@ def optim_flat(
         history=val["history"],
         max_iter=stopper.max_iter,
         n_train=n_train,
-        n_test=n_test,
+        n_validation=n_validation,
     )
 
     return result

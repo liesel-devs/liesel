@@ -114,28 +114,28 @@ class TestOptim:
         assert result_batched_small.iteration != result_batched_big.iteration
         assert result_nonbatched.iteration != result_batched_big.iteration
 
-    def test_optim_flat_train_test(self, models):
-        model, model_test = models
+    def test_optim_flat_train_validation(self, models):
+        model, model_validation = models
         stopper = Stopper(max_iter=1_000, patience=30)
 
         result_train = optim_flat(
             model, ["coef", "log_sigma"], batch_size=None, stopper=stopper
         )
 
-        result_train_test = optim_flat(
+        result_train_validation = optim_flat(
             model,
             ["coef", "log_sigma"],
             batch_size=None,
             stopper=stopper,
-            model_validation=model_test,
+            model_validation=model_validation,
         )
 
-        assert result_train.n_train == result_train.n_test
-        assert result_train_test.n_train != result_train_test.n_test
+        assert result_train.n_train == result_train.n_validation
+        assert result_train_validation.n_train != result_train_validation.n_validation
 
         assert not jnp.allclose(
-            result_train_test.history["loss_train"],
-            result_train_test.history["loss_validation"],
+            result_train_validation.history["loss_train"],
+            result_train_validation.history["loss_validation"],
         )
         assert jnp.allclose(
             result_train.history["loss_train"], result_train.history["loss_validation"]
