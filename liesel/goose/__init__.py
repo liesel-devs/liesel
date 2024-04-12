@@ -18,6 +18,7 @@ from .iwls import IWLSKernel
 from .mh_kernel import MHKernel, MHProposal
 from .models import DataClassModel, DictModel
 from .nuts import NUTSKernel
+from .optim import OptimResult, Stopper, history_to_df, optim_flat
 from .rw import RWKernel
 from .summary_m import Summary
 from .summary_viz import (
@@ -50,6 +51,8 @@ __all__ = [
     "NamedTupleInterface",
     "NUTSKernel",
     "Position",
+    "history_to_df",
+    "Stopper",
     "RWKernel",
     "Summary",
     "SamplingResults",
@@ -60,4 +63,6 @@ __all__ = [
     "plot_scatter",
     "plot_pairs",
     "stan_epochs",
+    "optim_flat",
+    "OptimResult",
 ]
