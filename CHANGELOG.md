@@ -2,7 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.2.9] - unreleased
+## [0.2.10] - [unreleased]
+
+
+## [0.2.9] - 2024-04-04
 
 - :construction: Pinned scipy version to <=1.12 (@jobrachem)
 - :construction: Handeled error in `liesel.model.model.transform` for duplicated nodes (#167, @GianmarcoCallegher)
