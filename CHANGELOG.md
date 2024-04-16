@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [0.2.10] - [unreleased]
 
+- :construction: Update logging setup (#187, @jobrachem)
 
 ## [0.2.9] - 2024-04-04
 
