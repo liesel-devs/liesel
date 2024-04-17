@@ -26,7 +26,7 @@ def setup_logger() -> None:
     # This is the level that will in principle be handled by the logger.
     # If it is set, for example, to logging.WARNING, this logger will never
     # emit messages of a level below warning
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
 
     # By setting this to False, we prevent the Liesel log messages from being passed on
     # to the root logger. This prevents duplication of the log messages
@@ -34,7 +34,6 @@ def setup_logger() -> None:
 
     # This is the default handler that we set for our log messages
     handler = logging.StreamHandler()
-    handler.setLevel(logging.INFO)
 
     # We define the format of log messages for this handler
     formatter = logging.Formatter("%(name)s - %(levelname)s - %(message)s")
