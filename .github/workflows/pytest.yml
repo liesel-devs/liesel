@@ -27,7 +27,7 @@ jobs:
         run: pytest --cov=liesel --run-mcmc
 
       - name: Create coverage badge
-        uses: tj-actions/coverage-badge-py@v1.8
+        uses: tj-actions/coverage-badge-py@v2
         with:
           output: coverage-new.svg
 
