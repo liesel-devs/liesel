@@ -3,8 +3,8 @@ name: docs
 on:
   push:
     branches: [main]
-  release:
-    types: [published]
+  pull_request:
+    branches: [main]
 
 jobs:
   docs:
@@ -44,16 +44,3 @@ jobs:
         uses: quarto-dev/quarto-actions/render@v2
         with:
           path: docs/source/tutorials/qmd
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: tutorials-for-${{ github.sha }}
-          path: docs/source/tutorials/md
-
-      - name: Trigger RTDs build
-        uses: dfm/rtds-action@v1
-        with:
-          webhook_url: ${{ secrets.RTDS_WEBHOOK_URL }}
-          webhook_token: ${{ secrets.RTDS_WEBHOOK_TOKEN }}
-          commit_ref: ${{ github.ref }}
