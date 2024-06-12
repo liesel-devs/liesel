@@ -248,7 +248,7 @@ lsl.plot_vars(model)
 
 When we use an inverse gamma prior for $\tau^2$, we can set up a Gibbs sampler
 to sample from the posterior distribution of $\tau^2$. In Liesel, we can
-conveniently define a {class}`.GibbsKernel` simply by supplying a stateless
+conveniently define a {class}`~.goose.GibbsKernel` simply by supplying a stateless
 `transition` function and the name of the corresponding variable. Groups can
 help us to make this process modular, because they provide an interface with
 reliable and human-readable names for our variables.
