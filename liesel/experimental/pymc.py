@@ -85,7 +85,7 @@ try:
         pytensor.config.floatX = "float32"
 
     import pymc as pm
-    from pymc.sampling_jax import get_jaxified_graph, get_jaxified_logp
+    from pymc.sampling.jax import get_jaxified_graph, get_jaxified_logp
 except ImportError as e:
     raise ImportError(
         f"PyMC must be installed to use this module. Original exception: {e}"
