@@ -3,7 +3,7 @@
 #########################
 
 # ignore compiled tutorials
-/docs/source/tutorials/
+# /docs/source/tutorials/
 
 #########################
 ####     General    #####
