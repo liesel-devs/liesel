@@ -392,6 +392,7 @@ don’t see an output right away. The subsequent samples will be generated
 much faster. Finally, we can extract the results and print a summary
 table.
 
+
 ``` python
 engine.sample_all_epochs()
 results = engine.get_results()
