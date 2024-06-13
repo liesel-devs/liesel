@@ -507,12 +507,12 @@ class GraphBuilder:
 
         for node in nodes:
             try:
-                wrappers = jax.tree_map(ConversionWrapper, node.value)
+                wrappers = jax.tree.map(ConversionWrapper, node.value)
 
-                value = jax.tree_map(lambda x: x.value, wrappers)
+                value = jax.tree.map(lambda x: x.value, wrappers)
                 node.value = value  # type: ignore # data node
 
-                converted = jax.tree_map(lambda x: x.converted, wrappers)
+                converted = jax.tree.map(lambda x: x.converted, wrappers)
 
                 if any(jax.tree_util.tree_flatten(converted)[0]):
                     logger.info(f"Converted dtype of {repr(node)}.value")

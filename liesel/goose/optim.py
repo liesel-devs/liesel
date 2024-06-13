@@ -452,7 +452,7 @@ def optim_flat(
 
         if save_position_history:
             pos_hist = val["history"]["position"]
-            val["history"]["position"] = jax.tree_map(
+            val["history"]["position"] = jax.tree.map(
                 lambda d, pos: d.at[val["while_i"]].set(pos), pos_hist, val["position"]
             )
 
@@ -464,7 +464,7 @@ def optim_flat(
 
     val = jax.lax.while_loop(
         cond_fun=lambda val: stopper.continue_(
-            jnp.clip(val["while_i"] - 1, a_min=0), val["history"]["loss_validation"]
+            jnp.clip(val["while_i"] - 1, min=0), val["history"]["loss_validation"]
         ),
         body_fun=body_fun,
         init_val=init_val,

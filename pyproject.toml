@@ -19,11 +19,3 @@ follow_imports = "skip"
 [tool.pytest.ini_options]
 testpaths = "tests"
 # only report deprecation / pending deprecation / future warnings from liesel
-filterwarnings = [
-    "ignore::DeprecationWarning",
-    "ignore::PendingDeprecationWarning",
-    "ignore::FutureWarning",
-    "ignore:.*float64:UserWarning:pytensor.link.jax.dispatch",
-    "ignore:.*experimental:UserWarning:pymc.sampling.jax",
-    "default:::liesel"
-]

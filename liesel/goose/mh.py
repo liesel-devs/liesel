@@ -57,7 +57,7 @@ def mh_step(
         lambda: (log_acc_prob, 0),
     )
 
-    acceptance_prob = jnp.clip(jnp.exp(log_acc_prob), a_max=1.0)
+    acceptance_prob = jnp.clip(jnp.exp(log_acc_prob), max=1.0)
     do_accept = jax.random.uniform(prng_key) <= acceptance_prob
 
     info = DefaultTransitionInfo(error_code, acceptance_prob, do_accept)

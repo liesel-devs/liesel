@@ -114,10 +114,10 @@ def test_sample_info(result: SamplingResults):
 
 def test_df_sample_info(result: SamplingResults):
     summary = Summary(result, selected=["baz"]).to_dataframe()
-    assert summary["sample_size"][0] == 3 * 250
+    assert summary["sample_size"].iloc[0] == 3 * 250
 
     summary = Summary(result, per_chain=True, selected=["baz"]).to_dataframe()
-    assert summary["sample_size"][0] == 250
+    assert summary["sample_size"].iloc[0] == 250
 
 
 def test_error_summary(result: SamplingResults):
