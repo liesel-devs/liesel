@@ -137,7 +137,7 @@ def delta_transition_fn(prng_key, model_state):
     return state
 ```
 
-Finally, we can sample from the posterior as we do for any other Liesel model. In this case, we use a {class}`.GibbsKernel` for $\boldsymbol{\delta}$ and a {class}`.NUTSKernel` both for the remaining parameters.
+Finally, we can sample from the posterior as we do for any other Liesel model. In this case, we use a {class}`~.goose.GibbsKernel` for $\boldsymbol{\delta}$ and a {class}`~.goose.NUTSKernel` both for the remaining parameters.
 
 ```{python}
 #| label: model-init-sampling

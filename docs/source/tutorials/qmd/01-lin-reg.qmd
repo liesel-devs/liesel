@@ -176,7 +176,7 @@ gb
 
 Since all other nodes are directly or indirectly connected to this node, the GraphBuilder will
 add those nodes automatically when it builds the model. Let us do that now with a call to
-{meth}`.build_model()`. The model returned by the builder provides a couple of convenience features, for example, to evaluate the model log-probability, or to update the nodes in a topological order.
+{meth}`~.GraphBuilder.build_model()`. The model returned by the builder provides a couple of convenience features, for example, to evaluate the model log-probability, or to update the nodes in a topological order.
 
 ```{python}
 #| label: model
@@ -237,9 +237,9 @@ For most inference algorithms, we need the gradient of the model log-probability
 
 ## MCMC inference with Goose
 
-This section illustrates the key features of Liesel's MCMC framework Goose. To use Goose, the user needs to select one or more sampling algorithms, called (transition) kernels, for the model parameters. Goose comes with a number of standard kernels such as Hamiltonian Monte Carlo ({class}`.HMCKernel`) or the No U-Turn Sampler ({class}`.NUTSKernel`). Multiple kernels can be combined in one sampling scheme and assigned to different parameters, and the user can implement their own problem-specific kernels, as long as they are compatible with the {class}`.Kernel` protocol. In any case, the user is responsible for constructing a *mathematically valid* algorithm. Refer to [MCMC Sampling (liesel.goose)](goose_overview) for an overview of important Goose functionality.
+This section illustrates the key features of Liesel's MCMC framework Goose. To use Goose, the user needs to select one or more sampling algorithms, called (transition) kernels, for the model parameters. Goose comes with a number of standard kernels such as Hamiltonian Monte Carlo ({class}`~.goose.HMCKernel`) or the No U-Turn Sampler ({class}`~.goose.NUTSKernel`). Multiple kernels can be combined in one sampling scheme and assigned to different parameters, and the user can implement their own problem-specific kernels, as long as they are compatible with the {class}`.Kernel` protocol. In any case, the user is responsible for constructing a *mathematically valid* algorithm. Refer to [MCMC Sampling (liesel.goose)](goose_overview) for an overview of important Goose functionality.
 
-We start with a very simple sampling scheme, keeping $\sigma^2$ fixed at the true value and using a NUTS sampler for $\boldsymbol{\beta}$. The kernels are added to a {class}`.Engine`, which coordinates the sampling, including the kernel tuning during the warmup, and the MCMC bookkeeping. The engine can be configured step by step with a {class}`.EngineBuilder`. We need to inform the builder about the model, the initial values, the kernels, and the sampling duration. Finally, we can call the {meth}`.EngineBuilder.build` method, which returns a fully configured engine.
+We start with a very simple sampling scheme, keeping $\sigma^2$ fixed at the true value and using a NUTS sampler for $\boldsymbol{\beta}$. The kernels are added to a {class}`~.goose.Engine`, which coordinates the sampling, including the kernel tuning during the warmup, and the MCMC bookkeeping. The engine can be configured step by step with a {class}`.EngineBuilder`. We need to inform the builder about the model, the initial values, the kernels, and the sampling duration. Finally, we can call the {meth}`.EngineBuilder.build` method, which returns a fully configured engine.
 
 ```{python}
 #| label: goose-MCMC-engine-setup
@@ -257,7 +257,7 @@ builder.set_duration(warmup_duration=1000, posterior_duration=1000)
 engine = builder.build()
 ```
 
-Now we can run the MCMC algorithm for the specified duration by calling the {meth}`.Engine.sample_all_epochs` method. In a first step, the model and the sampling algorithm are compiled, so don't worry if you don't see an output right away. The subsequent samples will be generated much faster. Finally, we can extract the results and print a summary table.
+Now we can run the MCMC algorithm for the specified duration by calling the {meth}`~.goose.Engine.sample_all_epochs` method. In a first step, the model and the sampling algorithm are compiled, so don't worry if you don't see an output right away. The subsequent samples will be generated much faster. Finally, we can extract the results and print a summary table.
 
 ```{python}
 #| label: sampling
@@ -267,7 +267,7 @@ summary = gs.Summary(results)
 summary
 ```
 
-If we need more samples, we can append another epoch to the engine and sample it by calling either the {meth}`.sample_next_epoch` or the {meth}`.sample_all_epochs` method. The epochs are described by {class}`.EpochConfig` objects.
+If we need more samples, we can append another epoch to the engine and sample it by calling either the {meth}`~.goose.Engine.sample_next_epoch` or the {meth}`~.goose.Engine.sample_all_epochs` method. The epochs are described by {class}`.EpochConfig` objects.
 
 ```{python}
 #| label: append-epoch
@@ -321,7 +321,7 @@ engine = builder.build()
 engine.sample_all_epochs()
 ```
 
-Goose provides a couple of convenient numerical and graphical summary tools. The {class}`.Summary` class computes several summary statistics that can be either accessed programmatically or displayed as a summary table.
+Goose provides a couple of convenient numerical and graphical summary tools. The {class}`~.goose~.goose.Summary` class computes several summary statistics that can be either accessed programmatically or displayed as a summary table.
 
 ```{python results="asis"}
 #| label: results-fo-sampling-with-gibbs-sampler
@@ -330,14 +330,14 @@ summary = gs.Summary(results)
 summary
 ```
 
-We can plot the trace plots of the chains with {func}`.plot_trace()`.
+We can plot the trace plots of the chains with {func}`~.goose.plot_trace()`.
 
 ```{python}
 #| label: trace-plot
 g = gs.plot_trace(results)
 ```
 
-We could also take a look at a kernel density estimator with {func}`.plot_density()` and the estimated autocorrelation with {func}`.plot_cor()`. Alternatively, we can output all three diagnostic plots together with {func}`.plot_param()`. The following plot shows the parameter $\beta_0$.
+We could also take a look at a kernel density estimator with {func}`~.goose.plot_density()` and the estimated autocorrelation with {func}`~.goose.plot_cor()`. Alternatively, we can output all three diagnostic plots together with {func}`~.goose.plot_param()`. The following plot shows the parameter $\beta_0$.
 
 ```{python}
 #| label: parameter-summary-plot

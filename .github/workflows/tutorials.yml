@@ -1,10 +1,10 @@
-name: docs
+name: tutorials
 
 on:
   push:
     branches: [main]
-  release:
-    types: [published]
+  pull_request:
+    branches: [main]
 
 jobs:
   docs:
@@ -15,7 +15,7 @@ jobs:
       - name: Install Ubuntu packages
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends r-base r-cran-remotes r-cran-tidyverse r-cran-vgam
+          sudo apt-get install -y --no-install-recommends r-base r-cran-remotes r-cran-tidyverse r-cran-vgam r-cran-reticulate
           sudo apt-get install -y --no-install-recommends graphviz graphviz-dev
 
       - name: Check out repository
@@ -44,16 +44,3 @@ jobs:
         uses: quarto-dev/quarto-actions/render@v2
         with:
           path: docs/source/tutorials/qmd
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: tutorials-for-${{ github.sha }}
-          path: docs/source/tutorials/md
-
-      - name: Trigger RTDs build
-        uses: dfm/rtds-action@v1
-        with:
-          webhook_url: ${{ secrets.RTDS_WEBHOOK_URL }}
-          webhook_token: ${{ secrets.RTDS_WEBHOOK_TOKEN }}
-          commit_ref: ${{ github.ref }}
