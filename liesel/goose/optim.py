@@ -359,25 +359,25 @@ def optim_flat(
     likelihood_scalar = n_train / batch_size
     likelihood_scalar_validation = n_train / n_validation
 
-    def _batched_neg_log_prob(position: Position, batch_indices: Array | None = None):
+    def _batched_neg_log_prob(
+        position: Position, model_state: ModelState, batch_indices: Array | None = None
+    ):
         if batch_indices is not None:
             batched_observed = batched_nodes(observed, batch_indices)
             position = position | batched_observed  # type: ignore
 
-        updated_state = interface_train.update_state(position, model_train.state)
+        updated_state = interface_train.update_state(position, model_state)
         log_lik = likelihood_scalar * updated_state["_model_log_lik"].value
         log_prior = updated_state["_model_log_prior"].value
         log_prob = log_lik + log_prior
         return -log_prob
 
-    def _neg_log_prob_train(position: Position):
-        updated_state = interface_validation.update_state(position, model_train.state)
+    def _neg_log_prob_train(position: Position, model_state: ModelState):
+        updated_state = interface_validation.update_state(position, model_state)
         return -updated_state["_model_log_prob"].value
 
-    def _neg_log_prob_validation(position: Position):
-        updated_state = interface_validation.update_state(
-            position, model_validation.state
-        )
+    def _neg_log_prob_validation(position: Position, model_state: ModelState):
+        updated_state = interface_validation.update_state(position, model_state)
         log_lik = likelihood_scalar_validation * updated_state["_model_log_lik"].value
         log_prior = updated_state["_model_log_prior"].value
         log_prob = log_lik + log_prior
@@ -400,8 +400,12 @@ def optim_flat(
     else:
         history["position"] = None
 
-    loss_train_start = _neg_log_prob_train(position=position)
-    loss_validation_start = _neg_log_prob_validation(position=position)
+    loss_train_start = _neg_log_prob_train(
+        position=position, model_state=model_train.state
+    )
+    loss_validation_start = _neg_log_prob_validation(
+        position=position, model_state=model_validation.state
+    )
     history["loss_train"] = history["loss_train"].at[0].set(loss_train_start)
     history["loss_validation"] = (
         history["loss_validation"].at[0].set(loss_validation_start)
@@ -416,6 +420,8 @@ def optim_flat(
     init_val["position"] = position
     init_val["opt_state"] = optimizer.init(position)
     init_val["key"] = jax.random.PRNGKey(batch_seed)
+    init_val["model_state_train"] = model_train.state
+    init_val["model_state_validation"] = model_validation.state
 
     # ---------------------------------------------------------------------------------
     # Initialize while loop carry dictionary
@@ -453,8 +459,12 @@ def optim_flat(
         def _fori_body(i, val):
             batch = batches[i]
             pos = val["position"]
-            grad = neg_log_prob_grad(pos, batch_indices=batch)
+
+            grad = neg_log_prob_grad(
+                pos, batch_indices=batch, model_state=val["model_state_train"]
+            )
             updates, opt_state = optimizer.update(grad, val["opt_state"])
+
             val["position"] = optax.apply_updates(pos, updates)
             val["opt_state"] = opt_state
 
@@ -467,12 +477,18 @@ def optim_flat(
         # -----------------------------------------------------------------------------
         # Save values and increase counter
 
-        loss_train = _neg_log_prob_train(val["position"])
+        loss_train = _neg_log_prob_train(
+            val["position"], model_state=val["model_state_train"]
+        )
+
         val["history"]["loss_train"] = (
             val["history"]["loss_train"].at[val["while_i"]].set(loss_train)
         )
 
-        loss_validation = _neg_log_prob_validation(val["position"])
+        loss_validation = _neg_log_prob_validation(
+            val["position"], model_state=val["model_state_validation"]
+        )
+
         val["history"]["loss_validation"] = (
             val["history"]["loss_validation"].at[val["while_i"]].set(loss_validation)
         )
