@@ -7,6 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 import pandas as pd
+from tqdm import tqdm
 
 from ..model import Model, Node, Var
 from .interface import LieselInterface
@@ -204,6 +205,7 @@ def optim_flat(
     model_validation: Model | None = None,
     restore_best_position: bool = True,
     prune_history: bool = True,
+    progress_bar: bool = True,
 ) -> OptimResult:
     """
     Optimize the parameters of a  Liesel :class:`.Model`.
@@ -247,6 +249,8 @@ def optim_flat(
         means, the history can be shorter than the maximum number of iterations defined\
         by the supplied :class:`.Stopper`. If ``False``, unused history entries are set\
         to ``jax.numpy.nan`` if optimization stops early.
+    progress_bar
+        Whether to use a progress bar.
 
     Returns
     -------
@@ -414,6 +418,29 @@ def optim_flat(
     init_val["key"] = jax.random.PRNGKey(batch_seed)
 
     # ---------------------------------------------------------------------------------
+    # Initialize while loop carry dictionary
+
+    progress_bar = tqdm(
+        total=stopper.max_iter - 1,
+        desc=(
+            f"Training loss: {loss_train_start:.3f}, Validation loss:"
+            f" {loss_validation_start:.3f}"
+        ),
+        position=0,
+        leave=True,
+    )
+
+    def tqdm_callback(val):
+        i = val["while_i"] - 1
+        loss_train = val["history"]["loss_train"][i]
+        loss_validation = val["history"]["loss_validation"][i]
+        desc = (
+            f"Training loss: {loss_train:.3f}, Validation loss: {loss_validation:.3f}"
+        )
+        progress_bar.update(1)
+        progress_bar.set_description(desc)
+
+    # ---------------------------------------------------------------------------------
     # Define while loop body
 
     def body_fun(val: dict):
@@ -455,6 +482,9 @@ def optim_flat(
             val["history"]["position"] = jax.tree.map(
                 lambda d, pos: d.at[val["while_i"]].set(pos), pos_hist, val["position"]
             )
+
+        if progress_bar:
+            jax.debug.callback(tqdm_callback, val)
 
         val["while_i"] += 1
         return val
