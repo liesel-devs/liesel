@@ -463,7 +463,7 @@ def optim_flat(
             grad = neg_log_prob_grad(
                 pos, batch_indices=batch, model_state=val["model_state_train"]
             )
-            updates, opt_state = optimizer.update(grad, val["opt_state"])
+            updates, opt_state = optimizer.update(grad, val["opt_state"], params=pos)
 
             val["position"] = optax.apply_updates(pos, updates)
             val["opt_state"] = opt_state
