@@ -151,7 +151,7 @@ class Stopper:
     def stop_now(self, i: int | Array, loss_history: Array):
         """Whether optimization should stop now."""
         stop_early = self.stop_early(i=i, loss_history=loss_history)
-        stop_max_iter = i >= self.max_iter
+        stop_max_iter = i >= (self.max_iter - 1)
 
         return stop_early | stop_max_iter
 
