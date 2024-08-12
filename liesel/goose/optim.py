@@ -198,7 +198,7 @@ def optim_flat(
     model_train: Model,
     params: Sequence[str],
     optimizer: optax.GradientTransformation | None = None,
-    stopper: Stopper = Stopper(max_iter=10_000, patience=10),
+    stopper: Stopper | None = None,
     batch_size: int | None = None,
     batch_seed: int | None = None,
     save_position_history: bool = True,
@@ -323,6 +323,9 @@ def optim_flat(
         batch_seed if batch_seed is not None else np.random.randint(low=1, high=1000)
     )
 
+    if stopper is None:
+        stopper = Stopper(max_iter=10_000, patience=10)
+
     user_patience = stopper.patience
     if model_validation is None:
         model_validation = model_train
@@ -373,7 +376,7 @@ def optim_flat(
         return -log_prob
 
     def _neg_log_prob_train(position: Position, model_state: ModelState):
-        updated_state = interface_validation.update_state(position, model_state)
+        updated_state = interface_train.update_state(position, model_state)
         return -updated_state["_model_log_prob"].value
 
     def _neg_log_prob_validation(position: Position, model_state: ModelState):
