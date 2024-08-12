@@ -278,7 +278,7 @@ def test_history_to_df_pruned(models):
     )
     df = history_to_df(result.history["position"])
 
-    assert df.shape == (84, 4)
+    assert df.shape == (66, 4)
 
 
 def test_generate_batches():
@@ -324,7 +324,7 @@ class TestStopper:
         key = jax.random.PRNGKey(42)
         loss_history = jax.random.uniform(key, shape=(15,))
         stop = stop_jit(i=6, loss_history=loss_history)
-        assert stop
+        assert not stop
 
     def test_stop_at_jitted(self):
         stopper = Stopper(patience=5, max_iter=100, atol=0.1, rtol=0.1)

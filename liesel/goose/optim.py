@@ -101,52 +101,52 @@ class Stopper:
         probability (compared to the best value observed within the patience period)\
         is smaller than this value, optimization stops early.
     rtol
-        The relative tolerance for early stopping. If the relative absolute change in \
-        the negative log probability is smaller than this value, the optimization stops.
+        The relative tolerance for early stopping.
     """
 
     max_iter: int
     patience: int
     atol: float = 1e-3
-    rtol: float = 1e-12
+    rtol: float = 1e-2
 
     def stop_early(self, i: int | Array, loss_history: Array):
-        """
-        Includes loss at iterations *before* i, but excluding i itself.
-        """
         p = self.patience
-        lower = jnp.max(jnp.array([(i - 1) - p, 0]))
+        lower = jnp.max(jnp.array([i - p, 0]))
         recent_history = jax.lax.dynamic_slice(
             loss_history, start_indices=(lower,), slice_sizes=(p,)
         )
 
         best_loss_in_recent = jnp.min(recent_history)
-        current_loss = loss_history[i]
+        current_loss = recent_history[0]
 
-        change = current_loss - best_loss_in_recent
+        diff = current_loss - best_loss_in_recent
+        abs_improvement = diff <= self.atol
         """
+        diff > 0: current loss is worse than best_loss_in_recent -> NO STOP
+        diff < 0: current loss is better than best_loss_in_recent -> STOP (unreachable)
+        diff = 0: current loss IS best_loss_in_recent -> STOP
+        diff < self.atol: current loss is only insignificantly worse than
+        best_loss_in_recent -> STOP
         If current_loss is better than best_loss_in_recent, this is negative.
         If current_loss is worse, this is positive.
         """
-        rel_change = jnp.abs(jnp.abs(change) / best_loss_in_recent)
 
-        no_improvement = change > self.atol
+        rel_change = 1.0 - jnp.abs(best_loss_in_recent / current_loss)
+        rel_improvement = rel_change <= self.rtol
         """
-        If the current loss has not improved upon the best loss in the patience
-        period, we always want to stop. However, we actually allow for slightly
-        worse losses, defined by the absolute tolerance here.
-        """
-
-        no_rel_change = ~no_improvement & (rel_change < self.rtol)
-        """
-        Let's say the current value *does* improve upon the best value within patience,
-        such that no_improvement=False.
-
-        In this case, if the improvement is very small compared to the best observed
-        loss in the patience period, we may still want to stop.
+        rel_change > 0: current loss is worse than best_loss_in_recent -> NO STOP
+        rel_change < 0: current loss is better than best_loss_in_recent -> STOP
+        (unreachable)
+        rel_change = 0: current loss IS best_loss_in_recent -> STOP
+        rel_change < self.rtol: current loss is only insiginificantly worse than
+        best_loss_in_recent -> STOP
         """
 
-        return (no_improvement | no_rel_change) & (i > p)
+        current_i_is_after_patience = i > p
+        """
+        Stopping happens only, if we actually went through a full patience period.
+        """
+        return (abs_improvement | rel_improvement) & current_i_is_after_patience
 
     def stop_now(self, i: int | Array, loss_history: Array):
         """Whether optimization should stop now."""
