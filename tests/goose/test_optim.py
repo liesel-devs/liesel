@@ -267,18 +267,19 @@ def test_full_history_to_df(models):
 def test_history_to_df_pruned(models):
     model, _ = models
     stopper = Stopper(max_iter=1_000, patience=10)
-    result = optim_flat(
-        model,
-        ["coef", "log_sigma"],
-        batch_size=20,
-        stopper=stopper,
-        batch_seed=1,
-        prune_history=True,
-        model_validation=model,
-    )
+    with jax.disable_jit(disable=True):
+        result = optim_flat(
+            model,
+            ["coef", "log_sigma"],
+            batch_size=20,
+            stopper=stopper,
+            batch_seed=1,
+            prune_history=True,
+            model_validation=model,
+        )
     df = history_to_df(result.history["position"])
 
-    assert df.shape == (66, 4)
+    assert df.shape == (75, 4)
 
 
 def test_generate_batches():

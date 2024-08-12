@@ -111,7 +111,7 @@ class Stopper:
 
     def stop_early(self, i: int | Array, loss_history: Array):
         p = self.patience
-        lower = jnp.max(jnp.array([i - p, 0]))
+        lower = jnp.max(jnp.array([i - p + 1, 0]))
         recent_history = jax.lax.dynamic_slice(
             loss_history, start_indices=(lower,), slice_sizes=(p,)
         )
@@ -168,10 +168,10 @@ class Stopper:
         """
         p = self.patience
         recent_history = jax.lax.dynamic_slice(
-            loss_history, start_indices=(i - p,), slice_sizes=(p,)
+            loss_history, start_indices=(i - p + 1,), slice_sizes=(p,)
         )
         imin = jnp.argmin(recent_history)
-        return i - self.patience + imin
+        return i - self.patience + imin + 1
 
 
 def _validate_log_prob_decomposition(
@@ -440,7 +440,7 @@ def optim_flat(
     )
 
     def tqdm_callback(val):
-        i = val["while_i"] - 1
+        i = val["while_i"]
         loss_train = val["history"]["loss_train"][i]
         loss_validation = val["history"]["loss_validation"][i]
         desc = (
@@ -480,6 +480,8 @@ def optim_flat(
         # -----------------------------------------------------------------------------
         # Save values and increase counter
 
+        val["while_i"] += 1
+
         loss_train = _neg_log_prob_train(
             val["position"], model_state=val["model_state_train"]
         )
@@ -505,7 +507,6 @@ def optim_flat(
         if progress_bar:
             jax.debug.callback(tqdm_callback, val)
 
-        val["while_i"] += 1
         return val
 
     # ---------------------------------------------------------------------------------
@@ -513,13 +514,13 @@ def optim_flat(
 
     val = jax.lax.while_loop(
         cond_fun=lambda val: stopper.continue_(
-            jnp.clip(val["while_i"] - 1, min=0), val["history"]["loss_validation"]
+            val["while_i"], val["history"]["loss_validation"]
         ),
         body_fun=body_fun,
         init_val=init_val,
     )
 
-    max_iter = val["while_i"] - 1
+    max_iter = val["while_i"]
 
     # ---------------------------------------------------------------------------------
     # Set final position and model state
@@ -541,24 +542,28 @@ def optim_flat(
     # Set unused values in history to nan
 
     val["history"]["loss_train"] = (
-        val["history"]["loss_train"].at[max_iter:].set(jnp.nan)
+        val["history"]["loss_train"].at[(max_iter + 1) :].set(jnp.nan)
     )
     val["history"]["loss_validation"] = (
-        val["history"]["loss_validation"].at[max_iter:].set(jnp.nan)
+        val["history"]["loss_validation"].at[(max_iter + 1) :].set(jnp.nan)
     )
     if save_position_history:
         for name, value in val["history"]["position"].items():
-            val["history"]["position"][name] = value.at[max_iter:, ...].set(jnp.nan)
+            val["history"]["position"][name] = value.at[(max_iter + 1) :, ...].set(
+                jnp.nan
+            )
 
     # ---------------------------------------------------------------------------------
     # Remove unused values in history, if applicable
 
     if prune_history:
-        val["history"]["loss_train"] = val["history"]["loss_train"][:max_iter]
-        val["history"]["loss_validation"] = val["history"]["loss_validation"][:max_iter]
+        val["history"]["loss_train"] = val["history"]["loss_train"][: (max_iter + 1)]
+        val["history"]["loss_validation"] = val["history"]["loss_validation"][
+            : (max_iter + 1)
+        ]
         if save_position_history:
             for name, value in val["history"]["position"].items():
-                val["history"]["position"][name] = value[:max_iter, ...]
+                val["history"]["position"][name] = value[: (max_iter + 1), ...]
 
     # ---------------------------------------------------------------------------------
     # Initialize results object and return
