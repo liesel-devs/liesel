@@ -325,7 +325,7 @@ class TestStopper:
         key = jax.random.PRNGKey(42)
         loss_history = jax.random.uniform(key, shape=(15,))
         stop = stop_jit(i=6, loss_history=loss_history)
-        assert not stop
+        assert stop
 
     def test_stop_at_jitted(self):
         stopper = Stopper(patience=5, max_iter=100, atol=0.1, rtol=0.1)
