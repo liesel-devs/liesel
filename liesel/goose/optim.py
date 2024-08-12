@@ -95,13 +95,52 @@ class Stopper:
         The maximum number of optimization steps.
     patience
         Early stopping happens only, if there was no improvement for the number of\
-        patience iterations.
+        patience iterations, and there were at least as many iterations as the length\
+        of the patience window.
     atol
-        The absolute tolerance for early stopping. If the change in the negative log\
-        probability (compared to the best value observed within the patience period)\
-        is smaller than this value, optimization stops early.
+        The absolute tolerance for early stopping.
     rtol
-        The relative tolerance for early stopping.
+        The relative tolerance for early stopping. The default of ``0.0`` means that \
+        no early stopping happens based on the relative tolerance.
+
+    Notes
+    -----
+    Early stopping happens, when the oldest loss value within the patience window is
+    the best loss value within the patience window. A simplified pseudo-implementation
+    is:
+
+    .. code-block:: python
+
+        def stop(patience, i, loss_history):
+            recent_history = loss_history[-patience:]
+            oldest_within_patience = recent_history[0]
+            best_within_patience = np.min(recent_history)
+
+            return oldest_within_patience <= best_within_patience
+
+    Absolute and relative tolerance make it possible to stop even in cases when the
+    oldest loss within patience is *not* the best. Instead, the algorithm stops, when
+    the absolute *or* relative difference between the oldest loss within patience and
+    the best loss within patience is so small that it can be neglected.
+    To be clear: If either of the two conditions is met, then early stopping happens.
+    The relative magnitude of the difference is calculaterd with respect to the best
+    lost within patience. A simplified pseudo-implementation is:
+
+    .. code-block:: python
+
+        def stop(patience, i, loss_history, atol, rtol):
+            recent_history = loss_history[-patience:]
+            oldest_within_patience = recent_history[0]
+            best_within_patience = np.min(recent_history)
+
+            diff = oldest_within_patience - best_within_patience
+            rel_diff = diff / np.abs(best_within_patience)
+
+            abs_improvement_is_neglectable = diff <= atol
+            rel_improvement_is_neglectable = rel_diff <= rtol
+
+            return (abs_improvement_is_neglectable | rel_improvement_is_neglectable)
+
     """
 
     max_iter: int
@@ -117,40 +156,20 @@ class Stopper:
         )
 
         best_loss_in_recent = jnp.min(recent_history)
-        current_loss = recent_history[0]
+        oldest_loss_in_recent = recent_history[0]
 
-        diff = current_loss - best_loss_in_recent
-        no_abs_improvement_since_current = diff <= self.atol
-        """
-        diff > 0: current loss is worse than best_loss_in_recent -> NO STOP
-        diff < 0: current loss is better than best_loss_in_recent -> STOP (unreachable)
-        diff = 0: current loss IS best_loss_in_recent -> STOP
-        diff < self.atol: current loss is only insignificantly worse than
-        best_loss_in_recent -> STOP
-        If current_loss is better than best_loss_in_recent, this is negative.
-        If current_loss is worse, this is positive.
-        """
+        diff = oldest_loss_in_recent - best_loss_in_recent
+        abs_improvement_is_neglectable = diff <= self.atol
 
-        rel_change = diff / jnp.abs(best_loss_in_recent)
-        no_rel_improvement_since_current = rel_change <= self.rtol
-        """
-        if current loss is best loss
-            diff is zero
-            rel change is zero
-
-        if current loss is worse than best loss in recent
-            diff is positive
-            rel change is: how big is the diff, relative to the best loss
-            if rel change is big, current loss is very bad
-            if rel change is very small, current loss is only insignificantly worse
-        """
+        rel_diff = diff / jnp.abs(best_loss_in_recent)
+        rel_improvement_is_neglectable = rel_diff <= self.rtol
 
         current_i_is_after_patience = i > p
         """
-        Stopping happens only, if we actually went through a full patience period.
+        Stopping happens only if we actually went through a full patience period.
         """
 
-        stop = no_abs_improvement_since_current | no_rel_improvement_since_current
+        stop = abs_improvement_is_neglectable | rel_improvement_is_neglectable
         return stop & current_i_is_after_patience
 
     def stop_now(self, i: int | Array, loss_history: Array):
