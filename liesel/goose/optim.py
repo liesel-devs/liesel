@@ -107,7 +107,7 @@ class Stopper:
     max_iter: int
     patience: int
     atol: float = 1e-3
-    rtol: float = 1e-12
+    rtol: float = 0.0
 
     def stop_early(self, i: int | Array, loss_history: Array):
         p = self.patience
