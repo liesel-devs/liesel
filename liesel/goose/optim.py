@@ -107,7 +107,7 @@ class Stopper:
     max_iter: int
     patience: int
     atol: float = 1e-3
-    rtol: float = 1e-3
+    rtol: float = 1e-12
 
     def stop_early(self, i: int | Array, loss_history: Array):
         p = self.patience
@@ -120,7 +120,7 @@ class Stopper:
         current_loss = recent_history[0]
 
         diff = current_loss - best_loss_in_recent
-        abs_improvement = diff <= self.atol
+        no_abs_improvement_since_current = diff <= self.atol
         """
         diff > 0: current loss is worse than best_loss_in_recent -> NO STOP
         diff < 0: current loss is better than best_loss_in_recent -> STOP (unreachable)
@@ -131,22 +131,27 @@ class Stopper:
         If current_loss is worse, this is positive.
         """
 
-        rel_change = 1.0 - jnp.abs(best_loss_in_recent / current_loss)
-        rel_improvement = rel_change <= self.rtol
+        rel_change = diff / jnp.abs(best_loss_in_recent)
+        no_rel_improvement_since_current = rel_change <= self.rtol
         """
-        rel_change > 0: current loss is worse than best_loss_in_recent -> NO STOP
-        rel_change < 0: current loss is better than best_loss_in_recent -> STOP
-        (unreachable)
-        rel_change = 0: current loss IS best_loss_in_recent -> STOP
-        rel_change < self.rtol: current loss is only insiginificantly worse than
-        best_loss_in_recent -> STOP
+        if current loss is best loss
+            diff is zero
+            rel change is zero
+
+        if current loss is worse than best loss in recent
+            diff is positive
+            rel change is: how big is the diff, relative to the best loss
+            if rel change is big, current loss is very bad
+            if rel change is very small, current loss is only insignificantly worse
         """
 
         current_i_is_after_patience = i > p
         """
         Stopping happens only, if we actually went through a full patience period.
         """
-        return (abs_improvement | rel_improvement) & current_i_is_after_patience
+
+        stop = no_abs_improvement_since_current | no_rel_improvement_since_current
+        return stop & current_i_is_after_patience
 
     def stop_now(self, i: int | Array, loss_history: Array):
         """Whether optimization should stop now."""
