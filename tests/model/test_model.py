@@ -1,5 +1,6 @@
 import tempfile
 import typing
+import warnings
 from collections.abc import Generator
 from itertools import combinations
 from types import MappingProxyType
@@ -342,7 +343,9 @@ class TestModel:
         _, vars = model.copy_nodes_and_vars()
 
         gb.add(*vars.values())
-        gb.transform(vars["x"])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", (FutureWarning))
+            gb.transform(vars["x"])
         new_model = gb.build_model()
 
         assert "x_transformed" in new_model.vars

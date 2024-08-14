@@ -1,4 +1,5 @@
 import typing
+import warnings
 
 import numpy as np
 import pytest
@@ -530,7 +531,9 @@ class TestVarTransform:
 
         prior = lnodes.Dist(tfp.distributions.HalfCauchy, loc=0.0, scale=25.0)
         tau = lnodes.Var(10.0, prior, name="tau")
-        log_tau_gb = lmodel.GraphBuilder().transform(tau, tfp.bijectors.Exp)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", (FutureWarning))
+            log_tau_gb = lmodel.GraphBuilder().transform(tau, tfp.bijectors.Exp())
 
         assert tau.weak
         assert not log_tau.weak
@@ -569,9 +572,11 @@ class TestVarTransform:
 
         prior = lnodes.Dist(tfp.distributions.HalfCauchy, loc=0.0, scale=25.0)
         tau = lnodes.Var(10.0, prior, name="tau")
-        transformed_tau_gb = lmodel.GraphBuilder().transform(
-            tau, tfp.bijectors.Softplus, hinge_softness=lnodes.Var(0.9)
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", (FutureWarning))
+            transformed_tau_gb = lmodel.GraphBuilder().transform(
+                tau, tfp.bijectors.Softplus, hinge_softness=lnodes.Var(0.9)
+            )
 
         assert tau.weak
         assert not transformed_tau.weak
@@ -588,7 +593,7 @@ class TestVarTransform:
     def test_transform_default(self) -> None:
         prior = lnodes.Dist(tfp.distributions.HalfCauchy, loc=0.0, scale=25.0)
         tau = lnodes.Var(10.0, prior, name="tau")
-        log_tau = tau.transform(None)
+        log_tau = tau.transform()
         tau.update()
 
         assert tau.weak
@@ -600,7 +605,9 @@ class TestVarTransform:
 
         prior = lnodes.Dist(tfp.distributions.HalfCauchy, loc=0.0, scale=25.0)
         tau = lnodes.Var(10.0, prior, name="tau")
-        log_tau_gb = lmodel.GraphBuilder().transform(tau)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", (FutureWarning))
+            log_tau_gb = lmodel.GraphBuilder().transform(tau)
 
         assert tau.weak
         assert not log_tau.weak
