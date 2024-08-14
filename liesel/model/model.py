@@ -694,7 +694,11 @@ class GraphBuilder:
         return self
 
     def transform(
-        self, var: Var, bijector: type[Bijector] | None = None, *args, **kwargs
+        self,
+        var: Var,
+        bijector: type[Bijector] | Bijector | None = None,
+        *args,
+        **kwargs,
     ) -> Var:
         """
         Transforms a variable by adding a new transformed variable as an input.
@@ -781,6 +785,14 @@ class GraphBuilder:
         if var.dist_node is None:
             raise RuntimeError(f"{repr(var)} has no distribution")
 
+        if bijector is not None and not isinstance(bijector, type) and (args or kwargs):
+            raise RuntimeError(
+                "You passed a bijector instance and "
+                "nonempty bijector arguments. You should either initialise your "
+                "bijector directly with the arguments, or pass a bijector class "
+                "instead."
+            )
+
         # avoid name clashes
         self._set_missing_names()
 
@@ -816,6 +828,17 @@ class GraphBuilder:
                 "and no bijector was given"
             )
 
+        using_bijector_instance = not use_default_bijector and not isinstance(
+            bijector, type
+        )
+
+        if isinstance(bijector, type) and not args and not kwargs:
+            warnings.warn(
+                "You passed a bijector class instead of an instance, but did not "
+                "provide any arguments. You should either provide arguments "
+                "or pass an instance of the bijector class.",
+            )
+
         if isinstance(tfp_dist, jd.Distribution):
             tfd = jd
             tfb = jb
@@ -847,10 +870,13 @@ class GraphBuilder:
 
             if use_default_bijector:
                 bijector_cls = tfp_dist.experimental_default_event_space_bijector
+                bijector_obj = bijector_cls(*bijector_args.args, **bijector_args.kwargs)
+            elif using_bijector_instance:
+                bijector_obj = bijector
             else:
                 bijector_cls = bijector
+                bijector_obj = bijector_cls(*bijector_args.args, **bijector_args.kwargs)
 
-            bijector_obj = bijector_cls(*bijector_args.args, **bijector_args.kwargs)
             bijector_inv = tfb.Invert(bijector_obj)
 
             return tfd.TransformedDistribution(
