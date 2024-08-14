@@ -626,4 +626,4 @@ def history_to_df(history: dict[str, Array]) -> pd.DataFrame:
     df = pd.DataFrame(data)
     df["iteration"] = np.arange(value.shape[0])
 
-    return df
+    return df.astype(float)
