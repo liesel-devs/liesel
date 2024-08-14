@@ -1110,24 +1110,21 @@ class Var:
         **bijector_kwargs,
     ) -> Var:
         """
-        Transforms the variable by adding a new transformed variable as an input.
+        Transforms the variable, making it a function of a new variable.
 
-        Creates a new variable on the transformed space the accordingly
+        Creates a new variable on the unconstrained space ``R**n`` with the appropriate
         transformed distribution, turning the original variable into a weak variable
-        without an associated distribution.
+        without an associated distribution. The transformation is performed using
+        TFP's bijector classes.
 
-        The value of the attribute :attr:`~liesel.model.nodes.Var.parameter` is
-        transferred to the transformed variable and set to ``False`` on the original
-        variable. The attributes :attr:`~liesel.model.nodes.Var.observed` and
-        :attr:`~liesel.model.nodes.Var.role` are set to the default values for
-        the transformed variable and remain unchanged on the original variable.
 
         Parameters
         ----------
         bijector
             The bijector used to map the new transformed variable to this variable \
             (forward transformation). If ``None``, the experimental default event \
-            space bijector (see TFP documentation) is used. If a bijector class is \
+            space bijector (see tensorflow probability documentation) is used. \
+            If a bijector class is \
             passed, it is instantiated with the arguments ``bijector_args`` and \
             ``bijector_kwargs``. If a bijector instance is passed, it is used \
             directly.
@@ -1143,14 +1140,50 @@ class Var:
         Raises
         ------
         RuntimeError
-            If the variable is weak, has no TFP distribution, and if the distribution
-            does not have a default event space bijector and the argument
-            ``bijector`` is ``None``.
+            If the variable is weak or if the variable has no distribution.
+            Also, if the argument ``bijector`` is ``None``, but the distribution does
+            not have a default event space bijector.
 
         Notes
         -----
-        Assumes that the distribution of this variable is a distribution from
-        ``tensorflow_probability.subtrates.jax.distributions``.
+
+        This is a simplified pseudo-code illustration of what this method does:
+
+        .. code-block:: python
+
+        import tensorflow_probability.substrates.jax.bijectors as tfb
+        import tensorflow_probability.substrates.jax.distributions as tfd
+
+        def transform(original_var: lsl.Var, bijector: tfb.Bijector):
+            original_dist = original_var.dist_node.distribution
+            dist_inputs = original_var.dist_node.inputs
+
+            # transform the distribution
+            new_dist = tfd.TransformedDistribution(original_dist, tfb.Invert(bijector))
+
+            # transform initial value
+            new_value = bijector.inverse(original_var.value)
+
+            # initialise the new variable
+            new_var = lsl.Var(
+                new_value,
+                lsl.Dist(new_dist, *dist_inputs),
+                name=f"{original_var.name}_transformed"
+            )
+            new_var.parameter = original_var.parameter
+
+            # define the original variable as a function of the new variable
+            original_var.value_node = lsl.Calc(bijector.forward, new_var)
+            original_var.parameter = False
+
+            # return the new variable
+            return new_var
+
+        The value of the attribute :attr:`~liesel.model.nodes.Var.parameter` is
+        transferred to the transformed variable and set to ``False`` on the original
+        variable. The attributes :attr:`~liesel.model.nodes.Var.observed` and
+        :attr:`~liesel.model.nodes.Var.role` have the default values for
+        the transformed variable and remain unchanged on the original variable.
 
         Examples
         --------
@@ -1578,10 +1611,10 @@ def _transform_var_with_bijector_class(
 
     dist_node_transformed.per_obs = var.dist_node.per_obs
 
-    bijector_obj = dist_node_transformed.init_dist().bijector
+    bijector_inv = dist_node_transformed.init_dist().bijector
 
     transformed_var = Var(
-        bijector_obj.forward(var.value),
+        bijector_inv.forward(var.value),
         dist_node_transformed,
         name=f"{var.name}_transformed",
     )
