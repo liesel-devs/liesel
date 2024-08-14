@@ -946,9 +946,9 @@ class Model:
 
     >>> from pprint import pprint # for nicer formatting of the output dicts
     >>> pprint(nodes)
-    {'a_value': Const(name="a_value"),
+    {'a_value': Value(name="a_value"),
      'a_var_value': VarValue(name="a_var_value"),
-     'b_value': Const(name="b_value"),
+     'b_value': Value(name="b_value"),
      'b_var_value': VarValue(name="b_var_value"),
      'c_value': Calc(name="c_value"),
      'c_var_value': VarValue(name="c_var_value")}
