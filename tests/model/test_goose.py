@@ -198,7 +198,7 @@ class TestFiniteDiscreteGibbsKernel:
     @pytest.mark.mcmc
     def test_sample_bernoulli(self):
         prior_prob = 0.7
-        prior = lsl.Dist(tfd.Bernoulli, probs=lsl.Const(prior_prob))
+        prior = lsl.Dist(tfd.Bernoulli, probs=lsl.Value(prior_prob))
         dummy_var = lsl.Var(
             value=1,
             distribution=prior,
@@ -228,7 +228,7 @@ class TestFiniteDiscreteGibbsKernel:
     @pytest.mark.mcmc
     def test_bernoulli_no_outcomes(self):
         prior_prob = 0.7
-        prior = lsl.Dist(tfd.Bernoulli, probs=lsl.Const(prior_prob))
+        prior = lsl.Dist(tfd.Bernoulli, probs=lsl.Value(prior_prob))
         dummy_var = lsl.Var(
             value=1,
             distribution=prior,

@@ -28,7 +28,7 @@ __all__ = [
     "Array",
     "Bijector",
     "Calc",
-    "Const",
+    "Value",
     "Dist",
     "Distribution",
     "Group",
@@ -225,7 +225,7 @@ class Node(ABC):
             return x.var_value_node
 
         if not isinstance(x, Node):
-            return Const(x)
+            return Value(x)
 
         return x
 
@@ -460,7 +460,7 @@ class InputGroup(TransientNode):
         return ArgGroup(args, kwargs)
 
 
-class Const(Node):
+class Value(Node):
     r"""
     A :class:`.Node` subclass that holds constant data.
 
@@ -522,7 +522,7 @@ class Const(Node):
         super().__init__(_name=_name)
         self._value = value
 
-    def flag_outdated(self) -> Const:
+    def flag_outdated(self) -> Value:
         """Stops the recursion setting outdated flags."""
         return self
 
@@ -530,7 +530,7 @@ class Const(Node):
     def outdated(self) -> bool:
         return False
 
-    def update(self) -> Const:
+    def update(self) -> Value:
         """Does nothing."""
         return self
 
@@ -550,7 +550,7 @@ class Const(Node):
                 self.model.update()
 
 
-class Data(Const):
+class Data(Value):
     """
     A :class:`.Node` subclass that holds constant data.
 
@@ -1064,7 +1064,7 @@ class Var:
         name: str = "",
     ):
         self._name = name
-        self._value_node: Node = Const(None)
+        self._value_node: Node = Value(None)
         self._dist_node: Dist = NoDist()
 
         self._var_value_node: VarValue = VarValue(
@@ -1324,7 +1324,7 @@ class Var:
         .weak : Whether the variable is weak. In general, ``strong = not weak``.
 
         """
-        return isinstance(self.value_node, Const)
+        return isinstance(self.value_node, Value)
 
     def update(self) -> Var:
         """Updates the variable."""
@@ -1363,7 +1363,7 @@ class Var:
             value_node = Calc(lambda x: x, value_node)
 
         if not isinstance(value_node, Node):
-            value_node = Const(value_node)
+            value_node = Value(value_node)
 
         if value_node.model:
             raise RuntimeError(

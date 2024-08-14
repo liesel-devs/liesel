@@ -27,13 +27,13 @@ from .nodes import (
     Array,
     Bijector,
     Calc,
-    Const,
     Dist,
     Group,
     InputGroup,
     Node,
     NodeState,
     TransientIdentity,
+    Value,
     Var,
     VarValue,
 )
@@ -207,7 +207,7 @@ class GraphBuilder:
 
         for node in nodes:
             if node.needs_seed:
-                seed = Const(jax.random.PRNGKey(0), _name=f"_model_{node.name}_seed")
+                seed = Value(jax.random.PRNGKey(0), _name=f"_model_{node.name}_seed")
                 node.set_inputs(*node.inputs, **{"seed": seed} | node.kwinputs)
 
         return self

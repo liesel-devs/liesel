@@ -7,11 +7,11 @@ import tensorflow_probability.substrates.numpy.distributions as tfd
 from liesel.model.model import Model
 from liesel.model.nodes import (
     Calc,
-    Const,
     Dist,
     NodeState,
     TransientCalc,
     TransientDist,
+    Value,
     Var,
 )
 
@@ -21,14 +21,14 @@ from liesel.model.nodes import (
 
 
 def test_data_var() -> None:
-    x = Const(1.0, _name="x")
+    x = Value(1.0, _name="x")
     v1 = Var(value=x)
 
     assert x.var is v1
 
 
 def test_data_init() -> None:
-    x = Const(0.0, _name="node")
+    x = Value(0.0, _name="node")
 
     assert x.value == pytest.approx(0.0)
     assert x.name == "node"
@@ -39,7 +39,7 @@ def test_data_init() -> None:
 
 
 def test_data_clear_state() -> None:
-    x = Const(1.0, _name="x")
+    x = Value(1.0, _name="x")
     x.clear_state()
 
     assert not x.outdated
@@ -47,7 +47,7 @@ def test_data_clear_state() -> None:
 
 
 def test_data_state_manipulation() -> None:
-    x = Const(0.0, _name="x")
+    x = Value(0.0, _name="x")
     x.state = NodeState(1.0, True)
     x.name = "n"
     x.update()
@@ -58,7 +58,7 @@ def test_data_state_manipulation() -> None:
 
 
 def test_data() -> None:
-    x = Const(13.0, _name="x")
+    x = Value(13.0, _name="x")
 
     assert x.value == pytest.approx(13.0)
     assert not x.outdated
@@ -70,7 +70,7 @@ def test_data() -> None:
 
 
 def test_frozen_data_name_manipulation() -> None:
-    x = Const(2.0, _name="x")
+    x = Value(2.0, _name="x")
     x.update()
 
     with pytest.raises(RuntimeError):
@@ -79,7 +79,7 @@ def test_frozen_data_name_manipulation() -> None:
 
 
 def test_frozen_data_needs_seed_manipulation() -> None:
-    x = Const(2.0, _name="x")
+    x = Value(2.0, _name="x")
     x.update()
 
     with pytest.raises(RuntimeError):
@@ -94,7 +94,7 @@ def test_frozen_data_needs_seed_manipulation() -> None:
 
 @pytest.mark.parametrize("Calc", [Calc, TransientCalc])
 def test_calculator_var(Calc) -> None:
-    x = Const(2.0, _name="x")
+    x = Value(2.0, _name="x")
     calc = Calc(np.exp, x)
     v1 = Var(value=calc)
 
@@ -103,7 +103,7 @@ def test_calculator_var(Calc) -> None:
 
 @pytest.mark.parametrize("Calc", [Calc, TransientCalc])
 def test_calculator_init(Calc) -> None:
-    x = Const(2.0, _name="x")
+    x = Value(2.0, _name="x")
     calc = Calc(np.exp, x)
     id_all_inputs = {id(i) for i in calc.all_input_nodes()}
 
@@ -112,7 +112,7 @@ def test_calculator_init(Calc) -> None:
 
 
 def test_calculator_clear_state() -> None:
-    x = Const(2.0, _name="x")
+    x = Value(2.0, _name="x")
     calc = Calc(np.exp, x)
     calc.clear_state()
 
@@ -121,7 +121,7 @@ def test_calculator_clear_state() -> None:
 
 
 def test_transient_calculator_clear_state() -> None:
-    x = Const(2.0, _name="x")
+    x = Value(2.0, _name="x")
     calc = TransientCalc(np.exp, x)
     calc.clear_state()
 
@@ -130,7 +130,7 @@ def test_transient_calculator_clear_state() -> None:
 
 
 def test_calculator_state_manipulation() -> None:
-    x = Const(2.0, _name="x")
+    x = Value(2.0, _name="x")
     calc = Calc(np.exp, x)
     calc.state = NodeState(1.0, True)
 
@@ -143,7 +143,7 @@ def test_calculator_state_manipulation() -> None:
 
 
 def test_transient_calculator_state_manipulation() -> None:
-    x = Const(2.0, _name="x")
+    x = Value(2.0, _name="x")
     calc = TransientCalc(np.exp, x)
     calc.state = NodeState(1.0, True)
 
@@ -158,7 +158,7 @@ def test_transient_calculator_state_manipulation() -> None:
 
 @pytest.mark.parametrize("Calc", [Calc, TransientCalc])
 def test_calculator_arg_input_nodes(Calc) -> None:
-    x = Const(2.0, _name="x")
+    x = Value(2.0, _name="x")
     calc = Calc(np.exp, x)
     id_all_inputs = {id(i) for i in calc.all_input_nodes()}
 
@@ -167,7 +167,7 @@ def test_calculator_arg_input_nodes(Calc) -> None:
 
 @pytest.mark.parametrize("Calc", [Calc, TransientCalc])
 def test_calculator_kwarg_input_nodes(Calc) -> None:
-    x = Const(2.0, _name="x")
+    x = Value(2.0, _name="x")
     calc = Calc(np.exp, x=x)
     id_all_inputs = {id(i) for i in calc.all_input_nodes()}
 
@@ -176,11 +176,11 @@ def test_calculator_kwarg_input_nodes(Calc) -> None:
 
 @pytest.mark.parametrize("Calc", [Calc, TransientCalc])
 def test_manipulated_calculator_input_nodes(Calc) -> None:
-    x = Const(2.0, _name="x")
+    x = Value(2.0, _name="x")
     calc = Calc(np.exp, x)
     calc.update()
 
-    y = Const(3.0, _name="y")
+    y = Value(3.0, _name="y")
     calc.set_inputs(y)
     id_all_inputs = {id(i) for i in calc.all_input_nodes()}
 
@@ -189,7 +189,7 @@ def test_manipulated_calculator_input_nodes(Calc) -> None:
 
 @pytest.mark.parametrize("Calc", [Calc, TransientCalc])
 def test_univariate_calculator(Calc) -> None:
-    x = Const(2.0, _name="x")
+    x = Value(2.0, _name="x")
     calc = Calc(np.exp, x)
     calc.update()
 
@@ -198,7 +198,7 @@ def test_univariate_calculator(Calc) -> None:
 
 @pytest.mark.parametrize("Calc", [Calc, TransientCalc])
 def test_frozen_calc_name_manipulation(Calc) -> None:
-    x = Const(2.0, _name="x")
+    x = Value(2.0, _name="x")
     calc = Calc(np.exp, x)
     calc.update()
 
@@ -209,7 +209,7 @@ def test_frozen_calc_name_manipulation(Calc) -> None:
 
 @pytest.mark.parametrize("Calc", [Calc, TransientCalc])
 def test_frozen_calc_needs_seed_manipulation(Calc) -> None:
-    x = Const(2.0, _name="x")
+    x = Value(2.0, _name="x")
     calc = Calc(np.exp, x)
     calc.update()
 
@@ -220,7 +220,7 @@ def test_frozen_calc_needs_seed_manipulation(Calc) -> None:
 
 @pytest.mark.parametrize("Calc", [Calc, TransientCalc])
 def test_frozen_calculator_function_manipulation(Calc) -> None:
-    x = Const(2.0, _name="x")
+    x = Value(2.0, _name="x")
     calc = Calc(np.exp, x)
     calc.update()
 
@@ -231,7 +231,7 @@ def test_frozen_calculator_function_manipulation(Calc) -> None:
 
 @pytest.mark.parametrize("Calc", [Calc, TransientCalc])
 def test_frozen_calculator_kwinputs_manipulation(Calc) -> None:
-    x = Const(2.0, _name="x")
+    x = Value(2.0, _name="x")
     calc = Calc(np.exp, x)
     calc.update()
 
@@ -240,16 +240,16 @@ def test_frozen_calculator_kwinputs_manipulation(Calc) -> None:
         calc.set_inputs()
 
     with pytest.raises(RuntimeError):
-        calc.set_inputs(y=Const(1.0))
+        calc.set_inputs(y=Value(1.0))
 
 
 @pytest.mark.parametrize("Calc", [Calc, TransientCalc])
 def test_calculator_input_manipulation(Calc) -> None:
-    x = Const(2.0, _name="x")
+    x = Value(2.0, _name="x")
     calc = Calc(np.exp, x)
     calc.update()
 
-    y = Const(1.0, _name="y")
+    y = Value(1.0, _name="y")
     calc.set_inputs(y)
     calc.update()
 
@@ -257,24 +257,24 @@ def test_calculator_input_manipulation(Calc) -> None:
 
 
 def test_calculator_kwinput_manipulation() -> None:
-    x = Const(2, _name="x")
+    x = Value(2, _name="x")
     calc = Calc(lambda x: x, x=x)
     calc.update()
     assert calc.value == 2
 
-    calc.set_inputs(y=Const(1))
+    calc.set_inputs(y=Value(1))
 
     with pytest.raises(RuntimeError):
         calc.update()
 
 
 def test_transient_calculator_kwinput_manipulation() -> None:
-    x = Const(2, _name="x")
+    x = Value(2, _name="x")
     calc = TransientCalc(lambda x: x, x=x)
     calc.update()
     assert calc.value == 2
 
-    calc.set_inputs(y=Const(1))
+    calc.set_inputs(y=Value(1))
 
     with pytest.raises(RuntimeError):
         calc.value
@@ -283,7 +283,7 @@ def test_transient_calculator_kwinput_manipulation() -> None:
 @pytest.mark.parametrize("Calc", [Calc, TransientCalc])
 def test_n_to_1_calculator(Calc) -> None:
     x_vec = np.array([1.0, 2.0])
-    x = Const(x_vec, _name="x")
+    x = Value(x_vec, _name="x")
     calc = Calc(np.linalg.norm, x)
     calc.update()
 
@@ -293,7 +293,7 @@ def test_n_to_1_calculator(Calc) -> None:
 @pytest.mark.parametrize("Calc", [Calc, TransientCalc])
 def test_n_to_n_calculator(Calc) -> None:
     x_vec = np.array([[0, 1, 2], [3, 4, 5], [7, 8, 9]])
-    x = Const(x_vec, _name="x")
+    x = Value(x_vec, _name="x")
     calc = Calc(np.transpose, x)
     calc.update()
 
@@ -301,7 +301,7 @@ def test_n_to_n_calculator(Calc) -> None:
 
 
 def test_calculator_error_in_update() -> None:
-    x = Const(2.0, _name="x")
+    x = Value(2.0, _name="x")
 
     def update_fn(x):
         raise ValueError("Testing error message.")
@@ -316,7 +316,7 @@ def test_calculator_error_in_update() -> None:
 
 
 def test_transient_calculator_error_in_update() -> None:
-    x = Const(2.0, _name="x")
+    x = Value(2.0, _name="x")
 
     def update_fn(x):
         raise ValueError("Testing error message.")
@@ -334,7 +334,7 @@ def test_calculator_update_on_init_error(local_caplog) -> None:
     def _raise_error(a):
         raise RuntimeError("Testing Error")
 
-    a = Data(1.0)
+    a = Value(1.0)
     with local_caplog() as caplog:
         Calc(_raise_error, a)
         assert "was not updated during initialization" in caplog.records[0].message
@@ -352,7 +352,7 @@ def test_calculator_update_on_init_error(local_caplog) -> None:
 
 @pytest.mark.parametrize("Calc", [Calc, TransientCalc])
 def test_calculator_update_on_init(Calc, local_caplog) -> None:
-    a = Data(0.0)
+    a = Value(0.0)
     b = Calc(np.exp, a)
     assert b.value == pytest.approx(1.0)
 
@@ -364,8 +364,8 @@ def test_calculator_update_on_init(Calc, local_caplog) -> None:
 
 @pytest.mark.parametrize("Dist", [Dist, TransientDist])
 def test_distribution_var(Dist) -> None:
-    loc = Const(0.0, _name="loc")
-    scale = Const(1.0, _name="scale")
+    loc = Value(0.0, _name="loc")
+    scale = Value(1.0, _name="scale")
     dist = Dist(tfd.Normal, loc, scale)
     v1 = Var(value=dist)
 
@@ -374,9 +374,9 @@ def test_distribution_var(Dist) -> None:
 
 @pytest.mark.parametrize("Dist", [Dist, TransientDist])
 def test_distribution_init(Dist) -> None:
-    x = Const(1.0, _name="x")
-    loc = Const(0.0, _name="loc")
-    scale = Const(1.0, _name="scale")
+    x = Value(1.0, _name="x")
+    loc = Value(0.0, _name="loc")
+    scale = Value(1.0, _name="scale")
     dist = Dist(tfd.Normal, loc, scale)
     dist.at = x
     id_all_inputs = {id(i) for i in dist.all_input_nodes()}
@@ -387,9 +387,9 @@ def test_distribution_init(Dist) -> None:
 
 
 def test_distribution_clear_state() -> None:
-    x = Const(1.0, _name="x")
-    loc = Const(0.0, _name="loc")
-    scale = Const(1.0, _name="scale")
+    x = Value(1.0, _name="x")
+    loc = Value(0.0, _name="loc")
+    scale = Value(1.0, _name="scale")
     dist = Dist(tfd.Normal, loc, scale)
     dist.at = x
     dist.clear_state()
@@ -399,9 +399,9 @@ def test_distribution_clear_state() -> None:
 
 
 def test_transient_distribution_clear_state() -> None:
-    x = Const(1.0, _name="x")
-    loc = Const(0.0, _name="loc")
-    scale = Const(1.0, _name="scale")
+    x = Value(1.0, _name="x")
+    loc = Value(0.0, _name="loc")
+    scale = Value(1.0, _name="scale")
     dist = TransientDist(tfd.Normal, loc, scale)
     dist.at = x
     dist.clear_state()
@@ -411,9 +411,9 @@ def test_transient_distribution_clear_state() -> None:
 
 
 def test_distribution_state_manipulation() -> None:
-    x = Const(1.0, _name="x")
-    loc = Const(0.0, _name="loc")
-    scale = Const(1.0, _name="scale")
+    x = Value(1.0, _name="x")
+    loc = Value(0.0, _name="loc")
+    scale = Value(1.0, _name="scale")
     dist = Dist(tfd.Normal, loc, scale)
     dist.at = x
     dist.state = NodeState(1.0, True)
@@ -427,9 +427,9 @@ def test_distribution_state_manipulation() -> None:
 
 
 def test_transient_distribution_state_manipulation() -> None:
-    x = Const(1.0, _name="x")
-    loc = Const(0.0, _name="loc")
-    scale = Const(1.0, _name="scale")
+    x = Value(1.0, _name="x")
+    loc = Value(0.0, _name="loc")
+    scale = Value(1.0, _name="scale")
     dist = TransientDist(tfd.Normal, loc, scale)
     dist.at = x
     dist.state = NodeState(1.0, True)
@@ -445,9 +445,9 @@ def test_transient_distribution_state_manipulation() -> None:
 
 @pytest.mark.parametrize("Dist", [Dist, TransientDist])
 def test_distribution_arg_all_input_nodes(Dist) -> None:
-    x = Const(1.0, _name="x")
-    loc = Const(0.0, _name="loc")
-    scale = Const(1.0, _name="scale")
+    x = Value(1.0, _name="x")
+    loc = Value(0.0, _name="loc")
+    scale = Value(1.0, _name="scale")
     dist = Dist(tfd.Normal, loc, scale)
     dist.at = x
     id_all_inputs = {id(i) for i in dist.all_input_nodes()}
@@ -457,9 +457,9 @@ def test_distribution_arg_all_input_nodes(Dist) -> None:
 
 @pytest.mark.parametrize("Dist", [Dist, TransientDist])
 def test_distribution_kwarg_all_input_nodes(Dist) -> None:
-    x = Const(1.0, _name="x")
-    loc = Const(0.0, _name="loc")
-    scale = Const(1.0, _name="scale")
+    x = Value(1.0, _name="x")
+    loc = Value(0.0, _name="loc")
+    scale = Value(1.0, _name="scale")
     dist = Dist(tfd.Normal, loc=loc, scale=scale)
     dist.at = x
     id_all_inputs = {id(i) for i in dist.all_input_nodes()}
@@ -469,14 +469,14 @@ def test_distribution_kwarg_all_input_nodes(Dist) -> None:
 
 @pytest.mark.parametrize("Dist", [Dist, TransientDist])
 def test_manipulated_distribution_all_input_nodes(Dist) -> None:
-    x = Const(1.0, _name="x")
-    loc = Const(0.0, _name="loc")
-    scale = Const(1.0, _name="scale")
+    x = Value(1.0, _name="x")
+    loc = Value(0.0, _name="loc")
+    scale = Value(1.0, _name="scale")
     dist = Dist(tfd.Normal, loc=loc, scale=scale)
     dist.at = x
     dist.update()
 
-    y = Const(3.0, _name="y")
+    y = Value(3.0, _name="y")
     dist.at = y
     id_all_inputs = {id(i) for i in dist.all_input_nodes()}
 
@@ -485,9 +485,9 @@ def test_manipulated_distribution_all_input_nodes(Dist) -> None:
 
 @pytest.mark.parametrize("Dist", [Dist, TransientDist])
 def test_univariate_distribution(Dist) -> None:
-    x = Const(1.0, _name="x")
-    loc = Const(0.0, _name="loc")
-    scale = Const(1.0, _name="scale")
+    x = Value(1.0, _name="x")
+    loc = Value(0.0, _name="loc")
+    scale = Value(1.0, _name="scale")
     dist = Dist(tfd.Normal, loc, scale)
     dist.at = x
     dist.update()
@@ -498,9 +498,9 @@ def test_univariate_distribution(Dist) -> None:
 
 @pytest.mark.parametrize("Dist", [Dist, TransientDist])
 def test_frozen_distribution_name_manipulation(Dist) -> None:
-    x = Const(1.0, _name="x")
-    loc = Const(0.0, _name="loc")
-    scale = Const(1.0, _name="scale")
+    x = Value(1.0, _name="x")
+    loc = Value(0.0, _name="loc")
+    scale = Value(1.0, _name="scale")
     dist = Dist(tfd.Normal, loc, scale)
     dist.at = x
     dist.update()
@@ -512,9 +512,9 @@ def test_frozen_distribution_name_manipulation(Dist) -> None:
 
 @pytest.mark.parametrize("Dist", [Dist, TransientDist])
 def test_frozen_distribution_needs_seed_manipulation(Dist) -> None:
-    x = Const(1.0, _name="x")
-    loc = Const(0.0, _name="loc")
-    scale = Const(1.0, _name="scale")
+    x = Value(1.0, _name="x")
+    loc = Value(0.0, _name="loc")
+    scale = Value(1.0, _name="scale")
     dist = Dist(tfd.Normal, loc, scale)
     dist.at = x
     dist.update()
@@ -526,9 +526,9 @@ def test_frozen_distribution_needs_seed_manipulation(Dist) -> None:
 
 @pytest.mark.parametrize("Dist", [Dist, TransientDist])
 def test_frozen_distribution_distribution_manipulation(Dist) -> None:
-    x = Const(1.0, _name="x")
-    loc = Const(0.0, _name="loc")
-    scale = Const(1.0, _name="scale")
+    x = Value(1.0, _name="x")
+    loc = Value(0.0, _name="loc")
+    scale = Value(1.0, _name="scale")
     dist = Dist(tfd.Normal, loc, scale)
     dist.at = x
     dist.update()
@@ -540,14 +540,14 @@ def test_frozen_distribution_distribution_manipulation(Dist) -> None:
 
 @pytest.mark.parametrize("Dist", [Dist, TransientDist])
 def test_frozen_distribution_inputs_manipulation(Dist) -> None:
-    x = Const(1.0, _name="x")
-    loc = Const(0.0, _name="loc")
-    scale = Const(1.0, _name="scale")
+    x = Value(1.0, _name="x")
+    loc = Value(0.0, _name="loc")
+    scale = Value(1.0, _name="scale")
     dist = Dist(tfd.Normal, loc, scale)
     dist.at = x
     dist.update()
 
-    rate = Const(1.0, _name="rate")
+    rate = Value(1.0, _name="rate")
 
     with pytest.raises(RuntimeError):
         _ = Model([dist])
@@ -556,9 +556,9 @@ def test_frozen_distribution_inputs_manipulation(Dist) -> None:
 
 @pytest.mark.parametrize("Dist", [Dist, TransientDist])
 def test_frozen_distribution_kwinputs_manipulation(Dist) -> None:
-    x = Const(1.0, _name="x")
-    loc = Const(0.0, _name="loc")
-    scale = Const(1.0, _name="scale")
+    x = Value(1.0, _name="x")
+    loc = Value(0.0, _name="loc")
+    scale = Value(1.0, _name="scale")
     dist = Dist(tfd.Normal, loc, scale)
     dist.at = x
     dist.update()
@@ -568,22 +568,22 @@ def test_frozen_distribution_kwinputs_manipulation(Dist) -> None:
         dist.set_inputs()
 
     with pytest.raises(RuntimeError):
-        dist.set_inputs(rate=Const(1.0))
+        dist.set_inputs(rate=Value(1.0))
 
 
 @pytest.mark.parametrize("Dist", [Dist, TransientDist])
 def test_distribution_input_manipulation(Dist) -> None:
-    x = Const(1.0, _name="x")
-    loc = Const(0.0, _name="loc")
-    scale = Const(1.0, _name="scale")
+    x = Value(1.0, _name="x")
+    loc = Value(0.0, _name="loc")
+    scale = Value(1.0, _name="scale")
     dist = Dist(tfd.Normal, loc, scale)
     dist.at = x
     dist.update()
 
-    rate = Const(1.0, _name="rate")
+    rate = Value(1.0, _name="rate")
     dist.distribution = tfd.Exponential
     dist.set_inputs(rate)
-    x = Const(2.0, _name="x")
+    x = Value(2.0, _name="x")
     dist.at = x
     dist.update()
 
@@ -594,16 +594,16 @@ def test_distribution_input_manipulation(Dist) -> None:
 
 @pytest.mark.parametrize("Dist", [Dist, TransientDist])
 def test_distribution_kwinput_manipulation(Dist) -> None:
-    x = Const(1.0, _name="x")
-    loc = Const(0.0, _name="loc")
-    scale = Const(1.0, _name="scale")
+    x = Value(1.0, _name="x")
+    loc = Value(0.0, _name="loc")
+    scale = Value(1.0, _name="scale")
     dist = Dist(tfd.Normal, loc, scale)
     dist.at = x
     dist.update()
 
     dist.distribution = tfd.Exponential
-    dist.set_inputs(rate=Const(1.0))
-    x = Const(2.0, _name="x")
+    dist.set_inputs(rate=Value(1.0))
+    x = Value(2.0, _name="x")
     dist.at = x
     dist.update()
 
@@ -614,9 +614,9 @@ def test_distribution_kwinput_manipulation(Dist) -> None:
 
 @pytest.mark.parametrize("Dist", [Dist, TransientDist])
 def test_univariate_batched_distribution(Dist) -> None:
-    x = Const([1.0, 2.0], _name="x")
-    loc = Const(0.0, _name="loc")
-    scale = Const(1.0, _name="scale")
+    x = Value([1.0, 2.0], _name="x")
+    loc = Value(0.0, _name="loc")
+    scale = Value(1.0, _name="scale")
     dist = Dist(tfd.Normal, loc, scale)
     dist.at = x
     dist.per_obs = True
@@ -627,9 +627,9 @@ def test_univariate_batched_distribution(Dist) -> None:
 
 @pytest.mark.parametrize("Dist", [Dist, TransientDist])
 def test_univariate_batched_distribution_per_obs_false(Dist) -> None:
-    x = Const([1.0, 2.0], _name="x")
-    loc = Const(0.0, _name="loc")
-    scale = Const(1.0, _name="scale")
+    x = Value([1.0, 2.0], _name="x")
+    loc = Value(0.0, _name="loc")
+    scale = Value(1.0, _name="scale")
     dist = Dist(tfd.Normal, loc, scale)
     dist.at = x
     dist.per_obs = True
@@ -641,9 +641,9 @@ def test_univariate_batched_distribution_per_obs_false(Dist) -> None:
 
 @pytest.mark.parametrize("Dist", [Dist, TransientDist])
 def test_univariate_batched_distribution_per_obs_default(Dist) -> None:
-    x = Const([1.0, 2.0], _name="x")
-    loc = Const(0.0, _name="loc")
-    scale = Const(1.0, _name="scale")
+    x = Value([1.0, 2.0], _name="x")
+    loc = Value(0.0, _name="loc")
+    scale = Value(1.0, _name="scale")
     dist = Dist(tfd.Normal, loc, scale)
     dist.at = x
     dist.update()
@@ -657,9 +657,9 @@ def test_multivariate_distribution(Dist) -> None:
     x_vec = np.array([1.0, 0.5])
     loc_vec = np.array([0.0, 0.5])
     scale_m = np.identity(2)
-    x = Const(x_vec, _name="x")
-    loc = Const(loc_vec, _name="loc")
-    scale = Const(scale_m, _name="scale")
+    x = Value(x_vec, _name="x")
+    loc = Value(loc_vec, _name="loc")
+    scale = Value(scale_m, _name="scale")
     dist = Dist(tfd.MultivariateNormalFullCovariance, loc, scale)
     dist.at = x
     dist.update()
@@ -674,11 +674,11 @@ def test_multivariate_distribution(Dist) -> None:
 @pytest.mark.parametrize("Dist", [Dist, TransientDist])
 def test_multivariate_batched_distribution(Dist) -> None:
     x_vec = np.array([[1.0, 0.5], [0.3, 0.8]])
-    x = Const(x_vec, _name="x")
+    x = Value(x_vec, _name="x")
     loc_vec = np.array([0.0, 0.5])
     scale_m = np.identity(2)
-    loc = Const(loc_vec, _name="loc")
-    scale = Const(scale_m, _name="scale")
+    loc = Value(loc_vec, _name="loc")
+    scale = Value(scale_m, _name="scale")
     dist = Dist(tfd.MultivariateNormalFullCovariance, loc, scale)
     dist.at = x
     dist.per_obs = True

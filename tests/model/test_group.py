@@ -1,6 +1,6 @@
 import pytest
 
-from liesel.model import Const, Group, Var
+from liesel.model import Group, Value, Var
 
 
 class TestGroup:
@@ -26,7 +26,7 @@ class TestGroup:
     def test_vars(self) -> None:
         v1 = Var(0.0, name="v1")
         v2 = Var(0.0, name="v2")
-        n1 = Const(0.0)
+        n1 = Value(0.0)
 
         g = Group("test", var1=v1, var2=v2, nd1=n1)
 
@@ -37,7 +37,7 @@ class TestGroup:
     def test_nodes(self) -> None:
         v1 = Var(0.0, name="v1")
         v2 = Var(0.0, name="v2")
-        n1 = Const(0.0)
+        n1 = Value(0.0)
 
         g = Group("test", var1=v1, var2=v2, nd1=n1)
 
