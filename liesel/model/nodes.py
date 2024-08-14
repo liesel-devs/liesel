@@ -462,23 +462,24 @@ class InputGroup(TransientNode):
 
 class Value(Node):
     r"""
-    A :class:`.Node` subclass that holds constant data.
+    A :class:`.Node` subclass that holds constant values.
 
-    Since the value represented by a data node does not change, it is always up-to-date.
-    A common usecase for data nodes is to cache computed values.
+    Since the information represented by a value node does not change, it is
+    always up-to-date.
+    A common usecase for value nodes is to cache computed values.
 
-    - By default, constant nodes *will* appear in the node graph created by
+    - By default, value nodes *will* appear in the node graph created by
       :func:`.viz.plot_nodes`, but they will *not* appear in the model graph created by
       :func:`.viz.plot_vars`.
-    - You can wrap a constant node in a :class:`.Var` to make it appear in the model
+    - You can wrap a value node in a :class:`.Var` to make it appear in the model
       graph.
 
     Parameters
     ----------
     value
-        The value of the constant node.
+        The value of the node.
     _name
-        The name of the constant node. If you do not specify a name, a unique name will
+        The name of the node. If you do not specify a name, a unique name will
         be \ automatically generated upon initialization of a :class:`.Model`.
 
     See Also
