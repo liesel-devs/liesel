@@ -1105,7 +1105,7 @@ class Var:
 
     def transform(
         self,
-        bijector: type[jb.Bijector] | jb.Bijector | None,
+        bijector: type[jb.Bijector] | jb.Bijector | None = None,
         *bijector_args,
         **bijector_kwargs,
     ) -> Var:
