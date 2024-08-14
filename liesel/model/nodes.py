@@ -1222,16 +1222,8 @@ class Var:
         if isinstance(bijector, type) and not bijector_args and not bijector_kwargs:
             raise RuntimeError(
                 "You passed a bijector class instead of an instance, but did not "
-                "provide any arguments. You should either provide arguments "
-                "or pass an instance of the bijector class."
-            )
-
-        if not isinstance(bijector, type) and (bijector_args or bijector_kwargs):
-            raise RuntimeError(
-                "You passed a bijector instance and "
-                "nonempty bijector arguments. You should either initialise your "
-                "bijector directly with the arguments, or pass a bijector class "
-                "instead."
+                "provide any arguments for the bijector. You should either provide "
+                "arguments or pass an instance of the bijector class instead."
             )
 
         # avoid infinite recursion
@@ -1248,6 +1240,13 @@ class Var:
                 self, bijector, *bijector_args, **bijector_kwargs
             )
         else:
+            if bijector_args or bijector_kwargs:
+                raise RuntimeError(
+                    "You passed a bijector instance and "
+                    "nonempty bijector arguments. You should either initialise your "
+                    "bijector directly with the arguments, or pass a bijector class "
+                    "instead."
+                )
             tvar = _transform_var_with_bijector_instance(self, bijector)
 
         tvar.parameter = self.parameter  # type: ignore
