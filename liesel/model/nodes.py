@@ -1070,6 +1070,49 @@ class Var:
         self.info: dict[str, Any] = {}
         """Additional meta-information about the variable as a dict."""
 
+    @classmethod
+    def new_param(
+        cls, value: Any, distribution: Dist | None = None, name: str = ""
+    ) -> Var:
+        var = cls(value, distribution, name)
+        var.value_node.monitor = True
+        var.parameter = True
+        return var
+
+    @classmethod
+    def new_obs(
+        cls, value: Any, distribution: Dist | None = None, name: str = ""
+    ) -> Var:
+        var = cls(value, distribution, name)
+        var.observed = True
+        return var
+
+    @classmethod
+    def new_calc(
+        cls,
+        function: Callable[..., Any],
+        *inputs: Any,
+        name: str = "",
+        _needs_seed: bool = False,
+        update_on_init: bool = True,
+        **kwinputs: Any,
+    ) -> Var:
+        calc = Calc(
+            function,
+            *inputs,
+            _name=f"{name}_calc",
+            _needs_seed=_needs_seed,
+            update_on_init=update_on_init,
+            **kwinputs,
+        )
+        var = cls(calc, name=name)
+        return var
+
+    @classmethod
+    def new_const(cls, value: Any, name: str = "") -> Var:
+        var = cls(value, name=name)
+        return var
+
     def all_input_nodes(self) -> tuple[Node, ...]:
         """Returns all input *nodes* as a unique tuple."""
         inputs1 = self.value_node.all_input_nodes()

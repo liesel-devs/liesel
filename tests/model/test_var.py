@@ -511,3 +511,42 @@ def test_indirect_connection() -> None:
     assert len(v3.all_input_vars()) == 1
     assert len(v2.all_input_vars()) == 1
     assert len(v0.all_input_vars()) == 0
+
+
+class TestVarConstructors:
+    def test_new_param(self):
+        loc = lnodes.Var.new_param(1.0, name="loc")
+        assert isinstance(loc, lnodes.Var)
+        assert loc.parameter
+        assert loc.value_node.monitor
+        assert loc.strong
+
+        dist = lnodes.Dist(tfp.distributions.Normal, 0.0, 1.0)
+        loc = lnodes.Var.new_param(1.0, dist, name="loc")
+        assert isinstance(loc, lnodes.Var)
+        assert loc.parameter
+        assert loc.value_node.monitor
+        assert loc.strong
+
+    def test_new_obs(self):
+        loc = lnodes.Var.new_obs(1.0, name="loc")
+        assert isinstance(loc, lnodes.Var)
+        assert loc.observed
+        assert loc.strong
+
+        dist = lnodes.Dist(tfp.distributions.Normal, 0.0, 1.0)
+        loc = lnodes.Var.new_obs(1.0, dist, name="loc")
+        assert isinstance(loc, lnodes.Var)
+        assert loc.observed
+        assert loc.strong
+
+    def test_new_calc(self):
+        loc = lnodes.Var.new_calc(lambda x: x + 1.0, 1.0, name="loc")
+        assert isinstance(loc, lnodes.Var)
+        assert loc.value == pytest.approx(2.0)
+        assert loc.weak
+
+    def test_new_const(self):
+        loc = lnodes.Var.new_const(1.0, name="loc")
+        assert isinstance(loc, lnodes.Var)
+        assert loc.strong
