@@ -949,6 +949,13 @@ class Dist(Node):
         self._outdated = False
         return self
 
+    @property
+    def iloc(self) -> tuple[Node | Var, ...]:
+        iloc = super().iloc
+        if self.at:
+            return iloc[:-1]
+        return iloc
+
 
 class TransientDist(TransientNode, Dist):
     """A transient distribution node that does not cache its value."""
