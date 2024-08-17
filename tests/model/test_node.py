@@ -745,6 +745,66 @@ class TestDistGetitem:
         assert x["scale"] is scale
 
 
+class TestDistSetitem:
+    def test_anonymous_values(self):
+        x = Var(0.0, Dist(tfd.Normal, loc=0.0, scale=1.0)).update()
+
+        assert x.log_prob == pytest.approx(
+            tfd.Normal(loc=0.0, scale=1.0).log_prob(x.value)
+        )
+
+        x.dist_node["loc"] = 2.0
+        x.update()
+
+        assert x.log_prob == pytest.approx(
+            tfd.Normal(loc=2.0, scale=1.0).log_prob(x.value)
+        )
+        assert len(x.dist_node.iloc) == 2
+
+        x.dist_node[1] = 2.0
+        x.update()
+
+        assert x.log_prob == pytest.approx(
+            tfd.Normal(loc=2.0, scale=2.0).log_prob(x.value)
+        )
+
+    def test_cannot_replace_dist_at(self):
+        x = Var(0.0, Dist(tfd.Normal, loc=0.0, scale=1.0)).update()
+        with pytest.raises(IndexError):
+            x.dist_node[2] = Var(1.0)
+
+    def test_positional_values(self):
+        x = Var(0.0, Dist(tfd.Normal, 0.0, 1.0)).update()
+
+        assert x.log_prob == pytest.approx(
+            tfd.Normal(loc=0.0, scale=1.0).log_prob(x.value)
+        )
+
+        x.dist_node[0] = 2.0
+        x.update()
+
+        assert x.log_prob == pytest.approx(
+            tfd.Normal(loc=2.0, scale=1.0).log_prob(x.value)
+        )
+
+        with pytest.raises(KeyError):
+            x.dist_node["loc"] = 2.0
+
+    def test_replace_with_var(self):
+        x = Var(0.0, Dist(tfd.Normal, 0.0, 1.0)).update()
+
+        assert x.log_prob == pytest.approx(
+            tfd.Normal(loc=0.0, scale=1.0).log_prob(x.value)
+        )
+
+        x.dist_node[0] = Var(2.0, name="loc")
+        x.update()
+
+        assert x.log_prob == pytest.approx(
+            tfd.Normal(loc=2.0, scale=1.0).log_prob(x.value)
+        )
+
+
 class TestCalcGetitem:
     def test_anonymous_values(self):
         x = Calc(lambda loc, scale: loc * scale, loc=0.0, scale=1.0)

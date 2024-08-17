@@ -406,6 +406,35 @@ class Node(ABC):
         else:
             raise ValueError(f"Key must be str or int, not {type(key)}.")
 
+    def _iloc_replace(self, key: int, value: Node | Var | Any) -> None:
+        inputs = list(self.inputs)
+        inputs[key] = self._to_node(value)
+
+        return self.set_inputs(*inputs, **self.kwinputs)
+
+    def _loc_replace(self, key: str, value: Node | Var | Any) -> None:
+        kwinputs = dict(self.kwinputs)
+        if key not in kwinputs:
+            raise KeyError(f"'{key}' is not the key of an existing keyword input.")
+        kwinputs[key] = self._to_node(value)
+        return self.set_inputs(*self.inputs, **kwinputs)
+
+    def __setitem__(self, key: int | str, value: Node | Var | Any) -> None:
+        if isinstance(key, int):
+            all_inputs = self.all_input_nodes()
+            node_to_replace = all_inputs[key]
+
+            for kwinputs_key, kwinputs_node in self.kwinputs.items():
+                if node_to_replace is kwinputs_node:
+                    return self._loc_replace(kwinputs_key, value)
+
+            return self._iloc_replace(key, value)
+
+        elif isinstance(key, str):
+            return self._loc_replace(key, value)
+        else:
+            raise ValueError(f"Key must be str or int, not {type(key)}.")
+
     def __getstate__(self):
         state = self.__dict__.copy()
         state["_model"] = self._model()
