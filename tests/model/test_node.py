@@ -688,3 +688,121 @@ def test_multivariate_batched_distribution(Dist) -> None:
         dist.value,
         tfd.MultivariateNormalFullCovariance(loc_vec, scale_m).log_prob(x_vec),
     )
+
+
+class TestDistGetitem:
+    def test_anonymous_values(self):
+        x = Dist(tfd.Normal, loc=0.0, scale=1.0)
+
+        assert x[0] is x.all_input_nodes()[0]
+        assert x[1] is x.all_input_nodes()[1]
+
+        x = Dist(tfd.Normal, loc=Data(0.0), scale=Data(1.0))
+
+        assert x[0] is x.all_input_nodes()[0]
+        assert x[1] is x.all_input_nodes()[1]
+
+    def test_anonymous_values_positional(self):
+        x = Dist(tfd.Normal, 0.0, 1.0)
+
+        assert x[0] is x.all_input_nodes()[0]
+        assert x[1] is x.all_input_nodes()[1]
+
+    def test_vars_named_kw(self):
+        loc = Var(0.0, name="loc")
+        scale = Var(1.0, name="scale")
+        x = Dist(tfd.Normal, loc=loc, scale=scale)
+
+        assert x[0] is loc
+        assert x[1] is scale
+
+        assert x["loc"] is loc
+        assert x["scale"] is scale
+
+    def test_vars_named_positional(self):
+        loc = Var(0.0, name="loc")
+        scale = Var(1.0, name="scale")
+        x = Dist(tfd.Normal, loc, scale)
+
+        assert x[0] is loc
+        assert x[1] is scale
+
+        with pytest.raises(KeyError):
+            x["loc"]
+
+        with pytest.raises(KeyError):
+            x["scale"]
+
+    def test_vars_unnamed(self):
+        loc = Var(0.0)
+        scale = Var(1.0)
+        x = Dist(tfd.Normal, loc=loc, scale=scale)
+
+        assert x[0] is loc
+        assert x[1] is scale
+
+        assert x["loc"] is loc
+        assert x["scale"] is scale
+
+
+class TestCalcGetitem:
+    def test_anonymous_values(self):
+        x = Calc(lambda loc, scale: loc * scale, loc=0.0, scale=1.0)
+
+        assert x[0] is x.all_input_nodes()[0]
+        assert x[1] is x.all_input_nodes()[1]
+
+    def test_anonymous_value_nodes(self):
+        x = Calc(lambda loc, scale: loc * scale, loc=Data(0.0), scale=Data(1.0))
+
+        assert x[0] is x.all_input_nodes()[0]
+        assert x[1] is x.all_input_nodes()[1]
+
+        loc = Data(0.0)
+        scale = Data(0.0)
+        x = Calc(lambda loc, scale: loc * scale, loc=loc, scale=scale)
+
+        assert x[0] is loc
+        assert x[1] is scale
+
+    def test_anonymous_values_positional(self):
+        x = Calc(lambda loc, scale: loc * scale, 0.0, 1.0)
+
+        assert x[0] is x.all_input_nodes()[0]
+        assert x[1] is x.all_input_nodes()[1]
+
+    def test_vars_named_kw(self):
+        loc = Var(0.0, name="loc")
+        scale = Var(1.0, name="scale")
+        x = Calc(lambda loc, scale: loc * scale, loc=loc, scale=scale)
+
+        assert x[0] is loc
+        assert x[1] is scale
+
+        assert x["loc"] is loc
+        assert x["scale"] is scale
+
+    def test_vars_named_positional(self):
+        loc = Var(0.0, name="loc")
+        scale = Var(1.0, name="scale")
+        x = Calc(lambda loc, scale: loc * scale, loc, scale)
+
+        assert x[0] is loc
+        assert x[1] is scale
+
+        with pytest.raises(KeyError):
+            x["loc"]
+
+        with pytest.raises(KeyError):
+            x["scale"]
+
+    def test_vars_unnamed(self):
+        loc = Var(0.0)
+        scale = Var(1.0)
+        x = Calc(lambda loc, scale: loc * scale, loc=loc, scale=scale)
+
+        assert x[0] is loc
+        assert x[1] is scale
+
+        assert x["loc"] is loc
+        assert x["scale"] is scale

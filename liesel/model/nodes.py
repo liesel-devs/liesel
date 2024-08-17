@@ -372,6 +372,40 @@ class Node(ABC):
         """The variable the node is part of."""
         return self._var
 
+    @property
+    def iloc(self) -> tuple[Node | Var, ...]:
+        input_list: list[Node | Var] = []
+        for input_ in self.all_input_nodes():
+            if isinstance(input_, VarValue):
+                if input_.var is None:
+                    raise RuntimeError(f"{input_}.var is None.")
+                input_list.append(input_.var)
+            else:
+                input_list.append(input_)
+
+        return tuple(input_list)
+
+    @property
+    def loc(self) -> dict[str, Node | Var]:
+        input_dict: dict[str, Node | Var] = {}
+        for key, input_ in self.kwinputs.items():
+            if isinstance(input_, VarValue):
+                if input_.var is None:
+                    raise RuntimeError(f"{input_}.var is None.")
+                input_dict[key] = input_.var
+            else:
+                input_dict[key] = input_
+
+        return input_dict
+
+    def __getitem__(self, key: int | str) -> Node | Var:
+        if isinstance(key, int):
+            return self.iloc[key]
+        elif isinstance(key, str):
+            return self.loc[key]
+        else:
+            raise ValueError(f"Key must be str or int, not {type(key)}.")
+
     def __getstate__(self):
         state = self.__dict__.copy()
         state["_model"] = self._model()
