@@ -5,6 +5,7 @@ import tensorflow_probability.substrates.jax as tfp
 
 import liesel.model.model as lmodel
 import liesel.model.nodes as lnodes
+from liesel.model import Calc, Data, Dist, Var
 
 
 def test_initialization() -> None:
@@ -511,3 +512,55 @@ def test_indirect_connection() -> None:
     assert len(v3.all_input_vars()) == 1
     assert len(v2.all_input_vars()) == 1
     assert len(v0.all_input_vars()) == 0
+
+
+class TestVarGetitem:
+    def test_calc_with_var_input(self):
+        xvar = Var(2.0, name="xvar")
+        y = Var(Calc(lambda xarg: xarg + 1.0, xarg=xvar))
+
+        assert y[0] is xvar
+        assert y["xarg"] is xvar
+
+    def test_calc_with_positional_var_input(self):
+        xvar = Var(2.0, name="xvar")
+        y = Var(Calc(lambda xarg: xarg + 1.0, xvar))
+
+        assert y[0] is xvar
+        with pytest.raises(KeyError):
+            y["xarg"]
+
+    def test_calc_with_multiple_var_inputs(self):
+        xvar = Var(2.0, name="xvar")
+        zvar = Var(3.0, name="zvar")
+        y = Var(Calc(lambda xarg, zarg: xarg + zarg, xarg=xvar, zarg=zvar))
+
+        assert y[0] is xvar
+        assert y["xarg"] is xvar
+
+        assert y[1] is zvar
+        assert y["zarg"] is zvar
+
+    def test_calc_with_node_input(self):
+        xnode = Data(2.0, _name="xnode")
+        y = Var(Calc(lambda xarg: xarg + 1.0, xarg=xnode))
+
+        assert y[0] is xnode
+        assert y["xarg"] is xnode
+
+    def test_calc_with_float_input(self):
+        xfloat = 2.0
+        y = Var(Calc(lambda xarg: xarg + 1.0, xarg=2.0))
+
+        assert y[0] is not xfloat
+        assert y["xarg"] is not xfloat
+
+        assert y[0] is y.value_node.all_input_nodes()[0]
+        assert y["xarg"] is y.value_node.all_input_nodes()[0]
+
+    def test_dist_with_var_input(self):
+        xvar = Var(2.0, name="xvar")
+        y = Var(1.0, Dist(tfp.distributions.Normal, loc=xvar, scale=1.0))
+
+        assert y.dist_node[0] is xvar
+        assert y.dist_node["loc"] is xvar
