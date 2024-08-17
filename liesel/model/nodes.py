@@ -12,7 +12,7 @@ from collections.abc import Callable, Hashable, Iterable
 from functools import wraps
 from itertools import chain
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar, Union
+from typing import TYPE_CHECKING, Any, NamedTuple, Self, TypeVar, Union
 
 import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as jd
@@ -1073,7 +1073,7 @@ class Var:
     @classmethod
     def new_param(
         cls, value: Any, distribution: Dist | None = None, name: str = ""
-    ) -> Var:
+    ) -> Self:
         var = cls(value, distribution, name)
         var.value_node.monitor = True
         var.parameter = True
@@ -1082,7 +1082,7 @@ class Var:
     @classmethod
     def new_obs(
         cls, value: Any, distribution: Dist | None = None, name: str = ""
-    ) -> Var:
+    ) -> Self:
         var = cls(value, distribution, name)
         var.observed = True
         return var
@@ -1096,7 +1096,7 @@ class Var:
         _needs_seed: bool = False,
         update_on_init: bool = True,
         **kwinputs: Any,
-    ) -> Var:
+    ) -> Self:
         calc = Calc(
             function,
             *inputs,
@@ -1109,7 +1109,7 @@ class Var:
         return var
 
     @classmethod
-    def new_const(cls, value: Any, name: str = "") -> Var:
+    def new_const(cls, value: Any, name: str = "") -> Self:
         var = cls(value, name=name)
         return var
 
