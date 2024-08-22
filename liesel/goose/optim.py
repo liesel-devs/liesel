@@ -424,6 +424,9 @@ def optim_flat(
             name: jnp.zeros((stopper.max_iter,) + jnp.shape(value))
             for name, value in position.items()
         }
+        history["position"] = jax.tree.map(
+            lambda d, pos: d.at[0].set(pos), history["position"], position
+        )
     else:
         history["position"] = None
 
