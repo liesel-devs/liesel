@@ -147,7 +147,7 @@ class GraphBuilder:
     []
     """
 
-    def __init__(self):
+    def __init__(self, to_float32: bool = True):
         self.nodes: list[Node] = []
         """The nodes that were explicitly added to the graph."""
 
@@ -157,6 +157,7 @@ class GraphBuilder:
         self._log_lik_node: Node | None = None
         self._log_prior_node: Node | None = None
         self._log_prob_node: Node | None = None
+        self.to_float32 = to_float32
 
     def _add_model_log_lik_node(self) -> GraphBuilder:
         """Adds the model log-likelihood node with the name ``_model_log_lik``."""
@@ -276,7 +277,7 @@ class GraphBuilder:
         return self
 
     def add(
-        self, *args: Node | Var | GraphBuilder, to_float32: bool = True
+        self, *args: Node | Var | GraphBuilder, to_float32: bool | None = None
     ) -> GraphBuilder:
         """
         Adds nodes, variables or other graph builders to the graph.
@@ -320,6 +321,9 @@ class GraphBuilder:
         Model(9 nodes, 3 vars)
         """
 
+        if to_float32 is None:
+            to_float32 = self.to_float32
+
         for arg in args:
             if isinstance(arg, Node):
                 self.nodes.append(arg)
@@ -336,7 +340,9 @@ class GraphBuilder:
 
         return self
 
-    def add_groups(self, *groups: Group, to_float32: bool = True) -> GraphBuilder:
+    def add_groups(
+        self, *groups: Group, to_float32: bool | None = None
+    ) -> GraphBuilder:
         """
         Adds groups to the graph.
 
@@ -352,6 +358,9 @@ class GraphBuilder:
         -------
         The graph builder.
         """
+
+        if to_float32 is None:
+            to_float32 = self.to_float32
 
         for group in groups:
             old = self.groups()
@@ -523,7 +532,7 @@ class GraphBuilder:
 
     def copy(self) -> GraphBuilder:
         """Returns a shallow copy of the graph builder."""
-        gb = GraphBuilder()
+        gb = GraphBuilder(to_float32=self.to_float32)
         gb.nodes = self.nodes.copy()
         gb.vars = self.vars.copy()
 
