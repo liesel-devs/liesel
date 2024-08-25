@@ -239,6 +239,12 @@ def optim_flat(
     the batching functionality implemented here assumes a "flat" model structure.
     See below for details.
 
+    .. warning::
+        This function is experimental.
+        The API may change more quickly than in other parts of the library.
+        Check your results carefully. If you encounter puzzling results, try to disable
+        batching.
+
     Params
     ------
     model_train
