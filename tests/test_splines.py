@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from scipy.interpolate import BSpline
 
-from liesel.splines import basis_matrix, equidistant_knots
+from liesel.splines import basis_matrix, equidistant_knots, pspline_penalty
 
 
 def test_knots_creation():
@@ -109,3 +109,17 @@ class TestBasisMatrix:
         B = basis_matrix_vec(x, knots, order, True)
 
         assert B.shape == (2, n, n_params)
+
+
+class TestPsplinePenalty:
+    def test_shape(self):
+        d = 10
+
+        P = pspline_penalty(d)
+        assert P.shape == (d, d)
+
+    def test_rank(self):
+        d = 10
+        for diff in [1, 2, 3]:
+            P = pspline_penalty(d, diff=diff)
+            assert jnp.linalg.matrix_rank(P) == d - diff

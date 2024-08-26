@@ -189,3 +189,25 @@ def basis_matrix(
     design_matrix = vmap(lambda x: _build_basis_vector(x, knots, order))(x)
 
     return design_matrix
+
+
+def pspline_penalty(d: int, diff: int = 2):
+    """
+    Builds an (n_param x n_param) P-spline penalty matrix.
+
+    Parameters
+    ----------
+    d
+        Integer, dimension of the matrix. Corresponds to the number of parameters \
+        in a P-spline.
+    diff
+        Order of the differences used in constructing the penalty matrix. The default \
+        of ``diff=2`` corresponds to the common P-spline default of penalizing second \
+        differences.
+
+    Returns
+    -------
+    A 2d array, the penalty matrix.
+    """
+    D = jnp.diff(jnp.identity(d), diff, axis=0)
+    return D.T @ D
