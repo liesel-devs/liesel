@@ -929,7 +929,7 @@ class Model:
         Whether the nodes and variables should be copied upon initialization.
     to_float32
         Whether to convert the dtype of the values of the added nodes \
-        from float64 to float32.
+        from float64 to float32. Only takes effect if ``grow=True``.
 
     See Also
     --------
