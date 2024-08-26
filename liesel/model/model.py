@@ -983,9 +983,12 @@ class Model:
         nodes_and_vars: Iterable[Node | Var],
         grow: bool = True,
         copy: bool = False,
+        to_float32: bool = True,
     ):
         if grow:
-            model = GraphBuilder().add(*nodes_and_vars).build_model()
+            model = (
+                GraphBuilder(to_float32=to_float32).add(*nodes_and_vars).build_model()
+            )
             nodes_and_vars = [*model.nodes.values(), *model.vars.values()]
             model.pop_nodes_and_vars()
 
