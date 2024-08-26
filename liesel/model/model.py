@@ -102,6 +102,12 @@ class GraphBuilder:
     been constructed, some methods of the graph builder are not available anymore,
     because the graph is considered static.
 
+    Parameters
+    ----------
+    to_float32
+        Whether to convert the dtype of the values of the added nodes \
+        from float64 to float32.
+
     See Also
     --------
 
@@ -921,6 +927,9 @@ class Model:
         the recursive inputs of the nodes and variables), and to add the model nodes.
     copy
         Whether the nodes and variables should be copied upon initialization.
+    to_float32
+        Whether to convert the dtype of the values of the added nodes \
+        from float64 to float32.
 
     See Also
     --------
