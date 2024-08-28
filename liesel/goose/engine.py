@@ -712,7 +712,7 @@ class Engine:
         it = range(duration // self._jitted_sample_duration)
 
         if self._show_progress:
-            it = tqdm(it, ncols=80, disable=None, unit="chunk")
+            it = tqdm(it, ncols=80, unit="chunk")
 
         for dur_i in it:
             # FIXME: split for entire duration instead of each loop iteration
