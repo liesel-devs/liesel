@@ -550,7 +550,7 @@ class TestVarTransform:
     def test_transform_class_no_args(self) -> None:
         prior = lnodes.Dist(tfp.distributions.HalfCauchy, loc=0.0, scale=25.0)
         tau = lnodes.Var(10.0, prior, name="tau")
-        with pytest.raises(RuntimeError):
+        with pytest.raises(ValueError):
             tau.transform(tfp.bijectors.Exp)
 
     def test_transform_class_with_args(self) -> None:

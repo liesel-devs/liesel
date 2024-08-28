@@ -1141,7 +1141,8 @@ class Var:
         ------
         RuntimeError
             If the variable is weak or if the variable has no distribution.
-            Also, if the argument ``bijector`` is ``None``, but the distribution does
+        ValueError
+            If the argument ``bijector`` is ``None``, but the distribution does
             not have a default event space bijector.
 
         Notes
@@ -1220,7 +1221,7 @@ class Var:
             raise RuntimeError(f"{repr(self)} has no distribution")
 
         if isinstance(bijector, type) and not bijector_args and not bijector_kwargs:
-            raise RuntimeError(
+            raise ValueError(
                 "You passed a bijector class instead of an instance, but did not "
                 "provide any arguments for the bijector. You should either provide "
                 "arguments or pass an instance of the bijector class instead."
