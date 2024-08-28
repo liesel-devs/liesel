@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 import pandas as pd
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 from ..model import Model, Node, Var
 from .interface import LieselInterface
