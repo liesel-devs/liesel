@@ -379,8 +379,6 @@ def save_figure(g: sns.FacetGrid | None = None, save_path: str | None = None) ->
             g.fig.savefig(save_path)
         else:
             plt.savefig(save_path)
-    else:
-        plt.show()
 
 
 def plot_trace(
@@ -399,6 +397,7 @@ def plot_trace(
     aspect_ratio: int = 1,
     save_path: str | None = None,
     include_warmup: bool = False,
+    show: bool = True,
     **kwargs,
 ) -> sns.FacetGrid:
     """
@@ -495,6 +494,8 @@ def plot_trace(
     g = _set_aesthetics(g, title, title_spacing, xlabel, ylabel="")
 
     save_figure(g, save_path)
+    if save_path is not None and show:
+        plt.show()
     return g
 
 
@@ -605,6 +606,7 @@ def plot_density(
     g = _set_aesthetics(g, title, title_spacing, xlabel, ylabel="")
 
     save_figure(g, save_path)
+
     return g
 
 
