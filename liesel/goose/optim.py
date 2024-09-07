@@ -7,6 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 import pandas as pd
+from tqdm import tqdm
 
 from ..model import Model, Node, Var
 from .interface import LieselInterface
@@ -94,63 +95,87 @@ class Stopper:
         The maximum number of optimization steps.
     patience
         Early stopping happens only, if there was no improvement for the number of\
-        patience iterations.
+        patience iterations, and there were at least as many iterations as the length\
+        of the patience window.
     atol
-        The absolute tolerance for early stopping. If the change in the negative log\
-        probability (compared to the best value observed within the patience period)\
-        is smaller than this value, optimization stops early.
+        The absolute tolerance for early stopping.
     rtol
-        The relative tolerance for early stopping. If the relative absolute change in \
-        the negative log probability is smaller than this value, the optimization stops.
+        The relative tolerance for early stopping. The default of ``0.0`` means that \
+        no early stopping happens based on the relative tolerance.
+
+    Notes
+    -----
+    Early stopping happens, when the oldest loss value within the patience window is
+    the best loss value within the patience window. A simplified pseudo-implementation
+    is:
+
+    .. code-block:: python
+
+        def stop(patience, i, loss_history):
+            recent_history = loss_history[-patience:]
+            oldest_within_patience = recent_history[0]
+            best_within_patience = np.min(recent_history)
+
+            return oldest_within_patience <= best_within_patience
+
+    Absolute and relative tolerance make it possible to stop even in cases when the
+    oldest loss within patience is *not* the best. Instead, the algorithm stops, when
+    the absolute *or* relative difference between the oldest loss within patience and
+    the best loss within patience is so small that it can be neglected.
+    To be clear: If either of the two conditions is met, then early stopping happens.
+    The relative magnitude of the difference is calculaterd with respect to the best
+    lost within patience. A simplified pseudo-implementation is:
+
+    .. code-block:: python
+
+        def stop(patience, i, loss_history, atol, rtol):
+            recent_history = loss_history[-patience:]
+            oldest_within_patience = recent_history[0]
+            best_within_patience = np.min(recent_history)
+
+            diff = oldest_within_patience - best_within_patience
+            rel_diff = diff / np.abs(best_within_patience)
+
+            abs_improvement_is_neglectable = diff <= atol
+            rel_improvement_is_neglectable = rel_diff <= rtol
+
+            return (abs_improvement_is_neglectable | rel_improvement_is_neglectable)
+
     """
 
     max_iter: int
     patience: int
     atol: float = 1e-3
-    rtol: float = 1e-12
+    rtol: float = 0.0
 
     def stop_early(self, i: int | Array, loss_history: Array):
-        """
-        Includes loss at iterations *before* i, but excluding i itself.
-        """
         p = self.patience
-        lower = jnp.max(jnp.array([(i - 1) - p, 0]))
+        lower = jnp.max(jnp.array([i - p + 1, 0]))
         recent_history = jax.lax.dynamic_slice(
             loss_history, start_indices=(lower,), slice_sizes=(p,)
         )
 
         best_loss_in_recent = jnp.min(recent_history)
-        current_loss = loss_history[i]
+        oldest_loss_in_recent = recent_history[0]
 
-        change = current_loss - best_loss_in_recent
-        """
-        If current_loss is better than best_loss_in_recent, this is negative.
-        If current_loss is worse, this is positive.
-        """
-        rel_change = jnp.abs(jnp.abs(change) / best_loss_in_recent)
+        diff = oldest_loss_in_recent - best_loss_in_recent
+        abs_improvement_is_neglectable = diff <= self.atol
 
-        no_improvement = change > self.atol
+        rel_diff = diff / jnp.abs(best_loss_in_recent)
+        rel_improvement_is_neglectable = rel_diff <= self.rtol
+
+        current_i_is_after_patience = i > p
         """
-        If the current loss has not improved upon the best loss in the patience
-        period, we always want to stop. However, we actually allow for slightly
-        worse losses, defined by the absolute tolerance here.
+        Stopping happens only if we actually went through a full patience period.
         """
 
-        no_rel_change = ~no_improvement & (rel_change < self.rtol)
-        """
-        Let's say the current value *does* improve upon the best value within patience,
-        such that no_improvement=False.
-
-        In this case, if the improvement is very small compared to the best observed
-        loss in the patience period, we may still want to stop.
-        """
-
-        return (no_improvement | no_rel_change) & (i > p)
+        stop = abs_improvement_is_neglectable | rel_improvement_is_neglectable
+        return stop & current_i_is_after_patience
 
     def stop_now(self, i: int | Array, loss_history: Array):
         """Whether optimization should stop now."""
         stop_early = self.stop_early(i=i, loss_history=loss_history)
-        stop_max_iter = i >= self.max_iter
+        stop_max_iter = i >= (self.max_iter - 1)
 
         return stop_early | stop_max_iter
 
@@ -167,10 +192,10 @@ class Stopper:
         """
         p = self.patience
         recent_history = jax.lax.dynamic_slice(
-            loss_history, start_indices=(i - p,), slice_sizes=(p,)
+            loss_history, start_indices=(i - p + 1,), slice_sizes=(p,)
         )
         imin = jnp.argmin(recent_history)
-        return i - self.patience + imin
+        return i - self.patience + imin + 1
 
 
 def _validate_log_prob_decomposition(
@@ -197,13 +222,14 @@ def optim_flat(
     model_train: Model,
     params: Sequence[str],
     optimizer: optax.GradientTransformation | None = None,
-    stopper: Stopper = Stopper(max_iter=10_000, patience=10),
+    stopper: Stopper | None = None,
     batch_size: int | None = None,
     batch_seed: int | None = None,
     save_position_history: bool = True,
     model_validation: Model | None = None,
     restore_best_position: bool = True,
     prune_history: bool = True,
+    progress_bar: bool = True,
 ) -> OptimResult:
     """
     Optimize the parameters of a  Liesel :class:`.Model`.
@@ -212,6 +238,12 @@ def optim_flat(
     negative log posterior probability of the model. If you use batching, be aware that
     the batching functionality implemented here assumes a "flat" model structure.
     See below for details.
+
+    .. warning::
+        This function is experimental.
+        The API may change more quickly than in other parts of the library.
+        Check your results carefully. If you encounter puzzling results, try to disable
+        batching.
 
     Params
     ------
@@ -247,6 +279,8 @@ def optim_flat(
         means, the history can be shorter than the maximum number of iterations defined\
         by the supplied :class:`.Stopper`. If ``False``, unused history entries are set\
         to ``jax.numpy.nan`` if optimization stops early.
+    progress_bar
+        Whether to use a progress bar.
 
     Returns
     -------
@@ -319,6 +353,9 @@ def optim_flat(
         batch_seed if batch_seed is not None else np.random.randint(low=1, high=1000)
     )
 
+    if stopper is None:
+        stopper = Stopper(max_iter=10_000, patience=10)
+
     user_patience = stopper.patience
     if model_validation is None:
         model_validation = model_train
@@ -355,25 +392,25 @@ def optim_flat(
     likelihood_scalar = n_train / batch_size
     likelihood_scalar_validation = n_train / n_validation
 
-    def _batched_neg_log_prob(position: Position, batch_indices: Array | None = None):
+    def _batched_neg_log_prob(
+        position: Position, model_state: ModelState, batch_indices: Array | None = None
+    ):
         if batch_indices is not None:
             batched_observed = batched_nodes(observed, batch_indices)
             position = position | batched_observed  # type: ignore
 
-        updated_state = interface_train.update_state(position, model_train.state)
+        updated_state = interface_train.update_state(position, model_state)
         log_lik = likelihood_scalar * updated_state["_model_log_lik"].value
         log_prior = updated_state["_model_log_prior"].value
         log_prob = log_lik + log_prior
         return -log_prob
 
-    def _neg_log_prob_train(position: Position):
-        updated_state = interface_validation.update_state(position, model_train.state)
+    def _neg_log_prob_train(position: Position, model_state: ModelState):
+        updated_state = interface_train.update_state(position, model_state)
         return -updated_state["_model_log_prob"].value
 
-    def _neg_log_prob_validation(position: Position):
-        updated_state = interface_validation.update_state(
-            position, model_validation.state
-        )
+    def _neg_log_prob_validation(position: Position, model_state: ModelState):
+        updated_state = interface_validation.update_state(position, model_state)
         log_lik = likelihood_scalar_validation * updated_state["_model_log_lik"].value
         log_prior = updated_state["_model_log_prior"].value
         log_prob = log_lik + log_prior
@@ -393,11 +430,18 @@ def optim_flat(
             name: jnp.zeros((stopper.max_iter,) + jnp.shape(value))
             for name, value in position.items()
         }
+        history["position"] = jax.tree.map(
+            lambda d, pos: d.at[0].set(pos), history["position"], position
+        )
     else:
         history["position"] = None
 
-    loss_train_start = _neg_log_prob_train(position=position)
-    loss_validation_start = _neg_log_prob_validation(position=position)
+    loss_train_start = _neg_log_prob_train(
+        position=position, model_state=model_train.state
+    )
+    loss_validation_start = _neg_log_prob_validation(
+        position=position, model_state=model_validation.state
+    )
     history["loss_train"] = history["loss_train"].at[0].set(loss_train_start)
     history["loss_validation"] = (
         history["loss_validation"].at[0].set(loss_validation_start)
@@ -412,6 +456,31 @@ def optim_flat(
     init_val["position"] = position
     init_val["opt_state"] = optimizer.init(position)
     init_val["key"] = jax.random.PRNGKey(batch_seed)
+    init_val["model_state_train"] = model_train.state
+    init_val["model_state_validation"] = model_validation.state
+
+    # ---------------------------------------------------------------------------------
+    # Initialize while loop carry dictionary
+
+    progress_bar = tqdm(
+        total=stopper.max_iter - 1,
+        desc=(
+            f"Training loss: {loss_train_start:.3f}, Validation loss:"
+            f" {loss_validation_start:.3f}"
+        ),
+        position=0,
+        leave=True,
+    )
+
+    def tqdm_callback(val):
+        i = val["while_i"]
+        loss_train = val["history"]["loss_train"][i]
+        loss_validation = val["history"]["loss_validation"][i]
+        desc = (
+            f"Training loss: {loss_train:.3f}, Validation loss: {loss_validation:.3f}"
+        )
+        progress_bar.update(1)
+        progress_bar.set_description(desc)
 
     # ---------------------------------------------------------------------------------
     # Define while loop body
@@ -426,8 +495,12 @@ def optim_flat(
         def _fori_body(i, val):
             batch = batches[i]
             pos = val["position"]
-            grad = neg_log_prob_grad(pos, batch_indices=batch)
-            updates, opt_state = optimizer.update(grad, val["opt_state"])
+
+            grad = neg_log_prob_grad(
+                pos, batch_indices=batch, model_state=val["model_state_train"]
+            )
+            updates, opt_state = optimizer.update(grad, val["opt_state"], params=pos)
+
             val["position"] = optax.apply_updates(pos, updates)
             val["opt_state"] = opt_state
 
@@ -440,12 +513,20 @@ def optim_flat(
         # -----------------------------------------------------------------------------
         # Save values and increase counter
 
-        loss_train = _neg_log_prob_train(val["position"])
+        val["while_i"] += 1
+
+        loss_train = _neg_log_prob_train(
+            val["position"], model_state=val["model_state_train"]
+        )
+
         val["history"]["loss_train"] = (
             val["history"]["loss_train"].at[val["while_i"]].set(loss_train)
         )
 
-        loss_validation = _neg_log_prob_validation(val["position"])
+        loss_validation = _neg_log_prob_validation(
+            val["position"], model_state=val["model_state_validation"]
+        )
+
         val["history"]["loss_validation"] = (
             val["history"]["loss_validation"].at[val["while_i"]].set(loss_validation)
         )
@@ -456,7 +537,9 @@ def optim_flat(
                 lambda d, pos: d.at[val["while_i"]].set(pos), pos_hist, val["position"]
             )
 
-        val["while_i"] += 1
+        if progress_bar:
+            jax.debug.callback(tqdm_callback, val)
+
         return val
 
     # ---------------------------------------------------------------------------------
@@ -464,13 +547,13 @@ def optim_flat(
 
     val = jax.lax.while_loop(
         cond_fun=lambda val: stopper.continue_(
-            jnp.clip(val["while_i"] - 1, min=0), val["history"]["loss_validation"]
+            val["while_i"], val["history"]["loss_validation"]
         ),
         body_fun=body_fun,
         init_val=init_val,
     )
 
-    max_iter = val["while_i"] - 1
+    max_iter = val["while_i"]
 
     # ---------------------------------------------------------------------------------
     # Set final position and model state
@@ -492,24 +575,28 @@ def optim_flat(
     # Set unused values in history to nan
 
     val["history"]["loss_train"] = (
-        val["history"]["loss_train"].at[max_iter:].set(jnp.nan)
+        val["history"]["loss_train"].at[(max_iter + 1) :].set(jnp.nan)
     )
     val["history"]["loss_validation"] = (
-        val["history"]["loss_validation"].at[max_iter:].set(jnp.nan)
+        val["history"]["loss_validation"].at[(max_iter + 1) :].set(jnp.nan)
     )
     if save_position_history:
         for name, value in val["history"]["position"].items():
-            val["history"]["position"][name] = value.at[max_iter:, ...].set(jnp.nan)
+            val["history"]["position"][name] = value.at[(max_iter + 1) :, ...].set(
+                jnp.nan
+            )
 
     # ---------------------------------------------------------------------------------
     # Remove unused values in history, if applicable
 
     if prune_history:
-        val["history"]["loss_train"] = val["history"]["loss_train"][:max_iter]
-        val["history"]["loss_validation"] = val["history"]["loss_validation"][:max_iter]
+        val["history"]["loss_train"] = val["history"]["loss_train"][: (max_iter + 1)]
+        val["history"]["loss_validation"] = val["history"]["loss_validation"][
+            : (max_iter + 1)
+        ]
         if save_position_history:
             for name, value in val["history"]["position"].items():
-                val["history"]["position"][name] = value[:max_iter, ...]
+                val["history"]["position"][name] = value[: (max_iter + 1), ...]
 
     # ---------------------------------------------------------------------------------
     # Initialize results object and return
@@ -548,4 +635,4 @@ def history_to_df(history: dict[str, Array]) -> pd.DataFrame:
     df = pd.DataFrame(data)
     df["iteration"] = np.arange(value.shape[0])
 
-    return df
+    return df.astype(float)
