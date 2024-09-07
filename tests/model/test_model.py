@@ -10,7 +10,7 @@ import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 from liesel.model.model import GraphBuilder, Model, save_model
-from liesel.model.nodes import Calc, Data, Dist, Group, TransientNode, Var, obs, param
+from liesel.model.nodes import Calc, Dist, Group, TransientNode, Value, Var, obs, param
 
 
 @pytest.fixture
@@ -82,15 +82,15 @@ def model(y_var) -> Generator:
     """
     A simple linear model with an additional unconnected data node for testing purposes.
     """
-    data = Data(2.5, "z")
+    data = Value(2.5, "z")
     yield Model([y_var, data])
 
 
 @pytest.fixture
 def model_nodes() -> Generator:
-    log_prior = Data(3.0, _name="_model_log_prior")
-    log_lik = Data(4.0, _name="_model_log_lik")
-    log_prob = Data(5.0, _name="_model_log_prob")
+    log_prior = Value(3.0, _name="_model_log_prior")
+    log_lik = Value(4.0, _name="_model_log_lik")
+    log_prob = Value(5.0, _name="_model_log_prob")
     model_nodes = [log_prob, log_prior, log_lik]
     yield model_nodes
 
@@ -352,7 +352,7 @@ class TestModel:
 @pytest.mark.xfail
 class TestUserDefinedModelNodes:
     @typing.no_type_check
-    def test_require_model_nodes(self, y_var: Var, model_nodes: list[Data]) -> None:
+    def test_require_model_nodes(self, y_var: Var, model_nodes: list[Value]) -> None:
         """
         Verifies that the model raises exceptions if any required model nodes are
         missing.
@@ -372,7 +372,7 @@ class TestUserDefinedModelNodes:
                 Model(variables=[y_var], nodes=comb, user_defined_model_nodes=True)
 
     @typing.no_type_check
-    def test_provide_model_nodes(self, y_var: Var, model_nodes: list[Data]) -> None:
+    def test_provide_model_nodes(self, y_var: Var, model_nodes: list[Value]) -> None:
         """
         Verifies that the model nodes are accepted if provided correctly.
         """
@@ -385,7 +385,7 @@ class TestUserDefinedModelNodes:
         assert model.log_prob == pytest.approx(5.0)
 
     @typing.no_type_check
-    def test_user_defined_false(self, y_var: Var, model_nodes: list[Data]) -> None:
+    def test_user_defined_false(self, y_var: Var, model_nodes: list[Value]) -> None:
         """
         Verifies that the model does not accept nodes with reserved names, if the
         flag user_defnied_model_nodes is set to False (default).
