@@ -697,7 +697,7 @@ class TestDistGetitem:
         assert x[0] is x.all_input_nodes()[0]
         assert x[1] is x.all_input_nodes()[1]
 
-        x = Dist(tfd.Normal, loc=Data(0.0), scale=Data(1.0))
+        x = Dist(tfd.Normal, loc=Value(0.0), scale=Value(1.0))
 
         assert x[0] is x.all_input_nodes()[0]
         assert x[1] is x.all_input_nodes()[1]
@@ -759,7 +759,7 @@ class TestDistSetitem:
         assert x.log_prob == pytest.approx(
             tfd.Normal(loc=2.0, scale=1.0).log_prob(x.value)
         )
-        assert len(x.dist_node.iloc) == 2
+        assert len(x.dist_node._iloc) == 2
 
         x.dist_node[1] = 2.0
         x.update()
@@ -813,13 +813,13 @@ class TestCalcGetitem:
         assert x[1] is x.all_input_nodes()[1]
 
     def test_anonymous_value_nodes(self):
-        x = Calc(lambda loc, scale: loc * scale, loc=Data(0.0), scale=Data(1.0))
+        x = Calc(lambda loc, scale: loc * scale, loc=Value(0.0), scale=Value(1.0))
 
         assert x[0] is x.all_input_nodes()[0]
         assert x[1] is x.all_input_nodes()[1]
 
-        loc = Data(0.0)
-        scale = Data(0.0)
+        loc = Value(0.0)
+        scale = Value(0.0)
         x = Calc(lambda loc, scale: loc * scale, loc=loc, scale=scale)
 
         assert x[0] is loc

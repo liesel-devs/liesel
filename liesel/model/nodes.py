@@ -373,7 +373,7 @@ class Node(ABC):
         return self._var
 
     @property
-    def iloc(self) -> tuple[Node | Var, ...]:
+    def _iloc(self) -> tuple[Node | Var, ...]:
         input_list: list[Node | Var] = []
         for input_ in self.all_input_nodes():
             if isinstance(input_, VarValue):
@@ -386,7 +386,7 @@ class Node(ABC):
         return tuple(input_list)
 
     @property
-    def loc(self) -> dict[str, Node | Var]:
+    def _loc(self) -> dict[str, Node | Var]:
         input_dict: dict[str, Node | Var] = {}
         for key, input_ in self.kwinputs.items():
             if isinstance(input_, VarValue):
@@ -400,9 +400,9 @@ class Node(ABC):
 
     def __getitem__(self, key: int | str) -> Node | Var:
         if isinstance(key, int):
-            return self.iloc[key]
+            return self._iloc[key]
         elif isinstance(key, str):
-            return self.loc[key]
+            return self._loc[key]
         else:
             raise ValueError(f"Key must be str or int, not {type(key)}.")
 
@@ -996,8 +996,8 @@ class Dist(Node):
         return self
 
     @property
-    def iloc(self) -> tuple[Node | Var, ...]:
-        iloc = super().iloc
+    def _iloc(self) -> tuple[Node | Var, ...]:
+        iloc = super()._iloc
         if self.at:
             return iloc[:-1]
         return iloc
