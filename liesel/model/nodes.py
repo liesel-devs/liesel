@@ -375,7 +375,7 @@ class Node(ABC):
     @property
     def _iloc(self) -> tuple[Node | Var, ...]:
         input_list: list[Node | Var] = []
-        for input_ in self.all_input_nodes():
+        for input_ in self.inputs:
             if isinstance(input_, VarValue):
                 if input_.var is None:
                     raise RuntimeError(f"{input_}.var is None.")
@@ -994,13 +994,6 @@ class Dist(Node):
         self._value = log_prob
         self._outdated = False
         return self
-
-    @property
-    def _iloc(self) -> tuple[Node | Var, ...]:
-        iloc = super()._iloc
-        if self.at:
-            return iloc[:-1]
-        return iloc
 
 
 class TransientDist(TransientNode, Dist):

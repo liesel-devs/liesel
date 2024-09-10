@@ -691,30 +691,22 @@ def test_multivariate_batched_distribution(Dist) -> None:
 
 
 class TestDistGetitem:
-    def test_anonymous_values(self):
-        x = Dist(tfd.Normal, loc=0.0, scale=1.0)
-
-        assert x[0] is x.all_input_nodes()[0]
-        assert x[1] is x.all_input_nodes()[1]
-
-        x = Dist(tfd.Normal, loc=Value(0.0), scale=Value(1.0))
-
-        assert x[0] is x.all_input_nodes()[0]
-        assert x[1] is x.all_input_nodes()[1]
-
     def test_anonymous_values_positional(self):
         x = Dist(tfd.Normal, 0.0, 1.0)
 
-        assert x[0] is x.all_input_nodes()[0]
-        assert x[1] is x.all_input_nodes()[1]
+        assert x[0] is x.inputs[0]
+        assert x[1] is x.inputs[1]
 
     def test_vars_named_kw(self):
         loc = Var(0.0, name="loc")
         scale = Var(1.0, name="scale")
         x = Dist(tfd.Normal, loc=loc, scale=scale)
 
-        assert x[0] is loc
-        assert x[1] is scale
+        with pytest.raises(IndexError):
+            x[0]
+
+        with pytest.raises(IndexError):
+            x[1]
 
         assert x["loc"] is loc
         assert x["scale"] is scale
@@ -738,8 +730,11 @@ class TestDistGetitem:
         scale = Var(1.0)
         x = Dist(tfd.Normal, loc=loc, scale=scale)
 
-        assert x[0] is loc
-        assert x[1] is scale
+        with pytest.raises(IndexError):
+            x[0]
+
+        with pytest.raises(IndexError):
+            x[1]
 
         assert x["loc"] is loc
         assert x["scale"] is scale
@@ -759,9 +754,9 @@ class TestDistSetitem:
         assert x.log_prob == pytest.approx(
             tfd.Normal(loc=2.0, scale=1.0).log_prob(x.value)
         )
-        assert len(x.dist_node._iloc) == 2
+        assert len(x.dist_node._loc) == 2
 
-        x.dist_node[1] = 2.0
+        x.dist_node["scale"] = 2.0
         x.update()
 
         assert x.log_prob == pytest.approx(
@@ -809,35 +804,28 @@ class TestCalcGetitem:
     def test_anonymous_values(self):
         x = Calc(lambda loc, scale: loc * scale, loc=0.0, scale=1.0)
 
-        assert x[0] is x.all_input_nodes()[0]
-        assert x[1] is x.all_input_nodes()[1]
+        with pytest.raises(IndexError):
+            x[0]
 
-    def test_anonymous_value_nodes(self):
-        x = Calc(lambda loc, scale: loc * scale, loc=Value(0.0), scale=Value(1.0))
-
-        assert x[0] is x.all_input_nodes()[0]
-        assert x[1] is x.all_input_nodes()[1]
-
-        loc = Value(0.0)
-        scale = Value(0.0)
-        x = Calc(lambda loc, scale: loc * scale, loc=loc, scale=scale)
-
-        assert x[0] is loc
-        assert x[1] is scale
+        with pytest.raises(IndexError):
+            x[1]
 
     def test_anonymous_values_positional(self):
         x = Calc(lambda loc, scale: loc * scale, 0.0, 1.0)
 
-        assert x[0] is x.all_input_nodes()[0]
-        assert x[1] is x.all_input_nodes()[1]
+        assert x[0] is x.inputs[0]
+        assert x[1] is x.inputs[1]
 
     def test_vars_named_kw(self):
         loc = Var(0.0, name="loc")
         scale = Var(1.0, name="scale")
         x = Calc(lambda loc, scale: loc * scale, loc=loc, scale=scale)
 
-        assert x[0] is loc
-        assert x[1] is scale
+        with pytest.raises(IndexError):
+            x[0]
+
+        with pytest.raises(IndexError):
+            x[1]
 
         assert x["loc"] is loc
         assert x["scale"] is scale
@@ -861,8 +849,11 @@ class TestCalcGetitem:
         scale = Var(1.0)
         x = Calc(lambda loc, scale: loc * scale, loc=loc, scale=scale)
 
-        assert x[0] is loc
-        assert x[1] is scale
+        with pytest.raises(IndexError):
+            x[0]
+
+        with pytest.raises(IndexError):
+            x[1]
 
         assert x["loc"] is loc
         assert x["scale"] is scale

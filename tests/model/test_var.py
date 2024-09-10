@@ -519,48 +519,65 @@ class TestVarGetitem:
         xvar = Var(2.0, name="xvar")
         y = Var(Calc(lambda xarg: xarg + 1.0, xarg=xvar))
 
-        assert y[0] is xvar
-        assert y["xarg"] is xvar
+        with pytest.raises(IndexError):
+            y.value_node[0]
+
+        assert y.value_node["xarg"] is xvar
 
     def test_calc_with_positional_var_input(self):
         xvar = Var(2.0, name="xvar")
         y = Var(Calc(lambda xarg: xarg + 1.0, xvar))
 
-        assert y[0] is xvar
+        assert y.value_node[0] is xvar
         with pytest.raises(KeyError):
-            y["xarg"]
+            y.value_node["xarg"]
 
     def test_calc_with_multiple_var_inputs(self):
         xvar = Var(2.0, name="xvar")
         zvar = Var(3.0, name="zvar")
         y = Var(Calc(lambda xarg, zarg: xarg + zarg, xarg=xvar, zarg=zvar))
 
-        assert y[0] is xvar
-        assert y["xarg"] is xvar
+        with pytest.raises(IndexError):
+            y.value_node[0]
 
-        assert y[1] is zvar
-        assert y["zarg"] is zvar
+        with pytest.raises(IndexError):
+            y.value_node[1]
+
+        assert y.value_node["xarg"] is xvar
+        assert y.value_node["zarg"] is zvar
 
     def test_calc_with_node_input(self):
         xnode = Data(2.0, _name="xnode")
         y = Var(Calc(lambda xarg: xarg + 1.0, xarg=xnode))
 
-        assert y[0] is xnode
-        assert y["xarg"] is xnode
+        with pytest.raises(IndexError):
+            y.value_node[0]
+        assert y.value_node["xarg"] is xnode
 
     def test_calc_with_float_input(self):
         xfloat = 2.0
         y = Var(Calc(lambda xarg: xarg + 1.0, xarg=2.0))
 
-        assert y[0] is not xfloat
-        assert y["xarg"] is not xfloat
+        with pytest.raises(IndexError):
+            y.value_node[0]
 
-        assert y[0] is y.value_node.all_input_nodes()[0]
-        assert y["xarg"] is y.value_node.all_input_nodes()[0]
+        assert y.value_node["xarg"] is not xfloat
+        assert y.value_node["xarg"] is y.value_node.all_input_nodes()[0]
 
     def test_dist_with_var_input(self):
         xvar = Var(2.0, name="xvar")
         y = Var(1.0, Dist(tfp.distributions.Normal, loc=xvar, scale=1.0))
 
-        assert y.dist_node[0] is xvar
+        with pytest.raises(IndexError):
+            y.dist_node[0]
+
         assert y.dist_node["loc"] is xvar
+
+    def test_dist_with_positional_input(self):
+        xvar = Var(2.0, name="xvar")
+        y = Var(1.0, Dist(tfp.distributions.Normal, xvar, scale=1.0))
+
+        assert y.dist_node[0] is xvar
+        assert len(y.dist_node._iloc) == 1
+
+        assert y.dist_node["scale"].value == pytest.approx(1.0)
