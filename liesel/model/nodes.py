@@ -611,12 +611,12 @@ class Calc(Node):
 
     See Also
     --------
+    .Var.new_calc :
+        Initializes a weak variable that is a function of other variables.
     .Var : A variable in a statistical model, typically with a probability
         distribution.
     .Var.new_param : Initializes a strong variable that acts as a model parameter.
-    .Var.new_param : Initializes a strong variable that acts as a model parameter.
-    .Var.new_calc :
-        Initializes a weak variable that is a function of other variables.
+    .Var.new_obs : Initializes a strong variable that holds observed data.
     .Var.new_value : Initializes a strong variable without a distribution.
     .Value :
         A node representing some static data.
@@ -983,7 +983,7 @@ class Var:
 
     See Also
     --------
-    .Var.new_param : Initializes a strong variable that acts as a model parameter.
+    .Var.new_obs : Initializes a strong variable that holds observed data.
     .Var.new_param : Initializes a strong variable that acts as a model parameter.
     .Var.new_calc :
         Initializes a weak variable that is a function of other variables.
@@ -1604,6 +1604,9 @@ def obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> 
     """
     Helper function that returns an observed :class:`.Var`.
 
+    .. deprecated:: v0.2.10
+        Use :meth:`.Var.new_obs` instead. This function will be removed in v0.4.0.
+
     Sets the :attr:`.Var.observed` flag. If the observed variable is a random variable,
     i.e. if it has an associated probability distribution, its log-probability is
     automatically added to the model log-likelihood (see :attr:`.Model.log_lik`).
@@ -1625,17 +1628,7 @@ def obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> 
 
     See Also
     --------
-    .Calc :
-        A node representing a general calculation/operation in JAX or Python.
-    .Value :
-        A node representing some static data.
-    .Dist :
-        A node representing a ``tensorflow_probability``
-        :class:`~tfp.distributions.Distribution`.
-    .Var : A variable in a statistical model, typically with a probability
-        distribution.
-    .param :
-        A helper function to initialize a :class:`.Var` as a model parameter.
+    .Var.new_obs : Initializes a strong variable that holds observed data.
 
     Notes
     -----
@@ -1673,6 +1666,10 @@ def obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> 
     Array(-3.0068154, dtype=float32)
 
     """
+    warnings.warn(
+        "Use lsl.Var.new_obs() instead. This function will be removed in v0.4.0",
+        FutureWarning,
+    )
     var = Var(value, distribution, name)
     var.observed = True
     return var
@@ -1681,6 +1678,9 @@ def obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> 
 def param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> Var:
     """
     Helper function that returns a parameter :class:`.Var`.
+
+    .. deprecated:: v0.2.10
+        Use :meth:`.Var.new_param` instead. This function will be removed in v0.4.0.
 
     Sets the :attr:`.Var.parameter` flag. If the parameter variable is a
     random variable, i.e. if it has an associated probability distribution,
@@ -1703,18 +1703,7 @@ def param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -
 
     See Also
     --------
-    .Calc :
-        A node representing a general calculation/operation
-        in JAX or Python.
-    .Value :
-        A node representing some static data.
-    .Dist :
-        A node representing a ``tensorflow_probability``
-        :class:`~tfp.distributions.Distribution`.
-    .Var : A variable in a statistical model, typically with a probability
-        distribution.
-    .obs :
-        A helper function to initialize a :class:`.Var` as an observed variable.
+    .Var.new_param : Initializes a strong variable that acts as a model parameter.
 
     Notes
     -----
@@ -1767,6 +1756,10 @@ def param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -
     Array(-3.0068154, dtype=float32)
 
     """
+    warnings.warn(
+        "Use lsl.Var.new_param() instead. This function will be removed in v0.4.0",
+        FutureWarning,
+    )
     var = Var(value, distribution, name)
     var.value_node.monitor = True
     var.parameter = True
