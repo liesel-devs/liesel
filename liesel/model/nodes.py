@@ -1469,20 +1469,6 @@ class Var:
         """
         return not self.strong
 
-    @property
-    def iloc(self) -> tuple[Var | Node, ...]:
-        return self.value_node.iloc
-
-    @property
-    def loc(self) -> dict[str, Var | Node]:
-        return self.value_node.loc
-
-    def __getitem__(self, key: int | str) -> Var | Node:
-        return self.value_node[key]
-
-    def __setitem__(self, key: int | str, value: Any) -> None:
-        self.value_node[key] = value
-
     def __repr__(self) -> str:
         return f'{type(self).__name__}(name="{self.name}")'
 
