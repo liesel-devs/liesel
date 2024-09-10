@@ -1214,7 +1214,7 @@ class Var:
         >>> def compute_variance(x):
         ...     return jnp.exp(x)**2
         >>> log_scale = lsl.Var.new_param(0.0, name="log_scale")
-        >>> variance = lsl.Car.new_calc(compute_variance, log_scale, name="scale")
+        >>> variance = lsl.Var.new_calc(compute_variance, log_scale, name="scale")
         >>> print(variance.value)
         1.0
 
@@ -1229,7 +1229,7 @@ class Var:
         >>> print(scale.value)
         1.0
         >>> print(scale.update().value)
-        >>> 2.718281828459045
+        2.7182817
 
         .. _docs: https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html # noqa
         """
