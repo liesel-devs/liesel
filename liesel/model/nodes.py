@@ -956,16 +956,16 @@ class NoDist(Dist):
 
 class Var:
     """
-    A variable in a statistical model, typically with a probability distribution.
+    A variable in a statistical model.
 
     A variable in Liesel is often a random variable, e.g. an observed or
-    latent variable with a probability distribution, or a model parameter with
-    a prior distribution.
+    latent variable with a probability distribution (see :meth:`~.Var.new_obs`),
+    or a model parameter with a prior distribution (see :meth:`~.Var.new_param`).
 
     Other quantities can also be declared as variables, e.g. fixed data like
-    hyperparameters or design matrices, or quantities that are computed from
-    other nodes, e.g. structured additive predictors in semi-parametric
-    regression models.
+    hyperparameters or design matrices (see :meth:`~.Var.new_value`),
+    or quantities that are computed from other nodes, e.g. structured additive
+    predictors in semi-parametric regression models (see :meth:`~.Var.new_calc`).
 
     .. tip::
         You should initialize variables through one of the four constructors:
