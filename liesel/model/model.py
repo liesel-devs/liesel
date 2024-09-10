@@ -900,8 +900,13 @@ class Model:
     A model with a static graph.
 
     .. tip::
-        While you can create a model directly, it is usually more convenient to use a
-        :class:`.GraphBuilder` to construct the model.
+        If you have an existing model and want to make changes to it, you can use the
+        :meth:`.Model.pop_nodes_and_vars` method to release the nodes and variables
+        of the model. You can then make changes to them, for example i.e. changing the
+        distribution of a variable or the inputs of a calculation. Afterwards, you
+        initialize a *new* model with your changed variables.
+        If you simply want to change the value of a variable, it is not necessary to
+        call :meth:`~.Model.pop_nodes_and_vars`.
 
     Parameters
     ----------
@@ -915,57 +920,29 @@ class Model:
 
     See Also
     --------
-    :class:`.GraphBuilder` : A graph builder, used to set up a model.
+    .Var.new_obs : Initializes a strong variable that holds observed data.
+    .Var.new_param : Initializes a strong variable that acts as a model parameter.
+    .Var.new_calc :
+        Initializes a weak variable that is a function of other variables.
+    .Var.new_value : Initializes a strong variable without a distribution.
+    :class:`.GraphBuilder` :
+        A graph builder, which can be used to set up and manipulate a model if you need
+        more control.
 
     Examples
     --------
 
-    For basic examples on how to set up a model, please refer to the
-    :class:`.GraphBuilder` documentation.
+    Here, we set up a basic model based on three variables:
 
-    .. rubric:: Modifying an existing model
-
-    If you have an existing model and want to make changes to it, you can use the
-    :meth:`.Model.copy_nodes_and_vars` or the :meth:`.Model.copy_nodes_and_vars`
-    method to obtain the nodes and variables of the model, make changes to them, and
-    then create a new model from the modified nodes and variables.
-
-    >>> a = lsl.Var(1.0, name="a")
-    >>> b = lsl.Var(2.0, name="b")
-    >>> c = lsl.Var(lsl.Calc(lambda x, y: x + y, a, b), name="c")
+    >>> a = lsl.Var.new_value(1.0, name="a")
+    >>> b = lsl.Var.new_value(2.0, name="b")
+    >>> c = lsl.Var.new_calc(lambda x, y: x + y, a, b, name="c")
 
     We now build a model:
 
-    >>> model = lsl.GraphBuilder().add(c).build_model()
+    >>> model = lsl.Model([c])
     >>> model
     Model(9 nodes, 3 vars)
-
-    >>> nodes, vars_ = model.pop_nodes_and_vars()
-    >>> vars_
-    {'c': Var(name="c"), 'b': Var(name="b"), 'a': Var(name="a")}
-
-    >>> from pprint import pprint # for nicer formatting of the output dicts
-    >>> pprint(nodes)
-    {'a_value': Value(name="a_value"),
-     'a_var_value': VarValue(name="a_var_value"),
-     'b_value': Value(name="b_value"),
-     'b_var_value': VarValue(name="b_var_value"),
-     'c_value': Calc(name="c_value"),
-     'c_var_value': VarValue(name="c_var_value")}
-
-    We can now make changes to the nodes and variables.
-    Just for show, let's add a distribution to the node ``a``:
-
-    >>> import tensorflow_probability.substrates.jax.distributions as tfd
-    >>> vars_["a"].dist_node = lsl.Dist(tfd.Normal, loc=0.0, scale=1.0)
-
-    Now we create a new GraphBuilder and build a new model:
-
-    >>> gb = lsl.GraphBuilder()
-    >>> gb = gb.add(*nodes.values(), *vars_.values())
-    >>> model = gb.build_model()
-    >>> model
-    Model(12 nodes, 3 vars)
 
     """
 
