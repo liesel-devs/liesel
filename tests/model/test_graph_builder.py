@@ -11,7 +11,7 @@ import liesel.model.nodes as lnodes
 def test_transform() -> None:
     val = jnp.array((0.1, 1.0, 2.0))
     rate = 0.5
-    d_true = lnodes.Data(True, "true")
+    d_true = lnodes.Value(True, "true")
     dist = lnodes.Dist(tfp.distributions.Exponential, rate, validate_args=d_true)
     dist.per_obs = True
     var = lnodes.Var(val, dist)
@@ -69,7 +69,7 @@ def test_transform_with_param_outdated() -> None:
     val = jnp.array((0.1, 1.0, 2.0))
     real_rate = 1.5
     rate = lnodes.Calc(lambda x, y: x + y, 0.5, 1.0)
-    d_true = lnodes.Data(True, "true")
+    d_true = lnodes.Value(True, "true")
     dist = lnodes.Dist(tfp.distributions.Exponential, rate, validate_args=d_true)
     dist.per_obs = True
     var = lnodes.Var(val, dist)
@@ -119,7 +119,7 @@ def test_transform_with_param() -> None:
     val = jnp.array((0.1, 1.0, 2.0))
     real_rate = 1.5
     rate = lnodes.Calc(lambda x, y: x + y, 0.5, 1.0)
-    d_true = lnodes.Data(True, "true")
+    d_true = lnodes.Value(True, "true")
     dist = lnodes.Dist(tfp.distributions.Exponential, rate, validate_args=d_true)
     dist.per_obs = True
     var = lnodes.Var(val, dist)
@@ -170,7 +170,7 @@ def test_transform_with_param() -> None:
 def test_transform_user() -> None:
     val = jnp.array((0.1, 1.0, 2.0))
     rate = 0.5
-    d_true = lnodes.Data(True, "true")
+    d_true = lnodes.Value(True, "true")
     dist = lnodes.Dist(tfp.distributions.Exponential, rate, validate_args=d_true)
     dist.per_obs = True
     var = lnodes.Var(val, dist)
@@ -321,8 +321,8 @@ def test_add_same_group_twice() -> None:
 
 
 def test_manual_dtype_conversion(local_caplog) -> None:
-    float_node = lnodes.Data(np.zeros(5, dtype="float64"), _name="float_node")
-    int_node = lnodes.Data(np.zeros(5, dtype="int64"), _name="int_node")
+    float_node = lnodes.Value(np.zeros(5, dtype="float64"), _name="float_node")
+    int_node = lnodes.Value(np.zeros(5, dtype="int64"), _name="int_node")
 
     gb = lmodel.GraphBuilder()
     gb.add(float_node, int_node, to_float32=False)
@@ -337,7 +337,7 @@ def test_manual_dtype_conversion(local_caplog) -> None:
         assert len(caplog.records) == 1
         assert caplog.records[0].levelname == "INFO"
         assert (
-            caplog.records[0].msg == 'Converted dtype of Data(name="float_node").value'
+            caplog.records[0].msg == 'Converted dtype of Value(name="float_node").value'
         )
 
     gb.convert_dtype("int64", "int32")
@@ -346,8 +346,8 @@ def test_manual_dtype_conversion(local_caplog) -> None:
 
 
 def test_auto_dtype_conversion() -> None:
-    float_node = lnodes.Data(np.zeros(5, dtype="float64"), _name="float_node")
-    int_node = lnodes.Data(np.zeros(5, dtype="int64"), _name="int_node")
+    float_node = lnodes.Value(np.zeros(5, dtype="float64"), _name="float_node")
+    int_node = lnodes.Value(np.zeros(5, dtype="int64"), _name="int_node")
 
     gb = lmodel.GraphBuilder()
     gb.add(float_node, int_node)
