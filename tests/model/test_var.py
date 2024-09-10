@@ -547,6 +547,6 @@ class TestVarConstructors:
         assert loc.weak
 
     def test_new_const(self):
-        loc = lnodes.Var.new_const(1.0, name="loc")
+        loc = lnodes.Var.new_value(1.0, name="loc")
         assert isinstance(loc, lnodes.Var)
         assert loc.strong

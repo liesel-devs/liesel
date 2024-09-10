@@ -1109,7 +1109,7 @@ class Var:
         return var
 
     @classmethod
-    def new_const(cls, value: Any, name: str = "") -> Var:
+    def new_value(cls, value: Any, name: str = "") -> Var:
         var = cls(value, name=name)
         return var
 
