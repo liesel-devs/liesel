@@ -85,8 +85,10 @@ class TestOptim:
             model, ["coef", "log_sigma"], batch_size=None, stopper=stopper
         )
 
-        assert result.iteration == 1_000
+        assert result.iteration == 999
         assert result.iteration_best < result.iteration
+        assert result.history["loss_train"].shape == (1000,)
+        assert result.history["loss_validation"].shape == (1000,)
 
     def test_optim_flat_batched(self, models):
         model, _ = models
@@ -267,18 +269,19 @@ def test_full_history_to_df(models):
 def test_history_to_df_pruned(models):
     model, _ = models
     stopper = Stopper(max_iter=1_000, patience=10)
-    result = optim_flat(
-        model,
-        ["coef", "log_sigma"],
-        batch_size=20,
-        stopper=stopper,
-        batch_seed=1,
-        prune_history=True,
-        model_validation=model,
-    )
+    with jax.disable_jit(disable=False):
+        result = optim_flat(
+            model,
+            ["coef", "log_sigma"],
+            batch_size=20,
+            stopper=stopper,
+            batch_seed=1,
+            prune_history=True,
+            model_validation=model,
+        )
     df = history_to_df(result.history["position"])
 
-    assert df.shape == (84, 4)
+    assert df.shape == (85, 4)
 
 
 def test_generate_batches():
@@ -295,27 +298,42 @@ class TestStopper:
     def test_stopper_does_not_stop(self):
         stopper = Stopper(patience=5, max_iter=100)
 
-        key = jax.random.PRNGKey(42)
-        loss_history = jax.random.uniform(key, shape=(15,))
-        loss_history = loss_history.at[6].set(-0.1)
-
+        # case 1: continous decrease
+        loss_history = np.linspace(100, 0, 100)
         stop = stopper.stop_early(i=6, loss_history=loss_history)
-
         assert not stop
 
-    def test_stopper_stops(self):
-        stopper = Stopper(patience=5, max_iter=100, atol=0.1, rtol=0.1)
-
-        key = jax.random.PRNGKey(42)
-        loss_history = 2.0 + jax.random.uniform(
-            key, shape=(15,), minval=0.0, maxval=0.1
-        )
-
+        # case 2: current loss is not the best
+        loss_history = np.zeros((100,))
+        loss_history[5] = -1.0
         stop = stopper.stop_early(i=6, loss_history=loss_history)
-        stop_at = stopper.which_best_in_recent_history(i=6, loss_history=loss_history)
+        assert not stop
 
+    def test_stopper_stops_atol(self):
+        stopper = Stopper(patience=5, max_iter=100, atol=0.1)
+
+        loss_history = np.zeros((100,))
+        loss_history[2:7] = np.array([0.0, 1.0, -0.05, -0.05, -0.01])
+        stop = stopper.stop_early(i=6, loss_history=loss_history)
         assert stop
-        assert stop_at == jnp.argmin(loss_history)
+
+    def test_stopper_stops_rtol(self):
+        stopper = Stopper(patience=5, max_iter=100, atol=0.0, rtol=0.05)
+
+        # case one: 0.0 gets compared to -0.05
+        # relative difference is 1
+        # so no stop
+        loss_history = np.zeros((100,))
+        loss_history[2:7] = np.array([0.0, 1.0, -0.05, -0.05, -0.01])
+        stop = stopper.stop_early(i=6, loss_history=loss_history)
+        assert not stop
+
+        # case one: -0.049 gets compared to -0.05
+        # relative difference is ~0.02
+        # so stop
+        loss_history[2:7] = np.array([-0.049, 1.0, -0.05, -0.05, -0.01])
+        stop = stopper.stop_early(i=6, loss_history=loss_history)
+        assert stop
 
     def test_stopper_jitted(self):
         stopper = Stopper(patience=5, max_iter=100, atol=0.1, rtol=0.1)

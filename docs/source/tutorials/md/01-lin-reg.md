@@ -109,7 +109,7 @@ The graph of a Bayesian linear regression model is a tree, where the
 hyperparameters of the prior are the leaves and the response is the
 root. To build this tree in Liesel, we need to start from the leaves and
 work our way down to the root. As the basic building blocks of your
-model Liesel provides the {class}`.Node` classes {class}`.Data`,
+model Liesel provides the {class}`.Node` classes {class}`.Value`,
 {class}`.Calc`, and {class}`.Dist`, and the helper functions
 {func}`.obs` and {func}`.param`, which return instances of
 {class}`.Var`. See also [Model Building (liesel.model)](model_overview).
@@ -140,7 +140,7 @@ beta_prior = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
 Note that you could also provide a {class}`.Node` or {class}`.Var`
 instance for the `loc` and `scale` argument - this fact allows you to
 build hierarchical models. If you provide floats like we do here, Liesel
-will turn them into {class}`.Data` nodes under the hood.
+will turn them into {class}`.Value` nodes under the hood.
 
 With this distribution object, we can now create the node for our
 regression coefficient with the {func}`.param` helper function:
