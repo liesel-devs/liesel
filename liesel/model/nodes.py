@@ -554,14 +554,14 @@ class Calc(Node):
     """
     A :class:`.Node` subclass that calculates its value based on its inputs nodes.
 
-    Calculator nodes are a central element block of the Liesel graph building toolkit.
+    Calculator nodes are a central element of the Liesel graph building toolkit.
     They wrap arbitrary calculations in pure JAX functions.
 
     - By default, calculator nodes *will* appear in the node graph created by
       :func:`.viz.plot_nodes`, but they will *not* appear in the model graph created by
       :func:`.viz.plot_vars`.
-    - You can wrap a calculator node in a :class:`.Var` to make it appear in the model
-      graph.
+    - You can use :meth:`~.Var.new_calc` if you want your calculation to be treated
+      as a model variable and thus be shown in :func:`.viz.plot_vars`.
 
     .. tip::
         The wrapped function must be jit-compilable by JAX. This mainly means that
@@ -576,8 +576,8 @@ class Calc(Node):
     function
         The function to be wrapped. Must be jit-compilable by JAX.
     *inputs
-        Non-keyword inputs. Any inputs that are not already nodes or :class:`.Var`
-        will be converted to :class:`.Data` nodes. The values of these inputs will be
+        Non-keyword inputs. Any inputs that are not already nodes or :class:`.Var` \
+        will be converted to :class:`.Data` nodes. The values of these inputs will be \
         passed to the wrapped function in the same order they are entered here.
     _name
         The name of the node. If you do not specify a name, a unique name will be \
@@ -594,26 +594,18 @@ class Calc(Node):
 
     See Also
     --------
+    .Var : A variable in a statistical model, typically with a probability
+        distribution.
+    .Var.new_param : Initializes a strong variable that acts as a model parameter.
+    .Var.new_param : Initializes a strong variable that acts as a model parameter.
+    .Var.new_calc :
+        Initializes a weak variable that is a function of other variables.
+    .Var.new_value : Initializes a strong variable without a distribution.
     .Data :
         A node representing some static data.
     .Dist :
         A node representing a ``tensorflow_probability``
         :class:`~tfp.distributions.Distribution`.
-    .Var : A variable in a statistical model, typically with a probability
-        distribution.
-    .param :
-        A helper function to initialize a :class:`.Var` as a model parameter.
-    .obs :
-        A helper function to initialize a :class:`.Var` as an observed variable.
-
-    Notes
-    -----
-
-    A calculator node will compute its value only when :meth:`.Calc.update` is called.
-    This does not happen automatically upon initialization. Commonly, the first time
-    this method is called is during the initialization of a :class:`.Model`, which might
-    make it hard to spot errors in the wrapped computations. To update the value
-    immediately, you can call :meth:`.Calc.update` manually.
 
     Examples
     --------
@@ -632,13 +624,6 @@ class Calc(Node):
     >>> print(scale.value)
     1.0
 
-    You can also update the value of the calculator node in one step upon initilization.
-
-    >>> log_scale = lsl.param(0.0, name="log_scale")
-    >>> scale = lsl.Calc(jnp.exp, log_scale).update()
-    >>> print(scale.value)
-    1.0
-
     You can also use your own functions as long as they are jit-compilable by JAX.
 
     >>> def compute_variance(x):
@@ -647,15 +632,6 @@ class Calc(Node):
     >>> variance = lsl.Calc(compute_variance, log_scale).update()
     >>> print(variance.value)
     1.0
-
-    You can wrap a calculator node in a :class:`.Var` to declare its role as a
-    statistical model variable and make it appear in the variable graph.
-
-    >>> log_scale = lsl.param(0.0, name="log_scale")
-    >>> scale = lsl.Var(lsl.Calc(jnp.exp, log_scale).update())
-    >>> print(scale.value)
-    1.0
-
 
     .. _docs: https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html
 
@@ -994,6 +970,7 @@ class Var:
     .Var.new_param : Initializes a strong variable that acts as a model parameter.
     .Var.new_calc :
         Initializes a weak variable that is a function of other variables.
+    .Var.new_value : Initializes a strong variable without a distribution.
     .Calc :
         A node representing a general calculation/operation in JAX or Python. Use this
         instead of :meth:`~.Var.new_calc` if you want to hide your calculation in the
@@ -1178,8 +1155,9 @@ class Var:
             The function to be wrapped. Must be jit-compilable by JAX.
         *inputs
             Non-keyword inputs. Any inputs that are not already nodes or :class:`.Var` \
-            will be converted to :class:`.Data` nodes. The values of these inputs will \
-            be passed to the wrapped function in the same order they are entered here.
+            will be converted to :class:`.Value` nodes. The values of these inputs \
+            will be passed to the wrapped function in the same order they are entered \
+            here.
         _name
             The name of the node. If you do not specify a name, a unique name will be \
             automatically generated upon initialization of a :class:`.Model`.
@@ -1222,6 +1200,19 @@ class Var:
         >>> variance = lsl.Car.new_calc(compute_variance, log_scale, name="scale")
         >>> print(variance.value)
         1.0
+
+        The value of the calculating variable is updated when :meth:`~.Var.update` is
+        called.
+
+        >>> log_scale = lsl.Var.new_param(0.0, name="log_scale")
+        >>> scale = lsl.Var.new_calc(jnp.exp, log_scale, name="scale")
+        >>> print(scale.value)
+        1.0
+        >>> log_scale.value = 1.0
+        >>> print(scale.value)
+        1.0
+        >>> print(scale.update().value)
+        >>> 2.718281828459045
 
         .. _docs: https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html # noqa
         """
