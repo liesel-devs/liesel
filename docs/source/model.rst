@@ -55,7 +55,7 @@ To set up :class:`.Var` objects, Liesel provides four constructors:
 
 We recommend to always use one of these constructors when initializing a variable.
 This makes sure that the respective
-:attr:`.Var.observerd` and :attr:`.Var.parameter` flags are correctly set. This in
+:attr:`.Var.observed` and :attr:`.Var.parameter` flags are correctly set. This in
 turn ensures that the :attr:`.Var.log_prob` of an *observed* variable will be included
 in the :attr:`.Model.log_lik` and the :attr:`.Var.log_prob` of a *parameter* variable
 will be included in the :attr:`.Model.log_prior`.
