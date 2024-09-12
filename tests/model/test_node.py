@@ -799,6 +799,38 @@ class TestDistSetitem:
             tfd.Normal(loc=2.0, scale=1.0).log_prob(x.value)
         )
 
+    def test_del(self):
+        x = Var(
+            0.0,
+            Dist(tfd.Normal, loc=Var(0.0, name="loc"), scale=Var(1.0, name="scale")),
+        ).update()
+
+        with pytest.raises(AttributeError):
+            del x.dist_node["loc"]
+
+        x = Var(
+            0.0, Dist(tfd.Normal, Var(0.0, name="loc"), scale=Var(1.0, name="scale"))
+        ).update()
+
+        with pytest.raises(AttributeError):
+            del x.dist_node[0]
+
+        x = Var(0.0, Dist(tfd.Normal, 0.0, scale=Var(1.0, name="scale"))).update()
+
+        with pytest.raises(AttributeError):
+            del x.dist_node[0]
+
+    def test_assign_none(self):
+        x = Var(
+            0.0,
+            Dist(tfd.Normal, loc=Var(0.0, name="loc"), scale=Var(1.0, name="scale")),
+        ).update()
+
+        x.dist_node["loc"] = None
+
+        assert isinstance(x.dist_node["loc"], Value)
+        assert x.dist_node["loc"].value is None
+
 
 class TestCalcGetitem:
     def test_anonymous_values(self):
@@ -857,3 +889,52 @@ class TestCalcGetitem:
 
         assert x["loc"] is loc
         assert x["scale"] is scale
+
+
+class TestCalcSetItem:
+    def test_calc_args(self):
+        def sum_(*args):
+            return sum(args)
+
+        x = Calc(sum_, 1.0, 2.0)
+
+        assert x.value == pytest.approx(3.0)
+
+        x[0] = 2.0
+        x.update()
+        assert x.value == pytest.approx(4.0)
+
+        with pytest.raises(IndexError):
+            x[2] = 3.0
+
+    def test_calc_kwargs(self):
+        def sum_(**kwargs):
+            return sum(kwargs.values())
+
+        x = Calc(sum_, a=1.0, b=2.0)
+
+        assert x.value == pytest.approx(3.0)
+
+        x["a"] = 2.0
+        x.update()
+        assert x.value == pytest.approx(4.0)
+
+        with pytest.raises(KeyError):
+            x["c"] = 3.0
+
+    def test_calc_with_default(self):
+        def sum_(a, b=3.0):
+            return a + b
+
+        x = Calc(sum_, 1.0)
+        assert x.value == pytest.approx(4.0)
+
+        x[0] = 2.0
+        x.update()
+        assert x.value == pytest.approx(5.0)
+
+        with pytest.raises(IndexError):
+            x[1] = 0.0
+
+        with pytest.raises(KeyError):
+            x["b"] = 0.0
