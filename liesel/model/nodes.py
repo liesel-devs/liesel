@@ -571,14 +571,14 @@ class Calc(Node):
     """
     A :class:`.Node` subclass that calculates its value based on its inputs nodes.
 
-    Calculator nodes are a central element block of the Liesel graph building toolkit.
+    Calculator nodes are a central element of the Liesel graph building toolkit.
     They wrap arbitrary calculations in pure JAX functions.
 
     - By default, calculator nodes *will* appear in the node graph created by
       :func:`.viz.plot_nodes`, but they will *not* appear in the model graph created by
       :func:`.viz.plot_vars`.
-    - You can wrap a calculator node in a :class:`.Var` to make it appear in the model
-      graph.
+    - You can use :meth:`~.Var.new_calc` if you want your calculation to be treated
+      as a model variable and thus be shown in :func:`.viz.plot_vars`.
 
     .. tip::
         The wrapped function must be jit-compilable by JAX. This mainly means that
@@ -611,26 +611,18 @@ class Calc(Node):
 
     See Also
     --------
+    .Var.new_calc :
+        Initializes a weak variable that is a function of other variables.
+    .Var : A variable in a statistical model, typically with a probability
+        distribution.
+    .Var.new_param : Initializes a strong variable that acts as a model parameter.
+    .Var.new_obs : Initializes a strong variable that holds observed data.
+    .Var.new_value : Initializes a strong variable without a distribution.
     .Value :
         A node representing some static data.
     .Dist :
         A node representing a ``tensorflow_probability``
         :class:`~tfp.distributions.Distribution`.
-    .Var : A variable in a statistical model, typically with a probability
-        distribution.
-    .param :
-        A helper function to initialize a :class:`.Var` as a model parameter.
-    .obs :
-        A helper function to initialize a :class:`.Var` as an observed variable.
-
-    Notes
-    -----
-
-    A calculator node will compute its value only when :meth:`.Calc.update` is called.
-    This does not happen automatically upon initialization. Commonly, the first time
-    this method is called is during the initialization of a :class:`.Model`, which might
-    make it hard to spot errors in the wrapped computations. To update the value
-    immediately, you can call :meth:`.Calc.update` manually.
 
     Examples
     --------
@@ -649,13 +641,6 @@ class Calc(Node):
     >>> print(scale.value)
     1.0
 
-    You can also update the value of the calculator node in one step upon initilization.
-
-    >>> log_scale = lsl.param(0.0, name="log_scale")
-    >>> scale = lsl.Calc(jnp.exp, log_scale).update()
-    >>> print(scale.value)
-    1.0
-
     You can also use your own functions as long as they are jit-compilable by JAX.
 
     >>> def compute_variance(x):
@@ -664,15 +649,6 @@ class Calc(Node):
     >>> variance = lsl.Calc(compute_variance, log_scale).update()
     >>> print(variance.value)
     1.0
-
-    You can wrap a calculator node in a :class:`.Var` to declare its role as a
-    statistical model variable and make it appear in the variable graph.
-
-    >>> log_scale = lsl.param(0.0, name="log_scale")
-    >>> scale = lsl.Var(lsl.Calc(jnp.exp, log_scale).update())
-    >>> print(scale.value)
-    1.0
-
 
     .. _docs: https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html
 
@@ -980,24 +956,20 @@ class NoDist(Dist):
 
 class Var:
     """
-    A variable in a statistical model, typically with a probability distribution.
+    A variable in a statistical model.
 
-    A variable in Liesel is typically a random variable, e.g. an observed or
-    latent variable with a probability distribution, or a model parameter with
-    a prior distribution. Note that observed variables and model parameters should
-    typically be declared with the :func:`.obs` and :func:`.param` helper functions.
+    A variable in Liesel is often a random variable, e.g. an observed or
+    latent variable with a probability distribution (see :meth:`~.Var.new_obs`),
+    or a model parameter with a prior distribution (see :meth:`~.Var.new_param`).
+
     Other quantities can also be declared as variables, e.g. fixed data like
-    hyperparameters or design matrices, or quantities that are computed from
-    other nodes, e.g. structured additive predictors in semi-parametric
-    regression models.
+    hyperparameters or design matrices (see :meth:`~.Var.new_value`),
+    or quantities that are computed from other nodes, e.g. structured additive
+    predictors in semi-parametric regression models (see :meth:`~.Var.new_calc`).
 
-    If a :class:`.Value` or :class:`.Calc` node does not have an associated probability
-    distribution, it is possible but not necessary to declare it as a variable. There
-    is no hard and fast rule when a node without a probability distribution should be
-    declared as a variable and when not. The advantages of a variable in this case are:
-    (1) easier access via the :attr:`.Model.vars` attribute, and (2) more explicit
-    visualization with the :func:`.plot_vars` function. This might be particularly
-    desirable for the hyperparameters of a prior distribution.
+    .. tip::
+        You should initialize variables through one of the four constructors:
+        :meth:`.new_param`, :meth:`.new_obs`, :meth:`.new_calc`, and :meth:`.new_value`.
 
     Parameters
     ----------
@@ -1011,37 +983,22 @@ class Var:
 
     See Also
     --------
-    .obs : Helper function to declare a variable as an observed quantity.
-    .param : Helper function to declare a variable as a model parameter.
+    .Var.new_obs : Initializes a strong variable that holds observed data.
+    .Var.new_param : Initializes a strong variable that acts as a model parameter.
+    .Var.new_calc :
+        Initializes a weak variable that is a function of other variables.
+    .Var.new_value : Initializes a strong variable without a distribution.
     .Calc :
-        A node representing a general calculation/operation
-        in JAX or Python.
+        A node representing a general calculation/operation in JAX or Python. Use this
+        instead of :meth:`~.Var.new_calc` if you want to hide your calculation in the
+        model graph produced by :func:`.plot_vars`.
     .Value :
-        A node representing some static data.
+        A node representing a static value. Use this
+        instead of :meth:`~.Var.new_value` if you want to hide your value in the
+        model graph produced by :func:`.plot_vars`.
     .Dist :
         A node representing a ``tensorflow_probability``
         :class:`~tfp.distributions.Distribution`.
-
-    Examples
-    --------
-
-    A simple variable without a distribution and without a name:
-
-    >>> x = lsl.Var(1.0)
-    >>> x
-    Var(name="")
-
-    Adding this variable to a model leads to an automatically generated name:
-
-    >>> model = lsl.GraphBuilder().add(x).build_model()
-    >>> x
-    Var(name="v0")
-
-    A simple variable with a name:
-
-    >>> x = lsl.Var(1.0, name="x")
-    >>> x
-    Var(name="x")
 
     """
 
@@ -1086,6 +1043,241 @@ class Var:
 
         self.info: dict[str, Any] = {}
         """Additional meta-information about the variable as a dict."""
+
+    @classmethod
+    def new_param(
+        cls, value: Any, distribution: Dist | None = None, name: str = ""
+    ) -> Var:
+        """
+        Initializes a strong variable that acts as a model parameter.
+
+        A parameter is a strong variable that can have a distribution. If it does have a
+        distribution, its :attr:`~.Var.log_prob` is counted in a model's log prior, i.e.
+        :attr:`~.Model.log_prior`.
+
+        Parameters
+        ----------
+        value
+            The value of the variable.
+        distribution
+            The probability distribution of the variable.
+        name
+            The name of the variable. If you do not specify a name, a unique name will \
+            be automatically generated upon initialization of a :class:`.Model`.
+
+        See Also
+        --------
+        .Var.new_obs : Initializes a strong variable that holds observed data.
+        .Var.new_calc :
+            Initializes a weak variable that is a function of other variables.
+        .Var.new_value : Initializes a strong variable without a distribution.
+
+        Examples
+        --------
+
+        A simple parameter without a distribution and without a name:
+
+        >>> x = lsl.Var.new_param(1.0)
+        >>> x
+        Var(name="")
+
+        A simple parameter with a normal prior:
+
+        >>> prior = lsl.Dist(tfd.Normal, loc=0.0, scale=1.0)
+        >>> x = lsl.Var.new_param(1.0, distribution=prior)
+        >>> x
+        Var(name="")
+
+        """
+        var = cls(value, distribution, name)
+        var.value_node.monitor = True
+        var.parameter = True
+        return var
+
+    @classmethod
+    def new_obs(
+        cls, value: Any, distribution: Dist | None = None, name: str = ""
+    ) -> Var:
+        """
+        Initializes a strong variable that holds observed data.
+
+        An observed variables is a strong variable that can have a distribution.
+        If it does have a distribution, its :attr:`~.Var.log_prob` is counted in
+        a model's log likelihood, i.e. :attr:`~.Model.log_lik`.
+
+        Parameters
+        ----------
+        value
+            The value of the variable.
+        distribution
+            The probability distribution of the variable.
+        name
+            The name of the variable. If you do not specify a name, a unique name will \
+            be automatically generated upon initialization of a :class:`.Model`.
+
+        See Also
+        --------
+        .Var.new_param : Initializes a strong variable that acts as a model parameter.
+        .Var.new_calc :
+            Initializes a weak variable that is a function of other variables.
+        .Var.new_value : Initializes a strong variable without a distribution.
+
+        Examples
+        --------
+
+        A simple observed variable without a distribution and without a name:
+
+        >>> x = lsl.Var.new_obs(1.0)
+        >>> x
+        Var(name="")
+
+        A simple observed variable with a normal distribution:
+
+        >>> prior = lsl.Dist(tfd.Normal, loc=0.0, scale=1.0)
+        >>> x = lsl.Var.new_param(1.0, distribution=prior)
+        >>> x
+        Var(name="")
+
+        """
+        var = cls(value, distribution, name)
+        var.observed = True
+        return var
+
+    @classmethod
+    def new_calc(
+        cls,
+        function: Callable[..., Any],
+        *inputs: Any,
+        name: str = "",
+        _needs_seed: bool = False,
+        update_on_init: bool = True,
+        **kwinputs: Any,
+    ) -> Var:
+        """
+        Initializes a weak variable that is a function of other variables.
+
+        A calculating variable can wrap arbitrary calculations in pure JAX functions.
+
+        .. tip::
+            The wrapped function must be jit-compilable by JAX. This mainly means that
+            it must be a pure function, i.e. it must not have any side effects and,
+            given the same input, it must always return the same output. Some special
+            consideration is also required for loops and conditionals.
+
+            Please consult the JAX docs_ for details.
+
+        Parameters
+        ----------
+        function
+            The function to be wrapped. Must be jit-compilable by JAX.
+        *inputs
+            Non-keyword inputs. Any inputs that are not already nodes or :class:`.Var` \
+            will be converted to :class:`.Value` nodes. The values of these inputs \
+            will be passed to the wrapped function in the same order they are entered \
+            here.
+        _name
+            The name of the node. If you do not specify a name, a unique name will be \
+            automatically generated upon initialization of a :class:`.Model`.
+        _needs_seed
+            Whether the node needs a seed / PRNG key.
+        update_on_init
+            If ``True``, the calculator will try to evaluate its function upon \
+            initialization.
+        **kwinputs
+            Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
+            will be converted to :class:`.Data` nodes. The values of these inputs will \
+            be passed to the wrapped function as keyword arguments.
+
+        Notes
+        -----
+        Internally, this constructor initializes and wraps a :class:`.Calc` node.
+
+        See Also
+        --------
+        .Var.new_param : Initializes a strong variable that acts as a model parameter.
+        .Var.new_obs : Initializes a strong variable that holds observed data.
+        .Var.new_value : Initializes a strong variable without a distribution.
+        .Calc : The calculator node class.
+
+        Examples
+        --------
+
+        A simple calculator node, taking the exponential value of an input parameter.
+
+        >>> log_scale = lsl.Var.new_param(0.0, name="log_scale")
+        >>> scale = lsl.Var.new_calc(jnp.exp, log_scale, name="scale")
+        >>> print(scale.value)
+        1.0
+
+        You can also use your own functions as long as they are jit-compilable by JAX.
+
+        >>> def compute_variance(x):
+        ...     return jnp.exp(x)**2
+        >>> log_scale = lsl.Var.new_param(0.0, name="log_scale")
+        >>> variance = lsl.Var.new_calc(compute_variance, log_scale, name="scale")
+        >>> print(variance.value)
+        1.0
+
+        The value of the calculating variable is updated when :meth:`~.Var.update` is
+        called.
+
+        >>> log_scale = lsl.Var.new_param(0.0, name="log_scale")
+        >>> scale = lsl.Var.new_calc(jnp.exp, log_scale, name="scale")
+        >>> print(scale.value)
+        1.0
+        >>> log_scale.value = 1.0
+        >>> print(scale.value)
+        1.0
+        >>> print(scale.update().value)
+        2.7182817
+
+        .. _docs: https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html # noqa
+        """
+        calc = Calc(
+            function,
+            *inputs,
+            _name=f"{name}_calc",
+            _needs_seed=_needs_seed,
+            update_on_init=update_on_init,
+            **kwinputs,
+        )
+        var = cls(calc, name=name)
+        return var
+
+    @classmethod
+    def new_value(cls, value: Any, name: str = "") -> Var:
+        """
+        Initializes a strong variable without a distribution.
+
+        Parameters
+        ----------
+        value
+            The value of the variable.
+        distribution
+            The probability distribution of the variable.
+        name
+            The name of the variable. If you do not specify a name, a unique name will \
+            be automatically generated upon initialization of a :class:`.Model`.
+
+        See Also
+        --------
+        .Var.new_param : Initializes a strong variable that acts as a model parameter.
+        .Var.new_param : Initializes a strong variable that acts as a model parameter.
+        .Var.new_calc :
+            Initializes a weak variable that is a function of other variables.
+
+        Examples
+        --------
+
+        A simple value variable without a name:
+
+        >>> x = lsl.Var.new_value(1.0)
+        >>> x
+        Var(name="")
+
+        """
+        var = cls(value, name=name)
+        return var
 
     def all_input_nodes(self) -> tuple[Node, ...]:
         """Returns all input *nodes* as a unique tuple."""
@@ -1412,6 +1604,9 @@ def obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> 
     """
     Helper function that returns an observed :class:`.Var`.
 
+    .. deprecated:: v0.2.10
+        Use :meth:`.Var.new_obs` instead. This function will be removed in v0.4.0.
+
     Sets the :attr:`.Var.observed` flag. If the observed variable is a random variable,
     i.e. if it has an associated probability distribution, its log-probability is
     automatically added to the model log-likelihood (see :attr:`.Model.log_lik`).
@@ -1433,17 +1628,7 @@ def obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> 
 
     See Also
     --------
-    .Calc :
-        A node representing a general calculation/operation in JAX or Python.
-    .Value :
-        A node representing some static data.
-    .Dist :
-        A node representing a ``tensorflow_probability``
-        :class:`~tfp.distributions.Distribution`.
-    .Var : A variable in a statistical model, typically with a probability
-        distribution.
-    .param :
-        A helper function to initialize a :class:`.Var` as a model parameter.
+    .Var.new_obs : Initializes a strong variable that holds observed data.
 
     Notes
     -----
@@ -1481,6 +1666,10 @@ def obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> 
     Array(-3.0068154, dtype=float32)
 
     """
+    warnings.warn(
+        "Use lsl.Var.new_obs() instead. This function will be removed in v0.4.0",
+        FutureWarning,
+    )
     var = Var(value, distribution, name)
     var.observed = True
     return var
@@ -1489,6 +1678,9 @@ def obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> 
 def param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> Var:
     """
     Helper function that returns a parameter :class:`.Var`.
+
+    .. deprecated:: v0.2.10
+        Use :meth:`.Var.new_param` instead. This function will be removed in v0.4.0.
 
     Sets the :attr:`.Var.parameter` flag. If the parameter variable is a
     random variable, i.e. if it has an associated probability distribution,
@@ -1511,18 +1703,7 @@ def param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -
 
     See Also
     --------
-    .Calc :
-        A node representing a general calculation/operation
-        in JAX or Python.
-    .Value :
-        A node representing some static data.
-    .Dist :
-        A node representing a ``tensorflow_probability``
-        :class:`~tfp.distributions.Distribution`.
-    .Var : A variable in a statistical model, typically with a probability
-        distribution.
-    .obs :
-        A helper function to initialize a :class:`.Var` as an observed variable.
+    .Var.new_param : Initializes a strong variable that acts as a model parameter.
 
     Notes
     -----
@@ -1575,6 +1756,10 @@ def param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -
     Array(-3.0068154, dtype=float32)
 
     """
+    warnings.warn(
+        "Use lsl.Var.new_param() instead. This function will be removed in v0.4.0",
+        FutureWarning,
+    )
     var = Var(value, distribution, name)
     var.value_node.monitor = True
     var.parameter = True

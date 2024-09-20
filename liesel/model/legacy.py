@@ -210,7 +210,8 @@ def Obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> 
     :func:`.obs` : New alias. Sould be used in future code.
     """
     warnings.warn(
-        "Use lsl.obs() instead. This alias will be removed in v0.4.0", FutureWarning
+        "Use lsl.Var.new_obs() instead. This class will be removed in v0.4.0",
+        FutureWarning,
     )
     return obs(value, distribution, name)
 
@@ -238,6 +239,7 @@ def Param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -
     :func:`.param` : New alias. Sould be used in future code.
     """
     warnings.warn(
-        "Use lsl.param() instead. This alias will be removed in v0.4.0", FutureWarning
+        "Use lsl.Var.new_param() instead. This class will be removed in v0.4.0",
+        FutureWarning,
     )
     return param(value, distribution, name)
