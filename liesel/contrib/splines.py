@@ -136,15 +136,18 @@ def basis_matrix(
     .. rubric:: Jit-compilation
 
     The ``basis_matrix`` function internally uses a jit-compiled function to do the
-    heavy lifting. However, you may want make ``basis_matrix`` itself jit-compilable.
+    heavy lifting. However, you may want to make ``basis_matrix`` itself jit-compilable.
     In this case, you need to define the arguments ``order`` and ``outer_ok`` as
     static arguments. Further, ``outer_ok`` needs to be fixed to ``True``.
+
+    If you just want to set up a basis matrix once, it is usually not necessary to go
+    through this process.
 
     Example:
 
     .. code-block:: python
 
-        from liesel.splines import equidistant_knots, basis_matrix
+        from liesel.contrib.splines import equidistant_knots, basis_matrix
 
         x = jnp.linspace(-2.0, 2.0, 30)
         knots = equidistant_knots(x, n_param=10, order=3)
@@ -156,7 +159,7 @@ def basis_matrix(
     Another suitable way to go is to use ``functools.partial``::
 
         from functools import partial
-        from liesel.splines import equidistant_knots, basis_matrix
+        from liesel.contrib.splines import equidistant_knots, basis_matrix
 
         x = jnp.linspace(-2.0, 2.0, 30)
         knots = equidistant_knots(x, n_param=10, order=3)

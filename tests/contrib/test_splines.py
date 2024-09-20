@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from scipy.interpolate import BSpline
 
-from liesel.splines import basis_matrix, equidistant_knots, pspline_penalty
+from liesel.contrib.splines import basis_matrix, equidistant_knots, pspline_penalty
 
 
 def test_knots_creation():
