@@ -27,13 +27,13 @@ from .nodes import (
     Array,
     Bijector,
     Calc,
-    Data,
     Dist,
     Group,
     InputGroup,
     Node,
     NodeState,
     TransientIdentity,
+    Value,
     Var,
     VarValue,
 )
@@ -214,7 +214,7 @@ class GraphBuilder:
 
         for node in nodes:
             if node.needs_seed:
-                seed = Data(jax.random.PRNGKey(0), _name=f"_model_{node.name}_seed")
+                seed = Value(jax.random.PRNGKey(0), _name=f"_model_{node.name}_seed")
                 node.set_inputs(*node.inputs, **{"seed": seed} | node.kwinputs)
 
         return self
@@ -968,9 +968,9 @@ class Model:
 
     >>> from pprint import pprint # for nicer formatting of the output dicts
     >>> pprint(nodes)
-    {'a_value': Data(name="a_value"),
+    {'a_value': Value(name="a_value"),
      'a_var_value': VarValue(name="a_var_value"),
-     'b_value': Data(name="b_value"),
+     'b_value': Value(name="b_value"),
      'b_var_value': VarValue(name="b_var_value"),
      'c_value': Calc(name="c_value"),
      'c_var_value': VarValue(name="c_var_value")}
