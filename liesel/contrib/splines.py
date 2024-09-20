@@ -1,3 +1,7 @@
+"""
+Basic functionality for using B-splines in Liesel.
+"""
+
 from functools import partial
 
 import jax.numpy as jnp
