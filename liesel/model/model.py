@@ -102,6 +102,12 @@ class GraphBuilder:
     been constructed, some methods of the graph builder are not available anymore,
     because the graph is considered static.
 
+    Parameters
+    ----------
+    to_float32
+        Whether to convert the dtype of the values of the added nodes \
+        from float64 to float32.
+
     See Also
     --------
 
@@ -147,7 +153,7 @@ class GraphBuilder:
     []
     """
 
-    def __init__(self):
+    def __init__(self, to_float32: bool = True):
         self.nodes: list[Node] = []
         """The nodes that were explicitly added to the graph."""
 
@@ -157,6 +163,7 @@ class GraphBuilder:
         self._log_lik_node: Node | None = None
         self._log_prior_node: Node | None = None
         self._log_prob_node: Node | None = None
+        self.to_float32 = to_float32
 
     def _add_model_log_lik_node(self) -> GraphBuilder:
         """Adds the model log-likelihood node with the name ``_model_log_lik``."""
@@ -276,7 +283,7 @@ class GraphBuilder:
         return self
 
     def add(
-        self, *args: Node | Var | GraphBuilder, to_float32: bool = True
+        self, *args: Node | Var | GraphBuilder, to_float32: bool | None = None
     ) -> GraphBuilder:
         """
         Adds nodes, variables or other graph builders to the graph.
@@ -289,7 +296,9 @@ class GraphBuilder:
             variables that are added to it, so you only need to add root nodes.
         to_float32
             Whether to convert the dtype of the values of the added nodes \
-            from float64 to float32.
+            from float64 to float32. If ``None`` (default), the GraphBuilder's \
+            attribute ``GraphBuilder.to_float32``, which is set during initialization \
+            will be used instead.
 
         See Also
         --------
@@ -320,6 +329,9 @@ class GraphBuilder:
         Model(9 nodes, 3 vars)
         """
 
+        if to_float32 is None:
+            to_float32 = self.to_float32
+
         for arg in args:
             if isinstance(arg, Node):
                 self.nodes.append(arg)
@@ -336,7 +348,9 @@ class GraphBuilder:
 
         return self
 
-    def add_groups(self, *groups: Group, to_float32: bool = True) -> GraphBuilder:
+    def add_groups(
+        self, *groups: Group, to_float32: bool | None = None
+    ) -> GraphBuilder:
         """
         Adds groups to the graph.
 
@@ -346,12 +360,17 @@ class GraphBuilder:
             The groups to add to the graph.
         to_float32
             Whether to convert the dtype of the values of the added nodes \
-            from float64 to float32.
+            from float64 to float32. If ``None`` (default), the GraphBuilder's \
+            attribute ``GraphBuilder.to_float32``, which is set during initialization \
+            will be used instead.
 
         Returns
         -------
         The graph builder.
         """
+
+        if to_float32 is None:
+            to_float32 = self.to_float32
 
         for group in groups:
             old = self.groups()
@@ -523,7 +542,7 @@ class GraphBuilder:
 
     def copy(self) -> GraphBuilder:
         """Returns a shallow copy of the graph builder."""
-        gb = GraphBuilder()
+        gb = GraphBuilder(to_float32=self.to_float32)
         gb.nodes = self.nodes.copy()
         gb.vars = self.vars.copy()
 
@@ -912,6 +931,9 @@ class Model:
         the recursive inputs of the nodes and variables), and to add the model nodes.
     copy
         Whether the nodes and variables should be copied upon initialization.
+    to_float32
+        Whether to convert the dtype of the values of the added nodes \
+        from float64 to float32. Only takes effect if ``grow=True``.
 
     See Also
     --------
@@ -974,9 +996,12 @@ class Model:
         nodes_and_vars: Iterable[Node | Var],
         grow: bool = True,
         copy: bool = False,
+        to_float32: bool = True,
     ):
         if grow:
-            model = GraphBuilder().add(*nodes_and_vars).build_model()
+            model = (
+                GraphBuilder(to_float32=to_float32).add(*nodes_and_vars).build_model()
+            )
             nodes_and_vars = [*model.nodes.values(), *model.vars.values()]
             model.pop_nodes_and_vars()
 
