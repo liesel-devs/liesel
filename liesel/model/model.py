@@ -296,7 +296,9 @@ class GraphBuilder:
             variables that are added to it, so you only need to add root nodes.
         to_float32
             Whether to convert the dtype of the values of the added nodes \
-            from float64 to float32.
+            from float64 to float32. If ``None`` (default), the GraphBuilder's \
+            attribute ``GraphBuilder.to_float32``, which is set during initialization \
+            will be used instead.
 
         See Also
         --------
@@ -358,7 +360,9 @@ class GraphBuilder:
             The groups to add to the graph.
         to_float32
             Whether to convert the dtype of the values of the added nodes \
-            from float64 to float32.
+            from float64 to float32. If ``None`` (default), the GraphBuilder's \
+            attribute ``GraphBuilder.to_float32``, which is set during initialization \
+            will be used instead.
 
         Returns
         -------
