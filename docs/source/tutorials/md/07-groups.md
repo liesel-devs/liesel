@@ -111,9 +111,9 @@ class SplineCoef(lsl.Group):
         penalty_var = lsl.Var(penalty, name=f"{name}_penalty")
 
         evals = jax.numpy.linalg.eigvalsh(penalty)
-        rank = lsl.Data(jnp.sum(evals > 0.0), _name=f"{name}_rank")
+        rank = lsl.Value(jnp.sum(evals > 0.0), _name=f"{name}_rank")
         _log_pdet = jnp.log(jnp.where(evals > 0.0, evals, 1.0)).sum()
-        log_pdet = lsl.Data(_log_pdet, _name=f"{name}_log_pdet")
+        log_pdet = lsl.Value(_log_pdet, _name=f"{name}_log_pdet")
 
         prior = lsl.Dist(
             MultivariateNormalDegenerate.from_penalty,

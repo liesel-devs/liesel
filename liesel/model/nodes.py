@@ -28,7 +28,7 @@ __all__ = [
     "Array",
     "Bijector",
     "Calc",
-    "Data",
+    "Value",
     "Dist",
     "Distribution",
     "Group",
@@ -147,7 +147,7 @@ class Node(ABC):
     ----------
     inputs
         Non-keyword inputs. Any inputs that are not already nodes or :class:`.Var`
-        will be converted to :class:`.Data` nodes.
+        will be converted to :class:`.Value` nodes.
     _name
         The name of the node. If you do not specify a name, a unique name will be \
         automatically generated upon initialization of a :class:`.Model`.
@@ -159,7 +159,7 @@ class Node(ABC):
     .Calc :
         A node representing a general calculation/operation
         in JAX or Python.
-    .Data :
+    .Value :
         A node representing some static data.
     .Dist :
         A node representing a ``tensorflow_probability``
@@ -225,7 +225,7 @@ class Node(ABC):
             return x.var_value_node
 
         if not isinstance(x, Node):
-            return Data(x)
+            return Value(x)
 
         return x
 
@@ -359,7 +359,7 @@ class Node(ABC):
         """
         The value of the node.
 
-        Can only be set for a :class:`.Data` node, but not a :class:`.Calc` or
+        Can only be set for a :class:`.Value` node, but not a :class:`.Calc` or
         :class:`.Dist` node. If the node is part of a :class:`.Model` ``m`` with
         ``m.auto_update == True``, setting the value of the node triggers an update
         of the model. The auto-update can be disabled to improve the performance if
@@ -460,31 +460,32 @@ class InputGroup(TransientNode):
         return ArgGroup(args, kwargs)
 
 
-class Data(Node):
-    """
+class Value(Node):
+    r"""
     A :class:`.Node` subclass that holds constant values.
 
-    Since the value represented by a data node does not change, it is always up-to-date.
-    A common usecase for data nodes is to cache computed values.
+    Since the information represented by a value node does not change, it is
+    always up-to-date.
+    A common usecase for value nodes is to cache computed values.
 
-    - By default, data nodes *will* appear in the node graph created by
+    - By default, value nodes *will* appear in the node graph created by
       :func:`.viz.plot_nodes`, but they will *not* appear in the model graph created by
       :func:`.viz.plot_vars`.
-    - You can wrap a data node in a :class:`.Var` to make it appear in the model graph.
+    - You can wrap a value node in a :class:`.Var` to make it appear in the model
+      graph.
 
     Parameters
     ----------
     value
-        The value of the data node.
+        The value of the node.
     _name
-        The name of the data node. If you do not specify a name, a unique name will be \
-        automatically generated upon initialization of a :class:`.Model`.
+        The name of the node. If you do not specify a name, a unique name will
+        be \ automatically generated upon initialization of a :class:`.Model`.
 
     See Also
     --------
     .Calc :
-        A node representing a general calculation/operation
-        in JAX or Python.
+        A node representing a general calculation/operation in JAX or Python.
     .Dist :
         A node representing a ``tensorflow_probability``
         :class:`~tfp.distributions.Distribution`.
@@ -499,30 +500,30 @@ class Data(Node):
     Examples
     --------
 
-    A simple data node representing a constant value without a name:
+    A simple constant node representing a constant value without a name:
 
-    >>> nameless_node = lsl.Data(1.0)
+    >>> nameless_node = lsl.Value(1.0)
     >>> nameless_node
-    Data(name="")
+    Value(name="")
 
     Adding this node to a model leads to an automatically generated name:
 
     >>> model = lsl.GraphBuilder().add(nameless_node).build_model()
     >>> nameless_node
-    Data(name="n0")
+    Value(name="n0")
 
-    A data node with a name:
+    A constant node with a name:
 
-    >>> node = lsl.Data(1.0, _name="my_name")
+    >>> node = lsl.Value(1.0, _name="my_name")
     >>> node
-    Data(name="my_name")
+    Value(name="my_name")
     """
 
     def __init__(self, value: Any, _name: str = ""):
         super().__init__(_name=_name)
         self._value = value
 
-    def flag_outdated(self) -> Data:
+    def flag_outdated(self) -> Value:
         """Stops the recursion setting outdated flags."""
         return self
 
@@ -530,7 +531,7 @@ class Data(Node):
     def outdated(self) -> bool:
         return False
 
-    def update(self) -> Data:
+    def update(self) -> Value:
         """Does nothing."""
         return self
 
@@ -548,6 +549,22 @@ class Data(Node):
 
             if self.model.auto_update:
                 self.model.update()
+
+
+class Data(Value):
+    """
+    A :class:`.Node` subclass that holds constant data.
+
+    This is an alias for :class:`.Value`.
+
+    See Also
+    --------
+    .Value :
+        Alias for :class:`.Value`. For full documentation, please consult
+        :class:`.Value`.
+    """
+
+    pass
 
 
 class Calc(Node):
@@ -577,7 +594,7 @@ class Calc(Node):
         The function to be wrapped. Must be jit-compilable by JAX.
     *inputs
         Non-keyword inputs. Any inputs that are not already nodes or :class:`.Var`
-        will be converted to :class:`.Data` nodes. The values of these inputs will be
+        will be converted to :class:`.Value` nodes. The values of these inputs will be
         passed to the wrapped function in the same order they are entered here.
     _name
         The name of the node. If you do not specify a name, a unique name will be \
@@ -589,12 +606,12 @@ class Calc(Node):
         initialization.
     **kwinputs
         Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
-        will be converted to :class:`.Data` nodes. The values of these inputs will be
+        will be converted to :class:`.Value` nodes. The values of these inputs will be
         passed to the wrapped function as keyword arguments.
 
     See Also
     --------
-    .Data :
+    .Value :
         A node representing some static data.
     .Dist :
         A node representing a ``tensorflow_probability``
@@ -763,7 +780,7 @@ class Dist(Node):
         :class:`~tfp.distributions.Distribution` interface.
     *inputs
         Non-keyword inputs. Any inputs that are not already nodes or :class:`.Var`
-        will be converted to :class:`.Data` nodes. The values of these inputs will be
+        will be converted to :class:`.Value` nodes. The values of these inputs will be
         passed to the wrapped distribution in the same order they are entered here.
     _name
         The name of the node. If you do not specify a name, a unique name will be \
@@ -772,7 +789,7 @@ class Dist(Node):
         Whether the node needs a seed / PRNG key.
     **kwinputs
         Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
-        will be converted to :class:`.Data` nodes. The values of these inputs will be
+        will be converted to :class:`.Value` nodes. The values of these inputs will be
         passed to the wrapped distribution as keyword arguments.
 
     See Also
@@ -974,7 +991,7 @@ class Var:
     other nodes, e.g. structured additive predictors in semi-parametric
     regression models.
 
-    If a :class:`.Data` or :class:`.Calc` node does not have an associated probability
+    If a :class:`.Value` or :class:`.Calc` node does not have an associated probability
     distribution, it is possible but not necessary to declare it as a variable. There
     is no hard and fast rule when a node without a probability distribution should be
     declared as a variable and when not. The advantages of a variable in this case are:
@@ -999,7 +1016,7 @@ class Var:
     .Calc :
         A node representing a general calculation/operation
         in JAX or Python.
-    .Data :
+    .Value :
         A node representing some static data.
     .Dist :
         A node representing a ``tensorflow_probability``
@@ -1048,7 +1065,7 @@ class Var:
         name: str = "",
     ):
         self._name = name
-        self._value_node: Node = Data(None)
+        self._value_node: Node = Value(None)
         self._dist_node: Dist = NoDist()
 
         self._var_value_node: VarValue = VarValue(
@@ -1308,7 +1325,7 @@ class Var:
         .weak : Whether the variable is weak. In general, ``strong = not weak``.
 
         """
-        return isinstance(self.value_node, Data)
+        return isinstance(self.value_node, Value)
 
     def update(self) -> Var:
         """Updates the variable."""
@@ -1347,7 +1364,7 @@ class Var:
             value_node = Calc(lambda x: x, value_node)
 
         if not isinstance(value_node, Node):
-            value_node = Data(value_node)
+            value_node = Value(value_node)
 
         if value_node.model:
             raise RuntimeError(
@@ -1418,7 +1435,7 @@ def obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> 
     --------
     .Calc :
         A node representing a general calculation/operation in JAX or Python.
-    .Data :
+    .Value :
         A node representing some static data.
     .Dist :
         A node representing a ``tensorflow_probability``
@@ -1497,7 +1514,7 @@ def param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -
     .Calc :
         A node representing a general calculation/operation
         in JAX or Python.
-    .Data :
+    .Value :
         A node representing some static data.
     .Dist :
         A node representing a ``tensorflow_probability``

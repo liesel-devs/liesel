@@ -167,7 +167,7 @@ def finite_discrete_gibbs_kernel(
 
     Example for a variable with a Bernoulli prior distribution:
 
-    >>> prior = lsl.Dist(tfd.Bernoulli, probs=lsl.Data(0.7))
+    >>> prior = lsl.Dist(tfd.Bernoulli, probs=lsl.Value(0.7))
     >>> dummy_var = lsl.Var(
     ...     value=1,
     ...     distribution=prior,

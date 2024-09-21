@@ -36,6 +36,7 @@ from .nodes import (  # TODO: Bijector?
     TransientDist,
     TransientIdentity,
     TransientNode,
+    Value,
     Var,
     add_group,
     obs,

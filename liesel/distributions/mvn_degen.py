@@ -298,7 +298,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         name: str = "MultivariateNormalDegenerate",
     ) -> MultivariateNormalDegenerate:
         """
-        Alternative constructor based on a penalty matrix and an inverse smoothing
+        Alternative constructor based on a penalty matrix and a smoothing
         parameter.
 
         Sometimes, the precision matrix of a degenerate multivariate normal
