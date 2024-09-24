@@ -139,7 +139,7 @@ This is the model graph before the transformation:
 lsl.plot_vars(model)
 ```
 
-To transform the smoothing parameters with the {meth}`.Var.transform` method,
+To transform the smoothing parameters with the method {meth}`.Var.transform`,
 we need to retrieve the nodes and vars form the model. This is necessary, because
 while they are part of a model, the inputs and outputs of nodes and vars cannot
 be changed.
