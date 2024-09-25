@@ -741,6 +741,18 @@ class TestDistGetitem:
 
 
 class TestDistSetitem:
+    def test_self_as_input(self):
+        a = Dist(tfd.Normal, loc=0.0, scale=1.0)
+        b = Var(2.0, a)
+        a.update()
+
+        lp = tfd.Normal(loc=a.value, scale=1.0).log_prob(b.value)
+
+        a["loc"] = a
+        a.update()
+
+        assert a.value == pytest.approx(lp)
+
     def test_anonymous_values(self):
         x = Var(0.0, Dist(tfd.Normal, loc=0.0, scale=1.0)).update()
 
@@ -892,6 +904,22 @@ class TestCalcGetitem:
 
 
 class TestCalcSetItem:
+    def test_self_as_input(self):
+        def sum_(*args):
+            return sum(args)
+
+        x = Calc(sum_, 1.0, 2.0)
+
+        assert x.value == pytest.approx(3.0)
+
+        x[0] = x
+
+        x.update()
+        assert x.value == pytest.approx(5.0)
+
+        x.update()
+        assert x.value == pytest.approx(7.0)
+
     def test_calc_args(self):
         def sum_(*args):
             return sum(args)

@@ -581,3 +581,28 @@ class TestVarGetitem:
         assert len(y.dist_node._iloc) == 1
 
         assert y.dist_node["scale"].value == pytest.approx(1.0)
+
+
+class TestVarSetItem:
+    def test_self_as_dist_input(self):
+        a = Var(2.0, name="a")
+        b = Var(1.0, Dist(tfp.distributions.Normal, a, scale=1.0))
+
+        b.dist_node[0] = b
+
+        assert b.dist_node[0] is b
+
+    def test_self_as_value_input(self):
+        a = Var(2.0, name="a")
+        b = Var(Calc(lambda x: x + 1, a))
+
+        b.value_node[0] = b
+
+        assert b.value_node[0] is b
+        assert b.value == pytest.approx(3.0)
+
+        b.update()
+        assert b.value == pytest.approx(4.0)
+
+        b.update()
+        assert b.value == pytest.approx(5.0)
