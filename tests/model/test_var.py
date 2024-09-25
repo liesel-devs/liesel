@@ -590,6 +590,8 @@ class TestVarSetItem:
 
         b.dist_node[0] = b
 
+        lmodel.Model([b])
+
         assert b.dist_node[0] is b
 
     def test_self_as_value_input(self):
@@ -598,11 +600,5 @@ class TestVarSetItem:
 
         b.value_node[0] = b
 
-        assert b.value_node[0] is b
-        assert b.value == pytest.approx(3.0)
-
-        b.update()
-        assert b.value == pytest.approx(4.0)
-
-        b.update()
-        assert b.value == pytest.approx(5.0)
+        with pytest.raises(Exception):
+            lmodel.Model([b])
