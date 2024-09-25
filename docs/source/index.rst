@@ -24,6 +24,7 @@ API Reference
 
     ~liesel.model
     ~liesel.goose
+    ~liesel.contrib
     ~liesel.distributions
     ~liesel.bijectors
 
