@@ -688,3 +688,274 @@ def test_multivariate_batched_distribution(Dist) -> None:
         dist.value,
         tfd.MultivariateNormalFullCovariance(loc_vec, scale_m).log_prob(x_vec),
     )
+
+
+class TestDistGetitem:
+    def test_anonymous_values_positional(self):
+        x = Dist(tfd.Normal, 0.0, 1.0)
+
+        assert x[0] is x.inputs[0]
+        assert x[1] is x.inputs[1]
+
+    def test_vars_named_kw(self):
+        loc = Var(0.0, name="loc")
+        scale = Var(1.0, name="scale")
+        x = Dist(tfd.Normal, loc=loc, scale=scale)
+
+        with pytest.raises(IndexError):
+            x[0]
+
+        with pytest.raises(IndexError):
+            x[1]
+
+        assert x["loc"] is loc
+        assert x["scale"] is scale
+
+    def test_vars_named_positional(self):
+        loc = Var(0.0, name="loc")
+        scale = Var(1.0, name="scale")
+        x = Dist(tfd.Normal, loc, scale)
+
+        assert x[0] is loc
+        assert x[1] is scale
+
+        with pytest.raises(KeyError):
+            x["loc"]
+
+        with pytest.raises(KeyError):
+            x["scale"]
+
+    def test_vars_unnamed(self):
+        loc = Var(0.0)
+        scale = Var(1.0)
+        x = Dist(tfd.Normal, loc=loc, scale=scale)
+
+        with pytest.raises(IndexError):
+            x[0]
+
+        with pytest.raises(IndexError):
+            x[1]
+
+        assert x["loc"] is loc
+        assert x["scale"] is scale
+
+
+class TestDistSetitem:
+    def test_self_as_input(self):
+        a = Dist(tfd.Normal, loc=0.0, scale=1.0)
+        b = Var(2.0, a)
+        a["loc"] = a
+
+        with pytest.raises(Exception):
+            Model([b])
+
+    def test_anonymous_values(self):
+        x = Var(0.0, Dist(tfd.Normal, loc=0.0, scale=1.0)).update()
+
+        assert x.log_prob == pytest.approx(
+            tfd.Normal(loc=0.0, scale=1.0).log_prob(x.value)
+        )
+
+        x.dist_node["loc"] = 2.0
+        x.update()
+
+        assert x.log_prob == pytest.approx(
+            tfd.Normal(loc=2.0, scale=1.0).log_prob(x.value)
+        )
+        assert len(x.dist_node._loc) == 2
+
+        x.dist_node["scale"] = 2.0
+        x.update()
+
+        assert x.log_prob == pytest.approx(
+            tfd.Normal(loc=2.0, scale=2.0).log_prob(x.value)
+        )
+
+    def test_cannot_replace_dist_at(self):
+        x = Var(0.0, Dist(tfd.Normal, loc=0.0, scale=1.0)).update()
+        with pytest.raises(IndexError):
+            x.dist_node[2] = Var(1.0)
+
+    def test_positional_values(self):
+        x = Var(0.0, Dist(tfd.Normal, 0.0, 1.0)).update()
+
+        assert x.log_prob == pytest.approx(
+            tfd.Normal(loc=0.0, scale=1.0).log_prob(x.value)
+        )
+
+        x.dist_node[0] = 2.0
+        x.update()
+
+        assert x.log_prob == pytest.approx(
+            tfd.Normal(loc=2.0, scale=1.0).log_prob(x.value)
+        )
+
+        with pytest.raises(KeyError):
+            x.dist_node["loc"] = 2.0
+
+    def test_replace_with_var(self):
+        x = Var(0.0, Dist(tfd.Normal, 0.0, 1.0)).update()
+
+        assert x.log_prob == pytest.approx(
+            tfd.Normal(loc=0.0, scale=1.0).log_prob(x.value)
+        )
+
+        x.dist_node[0] = Var(2.0, name="loc")
+        x.update()
+
+        assert x.log_prob == pytest.approx(
+            tfd.Normal(loc=2.0, scale=1.0).log_prob(x.value)
+        )
+
+    def test_del(self):
+        x = Var(
+            0.0,
+            Dist(tfd.Normal, loc=Var(0.0, name="loc"), scale=Var(1.0, name="scale")),
+        ).update()
+
+        with pytest.raises(AttributeError):
+            del x.dist_node["loc"]
+
+        x = Var(
+            0.0, Dist(tfd.Normal, Var(0.0, name="loc"), scale=Var(1.0, name="scale"))
+        ).update()
+
+        with pytest.raises(AttributeError):
+            del x.dist_node[0]
+
+        x = Var(0.0, Dist(tfd.Normal, 0.0, scale=Var(1.0, name="scale"))).update()
+
+        with pytest.raises(AttributeError):
+            del x.dist_node[0]
+
+    def test_assign_none(self):
+        x = Var(
+            0.0,
+            Dist(tfd.Normal, loc=Var(0.0, name="loc"), scale=Var(1.0, name="scale")),
+        ).update()
+
+        x.dist_node["loc"] = None
+
+        assert isinstance(x.dist_node["loc"], Value)
+        assert x.dist_node["loc"].value is None
+
+
+class TestCalcGetitem:
+    def test_anonymous_values(self):
+        x = Calc(lambda loc, scale: loc * scale, loc=0.0, scale=1.0)
+
+        with pytest.raises(IndexError):
+            x[0]
+
+        with pytest.raises(IndexError):
+            x[1]
+
+    def test_anonymous_values_positional(self):
+        x = Calc(lambda loc, scale: loc * scale, 0.0, 1.0)
+
+        assert x[0] is x.inputs[0]
+        assert x[1] is x.inputs[1]
+
+    def test_vars_named_kw(self):
+        loc = Var(0.0, name="loc")
+        scale = Var(1.0, name="scale")
+        x = Calc(lambda loc, scale: loc * scale, loc=loc, scale=scale)
+
+        with pytest.raises(IndexError):
+            x[0]
+
+        with pytest.raises(IndexError):
+            x[1]
+
+        assert x["loc"] is loc
+        assert x["scale"] is scale
+
+    def test_vars_named_positional(self):
+        loc = Var(0.0, name="loc")
+        scale = Var(1.0, name="scale")
+        x = Calc(lambda loc, scale: loc * scale, loc, scale)
+
+        assert x[0] is loc
+        assert x[1] is scale
+
+        with pytest.raises(KeyError):
+            x["loc"]
+
+        with pytest.raises(KeyError):
+            x["scale"]
+
+    def test_vars_unnamed(self):
+        loc = Var(0.0)
+        scale = Var(1.0)
+        x = Calc(lambda loc, scale: loc * scale, loc=loc, scale=scale)
+
+        with pytest.raises(IndexError):
+            x[0]
+
+        with pytest.raises(IndexError):
+            x[1]
+
+        assert x["loc"] is loc
+        assert x["scale"] is scale
+
+
+class TestCalcSetItem:
+    def test_self_as_input(self):
+        def sum_(*args):
+            return sum(args)
+
+        x = Calc(sum_, 1.0, 2.0)
+
+        assert x.value == pytest.approx(3.0)
+
+        x[0] = x
+
+        with pytest.raises(Exception):
+            Model([x])
+
+    def test_calc_args(self):
+        def sum_(*args):
+            return sum(args)
+
+        x = Calc(sum_, 1.0, 2.0)
+
+        assert x.value == pytest.approx(3.0)
+
+        x[0] = 2.0
+        x.update()
+        assert x.value == pytest.approx(4.0)
+
+        with pytest.raises(IndexError):
+            x[2] = 3.0
+
+    def test_calc_kwargs(self):
+        def sum_(**kwargs):
+            return sum(kwargs.values())
+
+        x = Calc(sum_, a=1.0, b=2.0)
+
+        assert x.value == pytest.approx(3.0)
+
+        x["a"] = 2.0
+        x.update()
+        assert x.value == pytest.approx(4.0)
+
+        with pytest.raises(KeyError):
+            x["c"] = 3.0
+
+    def test_calc_with_default(self):
+        def sum_(a, b=3.0):
+            return a + b
+
+        x = Calc(sum_, 1.0)
+        assert x.value == pytest.approx(4.0)
+
+        x[0] = 2.0
+        x.update()
+        assert x.value == pytest.approx(5.0)
+
+        with pytest.raises(IndexError):
+            x[1] = 0.0
+
+        with pytest.raises(KeyError):
+            x["b"] = 0.0
