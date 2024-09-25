@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 - :construction: Fixed spurious warning during model creation (#186, @jobrachem)
 - :construction: Update logging setup (#187, @jobrachem)
+- :sparkles: New method `Var.transform`. (#174, @jobrachem)
 
 ## [0.2.9] - 2024-04-04
 

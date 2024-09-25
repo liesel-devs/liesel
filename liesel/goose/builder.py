@@ -152,7 +152,7 @@ class EngineBuilder:
         self.store_kernel_states: bool = False
         self.minimize_transition_infos: bool = False
         self.show_progress: bool = True
-        """Whether to show progress bars curing sampling."""
+        """Whether to show progress bars during sampling."""
 
         self.positions_included: list[str] = []
         """
