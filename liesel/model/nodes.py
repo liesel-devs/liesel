@@ -1238,21 +1238,17 @@ class Var:
         use_default_bijector = bijector is None
         if use_default_bijector:
             dist_inst = self.dist_node.init_dist()
-            bijector = dist_inst.experimental_default_event_space_bijector
+            default_bijector = dist_inst.experimental_default_event_space_bijector
 
-        if use_default_bijector and bijector is None:
+        if use_default_bijector and default_bijector is None:
             raise RuntimeError(
                 f"{self} has distribution without default event space bijector "
                 "and no bijector was given"
             )
 
-        if is_bijector_class(bijector):
+        if is_bijector_class(bijector) or use_default_bijector:
             tvar = _transform_var_with_bijector_class(
                 self, bijector, *bijector_args, **bijector_kwargs
-            )
-        elif use_default_bijector:
-            tvar = _transform_var_with_bijector_class(
-                self, None, *bijector_args, **bijector_kwargs
             )
         elif isinstance(bijector, jb.Bijector):
             if bijector_args or bijector_kwargs:
