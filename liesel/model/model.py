@@ -832,7 +832,7 @@ class GraphBuilder:
             bijector, type
         )
 
-        if isinstance(bijector, type) and not args and not kwargs:
+        if isinstance(bijector, type) and not (args or kwargs):
             warnings.warn(
                 "You passed a bijector class instead of an instance, but did not "
                 "provide any arguments. You should either provide arguments "
