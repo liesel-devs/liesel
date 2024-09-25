@@ -162,9 +162,9 @@ class NUTSKernel(
             flat_position, _ = ravel_pytree(self.position(model_state))
 
             if self.mm_diag:
-                inverse_mass_matrix = jnp.eye(flat_position.size)
-            else:
                 inverse_mass_matrix = jnp.ones_like(flat_position)
+            else:
+                inverse_mass_matrix = jnp.eye(flat_position.size)
         else:
             inverse_mass_matrix = self.initial_inverse_mass_matrix
 
