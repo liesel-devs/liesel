@@ -1106,6 +1106,79 @@ class Var:
     >>> x
     Var(name="x")
 
+    .. rubric:: Accessing inputs
+
+    :class:`.Calc` and :class:`.Dist` objects support access to their inputs via
+    square-bracket syntax. Thus, with a :class:`.Var` object, you can use square bracket
+    indexing on its attributes :attr:`.Var.value_node` and :attr:`.Var.dist_node`.
+    You can access both named and unnamed arguments this way.
+
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+
+    Access named inputs to a calculator :attr:`.Var.value_node`:
+
+    >>> a = lsl.Var(2.0, name="a")
+    >>> b = lsl.Var(lsl.Calc(lambda x: x + 1.0, x=a))
+    >>> b.value_node["x"]
+    Var(name="a")
+
+    Access positional inputs to a calculator :attr:`.Var.value_node`:
+
+    >>> a = lsl.Var(2.0, name="a")
+    >>> b = lsl.Var(lsl.Calc(lambda x: x + 1.0, a))
+    >>> b.value_node[0]
+    Var(name="a")
+
+    Access named inputs to a distribution :attr:`.Var.dist_node`:
+
+    >>> a = lsl.Var(2.0, name="a")
+    >>> b = lsl.Var(1.0, lsl.Dist(tfd.Normal, loc=a, scale=1.0))
+    >>> b.dist_node["loc"]
+    Var(name="a")
+
+    Access positional inputs to a distribution :attr:`.Var.dist_node`:
+
+    >>> a = lsl.Var(2.0, name="a")
+    >>> b = lsl.Var(1.0, lsl.Dist(tfd.Normal, a, scale=1.0))
+    >>> b.dist_node[0]
+    Var(name="a")
+
+    .. info::
+        Note that, for accessing named arguments, you do *not* use :attr:`.Var.name`
+        attribute of the looked-for input variable or node, but the *argument name*.
+        Consider this case from above::
+
+            a = lsl.Var(2.0, name="a")
+            b = lsl.Var(1.0, lsl.Dist(tfd.Normal, loc=a, scale=1.0))
+            b.dist_node["loc"]
+
+        Here, we retrieve the variable ``a`` with the name ``"a"``. But for the
+        indexing, we use the *argument name` ``"loc"`` from the call to ``lsl.Dist`.
+
+    .. rubric:: Swapping out inputs
+
+    You can also use square-bracket indexing on :attr:`.Var.value_node` and
+    :attr:`.Var.dist_node` to swap out existing inputs. This allows you to easily make
+    changes to your model.
+
+    Swap out inputs to a calculator via :attr:`.Var.value_node`:
+
+    >>> a = lsl.Var(2.0, name="a")
+    >>> b = lsl.Var(lsl.Calc(lambda x: x + 1.0, x=a))
+    >>> c = lsl.Var(3.0, name="c")
+    >>> b.value_node["x"] = c
+    >>> b.value_node["x"]
+    Var(name="c")
+
+    Swap out inputs to a distribution via :attr:`.Var.dist_node`:
+
+    >>> a = lsl.Var(2.0, name="a")
+    >>> b = lsl.Var(1.0, lsl.Dist(tfd.Normal, loc=a, scale=1.0))
+    >>> c = lsl.Var(3.0, name="c")
+    >>> b.dist_node["loc"] = c
+    >>> b.dist_node["loc"]
+    Var(name="c")
+
     """
 
     __slots__ = (
