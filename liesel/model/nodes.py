@@ -12,7 +12,7 @@ from collections.abc import Callable, Hashable, Iterable
 from functools import wraps
 from itertools import chain
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar, Union
+from typing import TYPE_CHECKING, Any, NamedTuple, TypeGuard, TypeVar, Union
 
 import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as jd
@@ -961,6 +961,10 @@ class NoDist(Dist):
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
+def is_bijector_class(obj) -> TypeGuard[type[Any]]:
+    return isinstance(obj, type) and issubclass(obj, jb.Bijector)
+
+
 class Var:
     """
     A variable in a statistical model, typically with a probability distribution.
@@ -1220,7 +1224,7 @@ class Var:
         if self.dist_node is None:  # type: ignore
             raise RuntimeError(f"{repr(self)} has no distribution")
 
-        if isinstance(bijector, type) and not bijector_args and not bijector_kwargs:
+        if is_bijector_class(bijector) and not (bijector_args or bijector_kwargs):
             raise ValueError(
                 "You passed a bijector class instead of an instance, but did not "
                 "provide any arguments for the bijector. You should either provide "
@@ -1230,25 +1234,40 @@ class Var:
         # avoid infinite recursion
         self.auto_transform = False
 
-        if isinstance(bijector, type):
-            tvar = _transform_var_with_bijector_class(
-                self, bijector, *bijector_args, **bijector_kwargs
-            )
-        elif bijector is None:
+        # use default event space bijector if bijector is None
+        use_default_bijector = bijector is None
+        if use_default_bijector:
             dist_inst = self.dist_node.init_dist()
             bijector = dist_inst.experimental_default_event_space_bijector
+
+        if use_default_bijector and bijector is None:
+            raise RuntimeError(
+                f"{self} has distribution without default event space bijector "
+                "and no bijector was given"
+            )
+
+        if is_bijector_class(bijector):
             tvar = _transform_var_with_bijector_class(
                 self, bijector, *bijector_args, **bijector_kwargs
             )
-        else:
+        elif use_default_bijector:
+            tvar = _transform_var_with_bijector_class(
+                self, None, *bijector_args, **bijector_kwargs
+            )
+        elif isinstance(bijector, jb.Bijector):
             if bijector_args or bijector_kwargs:
                 raise RuntimeError(
                     "You passed a bijector instance and "
                     "nonempty bijector arguments. You should either initialise your "
                     "bijector directly with the arguments, or pass a bijector class "
-                    "instead."
+                    "instead. The first option is preferred, if the bijector arguments"
+                    "are constant."
                 )
             tvar = _transform_var_with_bijector_instance(self, bijector)
+        else:
+            raise TypeError(
+                f"Argument {bijector=} is of invalid type {type(bijector)}."
+            )
 
         tvar.parameter = self.parameter  # type: ignore
         self.parameter = False
@@ -1575,7 +1594,7 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
 
 
 def _transform_var_with_bijector_class(
-    var: Var, bijector_cls: type[jb.Bijector], *args, **kwargs
+    var: Var, bijector_cls: type[jb.Bijector] | None, *args, **kwargs
 ) -> Var:
     if var.dist_node is None:  # type: ignore
         raise RuntimeError(f"{var} has no distribution")
@@ -1591,8 +1610,14 @@ def _transform_var_with_bijector_class(
     # define distribution "class" for the transformed var
     def transform_dist(dist_args: ArgGroup, bijector_args: ArgGroup):
         tfp_dist = InputDist(*dist_args.args, **dist_args.kwargs)
+        bjargs, bjkwargs = bijector_args.args, bijector_args.kwargs
 
-        bijector_inst = bijector_cls(*bijector_args.args, **bijector_args.kwargs)
+        if bijector_cls is None:
+            default_bijector_cls = tfp_dist.experimental_default_event_space_bijector
+            bijector_inst = default_bijector_cls(*bjargs, **bjkwargs)
+        else:
+            bijector_inst = bijector_cls(*bjargs, **bjkwargs)
+
         bijector_inv = jb.Invert(bijector_inst)
 
         transformed_dist = jd.TransformedDistribution(

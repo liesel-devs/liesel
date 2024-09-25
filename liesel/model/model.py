@@ -37,6 +37,7 @@ from .nodes import (
     TransientIdentity,
     Var,
     VarValue,
+    is_bijector_class,
 )
 from .viz import plot_nodes, plot_vars
 
@@ -785,7 +786,7 @@ class GraphBuilder:
         if var.dist_node is None:
             raise RuntimeError(f"{repr(var)} has no distribution")
 
-        if bijector is not None and not isinstance(bijector, type) and (args or kwargs):
+        if not is_bijector_class(bijector) and (args or kwargs):
             raise RuntimeError(
                 "You passed a bijector instance and "
                 "nonempty bijector arguments. You should either initialise your "
