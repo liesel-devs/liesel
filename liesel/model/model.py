@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import re
+import warnings
 from collections import Counter
 from collections.abc import Iterable
 from copy import deepcopy
@@ -36,6 +37,7 @@ from .nodes import (
     Value,
     Var,
     VarValue,
+    is_bijector_class,
 )
 from .viz import plot_nodes, plot_vars
 
@@ -102,6 +104,12 @@ class GraphBuilder:
     been constructed, some methods of the graph builder are not available anymore,
     because the graph is considered static.
 
+    Parameters
+    ----------
+    to_float32
+        Whether to convert the dtype of the values of the added nodes \
+        from float64 to float32.
+
     See Also
     --------
 
@@ -110,7 +118,7 @@ class GraphBuilder:
         GraphBuilder.
     :meth:`.GraphBuilder.build_model` : Method for building a model from the
         GraphBuilder.
-    :meth:`GraphBuilder.transform` : Transforms a variable by adding a new transformed
+    :meth:`.Var.transform` : Transforms a variable by adding a new transformed
         variable as an input. This is useful for variables that are constrained to a
         certain domain, e.g. positive values.
 
@@ -147,7 +155,7 @@ class GraphBuilder:
     []
     """
 
-    def __init__(self):
+    def __init__(self, to_float32: bool = True):
         self.nodes: list[Node] = []
         """The nodes that were explicitly added to the graph."""
 
@@ -157,6 +165,7 @@ class GraphBuilder:
         self._log_lik_node: Node | None = None
         self._log_prior_node: Node | None = None
         self._log_prob_node: Node | None = None
+        self.to_float32 = to_float32
 
     def _add_model_log_lik_node(self) -> GraphBuilder:
         """Adds the model log-likelihood node with the name ``_model_log_lik``."""
@@ -276,7 +285,7 @@ class GraphBuilder:
         return self
 
     def add(
-        self, *args: Node | Var | GraphBuilder, to_float32: bool = True
+        self, *args: Node | Var | GraphBuilder, to_float32: bool | None = None
     ) -> GraphBuilder:
         """
         Adds nodes, variables or other graph builders to the graph.
@@ -289,13 +298,15 @@ class GraphBuilder:
             variables that are added to it, so you only need to add root nodes.
         to_float32
             Whether to convert the dtype of the values of the added nodes \
-            from float64 to float32.
+            from float64 to float32. If ``None`` (default), the GraphBuilder's \
+            attribute ``GraphBuilder.to_float32``, which is set during initialization \
+            will be used instead.
 
         See Also
         --------
         :meth:`.GraphBuilder.build_model` : Method for building a model from the \
             GraphBuilder.
-        :meth:`GraphBuilder.transform` : Transforms a variable by adding a new
+        :meth:`.Var.transform` : Transforms a variable by adding a new
             transformed variable as an input.
 
         Examples
@@ -320,6 +331,9 @@ class GraphBuilder:
         Model(9 nodes, 3 vars)
         """
 
+        if to_float32 is None:
+            to_float32 = self.to_float32
+
         for arg in args:
             if isinstance(arg, Node):
                 self.nodes.append(arg)
@@ -336,7 +350,9 @@ class GraphBuilder:
 
         return self
 
-    def add_groups(self, *groups: Group, to_float32: bool = True) -> GraphBuilder:
+    def add_groups(
+        self, *groups: Group, to_float32: bool | None = None
+    ) -> GraphBuilder:
         """
         Adds groups to the graph.
 
@@ -346,12 +362,17 @@ class GraphBuilder:
             The groups to add to the graph.
         to_float32
             Whether to convert the dtype of the values of the added nodes \
-            from float64 to float32.
+            from float64 to float32. If ``None`` (default), the GraphBuilder's \
+            attribute ``GraphBuilder.to_float32``, which is set during initialization \
+            will be used instead.
 
         Returns
         -------
         The graph builder.
         """
+
+        if to_float32 is None:
+            to_float32 = self.to_float32
 
         for group in groups:
             old = self.groups()
@@ -444,7 +465,13 @@ class GraphBuilder:
 
         for var in _vars:
             if var.auto_transform:
-                gb.transform(var)
+                tname = f"{var.name}_transformed"
+                if tname in nodes or tname in _vars:
+                    raise RuntimeError(
+                        f"Auto-transform of {var} failed, because a variable of the "
+                        f"name {tname} is already present in {gb}."
+                    )
+                var.transform(bijector=None)
 
         gb._set_missing_names()
         gb._add_model_log_lik_node()
@@ -523,7 +550,7 @@ class GraphBuilder:
 
     def copy(self) -> GraphBuilder:
         """Returns a shallow copy of the graph builder."""
-        gb = GraphBuilder()
+        gb = GraphBuilder(to_float32=self.to_float32)
         gb.nodes = self.nodes.copy()
         gb.vars = self.vars.copy()
 
@@ -687,10 +714,18 @@ class GraphBuilder:
         return self
 
     def transform(
-        self, var: Var, bijector: type[Bijector] | None = None, *args, **kwargs
+        self,
+        var: Var,
+        bijector: type[Bijector] | Bijector | None = None,
+        *args,
+        **kwargs,
     ) -> Var:
         """
         Transforms a variable by adding a new transformed variable as an input.
+
+        .. deprecated:: 0.2.9
+            ``GraphBuilder.transform`` is deprecated.
+            Use :meth:`.Var.transform` instead. This method will be removed in v0.4.0.
 
         Creates a new variable on the unconstrained space ``R**n`` with the appropriate
         transformed distribution, turning the original variable into a weak variable
@@ -758,11 +793,25 @@ class GraphBuilder:
         0.0
         """
 
+        warnings.warn(
+            "GraphBuilder.transform is deprecated. Use Var.transform instead. "
+            "This method will be removed in v0.4.0",
+            FutureWarning,
+        )
+
         if var.weak:
             raise RuntimeError(f"{repr(var)} is weak")
 
         if var.dist_node is None:
             raise RuntimeError(f"{repr(var)} has no distribution")
+
+        if not is_bijector_class(bijector) and (args or kwargs):
+            raise RuntimeError(
+                "You passed a bijector instance and "
+                "nonempty bijector arguments. You should either initialise your "
+                "bijector directly with the arguments, or pass a bijector class "
+                "instead."
+            )
 
         # avoid name clashes
         self._set_missing_names()
@@ -799,6 +848,17 @@ class GraphBuilder:
                 "and no bijector was given"
             )
 
+        using_bijector_instance = not use_default_bijector and not isinstance(
+            bijector, type
+        )
+
+        if isinstance(bijector, type) and not (args or kwargs):
+            warnings.warn(
+                "You passed a bijector class instead of an instance, but did not "
+                "provide any arguments. You should either provide arguments "
+                "or pass an instance of the bijector class.",
+            )
+
         if isinstance(tfp_dist, jd.Distribution):
             tfd = jd
             tfb = jb
@@ -830,10 +890,13 @@ class GraphBuilder:
 
             if use_default_bijector:
                 bijector_cls = tfp_dist.experimental_default_event_space_bijector
+                bijector_obj = bijector_cls(*bijector_args.args, **bijector_args.kwargs)
+            elif using_bijector_instance:
+                bijector_obj = bijector
             else:
                 bijector_cls = bijector
+                bijector_obj = bijector_cls(*bijector_args.args, **bijector_args.kwargs)
 
-            bijector_obj = bijector_cls(*bijector_args.args, **bijector_args.kwargs)
             bijector_inv = tfb.Invert(bijector_obj)
 
             return tfd.TransformedDistribution(
@@ -917,6 +980,9 @@ class Model:
         the recursive inputs of the nodes and variables), and to add the model nodes.
     copy
         Whether the nodes and variables should be copied upon initialization.
+    to_float32
+        Whether to convert the dtype of the values of the added nodes \
+        from float64 to float32. Only takes effect if ``grow=True``.
 
     See Also
     --------
@@ -951,9 +1017,12 @@ class Model:
         nodes_and_vars: Iterable[Node | Var],
         grow: bool = True,
         copy: bool = False,
+        to_float32: bool = True,
     ):
         if grow:
-            model = GraphBuilder().add(*nodes_and_vars).build_model()
+            model = (
+                GraphBuilder(to_float32=to_float32).add(*nodes_and_vars).build_model()
+            )
             nodes_and_vars = [*model.nodes.values(), *model.vars.values()]
             model.pop_nodes_and_vars()
 

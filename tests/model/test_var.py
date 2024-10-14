@@ -1,5 +1,7 @@
 import typing
+import warnings
 
+import numpy as np
 import pytest
 import tensorflow_probability.substrates.jax as tfp
 
@@ -550,3 +552,111 @@ class TestVarConstructors:
         loc = lnodes.Var.new_value(1.0, name="loc")
         assert isinstance(loc, lnodes.Var)
         assert loc.strong
+
+
+class TestVarTransform:
+    def test_transform_instance(self) -> None:
+        prior = lnodes.Dist(tfp.distributions.HalfCauchy, loc=0.0, scale=25.0)
+        tau = lnodes.Var(10.0, prior, name="tau")
+        log_tau = tau.transform(tfp.bijectors.Exp())
+        tau.update()
+
+        assert tau.weak
+        assert not log_tau.weak
+
+        assert tau.value == pytest.approx(np.exp(log_tau.value))
+        assert tau.value == pytest.approx(10.0)
+        assert log_tau.value == pytest.approx(np.log(10.0))
+
+        prior = lnodes.Dist(tfp.distributions.HalfCauchy, loc=0.0, scale=25.0)
+        tau = lnodes.Var(10.0, prior, name="tau")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", (FutureWarning))
+            log_tau_gb = lmodel.GraphBuilder().transform(tau, tfp.bijectors.Exp())
+
+        assert tau.weak
+        assert not log_tau.weak
+
+        tau.update()
+        assert tau.value == pytest.approx(np.exp(log_tau.value))
+        assert tau.value == pytest.approx(10.0)
+        assert log_tau_gb.value == pytest.approx(np.log(10.0))
+
+        log_tau.dist_node.update()  # type: ignore
+        log_tau_gb.dist_node.update()  # type: ignore
+        assert log_tau.log_prob == pytest.approx(log_tau_gb.log_prob)
+
+    def test_transform_class_no_args(self) -> None:
+        prior = lnodes.Dist(tfp.distributions.HalfCauchy, loc=0.0, scale=25.0)
+        tau = lnodes.Var(10.0, prior, name="tau")
+        with pytest.raises(ValueError):
+            tau.transform(tfp.bijectors.Exp)
+
+    def test_transform_class_with_args(self) -> None:
+        prior = lnodes.Dist(tfp.distributions.HalfCauchy, loc=0.0, scale=25.0)
+        tau = lnodes.Var(10.0, prior, name="tau")
+        transformed_tau = tau.transform(
+            tfp.bijectors.Softplus, hinge_softness=lnodes.Var(0.9)
+        )
+        tau.update()
+
+        bijector = tfp.bijectors.Softplus(hinge_softness=0.9)
+
+        assert tau.weak
+        assert not transformed_tau.weak
+
+        assert tau.value == pytest.approx(bijector.forward(transformed_tau.value))
+        assert tau.value == pytest.approx(10.0)
+        assert transformed_tau.value == pytest.approx(bijector.inverse(10.0))
+
+        prior = lnodes.Dist(tfp.distributions.HalfCauchy, loc=0.0, scale=25.0)
+        tau = lnodes.Var(10.0, prior, name="tau")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", (FutureWarning))
+            transformed_tau_gb = lmodel.GraphBuilder().transform(
+                tau, tfp.bijectors.Softplus, hinge_softness=lnodes.Var(0.9)
+            )
+
+        assert tau.weak
+        assert not transformed_tau.weak
+
+        tau.update()
+        assert tau.value == pytest.approx(bijector.forward(transformed_tau.value))
+        assert tau.value == pytest.approx(10.0)
+        assert transformed_tau_gb.value == pytest.approx(bijector.inverse(10.0))
+
+        transformed_tau.dist_node.update()  # type: ignore
+        transformed_tau_gb.dist_node.update()  # type: ignore
+        assert transformed_tau.log_prob == pytest.approx(transformed_tau_gb.log_prob)
+
+    def test_transform_default(self) -> None:
+        prior = lnodes.Dist(tfp.distributions.HalfCauchy, loc=0.0, scale=25.0)
+        tau = lnodes.Var(10.0, prior, name="tau")
+        log_tau = tau.transform()
+        tau.update()
+
+        assert tau.weak
+        assert not log_tau.weak
+
+        assert tau.value == pytest.approx(np.exp(log_tau.value))
+        assert tau.value == pytest.approx(10.0)
+        assert log_tau.value == pytest.approx(np.log(10.0))
+
+        prior = lnodes.Dist(tfp.distributions.HalfCauchy, loc=0.0, scale=25.0)
+        tau = lnodes.Var(10.0, prior, name="tau")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", (FutureWarning))
+            log_tau_gb = lmodel.GraphBuilder().transform(tau)
+
+        assert tau.weak
+        assert not log_tau.weak
+
+        tau.update()
+        assert tau.value == pytest.approx(np.exp(log_tau.value))
+        assert tau.value == pytest.approx(10.0)
+        assert log_tau_gb.value == pytest.approx(np.log(10.0))
+
+        log_tau.dist_node.update()  # type: ignore
+        log_tau_gb.dist_node.update()  # type: ignore
+        assert log_tau.log_prob == pytest.approx(log_tau_gb.log_prob)
+

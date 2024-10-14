@@ -2,9 +2,13 @@
 Model visualization.
 """
 
+import logging
+
 import matplotlib.pyplot as plt
 import networkx as nx
 from matplotlib.lines import Line2D
+
+logger = logging.getLogger(__name__)
 
 
 def plot_nodes(model, show=True, save_path=None, width=14, height=10, prog="dot"):
@@ -86,6 +90,11 @@ def _prepare_figure(graph, width, height, prog):
     if _is_pygraphviz_installed():
         pos = nx.drawing.nx_agraph.graphviz_layout(graph, prog=prog)
     else:
+        logger.warning(
+            "PyGraphviz was not found in the current environment. "
+            "Using fallback graph layout. Consider installing PyGraphviz: "
+            "https://pygraphviz.github.io/documentation/stable/install.html"
+        )
         pos = nx.fruchterman_reingold_layout(graph)
 
     return fig, axis, pos

@@ -129,7 +129,9 @@ ggplot(data.frame(times = mcycle$times, mean = beta0 + f)) +
 
 ## NUTS sampler
 
-As an alternative, we try a NUTS kernel which samples all model parameters (regression coefficients and smoothing parameters) in one block. To do so, we first need to log-transform the smoothing parameters. This is the model graph before the transformation:
+As an alternative, we try using NUTS kernels for all parameters.
+To do so, we first need to log-transform the smoothing parameters.
+This is the model graph before the transformation:
 
 ```{python}
 #| label: untransformed-graph
@@ -137,7 +139,14 @@ As an alternative, we try a NUTS kernel which samples all model parameters (regr
 lsl.plot_vars(model)
 ```
 
-Before transforming the smoothing parameters with the `lsl.transform_parameter()` function, we first need to copy all model nodes. Once this is done, we need to update the output nodes of the smoothing parameters and rebuild the model. There are two additional nodes in the new model graph.
+To transform the smoothing parameters with the method {meth}`.Var.transform`,
+we need to retrieve the nodes and vars form the model. This is necessary, because
+while they are part of a model, the inputs and outputs of nodes and vars cannot
+be changed.
+We retrieve the nodes and vars using {meth}`.Model.pop_nodes_and_vars`,
+which renders the model empty.
+
+After transformation, there are two additional nodes in the new model graph.
 
 ```{python}
 #| label: transformed-graph
@@ -146,10 +155,11 @@ import tensorflow_probability.substrates.jax.bijectors as tfb
 
 nodes, _vars = model.pop_nodes_and_vars()
 
-gb = lsl.GraphBuilder()
-gb.add(_vars["response"])
-_ = gb.transform(_vars["loc_np0_tau2"], tfb.Exp)
-_ = gb.transform(_vars["scale_np0_tau2"], tfb.Exp)
+_vars["loc_np0_tau2"].transform(tfb.Exp())
+_vars["scale_np0_tau2"].transform(tfb.Exp())
+
+gb = lsl.GraphBuilder().add(_vars["response"])
+
 model = gb.build_model()
 lsl.plot_vars(model)
 ```
