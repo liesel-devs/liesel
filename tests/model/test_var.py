@@ -659,4 +659,3 @@ class TestVarTransform:
         log_tau.dist_node.update()  # type: ignore
         log_tau_gb.dist_node.update()  # type: ignore
         assert log_tau.log_prob == pytest.approx(log_tau_gb.log_prob)
-
