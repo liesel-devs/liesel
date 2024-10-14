@@ -377,6 +377,7 @@ class Node(ABC):
         input_list: list[Node | Var] = []
         for input_ in self.inputs:
             if isinstance(input_, VarValue):
+                # This should not happen in practice, but the check makes mypy happy.
                 if input_.var is None:
                     raise RuntimeError(f"{input_}.var is None.")
                 input_list.append(input_.var)
@@ -390,6 +391,7 @@ class Node(ABC):
         input_dict: dict[str, Node | Var] = {}
         for key, input_ in self.kwinputs.items():
             if isinstance(input_, VarValue):
+                # This should not happen in practice, but the check makes mypy happy.
                 if input_.var is None:
                     raise RuntimeError(f"{input_}.var is None.")
                 input_dict[key] = input_.var
