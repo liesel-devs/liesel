@@ -691,27 +691,13 @@ def test_multivariate_batched_distribution(Dist) -> None:
 
 
 class TestDistGetitem:
-    def test_anonymous_values_positional(self):
+    def test_positional_access_works(self):
         x = Dist(tfd.Normal, 0.0, 1.0)
 
         assert x[0] is x.inputs[0]
         assert x[1] is x.inputs[1]
 
-    def test_vars_named_kw(self):
-        loc = Var(0.0, name="loc")
-        scale = Var(1.0, name="scale")
-        x = Dist(tfd.Normal, loc=loc, scale=scale)
-
-        with pytest.raises(IndexError):
-            x[0]
-
-        with pytest.raises(IndexError):
-            x[1]
-
-        assert x["loc"] is loc
-        assert x["scale"] is scale
-
-    def test_vars_named_positional(self):
+    def test_keyword_access_to_positional_args_raises_error(self):
         loc = Var(0.0, name="loc")
         scale = Var(1.0, name="scale")
         x = Dist(tfd.Normal, loc, scale)
@@ -725,7 +711,7 @@ class TestDistGetitem:
         with pytest.raises(KeyError):
             x["scale"]
 
-    def test_vars_unnamed(self):
+    def test_positional_access_to_keyword_args_raises_error(self):
         loc = Var(0.0)
         scale = Var(1.0)
         x = Dist(tfd.Normal, loc=loc, scale=scale)
@@ -736,12 +722,17 @@ class TestDistGetitem:
         with pytest.raises(IndexError):
             x[1]
 
+    def test_keyword_access_works(self):
+        loc = Var(0.0)
+        scale = Var(1.0)
+        x = Dist(tfd.Normal, loc=loc, scale=scale)
+
         assert x["loc"] is loc
         assert x["scale"] is scale
 
 
 class TestDistSetitem:
-    def test_self_as_input(self):
+    def test_replacing_input_with_self_breaks_model(self):
         a = Dist(tfd.Normal, loc=0.0, scale=1.0)
         b = Var(2.0, a)
         a["loc"] = a
@@ -749,7 +740,7 @@ class TestDistSetitem:
         with pytest.raises(Exception):
             Model([b])
 
-    def test_anonymous_values(self):
+    def test_replacing_keyword_input_leads_to_correct_log_prob(self):
         x = Var(0.0, Dist(tfd.Normal, loc=0.0, scale=1.0)).update()
 
         assert x.log_prob == pytest.approx(
@@ -776,7 +767,7 @@ class TestDistSetitem:
         with pytest.raises(IndexError):
             x.dist_node[2] = Var(1.0)
 
-    def test_positional_values(self):
+    def test_replacing_positional_input_leads_to_correct_log_prob(self):
         x = Var(0.0, Dist(tfd.Normal, 0.0, 1.0)).update()
 
         assert x.log_prob == pytest.approx(
@@ -790,10 +781,13 @@ class TestDistSetitem:
             tfd.Normal(loc=2.0, scale=1.0).log_prob(x.value)
         )
 
+    def test_positional_input_cannot_be_replaced_via_keyword(self):
+        x = Var(0.0, Dist(tfd.Normal, 0.0, 1.0)).update()
+
         with pytest.raises(KeyError):
             x.dist_node["loc"] = 2.0
 
-    def test_replace_with_var(self):
+    def test_replacing_an_input_node_with_a_var_works(self):
         x = Var(0.0, Dist(tfd.Normal, 0.0, 1.0)).update()
 
         assert x.log_prob == pytest.approx(
@@ -807,7 +801,7 @@ class TestDistSetitem:
             tfd.Normal(loc=2.0, scale=1.0).log_prob(x.value)
         )
 
-    def test_del(self):
+    def test_del_raises_attribute_error(self):
         x = Var(
             0.0,
             Dist(tfd.Normal, loc=Var(0.0, name="loc"), scale=Var(1.0, name="scale")),
@@ -828,7 +822,7 @@ class TestDistSetitem:
         with pytest.raises(AttributeError):
             del x.dist_node[0]
 
-    def test_assign_none(self):
+    def test_assign_none_works(self):
         x = Var(
             0.0,
             Dist(tfd.Normal, loc=Var(0.0, name="loc"), scale=Var(1.0, name="scale")),
@@ -841,7 +835,7 @@ class TestDistSetitem:
 
 
 class TestCalcGetitem:
-    def test_anonymous_values(self):
+    def test_positional_access_to_keyword_args_raises_error(self):
         x = Calc(lambda loc, scale: loc * scale, loc=0.0, scale=1.0)
 
         with pytest.raises(IndexError):
@@ -850,33 +844,24 @@ class TestCalcGetitem:
         with pytest.raises(IndexError):
             x[1]
 
-    def test_anonymous_values_positional(self):
+    def test_positional_access_works(self):
         x = Calc(lambda loc, scale: loc * scale, 0.0, 1.0)
 
         assert x[0] is x.inputs[0]
         assert x[1] is x.inputs[1]
 
-    def test_vars_named_kw(self):
+    def test_keyword_access_works(self):
         loc = Var(0.0, name="loc")
         scale = Var(1.0, name="scale")
         x = Calc(lambda loc, scale: loc * scale, loc=loc, scale=scale)
 
-        with pytest.raises(IndexError):
-            x[0]
-
-        with pytest.raises(IndexError):
-            x[1]
-
         assert x["loc"] is loc
         assert x["scale"] is scale
 
-    def test_vars_named_positional(self):
+    def test_keyword_access_to_positional_args_raises_error(self):
         loc = Var(0.0, name="loc")
         scale = Var(1.0, name="scale")
         x = Calc(lambda loc, scale: loc * scale, loc, scale)
-
-        assert x[0] is loc
-        assert x[1] is scale
 
         with pytest.raises(KeyError):
             x["loc"]
@@ -884,7 +869,8 @@ class TestCalcGetitem:
         with pytest.raises(KeyError):
             x["scale"]
 
-    def test_vars_unnamed(self):
+    def test_keyword_access_works_with_unnamed_vars(self):
+        """Because keyword access is based on argument name, not variable name."""
         loc = Var(0.0)
         scale = Var(1.0)
         x = Calc(lambda loc, scale: loc * scale, loc=loc, scale=scale)
@@ -900,7 +886,7 @@ class TestCalcGetitem:
 
 
 class TestCalcSetItem:
-    def test_self_as_input(self):
+    def test_replacing_input_with_self_breaks_model(self):
         def sum_(*args):
             return sum(args)
 
@@ -913,7 +899,7 @@ class TestCalcSetItem:
         with pytest.raises(Exception):
             Model([x])
 
-    def test_calc_args(self):
+    def test_variable_length_args_cannot_be_extended_by_setitem(self):
         def sum_(*args):
             return sum(args)
 
@@ -928,7 +914,7 @@ class TestCalcSetItem:
         with pytest.raises(IndexError):
             x[2] = 3.0
 
-    def test_calc_kwargs(self):
+    def test_variable_length_kwargs_cannot_be_extended_by_setitem(self):
         def sum_(**kwargs):
             return sum(kwargs.values())
 
@@ -943,7 +929,7 @@ class TestCalcSetItem:
         with pytest.raises(KeyError):
             x["c"] = 3.0
 
-    def test_calc_with_default(self):
+    def test_argument_defaults_cannot_be_changed_by_setitem_after_init(self):
         def sum_(a, b=3.0):
             return a + b
 
