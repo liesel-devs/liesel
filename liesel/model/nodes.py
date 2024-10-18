@@ -1120,11 +1120,11 @@ class Var:
     :class:`.Calc` and :class:`.Dist` objects support access to their inputs via
     square-bracket syntax. Thus, with a :class:`.Var` object, you can use square bracket
     indexing on its attributes :attr:`.Var.value_node` and :attr:`.Var.dist_node`.
-    You can access both named and unnamed arguments this way.
+    You can access both keyword and positional arguments this way.
 
     >>> import tensorflow_probability.substrates.jax.distributions as tfd
 
-    Access named inputs to a calculator :attr:`.Var.value_node`:
+    Access keyword inputs to a calculator :attr:`.Var.value_node`:
 
     >>> a = lsl.Var(2.0, name="a")
     >>> b = lsl.Var(lsl.Calc(lambda x: x + 1.0, x=a))
@@ -1138,7 +1138,7 @@ class Var:
     >>> b.value_node[0]
     Var(name="a")
 
-    Access named inputs to a distribution :attr:`.Var.dist_node`:
+    Access keyword inputs to a distribution :attr:`.Var.dist_node`:
 
     >>> a = lsl.Var(2.0, name="a")
     >>> b = lsl.Var(1.0, lsl.Dist(tfd.Normal, loc=a, scale=1.0))
@@ -1153,7 +1153,7 @@ class Var:
     Var(name="a")
 
     .. info::
-        Note that, for accessing named arguments, you do *not* use :attr:`.Var.name`
+        Note that, for accessing keyword arguments, you do *not* use :attr:`.Var.name`
         attribute of the looked-for input variable or node, but the *argument name*.
         Consider this case from above::
 
