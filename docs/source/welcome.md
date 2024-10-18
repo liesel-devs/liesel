@@ -28,11 +28,20 @@ $ pip install liesel
 If you want to work with the latest development version of Liesel or use PyGraphviz for
 prettier plots of the model graphs, see the [README][5] in the main repository.
 
-Now you can get started. We recommend using the following import paths:
+Now you can get started. Throughout this documentation, we import Liesel as follows:
 
 ```python
 import liesel.model as lsl
 import liesel.goose as gs
+```
+
+We also commonly use the following imports:
+
+```python
+import jax
+import jax.numpy as jnp
+import numpy as np
+import tensorflow_probability.substrates.jax.distributions as tfd
 ```
 
 We provide overviews of the most important building blocks provided by `liesel.model`
