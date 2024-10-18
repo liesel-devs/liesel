@@ -372,6 +372,71 @@ class Node(ABC):
         """The variable the node is part of."""
         return self._var
 
+    @property
+    def _iloc(self) -> tuple[Node | Var, ...]:
+        input_list: list[Node | Var] = []
+        for input_ in self.inputs:
+            if isinstance(input_, VarValue):
+                # This should not happen in practice, but the check makes mypy happy.
+                if input_.var is None:
+                    raise RuntimeError(f"{input_}.var is None.")
+                input_list.append(input_.var)
+            else:
+                input_list.append(input_)
+
+        return tuple(input_list)
+
+    @property
+    def _loc(self) -> dict[str, Node | Var]:
+        input_dict: dict[str, Node | Var] = {}
+        for key, input_ in self.kwinputs.items():
+            if isinstance(input_, VarValue):
+                # This should not happen in practice, but the check makes mypy happy.
+                if input_.var is None:
+                    raise RuntimeError(f"{input_}.var is None.")
+                input_dict[key] = input_.var
+            else:
+                input_dict[key] = input_
+
+        return input_dict
+
+    def __getitem__(self, key: int | str) -> Node | Var:
+        if isinstance(key, int):
+            return self._iloc[key]
+        elif isinstance(key, str):
+            return self._loc[key]
+        else:
+            raise ValueError(f"Key must be str or int, not {type(key)}.")
+
+    def _iloc_replace(self, key: int, value: Node | Var | Any) -> None:
+        inputs = list(self.inputs)
+        inputs[key] = self._to_node(value)
+
+        return self.set_inputs(*inputs, **self.kwinputs)
+
+    def _loc_replace(self, key: str, value: Node | Var | Any) -> None:
+        kwinputs = dict(self.kwinputs)
+        if key not in kwinputs:
+            raise KeyError(f"'{key}' is not the key of an existing keyword input.")
+        kwinputs[key] = self._to_node(value)
+        return self.set_inputs(*self.inputs, **kwinputs)
+
+    def __setitem__(self, key: int | str, value: Node | Var | Any) -> None:
+        if isinstance(key, int):
+            all_inputs = self.all_input_nodes()
+            node_to_replace = all_inputs[key]
+
+            for kwinputs_key, kwinputs_node in self.kwinputs.items():
+                if node_to_replace is kwinputs_node:
+                    return self._loc_replace(kwinputs_key, value)
+
+            return self._iloc_replace(key, value)
+
+        elif isinstance(key, str):
+            return self._loc_replace(key, value)
+        else:
+            raise ValueError(f"Key must be str or int, not {type(key)}.")
+
     def __getstate__(self):
         state = self.__dict__.copy()
         state["_model"] = self._model()
@@ -1049,6 +1114,79 @@ class Var:
     >>> x = lsl.Var(1.0, name="x")
     >>> x
     Var(name="x")
+
+    .. rubric:: Accessing inputs
+
+    :class:`.Calc` and :class:`.Dist` objects support access to their inputs via
+    square-bracket syntax. Thus, with a :class:`.Var` object, you can use square bracket
+    indexing on its attributes :attr:`.Var.value_node` and :attr:`.Var.dist_node`.
+    You can access both keyword and positional arguments this way.
+
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+
+    Access keyword inputs to a calculator :attr:`.Var.value_node`:
+
+    >>> a = lsl.Var(2.0, name="a")
+    >>> b = lsl.Var(lsl.Calc(lambda x: x + 1.0, x=a))
+    >>> b.value_node["x"]
+    Var(name="a")
+
+    Access positional inputs to a calculator :attr:`.Var.value_node`:
+
+    >>> a = lsl.Var(2.0, name="a")
+    >>> b = lsl.Var(lsl.Calc(lambda x: x + 1.0, a))
+    >>> b.value_node[0]
+    Var(name="a")
+
+    Access keyword inputs to a distribution :attr:`.Var.dist_node`:
+
+    >>> a = lsl.Var(2.0, name="a")
+    >>> b = lsl.Var(1.0, lsl.Dist(tfd.Normal, loc=a, scale=1.0))
+    >>> b.dist_node["loc"]
+    Var(name="a")
+
+    Access positional inputs to a distribution :attr:`.Var.dist_node`:
+
+    >>> a = lsl.Var(2.0, name="a")
+    >>> b = lsl.Var(1.0, lsl.Dist(tfd.Normal, a, scale=1.0))
+    >>> b.dist_node[0]
+    Var(name="a")
+
+    .. info::
+        Note that, for accessing keyword arguments, you do *not* use :attr:`.Var.name`
+        attribute of the looked-for input variable or node, but the *argument name*.
+        Consider this case from above::
+
+            a = lsl.Var(2.0, name="a")
+            b = lsl.Var(1.0, lsl.Dist(tfd.Normal, loc=a, scale=1.0))
+            b.dist_node["loc"]
+
+        Here, we retrieve the variable ``a`` with the name ``"a"``. But for the
+        indexing, we use the *argument name` ``"loc"`` from the call to ``lsl.Dist`.
+
+    .. rubric:: Swapping out inputs
+
+    You can also use square-bracket indexing on :attr:`.Var.value_node` and
+    :attr:`.Var.dist_node` to swap out existing inputs. This allows you to easily make
+    changes to your model.
+
+    Swap out inputs to a calculator via :attr:`.Var.value_node`:
+
+    >>> a = lsl.Var(2.0, name="a")
+    >>> b = lsl.Var(lsl.Calc(lambda x: x + 1.0, x=a))
+    >>> c = lsl.Var(3.0, name="c")
+    >>> b.value_node["x"] = c
+    >>> b.value_node["x"]
+    Var(name="c")
+
+    Swap out inputs to a distribution via :attr:`.Var.dist_node`:
+
+    >>> a = lsl.Var(2.0, name="a")
+    >>> b = lsl.Var(1.0, lsl.Dist(tfd.Normal, loc=a, scale=1.0))
+    >>> c = lsl.Var(3.0, name="c")
+    >>> b.dist_node["loc"] = c
+    >>> b.dist_node["loc"]
+    Var(name="c")
 
     """
 
