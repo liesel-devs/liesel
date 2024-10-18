@@ -1084,43 +1084,44 @@ class Var:
 
     Access keyword inputs to a calculator :attr:`.Var.value_node`:
 
-    >>> a = lsl.Var(2.0, name="a")
-    >>> b = lsl.Var(lsl.Calc(lambda x: x + 1.0, x=a))
+    >>> a = lsl.Var.new_value(2.0, name="a")
+    >>> b = lsl.Var.new_calc(lambda x: x + 1.0, x=a)
     >>> b.value_node["x"]
     Var(name="a")
 
     Access positional inputs to a calculator :attr:`.Var.value_node`:
 
-    >>> a = lsl.Var(2.0, name="a")
-    >>> b = lsl.Var(lsl.Calc(lambda x: x + 1.0, a))
+    >>> a = lsl.Var.new_value(2.0, name="a")
+    >>> b = lsl.Var.new_calc(lambda x: x + 1.0, a)
     >>> b.value_node[0]
     Var(name="a")
 
     Access keyword inputs to a distribution :attr:`.Var.dist_node`:
 
-    >>> a = lsl.Var(2.0, name="a")
-    >>> b = lsl.Var(1.0, lsl.Dist(tfd.Normal, loc=a, scale=1.0))
+    >>> a = lsl.Var.new_value(2.0, name="a")
+    >>> b = lsl.Var.new_obs(1.0, lsl.Dist(tfd.Normal, loc=a, scale=1.0))
     >>> b.dist_node["loc"]
     Var(name="a")
 
     Access positional inputs to a distribution :attr:`.Var.dist_node`:
 
-    >>> a = lsl.Var(2.0, name="a")
-    >>> b = lsl.Var(1.0, lsl.Dist(tfd.Normal, a, scale=1.0))
+    >>> a = lsl.Var.new_value(2.0, name="a")
+    >>> b = lsl.Var.new_obs(1.0, lsl.Dist(tfd.Normal, a, scale=1.0))
     >>> b.dist_node[0]
     Var(name="a")
 
     .. info::
-        Note that, for accessing keyword arguments, you do *not* use :attr:`.Var.name`
+        Note that, for accessing keyword arguments, you do *not* use the
+        :attr:`.Var.name`
         attribute of the looked-for input variable or node, but the *argument name*.
         Consider this case from above::
 
-            a = lsl.Var(2.0, name="a")
-            b = lsl.Var(1.0, lsl.Dist(tfd.Normal, loc=a, scale=1.0))
+            a = lsl.Var.new_value(2.0, name="a")
+            b = lsl.Var.new_obs(1.0, lsl.Dist(tfd.Normal, loc=a, scale=1.0))
             b.dist_node["loc"]
 
         Here, we retrieve the variable ``a`` with the name ``"a"``. But for the
-        indexing, we use the *argument name` ``"loc"`` from the call to ``lsl.Dist`.
+        indexing, we use the *argument name* ``"loc"`` from the call to ``lsl.Dist`.
 
     .. rubric:: Swapping out inputs
 
@@ -1130,18 +1131,18 @@ class Var:
 
     Swap out inputs to a calculator via :attr:`.Var.value_node`:
 
-    >>> a = lsl.Var(2.0, name="a")
-    >>> b = lsl.Var(lsl.Calc(lambda x: x + 1.0, x=a))
-    >>> c = lsl.Var(3.0, name="c")
+    >>> a = lsl.Var.new_value(2.0, name="a")
+    >>> b = lsl.Var.new_calc(lambda x: x + 1.0, x=a)
+    >>> c = lsl.Var.new_value(3.0, name="c")
     >>> b.value_node["x"] = c
     >>> b.value_node["x"]
     Var(name="c")
 
     Swap out inputs to a distribution via :attr:`.Var.dist_node`:
 
-    >>> a = lsl.Var(2.0, name="a")
-    >>> b = lsl.Var(1.0, lsl.Dist(tfd.Normal, loc=a, scale=1.0))
-    >>> c = lsl.Var(3.0, name="c")
+    >>> a = lsl.Var.new_value(2.0, name="a")
+    >>> b = lsl.Var.new_obs(1.0, lsl.Dist(tfd.Normal, loc=a, scale=1.0))
+    >>> c = lsl.Var.new_value(3.0, name="c")
     >>> b.dist_node["loc"] = c
     >>> b.dist_node["loc"]
     Var(name="c")
