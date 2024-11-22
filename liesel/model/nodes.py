@@ -1040,39 +1040,6 @@ class Var:
         You should initialize variables through one of the four constructors:
         :meth:`.new_param`, :meth:`.new_obs`, :meth:`.new_calc`, and :meth:`.new_value`.
 
-    Parameters
-    ----------
-    value
-        The value of the variable.
-    distribution
-        The probability distribution of the variable.
-    name
-        The name of the variable. If you do not specify a name, a unique name will be \
-        automatically generated upon initialization of a :class:`.Model`.
-
-    See Also
-    --------
-
-    .Var.new_obs : Initializes a strong variable that holds observed data.
-    .Var.new_param : Initializes a strong variable that acts as a model parameter.
-    .Var.new_calc :
-        Initializes a weak variable that is a function of other variables.
-    .Var.new_value : Initializes a strong variable without a distribution.
-    :meth:`.Var.transform` : Transforms a variable by adding a new transformed
-        variable as an input. This is useful for variables that are constrained to a
-        certain domain, e.g. positive values.
-    .Calc :
-        A node representing a general calculation/operation in JAX or Python. Use this
-        instead of :meth:`~.Var.new_calc` if you want to hide your calculation in the
-        model graph produced by :func:`.plot_vars`.
-    .Value :
-        A node representing a static value. Use this
-        instead of :meth:`~.Var.new_value` if you want to hide your value in the
-        model graph produced by :func:`.plot_vars`.
-    .Dist :
-        A node representing a ``tensorflow_probability``
-        :class:`~tfp.distributions.Distribution`.
-
     .. rubric:: Accessing inputs
 
     :class:`.Calc` and :class:`.Dist` objects support access to their inputs via
@@ -1110,7 +1077,7 @@ class Var:
     >>> b.dist_node[0]
     Var(name="a")
 
-    .. info::
+    .. note::
         Note that, for accessing keyword arguments, you do *not* use the
         :attr:`.Var.name`
         attribute of the looked-for input variable or node, but the *argument name*.
@@ -1146,6 +1113,40 @@ class Var:
     >>> b.dist_node["loc"] = c
     >>> b.dist_node["loc"]
     Var(name="c")
+
+    Parameters
+    ----------
+    value
+        The value of the variable.
+    distribution
+        The probability distribution of the variable.
+    name
+        The name of the variable. If you do not specify a name, a unique name will be \
+        automatically generated upon initialization of a :class:`.Model`.
+
+    See Also
+    --------
+
+    .Var.new_obs : Initializes a strong variable that holds observed data.
+    .Var.new_param : Initializes a strong variable that acts as a model parameter.
+    .Var.new_calc :
+        Initializes a weak variable that is a function of other variables.
+    .Var.new_value : Initializes a strong variable without a distribution.
+    :meth:`.Var.transform` : Transforms a variable by adding a new transformed
+        variable as an input. This is useful for variables that are constrained to a
+        certain domain, e.g. positive values.
+    .Calc :
+        A node representing a general calculation/operation in JAX or Python. Use this
+        instead of :meth:`~.Var.new_calc` if you want to hide your calculation in the
+        model graph produced by :func:`.plot_vars`.
+    .Value :
+        A node representing a static value. Use this
+        instead of :meth:`~.Var.new_value` if you want to hide your value in the
+        model graph produced by :func:`.plot_vars`.
+    .Dist :
+        A node representing a ``tensorflow_probability``
+        :class:`~tfp.distributions.Distribution`.
+
 
     """
 
