@@ -1505,33 +1505,35 @@ class Var:
 
         .. code-block:: python
 
-        import tensorflow_probability.substrates.jax.bijectors as tfb
-        import tensorflow_probability.substrates.jax.distributions as tfd
+            import tensorflow_probability.substrates.jax.bijectors as tfb
+            import tensorflow_probability.substrates.jax.distributions as tfd
 
-        def transform(original_var: lsl.Var, bijector: tfb.Bijector):
-            original_dist = original_var.dist_node.distribution
-            dist_inputs = original_var.dist_node.inputs
+            def transform(original_var: lsl.Var, bijector: tfb.Bijector):
+                original_dist = original_var.dist_node.distribution
+                dist_inputs = original_var.dist_node.inputs
 
-            # transform the distribution
-            new_dist = tfd.TransformedDistribution(original_dist, tfb.Invert(bijector))
+                # transform the distribution
+                new_dist = tfd.TransformedDistribution(
+                    original_dist, tfb.Invert(bijector)
+                )
 
-            # transform initial value
-            new_value = bijector.inverse(original_var.value)
+                # transform initial value
+                new_value = bijector.inverse(original_var.value)
 
-            # initialise the new variable
-            new_var = lsl.Var(
-                new_value,
-                lsl.Dist(new_dist, *dist_inputs),
-                name=f"{original_var.name}_transformed"
-            )
-            new_var.parameter = original_var.parameter
+                # initialise the new variable
+                new_var = lsl.Var(
+                    new_value,
+                    lsl.Dist(new_dist, *dist_inputs),
+                    name=f"{original_var.name}_transformed"
+                )
+                new_var.parameter = original_var.parameter
 
-            # define the original variable as a function of the new variable
-            original_var.value_node = lsl.Calc(bijector.forward, new_var)
-            original_var.parameter = False
+                # define the original variable as a function of the new variable
+                original_var.value_node = lsl.Calc(bijector.forward, new_var)
+                original_var.parameter = False
 
-            # return the new variable
-            return new_var
+                # return the new variable
+                return new_var
 
         The value of the attribute :attr:`~liesel.model.nodes.Var.parameter` is
         transferred to the transformed variable and set to ``False`` on the original
