@@ -12,7 +12,7 @@ from collections.abc import Callable, Hashable, Iterable
 from functools import wraps
 from itertools import chain
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, NamedTuple, TypeGuard, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, TypeGuard, TypeVar, Union
 
 import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as jd
@@ -1907,6 +1907,65 @@ class Var:
 
     def __repr__(self) -> str:
         return f'{type(self).__name__}(name="{self.name}")'
+
+    def _plot(
+        self, which: Literal["vars", "nodes"] = "vars", verbose: bool = True, **kwargs
+    ) -> None:
+        if self.model:
+            match which:
+                case "vars":
+                    return self.model.plot_vars()
+                case "nodes":
+                    return self.model.plot_nodes()
+
+        from liesel.model import GraphBuilder
+
+        gb = GraphBuilder().add(self)
+        nodes, _vars = gb._all_nodes_and_vars()
+
+        automatically_set_names = gb._set_missing_names()
+        var_names = automatically_set_names["vars"]
+        node_names = automatically_set_names["nodes"]
+        if var_names and verbose:
+            logger.info(
+                "Unnamed variables were temporarily named for plotting. The"
+                f" automatically assigned names are: {var_names}. The names are reset"
+                " after plotting."
+            )
+        if node_names and verbose:
+            logger.info(
+                "Unnamed nodes were temporarily named for plottingThe automatically"
+                f" assigned names are: {node_names}. The names are reset after"
+                " plotting."
+            )
+
+        model = gb.build_model()
+
+        match which:
+            case "vars":
+                model.plot_vars(**kwargs)
+            case "nodes":
+                model.plot_nodes(**kwargs)
+
+        model.pop_nodes_and_vars()
+
+        vars_dict = {var_.name: var_ for var_ in _vars}
+        nodes_dict = {node.name: node for node in nodes}
+
+        for name in var_names:
+            vars_dict[name].name = ""
+
+        for name in node_names:
+            nodes_dict[name].name = ""
+
+        gb.nodes.clear()
+        gb.vars.clear()
+
+    def plot_vars(self, verbose: bool = True, **kwargs) -> None:
+        return self._plot(which="vars", verbose=verbose, **kwargs)
+
+    def plot_nodes(self, verbose: bool = True, **kwargs) -> None:
+        return self._plot(which="nodes", verbose=verbose, **kwargs)
 
 
 def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) -> Var:
