@@ -389,6 +389,7 @@ class Node(ABC):
     @property
     def _loc(self) -> dict[str, Node | Var]:
         input_dict: dict[str, Node | Var] = {}
+
         for key, input_ in self.kwinputs.items():
             if isinstance(input_, VarValue):
                 # This should not happen in practice, but the check makes mypy happy.
@@ -401,10 +402,33 @@ class Node(ABC):
         return input_dict
 
     def __getitem__(self, key: int | str) -> Node | Var:
+
         if isinstance(key, int):
-            return self._iloc[key]
+            try:
+                return self._iloc[key]
+            except IndexError as error:
+                available_indices = {
+                    idx: self._iloc[idx] for idx in range(len(self._iloc))
+                }
+                msg = (
+                    f"IndexError: {key}. Available index-variable pairs:"
+                    f" {available_indices}. Available keyword-variable pairs:"
+                    f" {self._loc}."
+                )
+                raise IndexError(msg) from error
         elif isinstance(key, str):
-            return self._loc[key]
+            try:
+                return self._loc[key]
+            except KeyError as error:
+                available_indices = {
+                    idx: self._iloc[idx] for idx in range(len(self._iloc))
+                }
+                msg = (
+                    f"KeyError: {key} not found. Available index-variable pairs:"
+                    f" {available_indices}. Available keyword-variable pairs:"
+                    f" {self._loc}."
+                )
+                raise KeyError(msg) from error
         else:
             raise ValueError(f"Key must be str or int, not {type(key)}.")
 
