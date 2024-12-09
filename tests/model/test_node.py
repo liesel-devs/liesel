@@ -884,6 +884,22 @@ class TestCalcGetitem:
         assert x["loc"] is loc
         assert x["scale"] is scale
 
+    def test_informative_key_error(self):
+        loc = Var(0.0, name="locx")
+        scale = Var(1.0, name="scalex")
+        x = Calc(lambda loc, scale: loc * scale, loc=loc, scale=scale)
+
+        with pytest.raises(KeyError, match="Available index-variable pairs:"):
+            x["locx"]
+
+    def test_informative_index_error(self):
+        loc = Var(0.0, name="locx")
+        scale = Var(1.0, name="scalex")
+        x = Calc(lambda loc, scale: loc * scale, loc, scale)
+
+        with pytest.raises(IndexError, match="Available index-variable pairs:"):
+            x[3]
+
 
 class TestCalcSetItem:
     def test_replacing_input_with_self_breaks_model(self):

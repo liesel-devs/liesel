@@ -8,6 +8,7 @@ from typing import ClassVar
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 from liesel.goose.builder import EngineBuilder
@@ -24,6 +25,7 @@ from liesel.goose.kernel import DefaultTransitionInfo
 from liesel.goose.kernel_sequence import KernelSequence
 from liesel.goose.pytree import register_dataclass_as_pytree
 from liesel.goose.types import Array, KeyArray, ModelInterface, ModelState
+from liesel.model import Model, Var
 from liesel.option import Option
 
 from .deterministic_kernels import DetCountingKernel, DetCountingKernelState
@@ -145,6 +147,15 @@ def t_test_engine():
     print(results.get_tuning_times())
 
     print(results.generated_quantities.unwrap().combine_all().unwrap())
+
+
+def test_liesel_model_in_engine_builder() -> None:
+    builder = EngineBuilder(seed=1, num_chains=4)
+    y = Var.new_obs(1.0, name="y")
+    model = Model([y])
+
+    with pytest.raises(TypeError):
+        builder.set_model(model)  # type: ignore
 
 
 def t_test_engine_builder() -> None:
