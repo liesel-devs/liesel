@@ -262,10 +262,12 @@ class GraphBuilder:
         return all_nodes, all_vars
 
     @staticmethod
-    def _do_set_missing_names(nodes_or_vars: Iterable[NV], prefix: str) -> None:
+    def _do_set_missing_names(nodes_or_vars: Iterable[NV], prefix: str) -> list[str]:
         """Sets the missing names for the given nodes or variables."""
         other = [nv.name for nv in nodes_or_vars if nv.name]
         counter = -1
+
+        automatically_set_names = []
 
         for nv in nodes_or_vars:
             if not nv.name:
@@ -276,13 +278,16 @@ class GraphBuilder:
 
                 nv.name = name
                 other.append(name)
+                automatically_set_names.append(name)
 
-    def _set_missing_names(self) -> GraphBuilder:
+        return automatically_set_names
+
+    def _set_missing_names(self) -> dict[str, list[str]]:
         """Sets the missing node and variable names."""
         nodes, _vars = self._all_nodes_and_vars()
-        self._do_set_missing_names(_vars, prefix="v")
-        self._do_set_missing_names(nodes, prefix="n")
-        return self
+        auto_var_names = self._do_set_missing_names(_vars, prefix="v")
+        auto_node_names = self._do_set_missing_names(nodes, prefix="n")
+        return {"vars": auto_var_names, "nodes": auto_node_names}
 
     def add(
         self, *args: Node | Var | GraphBuilder, to_float32: bool | None = None
