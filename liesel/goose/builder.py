@@ -370,6 +370,14 @@ class EngineBuilder:
 
     def set_model(self, model: ModelInterface):
         """Sets the model interface for all kernels and quantity generators."""
+        # avoid circular import
+        from liesel.model import Model as LieselModel
+
+        if isinstance(model, LieselModel):
+            raise TypeError(
+                f"{model=} is a `lsl.Model` instance. Please wrap it in a"
+                " `gs.LieselInterface`."
+            )
         self._model = Option(model)
 
     def build(self) -> Engine:
