@@ -1573,15 +1573,29 @@ class Var:
         if self.weak:
             raise RuntimeError(f"{repr(self)} is weak")
 
-        if self.dist_node is None:  # type: ignore
-            raise RuntimeError(f"{repr(self)} has no distribution")
-
         if is_bijector_class(bijector) and not (bijector_args or bijector_kwargs):
             raise ValueError(
                 "You passed a bijector class instead of an instance, but did not "
                 "provide any arguments for the bijector. You should either provide "
                 "arguments or pass an instance of the bijector class instead."
             )
+
+        if self.dist_node is None and is_bijector_class(bijector):
+            tvar = _transform_var_without_dist_with_bijector_class(
+                self, bijector, *bijector_args, **bijector_kwargs
+            )
+            tvar.parameter = self.parameter  # type: ignore
+            self.parameter = False
+            return tvar
+
+        elif self.dist_node is None:
+            tvar = _transform_var_without_dist_with_bijector_instance(self, bijector)
+            tvar.parameter = self.parameter  # type: ignore
+            self.parameter = False
+            return tvar
+
+        if self.dist_node is None:  # type: ignore
+            raise RuntimeError(f"{repr(self)} has no distribution")
 
         # avoid infinite recursion
         self.auto_transform = False
@@ -1997,6 +2011,56 @@ def _transform_var_with_bijector_class(
         return bijector.inverse(value)
 
     var.value_node = Calc(bijector_fn, transformed_var, dist_inputs, bijector_inputs)
+
+    return transformed_var
+
+
+def _transform_var_without_dist_with_bijector_instance(
+    var: Var, bijector_inst: jb.Bijector
+) -> Var:
+    bijector_inv = jb.Invert(bijector_inst)
+
+    transformed_var = Var(
+        bijector_inv.forward(var.value),
+        name=f"{var.name}_transformed",
+    )
+
+    var.value_node = Calc(bijector_inst.forward, transformed_var)
+
+    return transformed_var
+
+
+def _transform_var_without_dist_with_bijector_class(
+    var: Var, bijector_cls: type[jb.Bijector] | None, *args, **kwargs
+) -> Var:
+    def bijection_inverse(x, *bjargs, **bjkwargs):
+        arg_values = []
+        for arg in bjargs:
+            try:
+                arg_values.append(arg.value)
+            except AttributeError:
+                arg_values.append(arg)
+        kwarg_values = {}
+        for key, val in bjkwargs.items():
+            try:
+                kwarg_values[key] = val.value
+            except AttributeError:
+                kwarg_values[key] = val
+
+        bijector_inst = bijector_cls(*arg_values, **kwarg_values)
+        bijector_inv = jb.Invert(bijector_inst)
+        return bijector_inv(x)
+
+    def bijection_forward(x, *bjargs, **bjkwargs):
+        bijector_inst = bijector_cls(*bjargs, **bjkwargs)
+        return bijector_inst(x)
+
+    transformed_var = Var(
+        bijection_inverse(var.value, *args, **kwargs),
+        name=f"{var.name}_transformed",
+    )
+
+    var.value_node = Calc(bijection_forward, transformed_var, *args, **kwargs)
 
     return transformed_var
 

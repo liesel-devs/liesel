@@ -1,6 +1,7 @@
 import typing
 import warnings
 
+import jax.numpy as jnp
 import numpy as np
 import pytest
 import tensorflow_probability.substrates.jax as tfp
@@ -555,6 +556,32 @@ class TestVarConstructors:
 
 
 class TestVarTransform:
+    def test_transform_without_dist_with_bijector_instance(self) -> None:
+        tau = lnodes.Var.new_param(10.0, name="tau")
+        log_tau = tau.transform(tfp.bijectors.Exp())
+
+        assert tau.value == pytest.approx(10.0)
+        assert log_tau.value == pytest.approx(jnp.log(10.0))
+
+        assert tau.weak
+        assert log_tau.strong
+        assert not tau.parameter
+        assert log_tau.parameter
+
+    def test_transform_without_dist_with_bijector_class(self) -> None:
+        tau = lnodes.Var.new_param(10.0, name="tau")
+
+        scale = lnodes.Var.new_param(2.0, name="bijector_scale")
+        log_tau = tau.transform(tfp.bijectors.Scale, scale=scale)
+
+        assert tau.value == pytest.approx(10.0)
+        assert log_tau.value == pytest.approx(5.0)
+
+        assert tau.weak
+        assert log_tau.strong
+        assert not tau.parameter
+        assert log_tau.parameter
+
     def test_transform_instance(self) -> None:
         prior = lnodes.Dist(tfp.distributions.HalfCauchy, loc=0.0, scale=25.0)
         tau = lnodes.Var(10.0, prior, name="tau")

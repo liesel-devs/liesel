@@ -465,6 +465,11 @@ class GraphBuilder:
 
         for var in _vars:
             if var.auto_transform:
+                if var.dist_node is None:
+                    raise RuntimeError(
+                        f"Auto-transform of {var} failed, because it has no"
+                        " distribution, which means no default bijector can be found."
+                    )
                 tname = f"{var.name}_transformed"
                 if tname in nodes or tname in _vars:
                     raise RuntimeError(
