@@ -410,10 +410,11 @@ class Node(ABC):
                 available_indices = {
                     idx: self._iloc[idx] for idx in range(len(self._iloc))
                 }
+                available_keywords = str(self._loc).replace("'", '"')
                 msg = (
-                    f"IndexError: {key}. Available index-variable pairs:"
+                    f"{key} is out of bounds. Available index-variable pairs:"
                     f" {available_indices}. Available keyword-variable pairs:"
-                    f" {self._loc}."
+                    f" {available_keywords}."
                 )
                 raise IndexError(msg) from error
         elif isinstance(key, str):
@@ -423,10 +424,11 @@ class Node(ABC):
                 available_indices = {
                     idx: self._iloc[idx] for idx in range(len(self._iloc))
                 }
+                available_keywords = str(self._loc).replace("'", '"')
                 msg = (
-                    f"KeyError: {key} not found. Available index-variable pairs:"
+                    f"{key} not found. Available index-variable pairs:"
                     f" {available_indices}. Available keyword-variable pairs:"
-                    f" {self._loc}."
+                    f" {available_keywords}."
                 )
                 raise KeyError(msg) from error
         else:
