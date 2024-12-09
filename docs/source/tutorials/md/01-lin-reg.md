@@ -108,11 +108,15 @@ plt.show()
 The graph of a Bayesian linear regression model is a tree, where the
 hyperparameters of the prior are the leaves and the response is the
 root. To build this tree in Liesel, we need to start from the leaves and
-work our way down to the root. As the basic building blocks of your
-model Liesel provides the {class}`.Node` classes {class}`.Value`,
-{class}`.Calc`, and {class}`.Dist`, and the helper functions
-{func}`.obs` and {func}`.param`, which return instances of
-{class}`.Var`. See also [Model Building (liesel.model)](model_overview).
+work our way down to the root. As the most basic building blocks of a
+model, Liesel provides the {class}`.Var` class for instantiating
+variables and the {class}`.Dist`, class for wrapping probability
+distributions. The {class}`.Var` class comes with four constructors,
+namely {meth}`.Var.new_param` for parameters, {meth}`.Var.new_obs` for
+observed data, {meth}`.Var.new_calc` for variables that are
+deterministic functions of other variables in the model, and
+{meth}`.Var.new_value` for fixed values. See also [Model Building
+(liesel.model)](model_overview).
 
 #### The regression coefficients
 
@@ -143,10 +147,10 @@ build hierarchical models. If you provide floats like we do here, Liesel
 will turn them into {class}`.Value` nodes under the hood.
 
 With this distribution object, we can now create the node for our
-regression coefficient with the {func}`.param` helper function:
+regression coefficient with the {meth}`.Var.new_param` constructor:
 
 ``` python
-beta = lsl.param(value=np.array([0.0, 0.0]), distribution=beta_prior, name="beta")
+beta = lsl.Var.new_param(value=np.array([0.0, 0.0]), distribution=beta_prior, name="beta")
 ```
 
 #### The standard deviation
@@ -159,78 +163,68 @@ parameter names based on TFP. This time, we supply the hyperparameters
 as {class}`.Var` instances.
 
 ``` python
-a = lsl.Var(0.01, name="a")
-b = lsl.Var(0.01, name="b")
+a = lsl.Var.new_param(0.01, name="a")
+b = lsl.Var.new_param(0.01, name="b")
 sigma_sq_prior = lsl.Dist(tfd.InverseGamma, concentration=a, scale=b)
-sigma_sq = lsl.param(value=10.0, distribution=sigma_sq_prior, name="sigma_sq")
+sigma_sq = lsl.Var.new_param(value=10.0, distribution=sigma_sq_prior, name="sigma_sq")
 ```
 
 Since we need to work not only with the variance, but with the scale, we
-use a {class}`.Calc` to compute the square root.
+initialize the scale using {meth}`.Var.new_calc`, to compute the square
+root.
 
-We can use this class to include computations based on our nodes. It
-always takes a function as its first argument, and the nodes to be used
-as function inputs as the following arguments. In this case, we also
-want to emphasize the fact that the scale is a parameter of the model,
-so we wrap the calculator instance in a {class}`.Var`. This is the first
-weak node that we are setting up - all previous nodes have been strong.
+We can use this variable constructor to include computations based on
+our nodes. It always takes a function as its first argument, and the
+nodes to be used as function inputs as the following arguments. This is
+the first weak node that we are setting up - all previous nodes have
+been strong.
 
 ``` python
-sigma = lsl.Var(lsl.Calc(jnp.sqrt, sigma_sq), name="sigma").update()
+sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma").update()
 ```
 
 #### Design matrix, fitted values, and response
 
 To compute the matrix-vector product $\mathbf{X}\boldsymbol{\beta}$, we
-use another {class}`.Calc`. We can view our model as
-$y_i \sim \mathcal{N}(\mu_i, \;\sigma^2)$ with
+use another variable instantiated via {meth}`.Var.new_calc`. We can view
+our model as $y_i \sim \mathcal{N}(\mu_i, \;\sigma^2)$ with
 $\mu_i = \beta_0 + \beta_1 x_i$, so we use the name `mu` for this
-product. Again, we also want to emphasize the fact that `mu` is a
-parameter of the model, so we wrap the calculator instance in a
-{class}`.Var`.
+product.
 
 ``` python
-X = lsl.obs(X_mat, name="X")
-mu = lsl.Var(lsl.Calc(jnp.dot, X, beta), name="mu")
+X = lsl.Var.new_obs(X_mat, name="X")
+mu = lsl.Var.new_calc(jnp.dot, X, beta, name="mu")
 ```
 
 Finally, we can connect the branches of the tree in a response node. The
 value of the node are our observed response values. And since we assumed
 the model $y_i \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \;\sigma^2)$, we
 also need to specify the response’s distribution. We use our previously
-created nodes `sigma` and `mu` to define specify this distribution:
+created nodes `sigma` and `mu` to specify this distribution:
 
 ``` python
 y_dist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
-y = lsl.Var(y_vec, distribution=y_dist, name="y")
+y = lsl.Var.new_obs(y_vec, distribution=y_dist, name="y")
 ```
 
 #### Bringing the model together
 
 Now, to construct a full-fledged Liesel model from our individual node
-objects, we can use the {class}`.GraphBuilder` class. Here, we will only
-add the response node.
+objects, we can set up the {class}`.Model`. Here, we will only add the
+response node.
 
 ``` python
-gb = lsl.GraphBuilder().add(y)
-gb
-```
-
-    GraphBuilder(0 nodes, 1 vars)
-
-Since all other nodes are directly or indirectly connected to this node,
-the GraphBuilder will add those nodes automatically when it builds the
-model. Let us do that now with a call to
-{meth}`~.GraphBuilder.build_model()`. The model returned by the builder
-provides a couple of convenience features, for example, to evaluate the
-model log-probability, or to update the nodes in a topological order.
-
-``` python
-model = gb.build_model()
+model = lsl.Model([y])
 model
 ```
 
     Model(24 nodes, 8 vars)
+
+Since all other nodes are directly or indirectly connected to this node,
+the Model will add those nodes automatically when it builds the model.
+The model provides a couple of convenience features, for example, to
+evaluate the model log-probability, or to update the nodes in a
+topological order.
 
 The {func}`.plot_vars()` function visualizes the graph of a model.
 Strong nodes are shown in blue, weak nodes in red. Nodes with a
@@ -356,8 +350,8 @@ comes with a number of standard kernels such as Hamiltonian Monte Carlo
 sampling scheme and assigned to different parameters, and the user can
 implement their own problem-specific kernels, as long as they are
 compatible with the {class}`.Kernel` protocol. In any case, the user is
-responsible for constructing a *mathematically valid* algorithm. Refer
-to [MCMC Sampling (liesel.goose)](goose_overview) for an overview of
+responsible for constructing a mathematically valid algorithm. Refer to
+[MCMC Sampling (liesel.goose)](goose_overview) for an overview of
 important Goose functionality.
 
 We start with a very simple sampling scheme, keeping $\sigma^2$ fixed at
@@ -375,7 +369,8 @@ sigma_sq.value = true_sigma**2 # setting sigma_sq to the true value
 
 builder = gs.EngineBuilder(seed=1337, num_chains=4)
 
-builder.set_model(gs.LieselInterface(model))
+interface = gs.LieselInterface(model)
+builder.set_model(interface)
 builder.set_initial_values(model.state)
 
 builder.add_kernel(gs.NUTSKernel(["beta"]))
@@ -392,9 +387,38 @@ don’t see an output right away. The subsequent samples will be generated
 much faster. Finally, we can extract the results and print a summary
 table.
 
-
 ``` python
 engine.sample_all_epochs()
+```
+
+
+      0%|                                                  | 0/3 [00:00<?, ?chunk/s]
+     33%|##############                            | 1/3 [00:03<00:06,  3.13s/chunk]
+    100%|##########################################| 3/3 [00:03<00:00,  1.05s/chunk]
+
+      0%|                                                  | 0/1 [00:00<?, ?chunk/s]
+    100%|#########################################| 1/1 [00:00<00:00, 217.06chunk/s]
+
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
+    100%|#########################################| 2/2 [00:00<00:00, 231.81chunk/s]
+
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
+    100%|#########################################| 4/4 [00:00<00:00, 319.67chunk/s]
+
+      0%|                                                  | 0/8 [00:00<?, ?chunk/s]
+    100%|#########################################| 8/8 [00:00<00:00, 361.27chunk/s]
+
+      0%|                                                 | 0/20 [00:00<?, ?chunk/s]
+    100%|#######################################| 20/20 [00:00<00:00, 375.12chunk/s]
+
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
+    100%|#########################################| 2/2 [00:00<00:00, 298.16chunk/s]
+
+      0%|                                                 | 0/40 [00:00<?, ?chunk/s]
+     95%|#####################################  | 38/40 [00:00<00:00, 374.17chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 372.34chunk/s]
+
+``` python
 results = engine.get_results()
 summary = gs.Summary(results)
 summary
@@ -634,6 +658,11 @@ engine.append_epoch(
 engine.sample_next_epoch()
 ```
 
+
+      0%|                                                 | 0/40 [00:00<?, ?chunk/s]
+     95%|#####################################  | 38/40 [00:00<00:00, 371.35chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 371.79chunk/s]
+
 No compilation is required at this point, so this is pretty fast.
 
 ### Using a Gibbs kernel
@@ -649,22 +678,31 @@ node name as the key and the new node value as the value. We could also
 update multiple parameters with one Gibbs kernel if we returned a
 dictionary of length two or more.
 
-To retrieve the values of our nodes from the `model_state`, we need to
-add the suffix `_value` behind the nodes’ names. Likewise, the node name
-in returned dictionary needs to have the added `_value` suffix.
+To retrieve the relevant values of our nodes from the `model_state`, we
+use the method
+{meth}`~.goose.interface.LieselInterface.extract_position` of the
+{class}`~.goose.interface.LieselInterface`.
 
 ``` python
 def draw_sigma_sq(prng_key, model_state):
-    a_prior = model_state["a_value"].value
-    b_prior = model_state["b_value"].value
-    n = len(model_state["y_value"].value)
 
-    resid = model_state["y_value"].value - model_state["mu_value"].value
+    # extract relevant values from model state
+    pos = interface.extract_position(
+      position_keys=["y", "mu", "sigma_sq", "a", "b"],
+      model_state=model_state
+    )
 
-    a_gibbs = a_prior + n / 2
-    b_gibbs = b_prior + jnp.sum(resid**2) / 2
+    # calculate relevant intermediate quantities
+    n = len(pos["y"])
+    resid = pos["y"] - pos["mu"]
+    a_gibbs = pos["a"] + n / 2
+    b_gibbs = pos["b"] + jnp.sum(resid**2) / 2
+
+    # draw new value from full conditional
     draw = b_gibbs / jax.random.gamma(prng_key, a_gibbs)
-    return {"sigma_sq_value": draw}
+
+    # return key-value pair of variable name and new value
+    return {"sigma_sq": draw}
 ```
 
 We build the engine in a similar way as before, but this time adding the
@@ -684,6 +722,33 @@ builder.set_duration(warmup_duration=1000, posterior_duration=1000)
 engine = builder.build()
 engine.sample_all_epochs()
 ```
+
+
+      0%|                                                  | 0/3 [00:00<?, ?chunk/s]
+     33%|##############                            | 1/3 [00:03<00:07,  3.86s/chunk]
+    100%|##########################################| 3/3 [00:03<00:00,  1.29s/chunk]
+
+      0%|                                                  | 0/1 [00:00<?, ?chunk/s]
+    100%|#########################################| 1/1 [00:00<00:00, 221.83chunk/s]
+
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
+    100%|#########################################| 2/2 [00:00<00:00, 241.16chunk/s]
+
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
+    100%|#########################################| 4/4 [00:00<00:00, 287.26chunk/s]
+
+      0%|                                                  | 0/8 [00:00<?, ?chunk/s]
+    100%|#########################################| 8/8 [00:00<00:00, 327.43chunk/s]
+
+      0%|                                                 | 0/20 [00:00<?, ?chunk/s]
+    100%|#######################################| 20/20 [00:00<00:00, 384.92chunk/s]
+
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
+    100%|#########################################| 2/2 [00:00<00:00, 233.62chunk/s]
+
+      0%|                                                 | 0/40 [00:00<?, ?chunk/s]
+     90%|###################################1   | 36/40 [00:00<00:00, 354.57chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 355.12chunk/s]
 
 Goose provides a couple of convenient numerical and graphical summary
 tools. The {class}`~.goose~.goose.Summary` class computes several
