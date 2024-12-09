@@ -16,16 +16,6 @@ from liesel.goose import EngineBuilder, GibbsKernel, IWLSKernel, LieselInterface
 from liesel.goose.types import JitterFunction
 from liesel.option import Option
 
-from .legacy import (
-    DesignMatrix,
-    Hyperparameter,
-    InverseLink,
-    Predictor,
-    RegressionCoef,
-    Response,
-    Smooth,
-    SmoothingParam,
-)
 from .model import GraphBuilder, Model
 from .nodes import Array, Bijector, Dist, Distribution, Group, NodeState, Var
 
@@ -110,15 +100,15 @@ class DistRegBuilder(GraphBuilder):
 
         name = self._smooth_name(name, predictor, "p")
 
-        X_var = DesignMatrix(X, name=name + "_X")
-        m_var = Hyperparameter(m, name=name + "_m")
-        s_var = Hyperparameter(s, name=name + "_s")
+        X_var = Var.new_obs(X, name=name + "_X")
+        m_var = Var.new_param(m, name=name + "_m")
+        s_var = Var.new_param(s, name=name + "_s")
 
         beta = np.zeros(np.shape(X)[-1], np.float32)
         beta_distribution = Dist(tfd.Normal, loc=m_var, scale=s_var)
-        beta_var = RegressionCoef(beta, beta_distribution, name + "_beta")
+        beta_var = Var.new_param(beta, beta_distribution, name + "_beta")
 
-        smooth_var = Smooth(X_var, beta_var, name=name)
+        smooth_var = Var.new_calc(jnp.dot, X_var, beta_var, name=name)
         self._smooths[predictor].append(smooth_var)
 
         predictor_var = self._predictors[predictor]
@@ -159,14 +149,14 @@ class DistRegBuilder(GraphBuilder):
         """
         name = self._smooth_name(name, predictor, "np")
 
-        X_var = DesignMatrix(X, name=name + "_X")
-        K_var = Hyperparameter(K, name=name + "_K")
-        a_var = Hyperparameter(a, name=name + "_a")
-        b_var = Hyperparameter(b, name=name + "_b")
+        X_var = Var.new_obs(X, name=name + "_X")
+        K_var = Var.new_param(K, name=name + "_K")
+        a_var = Var.new_param(a, name=name + "_a")
+        b_var = Var.new_param(b, name=name + "_b")
 
-        rank_var = Hyperparameter(matrix_rank(K), name=name + "_rank")
+        rank_var = Var.new_param(matrix_rank(K), name=name + "_rank")
         tau2_distribution = Dist(tfd.InverseGamma, concentration=a_var, scale=b_var)
-        tau2_var = SmoothingParam(10000.0, tau2_distribution, name + "_tau2")
+        tau2_var = Var.new_param(10000.0, tau2_distribution, name + "_tau2")
 
         beta = np.zeros(np.shape(X)[-1], np.float32)
         beta_distribution = Dist(
@@ -176,9 +166,9 @@ class DistRegBuilder(GraphBuilder):
             pen=K_var,
             rank=rank_var,
         )
-        beta_var = RegressionCoef(beta, beta_distribution, name + "_beta")
+        beta_var = Var.new_param(beta, beta_distribution, name + "_beta")
 
-        smooth_var = Smooth(X_var, beta_var, name=name)
+        smooth_var = Var.new_calc(jnp.dot, X_var, beta_var, name=name)
         self._smooths[predictor].append(smooth_var)
 
         predictor_var = self._predictors[predictor]
@@ -217,8 +207,13 @@ class DistRegBuilder(GraphBuilder):
         """
         if self.response is None:
             raise RuntimeError("No response found. Add a response first.")
-        predictor_var = Predictor(name=name + "_pdt")
-        parameter_var = InverseLink(predictor_var, inverse_link, name=name)
+
+        predictor_var = Var.new_calc(
+            lambda *args, **kwargs: sum(args) + sum(kwargs.values()), name=name + "_pdt"
+        )
+
+        parameter_var = Var.new_calc(inverse_link().forward, predictor_var, name=name)
+
         self._predictors[name] = predictor_var
         self._distributional_parameters[name] = parameter_var
 
@@ -245,7 +240,7 @@ class DistRegBuilder(GraphBuilder):
             needs to make sure it uses the right NumPy implementation.
         """
 
-        response_var = Response(response, Dist(distribution), "response")
+        response_var = Var.new_obs(response, Dist(distribution), "response")
         self._response = Option(response_var)
         self.add(response_var)
 
