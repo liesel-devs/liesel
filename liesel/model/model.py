@@ -1387,6 +1387,12 @@ class Model:
         brackets = f"({len(self._nodes)} nodes, {len(self._vars)} vars)"
         return type(self).__name__ + brackets
 
+    def plot_vars(self, **kwargs):
+        return plot_vars(self, **kwargs)
+
+    def plot_nodes(self, **kwargs):
+        return plot_nodes(self, **kwargs)
+
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Save and load models ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
