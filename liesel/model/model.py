@@ -33,7 +33,6 @@ from .nodes import (
     InputGroup,
     Node,
     NodeState,
-    TransientIdentity,
     Value,
     Var,
     VarValue,
@@ -171,7 +170,14 @@ class GraphBuilder:
         """Adds the model log-likelihood node with the name ``_model_log_lik``."""
 
         if self.log_lik_node:
-            self.add(TransientIdentity(self.log_lik_node, _name="_model_log_lik"))
+            self.add(
+                Calc(
+                    lambda x: x,
+                    self.log_lik_node,
+                    _name="_model_log_lik",
+                    update_on_init=False,
+                )
+            )
             return self
 
         _, _vars = self._all_nodes_and_vars()
@@ -184,7 +190,14 @@ class GraphBuilder:
         """Adds the model log-prior node with the name ``_model_log_prior``."""
 
         if self.log_prior_node:
-            self.add(TransientIdentity(self.log_prior_node, _name="_model_log_prior"))
+            self.add(
+                Calc(
+                    lambda x: x,
+                    self.log_prior_node,
+                    _name="_model_log_prior",
+                    update_on_init=False,
+                )
+            )
             return self
 
         _, _vars = self._all_nodes_and_vars()
@@ -199,7 +212,14 @@ class GraphBuilder:
         """Adds the model log-probability node with the name ``_model_log_prob``."""
 
         if self.log_prob_node:
-            self.add(TransientIdentity(self.log_prob_node, _name="_model_log_prob"))
+            self.add(
+                Calc(
+                    lambda x: x,
+                    self.log_prob_node,
+                    _name="_model_log_prob",
+                    update_on_init=False,
+                )
+            )
             return self
 
         nodes, _ = self._all_nodes_and_vars()
