@@ -101,6 +101,9 @@ builder.add_kernel(gs.NUTSKernel(["loc"]))
 builder.set_model(gs.LieselInterface(model))
 builder.set_initial_values(model.state)
 
+ # we disable the progress bar for a nicer display here in the readme
+builder.show_progress = False
+
 builder.set_duration(warmup_duration=1000, posterior_duration=1000)
 
 engine = builder.build()

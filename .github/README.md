@@ -101,37 +101,14 @@ builder.add_kernel(gs.NUTSKernel(["loc"]))
 builder.set_model(gs.LieselInterface(model))
 builder.set_initial_values(model.state)
 
+ # we disable the progress bar for a nicer display here in the readme
+builder.show_progress = False
+
 builder.set_duration(warmup_duration=1000, posterior_duration=1000)
 
 engine = builder.build()
 engine.sample_all_epochs()
 ```
-
-
-      0%|                                                  | 0/3 [00:00<?, ?chunk/s]
-     33%|##############                            | 1/3 [00:02<00:05,  2.58s/chunk]
-    100%|##########################################| 3/3 [00:02<00:00,  1.16chunk/s]
-
-      0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|########################################| 1/1 [00:00<00:00, 1589.96chunk/s]
-
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 1766.77chunk/s]
-
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|########################################| 4/4 [00:00<00:00, 2599.10chunk/s]
-
-      0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|########################################| 8/8 [00:00<00:00, 2987.13chunk/s]
-
-      0%|                                                 | 0/20 [00:00<?, ?chunk/s]
-    100%|######################################| 20/20 [00:00<00:00, 2583.34chunk/s]
-
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 2363.65chunk/s]
-
-      0%|                                                 | 0/40 [00:00<?, ?chunk/s]
-    100%|######################################| 40/40 [00:00<00:00, 2795.41chunk/s]
 
 Finally, we can print a summary table and view some diagnostic plots.
 
