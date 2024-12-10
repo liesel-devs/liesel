@@ -2032,12 +2032,17 @@ def _transform_var_without_dist_with_bijector_class(
     var: Var, bijector_cls: type[jb.Bijector] | None, *args, **kwargs
 ) -> Var:
     def bijection_inverse(x, *bjargs, **bjkwargs):
+        # this somewhat over-complicated functionality accounts for bijector
+        # arguments being passed directly as values, or as Liesel Vars and Nodes.
+        # This inverse is executed only once in the initialization of the transformed
+        # variable.
         arg_values = []
         for arg in bjargs:
             try:
                 arg_values.append(arg.value)
             except AttributeError:
                 arg_values.append(arg)
+
         kwarg_values = {}
         for key, val in bjkwargs.items():
             try:
