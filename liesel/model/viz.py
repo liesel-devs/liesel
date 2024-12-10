@@ -3,6 +3,7 @@ Model visualization.
 """
 
 import logging
+from typing import IO, Literal
 
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -11,7 +12,16 @@ from matplotlib.lines import Line2D
 logger = logging.getLogger(__name__)
 
 
-def plot_nodes(model, show=True, save_path=None, width=14, height=10, prog="dot"):
+def plot_nodes(
+    model,
+    show: bool = True,
+    save_path: str | None | IO = None,
+    width: int = 14,
+    height: int = 10,
+    prog: Literal[
+        "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
+    ] = "dot",
+):
     """
     Plots the nodes of a Liesel model.
 
@@ -28,8 +38,19 @@ def plot_nodes(model, show=True, save_path=None, width=14, height=10, prog="dot"
     height
         Height of the plot in inches.
     prog
-        Layout parameter. Available layouts: circo, dot (the default), fdp, neato,
+        Layout parameter. Available layouts: circo, dot (the default), fdp, neato, \
         osage, patchwork, sfdp, twopi.
+
+    See Also
+    --------
+    .Var.plot_vars : Plots the variables of the Liesel sub-model that terminates in
+        this variable.
+    .Var.plot_nodes : Plots the nodes of the Liesel sub-model that terminates in
+        this variable.
+    .Model.plot_vars : Plots the variables of a Liesel model.
+    .Model.plot_nodes : Plots the nodes of a Liesel model.
+    .viz.plot_vars : Plots the variables of a Liesel model.
+    .viz.plot_nodes : Plots the nodes of a Liesel model.
     """
 
     colors = [
@@ -47,7 +68,16 @@ def plot_nodes(model, show=True, save_path=None, width=14, height=10, prog="dot"
         plt.show()
 
 
-def plot_vars(model, show=True, save_path=None, width=14, height=10, prog="dot"):
+def plot_vars(
+    model,
+    show: bool = True,
+    save_path: str | None | IO = None,
+    width: int = 14,
+    height: int = 10,
+    prog: Literal[
+        "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
+    ] = "dot",
+):
     """
     Plots the variables of a Liesel model.
 
@@ -66,6 +96,17 @@ def plot_vars(model, show=True, save_path=None, width=14, height=10, prog="dot")
     prog
         Layout parameter. Available layouts: circo, dot (the default), fdp, neato,
         osage, patchwork, sfdp, twopi.
+
+    See Also
+    --------
+    .Var.plot_vars : Plots the variables of the Liesel sub-model that terminates in
+        this variable.
+    .Var.plot_nodes : Plots the nodes of the Liesel sub-model that terminates in
+        this variable.
+    .Model.plot_vars : Plots the variables of a Liesel model.
+    .Model.plot_nodes : Plots the nodes of a Liesel model.
+    .viz.plot_vars : Plots the variables of a Liesel model.
+    .viz.plot_nodes : Plots the nodes of a Liesel model.
     """
 
     _, axis, pos = _prepare_figure(model.var_graph, width, height, prog)
