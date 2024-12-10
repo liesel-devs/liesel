@@ -321,7 +321,7 @@ class TestModel:
         x = Var(Calc(lambda x: x), name="x")
         x.auto_transform = True
 
-        with pytest.raises(RuntimeError, match="is weak"):
+        with pytest.raises(RuntimeError, match="has no distribution"):
             GraphBuilder().add(x).build_model()
 
     def test_transform_vars_no_dist(self) -> None:
