@@ -66,7 +66,7 @@ y = lsl.Var.new_obs(
     name="y",
 )
 
-model = lsl.Model([loc, scale, y])
+model = lsl.Model([y])
 ```
 
 The model allows us to evaluate the log-probability through a property,
