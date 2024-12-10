@@ -11,7 +11,7 @@ from collections import Counter
 from collections.abc import Iterable
 from copy import deepcopy
 from types import MappingProxyType
-from typing import IO, Any, TypeVar
+from typing import IO, Any, Literal, TypeVar
 
 import dill
 import jax
@@ -1387,11 +1387,103 @@ class Model:
         brackets = f"({len(self._nodes)} nodes, {len(self._vars)} vars)"
         return type(self).__name__ + brackets
 
-    def plot_vars(self, **kwargs):
-        return plot_vars(self, **kwargs)
+    def plot_vars(
+        self,
+        show: bool = True,
+        save_path: str | None | IO = None,
+        width: int = 14,
+        height: int = 10,
+        prog: Literal[
+            "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
+        ] = "dot",
+    ):
+        """
+        Plots the variables of this model.
 
-    def plot_nodes(self, **kwargs):
-        return plot_nodes(self, **kwargs)
+        Wraps :func:`~.viz.plot_vars`.
+
+        Parameters
+        ----------
+        show
+            Whether to show the plot in a new window.
+        save_path
+            Path to save the plot. If not provided, the plot will not be saved.
+        width
+            Width of the plot in inches.
+        height
+            Height of the plot in inches.
+        prog
+            Layout parameter. Available layouts: circo, dot (the default), fdp, neato, \
+            osage, patchwork, sfdp, twopi.
+
+        See Also
+        --------
+        .Var.plot_vars : Plots the variables of the Liesel sub-model that terminates in
+            this variable.
+        .Var.plot_nodes : Plots the nodes of the Liesel sub-model that terminates in
+            this variable.
+        .Model.plot_vars : Plots the variables of a Liesel model.
+        .Model.plot_nodes : Plots the nodes of a Liesel model.
+        .viz.plot_vars : Plots the variables of a Liesel model.
+        .viz.plot_nodes : Plots the nodes of a Liesel model.
+        """
+        return plot_vars(
+            self,
+            show=show,
+            save_path=save_path,
+            width=width,
+            height=height,
+            prog=prog,
+        )
+
+    def plot_nodes(
+        self,
+        show: bool = True,
+        save_path: str | None | IO = None,
+        width: int = 14,
+        height: int = 10,
+        prog: Literal[
+            "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
+        ] = "dot",
+    ):
+        """
+        Plots the nodes of this model.
+
+        Wraps :func:`~.viz.plot_nodes`.
+
+        Parameters
+        ----------
+        show
+            Whether to show the plot in a new window.
+        save_path
+            Path to save the plot. If not provided, the plot will not be saved.
+        width
+            Width of the plot in inches.
+        height
+            Height of the plot in inches.
+        prog
+            Layout parameter. Available layouts: circo, dot (the default), fdp, neato, \
+            osage, patchwork, sfdp, twopi.
+
+        See Also
+        --------
+        .Var.plot_vars : Plots the variables of the Liesel sub-model that terminates in
+            this variable.
+        .Var.plot_nodes : Plots the nodes of the Liesel sub-model that terminates in
+            this variable.
+        .Model.plot_vars : Plots the variables of a Liesel model.
+        .Model.plot_nodes : Plots the nodes of a Liesel model.
+        .viz.plot_vars : Plots the variables of a Liesel model.
+        .viz.plot_nodes : Plots the nodes of a Liesel model.
+        """
+        return plot_nodes(
+            self,
+            show=show,
+            save_path=save_path,
+            width=width,
+            height=height,
+            prog=prog,
+        )
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
