@@ -2018,10 +2018,8 @@ def _transform_var_with_bijector_class(
 def _transform_var_without_dist_with_bijector_instance(
     var: Var, bijector_inst: jb.Bijector
 ) -> Var:
-    bijector_inv = jb.Invert(bijector_inst)
-
     transformed_var = Var(
-        bijector_inv.forward(var.value),
+        bijector_inst.inverse(var.value),
         name=f"{var.name}_transformed",
     )
 
