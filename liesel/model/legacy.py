@@ -10,7 +10,7 @@ from typing import Any, cast
 import jax.numpy as jnp
 
 from .nodes import Bijector as TFPBijector
-from .nodes import Calc, Dist, Node, Var, obs, param
+from .nodes import Calc, Dist, Node, Var
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Strong variables ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -21,7 +21,7 @@ def DesignMatrix(
     value: Any | Calc, distribution: Dist | None = None, name: str = ""
 ) -> Var:
     """A strong variable representing a design matrix."""
-    var = obs(value, distribution, name)
+    var = Var.new_obs(value, distribution, name)
     var.role = "DesignMatrix"
     return var
 
@@ -39,7 +39,7 @@ def Parameter(
     value: Any | Calc, distribution: Dist | None = None, name: str = ""
 ) -> Var:
     """A strong variable representing a model parameter."""
-    var = param(value, distribution, name)
+    var = Var.new_param(value, distribution, name)
     var.role = "Parameter"
     return var
 
@@ -48,7 +48,7 @@ def RegressionCoef(
     value: Any | Calc, distribution: Dist | None = None, name: str = ""
 ) -> Var:
     """A strong variable representing a vector of regression coefficients."""
-    var = param(value, distribution, name)
+    var = Var.new_param(value, distribution, name)
     var.role = "RegressionCoef"
     return var
 
@@ -57,7 +57,7 @@ def Response(
     value: Any | Calc, distribution: Dist | None = None, name: str = ""
 ) -> Var:
     """A strong variable representing a response vector."""
-    var = obs(value, distribution, name)
+    var = Var.new_obs(value, distribution, name)
     var.role = "Response"
     return var
 
@@ -66,7 +66,7 @@ def SmoothingParam(
     value: Any | Calc, distribution: Dist | None = None, name: str = ""
 ) -> Var:
     """A strong variable representing a smoothing parameter."""
-    var = param(value, distribution, name)
+    var = Var.new_param(value, distribution, name)
     var.role = "SmoothingParam"
     return var
 
@@ -194,7 +194,7 @@ def Obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> 
     Declares an observed variable.
 
     .. deprecated:: 0.2.6
-        Use lsl.obs() instead. This alias will be removed in v0.4.0
+        Use lsl.Var.new_obs() instead. This alias will be removed in v0.4.0
 
     Sets the :attr:`.Var.observed` flag. If the observed variable is a
     random variable, i.e. if it has an associated probability distribution,
@@ -213,7 +213,7 @@ def Obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> 
         "Use lsl.Var.new_obs() instead. This class will be removed in v0.4.0",
         FutureWarning,
     )
-    return obs(value, distribution, name)
+    return Var.new_obs(value, distribution, name)
 
 
 def Param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> Var:
@@ -221,7 +221,7 @@ def Param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -
     Declares a parameter variable.
 
     .. deprecated:: 0.2.6
-        Use lsl.param() instead. This alias will be removed in v0.4.0
+        Use lsl.Var.new_param() instead. This alias will be removed in v0.4.0
 
     Sets the :attr:`.Var.parameter` flag. If the parameter variable is a
     random variable, i.e. if it has an associated probability distribution,
@@ -242,4 +242,4 @@ def Param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -
         "Use lsl.Var.new_param() instead. This class will be removed in v0.4.0",
         FutureWarning,
     )
-    return param(value, distribution, name)
+    return Var.new_param(value, distribution, name)

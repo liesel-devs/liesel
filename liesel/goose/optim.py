@@ -321,19 +321,19 @@ def optim_flat(
     Next, set up a linear model. For simplicity, we assume the scale to be fixed to the
     true value of 1.
 
-    >>> coef = lsl.param(jnp.zeros(2), name="coef")
-    >>> xvar = lsl.obs(jnp.c_[jnp.ones_like(x), x], name="x")
-    >>> mu = lsl.Var(lsl.Calc(jnp.dot, xvar, coef), name="mu")
+    >>> coef = lsl.Var.new_param(jnp.zeros(2), name="coef")
+    >>> xvar = lsl.Var.new_obs(jnp.c_[jnp.ones_like(x), x], name="x")
+    >>> mu = Var.new_calc(jnp.dot, xvar, coef, name="mu")
     >>> ydist = lsl.Dist(tfd.Normal, loc=mu, scale=1.0)
-    >>> yvar = lsl.obs(y, ydist, name="y")
-    >>> model = lsl.GraphBuilder().add(yvar).build_model()
+    >>> yvar = lsl.Var.new_obs(y, ydist, name="y")
+    >>> model = lsl.Model([yvar])
 
     Now, we are ready to run the optimization.
 
     >>> stopper = gs.Stopper(max_iter=1000, patience=10, atol=0.01)
     >>> result = gs.optim_flat(model, params=["coef"], stopper=stopper)
     >>> {name: jnp.round(value, 2) for name, value in result.position.items()}
-    {'coef': Array([0.52, 1.29], dtype=float32)}
+    {'coef': Array([0.52, 1.27], dtype=float32)}
 
     We can now, for example, use ``result.model_state`` in
     :meth:`.EngineBuilder.set_initial_values` to implement a "warm start" of MCMC
@@ -360,7 +360,6 @@ def optim_flat(
     user_patience = stopper.patience
     if model_validation is None:
         model_validation = model_train
-        stopper.patience = stopper.max_iter
 
     if optimizer is None:
         optimizer = optax.adam(learning_rate=1e-2)
@@ -456,6 +455,8 @@ def optim_flat(
     init_val["history"] = history
     init_val["position"] = position
     init_val["opt_state"] = optimizer.init(position)
+    init_val["current_loss_train"] = history["loss_train"][0]
+    init_val["current_loss_validation"] = history["loss_validation"][0]
     init_val["key"] = jax.random.PRNGKey(batch_seed)
     init_val["model_state_train"] = model_train.state
     init_val["model_state_validation"] = model_validation.state
@@ -463,25 +464,33 @@ def optim_flat(
     # ---------------------------------------------------------------------------------
     # Initialize while loop carry dictionary
 
-    progress_bar = tqdm(
-        total=stopper.max_iter - 1,
-        desc=(
-            f"Training loss: {loss_train_start:.3f}, Validation loss:"
-            f" {loss_validation_start:.3f}"
-        ),
-        position=0,
-        leave=True,
-    )
-
-    def tqdm_callback(val):
-        i = val["while_i"]
-        loss_train = val["history"]["loss_train"][i]
-        loss_validation = val["history"]["loss_validation"][i]
-        desc = (
-            f"Training loss: {loss_train:.3f}, Validation loss: {loss_validation:.3f}"
+    if progress_bar:
+        progress_bar_inst = tqdm(
+            total=stopper.max_iter,
+            desc=(
+                f"Training loss: {loss_train_start:.3f}, Validation loss:"
+                f" {loss_validation_start:.3f}"
+            ),
+            position=0,
+            leave=True,
         )
-        progress_bar.update(1)
-        progress_bar.set_description(desc)
+
+        def tqdm_callback(val):
+            loss_train = val["current_loss_train"]
+            loss_validation = val["current_loss_validation"]
+            desc = (
+                f"Training loss: {loss_train:.3f}, Validation loss:"
+                f" {loss_validation:.3f}"
+            )
+            progress_bar_inst.update(1)
+            progress_bar_inst.set_description(desc)
+
+        tqdm_callback(init_val)
+
+    else:
+
+        def tqdm_callbacl(val):
+            return None
 
     # ---------------------------------------------------------------------------------
     # Define while loop body
@@ -531,6 +540,9 @@ def optim_flat(
         val["history"]["loss_validation"] = (
             val["history"]["loss_validation"].at[val["while_i"]].set(loss_validation)
         )
+
+        val["current_loss_train"] = loss_train
+        val["current_loss_validation"] = loss_validation
 
         if save_position_history:
             pos_hist = val["history"]["position"]

@@ -128,7 +128,7 @@ class GraphBuilder:
 
     >>> a = lsl.Var(1.0, name="a")
     >>> b = lsl.Var(2.0, name="b")
-    >>> c = lsl.Var(lsl.Calc(lambda x, y: x + y, a, b), name="c")
+    >>> c = Var.new_calc(lambda x, y: x + y, a, b, name="c")
 
     We now initialize a GraphBuilder and add the root node ``c`` to it:
 
@@ -336,7 +336,7 @@ class GraphBuilder:
 
         >>> a = lsl.Var(1.0, name="a")
         >>> b = lsl.Var(2.0, name="b")
-        >>> c = lsl.Var(lsl.Calc(lambda x, y: x + y, a, b), name="c")
+        >>> c = Var.new_calc(lambda x, y: x + y, a, b, name="c")
 
         We now initialize a GraphBuilder and add the root node ``c`` to it:
 
@@ -445,7 +445,7 @@ class GraphBuilder:
 
         >>> a = lsl.Var(1.0, name="a")
         >>> b = lsl.Var(2.0, name="b")
-        >>> c = lsl.Var(lsl.Calc(lambda x, y: x + y, a, b), name="c")
+        >>> c = Var.new_calc(lambda x, y: x + y, a, b, name="c")
 
         We now initialize a GraphBuilder and add the root node ``c`` to it:
 
@@ -798,7 +798,7 @@ class GraphBuilder:
         We first set up the parameter var with its distribution:
 
         >>> prior = lsl.Dist(tfd.HalfCauchy, loc=0.0, scale=25.0)
-        >>> scale = lsl.param(1.0, prior, name="scale")
+        >>> scale = lsl.Var.new_param(1.0, prior, name="scale")
 
         Then we create a GraphBuilder and use the ``transform`` method to transform
         the ``scale`` variable.
