@@ -462,25 +462,34 @@ def optim_flat(
     # ---------------------------------------------------------------------------------
     # Initialize while loop carry dictionary
 
-    progress_bar = tqdm(
-        total=stopper.max_iter - 1,
-        desc=(
-            f"Training loss: {loss_train_start:.3f}, Validation loss:"
-            f" {loss_validation_start:.3f}"
-        ),
-        position=0,
-        leave=True,
-    )
-
-    def tqdm_callback(val):
-        i = val["while_i"]
-        loss_train = val["history"]["loss_train"][i]
-        loss_validation = val["history"]["loss_validation"][i]
-        desc = (
-            f"Training loss: {loss_train:.3f}, Validation loss: {loss_validation:.3f}"
+    if progress_bar:
+        progress_bar_inst = tqdm(
+            total=stopper.max_iter,
+            desc=(
+                f"Training loss: {loss_train_start:.3f}, Validation loss:"
+                f" {loss_validation_start:.3f}"
+            ),
+            position=0,
+            leave=True,
         )
-        progress_bar.update(1)
-        progress_bar.set_description(desc)
+
+        def tqdm_callback(val):
+            i = val["while_i"]
+            loss_train = val["history"]["loss_train"][i]
+            loss_validation = val["history"]["loss_validation"][i]
+            desc = (
+                f"Training loss: {loss_train:.3f}, Validation loss:"
+                f" {loss_validation:.3f}"
+            )
+            progress_bar_inst.update(1)
+            progress_bar_inst.set_description(desc)
+
+        tqdm_callback(init_val)
+
+    else:
+
+        def tqdm_callbacl(val):
+            return None
 
     # ---------------------------------------------------------------------------------
     # Define while loop body
