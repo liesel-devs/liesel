@@ -100,9 +100,9 @@ class EngineBuilder:
 
     First, we set up a minimal model:
 
-    >>> mu = lsl.param(0.0, name="mu")
+    >>> mu = lsl.Var.new_param(0.0, name="mu")
     >>> dist = lsl.Dist(tfd.Normal, loc=mu, scale=1.0)
-    >>> y = lsl.obs(jnp.array([1.0, 2.0, 3.0]), dist, name="y")
+    >>> y = lsl.Var.new_obs(jnp.array([1.0, 2.0, 3.0]), dist, name="y")
     >>> model = lsl.GraphBuilder().add(y).build_model()
 
     Now we initialize the EngineBuilder and set the desired number of warmup and
@@ -177,10 +177,10 @@ class EngineBuilder:
         parameter in a normal distribution and take the exponential value for including
         the actual scale:
 
-        >>> log_scale = lsl.param(0.0, name="log_scale")
+        >>> log_scale = lsl.Var.new_param(0.0, name="log_scale")
         >>> scale = lsl.Calc(jnp.exp, variance, _name="scale")
         >>> dist = lsl.Dist(tfd.Normal, loc=0.0, scale=scale)
-        >>> y = lsl.obs(jnp.array([1.0, 2.0, 3.0]), dist, name="y")
+        >>> y = lsl.Var.new_obs(jnp.array([1.0, 2.0, 3.0]), dist, name="y")
         >>> model = lsl.GraphBuilder().add(y).build_model()
 
         Now we might want to set up an engine builder with a NUTS kernel for the
@@ -293,7 +293,7 @@ class EngineBuilder:
         Then, we define the distribution we want to sample from, which is
         parametrized by a single parameter `mu`.
 
-        >>> mu = lsl.param(1.0, name="mu")
+        >>> mu = lsl.Var.new_param(1.0, name="mu")
         >>> x_dist = lsl.Dist(tfd.Normal, loc=true_mu, scale=true_sigma)
         >>> x = lsl.Var(x_vec, distribution=x_dist, name="x")
 

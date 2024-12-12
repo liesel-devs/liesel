@@ -798,7 +798,7 @@ class GraphBuilder:
         We first set up the parameter var with its distribution:
 
         >>> prior = lsl.Dist(tfd.HalfCauchy, loc=0.0, scale=25.0)
-        >>> scale = lsl.param(1.0, prior, name="scale")
+        >>> scale = lsl.Var.new_param(1.0, prior, name="scale")
 
         Then we create a GraphBuilder and use the ``transform`` method to transform
         the ``scale`` variable.

@@ -11,7 +11,7 @@ import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 from liesel.model.model import GraphBuilder, Model, save_model
-from liesel.model.nodes import Calc, Dist, Group, TransientNode, Value, Var, obs, param
+from liesel.model.nodes import Calc, Dist, Group, TransientNode, Value, Var
 
 
 @pytest.fixture
@@ -35,7 +35,7 @@ def beta() -> Generator:
     beta_prior_scale = Var(100.0, name="beta_scale")
     beta_prior = Dist(tfd.Normal, loc=beta_prior_loc, scale=beta_prior_scale)
 
-    beta_hat = param(
+    beta_hat = Var.new_param(
         value=jnp.array([0.0, 0.0]), distribution=beta_prior, name="beta_hat"
     )
     yield beta_hat
@@ -52,7 +52,7 @@ def sigma() -> Generator:
         scale=sigma_prior_scale,
     )
 
-    sigma_hat = param(
+    sigma_hat = Var.new_param(
         value=10.0,
         distribution=sigma_prior,
         name="sigma_hat",
@@ -64,13 +64,13 @@ def sigma() -> Generator:
 @pytest.fixture
 def y_var(data, beta, sigma) -> Generator:
     x, y = data
-    x_var = obs(x, name="X")
+    x_var = Var.new_obs(x, name="X")
 
     mu_calc = Calc(lambda X, beta: X @ beta, x_var, beta)
     mu_hat = Var(mu_calc, name="mu")
 
     likelihood = Dist(tfd.Normal, loc=mu_hat, scale=sigma)
-    y_var = obs(value=y, distribution=likelihood, name="y_var")
+    y_var = Var.new_obs(value=y, distribution=likelihood, name="y_var")
 
     Group("loc", X=x_var, beta=beta)
     Group("scale", scale=sigma)

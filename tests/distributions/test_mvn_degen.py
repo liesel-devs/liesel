@@ -1063,14 +1063,16 @@ def test_sampling() -> None:
         pen=lsl.Var(K),
     )
 
-    beta = lsl.param(jnp.zeros(5), mvnd, name="beta")
+    beta = lsl.Var.new_param(jnp.zeros(5), mvnd, name="beta")
 
     knots = _create_equidistant_knots(x, order=4, internal_k=4)
     basis_mat = BSpline.design_matrix(x, knots, 3).toarray()
-    X = lsl.obs(basis_mat[:, 1:])
+    X = lsl.Var.new_obs(basis_mat[:, 1:])
 
     smooth = lsl.Smooth(X, beta)
-    Y = lsl.obs(y, distribution=lsl.Dist(tfd.Normal, loc=smooth, scale=lsl.Var(1.0)))
+    Y = lsl.Var.new_obs(
+        y, distribution=lsl.Dist(tfd.Normal, loc=smooth, scale=lsl.Var(1.0))
+    )
     model = lsl.GraphBuilder().add(Y).build_model()
 
     builder = gs.EngineBuilder(1337, 1)

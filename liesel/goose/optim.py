@@ -321,11 +321,11 @@ def optim_flat(
     Next, set up a linear model. For simplicity, we assume the scale to be fixed to the
     true value of 1.
 
-    >>> coef = lsl.param(jnp.zeros(2), name="coef")
-    >>> xvar = lsl.obs(jnp.c_[jnp.ones_like(x), x], name="x")
+    >>> coef = lsl.Var.new_param(jnp.zeros(2), name="coef")
+    >>> xvar = lsl.Var.new_obs(jnp.c_[jnp.ones_like(x), x], name="x")
     >>> mu = lsl.Var(lsl.Calc(jnp.dot, xvar, coef), name="mu")
     >>> ydist = lsl.Dist(tfd.Normal, loc=mu, scale=1.0)
-    >>> yvar = lsl.obs(y, ydist, name="y")
+    >>> yvar = lsl.Var.new_obs(y, ydist, name="y")
     >>> model = lsl.GraphBuilder().add(yvar).build_model()
 
     Now, we are ready to run the optimization.

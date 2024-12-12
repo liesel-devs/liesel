@@ -108,10 +108,10 @@ The variables `beta` and `gamma` are initialized with values far away from zero 
 ```{python}
 #| label: coefficients
 dist_beta = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
-beta = lsl.param(jnp.array([10., 10.]), dist_beta, name="beta")
+beta = lsl.Var.new_param(jnp.array([10., 10.]), dist_beta, name="beta")
 
 dist_gamma = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
-gamma = lsl.param(jnp.array([5., 5.]), dist_gamma, name="gamma")
+gamma = lsl.Var.new_param(jnp.array([5., 5.]), dist_gamma, name="gamma")
 ```
 
 The additional complexity of the location-scale model compared to the standard linear model is handled in the next step.
@@ -119,8 +119,8 @@ Since `gamma` takes values on the whole real line, but the response variable `y`
 
 ```{python}
 #| label: observation-nodes
-X = lsl.obs(X_mat, name="X")
-Z = lsl.obs(Z_mat, name="Z")
+X = lsl.Var.new_obs(X_mat, name="X")
+Z = lsl.Var.new_obs(Z_mat, name="Z")
 
 mu = lsl.Var(lsl.Calc(jnp.dot, X, beta), name="mu")
 
@@ -128,7 +128,7 @@ log_scale = lsl.Calc(jnp.dot, Z, gamma)
 scale = lsl.Var(lsl.Calc(jnp.exp, log_scale), name="scale")
 
 dist_y = lsl.Dist(tfd.Normal, loc=mu, scale=scale)
-y = lsl.obs(y_vec, dist_y, name="y")
+y = lsl.Var.new_obs(y_vec, dist_y, name="y")
 ```
 
 We can now combine the nodes in a model and visualize it
