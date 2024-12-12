@@ -103,7 +103,7 @@ class EngineBuilder:
     >>> mu = lsl.Var.new_param(0.0, name="mu")
     >>> dist = lsl.Dist(tfd.Normal, loc=mu, scale=1.0)
     >>> y = lsl.Var.new_obs(jnp.array([1.0, 2.0, 3.0]), dist, name="y")
-    >>> model = lsl.GraphBuilder().add(y).build_model()
+    >>> model = lsl.Model([y])
 
     Now we initialize the EngineBuilder and set the desired number of warmup and
     posterior samples:
@@ -181,7 +181,7 @@ class EngineBuilder:
         >>> scale = lsl.Calc(jnp.exp, variance, _name="scale")
         >>> dist = lsl.Dist(tfd.Normal, loc=0.0, scale=scale)
         >>> y = lsl.Var.new_obs(jnp.array([1.0, 2.0, 3.0]), dist, name="y")
-        >>> model = lsl.GraphBuilder().add(y).build_model()
+        >>> model = lsl.Model([y])
 
         Now we might want to set up an engine builder with a NUTS kernel for the
         parameter ``"log_scale"``:
@@ -297,10 +297,9 @@ class EngineBuilder:
         >>> x_dist = lsl.Dist(tfd.Normal, loc=true_mu, scale=true_sigma)
         >>> x = lsl.Var(x_vec, distribution=x_dist, name="x")
 
-        Now, we can create the model with :class:`.GraphBuilder`.
+        Now, we can create the model.
 
-        >>> gb = lsl.GraphBuilder().add(x)
-        >>> model = gb.build_model()
+        >>> model = lsl.Model([x])
 
         Finally, we build the model with :class:`.EngineBuilder`. We will use 4
         parallel chains and sample our varaible using a :class:`~.goose.NUTSKernel`.

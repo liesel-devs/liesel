@@ -38,8 +38,7 @@ def setup_model(ys: Array, xs: Array) -> lsl.Model:
     ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
     y = lsl.Var.new_obs(ys, ydist, name="y")
 
-    gb = lsl.GraphBuilder().add(y)
-    model = gb.build_model()
+    model = lsl.Model([y])
     return model
 
 
@@ -157,8 +156,7 @@ class TestLogProbDecompositionValidation:
         ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
         y = lsl.Var.new_obs(ys, ydist, name="y")
 
-        gb = lsl.GraphBuilder().add(y)
-        model = gb.build_model()
+        model = lsl.Model([y])
 
         interface = gs.LieselInterface(model)
         position = interface.extract_position(["coef", "log_sigma"], model.state)
@@ -179,8 +177,7 @@ class TestLogProbDecompositionValidation:
         ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
         y = lsl.Var.new_obs(ys, ydist, name="y")
 
-        gb = lsl.GraphBuilder().add(y)
-        model = gb.build_model()
+        model = lsl.Model([y])
 
         interface = gs.LieselInterface(model)
         position = interface.extract_position(["coef", "log_sigma"], model.state)
@@ -201,8 +198,7 @@ class TestLogProbDecompositionValidation:
         ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
         y = lsl.Var.new_obs(ys, ydist, name="y")
 
-        gb = lsl.GraphBuilder().add(y)
-        model = gb.build_model()
+        model = lsl.Model([y])
 
         interface = gs.LieselInterface(model)
         position = interface.extract_position(["coef", "log_sigma"], model.state)
@@ -224,8 +220,7 @@ class TestLogProbDecompositionValidation:
         ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
         y = lsl.Var(ys, ydist, name="y")
 
-        gb = lsl.GraphBuilder().add(y)
-        model = gb.build_model()
+        model = lsl.Model([y])
 
         interface = gs.LieselInterface(model)
         position = interface.extract_position(["coef", "log_sigma"], model.state)

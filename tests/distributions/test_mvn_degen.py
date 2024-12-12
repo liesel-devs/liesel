@@ -1073,7 +1073,7 @@ def test_sampling() -> None:
     Y = lsl.Var.new_obs(
         y, distribution=lsl.Dist(tfd.Normal, loc=smooth, scale=lsl.Var(1.0))
     )
-    model = lsl.GraphBuilder().add(Y).build_model()
+    model = lsl.Model([Y])
 
     builder = gs.EngineBuilder(1337, 1)
     builder.set_model(gs.LieselInterface(model))

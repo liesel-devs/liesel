@@ -326,7 +326,7 @@ def optim_flat(
     >>> mu = Var.new_calc(jnp.dot, xvar, coef, name="mu")
     >>> ydist = lsl.Dist(tfd.Normal, loc=mu, scale=1.0)
     >>> yvar = lsl.Var.new_obs(y, ydist, name="y")
-    >>> model = lsl.GraphBuilder().add(yvar).build_model()
+    >>> model = lsl.Model([yvar])
 
     Now, we are ready to run the optimization.
 

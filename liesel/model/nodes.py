@@ -599,7 +599,7 @@ class Value(Node):
 
     Adding this node to a model leads to an automatically generated name:
 
-    >>> model = lsl.GraphBuilder().add(nameless_node).build_model()
+    >>> model = lsl.Model([nameless_node])
     >>> nameless_node
     Value(name="n0")
 
@@ -2153,7 +2153,7 @@ def obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> 
 
     Now we build the model graph:
 
-    >>> model = lsl.GraphBuilder().add(y).build_model()
+    >>> model = lsl.Model([y])
 
     The log-likelihood of the model is the sum of the log-probabilities of all observed
     variables. In this case this is only our ``y`` variable:
@@ -2234,7 +2234,7 @@ def param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -
 
     Now we can build the model graph:
 
-    >>> model = lsl.GraphBuilder().add(y).build_model()
+    >>> model = lsl.Model([y])
 
     The log_prior of the model is the sum of the log-priors of all parameters. In this
     case this is only our ``variance`` parameter:

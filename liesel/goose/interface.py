@@ -255,7 +255,7 @@ class LieselInterface:
     of demonstrating how to use the interface.
 
     >>> y = lsl.Var.new_obs(jnp.array([1.0, 2.0, 3.0]), name="y")
-    >>> model = lsl.GraphBuilder().add(y).build_model()
+    >>> model = lsl.Model([y])
 
     The interface is initialized by passing the model to the constructor.
 

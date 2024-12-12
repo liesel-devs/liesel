@@ -311,7 +311,7 @@ class TestModel:
         x = Var(1.0, dist, name="x")
         x.auto_transform = True
 
-        model = GraphBuilder().add(x).build_model()
+        model = Model([x])
 
         assert "x_transformed" in model.vars
         assert "lambda_transformed" not in model.vars
@@ -322,14 +322,14 @@ class TestModel:
         x.auto_transform = True
 
         with pytest.raises(RuntimeError, match="has no distribution"):
-            GraphBuilder().add(x).build_model()
+            Model([x])
 
     def test_transform_vars_no_dist(self) -> None:
         x = Var(1.0, name="x")
         x.auto_transform = True
 
         with pytest.raises(RuntimeError, match="has no distribution"):
-            GraphBuilder().add(x).build_model()
+            Model([x])
 
     def test_build_after_transform(self) -> None:
         lmbd = Var(1.0, name="lambda")
@@ -411,7 +411,7 @@ class TestSimulate:
         mu = Var(0.0, name="mu")
         sigma = Var(1.0, name="sigma")
         x = Var(0.0, Dist(tfd.Normal, mu, sigma), name="x")
-        return GraphBuilder().add(x).build_model()
+        return Model([x])
 
     def test_simulate_scalar(self, model):
         model.simulate(rnd.PRNGKey(42))
@@ -450,8 +450,8 @@ class TestSimulate:
     def test_simulate_with_unsettable_value(self):
         mu = Var(0.0, name="mu")
         sigma = Var(1.0, name="sigma")
-        x = Var.new_calc(lambda: 0.0, Dist(tfd.Normal, mu, sigma), name="x")
-        model = GraphBuilder().add(x).build_model()
+        x = Var(Calc(lambda: 0.0), Dist(tfd.Normal, mu, sigma), name="x")
+        model = Model([x])
 
         with pytest.raises(AttributeError, match="Cannot set value of Calc"):
             model.simulate(rnd.PRNGKey(42))
@@ -460,7 +460,7 @@ class TestSimulate:
         mu = Var(0.0, Dist(tfd.Normal, loc=2.0, scale=1.0), name="mu")
         sigma = Var(1.0, name="sigma")
         x = Var(0.0, Dist(tfd.Normal, mu, sigma), name="x")
-        model = GraphBuilder().add(x).build_model()
+        model = Model([x])
 
         model.simulate(rnd.PRNGKey(42))
         assert jnp.all(model.vars["mu"].value != 0.0)
