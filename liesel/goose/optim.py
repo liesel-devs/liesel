@@ -323,7 +323,7 @@ def optim_flat(
 
     >>> coef = lsl.Var.new_param(jnp.zeros(2), name="coef")
     >>> xvar = lsl.Var.new_obs(jnp.c_[jnp.ones_like(x), x], name="x")
-    >>> mu = lsl.Var(lsl.Calc(jnp.dot, xvar, coef), name="mu")
+    >>> mu = Var.new_calc(jnp.dot, xvar, coef, name="mu")
     >>> ydist = lsl.Dist(tfd.Normal, loc=mu, scale=1.0)
     >>> yvar = lsl.Var.new_obs(y, ydist, name="y")
     >>> model = lsl.GraphBuilder().add(yvar).build_model()

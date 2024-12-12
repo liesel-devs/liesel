@@ -318,7 +318,7 @@ class TestModel:
         assert model.vars["x_transformed"].value == pytest.approx(0.54132485)
 
     def test_transform_vars_weak(self) -> None:
-        x = Var(Calc(lambda x: x), name="x")
+        x = Var.new_calc(lambda x: x, name="x")
         x.auto_transform = True
 
         with pytest.raises(RuntimeError, match="has no distribution"):
@@ -450,7 +450,7 @@ class TestSimulate:
     def test_simulate_with_unsettable_value(self):
         mu = Var(0.0, name="mu")
         sigma = Var(1.0, name="sigma")
-        x = Var(Calc(lambda: 0.0), Dist(tfd.Normal, mu, sigma), name="x")
+        x = Var.new_calc(lambda: 0.0, Dist(tfd.Normal, mu, sigma), name="x")
         model = GraphBuilder().add(x).build_model()
 
         with pytest.raises(AttributeError, match="Cannot set value of Calc"):

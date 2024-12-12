@@ -31,9 +31,9 @@ ols_coef = np.linalg.inv(xs.T @ xs) @ xs.T @ ys
 def setup_model(ys: Array, xs: Array) -> lsl.Model:
     x = lsl.Var.new_obs(xs, name="x")
     coef = lsl.Var.new_param(jnp.zeros(2), name="coef")
-    mu = lsl.Var(lsl.Calc(jnp.dot, x, coef), name="mu")
+    mu = lsl.Var.new_calc(jnp.dot, x, coef, name="mu")
     log_sigma = lsl.Var(2.0, name="log_sigma")
-    sigma = lsl.Var(lsl.Calc(jnp.exp, log_sigma), name="sigma")
+    sigma = lsl.Var.new_calc(jnp.exp, log_sigma, name="sigma")
 
     ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
     y = lsl.Var.new_obs(ys, ydist, name="y")
@@ -150,9 +150,9 @@ class TestLogProbDecompositionValidation:
     def test_const_priors(self):
         x = lsl.Var.new_obs(xs, name="x")
         coef = lsl.Var.new_param(jnp.zeros(2), name="coef")
-        mu = lsl.Var(lsl.Calc(jnp.dot, x, coef), name="mu")
+        mu = lsl.Var.new_calc(jnp.dot, x, coef, name="mu")
         log_sigma = lsl.Var(2.0, name="log_sigma")
-        sigma = lsl.Var(lsl.Calc(jnp.exp, log_sigma), name="sigma")
+        sigma = lsl.Var.new_calc(jnp.exp, log_sigma, name="sigma")
 
         ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
         y = lsl.Var.new_obs(ys, ydist, name="y")
@@ -172,9 +172,9 @@ class TestLogProbDecompositionValidation:
             distribution=lsl.Dist(tfd.Normal, loc=0.0, scale=10.0),
             name="coef",
         )
-        mu = lsl.Var(lsl.Calc(jnp.dot, x, coef), name="mu")
+        mu = lsl.Var.new_calc(jnp.dot, x, coef, name="mu")
         log_sigma = lsl.Var(2.0, name="log_sigma")
-        sigma = lsl.Var(lsl.Calc(jnp.exp, log_sigma), name="sigma")
+        sigma = lsl.Var.new_calc(jnp.exp, log_sigma, name="sigma")
 
         ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
         y = lsl.Var.new_obs(ys, ydist, name="y")
@@ -194,9 +194,9 @@ class TestLogProbDecompositionValidation:
             distribution=lsl.Dist(tfd.Normal, loc=0.0, scale=10.0),
             name="coef",
         )
-        mu = lsl.Var(lsl.Calc(jnp.dot, x, coef), name="mu")
+        mu = lsl.Var.new_calc(jnp.dot, x, coef, name="mu")
         log_sigma = lsl.Var(2.0, name="log_sigma")
-        sigma = lsl.Var(lsl.Calc(jnp.exp, log_sigma), name="sigma")
+        sigma = lsl.Var.new_calc(jnp.exp, log_sigma, name="sigma")
 
         ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
         y = lsl.Var.new_obs(ys, ydist, name="y")
@@ -217,9 +217,9 @@ class TestLogProbDecompositionValidation:
             distribution=lsl.Dist(tfd.Normal, loc=0.0, scale=10.0),
             name="coef",
         )
-        mu = lsl.Var(lsl.Calc(jnp.dot, x, coef), name="mu")
+        mu = lsl.Var.new_calc(jnp.dot, x, coef, name="mu")
         log_sigma = lsl.Var(2.0, name="log_sigma")
-        sigma = lsl.Var(lsl.Calc(jnp.exp, log_sigma), name="sigma")
+        sigma = lsl.Var.new_calc(jnp.exp, log_sigma, name="sigma")
 
         ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
         y = lsl.Var(ys, ydist, name="y")
