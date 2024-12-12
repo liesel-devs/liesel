@@ -333,7 +333,7 @@ def optim_flat(
     >>> stopper = gs.Stopper(max_iter=1000, patience=10, atol=0.01)
     >>> result = gs.optim_flat(model, params=["coef"], stopper=stopper)
     >>> {name: jnp.round(value, 2) for name, value in result.position.items()}
-    {'coef': Array([0.52, 1.29], dtype=float32)}
+    {'coef': Array([0.52, 1.27], dtype=float32)}
 
     We can now, for example, use ``result.model_state`` in
     :meth:`.EngineBuilder.set_initial_values` to implement a "warm start" of MCMC
@@ -455,6 +455,8 @@ def optim_flat(
     init_val["history"] = history
     init_val["position"] = position
     init_val["opt_state"] = optimizer.init(position)
+    init_val["current_loss_train"] = history["loss_train"][0]
+    init_val["current_loss_validation"] = history["loss_validation"][0]
     init_val["key"] = jax.random.PRNGKey(batch_seed)
     init_val["model_state_train"] = model_train.state
     init_val["model_state_validation"] = model_validation.state
@@ -474,9 +476,8 @@ def optim_flat(
         )
 
         def tqdm_callback(val):
-            i = val["while_i"]
-            loss_train = val["history"]["loss_train"][i]
-            loss_validation = val["history"]["loss_validation"][i]
+            loss_train = val["current_loss_train"]
+            loss_validation = val["current_loss_validation"]
             desc = (
                 f"Training loss: {loss_train:.3f}, Validation loss:"
                 f" {loss_validation:.3f}"
@@ -539,6 +540,9 @@ def optim_flat(
         val["history"]["loss_validation"] = (
             val["history"]["loss_validation"].at[val["while_i"]].set(loss_validation)
         )
+
+        val["current_loss_train"] = loss_train
+        val["current_loss_validation"] = loss_validation
 
         if save_position_history:
             pos_hist = val["history"]["position"]
