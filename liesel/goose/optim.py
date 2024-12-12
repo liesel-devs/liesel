@@ -360,7 +360,6 @@ def optim_flat(
     user_patience = stopper.patience
     if model_validation is None:
         model_validation = model_train
-        stopper.patience = stopper.max_iter
 
     if optimizer is None:
         optimizer = optax.adam(learning_rate=1e-2)
