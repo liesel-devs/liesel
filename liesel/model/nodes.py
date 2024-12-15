@@ -1596,8 +1596,8 @@ class Var:
         >>> scale.update().log_prob
         0.0
         """
-        if self.weak:
-            raise RuntimeError(f"{repr(self)} is weak")
+        # if self.weak:
+        #     raise RuntimeError(f"{repr(self)} is weak")
 
         if is_bijector_class(bijector) and not (bijector_args or bijector_kwargs):
             raise ValueError(
@@ -2044,10 +2044,17 @@ def _transform_var_with_bijector_class(
 def _transform_var_without_dist_with_bijector_instance(
     var: Var, bijector_inst: jb.Bijector
 ) -> Var:
-    transformed_var = Var(
-        bijector_inst.inverse(var.value),
-        name=f"{var.name}_transformed",
-    )
+    if var.strong:
+        transformed_var = Var(
+            bijector_inst.inverse(var.value),
+            name=f"{var.name}_transformed",
+        )
+    else:
+        transformed_var = Var.new_calc(
+            bijector_inst.inverse,
+            var.value_node,
+            name=f"{var.name}_transformed",
+        )
 
     var.value_node = Calc(bijector_inst.forward, transformed_var)
 
@@ -2084,10 +2091,19 @@ def _transform_var_without_dist_with_bijector_class(
         bijector_inst = bijector_cls(*bjargs, **bjkwargs)
         return bijector_inst(x)
 
-    transformed_var = Var(
-        bijection_inverse(var.value, *args, **kwargs),
-        name=f"{var.name}_transformed",
-    )
+    if var.strong:
+        transformed_var = Var(
+            bijection_inverse(var.value, *args, **kwargs),
+            name=f"{var.name}_transformed",
+        )
+    else:
+        transformed_var = Var.new_calc(
+            bijection_inverse,
+            var.value_node,
+            *args,
+            **kwargs,
+            name=f"{var.name}_transformed",
+        )
 
     var.value_node = Calc(bijection_forward, transformed_var, *args, **kwargs)
 
