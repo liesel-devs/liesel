@@ -53,14 +53,17 @@ def plot_nodes(
     .viz.plot_nodes : Plots the nodes of a Liesel model.
     """
 
-    colors = [
-        "#fc8d62" if node.outdated else "#8da0cb" for node in model.node_graph.nodes
-    ]
+    try:
+        graph = model.node_graph
+    except AttributeError:
+        graph = model
 
-    _, axis, pos = _prepare_figure(model.node_graph, width, height, prog)
-    nx.draw_networkx_nodes(model.node_graph, pos, node_color=colors, ax=axis)
-    _add_labels(model.node_graph, axis, pos)
-    _draw_edges(model.node_graph, axis, pos, False)
+    colors = ["#fc8d62" if node.outdated else "#8da0cb" for node in graph.nodes]
+
+    _, axis, pos = _prepare_figure(graph, width, height, prog)
+    nx.draw_networkx_nodes(graph, pos, node_color=colors, ax=axis)
+    _add_labels(graph, axis, pos)
+    _draw_edges(graph, axis, pos, False)
 
     if save_path:
         plt.savefig(save_path)
@@ -108,12 +111,16 @@ def plot_vars(
     .viz.plot_vars : Plots the variables of a Liesel model.
     .viz.plot_nodes : Plots the nodes of a Liesel model.
     """
+    try:
+        graph = model.var_graph
+    except AttributeError:
+        graph = model
 
-    _, axis, pos = _prepare_figure(model.var_graph, width, height, prog)
-    _add_nodes_with_distribution_to_plot(model.var_graph, axis, pos)
-    _add_nodes_without_distribution_to_plot(model.var_graph, axis, pos)
-    _add_labels(model.var_graph, axis, pos)
-    _draw_edges(model.var_graph, axis, pos, True)
+    _, axis, pos = _prepare_figure(graph, width, height, prog)
+    _add_nodes_with_distribution_to_plot(graph, axis, pos)
+    _add_nodes_without_distribution_to_plot(graph, axis, pos)
+    _add_labels(graph, axis, pos)
+    _draw_edges(graph, axis, pos, True)
     _add_legend(axis)
 
     if save_path:
