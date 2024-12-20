@@ -1186,6 +1186,22 @@ class Model:
 
         return nodes, _vars
 
+    def node_subgraph(self, *of: Node) -> nx.DiGraph:
+        nodes_to_include = set()
+        for node in of:
+            nodes_to_include.update(nx.ancestors(self.node_graph, node))
+            nodes_to_include.add(node)
+        subgraph = self.node_graph.subgraph(nodes_to_include)
+        return subgraph
+
+    def var_subgraph(self, *of: Var) -> nx.DiGraph:
+        nodes_to_include = set()
+        for node in of:
+            nodes_to_include.update(nx.ancestors(self.var_graph, node))
+            nodes_to_include.add(node)
+        subgraph = self.var_graph.subgraph(nodes_to_include)
+        return subgraph
+
     @property
     def log_lik(self) -> Array:
         """
