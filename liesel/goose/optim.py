@@ -66,11 +66,16 @@ def batched_nodes(nodes: dict[str, Array], batch_indices: Array) -> dict[str, Ar
     return jax.tree_util.tree_map(lambda x: x[batch_indices, ...], nodes)
 
 
-def _generate_batch_indices(key: KeyArray, n: int, batch_size: int) -> Array:
+def _generate_batch_indices(
+    key: KeyArray, n: int, batch_size: int, shuffle: bool = True
+) -> Array:
     n_full_batches = n // batch_size
-    shuffled_indices = jax.random.permutation(key, n)
-    shuffled_indices_subset = shuffled_indices[0 : n_full_batches * batch_size]
-    list_of_batch_indices = jnp.array_split(shuffled_indices_subset, n_full_batches)
+    if shuffle:
+        indices = jax.random.permutation(key, n)
+    else:
+        indices = jnp.arange(n)
+    indices_subset = indices[: n_full_batches * batch_size]
+    list_of_batch_indices = jnp.array_split(indices_subset, n_full_batches)
     return jnp.asarray(list_of_batch_indices)
 
 
@@ -372,6 +377,7 @@ def optim_flat(
     n_validation = _find_sample_size(model_validation)
     observed = _find_observed(model_train)
 
+    shuffle_batch_indices = batch_size is not None
     batch_size = batch_size if batch_size is not None else n_train
 
     interface_train = LieselInterface(model_train)
@@ -511,7 +517,9 @@ def optim_flat(
 
     def body_fun(val: dict):
         _, subkey = jax.random.split(val["key"])
-        batches = _generate_batch_indices(key=subkey, n=n_train, batch_size=batch_size)
+        batches = _generate_batch_indices(
+            key=subkey, n=n_train, batch_size=batch_size, shuffle=shuffle_batch_indices
+        )
 
         # -----------------------------------------------------------------------------
         # Loop over batches
