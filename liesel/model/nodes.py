@@ -29,6 +29,7 @@ import tensorflow_probability.substrates.numpy.bijectors as nb
 import tensorflow_probability.substrates.numpy.distributions as nd
 
 from ..distributions.nodist import NoDistribution
+from .viz import plot_nodes, plot_vars
 
 if TYPE_CHECKING:
     from .model import Model
@@ -1920,12 +1921,17 @@ class Var:
     def _plot(
         self, which: Literal["vars", "nodes"] = "vars", verbose: bool = True, **kwargs
     ) -> None:
-        if self.model:
+
+        if self.model is not None:
             match which:
                 case "vars":
-                    return self.model.plot_vars()
+                    subgraph = self.model.var_subgraph(self)
+                    return plot_vars(subgraph, **kwargs)
                 case "nodes":
-                    return self.model.plot_nodes()
+                    self_nodes = [self.value_node, self.dist_node, self.var_value_node]
+                    filtered_nodes = [nd for nd in self_nodes if nd is not None]
+                    subgraph = self.model.node_subgraph(*filtered_nodes)
+                    return plot_nodes(subgraph, **kwargs)
 
         from liesel.model import GraphBuilder
 
@@ -1952,9 +1958,14 @@ class Var:
 
         match which:
             case "vars":
-                model.plot_vars(**kwargs)
+                subgraph = model.var_subgraph(self)
+                plot_vars(subgraph, **kwargs)
             case "nodes":
-                model.plot_nodes(**kwargs)
+                self_nodes = [self.value_node, self.dist_node, self.var_value_node]
+                self_nodes = [nd for nd in self_nodes if nd is not None]
+                filtered_nodes = [nd for nd in self_nodes if nd is not None]
+                subgraph = model.node_subgraph(*filtered_nodes)
+                plot_nodes(subgraph, **kwargs)
 
         model.pop_nodes_and_vars()
 
