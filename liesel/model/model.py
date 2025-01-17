@@ -1186,7 +1186,10 @@ class Model:
 
         return nodes, _vars
 
-    def node_subgraph(self, *of: Node) -> nx.DiGraph:
+    def node_parental_subgraph(self, *of: Node) -> nx.DiGraph:
+        """
+        Returns a subgraph that consists of the input nodes and their parent nodes.
+        """
         nodes_to_include = set()
         for node in of:
             nodes_to_include.update(nx.ancestors(self.node_graph, node))
@@ -1194,7 +1197,11 @@ class Model:
         subgraph = self.node_graph.subgraph(nodes_to_include)
         return subgraph
 
-    def var_subgraph(self, *of: Var) -> nx.DiGraph:
+    def var_parental_subgraph(self, *of: Var) -> nx.DiGraph:
+        """
+        Returns a subgraph that consists of the input variables and their parent
+        variables.
+        """
         nodes_to_include = set()
         for node in of:
             nodes_to_include.update(nx.ancestors(self.var_graph, node))

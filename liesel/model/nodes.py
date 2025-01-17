@@ -1925,12 +1925,12 @@ class Var:
         if self.model is not None:
             match which:
                 case "vars":
-                    subgraph = self.model.var_subgraph(self)
+                    subgraph = self.model.var_parental_subgraph(self)
                     return plot_vars(subgraph, **kwargs)
                 case "nodes":
                     self_nodes = [self.value_node, self.dist_node, self.var_value_node]
                     filtered_nodes = [nd for nd in self_nodes if nd is not None]
-                    subgraph = self.model.node_subgraph(*filtered_nodes)
+                    subgraph = self.model.node_parental_subgraph(*filtered_nodes)
                     return plot_nodes(subgraph, **kwargs)
 
         from liesel.model import GraphBuilder
@@ -1958,13 +1958,13 @@ class Var:
 
         match which:
             case "vars":
-                subgraph = model.var_subgraph(self)
+                subgraph = model.var_parental_subgraph(self)
                 plot_vars(subgraph, **kwargs)
             case "nodes":
                 self_nodes = [self.value_node, self.dist_node, self.var_value_node]
                 self_nodes = [nd for nd in self_nodes if nd is not None]
                 filtered_nodes = [nd for nd in self_nodes if nd is not None]
-                subgraph = model.node_subgraph(*filtered_nodes)
+                subgraph = model.node_parental_subgraph(*filtered_nodes)
                 plot_nodes(subgraph, **kwargs)
 
         model.pop_nodes_and_vars()
