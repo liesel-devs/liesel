@@ -556,6 +556,86 @@ class TestVarConstructors:
 
 
 class TestVarTransform:
+    def test_transform_weak_var_with_distribtution_inst(self) -> None:
+        """
+        Tests transformation of a weak var with distribution when the bijector is passed
+        as an instance.
+        """
+        x = lnodes.Var.new_value(jnp.linspace(0.1, 2, 5), name="all_x")
+        batch_index = lnodes.Var.new_value(1, name="index")
+
+        x_batched = lnodes.Var(
+            value=lnodes.Calc(lambda i, x: x[i], batch_index, x),
+            distribution=lnodes.Dist(tfp.distributions.Normal, loc=0.0, scale=1.0),
+            name="x_batched",
+        )
+
+        x_batched_transformed = x_batched.transform(tfp.bijectors.Exp())
+
+        assert x_batched_transformed.value == pytest.approx(jnp.log(x.value[1]))
+
+        batch_index.value = 2
+        x_batched_transformed.update()
+        x_batched.update()
+        assert x_batched_transformed.value == pytest.approx(jnp.log(x.value[2]))
+
+    def test_transform_weak_var_with_distribtution_class(self) -> None:
+        """
+        Tests transformation of a weak var with distribution when the bijector is passed
+        as a class.
+        """
+        x = lnodes.Var.new_value(jnp.linspace(0.1, 2, 5), name="all_x")
+        batch_index = lnodes.Var.new_value(1, name="index")
+
+        x_batched = lnodes.Var(
+            value=lnodes.Calc(lambda i, x: x[i], i=batch_index, x=x),
+            distribution=lnodes.Dist(tfp.distributions.Normal, loc=0.0, scale=1.0),
+            name="x_batched",
+        )
+
+        x_batched_transformed = x_batched.transform(tfp.bijectors.Scale, scale=2.0)
+
+        assert x_batched_transformed.value == pytest.approx(x.value[1] / 2.0)
+
+        batch_index.value = 2
+        x_batched_transformed.update()
+        x_batched.update()
+        assert x_batched_transformed.value == pytest.approx(x.value[2] / 2.0)
+
+    def test_transform_weak_var_with_bijector_instance(self) -> None:
+        tau = lnodes.Var.new_param(10.0, name="tau")
+        tau_sqrt = lnodes.Var.new_calc(jnp.sqrt, tau)
+        log_tau_sqrt = tau_sqrt.transform(tfp.bijectors.Exp())
+
+        assert tau.value == pytest.approx(10.0)
+        assert tau_sqrt.value == pytest.approx(jnp.sqrt(10.0))
+        assert log_tau_sqrt.value == pytest.approx(jnp.log(jnp.sqrt(10.0)))
+
+        assert tau.strong
+        assert tau_sqrt.weak
+        assert log_tau_sqrt.weak
+        assert tau.parameter
+        assert not log_tau_sqrt.parameter
+        assert not tau_sqrt.parameter
+
+    def test_transform_weak_var_with_bijector_class(self) -> None:
+        tau = lnodes.Var.new_param(10.0, name="tau")
+        tau_sqrt = lnodes.Var.new_calc(jnp.sqrt, tau)
+
+        scale = lnodes.Var.new_param(2.0, name="bijector_scale")
+        scaled_tau_sqrt = tau_sqrt.transform(tfp.bijectors.Scale, scale=scale)
+
+        assert tau.value == pytest.approx(10.0)
+        assert tau_sqrt.value == pytest.approx(jnp.sqrt(10.0))
+        assert scaled_tau_sqrt.value == pytest.approx(jnp.sqrt(10.0) / 2)
+
+        assert tau.strong
+        assert tau_sqrt.weak
+        assert scaled_tau_sqrt.weak
+        assert tau.parameter
+        assert not scaled_tau_sqrt.parameter
+        assert not tau_sqrt.parameter
+
     def test_transform_without_dist_with_bijector_instance(self) -> None:
         tau = lnodes.Var.new_param(10.0, name="tau")
         log_tau = tau.transform(tfp.bijectors.Exp())
