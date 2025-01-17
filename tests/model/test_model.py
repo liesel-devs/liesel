@@ -11,7 +11,7 @@ import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 from liesel.model.model import GraphBuilder, Model, save_model
-from liesel.model.nodes import Calc, Dist, Group, TransientNode, Value, Var, obs, param
+from liesel.model.nodes import Calc, Dist, Group, TransientNode, Value, Var
 
 
 @pytest.fixture
@@ -35,7 +35,7 @@ def beta() -> Generator:
     beta_prior_scale = Var(100.0, name="beta_scale")
     beta_prior = Dist(tfd.Normal, loc=beta_prior_loc, scale=beta_prior_scale)
 
-    beta_hat = param(
+    beta_hat = Var.new_param(
         value=jnp.array([0.0, 0.0]), distribution=beta_prior, name="beta_hat"
     )
     yield beta_hat
@@ -52,7 +52,7 @@ def sigma() -> Generator:
         scale=sigma_prior_scale,
     )
 
-    sigma_hat = param(
+    sigma_hat = Var.new_param(
         value=10.0,
         distribution=sigma_prior,
         name="sigma_hat",
@@ -64,13 +64,13 @@ def sigma() -> Generator:
 @pytest.fixture
 def y_var(data, beta, sigma) -> Generator:
     x, y = data
-    x_var = obs(x, name="X")
+    x_var = Var.new_obs(x, name="X")
 
     mu_calc = Calc(lambda X, beta: X @ beta, x_var, beta)
     mu_hat = Var(mu_calc, name="mu")
 
     likelihood = Dist(tfd.Normal, loc=mu_hat, scale=sigma)
-    y_var = obs(value=y, distribution=likelihood, name="y_var")
+    y_var = Var.new_obs(value=y, distribution=likelihood, name="y_var")
 
     Group("loc", X=x_var, beta=beta)
     Group("scale", scale=sigma)
@@ -311,25 +311,25 @@ class TestModel:
         x = Var(1.0, dist, name="x")
         x.auto_transform = True
 
-        model = GraphBuilder().add(x).build_model()
+        model = Model([x])
 
         assert "x_transformed" in model.vars
         assert "lambda_transformed" not in model.vars
         assert model.vars["x_transformed"].value == pytest.approx(0.54132485)
 
     def test_transform_vars_weak(self) -> None:
-        x = Var(Calc(lambda x: x), name="x")
+        x = Var.new_calc(lambda x: x, name="x")
         x.auto_transform = True
 
         with pytest.raises(RuntimeError, match="has no distribution"):
-            GraphBuilder().add(x).build_model()
+            Model([x])
 
     def test_transform_vars_no_dist(self) -> None:
         x = Var(1.0, name="x")
         x.auto_transform = True
 
         with pytest.raises(RuntimeError, match="has no distribution"):
-            GraphBuilder().add(x).build_model()
+            Model([x])
 
     def test_build_after_transform(self) -> None:
         lmbd = Var(1.0, name="lambda")
@@ -411,7 +411,7 @@ class TestSimulate:
         mu = Var(0.0, name="mu")
         sigma = Var(1.0, name="sigma")
         x = Var(0.0, Dist(tfd.Normal, mu, sigma), name="x")
-        return GraphBuilder().add(x).build_model()
+        return Model([x])
 
     def test_simulate_scalar(self, model):
         model.simulate(rnd.PRNGKey(42))
@@ -451,7 +451,7 @@ class TestSimulate:
         mu = Var(0.0, name="mu")
         sigma = Var(1.0, name="sigma")
         x = Var(Calc(lambda: 0.0), Dist(tfd.Normal, mu, sigma), name="x")
-        model = GraphBuilder().add(x).build_model()
+        model = Model([x])
 
         with pytest.raises(AttributeError, match="Cannot set value of Calc"):
             model.simulate(rnd.PRNGKey(42))
@@ -460,7 +460,7 @@ class TestSimulate:
         mu = Var(0.0, Dist(tfd.Normal, loc=2.0, scale=1.0), name="mu")
         sigma = Var(1.0, name="sigma")
         x = Var(0.0, Dist(tfd.Normal, mu, sigma), name="x")
-        model = GraphBuilder().add(x).build_model()
+        model = Model([x])
 
         model.simulate(rnd.PRNGKey(42))
         assert jnp.all(model.vars["mu"].value != 0.0)

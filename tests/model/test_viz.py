@@ -7,7 +7,7 @@ import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 from liesel.model.model import Model
-from liesel.model.nodes import Calc, Dist, Var
+from liesel.model.nodes import Dist, Var
 from liesel.model.viz import plot_nodes, plot_vars
 
 matplotlib.use("template")
@@ -40,7 +40,7 @@ sigma_prior = Dist(
 sigma = Var(10.0, distribution=sigma_prior, name="sigma")
 
 x = Var(x, name="x")
-y_loc = Var(Calc(lambda x, beta: x @ beta, x, beta), name="mu")
+y_loc = Var.new_calc(lambda x, beta: x @ beta, x, beta, name="mu")
 likelihood = Dist(tfd.Normal, loc=y_loc, scale=sigma)
 y = Var(y, distribution=likelihood, name="y")
 
