@@ -756,8 +756,9 @@ class Calc(Node):
     ):
         super().__init__(*inputs, **kwinputs, _name=_name, _needs_seed=_needs_seed)
         self._function = function
+        self.update_on_init = update_on_init
 
-        if update_on_init:
+        if self.update_on_init:
             try:
                 self.update()
             except Exception as e:
@@ -1971,11 +1972,43 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
 
     transformed_dist.per_obs = var.dist_node.per_obs
 
-    transformed_var = Var(
-        bijector_inv.forward(var.value),
-        transformed_dist,
-        name=f"{var.name}_transformed",
-    )
+    if var.weak:
+        try:
+            value_function = var.value_node.function  # type: ignore
+        except AttributeError as e:
+            raise AttributeError(
+                "Trying to transform a weak variable without calculator node."
+            ) from e
+
+        def forward(*args, **kwargs):
+            return bijector_inv.forward(value_function(*args, **kwargs))
+
+        value_inputs = var.value_node.inputs
+        value_kwinputs = var.value_node.kwinputs
+        value_node_needs_seed = var.value_node.needs_seed
+        try:
+            value_node_upadte_on_init = var.value_node.update_on_init  # type: ignore
+        except AttributeError as e:
+            raise e
+
+        transformed_var = Var(
+            Calc(
+                forward,
+                *value_inputs,
+                _name="",
+                _needs_seed=value_node_needs_seed,
+                update_on_init=value_node_upadte_on_init,
+                **value_kwinputs,
+            ),
+            transformed_dist,
+            name=f"{var.name}_transformed",
+        )
+    else:
+        transformed_var = Var(
+            bijector_inv.forward(var.value),
+            transformed_dist,
+            name=f"{var.name}_transformed",
+        )
 
     var.value_node = Calc(bijector_inst.forward, transformed_var)
     return transformed_var
@@ -2026,11 +2059,43 @@ def _transform_var_with_bijector_class(
 
     bijector_inv = dist_node_transformed.init_dist().bijector
 
-    transformed_var = Var(
-        bijector_inv.forward(var.value),
-        dist_node_transformed,
-        name=f"{var.name}_transformed",
-    )
+    if var.weak:
+        try:
+            value_function = var.value_node.function  # type: ignore
+        except AttributeError as e:
+            raise AttributeError(
+                "Trying to transform a weak variable without calculator node."
+            ) from e
+
+        def forward(*args, **kwargs):
+            return bijector_inv.forward(value_function(*args, **kwargs))
+
+        value_inputs = var.value_node.inputs
+        value_kwinputs = var.value_node.kwinputs
+        value_node_needs_seed = var.value_node.needs_seed
+        try:
+            value_node_upadte_on_init = var.value_node.update_on_init  # type: ignore
+        except AttributeError as e:
+            raise e
+
+        transformed_var = Var(
+            Calc(
+                forward,
+                *value_inputs,
+                _name="",
+                _needs_seed=value_node_needs_seed,
+                update_on_init=value_node_upadte_on_init,
+                **value_kwinputs,
+            ),
+            dist_node_transformed,
+            name=f"{var.name}_transformed",
+        )
+    else:
+        transformed_var = Var(
+            bijector_inv.forward(var.value),
+            dist_node_transformed,
+            name=f"{var.name}_transformed",
+        )
 
     def bijector_fn(value, dist_inputs, bijector_inputs):
         bijector = transform_dist(dist_inputs, bijector_inputs).bijector
