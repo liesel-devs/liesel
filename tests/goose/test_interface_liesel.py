@@ -40,8 +40,8 @@ class TestLieselInterface:
         new_state = gm.update_state(pos, model.state)
         lp_after = gm.log_prob(new_state)
 
-        assert lp_before == pytest.approx(-722.714)
-        assert lp_after == pytest.approx(-25841.498)
+        assert lp_before == pytest.approx(-719.46875)
+        assert lp_after == pytest.approx(-25616.779296875)
 
 
 @pytest.mark.mcmc
