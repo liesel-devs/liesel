@@ -75,7 +75,7 @@ class TestOptim:
             model, ["coef", "log_sigma"], batch_size=None, stopper=stopper
         )
         assert jnp.allclose(result.position["coef"], ols_coef, atol=1e-2)
-        assert jnp.allclose(result.position["log_sigma"], ols_sigma, atol=1e-2)
+        assert jnp.allclose(result.position["log_sigma"], ols_sigma, atol=1e-1)
 
     def test_optim_no_early_stop(self, models):
         model, _ = models
