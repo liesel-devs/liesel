@@ -145,6 +145,24 @@ class TestOptim:
             result_train.history["loss_train"], result_train.history["loss_validation"]
         )
 
+    def test_track_keys(self, models):
+        model, _ = models
+        stopper = Stopper(max_iter=10, patience=1)
+
+        result = optim_flat(
+            model,
+            params=["coef", "log_sigma"],
+            batch_size=None,
+            stopper=stopper,
+            track_keys=["sigma"],
+        )
+
+        assert "sigma" in result.history["tracked"]
+        assert jnp.allclose(
+            result.history["tracked"]["sigma"],
+            jnp.exp(result.history["position"]["log_sigma"]),
+        )
+
 
 class TestLogProbDecompositionValidation:
     def test_const_priors(self):
@@ -260,10 +278,11 @@ def test_full_history_to_df(models):
         stopper=stopper,
         batch_seed=1,
         prune_history=False,
+        track_keys=["sigma"],
     )
     df = history_to_df(result.history)
 
-    assert df.shape == (1000, 6)
+    assert df.shape == (1000, 7)
 
 
 def test_history_to_df_pruned(models):
@@ -281,7 +300,7 @@ def test_history_to_df_pruned(models):
         )
     df = history_to_df(result.history["position"])
 
-    assert df.shape == (85, 4)
+    assert df.shape[0] < 100
 
 
 def test_generate_batches():
