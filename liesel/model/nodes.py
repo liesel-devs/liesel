@@ -599,7 +599,7 @@ class Value(Node):
 
     Adding this node to a model leads to an automatically generated name:
 
-    >>> model = lsl.GraphBuilder().add(nameless_node).build_model()
+    >>> model = lsl.Model([nameless_node])
     >>> nameless_node
     Value(name="n0")
 
@@ -720,7 +720,7 @@ class Calc(Node):
 
     A simple calculator node, taking the exponential value of an input parameter.
 
-    >>> log_scale = lsl.param(0.0, name="log_scale")
+    >>> log_scale = lsl.Var.new_param(0.0, name="log_scale")
     >>> scale = lsl.Calc(jnp.exp, log_scale)
     >>> print(scale.value)
     1.0
@@ -736,7 +736,7 @@ class Calc(Node):
 
     >>> def compute_variance(x):
     ...     return jnp.exp(x)**2
-    >>> log_scale = lsl.param(0.0, name="log_scale")
+    >>> log_scale = lsl.Var.new_param(0.0, name="log_scale")
     >>> variance = lsl.Calc(compute_variance, log_scale).update()
     >>> print(variance.value)
     1.0
@@ -886,7 +886,7 @@ class Dist(Node):
 
 
     >>> dist = lsl.Dist(tfd.Normal, loc=0.0, scale=1.0)
-    >>> y = lsl.obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y")
+    >>> y = lsl.Var.new_obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y")
     >>> print(y.log_prob)
     None
 
@@ -898,10 +898,10 @@ class Dist(Node):
     Now we define the same observation model, but include the location and scale
     as parameters:
 
-    >>> loc = lsl.param(0.0, name="loc")
-    >>> scale = lsl.param(1.0, name="scale")
+    >>> loc = lsl.Var.new_param(0.0, name="loc")
+    >>> scale = lsl.Var.new_param(1.0, name="scale")
     >>> dist = lsl.Dist(tfd.Normal, loc=loc, scale=scale)
-    >>> y = lsl.obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y").update()
+    >>> y = lsl.Var.new_obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y").update()
     >>> y.log_prob
     Array([-1.0439385, -0.9189385, -1.0439385], dtype=float32)
 
@@ -1580,7 +1580,7 @@ class Var:
         We first set up the parameter var with its distribution:
 
         >>> prior = lsl.Dist(tfd.HalfCauchy, loc=0.0, scale=25.0)
-        >>> scale = lsl.param(1.0, prior, name="scale")
+        >>> scale = lsl.Var.new_param(1.0, prior, name="scale")
 
         The we transform the variable to the log-scale:
 
@@ -2228,13 +2228,13 @@ def obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> 
     model:
 
     >>> dist = lsl.Dist(tfd.Normal, loc=0.0, scale=1.0)
-    >>> y = lsl.obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y")
+    >>> y = lsl.Var.new_obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y")
     >>> y
     Var(name="y")
 
     Now we build the model graph:
 
-    >>> model = lsl.GraphBuilder().add(y).build_model()
+    >>> model = lsl.Model([y])
 
     The log-likelihood of the model is the sum of the log-probabilities of all observed
     variables. In this case this is only our ``y`` variable:
@@ -2301,7 +2301,7 @@ def param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -
     A variance parameter with an inverse-gamma prior:
 
     >>> prior = lsl.Dist(tfd.InverseGamma, concentration=0.1, scale=0.1)
-    >>> variance = lsl.param(1.0, prior, name="variance")
+    >>> variance = lsl.Var.new_param(1.0, prior, name="variance")
     >>> variance
     Var(name="variance")
 
@@ -2309,13 +2309,13 @@ def param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -
 
     >>> scale = lsl.Calc(jnp.sqrt, variance)
     >>> dist = lsl.Dist(tfd.Normal, loc=0.0, scale=scale)
-    >>> y = lsl.obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y")
+    >>> y = lsl.Var.new_obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y")
     >>> y
     Var(name="y")
 
     Now we can build the model graph:
 
-    >>> model = lsl.GraphBuilder().add(y).build_model()
+    >>> model = lsl.Model([y])
 
     The log_prior of the model is the sum of the log-priors of all parameters. In this
     case this is only our ``variance`` parameter:

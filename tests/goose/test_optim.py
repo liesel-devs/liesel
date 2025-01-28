@@ -29,17 +29,16 @@ ols_coef = np.linalg.inv(xs.T @ xs) @ xs.T @ ys
 
 
 def setup_model(ys: Array, xs: Array) -> lsl.Model:
-    x = lsl.obs(xs, name="x")
-    coef = lsl.param(jnp.zeros(2), name="coef")
-    mu = lsl.Var(lsl.Calc(jnp.dot, x, coef), name="mu")
+    x = lsl.Var.new_obs(xs, name="x")
+    coef = lsl.Var.new_param(jnp.zeros(2), name="coef")
+    mu = lsl.Var.new_calc(jnp.dot, x, coef, name="mu")
     log_sigma = lsl.Var(2.0, name="log_sigma")
-    sigma = lsl.Var(lsl.Calc(jnp.exp, log_sigma), name="sigma")
+    sigma = lsl.Var.new_calc(jnp.exp, log_sigma, name="sigma")
 
     ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
-    y = lsl.obs(ys, ydist, name="y")
+    y = lsl.Var.new_obs(ys, ydist, name="y")
 
-    gb = lsl.GraphBuilder().add(y)
-    model = gb.build_model()
+    model = lsl.Model([y])
     return model
 
 
@@ -166,17 +165,16 @@ class TestOptim:
 
 class TestLogProbDecompositionValidation:
     def test_const_priors(self):
-        x = lsl.obs(xs, name="x")
-        coef = lsl.param(jnp.zeros(2), name="coef")
-        mu = lsl.Var(lsl.Calc(jnp.dot, x, coef), name="mu")
+        x = lsl.Var.new_obs(xs, name="x")
+        coef = lsl.Var.new_param(jnp.zeros(2), name="coef")
+        mu = lsl.Var.new_calc(jnp.dot, x, coef, name="mu")
         log_sigma = lsl.Var(2.0, name="log_sigma")
-        sigma = lsl.Var(lsl.Calc(jnp.exp, log_sigma), name="sigma")
+        sigma = lsl.Var.new_calc(jnp.exp, log_sigma, name="sigma")
 
         ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
-        y = lsl.obs(ys, ydist, name="y")
+        y = lsl.Var.new_obs(ys, ydist, name="y")
 
-        gb = lsl.GraphBuilder().add(y)
-        model = gb.build_model()
+        model = lsl.Model([y])
 
         interface = gs.LieselInterface(model)
         position = interface.extract_position(["coef", "log_sigma"], model.state)
@@ -184,21 +182,20 @@ class TestLogProbDecompositionValidation:
         assert _validate_log_prob_decomposition(interface, position, model.state)
 
     def test_prior(self):
-        x = lsl.obs(xs, name="x")
-        coef = lsl.param(
+        x = lsl.Var.new_obs(xs, name="x")
+        coef = lsl.Var.new_param(
             jnp.zeros(2),
             distribution=lsl.Dist(tfd.Normal, loc=0.0, scale=10.0),
             name="coef",
         )
-        mu = lsl.Var(lsl.Calc(jnp.dot, x, coef), name="mu")
+        mu = lsl.Var.new_calc(jnp.dot, x, coef, name="mu")
         log_sigma = lsl.Var(2.0, name="log_sigma")
-        sigma = lsl.Var(lsl.Calc(jnp.exp, log_sigma), name="sigma")
+        sigma = lsl.Var.new_calc(jnp.exp, log_sigma, name="sigma")
 
         ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
-        y = lsl.obs(ys, ydist, name="y")
+        y = lsl.Var.new_obs(ys, ydist, name="y")
 
-        gb = lsl.GraphBuilder().add(y)
-        model = gb.build_model()
+        model = lsl.Model([y])
 
         interface = gs.LieselInterface(model)
         position = interface.extract_position(["coef", "log_sigma"], model.state)
@@ -206,21 +203,20 @@ class TestLogProbDecompositionValidation:
         assert _validate_log_prob_decomposition(interface, position, model.state)
 
     def test_prior_but_not_param(self):
-        x = lsl.obs(xs, name="x")
+        x = lsl.Var.new_obs(xs, name="x")
         coef = lsl.Var(
             jnp.zeros(2),
             distribution=lsl.Dist(tfd.Normal, loc=0.0, scale=10.0),
             name="coef",
         )
-        mu = lsl.Var(lsl.Calc(jnp.dot, x, coef), name="mu")
+        mu = lsl.Var.new_calc(jnp.dot, x, coef, name="mu")
         log_sigma = lsl.Var(2.0, name="log_sigma")
-        sigma = lsl.Var(lsl.Calc(jnp.exp, log_sigma), name="sigma")
+        sigma = lsl.Var.new_calc(jnp.exp, log_sigma, name="sigma")
 
         ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
-        y = lsl.obs(ys, ydist, name="y")
+        y = lsl.Var.new_obs(ys, ydist, name="y")
 
-        gb = lsl.GraphBuilder().add(y)
-        model = gb.build_model()
+        model = lsl.Model([y])
 
         interface = gs.LieselInterface(model)
         position = interface.extract_position(["coef", "log_sigma"], model.state)
@@ -229,21 +225,20 @@ class TestLogProbDecompositionValidation:
             _validate_log_prob_decomposition(interface, position, model.state)
 
     def test_not_obs(self):
-        x = lsl.obs(xs, name="x")
-        coef = lsl.param(
+        x = lsl.Var.new_obs(xs, name="x")
+        coef = lsl.Var.new_param(
             jnp.zeros(2),
             distribution=lsl.Dist(tfd.Normal, loc=0.0, scale=10.0),
             name="coef",
         )
-        mu = lsl.Var(lsl.Calc(jnp.dot, x, coef), name="mu")
+        mu = lsl.Var.new_calc(jnp.dot, x, coef, name="mu")
         log_sigma = lsl.Var(2.0, name="log_sigma")
-        sigma = lsl.Var(lsl.Calc(jnp.exp, log_sigma), name="sigma")
+        sigma = lsl.Var.new_calc(jnp.exp, log_sigma, name="sigma")
 
         ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
         y = lsl.Var(ys, ydist, name="y")
 
-        gb = lsl.GraphBuilder().add(y)
-        model = gb.build_model()
+        model = lsl.Model([y])
 
         interface = gs.LieselInterface(model)
         position = interface.extract_position(["coef", "log_sigma"], model.state)

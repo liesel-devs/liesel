@@ -132,7 +132,7 @@ class TestFiniteDiscreteGibbsKernel:
             name="categorical_var",
         )
 
-        model = lsl.GraphBuilder().add(categorical_var).build_model()
+        model = lsl.Model([categorical_var])
         kernel = finite_discrete_gibbs_kernel("categorical_var", model)
 
         draw = kernel._transition_fn(jax.random.PRNGKey(0), model.state)
@@ -156,7 +156,7 @@ class TestFiniteDiscreteGibbsKernel:
             name="categorical_var",
         )
 
-        model = lsl.GraphBuilder().add(categorical_var).build_model()
+        model = lsl.Model([categorical_var])
         kernel = finite_discrete_gibbs_kernel("categorical_var", model)
 
         draw = jax.jit(kernel._transition_fn)(jax.random.PRNGKey(1), model.state)
@@ -175,7 +175,7 @@ class TestFiniteDiscreteGibbsKernel:
             name="categorical_var",
         )
 
-        model = lsl.GraphBuilder().add(categorical_var).build_model()
+        model = lsl.Model([categorical_var])
         kernel = finite_discrete_gibbs_kernel("categorical_var", model)
 
         eb = gs.EngineBuilder(1, num_chains=1)
@@ -205,7 +205,7 @@ class TestFiniteDiscreteGibbsKernel:
             name="dummy_var",
         )
 
-        model = lsl.GraphBuilder().add(dummy_var).build_model()
+        model = lsl.Model([dummy_var])
         kernel = finite_discrete_gibbs_kernel("dummy_var", model, outcomes=[0, 1])
 
         eb = gs.EngineBuilder(1, num_chains=1)
@@ -235,7 +235,7 @@ class TestFiniteDiscreteGibbsKernel:
             name="dummy_var",
         )
 
-        model = lsl.GraphBuilder().add(dummy_var).build_model()
+        model = lsl.Model([dummy_var])
         kernel = finite_discrete_gibbs_kernel("dummy_var", model)
 
         eb = gs.EngineBuilder(1, num_chains=1)
