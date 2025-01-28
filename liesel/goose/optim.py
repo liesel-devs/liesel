@@ -66,11 +66,16 @@ def batched_nodes(nodes: dict[str, Array], batch_indices: Array) -> dict[str, Ar
     return jax.tree_util.tree_map(lambda x: x[batch_indices, ...], nodes)
 
 
-def _generate_batch_indices(key: KeyArray, n: int, batch_size: int) -> Array:
+def _generate_batch_indices(
+    key: KeyArray, n: int, batch_size: int, shuffle: bool = True
+) -> Array:
     n_full_batches = n // batch_size
-    shuffled_indices = jax.random.permutation(key, n)
-    shuffled_indices_subset = shuffled_indices[0 : n_full_batches * batch_size]
-    list_of_batch_indices = jnp.array_split(shuffled_indices_subset, n_full_batches)
+    if shuffle:
+        indices = jax.random.permutation(key, n)
+    else:
+        indices = jnp.arange(n)
+    indices_subset = indices[: n_full_batches * batch_size]
+    list_of_batch_indices = jnp.array_split(indices_subset, n_full_batches)
     return jnp.asarray(list_of_batch_indices)
 
 
@@ -230,6 +235,7 @@ def optim_flat(
     restore_best_position: bool = True,
     prune_history: bool = True,
     progress_bar: bool = True,
+    track_keys: list[str] | None = None,
 ) -> OptimResult:
     """
     Optimize the parameters of a  Liesel :class:`.Model`.
@@ -281,6 +287,8 @@ def optim_flat(
         to ``jax.numpy.nan`` if optimization stops early.
     progress_bar
         Whether to use a progress bar.
+    track_keys
+        List of position keys to track and include in the history.
 
     Returns
     -------
@@ -340,6 +348,7 @@ def optim_flat(
     sampling.
 
     """
+    track_keys = track_keys if track_keys is not None else []
     # ---------------------------------------------------------------------------------
     # Validation input
     if restore_best_position:
@@ -368,10 +377,12 @@ def optim_flat(
     n_validation = _find_sample_size(model_validation)
     observed = _find_observed(model_train)
 
+    shuffle_batch_indices = batch_size is not None
     batch_size = batch_size if batch_size is not None else n_train
 
     interface_train = LieselInterface(model_train)
     position = interface_train.extract_position(params, model_train.state)
+    track = interface_train.extract_position(track_keys, model_train.state)
     interface_train._model.auto_update = False
 
     interface_validation = LieselInterface(model_validation)
@@ -433,6 +444,14 @@ def optim_flat(
         history["position"] = jax.tree.map(
             lambda d, pos: d.at[0].set(pos), history["position"], position
         )
+
+        history["tracked"] = {
+            name: jnp.zeros((stopper.max_iter,) + jnp.shape(value))
+            for name, value in track.items()
+        }
+        history["tracked"] = jax.tree.map(
+            lambda d, pos: d.at[0].set(pos), history["tracked"], track
+        )
     else:
         history["position"] = None
 
@@ -454,6 +473,7 @@ def optim_flat(
     init_val["while_i"] = 0
     init_val["history"] = history
     init_val["position"] = position
+    init_val["tracked"] = track
     init_val["opt_state"] = optimizer.init(position)
     init_val["current_loss_train"] = history["loss_train"][0]
     init_val["current_loss_validation"] = history["loss_validation"][0]
@@ -497,7 +517,9 @@ def optim_flat(
 
     def body_fun(val: dict):
         _, subkey = jax.random.split(val["key"])
-        batches = _generate_batch_indices(key=subkey, n=n_train, batch_size=batch_size)
+        batches = _generate_batch_indices(
+            key=subkey, n=n_train, batch_size=batch_size, shuffle=shuffle_batch_indices
+        )
 
         # -----------------------------------------------------------------------------
         # Loop over batches
@@ -512,6 +534,10 @@ def optim_flat(
             updates, opt_state = optimizer.update(grad, val["opt_state"], params=pos)
 
             val["position"] = optax.apply_updates(pos, updates)
+            updated_state = interface_train.update_state(
+                val["position"], val["model_state_train"]
+            )
+            val["tracked"] = interface_train.extract_position(track_keys, updated_state)
             val["opt_state"] = opt_state
 
             return val
@@ -548,6 +574,11 @@ def optim_flat(
             pos_hist = val["history"]["position"]
             val["history"]["position"] = jax.tree.map(
                 lambda d, pos: d.at[val["while_i"]].set(pos), pos_hist, val["position"]
+            )
+
+            pos_hist = val["history"]["tracked"]
+            val["history"]["tracked"] = jax.tree.map(
+                lambda d, pos: d.at[val["while_i"]].set(pos), pos_hist, val["tracked"]
             )
 
         if progress_bar:
@@ -599,6 +630,11 @@ def optim_flat(
                 jnp.nan
             )
 
+        for name, value in val["history"]["tracked"].items():
+            val["history"]["tracked"][name] = value.at[(max_iter + 1) :, ...].set(
+                jnp.nan
+            )
+
     # ---------------------------------------------------------------------------------
     # Remove unused values in history, if applicable
 
@@ -610,6 +646,8 @@ def optim_flat(
         if save_position_history:
             for name, value in val["history"]["position"].items():
                 val["history"]["position"][name] = value[: (max_iter + 1), ...]
+            for name, value in val["history"]["tracked"].items():
+                val["history"]["tracked"][name] = value[: (max_iter + 1), ...]
 
     # ---------------------------------------------------------------------------------
     # Initialize results object and return
@@ -635,14 +673,19 @@ def history_to_df(history: dict[str, Array]) -> pd.DataFrame:
     data: dict[str, Array] = dict()
 
     position_history = history.get("position", None)
+    tracked_history = history.get("tracked", None)
 
     for name, value in history.items():
-        if name == "position":
+        if name in ["position", "tracked"]:
             continue
         data |= array_to_dict(value, names_prefix=name)
 
     if position_history is not None:
         for name, value in position_history.items():
+            data |= array_to_dict(value, names_prefix=name)
+
+    if tracked_history is not None:
+        for name, value in tracked_history.items():
             data |= array_to_dict(value, names_prefix=name)
 
     df = pd.DataFrame(data)
