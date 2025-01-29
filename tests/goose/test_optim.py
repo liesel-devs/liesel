@@ -68,14 +68,15 @@ class TestOptim:
         xs = model.vars["x"].value
         ys = model.vars["y"].value
         ols_coef = np.linalg.inv(xs.T @ xs) @ xs.T @ ys
-        ols_sigma = jnp.log((ys - (xs @ ols_coef)).std())
+        n = ys.shape[-1]
+        ols_log_sigma = jnp.log(jnp.sqrt(jnp.square(ys - (xs @ ols_coef)).sum() / n))
 
         stopper = Stopper(max_iter=1_000, patience=30)
         result = optim_flat(
             model, ["coef", "log_sigma"], batch_size=None, stopper=stopper
         )
-        assert jnp.allclose(result.position["coef"], ols_coef, atol=1e-2)
-        assert jnp.allclose(result.position["log_sigma"], ols_sigma, atol=1e-1)
+        assert jnp.allclose(result.position["coef"], ols_coef, atol=1e-3)
+        assert jnp.allclose(result.position["log_sigma"], ols_log_sigma, atol=1e-3)
 
     def test_optim_no_early_stop(self, models):
         model, _ = models
