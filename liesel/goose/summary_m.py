@@ -359,14 +359,15 @@ class Summary:
 
     def _error_df(self, per_chain: bool = False) -> pd.DataFrame:
         # fmt: off
-        df = pd.concat({
-            kernel: pd.DataFrame.from_dict(code_summary, orient="index")
-            for kernel, code_summary in self.error_summary.items()
-        })
+        error_summaries = {k: v for k, v in self.error_summary.items() if v}
+        if error_summaries:
+            df = pd.concat({
+                kernel: pd.DataFrame.from_dict(code_summary, orient="index")
+                for kernel, code_summary in error_summaries.items()
+            })
+        else:
+            return pd.DataFrame()
         # fmt: on
-
-        if df.empty:
-            return df
 
         df = df.reset_index(level=1, drop=True)
         df["error_code"] = df["error_code"].astype(int)
