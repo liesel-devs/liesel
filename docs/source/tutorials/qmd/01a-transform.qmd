@@ -48,16 +48,16 @@ y_vec = X_mat @ true_beta + rng.normal(scale=true_sigma, size=n)
 # Model
 # Part 1: Model for the mean
 beta_prior = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
-beta = lsl.param(value=np.array([0.0, 0.0]), distribution=beta_prior,name="beta")
+beta = lsl.Var.new_param(value=np.array([0.0, 0.0]), distribution=beta_prior,name="beta")
 
-X = lsl.obs(X_mat, name="X")
+X = lsl.Var.new_obs(X_mat, name="X")
 mu = lsl.Var(lsl.Calc(jnp.dot, X, beta), name="mu")
 
 # Part 2: Model for the standard deviation
 a = lsl.Var(0.01, name="a")
 b = lsl.Var(0.01, name="b")
 sigma_sq_prior = lsl.Dist(tfd.InverseGamma, concentration=a, scale=b)
-sigma_sq = lsl.param(value=10.0, distribution=sigma_sq_prior, name="sigma_sq")
+sigma_sq = lsl.Var.new_param(value=10.0, distribution=sigma_sq_prior, name="sigma_sq")
 
 sigma = lsl.Var(lsl.Calc(jnp.sqrt, sigma_sq), name="sigma")
 

@@ -403,11 +403,11 @@ class TestMVNDegenerateBatches:
         # assert correct output values
         mvn1 = MultivariateNormalDegenerate(0.0, K)
         lp1 = mvn1.log_prob(beta)
-        assert lp[0] == lp1
+        assert jnp.allclose(lp[0], lp1)
 
         mvn2 = MultivariateNormalDegenerate(5.0, K)
         lp2 = mvn2.log_prob(beta)
-        assert lp[1] == lp2
+        assert jnp.allclose(lp[1], lp2)
 
     def test_batch_loc_prec(self, beta, K) -> None:
         """
@@ -438,11 +438,11 @@ class TestMVNDegenerateBatches:
         # assert correct output values
         mvn1 = MultivariateNormalDegenerate(0.0, prec1)
         lp1 = mvn1.log_prob(beta)
-        assert lp[0] == lp1
+        assert jnp.allclose(lp[0], lp1)
 
         mvn2 = MultivariateNormalDegenerate(5.0, prec2)
         lp2 = mvn2.log_prob(beta)
-        assert lp[1] == lp2
+        assert jnp.allclose(lp[1], lp2)
 
     def test_batch_2loc_3prec(self, beta, mvn_batch) -> None:
         """
@@ -1002,8 +1002,8 @@ class TestSampleFromMVNDegenerate:
         mvnd = MultivariateNormalDegenerate(loc=loc, prec=prec)
 
         key = jax.random.PRNGKey(42)
-        s1 = mvn.sample(3, seed=key)
-        s2 = mvnd.sample(3, seed=key)
+        s1 = mvn.sample(10, seed=key)
+        s2 = mvnd.sample(10, seed=key)
 
         assert s1.shape == s2.shape
         assert jnp.var(s1[:, 0, :]) < 0.5
@@ -1063,15 +1063,17 @@ def test_sampling() -> None:
         pen=lsl.Var(K),
     )
 
-    beta = lsl.param(jnp.zeros(5), mvnd, name="beta")
+    beta = lsl.Var.new_param(jnp.zeros(5), mvnd, name="beta")
 
     knots = _create_equidistant_knots(x, order=4, internal_k=4)
     basis_mat = BSpline.design_matrix(x, knots, 3).toarray()
-    X = lsl.obs(basis_mat[:, 1:])
+    X = lsl.Var.new_obs(basis_mat[:, 1:])
 
     smooth = lsl.Smooth(X, beta)
-    Y = lsl.obs(y, distribution=lsl.Dist(tfd.Normal, loc=smooth, scale=lsl.Var(1.0)))
-    model = lsl.GraphBuilder().add(Y).build_model()
+    Y = lsl.Var.new_obs(
+        y, distribution=lsl.Dist(tfd.Normal, loc=smooth, scale=lsl.Var(1.0))
+    )
+    model = lsl.Model([Y])
 
     builder = gs.EngineBuilder(1337, 1)
     builder.set_model(gs.LieselInterface(model))

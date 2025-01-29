@@ -33,7 +33,6 @@ from .nodes import (
     InputGroup,
     Node,
     NodeState,
-    TransientIdentity,
     Value,
     Var,
     VarValue,
@@ -129,7 +128,7 @@ class GraphBuilder:
 
     >>> a = lsl.Var(1.0, name="a")
     >>> b = lsl.Var(2.0, name="b")
-    >>> c = lsl.Var(lsl.Calc(lambda x, y: x + y, a, b), name="c")
+    >>> c = Var.new_calc(lambda x, y: x + y, a, b, name="c")
 
     We now initialize a GraphBuilder and add the root node ``c`` to it:
 
@@ -171,7 +170,14 @@ class GraphBuilder:
         """Adds the model log-likelihood node with the name ``_model_log_lik``."""
 
         if self.log_lik_node:
-            self.add(TransientIdentity(self.log_lik_node, _name="_model_log_lik"))
+            self.add(
+                Calc(
+                    lambda x: x,
+                    self.log_lik_node,
+                    _name="_model_log_lik",
+                    update_on_init=False,
+                )
+            )
             return self
 
         _, _vars = self._all_nodes_and_vars()
@@ -184,7 +190,14 @@ class GraphBuilder:
         """Adds the model log-prior node with the name ``_model_log_prior``."""
 
         if self.log_prior_node:
-            self.add(TransientIdentity(self.log_prior_node, _name="_model_log_prior"))
+            self.add(
+                Calc(
+                    lambda x: x,
+                    self.log_prior_node,
+                    _name="_model_log_prior",
+                    update_on_init=False,
+                )
+            )
             return self
 
         _, _vars = self._all_nodes_and_vars()
@@ -199,7 +212,14 @@ class GraphBuilder:
         """Adds the model log-probability node with the name ``_model_log_prob``."""
 
         if self.log_prob_node:
-            self.add(TransientIdentity(self.log_prob_node, _name="_model_log_prob"))
+            self.add(
+                Calc(
+                    lambda x: x,
+                    self.log_prob_node,
+                    _name="_model_log_prob",
+                    update_on_init=False,
+                )
+            )
             return self
 
         nodes, _ = self._all_nodes_and_vars()
@@ -321,7 +341,7 @@ class GraphBuilder:
 
         >>> a = lsl.Var(1.0, name="a")
         >>> b = lsl.Var(2.0, name="b")
-        >>> c = lsl.Var(lsl.Calc(lambda x, y: x + y, a, b), name="c")
+        >>> c = Var.new_calc(lambda x, y: x + y, a, b, name="c")
 
         We now initialize a GraphBuilder and add the root node ``c`` to it:
 
@@ -430,7 +450,7 @@ class GraphBuilder:
 
         >>> a = lsl.Var(1.0, name="a")
         >>> b = lsl.Var(2.0, name="b")
-        >>> c = lsl.Var(lsl.Calc(lambda x, y: x + y, a, b), name="c")
+        >>> c = Var.new_calc(lambda x, y: x + y, a, b, name="c")
 
         We now initialize a GraphBuilder and add the root node ``c`` to it:
 
@@ -470,6 +490,11 @@ class GraphBuilder:
 
         for var in _vars:
             if var.auto_transform:
+                if var.dist_node is None:
+                    raise RuntimeError(
+                        f"Auto-transform of {var} failed, because it has no"
+                        " distribution, which means no default bijector can be found."
+                    )
                 tname = f"{var.name}_transformed"
                 if tname in nodes or tname in _vars:
                     raise RuntimeError(
@@ -778,7 +803,7 @@ class GraphBuilder:
         We first set up the parameter var with its distribution:
 
         >>> prior = lsl.Dist(tfd.HalfCauchy, loc=0.0, scale=25.0)
-        >>> scale = lsl.param(1.0, prior, name="scale")
+        >>> scale = lsl.Var.new_param(1.0, prior, name="scale")
 
         Then we create a GraphBuilder and use the ``transform`` method to transform
         the ``scale`` variable.

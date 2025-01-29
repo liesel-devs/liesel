@@ -160,7 +160,7 @@ def finite_discrete_gibbs_kernel(
     ...     name="categorical_var",
     ... )
 
-    >>> model = lsl.GraphBuilder().add(categorical_var).build_model()
+    >>> model = lsl.Model([categorical_var])
     >>> kernel = finite_discrete_gibbs_kernel("categorical_var", model)
     >>> type(kernel)
     <class 'liesel.goose.gibbs.GibbsKernel'>
@@ -174,7 +174,7 @@ def finite_discrete_gibbs_kernel(
     ...     name="dummy_var",
     ... )
 
-    >>> model = lsl.GraphBuilder().add(dummy_var).build_model()
+    >>> model = lsl.Model([dummy_var])
     >>> kernel = finite_discrete_gibbs_kernel("dummy_var", model, outcomes=[0, 1])
     >>> type(kernel)
     <class 'liesel.goose.gibbs.GibbsKernel'>

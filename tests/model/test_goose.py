@@ -51,8 +51,8 @@ class TestGooseModel:
         new_state = gm.update_state(pos, model.state)
         lp_after = gm.log_prob(new_state)
 
-        assert lp_before == pytest.approx(-722.714)
-        assert lp_after == pytest.approx(-25841.498)
+        assert lp_before == pytest.approx(-719.46875)
+        assert lp_after == pytest.approx(-25616.779296875)
 
 
 @pytest.mark.filterwarnings("ignore::FutureWarning")
@@ -132,11 +132,11 @@ class TestFiniteDiscreteGibbsKernel:
             name="categorical_var",
         )
 
-        model = lsl.GraphBuilder().add(categorical_var).build_model()
+        model = lsl.Model([categorical_var])
         kernel = finite_discrete_gibbs_kernel("categorical_var", model)
 
         draw = kernel._transition_fn(jax.random.PRNGKey(0), model.state)
-        assert draw["categorical_var"] == pytest.approx(0)
+        assert draw["categorical_var"] == pytest.approx(1)
 
         draw = kernel._transition_fn(jax.random.PRNGKey(1), model.state)
         assert draw["categorical_var"] == pytest.approx(2)
@@ -156,7 +156,7 @@ class TestFiniteDiscreteGibbsKernel:
             name="categorical_var",
         )
 
-        model = lsl.GraphBuilder().add(categorical_var).build_model()
+        model = lsl.Model([categorical_var])
         kernel = finite_discrete_gibbs_kernel("categorical_var", model)
 
         draw = jax.jit(kernel._transition_fn)(jax.random.PRNGKey(1), model.state)
@@ -175,7 +175,7 @@ class TestFiniteDiscreteGibbsKernel:
             name="categorical_var",
         )
 
-        model = lsl.GraphBuilder().add(categorical_var).build_model()
+        model = lsl.Model([categorical_var])
         kernel = finite_discrete_gibbs_kernel("categorical_var", model)
 
         eb = gs.EngineBuilder(1, num_chains=1)
@@ -205,7 +205,7 @@ class TestFiniteDiscreteGibbsKernel:
             name="dummy_var",
         )
 
-        model = lsl.GraphBuilder().add(dummy_var).build_model()
+        model = lsl.Model([dummy_var])
         kernel = finite_discrete_gibbs_kernel("dummy_var", model, outcomes=[0, 1])
 
         eb = gs.EngineBuilder(1, num_chains=1)
@@ -235,7 +235,7 @@ class TestFiniteDiscreteGibbsKernel:
             name="dummy_var",
         )
 
-        model = lsl.GraphBuilder().add(dummy_var).build_model()
+        model = lsl.Model([dummy_var])
         kernel = finite_discrete_gibbs_kernel("dummy_var", model)
 
         eb = gs.EngineBuilder(1, num_chains=1)

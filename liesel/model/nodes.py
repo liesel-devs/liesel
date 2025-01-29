@@ -399,6 +399,7 @@ class Node(ABC):
     @property
     def _loc(self) -> dict[str, Node | Var]:
         input_dict: dict[str, Node | Var] = {}
+
         for key, input_ in self.kwinputs.items():
             if isinstance(input_, VarValue):
                 # This should not happen in practice, but the check makes mypy happy.
@@ -411,10 +412,35 @@ class Node(ABC):
         return input_dict
 
     def __getitem__(self, key: int | str) -> Node | Var:
+
         if isinstance(key, int):
-            return self._iloc[key]
+            try:
+                return self._iloc[key]
+            except IndexError as error:
+                available_indices = {
+                    idx: self._iloc[idx] for idx in range(len(self._iloc))
+                }
+                available_keywords = str(self._loc).replace("'", '"')
+                msg = (
+                    f"{key} is out of bounds. Available index-variable pairs:"
+                    f" {available_indices}. Available keyword-variable pairs:"
+                    f" {available_keywords}."
+                )
+                raise IndexError(msg) from error
         elif isinstance(key, str):
-            return self._loc[key]
+            try:
+                return self._loc[key]
+            except KeyError as error:
+                available_indices = {
+                    idx: self._iloc[idx] for idx in range(len(self._iloc))
+                }
+                available_keywords = str(self._loc).replace("'", '"')
+                msg = (
+                    f"{key} not found. Available index-variable pairs:"
+                    f" {available_indices}. Available keyword-variable pairs:"
+                    f" {available_keywords}."
+                )
+                raise KeyError(msg) from error
         else:
             raise ValueError(f"Key must be str or int, not {type(key)}.")
 
@@ -583,7 +609,7 @@ class Value(Node):
 
     Adding this node to a model leads to an automatically generated name:
 
-    >>> model = lsl.GraphBuilder().add(nameless_node).build_model()
+    >>> model = lsl.Model([nameless_node])
     >>> nameless_node
     Value(name="n0")
 
@@ -704,7 +730,7 @@ class Calc(Node):
 
     A simple calculator node, taking the exponential value of an input parameter.
 
-    >>> log_scale = lsl.param(0.0, name="log_scale")
+    >>> log_scale = lsl.Var.new_param(0.0, name="log_scale")
     >>> scale = lsl.Calc(jnp.exp, log_scale)
     >>> print(scale.value)
     1.0
@@ -720,7 +746,7 @@ class Calc(Node):
 
     >>> def compute_variance(x):
     ...     return jnp.exp(x)**2
-    >>> log_scale = lsl.param(0.0, name="log_scale")
+    >>> log_scale = lsl.Var.new_param(0.0, name="log_scale")
     >>> variance = lsl.Calc(compute_variance, log_scale).update()
     >>> print(variance.value)
     1.0
@@ -740,8 +766,9 @@ class Calc(Node):
     ):
         super().__init__(*inputs, **kwinputs, _name=_name, _needs_seed=_needs_seed)
         self._function = function
+        self.update_on_init = update_on_init
 
-        if update_on_init:
+        if self.update_on_init:
             try:
                 self.update()
             except Exception as e:
@@ -869,7 +896,7 @@ class Dist(Node):
 
 
     >>> dist = lsl.Dist(tfd.Normal, loc=0.0, scale=1.0)
-    >>> y = lsl.obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y")
+    >>> y = lsl.Var.new_obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y")
     >>> print(y.log_prob)
     None
 
@@ -881,10 +908,10 @@ class Dist(Node):
     Now we define the same observation model, but include the location and scale
     as parameters:
 
-    >>> loc = lsl.param(0.0, name="loc")
-    >>> scale = lsl.param(1.0, name="scale")
+    >>> loc = lsl.Var.new_param(0.0, name="loc")
+    >>> scale = lsl.Var.new_param(1.0, name="scale")
     >>> dist = lsl.Dist(tfd.Normal, loc=loc, scale=scale)
-    >>> y = lsl.obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y").update()
+    >>> y = lsl.Var.new_obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y").update()
     >>> y.log_prob
     Array([-1.0439385, -0.9189385, -1.0439385], dtype=float32)
 
@@ -1563,7 +1590,7 @@ class Var:
         We first set up the parameter var with its distribution:
 
         >>> prior = lsl.Dist(tfd.HalfCauchy, loc=0.0, scale=25.0)
-        >>> scale = lsl.param(1.0, prior, name="scale")
+        >>> scale = lsl.Var.new_param(1.0, prior, name="scale")
 
         The we transform the variable to the log-scale:
 
@@ -1580,11 +1607,8 @@ class Var:
         >>> scale.update().log_prob
         0.0
         """
-        if self.weak:
-            raise RuntimeError(f"{repr(self)} is weak")
-
-        if self.dist_node is None:  # type: ignore
-            raise RuntimeError(f"{repr(self)} has no distribution")
+        # if self.weak:
+        #     raise RuntimeError(f"{repr(self)} is weak")
 
         if is_bijector_class(bijector) and not (bijector_args or bijector_kwargs):
             raise ValueError(
@@ -1592,6 +1616,23 @@ class Var:
                 "provide any arguments for the bijector. You should either provide "
                 "arguments or pass an instance of the bijector class instead."
             )
+
+        if self.dist_node is None and is_bijector_class(bijector):
+            tvar = _transform_var_without_dist_with_bijector_class(
+                self, bijector, *bijector_args, **bijector_kwargs
+            )
+            tvar.parameter = self.parameter  # type: ignore
+            self.parameter = False
+            return tvar
+
+        elif self.dist_node is None:
+            tvar = _transform_var_without_dist_with_bijector_instance(self, bijector)
+            tvar.parameter = self.parameter  # type: ignore
+            self.parameter = False
+            return tvar
+
+        if self.dist_node is None:  # type: ignore
+            raise RuntimeError(f"{repr(self)} has no distribution")
 
         # avoid infinite recursion
         self.auto_transform = False
@@ -2112,11 +2153,43 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
 
     transformed_dist.per_obs = var.dist_node.per_obs
 
-    transformed_var = Var(
-        bijector_inv.forward(var.value),
-        transformed_dist,
-        name=f"{var.name}_transformed",
-    )
+    if var.weak:
+        try:
+            value_function = var.value_node.function  # type: ignore
+        except AttributeError as e:
+            raise AttributeError(
+                "Trying to transform a weak variable without calculator node."
+            ) from e
+
+        def forward(*args, **kwargs):
+            return bijector_inv.forward(value_function(*args, **kwargs))
+
+        value_inputs = var.value_node.inputs
+        value_kwinputs = var.value_node.kwinputs
+        value_node_needs_seed = var.value_node.needs_seed
+        try:
+            value_node_upadte_on_init = var.value_node.update_on_init  # type: ignore
+        except AttributeError as e:
+            raise e
+
+        transformed_var = Var(
+            Calc(
+                forward,
+                *value_inputs,
+                _name="",
+                _needs_seed=value_node_needs_seed,
+                update_on_init=value_node_upadte_on_init,
+                **value_kwinputs,
+            ),
+            transformed_dist,
+            name=f"{var.name}_transformed",
+        )
+    else:
+        transformed_var = Var(
+            bijector_inv.forward(var.value),
+            transformed_dist,
+            name=f"{var.name}_transformed",
+        )
 
     var.value_node = Calc(bijector_inst.forward, transformed_var)
     return transformed_var
@@ -2167,17 +2240,118 @@ def _transform_var_with_bijector_class(
 
     bijector_inv = dist_node_transformed.init_dist().bijector
 
-    transformed_var = Var(
-        bijector_inv.forward(var.value),
-        dist_node_transformed,
-        name=f"{var.name}_transformed",
-    )
+    if var.weak:
+        try:
+            value_function = var.value_node.function  # type: ignore
+        except AttributeError as e:
+            raise AttributeError(
+                "Trying to transform a weak variable without calculator node."
+            ) from e
+
+        def forward(*args, **kwargs):
+            return bijector_inv.forward(value_function(*args, **kwargs))
+
+        value_inputs = var.value_node.inputs
+        value_kwinputs = var.value_node.kwinputs
+        value_node_needs_seed = var.value_node.needs_seed
+        try:
+            value_node_upadte_on_init = var.value_node.update_on_init  # type: ignore
+        except AttributeError as e:
+            raise e
+
+        transformed_var = Var(
+            Calc(
+                forward,
+                *value_inputs,
+                _name="",
+                _needs_seed=value_node_needs_seed,
+                update_on_init=value_node_upadte_on_init,
+                **value_kwinputs,
+            ),
+            dist_node_transformed,
+            name=f"{var.name}_transformed",
+        )
+    else:
+        transformed_var = Var(
+            bijector_inv.forward(var.value),
+            dist_node_transformed,
+            name=f"{var.name}_transformed",
+        )
 
     def bijector_fn(value, dist_inputs, bijector_inputs):
         bijector = transform_dist(dist_inputs, bijector_inputs).bijector
         return bijector.inverse(value)
 
     var.value_node = Calc(bijector_fn, transformed_var, dist_inputs, bijector_inputs)
+
+    return transformed_var
+
+
+def _transform_var_without_dist_with_bijector_instance(
+    var: Var, bijector_inst: jb.Bijector
+) -> Var:
+    if var.strong:
+        transformed_var = Var(
+            bijector_inst.inverse(var.value),
+            name=f"{var.name}_transformed",
+        )
+    else:
+        transformed_var = Var.new_calc(
+            bijector_inst.inverse,
+            var.value_node,
+            name=f"{var.name}_transformed",
+        )
+
+    var.value_node = Calc(bijector_inst.forward, transformed_var)
+
+    return transformed_var
+
+
+def _transform_var_without_dist_with_bijector_class(
+    var: Var, bijector_cls: type[jb.Bijector] | None, *args, **kwargs
+) -> Var:
+    def bijection_inverse(x, *bjargs, **bjkwargs):
+        # this somewhat over-complicated functionality accounts for bijector
+        # arguments being passed directly as values, or as Liesel Vars and Nodes.
+        # This inverse is executed only once in the initialization of the transformed
+        # variable.
+        arg_values = []
+        for arg in bjargs:
+            try:
+                arg_values.append(arg.value)
+            except AttributeError:
+                arg_values.append(arg)
+
+        kwarg_values = {}
+        for key, val in bjkwargs.items():
+            try:
+                kwarg_values[key] = val.value
+            except AttributeError:
+                kwarg_values[key] = val
+
+        bijector_inst = bijector_cls(*arg_values, **kwarg_values)
+        bijector_inv = jb.Invert(bijector_inst)
+        return bijector_inv(x)
+
+    def bijection_forward(x, *bjargs, **bjkwargs):
+        bijector_inst = bijector_cls(*bjargs, **bjkwargs)
+        return bijector_inst(x)
+
+    if var.strong:
+        transformed_var = Var(
+            bijection_inverse(var.value, *args, **kwargs),
+            name=f"{var.name}_transformed",
+        )
+    else:
+        transformed_var = Var.new_calc(
+            bijection_inverse,
+            var.value_node,
+            *args,
+            **kwargs,
+            name=f"{var.name}_transformed",
+        )
+
+    var.value_node = Calc(bijection_forward, transformed_var, *args, **kwargs)
 
     return transformed_var
 
@@ -2235,13 +2409,13 @@ def obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> 
     model:
 
     >>> dist = lsl.Dist(tfd.Normal, loc=0.0, scale=1.0)
-    >>> y = lsl.obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y")
+    >>> y = lsl.Var.new_obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y")
     >>> y
     Var(name="y")
 
     Now we build the model graph:
 
-    >>> model = lsl.GraphBuilder().add(y).build_model()
+    >>> model = lsl.Model([y])
 
     The log-likelihood of the model is the sum of the log-probabilities of all observed
     variables. In this case this is only our ``y`` variable:
@@ -2308,7 +2482,7 @@ def param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -
     A variance parameter with an inverse-gamma prior:
 
     >>> prior = lsl.Dist(tfd.InverseGamma, concentration=0.1, scale=0.1)
-    >>> variance = lsl.param(1.0, prior, name="variance")
+    >>> variance = lsl.Var.new_param(1.0, prior, name="variance")
     >>> variance
     Var(name="variance")
 
@@ -2316,13 +2490,13 @@ def param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -
 
     >>> scale = lsl.Calc(jnp.sqrt, variance)
     >>> dist = lsl.Dist(tfd.Normal, loc=0.0, scale=scale)
-    >>> y = lsl.obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y")
+    >>> y = lsl.Var.new_obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y")
     >>> y
     Var(name="y")
 
     Now we can build the model graph:
 
-    >>> model = lsl.GraphBuilder().add(y).build_model()
+    >>> model = lsl.Model([y])
 
     The log_prior of the model is the sum of the log-priors of all parameters. In this
     case this is only our ``variance`` parameter:

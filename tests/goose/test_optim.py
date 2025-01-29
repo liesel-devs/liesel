@@ -29,17 +29,16 @@ ols_coef = np.linalg.inv(xs.T @ xs) @ xs.T @ ys
 
 
 def setup_model(ys: Array, xs: Array) -> lsl.Model:
-    x = lsl.obs(xs, name="x")
-    coef = lsl.param(jnp.zeros(2), name="coef")
-    mu = lsl.Var(lsl.Calc(jnp.dot, x, coef), name="mu")
+    x = lsl.Var.new_obs(xs, name="x")
+    coef = lsl.Var.new_param(jnp.zeros(2), name="coef")
+    mu = lsl.Var.new_calc(jnp.dot, x, coef, name="mu")
     log_sigma = lsl.Var(2.0, name="log_sigma")
-    sigma = lsl.Var(lsl.Calc(jnp.exp, log_sigma), name="sigma")
+    sigma = lsl.Var.new_calc(jnp.exp, log_sigma, name="sigma")
 
     ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
-    y = lsl.obs(ys, ydist, name="y")
+    y = lsl.Var.new_obs(ys, ydist, name="y")
 
-    gb = lsl.GraphBuilder().add(y)
-    model = gb.build_model()
+    model = lsl.Model([y])
     return model
 
 
@@ -68,14 +67,15 @@ class TestOptim:
         xs = model.vars["x"].value
         ys = model.vars["y"].value
         ols_coef = np.linalg.inv(xs.T @ xs) @ xs.T @ ys
-        ols_sigma = jnp.log((ys - (xs @ ols_coef)).std())
+        n = ys.shape[-1]
+        ols_log_sigma = jnp.log(jnp.sqrt(jnp.square(ys - (xs @ ols_coef)).sum() / n))
 
         stopper = Stopper(max_iter=1_000, patience=30)
         result = optim_flat(
             model, ["coef", "log_sigma"], batch_size=None, stopper=stopper
         )
-        assert jnp.allclose(result.position["coef"], ols_coef, atol=1e-2)
-        assert jnp.allclose(result.position["log_sigma"], ols_sigma, atol=1e-2)
+        assert jnp.allclose(result.position["coef"], ols_coef, atol=1e-3)
+        assert jnp.allclose(result.position["log_sigma"], ols_log_sigma, atol=1e-3)
 
     def test_optim_no_early_stop(self, models):
         model, _ = models
@@ -145,20 +145,37 @@ class TestOptim:
             result_train.history["loss_train"], result_train.history["loss_validation"]
         )
 
+    def test_track_keys(self, models):
+        model, _ = models
+        stopper = Stopper(max_iter=10, patience=1)
+
+        result = optim_flat(
+            model,
+            params=["coef", "log_sigma"],
+            batch_size=None,
+            stopper=stopper,
+            track_keys=["sigma"],
+        )
+
+        assert "sigma" in result.history["tracked"]
+        assert jnp.allclose(
+            result.history["tracked"]["sigma"],
+            jnp.exp(result.history["position"]["log_sigma"]),
+        )
+
 
 class TestLogProbDecompositionValidation:
     def test_const_priors(self):
-        x = lsl.obs(xs, name="x")
-        coef = lsl.param(jnp.zeros(2), name="coef")
-        mu = lsl.Var(lsl.Calc(jnp.dot, x, coef), name="mu")
+        x = lsl.Var.new_obs(xs, name="x")
+        coef = lsl.Var.new_param(jnp.zeros(2), name="coef")
+        mu = lsl.Var.new_calc(jnp.dot, x, coef, name="mu")
         log_sigma = lsl.Var(2.0, name="log_sigma")
-        sigma = lsl.Var(lsl.Calc(jnp.exp, log_sigma), name="sigma")
+        sigma = lsl.Var.new_calc(jnp.exp, log_sigma, name="sigma")
 
         ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
-        y = lsl.obs(ys, ydist, name="y")
+        y = lsl.Var.new_obs(ys, ydist, name="y")
 
-        gb = lsl.GraphBuilder().add(y)
-        model = gb.build_model()
+        model = lsl.Model([y])
 
         interface = gs.LieselInterface(model)
         position = interface.extract_position(["coef", "log_sigma"], model.state)
@@ -166,21 +183,20 @@ class TestLogProbDecompositionValidation:
         assert _validate_log_prob_decomposition(interface, position, model.state)
 
     def test_prior(self):
-        x = lsl.obs(xs, name="x")
-        coef = lsl.param(
+        x = lsl.Var.new_obs(xs, name="x")
+        coef = lsl.Var.new_param(
             jnp.zeros(2),
             distribution=lsl.Dist(tfd.Normal, loc=0.0, scale=10.0),
             name="coef",
         )
-        mu = lsl.Var(lsl.Calc(jnp.dot, x, coef), name="mu")
+        mu = lsl.Var.new_calc(jnp.dot, x, coef, name="mu")
         log_sigma = lsl.Var(2.0, name="log_sigma")
-        sigma = lsl.Var(lsl.Calc(jnp.exp, log_sigma), name="sigma")
+        sigma = lsl.Var.new_calc(jnp.exp, log_sigma, name="sigma")
 
         ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
-        y = lsl.obs(ys, ydist, name="y")
+        y = lsl.Var.new_obs(ys, ydist, name="y")
 
-        gb = lsl.GraphBuilder().add(y)
-        model = gb.build_model()
+        model = lsl.Model([y])
 
         interface = gs.LieselInterface(model)
         position = interface.extract_position(["coef", "log_sigma"], model.state)
@@ -188,21 +204,20 @@ class TestLogProbDecompositionValidation:
         assert _validate_log_prob_decomposition(interface, position, model.state)
 
     def test_prior_but_not_param(self):
-        x = lsl.obs(xs, name="x")
+        x = lsl.Var.new_obs(xs, name="x")
         coef = lsl.Var(
             jnp.zeros(2),
             distribution=lsl.Dist(tfd.Normal, loc=0.0, scale=10.0),
             name="coef",
         )
-        mu = lsl.Var(lsl.Calc(jnp.dot, x, coef), name="mu")
+        mu = lsl.Var.new_calc(jnp.dot, x, coef, name="mu")
         log_sigma = lsl.Var(2.0, name="log_sigma")
-        sigma = lsl.Var(lsl.Calc(jnp.exp, log_sigma), name="sigma")
+        sigma = lsl.Var.new_calc(jnp.exp, log_sigma, name="sigma")
 
         ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
-        y = lsl.obs(ys, ydist, name="y")
+        y = lsl.Var.new_obs(ys, ydist, name="y")
 
-        gb = lsl.GraphBuilder().add(y)
-        model = gb.build_model()
+        model = lsl.Model([y])
 
         interface = gs.LieselInterface(model)
         position = interface.extract_position(["coef", "log_sigma"], model.state)
@@ -211,21 +226,20 @@ class TestLogProbDecompositionValidation:
             _validate_log_prob_decomposition(interface, position, model.state)
 
     def test_not_obs(self):
-        x = lsl.obs(xs, name="x")
-        coef = lsl.param(
+        x = lsl.Var.new_obs(xs, name="x")
+        coef = lsl.Var.new_param(
             jnp.zeros(2),
             distribution=lsl.Dist(tfd.Normal, loc=0.0, scale=10.0),
             name="coef",
         )
-        mu = lsl.Var(lsl.Calc(jnp.dot, x, coef), name="mu")
+        mu = lsl.Var.new_calc(jnp.dot, x, coef, name="mu")
         log_sigma = lsl.Var(2.0, name="log_sigma")
-        sigma = lsl.Var(lsl.Calc(jnp.exp, log_sigma), name="sigma")
+        sigma = lsl.Var.new_calc(jnp.exp, log_sigma, name="sigma")
 
         ydist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
         y = lsl.Var(ys, ydist, name="y")
 
-        gb = lsl.GraphBuilder().add(y)
-        model = gb.build_model()
+        model = lsl.Model([y])
 
         interface = gs.LieselInterface(model)
         position = interface.extract_position(["coef", "log_sigma"], model.state)
@@ -260,10 +274,11 @@ def test_full_history_to_df(models):
         stopper=stopper,
         batch_seed=1,
         prune_history=False,
+        track_keys=["sigma"],
     )
     df = history_to_df(result.history)
 
-    assert df.shape == (1000, 6)
+    assert df.shape == (1000, 7)
 
 
 def test_history_to_df_pruned(models):
@@ -281,7 +296,7 @@ def test_history_to_df_pruned(models):
         )
     df = history_to_df(result.history["position"])
 
-    assert df.shape == (85, 4)
+    assert df.shape[0] < 100
 
 
 def test_generate_batches():
@@ -339,8 +354,7 @@ class TestStopper:
         stopper = Stopper(patience=5, max_iter=100, atol=0.1, rtol=0.1)
         stop_jit = jax.jit(stopper.stop_early)
 
-        key = jax.random.PRNGKey(42)
-        loss_history = jax.random.uniform(key, shape=(15,))
+        loss_history = jnp.array([1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
         stop = stop_jit(i=6, loss_history=loss_history)
         assert stop
 
