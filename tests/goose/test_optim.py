@@ -67,14 +67,15 @@ class TestOptim:
         xs = model.vars["x"].value
         ys = model.vars["y"].value
         ols_coef = np.linalg.inv(xs.T @ xs) @ xs.T @ ys
-        ols_sigma = jnp.log((ys - (xs @ ols_coef)).std())
+        n = ys.shape[-1]
+        ols_log_sigma = jnp.log(jnp.sqrt(jnp.square(ys - (xs @ ols_coef)).sum() / n))
 
         stopper = Stopper(max_iter=1_000, patience=30)
         result = optim_flat(
             model, ["coef", "log_sigma"], batch_size=None, stopper=stopper
         )
-        assert jnp.allclose(result.position["coef"], ols_coef, atol=1e-2)
-        assert jnp.allclose(result.position["log_sigma"], ols_sigma, atol=1e-2)
+        assert jnp.allclose(result.position["coef"], ols_coef, atol=1e-3)
+        assert jnp.allclose(result.position["log_sigma"], ols_log_sigma, atol=1e-3)
 
     def test_optim_no_early_stop(self, models):
         model, _ = models
@@ -353,8 +354,7 @@ class TestStopper:
         stopper = Stopper(patience=5, max_iter=100, atol=0.1, rtol=0.1)
         stop_jit = jax.jit(stopper.stop_early)
 
-        key = jax.random.PRNGKey(42)
-        loss_history = jax.random.uniform(key, shape=(15,))
+        loss_history = jnp.array([1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
         stop = stop_jit(i=6, loss_history=loss_history)
         assert stop
 

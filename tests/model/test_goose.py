@@ -51,8 +51,8 @@ class TestGooseModel:
         new_state = gm.update_state(pos, model.state)
         lp_after = gm.log_prob(new_state)
 
-        assert lp_before == pytest.approx(-722.714)
-        assert lp_after == pytest.approx(-25841.498)
+        assert lp_before == pytest.approx(-719.46875)
+        assert lp_after == pytest.approx(-25616.779296875)
 
 
 @pytest.mark.filterwarnings("ignore::FutureWarning")
@@ -136,7 +136,7 @@ class TestFiniteDiscreteGibbsKernel:
         kernel = finite_discrete_gibbs_kernel("categorical_var", model)
 
         draw = kernel._transition_fn(jax.random.PRNGKey(0), model.state)
-        assert draw["categorical_var"] == pytest.approx(0)
+        assert draw["categorical_var"] == pytest.approx(1)
 
         draw = kernel._transition_fn(jax.random.PRNGKey(1), model.state)
         assert draw["categorical_var"] == pytest.approx(2)

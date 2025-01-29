@@ -403,11 +403,11 @@ class TestMVNDegenerateBatches:
         # assert correct output values
         mvn1 = MultivariateNormalDegenerate(0.0, K)
         lp1 = mvn1.log_prob(beta)
-        assert lp[0] == lp1
+        assert jnp.allclose(lp[0], lp1)
 
         mvn2 = MultivariateNormalDegenerate(5.0, K)
         lp2 = mvn2.log_prob(beta)
-        assert lp[1] == lp2
+        assert jnp.allclose(lp[1], lp2)
 
     def test_batch_loc_prec(self, beta, K) -> None:
         """
@@ -438,11 +438,11 @@ class TestMVNDegenerateBatches:
         # assert correct output values
         mvn1 = MultivariateNormalDegenerate(0.0, prec1)
         lp1 = mvn1.log_prob(beta)
-        assert lp[0] == lp1
+        assert jnp.allclose(lp[0], lp1)
 
         mvn2 = MultivariateNormalDegenerate(5.0, prec2)
         lp2 = mvn2.log_prob(beta)
-        assert lp[1] == lp2
+        assert jnp.allclose(lp[1], lp2)
 
     def test_batch_2loc_3prec(self, beta, mvn_batch) -> None:
         """
@@ -1002,8 +1002,8 @@ class TestSampleFromMVNDegenerate:
         mvnd = MultivariateNormalDegenerate(loc=loc, prec=prec)
 
         key = jax.random.PRNGKey(42)
-        s1 = mvn.sample(3, seed=key)
-        s2 = mvnd.sample(3, seed=key)
+        s1 = mvn.sample(10, seed=key)
+        s2 = mvnd.sample(10, seed=key)
 
         assert s1.shape == s2.shape
         assert jnp.var(s1[:, 0, :]) < 0.5

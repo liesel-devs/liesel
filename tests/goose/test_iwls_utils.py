@@ -37,7 +37,7 @@ def test_mvn_log_prob():
 
 def test_mvn_random():
     n = 5
-    m = 100_000
+    m = 200_000
     seed = 42
 
     cov = rng.uniform(size=(n, n))
