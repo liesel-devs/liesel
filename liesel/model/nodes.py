@@ -1960,7 +1960,7 @@ class Var:
         return f'{type(self).__name__}(name="{self.name}")'
 
     def _plot(
-        self, which: Literal["vars", "nodes"] = "vars", verbose: bool = True, **kwargs
+        self, which: Literal["vars", "nodes"] = "vars", verbose: bool = False, **kwargs
     ) -> None:
 
         if self.model is not None:
@@ -1982,17 +1982,25 @@ class Var:
         automatically_set_names = gb._set_missing_names()
         var_names = automatically_set_names["vars"]
         node_names = automatically_set_names["nodes"]
-        if var_names and verbose:
+        if var_names:
+            if verbose:
+                names_ = f"The automatically assigned names are: {var_names}. "
+            else:
+                names_ = ""
             logger.info(
-                "Unnamed variables were temporarily named for plotting. The"
-                f" automatically assigned names are: {var_names}. The names are reset"
+                f"Unnamed variables were temporarily named for plotting. {names_}"
+                "The names are reset"
                 " after plotting."
             )
-        if node_names and verbose:
+        if node_names:
+            if verbose:
+                names_ = f"The automatically assigned names are: {node_names}. "
+            else:
+                names_ = ""
             logger.info(
-                "Unnamed nodes were temporarily named for plottingThe automatically"
-                f" assigned names are: {node_names}. The names are reset after"
-                " plotting."
+                f"Unnamed nodes were temporarily named for plotting. {names_}"
+                "The names are reset"
+                " after plotting."
             )
 
         model = gb.build_model()
@@ -2024,7 +2032,6 @@ class Var:
 
     def plot_vars(
         self,
-        verbose: bool = True,
         show: bool = True,
         save_path: str | None | IO = None,
         width: int = 14,
@@ -2032,6 +2039,7 @@ class Var:
         prog: Literal[
             "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
         ] = "dot",
+        verbose: bool = False,
     ) -> None:
         """
         Plots the variables of the Liesel sub-model that terminates in this variable.
@@ -2054,6 +2062,10 @@ class Var:
         prog
             Layout parameter. Available layouts: circo, dot (the default), fdp, neato, \
             osage, patchwork, sfdp, twopi.
+        verbose
+            If ``True``, the message that will be logged if unnamed nodes are \
+            automatically named for plotting contains a list of the automatically \
+            assigned names.
 
         See Also
         --------
@@ -2078,7 +2090,6 @@ class Var:
 
     def plot_nodes(
         self,
-        verbose: bool = True,
         show: bool = True,
         save_path: str | None | IO = None,
         width: int = 14,
@@ -2086,6 +2097,7 @@ class Var:
         prog: Literal[
             "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
         ] = "dot",
+        verbose: bool = False,
     ) -> None:
         """
         Plots the nodes of the Liesel sub-model that terminates in this variable.
@@ -2108,6 +2120,10 @@ class Var:
         prog
             Layout parameter. Available layouts: circo, dot (the default), fdp, neato, \
             osage, patchwork, sfdp, twopi.
+        verbose
+            If ``True``, the message that will be logged if unnamed nodes are \
+            automatically named for plotting contains a list of the automatically \
+            assigned names.
 
         See Also
         --------
