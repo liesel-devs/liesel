@@ -12,7 +12,16 @@ from collections.abc import Callable, Hashable, Iterable
 from functools import wraps
 from itertools import chain
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, NamedTuple, TypeGuard, TypeVar, Union
+from typing import (
+    IO,
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    NamedTuple,
+    TypeGuard,
+    TypeVar,
+    Union,
+)
 
 import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as jd
@@ -20,6 +29,7 @@ import tensorflow_probability.substrates.numpy.bijectors as nb
 import tensorflow_probability.substrates.numpy.distributions as nd
 
 from ..distributions.nodist import NoDistribution
+from .viz import plot_nodes, plot_vars
 
 if TYPE_CHECKING:
     from .model import Model
@@ -1948,6 +1958,192 @@ class Var:
 
     def __repr__(self) -> str:
         return f'{type(self).__name__}(name="{self.name}")'
+
+    def _plot(
+        self, which: Literal["vars", "nodes"] = "vars", verbose: bool = False, **kwargs
+    ) -> None:
+
+        if self.model is not None:
+            match which:
+                case "vars":
+                    subgraph = self.model.var_parental_subgraph(self)
+                    return plot_vars(subgraph, **kwargs)
+                case "nodes":
+                    self_nodes = [self.value_node, self.dist_node, self.var_value_node]
+                    filtered_nodes = [nd for nd in self_nodes if nd is not None]
+                    subgraph = self.model.node_parental_subgraph(*filtered_nodes)
+                    return plot_nodes(subgraph, **kwargs)
+
+        from liesel.model import GraphBuilder
+
+        gb = GraphBuilder().add(self)
+        nodes, _vars = gb._all_nodes_and_vars()
+
+        automatically_set_names = gb._set_missing_names()
+        var_names = automatically_set_names["vars"]
+        node_names = automatically_set_names["nodes"]
+        if var_names:
+            if verbose:
+                names_ = f"The automatically assigned names are: {var_names}. "
+            else:
+                names_ = ""
+            logger.info(
+                f"Unnamed variables were temporarily named for plotting. {names_}"
+                "The names are reset"
+                " after plotting."
+            )
+        if node_names:
+            if verbose:
+                names_ = f"The automatically assigned names are: {node_names}. "
+            else:
+                names_ = ""
+            logger.info(
+                f"Unnamed nodes were temporarily named for plotting. {names_}"
+                "The names are reset"
+                " after plotting."
+            )
+
+        model = gb.build_model()
+
+        match which:
+            case "vars":
+                subgraph = model.var_parental_subgraph(self)
+                plot_vars(subgraph, **kwargs)
+            case "nodes":
+                self_nodes = [self.value_node, self.dist_node, self.var_value_node]
+                filtered_nodes = [nd for nd in self_nodes if nd is not None]
+                subgraph = model.node_parental_subgraph(*filtered_nodes)
+                plot_nodes(subgraph, **kwargs)
+
+        model.pop_nodes_and_vars()
+
+        vars_dict = {var_.name: var_ for var_ in _vars}
+        nodes_dict = {node.name: node for node in nodes}
+
+        for name in var_names:
+            vars_dict[name].name = ""
+
+        for name in node_names:
+            nodes_dict[name].name = ""
+
+        gb.nodes.clear()
+        gb.vars.clear()
+
+    def plot_vars(
+        self,
+        show: bool = True,
+        save_path: str | None | IO = None,
+        width: int = 14,
+        height: int = 10,
+        prog: Literal[
+            "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
+        ] = "dot",
+        verbose: bool = False,
+    ) -> None:
+        """
+        Plots the variables of the Liesel sub-model that terminates in this variable.
+
+        Wraps :func:`~.viz.plot_vars`.
+
+        Parameters
+        ----------
+        verbose
+            If ``True``, logs a message if unnamed variables or nodes are temporarily \
+            named for plotting.
+        show
+            Whether to show the plot in a new window.
+        save_path
+            Path to save the plot. If not provided, the plot will not be saved.
+        width
+            Width of the plot in inches.
+        height
+            Height of the plot in inches.
+        prog
+            Layout parameter. Available layouts: circo, dot (the default), fdp, neato, \
+            osage, patchwork, sfdp, twopi.
+        verbose
+            If ``True``, the message that will be logged if unnamed nodes are \
+            automatically named for plotting contains a list of the automatically \
+            assigned names.
+
+        See Also
+        --------
+        .Var.plot_vars : Plots the variables of the Liesel sub-model that terminates in
+            this variable.
+        .Var.plot_nodes : Plots the nodes of the Liesel sub-model that terminates in
+            this variable.
+        .Model.plot_vars : Plots the variables of a Liesel model.
+        .Model.plot_nodes : Plots the nodes of a Liesel model.
+        .viz.plot_vars : Plots the variables of a Liesel model.
+        .viz.plot_nodes : Plots the nodes of a Liesel model.
+        """
+        return self._plot(
+            which="vars",
+            verbose=verbose,
+            show=show,
+            save_path=save_path,
+            width=width,
+            height=height,
+            prog=prog,
+        )
+
+    def plot_nodes(
+        self,
+        show: bool = True,
+        save_path: str | None | IO = None,
+        width: int = 14,
+        height: int = 10,
+        prog: Literal[
+            "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
+        ] = "dot",
+        verbose: bool = False,
+    ) -> None:
+        """
+        Plots the nodes of the Liesel sub-model that terminates in this variable.
+
+        Wraps :func:`~.viz.plot_nodes`.
+
+        Parameters
+        ----------
+        verbose
+            If ``True``, logs a message if unnamed variables or nodes are temporarily \
+            named for plotting.
+        show
+            Whether to show the plot in a new window.
+        save_path
+            Path to save the plot. If not provided, the plot will not be saved.
+        width
+            Width of the plot in inches.
+        height
+            Height of the plot in inches.
+        prog
+            Layout parameter. Available layouts: circo, dot (the default), fdp, neato, \
+            osage, patchwork, sfdp, twopi.
+        verbose
+            If ``True``, the message that will be logged if unnamed nodes are \
+            automatically named for plotting contains a list of the automatically \
+            assigned names.
+
+        See Also
+        --------
+        .Var.plot_vars : Plots the variables of the Liesel sub-model that terminates in
+            this variable.
+        .Var.plot_nodes : Plots the nodes of the Liesel sub-model that terminates in
+            this variable.
+        .Model.plot_vars : Plots the variables of a Liesel model.
+        .Model.plot_nodes : Plots the nodes of a Liesel model.
+        .viz.plot_vars : Plots the variables of a Liesel model.
+        .viz.plot_nodes : Plots the nodes of a Liesel model.
+        """
+        return self._plot(
+            which="nodes",
+            verbose=verbose,
+            show=show,
+            save_path=save_path,
+            width=width,
+            height=height,
+            prog=prog,
+        )
 
 
 def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) -> Var:

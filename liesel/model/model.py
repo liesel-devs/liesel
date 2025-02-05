@@ -11,7 +11,7 @@ from collections import Counter
 from collections.abc import Iterable
 from copy import deepcopy
 from types import MappingProxyType
-from typing import IO, Any, TypeVar
+from typing import IO, Any, Literal, TypeVar
 
 import dill
 import jax
@@ -282,10 +282,12 @@ class GraphBuilder:
         return all_nodes, all_vars
 
     @staticmethod
-    def _do_set_missing_names(nodes_or_vars: Iterable[NV], prefix: str) -> None:
+    def _do_set_missing_names(nodes_or_vars: Iterable[NV], prefix: str) -> list[str]:
         """Sets the missing names for the given nodes or variables."""
         other = [nv.name for nv in nodes_or_vars if nv.name]
         counter = -1
+
+        automatically_set_names = []
 
         for nv in nodes_or_vars:
             if not nv.name:
@@ -296,13 +298,16 @@ class GraphBuilder:
 
                 nv.name = name
                 other.append(name)
+                automatically_set_names.append(name)
 
-    def _set_missing_names(self) -> GraphBuilder:
+        return automatically_set_names
+
+    def _set_missing_names(self) -> dict[str, list[str]]:
         """Sets the missing node and variable names."""
         nodes, _vars = self._all_nodes_and_vars()
-        self._do_set_missing_names(_vars, prefix="v")
-        self._do_set_missing_names(nodes, prefix="n")
-        return self
+        auto_var_names = self._do_set_missing_names(_vars, prefix="v")
+        auto_node_names = self._do_set_missing_names(nodes, prefix="n")
+        return {"vars": auto_var_names, "nodes": auto_node_names}
 
     def add(
         self, *args: Node | Var | GraphBuilder, to_float32: bool | None = None
@@ -1206,6 +1211,29 @@ class Model:
 
         return nodes, _vars
 
+    def node_parental_subgraph(self, *of: Node) -> nx.DiGraph:
+        """
+        Returns a subgraph that consists of the input nodes and their parent nodes.
+        """
+        nodes_to_include = set()
+        for node in of:
+            nodes_to_include.update(nx.ancestors(self.node_graph, node))
+            nodes_to_include.add(node)
+        subgraph = self.node_graph.subgraph(nodes_to_include)
+        return subgraph
+
+    def var_parental_subgraph(self, *of: Var) -> nx.DiGraph:
+        """
+        Returns a subgraph that consists of the input variables and their parent
+        variables.
+        """
+        nodes_to_include = set()
+        for node in of:
+            nodes_to_include.update(nx.ancestors(self.var_graph, node))
+            nodes_to_include.add(node)
+        subgraph = self.var_graph.subgraph(nodes_to_include)
+        return subgraph
+
     @property
     def log_lik(self) -> Array:
         """
@@ -1406,6 +1434,104 @@ class Model:
     def __repr__(self) -> str:
         brackets = f"({len(self._nodes)} nodes, {len(self._vars)} vars)"
         return type(self).__name__ + brackets
+
+    def plot_vars(
+        self,
+        show: bool = True,
+        save_path: str | None | IO = None,
+        width: int = 14,
+        height: int = 10,
+        prog: Literal[
+            "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
+        ] = "dot",
+    ):
+        """
+        Plots the variables of this model.
+
+        Wraps :func:`~.viz.plot_vars`.
+
+        Parameters
+        ----------
+        show
+            Whether to show the plot in a new window.
+        save_path
+            Path to save the plot. If not provided, the plot will not be saved.
+        width
+            Width of the plot in inches.
+        height
+            Height of the plot in inches.
+        prog
+            Layout parameter. Available layouts: circo, dot (the default), fdp, neato, \
+            osage, patchwork, sfdp, twopi.
+
+        See Also
+        --------
+        .Var.plot_vars : Plots the variables of the Liesel sub-model that terminates in
+            this variable.
+        .Var.plot_nodes : Plots the nodes of the Liesel sub-model that terminates in
+            this variable.
+        .Model.plot_vars : Plots the variables of a Liesel model.
+        .Model.plot_nodes : Plots the nodes of a Liesel model.
+        .viz.plot_vars : Plots the variables of a Liesel model.
+        .viz.plot_nodes : Plots the nodes of a Liesel model.
+        """
+        return plot_vars(
+            self,
+            show=show,
+            save_path=save_path,
+            width=width,
+            height=height,
+            prog=prog,
+        )
+
+    def plot_nodes(
+        self,
+        show: bool = True,
+        save_path: str | None | IO = None,
+        width: int = 14,
+        height: int = 10,
+        prog: Literal[
+            "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
+        ] = "dot",
+    ):
+        """
+        Plots the nodes of this model.
+
+        Wraps :func:`~.viz.plot_nodes`.
+
+        Parameters
+        ----------
+        show
+            Whether to show the plot in a new window.
+        save_path
+            Path to save the plot. If not provided, the plot will not be saved.
+        width
+            Width of the plot in inches.
+        height
+            Height of the plot in inches.
+        prog
+            Layout parameter. Available layouts: circo, dot (the default), fdp, neato, \
+            osage, patchwork, sfdp, twopi.
+
+        See Also
+        --------
+        .Var.plot_vars : Plots the variables of the Liesel sub-model that terminates in
+            this variable.
+        .Var.plot_nodes : Plots the nodes of the Liesel sub-model that terminates in
+            this variable.
+        .Model.plot_vars : Plots the variables of a Liesel model.
+        .Model.plot_nodes : Plots the nodes of a Liesel model.
+        .viz.plot_vars : Plots the variables of a Liesel model.
+        .viz.plot_nodes : Plots the nodes of a Liesel model.
+        """
+        return plot_nodes(
+            self,
+            show=show,
+            save_path=save_path,
+            width=width,
+            height=height,
+            prog=prog,
+        )
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
