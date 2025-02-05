@@ -2011,7 +2011,6 @@ class Var:
                 plot_vars(subgraph, **kwargs)
             case "nodes":
                 self_nodes = [self.value_node, self.dist_node, self.var_value_node]
-                self_nodes = [nd for nd in self_nodes if nd is not None]
                 filtered_nodes = [nd for nd in self_nodes if nd is not None]
                 subgraph = model.node_parental_subgraph(*filtered_nodes)
                 plot_nodes(subgraph, **kwargs)
