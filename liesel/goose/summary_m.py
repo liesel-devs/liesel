@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 from deprecated.sphinx import deprecated
 
+from liesel.__version__ import __version__
 from liesel.goose.engine import ErrorLog, SamplingResults
 from liesel.goose.pytree import slice_leaves, stack_leaves
 from liesel.goose.types import Position
@@ -179,6 +180,10 @@ class Summary:
     The identifier refers to the kernel that was used to sample the respective
     parameter.
     """
+    liesel_version: str
+    """
+    The version of liesel used when the results where produced.
+    """
 
     def __init__(
         self,
@@ -259,6 +264,7 @@ class Summary:
         self.sample_info = sample_info
         self.error_summary = error_summary
         self.kernels_by_pos_key = results.get_kernels_by_pos_key()
+        self.liesel_version = __version__
 
     def to_dataframe(self) -> pd.DataFrame:
         """Turns Summary object into a :class:`~pandas.DataFrame` object."""
