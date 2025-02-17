@@ -182,7 +182,7 @@ class Summary:
     """
     liesel_version: str
     """
-    The version of liesel used when the results where produced.
+    The specific version of Liesel used to produce the results.
     """
 
     def __init__(
