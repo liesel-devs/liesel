@@ -682,11 +682,11 @@ def history_to_df(history: dict[str, Array]) -> pd.DataFrame:
 
     if position_history is not None:
         for name, value in position_history.items():
-            data |= array_to_dict(value, names_prefix=name)
+            data |= array_to_dict(value.squeeze(), names_prefix=name)
 
     if tracked_history is not None:
         for name, value in tracked_history.items():
-            data |= array_to_dict(value, names_prefix=name)
+            data |= array_to_dict(value.squeeze(), names_prefix=name)
 
     df = pd.DataFrame(data)
     df["iteration"] = np.arange(value.shape[0])
