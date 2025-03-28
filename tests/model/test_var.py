@@ -1,6 +1,7 @@
 import typing
 import warnings
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -766,3 +767,44 @@ class TestVarTransform:
         log_tau.dist_node.update()  # type: ignore
         log_tau_gb.dist_node.update()  # type: ignore
         assert log_tau.log_prob == pytest.approx(log_tau_gb.log_prob)
+
+
+class TestVarPredictions:
+    def test_predict(self) -> None:
+        n = 10
+        x = jax.random.uniform(jax.random.PRNGKey(1), (n,))
+        b = 1.0
+        e = jax.random.normal(jax.random.PRNGKey(2), (n,))
+        y = x * b + e
+
+        xvar = lnodes.Var.new_obs(x, name="x")
+        bvar = lnodes.Var.new_param(jnp.array([b]), name="b")
+        loc = lnodes.Var.new_calc(lambda x, b: x * b, x=xvar, b=bvar, name="loc")
+        scale = lnodes.Var.new_param(jnp.array([1.0]), name="scale")
+        scale.transform(tfp.bijectors.Exp())
+        yvar = lnodes.Var.new_obs(
+            y, lnodes.Dist(tfp.distributions.Normal, loc=loc, scale=scale), name="y"
+        )
+
+        _ = lmodel.Model([yvar])
+
+        samples = {"b": jax.random.uniform(jax.random.PRNGKey(3), (4, 7))}
+
+        pred = loc.predict(samples)
+        assert jnp.allclose(pred, x * jnp.expand_dims(samples["b"], -1))
+        assert pred.shape[-1] == x.shape[-1]
+
+        # predict at new observations with same shape
+        xnew = jax.random.uniform(jax.random.PRNGKey(5), (n,))
+        pred = loc.predict(samples, newdata={"x": xnew})
+
+        assert jnp.allclose(pred, xnew * jnp.expand_dims(samples["b"], -1))
+        assert pred.shape[-1] == x.shape[-1]
+
+        # predict at new grid of observations
+        xnew = jnp.linspace(0, 10)
+        pred = loc.predict(samples, newdata={"x": xnew})
+
+        assert jnp.allclose(pred, xnew * jnp.expand_dims(samples["b"], -1))
+        assert pred.shape[-1] != x.shape[-1]
+        assert pred.shape[-1] == xnew.shape[-1]
