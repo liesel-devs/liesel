@@ -1472,6 +1472,99 @@ class Model:
 
         return sampled_position
 
+    def sample(
+        self,
+        shape: Sequence[int] | int,
+        seed: jax.random.KeyArray,
+        samples: dict[str, Array] | None = None,
+        fixed: Sequence[str] = (),
+    ) -> dict[str, Array]:
+        """
+        Draws posterior predictive samples.
+
+        Parameters
+        ----------
+        shape
+            Sample shape.
+        seed
+            The seed is split and distributed to the distribution nodes in the model.
+            Must be a ``KeyArray``, i.e. an array of shape (2,) and dtype ``uint32``.
+            See :mod:`jax.random` for more details.
+        fixed
+            The names of the nodes or variables to be excluded from the simulation. \
+            By default, no nodes or variables are skipped.
+
+        Returns
+        -------
+        A dictionary of variable and node names and their sampled values.
+
+        Raises
+        ------
+        AttributeError
+            If the value of the :attr:`.Dist.at` node of a distribution node cannot be
+            set.
+        """
+        computational_model = self._copy_computational_model()
+        samples = samples if samples is not None else {}
+
+        dists = [
+            node
+            for node in computational_model._simulation_nodes
+            if isinstance(node, Dist)
+            and node.at is not None
+            and node.name not in fixed
+            and node.at.name not in fixed
+            and (node.var is not None and node.var.name not in fixed)
+        ]
+
+        if samples:
+            samples_shape = next(iter(samples.values())).shape[:2]
+        else:
+            samples_shape = ()
+
+        seeds = jax.random.split(seed, samples_shape + (len(dists),))
+
+        sampling_specs = {}
+
+        for i, dist in enumerate(dists):
+            tfp_dist = dist.init_dist()
+
+            event_shape = tfp_dist.event_shape
+            batch_shape = tfp_dist.batch_shape
+            value_shape = jnp.asarray(dist.at.value).shape  # type: ignore
+            sample_index = len(value_shape) - len(batch_shape) - len(event_shape)
+            sample_shape = shape + value_shape[:sample_index]
+
+            if isinstance(dist.at, VarValue):
+                var_name = dist.at.var.name  # type: ignore
+            else:
+                var_name = dist.at.name  # type: ignore
+
+            if var_name not in samples:
+                sampling_specs[var_name] = {"shape": sample_shape, "dist": dist, "i": i}
+
+        def one_draw(position, seeds):
+            updated_state = computational_model.update_state(position, self.state)
+            computational_model.state = updated_state
+
+            sampled_position = {}
+            for name, spec in sampling_specs.items():
+                tfp_dist = spec["dist"].init_dist()
+                sampled_position[name] = tfp_dist.sample(
+                    spec["shape"], seeds[spec["i"]]
+                )
+
+            return sampled_position
+
+        if not samples:
+            return one_draw({}, seeds)
+
+        draw_iter = jax.vmap(one_draw, in_axes=(0, 0), out_axes=0)
+        draw_chains = jax.vmap(draw_iter, in_axes=(0, 0), out_axes=0)
+
+        drawn_samples = draw_chains(samples, seeds)
+        return jax.tree.map(lambda x: jnp.moveaxis(x, 2, 0), drawn_samples)
+
     @property
     def state(self) -> dict[str, NodeState]:
         """The state of the model as a dict of node names and states."""
