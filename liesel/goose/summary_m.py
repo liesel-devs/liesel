@@ -16,7 +16,7 @@ from deprecated.sphinx import deprecated
 
 from liesel.goose.engine import ErrorLog, SamplingResults
 from liesel.goose.pytree import slice_leaves, stack_leaves
-from liesel.goose.types import Position
+from liesel.goose.types import Array, Position
 from liesel.option import Option
 
 
@@ -581,3 +581,204 @@ def _create_quantity_dict(
     # HDI --- VarIDX
 
     return quantities
+
+
+class SamplesSummary:
+    """
+    A summary object based on a dictionary of samples.
+
+    Offers two main use cases:
+
+    1. The summary object can be turned into a :class:`~pandas.DataFrame`
+        using :meth:`.to_dataframe`.
+    2. Programmatically access summary statistics via
+       ``quantities[quantity_name][var_name]``. Please refer to the documentation of the
+       attribute :attr:`.quantities` for details.
+
+    Parameters
+    ----------
+    samples
+        The dictionary of samples to summarize.
+    hdi_prob
+        Level on which to return posterior highest density intervals.
+    selected, deselected
+        Allow to get a summary only for a subset of the position keys.
+    per_chain
+        If *True*, the summary is calculated on a per-chain basis. Certain measures like
+        ``rhat`` are not available if ``per_chain`` is *True*.
+
+    Notes
+    -----
+    This class is still considered experimental. The API may still undergo larger
+    changes.
+    """
+
+    config: dict
+
+    def __init__(
+        self,
+        samples: dict[str, Array],
+        quantiles: Sequence[float] = (0.05, 0.5, 0.95),
+        hdi_prob: float = 0.9,
+        selected: list[str] | None = None,
+        deselected: list[str] | None = None,
+        per_chain: bool = False,
+    ):
+        posterior_chain = Position(samples)
+
+        if selected:
+            posterior_chain = Position(
+                {
+                    key: value
+                    for key, value in posterior_chain.items()
+                    if key in selected
+                }
+            )
+
+        if deselected is not None:
+            for key in deselected:
+                del posterior_chain[key]
+
+        # get some general infos on the sampling
+        param_chain = next(iter(posterior_chain.values()))
+
+        sample_info = {
+            "num_chains": param_chain.shape[0],
+            "sample_size_per_chain": param_chain.shape[1],
+        }
+
+        # convert everything to numpy array
+        for key in posterior_chain:
+            posterior_chain[key] = np.asarray(posterior_chain[key])
+
+        # calculate quantiles either per chain and merge the results or all at once
+        single_chain_summaries = []
+        if per_chain:
+            for chain_idx in range(sample_info["num_chains"]):
+                single_chain = slice_leaves(
+                    posterior_chain, jnp.s_[None, chain_idx, ...]
+                )
+
+                qdict = _create_quantity_dict(single_chain, quantiles, hdi_prob)
+
+                single_chain_summaries.append(qdict)
+
+            quantities = stack_leaves(single_chain_summaries, axis=0)
+
+        else:
+            quantities = _create_quantity_dict(posterior_chain, quantiles, hdi_prob)
+
+        config = {
+            "quantiles": quantiles,
+            "hdi_prob": hdi_prob,
+            "chains_merged": not per_chain,
+        }
+
+        self.per_chain = per_chain
+        self.quantities = quantities
+        self.config = config
+        self.sample_info = sample_info
+
+    @classmethod
+    def from_array(
+        cls,
+        a: Array,
+        quantiles: Sequence[float] = (0.05, 0.5, 0.95),
+        hdi_prob: float = 0.9,
+        selected: list[str] | None = None,
+        deselected: list[str] | None = None,
+        per_chain: bool = False,
+        name: str = "v",
+    ) -> SamplesSummary:
+        samples = {name: a}
+        return cls(samples, quantiles, hdi_prob, selected, deselected, per_chain)
+
+    def to_dataframe(self) -> pd.DataFrame:
+        """Turns Summary object into a :class:`~pandas.DataFrame` object."""
+
+        # don't change the original data
+        quants = self.quantities.copy()
+
+        # make new entries for the quantiles
+        if self.per_chain:
+            for i, q in enumerate(self.config["quantiles"]):
+                quants[f"q_{q}"] = {
+                    k: v[:, i, ...] for k, v in quants["quantile"].items()
+                }
+
+            quants["hdi_low"] = {k: v[:, 0, ...] for k, v in quants["hdi"].items()}
+            quants["hdi_high"] = {k: v[:, 1, ...] for k, v in quants["hdi"].items()}
+        else:
+            for i, q in enumerate(self.config["quantiles"]):
+                quants[f"q_{q}"] = {k: v[i, ...] for k, v in quants["quantile"].items()}
+
+            quants["hdi_low"] = {k: v[0, ...] for k, v in quants["hdi"].items()}
+            quants["hdi_high"] = {k: v[1, ...] for k, v in quants["hdi"].items()}
+
+        # remove the old entries
+        del quants["quantile"]
+        del quants["hdi"]
+
+        # create one row per entry
+        df_dict = {}
+        for var in quants["mean"].keys():
+            it = np.nditer(quants["mean"][var], flags=["multi_index"])
+            for _ in it:
+                var_fqn = (
+                    var if len(it.multi_index) == 0 else f"{var}{list(it.multi_index)}"
+                )
+                quant_per_elem: dict[str, Any] = {}
+                quant_per_elem["variable"] = var
+                if self.config["chains_merged"]:
+                    quant_per_elem["var_index"] = it.multi_index
+                    quant_per_elem["sample_size"] = (
+                        self.sample_info["sample_size_per_chain"]
+                        * self.sample_info["num_chains"]
+                    )
+                else:
+                    quant_per_elem["chain_index"] = it.multi_index[0]
+                    quant_per_elem["var_index"] = it.multi_index[1:]
+                    quant_per_elem["sample_size"] = self.sample_info[
+                        "sample_size_per_chain"
+                    ]
+
+                for quant_name, quant_dict in quants.items():
+                    quant_per_elem[quant_name] = quant_dict[var][it.multi_index]
+
+                # convert jax.Arrays (scalar) to floats so that pandas treats them
+                # correctly
+                for key, val in quant_per_elem.items():
+                    if isinstance(val, jax.Array):
+                        # value should be a scalar
+                        assert val.shape == ()
+
+                        # replace dict element with value casted to float32
+                        quant_per_elem[key] = float(val)
+
+                df_dict[var_fqn] = quant_per_elem
+
+        # convert to dataframe and use varname as index
+        df = pd.DataFrame.from_dict(df_dict, orient="index")
+        df = df.reset_index()
+        df = df.rename(columns={"index": "var_fqn"})
+        df = df.set_index("variable")
+
+        return df
+
+    def _param_df(self):
+        df = self.to_dataframe()
+
+        df.index.name = "parameter"
+        df = df.rename(columns={"var_index": "index"})
+        df = df.set_index("index", append=True)
+
+        qtls = [f"q_{qtl}" for qtl in self.config["quantiles"]]
+        cols = (
+            ["kernel", "mean", "sd"]
+            + qtls
+            + ["sample_size", "ess_bulk", "ess_tail", "rhat"]
+        )
+        cols = [col for col in cols if col in df.columns]
+        df = df[cols]
+
+        return df
