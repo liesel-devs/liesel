@@ -1631,6 +1631,75 @@ class Model:
         model.update()
         return model.state
 
+    def predict(
+        self,
+        samples: dict[str, Array],
+        predict: Sequence[str] | None = None,
+        newdata: dict[str, Array] | None = None,
+    ) -> dict[str, Array]:
+        """
+        Returns a dictionary of predictions.
+
+        Parameters
+        ----------
+        samples
+            Dictionary of samples at which to evaluate predictions. All values of the \
+            dictionary are assumed to have two leading dimensions corresponding to \
+            ``(nchains, niteration)``.
+        predict
+            Sequence of strings, which are the names of nodes or variables. \
+            Predictions will be returned only for the nodes or variables inlcuded \
+            here. If ``None`` (default), predictions will be returned for all \
+            *variables* in the model (but not for nodes).
+        newdata
+            Dictionary of new data at which to evaluate predictions. The keys should \
+            correspond to variable or node names in the model whose values should be \
+            set to the given values before evaluating predictions. If ``None`` \
+            (default), the current variable values are used.
+        """
+
+        predict_names = predict
+
+        # extract nodes and vars for target nodes
+        if predict_names is None:
+            # use full model without copying
+            submodel = self
+            predict_names = list(self.vars)  # output only vars
+        else:
+            predict_nodes_: list[Var | Node] = []
+            for name in predict_names:
+                try:
+                    predict_nodes_.append(self.vars[name])
+                except KeyError:
+                    predict_nodes_.append(self.nodes[name])
+
+            # construct submodel for target nodes
+            submodel = self.parental_submodel(*predict_nodes_)
+
+        # update submodel with new data, if any were given
+        newdata = newdata if newdata is not None else {}
+        submodel.state = submodel.update_state(newdata)
+
+        # filter samples to include only samples that belong to the submodel
+        vars_and_nodes = list(submodel.vars) + list(submodel.nodes)
+        filtered_samples = {k: v for k, v in samples.items() if k in vars_and_nodes}
+
+        # single prediction function
+        def predict_one(samples):
+            updated_state = submodel.update_state(
+                samples, submodel.state, inplace=False
+            )
+            return submodel.extract_position(predict_names, updated_state)
+
+        # map over iterations
+        predict_iter = jax.vmap(predict_one, in_axes=0, out_axes=0)
+
+        # map over chains
+        predict_chains = jax.vmap(predict_iter, in_axes=0, out_axes=0)
+
+        # apply function
+        return predict_chains(filtered_samples)
+
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Save and load models ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
