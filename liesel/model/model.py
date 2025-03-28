@@ -1234,6 +1234,29 @@ class Model:
         subgraph = self.var_graph.subgraph(nodes_to_include)
         return subgraph
 
+    def parental_submodel(self, *of: Var | Node) -> Model:
+        """
+        Returns a new model that consists only of the given variables and nodes and \
+        their parent variables and nodes. The new model contains copies of these \
+        variables and nodes.
+        """
+        nodes_to_include = set()
+
+        for node in of:
+            if isinstance(node, Var):
+                nodes_to_include.update(nx.ancestors(self.var_graph, node))
+            else:
+                nodes_to_include.update(nx.ancestors(self.node_graph, node))
+            nodes_to_include.add(node)
+
+        copy_of_nodes_to_include = deepcopy(nodes_to_include)
+
+        for node in copy_of_nodes_to_include:
+            if hasattr(node, "_unset_model"):
+                node._unset_model()
+
+        return Model(list(copy_of_nodes_to_include))
+
     @property
     def log_lik(self) -> Array:
         """
@@ -1609,6 +1632,150 @@ class Model:
             height=height,
             prog=prog,
         )
+
+    def extract_position(
+        self,
+        position_keys: Sequence[str],
+        model_state: dict[str, NodeState] | None = None,
+    ) -> dict[str, Array]:
+        """
+        Extracts a position from a model state.
+
+        Parameters
+        ----------
+        position_keys
+            An iterable of variable or node names.
+        model_state
+            A dictionary of node names and their corresponding :class:`.NodeState`. \
+            If ``None`` (default), the model's current state is used.
+        """
+        model_state = model_state if model_state is not None else self.state
+        position = {}
+
+        for key in position_keys:
+            try:
+                position[key] = model_state[key].value
+            except KeyError:
+                node_key = self.vars[key].value_node.name
+                position[key] = model_state[node_key].value
+
+        return position
+
+    def update_state(
+        self,
+        position: dict[str, Array],
+        model_state: dict[str, NodeState] | None = None,
+        inplace: bool = False,
+    ) -> dict[str, NodeState]:
+        """
+        Updates and returns a model state given a position.
+
+        Parameters
+        ----------
+        position
+            A dictionary of variable or node names and values.
+        model_state
+            A dictionary of node names and their corresponding :class:`.NodeState`. \
+            If ``None`` (default), the model's current state is used.
+        inplace
+            If ``False`` (default), a new model state is returned, while the current \
+            model's state is left unchanged. If ``True``, the current model's state is \
+            updated in place.
+
+        Warnings
+        --------
+        The ``model_state`` must be up-to-date, i.e. it must *not* contain any outdated
+        nodes. Updates can only be triggered through new variable or node values in the
+        ``position``. If you supply a ``model_state`` with outdated nodes, these nodes
+        and their outputs will not be updated.
+        """
+        model = self._copy_computational_model() if not inplace else self
+
+        # sets all outdated flags in the model state to false
+        # this is required to make the function jittable
+
+        model.state = model_state if model_state is not None else self.state
+
+        for node in model.nodes.values():
+            node._outdated = False
+
+        for key, value in position.items():
+            try:
+                model.nodes[key].value = value  # type: ignore  # data node
+            except KeyError:
+                model.vars[key].value = value
+
+        model.update()
+        return model.state
+
+    def predict(
+        self,
+        samples: dict[str, Array],
+        predict: Sequence[str] | None = None,
+        newdata: dict[str, Array] | None = None,
+    ) -> dict[str, Array]:
+        """
+        Returns a dictionary of predictions.
+
+        Parameters
+        ----------
+        samples
+            Dictionary of samples at which to evaluate predictions. All values of the \
+            dictionary are assumed to have two leading dimensions corresponding to \
+            ``(nchains, niteration)``.
+        predict
+            Sequence of strings, which are the names of nodes or variables. \
+            Predictions will be returned only for the nodes or variables inlcuded \
+            here. If ``None`` (default), predictions will be returned for all \
+            *variables* in the model (but not for nodes).
+        newdata
+            Dictionary of new data at which to evaluate predictions. The keys should \
+            correspond to variable or node names in the model whose values should be \
+            set to the given values before evaluating predictions. If ``None`` \
+            (default), the current variable values are used.
+        """
+
+        predict_names = predict
+
+        # extract nodes and vars for target nodes
+        if predict_names is None:
+            # use full model without copying
+            submodel = self
+            predict_names = list(self.vars)  # output only vars
+        else:
+            predict_nodes_: list[Var | Node] = []
+            for name in predict_names:
+                try:
+                    predict_nodes_.append(self.vars[name])
+                except KeyError:
+                    predict_nodes_.append(self.nodes[name])
+
+            # construct submodel for target nodes
+            submodel = self.parental_submodel(*predict_nodes_)
+
+        # update submodel with new data, if any were given
+        newdata = newdata if newdata is not None else {}
+        submodel.state = submodel.update_state(newdata)
+
+        # filter samples to include only samples that belong to the submodel
+        vars_and_nodes = list(submodel.vars) + list(submodel.nodes)
+        filtered_samples = {k: v for k, v in samples.items() if k in vars_and_nodes}
+
+        # single prediction function
+        def predict_one(samples):
+            updated_state = submodel.update_state(
+                samples, submodel.state, inplace=False
+            )
+            return submodel.extract_position(predict_names, updated_state)
+
+        # map over iterations
+        predict_iter = jax.vmap(predict_one, in_axes=0, out_axes=0)
+
+        # map over chains
+        predict_chains = jax.vmap(predict_iter, in_axes=0, out_axes=0)
+
+        # apply function
+        return predict_chains(filtered_samples)
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

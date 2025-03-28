@@ -2087,6 +2087,35 @@ class Var:
             prog=prog,
         )
 
+    def predict(
+        self,
+        samples: dict[str, Array],
+        newdata: dict[str, Array] | None = None,
+    ) -> Array:
+        """
+        Returns an array of predictions for this variable.
+
+        Parameters
+        ----------
+        samples
+            Dictionary of samples at which to evaluate predictions. All values of the \
+            dictionary are assumed to have two leading dimensions corresponding to \
+            ``(nchains, niteration)``.
+        newdata
+            Dictionary of new data at which to evaluate predictions. The keys should \
+            correspond to variable or node names in the model whose values should be \
+            set to the given values before evaluating predictions.
+        """
+
+        if not self.model:
+            raise ValueError(
+                f"For predictions, a model is required, but {self.model=}."
+            )
+
+        submodel = self.model.parental_submodel(self)
+        pred = submodel.predict(samples=samples, predict=[self.name], newdata=newdata)
+        return pred[self.name]
+
     def plot_nodes(
         self,
         show: bool = True,

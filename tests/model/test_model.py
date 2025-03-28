@@ -369,6 +369,116 @@ class TestModel:
         assert "x_transformed" in new_model.vars
         assert new_model.vars["x_transformed"].value == pytest.approx(0.54132485)
 
+    def test_extract_position(self, model) -> None:
+        pos = model.extract_position(["z"])
+        assert pos["z"] == pytest.approx(model.nodes["z"].value)
+
+    def test_update_state(self, model) -> None:
+        pos = {"z": 3.0}
+        state = model.update_state(pos, inplace=False)
+        assert model.extract_position(["z"], model_state=state)["z"] == pytest.approx(
+            3.0
+        )
+        assert model.nodes["z"].value != pytest.approx(3.0)
+
+        # updating the state from above
+        pos = {"sigma_hat": 20.0}
+        state = model.update_state(pos, inplace=False, model_state=state)
+
+        # extracted position from updated state should contain the updated values
+        extracted_pos = model.extract_position(["z", "sigma_hat"], model_state=state)
+        assert extracted_pos["z"] == pytest.approx(3.0)
+        assert extracted_pos["sigma_hat"] == pytest.approx(20.0)
+
+        # original model state should be unchanged
+        assert model.nodes["z"] != pytest.approx(3.0)
+        assert model.vars["sigma_hat"].value != pytest.approx(20.0)
+
+        pos = {"z": 3.0}
+        state = model.update_state(pos, inplace=True)
+        assert model.extract_position(["z"], model_state=state)["z"] == pytest.approx(
+            3.0
+        )
+        assert model.nodes["z"].value == pytest.approx(3.0)
+
+
+class TestPredictions:
+    def test_predict_at_current_state(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+        }
+
+        # manual prediction
+        manual_pred = jnp.einsum(
+            "nk,...k->...n", model.vars["X"].value, samples["beta_hat"]
+        )
+
+        # predictions at current values for all vars
+        pred = model.predict(samples=samples)
+        assert jnp.allclose(pred["mu"], manual_pred)
+        assert pred["mu"].shape == (4, 3, 500)
+        assert len(pred) == len(model.vars)
+
+    def test_predict_for_specific_var(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+        }
+
+        # manual prediction
+        manual_pred = jnp.einsum(
+            "nk,...k->...n", model.vars["X"].value, samples["beta_hat"]
+        )
+
+        # predictions at current values for mu
+        pred = model.predict(samples=samples, predict=["mu"])
+
+        assert jnp.allclose(pred["mu"], manual_pred)
+        assert pred["mu"].shape == (4, 3, 500)
+        assert len(pred) == 1
+
+    def test_predict_at_newdata(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+        }
+
+        # predictions at new values for X
+        xnew = tfd.Normal(loc=0.0, scale=1.0).sample(
+            sample_shape=model.vars["X"].value.shape, seed=rnd.PRNGKey(7)
+        )
+
+        assert not jnp.allclose(xnew, model.vars["X"].value)
+
+        manual_pred = jnp.einsum("nk,...k->...n", xnew, samples["beta_hat"])
+
+        pred = model.predict(samples=samples, predict=["mu"], newdata={"X": xnew})
+        assert jnp.allclose(pred["mu"], manual_pred)
+        assert pred["mu"].shape == (4, 3, 500)
+
+    def test_predict_at_newdata_with_new_shape(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+        }
+
+        # predictions at new values for X with different N
+        xnew = tfd.Normal(loc=0.0, scale=1.0).sample(
+            sample_shape=(10, 2), seed=rnd.PRNGKey(7)
+        )
+
+        manual_pred = jnp.einsum("nk,...k->...n", xnew, samples["beta_hat"])
+
+        pred = model.predict(samples=samples, predict=["mu"], newdata={"X": xnew})
+        assert jnp.allclose(pred["mu"], manual_pred)
+        assert pred["mu"].shape == (4, 3, 10)
+
+        # if the newdata shape does not work with some required shapes downstream,
+        # we run into a typerror
+        with pytest.raises(TypeError):
+            model.predict(samples=samples, newdata={"X": xnew})
+
 
 @pytest.mark.xfail
 class TestUserDefinedModelNodes:
