@@ -8,7 +8,7 @@ import logging
 import re
 import warnings
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from copy import deepcopy
 from types import MappingProxyType
 from typing import IO, Any, Literal, TypeVar
@@ -1555,6 +1555,34 @@ class Model:
             height=height,
             prog=prog,
         )
+
+    def extract_position(
+        self,
+        position_keys: Sequence[str],
+        model_state: dict[str, NodeState] | None = None,
+    ) -> dict[str, Array]:
+        """
+        Extracts a position from a model state.
+
+        Parameters
+        ----------
+        position_keys
+            An iterable of variable or node names.
+        model_state
+            A dictionary of node names and their corresponding :class:`.NodeState`. \
+            If ``None`` (default), the model's current state is used.
+        """
+        model_state = model_state if model_state is not None else self.state
+        position = {}
+
+        for key in position_keys:
+            try:
+                position[key] = model_state[key].value
+            except KeyError:
+                node_key = self.vars[key].value_node.name
+                position[key] = model_state[node_key].value
+
+        return position
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

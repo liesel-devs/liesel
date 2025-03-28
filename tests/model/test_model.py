@@ -351,6 +351,10 @@ class TestModel:
         assert "x_transformed" in new_model.vars
         assert new_model.vars["x_transformed"].value == pytest.approx(0.54132485)
 
+    def test_extract_position(self, model) -> None:
+        pos = model.extract_position(["z"])
+        assert pos["z"] == pytest.approx(model.nodes["z"].value)
+
 
 @pytest.mark.xfail
 class TestUserDefinedModelNodes:
