@@ -8,7 +8,7 @@ import logging
 import re
 import warnings
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from copy import deepcopy
 from types import MappingProxyType
 from typing import IO, Any, Literal, TypeVar
@@ -1383,6 +1383,71 @@ class Model:
                     raise AttributeError(f"Cannot set value of {dist.at}")
 
         return self
+
+    def sample_prior(
+        self,
+        shape: Sequence[int] | int,
+        seed: jax.random.KeyArray,
+        fixed: Sequence[str] = (),
+    ) -> dict[str, Array]:
+        """
+        Draws prior predictive samples.
+
+        Parameters
+        ----------
+        shape
+            Sample shape.
+        seed
+            The seed is split and distributed to the distribution nodes in the model.
+            Must be a ``KeyArray``, i.e. an array of shape (2,) and dtype ``uint32``.
+            See :mod:`jax.random` for more details.
+        fixed
+            The names of the nodes or variables to be excluded from the simulation. \
+            By default, no nodes or variables are skipped.
+
+        Returns
+        -------
+        A dictionary of variable and node names and their sampled values.
+
+        Raises
+        ------
+        AttributeError
+            If the value of the :attr:`.Dist.at` node of a distribution node cannot be
+            set.
+        """
+        dists = [
+            node
+            for node in self._simulation_nodes
+            if isinstance(node, Dist)
+            and node.at is not None
+            and node.name not in fixed
+            and node.at.name not in fixed
+            and (node.var is not None and node.var.name not in fixed)
+        ]
+
+        seeds = jax.random.split(seed, len(dists))
+
+        sampled_position = {}
+
+        for dist, seed in zip(dists, seeds):
+            tfp_dist = dist.init_dist()
+
+            event_shape = tfp_dist.event_shape
+            batch_shape = tfp_dist.batch_shape
+            value_shape = jnp.asarray(dist.at.value).shape  # type: ignore
+            sample_index = len(value_shape) - len(batch_shape) - len(event_shape)
+            sample_shape = shape + value_shape[:sample_index]
+
+            value = tfp_dist.sample(sample_shape, seed)
+
+            if isinstance(dist.at, VarValue):
+                var_name = dist.at.var.name  # type: ignore
+                sampled_position[var_name] = value
+            else:
+                var_name = dist.at.name  # type: ignore
+                sampled_position[var_name] = value
+
+        return sampled_position
 
     @property
     def state(self) -> dict[str, NodeState]:
