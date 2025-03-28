@@ -1974,60 +1974,18 @@ class Var:
                     subgraph = self.model.node_parental_subgraph(*filtered_nodes)
                     return plot_nodes(subgraph, **kwargs)
 
-        from liesel.model import GraphBuilder
+        from liesel.model.model import TemporaryModel
 
-        gb = GraphBuilder().add(self)
-        nodes, _vars = gb._all_nodes_and_vars()
-
-        automatically_set_names = gb._set_missing_names()
-        var_names = automatically_set_names["vars"]
-        node_names = automatically_set_names["nodes"]
-        if var_names:
-            if verbose:
-                names_ = f"The automatically assigned names are: {var_names}. "
-            else:
-                names_ = ""
-            logger.info(
-                f"Unnamed variables were temporarily named for plotting. {names_}"
-                "The names are reset"
-                " after plotting."
-            )
-        if node_names:
-            if verbose:
-                names_ = f"The automatically assigned names are: {node_names}. "
-            else:
-                names_ = ""
-            logger.info(
-                f"Unnamed nodes were temporarily named for plotting. {names_}"
-                "The names are reset"
-                " after plotting."
-            )
-
-        model = gb.build_model()
-
-        match which:
-            case "vars":
-                subgraph = model.var_parental_subgraph(self)
-                plot_vars(subgraph, **kwargs)
-            case "nodes":
-                self_nodes = [self.value_node, self.dist_node, self.var_value_node]
-                filtered_nodes = [nd for nd in self_nodes if nd is not None]
-                subgraph = model.node_parental_subgraph(*filtered_nodes)
-                plot_nodes(subgraph, **kwargs)
-
-        model.pop_nodes_and_vars()
-
-        vars_dict = {var_.name: var_ for var_ in _vars}
-        nodes_dict = {node.name: node for node in nodes}
-
-        for name in var_names:
-            vars_dict[name].name = ""
-
-        for name in node_names:
-            nodes_dict[name].name = ""
-
-        gb.nodes.clear()
-        gb.vars.clear()
+        with TemporaryModel(self, verbose=verbose) as model:
+            match which:
+                case "vars":
+                    subgraph = model.var_parental_subgraph(self)
+                    plot_vars(subgraph, **kwargs)
+                case "nodes":
+                    self_nodes = [self.value_node, self.dist_node, self.var_value_node]
+                    filtered_nodes = [nd for nd in self_nodes if nd is not None]
+                    subgraph = model.node_parental_subgraph(*filtered_nodes)
+                    plot_nodes(subgraph, **kwargs)
 
     def plot_vars(
         self,

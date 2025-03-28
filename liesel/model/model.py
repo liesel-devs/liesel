@@ -1819,3 +1819,64 @@ def load_model(file: str | IO[bytes]) -> Any:
         model = dill.load(file)
 
     return model
+
+
+class TemporaryModel:
+    def __init__(self, *vars_and_nodes, verbose: bool = False):
+        self.vars_and_nodes = vars_and_nodes
+        self.verbose = verbose
+
+        self.gb = None
+        self.model = None
+        self.var_names = None
+        self.node_names = None
+        self.vars = None
+        self.nodes = None
+
+    def __enter__(self):
+        verbose = self.verbose
+
+        gb = GraphBuilder().add(*self.vars_and_nodes)
+        nodes, _vars = gb._all_nodes_and_vars()
+
+        automatically_set_names = gb._set_missing_names()
+        var_names = automatically_set_names["vars"]
+        node_names = automatically_set_names["nodes"]
+
+        if verbose:
+            if var_names:
+                names_ = f"The automatically assigned names are: {var_names}. "
+                logger.info(f"Unnamed variables were temporarily named. {names_}")
+            if node_names:
+                names_ = f"The automatically assigned names are: {node_names}. "
+                logger.info(f"Unnamed nodes were temporarily named. {names_}")
+        else:
+            if var_names or node_names:
+                logger.info("Unnamed variables and/or nodes were temporarily named.")
+
+        model = gb.build_model()
+
+        self.gb = gb
+        self.model = model
+        self.var_names = var_names
+        self.node_names = node_names
+        self.vars = _vars
+        self.nodes = nodes
+        return model
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.model.pop_nodes_and_vars()
+
+        vars_dict = {var_.name: var_ for var_ in self.vars}
+        nodes_dict = {node.name: node for node in self.nodes}
+
+        for name in self.var_names:
+            vars_dict[name].name = ""
+
+        for name in self.node_names:
+            nodes_dict[name].name = ""
+
+        self.gb.nodes.clear()
+        self.gb.vars.clear()
+
+        return False  # Returning False means exceptions are not suppressed
