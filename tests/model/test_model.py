@@ -355,6 +355,34 @@ class TestModel:
         pos = model.extract_position(["z"])
         assert pos["z"] == pytest.approx(model.nodes["z"].value)
 
+    def test_update_state(self, model) -> None:
+        pos = {"z": 3.0}
+        state = model.update_state(pos, inplace=False)
+        assert model.extract_position(["z"], model_state=state)["z"] == pytest.approx(
+            3.0
+        )
+        assert model.nodes["z"].value != pytest.approx(3.0)
+
+        # updating the state from above
+        pos = {"sigma_hat": 20.0}
+        state = model.update_state(pos, inplace=False, model_state=state)
+
+        # extracted position from updated state should contain the updated values
+        extracted_pos = model.extract_position(["z", "sigma_hat"], model_state=state)
+        assert extracted_pos["z"] == pytest.approx(3.0)
+        assert extracted_pos["sigma_hat"] == pytest.approx(20.0)
+
+        # original model state should be unchanged
+        assert model.nodes["z"] != pytest.approx(3.0)
+        assert model.vars["sigma_hat"].value != pytest.approx(20.0)
+
+        pos = {"z": 3.0}
+        state = model.update_state(pos, inplace=True)
+        assert model.extract_position(["z"], model_state=state)["z"] == pytest.approx(
+            3.0
+        )
+        assert model.nodes["z"].value == pytest.approx(3.0)
+
 
 @pytest.mark.xfail
 class TestUserDefinedModelNodes:

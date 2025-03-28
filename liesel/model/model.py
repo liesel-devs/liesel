@@ -1584,6 +1584,53 @@ class Model:
 
         return position
 
+    def update_state(
+        self,
+        position: dict[str, Array],
+        model_state: dict[str, NodeState] | None = None,
+        inplace: bool = False,
+    ) -> dict[str, NodeState]:
+        """
+        Updates and returns a model state given a position.
+
+        Parameters
+        ----------
+        position
+            A dictionary of variable or node names and values.
+        model_state
+            A dictionary of node names and their corresponding :class:`.NodeState`. \
+            If ``None`` (default), the model's current state is used.
+        inplace
+            If ``False`` (default), a new model state is returned, while the current \
+            model's state is left unchanged. If ``True``, the current model's state is \
+            updated in place.
+
+        Warnings
+        --------
+        The ``model_state`` must be up-to-date, i.e. it must *not* contain any outdated
+        nodes. Updates can only be triggered through new variable or node values in the
+        ``position``. If you supply a ``model_state`` with outdated nodes, these nodes
+        and their outputs will not be updated.
+        """
+        model = self._copy_computational_model() if not inplace else self
+
+        # sets all outdated flags in the model state to false
+        # this is required to make the function jittable
+
+        model.state = model_state if model_state is not None else self.state
+
+        for node in model.nodes.values():
+            node._outdated = False
+
+        for key, value in position.items():
+            try:
+                model.nodes[key].value = value  # type: ignore  # data node
+            except KeyError:
+                model.vars[key].value = value
+
+        model.update()
+        return model.state
+
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Save and load models ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
