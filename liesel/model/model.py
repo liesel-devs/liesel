@@ -1474,42 +1474,40 @@ class Model:
 
     def sample(
         self,
-        shape: Sequence[int] | int,
+        shape: Sequence[int],
         seed: jax.random.KeyArray,
-        samples: dict[str, Array] | None = None,
+        posterior_samples: dict[str, Array] | None = None,
         fixed: Sequence[str] = (),
     ) -> dict[str, Array]:
         """
-        Draws posterior predictive samples.
+        Draws samples from the model.
 
         Parameters
         ----------
         shape
             Sample shape.
         seed
-            The seed is split and distributed to the distribution nodes in the model.
-            Must be a ``KeyArray``, i.e. an array of shape (2,) and dtype ``uint32``.
+            The seed is split and distributed to the distribution nodes in the model. \
+            Must be a ``KeyArray``, i.e. an array of shape (2,) and dtype ``uint32``. \
             See :mod:`jax.random` for more details.
+        posterior_samples
+            Dictionary of samples at which to evaluate predictions. All values of the \
+            dictionary are assumed to have two leading dimensions corresponding to \
+            ``(nchains, niteration)``.
         fixed
             The names of the nodes or variables to be excluded from the simulation. \
             By default, no nodes or variables are skipped.
 
         Returns
         -------
-        A dictionary of variable and node names and their sampled values.
-
-        Raises
-        ------
-        AttributeError
-            If the value of the :attr:`.Dist.at` node of a distribution node cannot be
-            set.
+        A dictionary of variable and node names and their sampled values. Includes
+        only sampled variables.
         """
-        computational_model = self._copy_computational_model()
-        samples = samples if samples is not None else {}
+        posterior_samples = posterior_samples if posterior_samples is not None else {}
 
         dists = [
             node
-            for node in computational_model._simulation_nodes
+            for node in self._simulation_nodes
             if isinstance(node, Dist)
             and node.at is not None
             and node.name not in fixed
@@ -1517,8 +1515,15 @@ class Model:
             and (node.var is not None and node.var.name not in fixed)
         ]
 
-        if samples:
-            samples_shape = next(iter(samples.values())).shape[:2]
+        for name in fixed:
+            if name in posterior_samples:
+                raise ValueError(
+                    f"Inconsistency: {name=} listed in 'fixed', but samples are"
+                    " provided in 'posterior_samples'."
+                )
+
+        if posterior_samples:
+            samples_shape = next(iter(posterior_samples.values())).shape[:2]
         else:
             samples_shape = ()
 
@@ -1540,8 +1545,10 @@ class Model:
             else:
                 var_name = dist.at.name  # type: ignore
 
-            if var_name not in samples:
+            if var_name not in posterior_samples:
                 sampling_specs[var_name] = {"shape": sample_shape, "dist": dist, "i": i}
+
+        computational_model = self._copy_computational_model()
 
         def one_draw(position, seeds):
             updated_state = computational_model.update_state(position, self.state)
@@ -1556,13 +1563,19 @@ class Model:
 
             return sampled_position
 
-        if not samples:
+        if not posterior_samples:
             return one_draw({}, seeds)
 
         draw_iter = jax.vmap(one_draw, in_axes=(0, 0), out_axes=0)
         draw_chains = jax.vmap(draw_iter, in_axes=(0, 0), out_axes=0)
-
-        drawn_samples = draw_chains(samples, seeds)
+        try:
+            drawn_samples = draw_chains(posterior_samples, seeds)
+        except Exception as e:
+            msg = (
+                "Error during sampling. Make sure to check sample shapes! The values in"
+                " 'posterior_samples' must have two leading batching dimensions."
+            )
+            raise RuntimeError(msg) from e
         return jax.tree.map(lambda x: jnp.moveaxis(x, 2, 0), drawn_samples)
 
     @property
@@ -1915,9 +1928,13 @@ def load_model(file: str | IO[bytes]) -> Any:
 
 
 class TemporaryModel:
-    def __init__(self, *vars_and_nodes, verbose: bool = False):
+    def __init__(self, *vars_and_nodes, verbose: bool = False, silent: bool = False):
         self.vars_and_nodes = vars_and_nodes
         self.verbose = verbose
+        self.silent = silent
+
+        if verbose and silent:
+            raise ValueError(f"{verbose=} and {silent=} cannot both be True.")
 
         self.gb = None
         self.model = None
@@ -1936,14 +1953,14 @@ class TemporaryModel:
         var_names = automatically_set_names["vars"]
         node_names = automatically_set_names["nodes"]
 
-        if verbose:
+        if verbose and not self.silent:
             if var_names:
                 names_ = f"The automatically assigned names are: {var_names}. "
                 logger.info(f"Unnamed variables were temporarily named. {names_}")
             if node_names:
                 names_ = f"The automatically assigned names are: {node_names}. "
                 logger.info(f"Unnamed nodes were temporarily named. {names_}")
-        else:
+        elif not self.silent:
             if var_names or node_names:
                 logger.info("Unnamed variables and/or nodes were temporarily named.")
 
