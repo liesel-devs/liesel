@@ -2087,6 +2087,7 @@ class Var:
             prog=prog,
         )
 
+    @in_model_method
     def predict(
         self,
         samples: dict[str, Array],
@@ -2107,12 +2108,7 @@ class Var:
             set to the given values before evaluating predictions.
         """
 
-        if not self.model:
-            raise ValueError(
-                f"For predictions, a model is required, but {self.model=}."
-            )
-
-        submodel = self.model.parental_submodel(self)
+        submodel = self.model.parental_submodel(self)  # type: ignore
         pred = submodel.predict(samples=samples, predict=[self.name], newdata=newdata)
         return pred[self.name]
 
