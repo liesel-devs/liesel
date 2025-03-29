@@ -1363,7 +1363,7 @@ class Var:
             here.
         distribution
             The probability distribution of the variable.
-        _name
+        name
             The name of the node. If you do not specify a name, a unique name will be \
             automatically generated upon initialization of a :class:`.Model`.
         _needs_seed
