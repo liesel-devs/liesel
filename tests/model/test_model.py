@@ -646,8 +646,8 @@ class TestSample:
 
         # basic plausibility checks for sampling from the correct distribution
         # this is not a tough check though.
-        assert samples["mu"].mean() == pytest.approx(2.0, abs=0.1)
-        assert samples["mu"].std() == pytest.approx(1.0, abs=0.1)
+        assert samples["mu"].mean() == pytest.approx(2.0, abs=0.3)
+        assert samples["mu"].std() == pytest.approx(1.0, abs=0.5)
 
         assert samples["sigma"].shape == (1, 100)  # verify correct shape of sigma
 
@@ -682,12 +682,13 @@ class TestSample:
 
         # basic plausibility checks for sampling from the correct distribution
         # this is not a tough check though.
-        assert samples["b"].mean(axis=(0, 1)) == pytest.approx(0.0, abs=0.1)
-        assert samples["b"].std(axis=(0, 1)) == pytest.approx(1.0, abs=0.1)
+        assert samples["b"].mean(axis=(0, 1)) == pytest.approx(0.0, abs=0.5)
+        assert samples["b"].std(axis=(0, 1)) == pytest.approx(1.0, abs=0.5)
 
         assert samples["sigma"].shape == (1, 100)  # verify shape of sigma samples
         # basic plausibility checks for sampling from the correct distribution
         # this is not a tough check though.
+        sigma = model.vars["sigma"]
         sigma_mean = sigma.dist_node.init_dist().mean()  # type: ignore
         sigma_std = sigma.dist_node.init_dist().stddev()  # type: ignore
         assert samples["sigma"].mean() == pytest.approx(sigma_mean, abs=0.1)

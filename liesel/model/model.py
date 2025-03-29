@@ -1439,6 +1439,7 @@ class Model:
         only sampled variables.
         """
         posterior_samples = posterior_samples if posterior_samples is not None else {}
+        state_before = self.state
 
         dists = [
             node
@@ -1462,7 +1463,8 @@ class Model:
         else:
             samples_shape = ()
 
-        seeds = jax.random.split(seed, samples_shape + (len(dists),))
+        nsamples = int(jnp.prod(jnp.asarray(shape)))
+        seeds = jax.random.split(seed, (nsamples,) + samples_shape + (len(dists),))
 
         sampling_specs = {}
 
@@ -1473,45 +1475,57 @@ class Model:
             batch_shape = tfp_dist.batch_shape
             value_shape = jnp.asarray(dist.at.value).shape  # type: ignore
             sample_index = len(value_shape) - len(batch_shape) - len(event_shape)
-            sample_shape = shape + value_shape[:sample_index]
+            sample_shape = value_shape[:sample_index]
 
             if isinstance(dist.at, VarValue):
                 var_name = dist.at.var.name  # type: ignore
+                value_var = dist.at.inputs[0]
             else:
                 var_name = dist.at.name  # type: ignore
+                value_var = dist.at  # type: ignore
 
             if var_name not in posterior_samples:
-                sampling_specs[var_name] = {"shape": sample_shape, "dist": dist, "i": i}
-
-        computational_model = self._copy_computational_model()
+                sampling_specs[var_name] = {
+                    "shape": sample_shape,
+                    "dist": dist,
+                    "i": i,
+                    "value_var": value_var,
+                }
 
         def one_draw(position, seeds):
-            updated_state = computational_model.update_state(position, self.state)
-            computational_model.state = updated_state
+            self.state = self.update_state(position, self.state)
 
             sampled_position = {}
             for name, spec in sampling_specs.items():
                 tfp_dist = spec["dist"].init_dist()
-                sampled_position[name] = tfp_dist.sample(
-                    spec["shape"], seeds[spec["i"]]
-                )
+                value = tfp_dist.sample(spec["shape"], seeds[spec["i"]])
+                sampled_position[name] = value
+                spec["value_var"].value = value
 
             return sampled_position
 
+        def reshape(a):
+            return jnp.reshape(a, shape=shape + a.shape[1:])
+
         if not posterior_samples:
-            return one_draw({}, seeds)
+            draw_chains = jax.vmap(one_draw, in_axes=(None, 0), out_axes=0)
+            drawn_samples = draw_chains({}, seeds)
+            self.state = state_before
+            return jax.tree.map(reshape, drawn_samples)
 
         draw_iter = jax.vmap(one_draw, in_axes=(0, 0), out_axes=0)
         draw_chains = jax.vmap(draw_iter, in_axes=(0, 0), out_axes=0)
+        draw_samples = jax.vmap(draw_chains, in_axes=(None, 0), out_axes=0)
         try:
-            drawn_samples = draw_chains(posterior_samples, seeds)
+            drawn_samples = draw_samples(posterior_samples, seeds)
+            self.state = state_before
         except Exception as e:
             msg = (
                 "Error during sampling. Make sure to check sample shapes! The values in"
                 " 'posterior_samples' must have two leading batching dimensions."
             )
             raise RuntimeError(msg) from e
-        return jax.tree.map(lambda x: jnp.moveaxis(x, 2, 0), drawn_samples)
+        return jax.tree.map(reshape, drawn_samples)
 
     @property
     def state(self) -> dict[str, NodeState]:
