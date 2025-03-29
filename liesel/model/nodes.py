@@ -8,7 +8,7 @@ import logging
 import warnings
 import weakref
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Hashable, Iterable
+from collections.abc import Callable, Hashable, Iterable, Sequence
 from functools import wraps
 from itertools import chain
 from types import MappingProxyType
@@ -23,6 +23,7 @@ from typing import (
     Union,
 )
 
+import jax
 import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as jd
 import tensorflow_probability.substrates.numpy.bijectors as nb
@@ -2073,6 +2074,53 @@ class Var:
         submodel = self.model.parental_submodel(self)
         pred = submodel.predict(samples=samples, predict=[self.name], newdata=newdata)
         return pred[self.name]
+
+    def sample(
+        self,
+        shape: Sequence[int],
+        seed: jax.random.KeyArray,
+        posterior_samples: dict[str, Array] | None = None,
+        fixed: Sequence[str] = (),
+    ) -> dict[str, Array]:
+        """
+        Draws samples from the parental model for this variable.
+
+        Parameters
+        ----------
+        shape
+            Sample shape.
+        seed
+            The seed is split and distributed to the distribution nodes in the model. \
+            Must be a ``KeyArray``, i.e. an array of shape (2,) and dtype ``uint32``. \
+            See :mod:`jax.random` for more details.
+        posterior_samples
+            Dictionary of samples at which to evaluate predictions. All values of the \
+            dictionary are assumed to have two leading dimensions corresponding to \
+            ``(nchains, niteration)``.
+        fixed
+            The names of the nodes or variables to be excluded from the simulation. \
+            By default, no nodes or variables are skipped.
+
+        Returns
+        -------
+        A dictionary of variable and node names and their sampled values. Includes
+        only sampled variables.
+        """
+        if self.model:
+            submodel = self.model.parental_submodel(self)
+            drawn_samples = submodel.sample(
+                shape=shape, seed=seed, posterior_samples=posterior_samples, fixed=fixed
+            )
+            return drawn_samples
+
+        from .model import TemporaryModel
+
+        with TemporaryModel(self, silent=True) as model:
+            drawn_samples = model.sample(
+                shape=shape, seed=seed, posterior_samples=posterior_samples, fixed=fixed
+            )
+
+            return drawn_samples
 
     def plot_nodes(
         self,
