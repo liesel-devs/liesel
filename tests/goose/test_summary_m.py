@@ -2,7 +2,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from liesel.goose.engine import SamplingResults
-from liesel.goose.summary_m import Summary
+from liesel.goose.summary_m import SamplesSummary, Summary
 
 # TODO: add tests to test correctness of quantities
 # TODO: speed up tests
@@ -221,3 +221,154 @@ def test_quantity_shape(result_for_quants: SamplingResults):
     assert summary.quantities["hdi"]["foo"].shape == (4, 2, 5)
     assert summary.quantities["hdi"]["bar"].shape == (4, 2, 3, 5, 7)
     assert summary.quantities["hdi"]["baz"].shape == (4, 2)
+
+
+class TestSamplesSummary:
+    def test_shapes(self, result: SamplingResults):
+        samples = result.get_posterior_samples()
+        summary = SamplesSummary(samples)
+
+        # combined chains
+        assert summary.quantities["mean"]["foo"].shape == (3,)
+        assert summary.quantities["mean"]["bar"].shape == (3, 5, 7)
+        assert summary.quantities["mean"]["baz"].shape == ()
+
+        assert summary.quantities["quantile"]["foo"].shape == (
+            3,
+            3,
+        )
+        assert summary.quantities["quantile"]["bar"].shape == (3, 3, 5, 7)
+        assert summary.quantities["quantile"]["baz"].shape == (3,)
+
+        assert summary.quantities["hdi"]["foo"].shape == (
+            2,
+            3,
+        )
+        assert summary.quantities["hdi"]["bar"].shape == (2, 3, 5, 7)
+        assert summary.quantities["hdi"]["baz"].shape == (2,)
+
+        # combined chains
+        summary = SamplesSummary(samples, quantiles=(0.2, 0.4), per_chain=True)
+
+        assert summary.quantities["mean"]["foo"].shape == (
+            3,
+            3,
+        )
+        assert summary.quantities["mean"]["bar"].shape == (3, 3, 5, 7)
+        assert summary.quantities["mean"]["baz"].shape == (3,)
+
+        assert summary.quantities["quantile"]["foo"].shape == (
+            3,
+            2,
+            3,
+        )
+        assert summary.quantities["quantile"]["bar"].shape == (3, 2, 3, 5, 7)
+        assert summary.quantities["quantile"]["baz"].shape == (3, 2)
+
+        assert summary.quantities["hdi"]["foo"].shape == (
+            3,
+            2,
+            3,
+        )
+        assert summary.quantities["hdi"]["bar"].shape == (3, 2, 3, 5, 7)
+        assert summary.quantities["hdi"]["baz"].shape == (
+            3,
+            2,
+        )
+
+    def test_selected(self, result: SamplingResults):
+        samples = result.get_posterior_samples()
+        summary = SamplesSummary(samples, selected=["foo"])
+
+        assert "foo" in summary.quantities["mean"]
+        assert "bar" not in summary.quantities["mean"]
+        assert "baz" not in summary.quantities["mean"]
+
+    def test_deselected(self, result: SamplingResults):
+        samples = result.get_posterior_samples()
+        summary = SamplesSummary(samples, deselected=["baz"])
+
+        assert "foo" in summary.quantities["mean"]
+        assert "bar" in summary.quantities["mean"]
+        assert "baz" not in summary.quantities["mean"]
+
+    def test_mean(self, result: SamplingResults):
+        samples = result.get_posterior_samples()
+        summary = SamplesSummary(samples)
+        assert jnp.allclose(
+            summary.quantities["mean"]["foo"], jnp.array([175.5, 176.5, 177.5])
+        )
+
+        assert jnp.allclose(
+            summary.quantities["mean"]["bar"], 175.5 * jnp.ones((3, 5, 7))
+        )
+
+        assert jnp.allclose(summary.quantities["mean"]["baz"], jnp.array(176.5))
+
+    def test_config(self, result: SamplingResults):
+        samples = result.get_posterior_samples()
+        summary = SamplesSummary(samples, quantiles=(0.4, 0.6), hdi_prob=0.5)
+        assert summary.config["chains_merged"]
+        assert summary.config["quantiles"] == (0.4, 0.6)
+        assert summary.config["hdi_prob"] == 0.5
+
+    def test_sample_info(self, result: SamplingResults):
+        samples = result.get_posterior_samples()
+        summary = SamplesSummary(samples)
+        print(summary.sample_info)
+        assert summary.sample_info["num_chains"] == 3
+        assert summary.sample_info["sample_size_per_chain"] == 250
+
+    def test_df_sample_info(self, result: SamplingResults):
+        samples = result.get_posterior_samples()
+        summary = SamplesSummary(samples, selected=["baz"]).to_dataframe()
+        assert summary["sample_size"].iloc[0] == 3 * 250
+
+        summary = Summary(result, per_chain=True, selected=["baz"]).to_dataframe()
+        assert summary["sample_size"].iloc[0] == 250
+
+    def test_per_chain_quantiles(self, result: SamplingResults):
+        samples = result.get_posterior_samples()
+        summary = SamplesSummary(samples, per_chain=True)
+        cols = [
+            "var_fqn",
+            "chain_index",
+            "mean",
+            "q_0.05",
+            "q_0.5",
+            "q_0.95",
+            "hdi_low",
+            "hdi_high",
+        ]
+        df = summary.to_dataframe().loc["baz"][cols]
+
+        assert np.allclose(df["q_0.05"], 64.449997)
+        assert np.allclose(df["q_0.5"], 176.5)
+        assert np.allclose(df["q_0.95"], 288.549988)
+        assert np.allclose(df["hdi_low"], 52.0)
+        assert np.allclose(df["hdi_high"], 277.0)
+
+    def test_quantity_shape(self, result_for_quants: SamplingResults):
+        """
+        Confirms that the HDI and quantile quantities at the summary object have the
+        intended shape:
+
+        - First index refers to the chain
+        - Second index refers to the quantile/hdi
+        - Following indices refer to individual parameters
+        """
+        samples = result_for_quants.get_posterior_samples()
+        summary = SamplesSummary(samples, per_chain=True)
+
+        assert summary.quantities["quantile"]["foo"].shape == (4, 3, 5)
+        assert summary.quantities["quantile"]["bar"].shape == (4, 3, 3, 5, 7)
+        assert summary.quantities["quantile"]["baz"].shape == (4, 3)
+
+        assert summary.quantities["hdi"]["foo"].shape == (4, 2, 5)
+        assert summary.quantities["hdi"]["bar"].shape == (4, 2, 3, 5, 7)
+        assert summary.quantities["hdi"]["baz"].shape == (4, 2)
+
+    def test_from_array(self, result: SamplingResults):
+        samples = result.get_posterior_samples()
+        summary = SamplesSummary.from_array(samples["bar"], name="test")
+        assert summary.to_dataframe().shape == (105, 16)

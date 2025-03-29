@@ -20,7 +20,7 @@ from .models import DataClassModel, DictModel
 from .nuts import NUTSKernel
 from .optim import OptimResult, Stopper, history_to_df, optim_flat
 from .rw import RWKernel
-from .summary_m import Summary
+from .summary_m import SamplesSummary, Summary
 from .summary_viz import (
     plot_cor,
     plot_density,
@@ -55,6 +55,7 @@ __all__ = [
     "Stopper",
     "RWKernel",
     "Summary",
+    "SamplesSummary",
     "SamplingResults",
     "plot_cor",
     "plot_density",
