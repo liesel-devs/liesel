@@ -690,6 +690,23 @@ class SamplesSummary:
         per_chain: bool = False,
         name: str = "v",
     ) -> SamplesSummary:
+        """
+        Initializes the summary from an array of samples.
+
+        Parameters
+        ----------
+        a
+            The array of samples to summarize.
+        hdi_prob
+            Level on which to return posterior highest density intervals.
+        selected, deselected
+            Allow to get a summary only for a subset of the position keys.
+        per_chain
+            If *True*, the summary is calculated on a per-chain basis. Certain \
+            measures like ``rhat`` are not available if ``per_chain`` is *True*.
+        name
+            Variable name to use for labelling in :meth:`.to_dataframe`.
+        """
         samples = {name: a}
         return cls(samples, quantiles, hdi_prob, selected, deselected, per_chain)
 
