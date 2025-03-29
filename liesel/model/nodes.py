@@ -1333,6 +1333,7 @@ class Var:
         cls,
         function: Callable[..., Any],
         *inputs: Any,
+        distribution: Dist | None = None,
         name: str = "",
         _needs_seed: bool = False,
         update_on_init: bool = True,
@@ -1360,6 +1361,8 @@ class Var:
             will be converted to :class:`.Value` nodes. The values of these inputs \
             will be passed to the wrapped function in the same order they are entered \
             here.
+        distribution
+            The probability distribution of the variable.
         _name
             The name of the node. If you do not specify a name, a unique name will be \
             automatically generated upon initialization of a :class:`.Model`.
@@ -1426,7 +1429,7 @@ class Var:
             update_on_init=update_on_init,
             **kwinputs,
         )
-        var = cls(calc, name=name)
+        var = cls(calc, distribution=distribution, name=name)
         return var
 
     @classmethod
