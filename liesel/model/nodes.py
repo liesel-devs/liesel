@@ -1502,7 +1502,7 @@ class Var:
     def mcmc_kernel(self) -> Kernel | None:
         """MCMC kernel for this variable."""
         if isinstance(self._mcmc_kernel, type):
-            return self._mcmc_kernel([self.name])  # type: ignore
+            self._mcmc_kernel = self._mcmc_kernel([self.name])  # type: ignore
 
         return self._mcmc_kernel
 
