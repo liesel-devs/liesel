@@ -504,3 +504,68 @@ def test_save_model() -> None:
     fh = tempfile.TemporaryFile()
     save_model(model, fh)
     fh.close()
+
+
+class TestJittering:
+    def test_jitter(self):
+        mu = Var(1.0, name="mu", jitter_dist=tfd.Uniform(low=-1.0, high=1.0))
+        jittered_value = mu.apply_jitter(seed=rnd.key(1))
+
+        assert mu.value != pytest.approx(jittered_value)
+
+    def test_model_jitter(self):
+        mu = Var(
+            jnp.array([1.0, 2.0]),
+            name="mu",
+            jitter_dist=tfd.Uniform(low=-1.0, high=1.0),
+        )
+
+        sigma = Var(1.0, name="sigma", jitter_dist=tfd.Uniform(low=-0.5, high=1.0))
+
+        y = Var(jnp.array([2.0, 3.0]), Dist(tfd.Normal, loc=mu, scale=sigma), name="y")
+
+        model = Model([y])
+        model.apply_jitter(rnd.key(1))
+
+        assert not jnp.allclose(mu.value, jnp.array([1.0, 2.0]))
+        assert not jnp.allclose(sigma.value, 1.0)
+
+        assert jnp.allclose(y.value, jnp.array([2.0, 3.0]))
+
+    def test_engine_jitter(self):
+        mu = Var(
+            jnp.array([1.0, 2.0]),
+            name="mu",
+            jitter_dist=tfd.Uniform(low=-1.0, high=1.0),
+        )
+
+        sigma = Var(1.0, name="sigma", jitter_dist=tfd.Uniform(low=-0.5, high=1.0))
+
+        y = Var(jnp.array([2.0, 3.0]), Dist(tfd.Normal, loc=mu, scale=sigma), name="y")
+
+        model = Model([y])
+
+        eb = gs.EngineBuilder(seed=2, num_chains=2)
+        eb.set_model(gs.LieselInterface(model))
+        eb.set_initial_values(model.state)
+        eb.set_duration(warmup_duration=200, posterior_duration=20)
+        eb.set_jitter_fns(model.jitter_functions())
+
+        eb.add_kernel(gs.NUTSKernel(["mu"]))
+        eb.add_kernel(gs.NUTSKernel(["sigma"]))
+
+        engine = eb.build()
+
+        assert not jnp.allclose(mu.value, engine._model_states["mu_value"][0][0])
+        assert not jnp.allclose(mu.value, engine._model_states["mu_value"][0][1])
+        assert not jnp.allclose(
+            engine._model_states["mu_value"][0][0],
+            engine._model_states["mu_value"][0][1],
+        )
+
+        assert not jnp.allclose(sigma.value, engine._model_states["sigma_value"][0][0])
+        assert not jnp.allclose(sigma.value, engine._model_states["sigma_value"][0][1])
+        assert not jnp.allclose(
+            engine._model_states["sigma_value"][0][0],
+            engine._model_states["sigma_value"][0][1],
+        )

@@ -41,6 +41,7 @@ from .nodes import (
 from .viz import plot_nodes, plot_vars
 
 if TYPE_CHECKING:
+    from ..goose.builder import JitterFunctions
     from ..goose.kernel import Kernel
 
 __all__ = ["GraphBuilder", "Model", "load_model", "save_model"]
@@ -1541,6 +1542,33 @@ class Model:
         return {
             k: v.mcmc_kernel for k, v in self.vars.items() if v.mcmc_kernel is not None
         }
+
+    def jitter_functions(self) -> JitterFunctions:
+        """
+        Returns a dictionary of variable names and their jitter functions.
+
+        The output can be passed directly to
+        :meth:`.goose.EngineBuilder.set_jitter_fns`.
+        """
+        return {
+            var.name: var.apply_jitter
+            for var in self.vars.values()
+            if var.jitter_dist is not None
+        }
+
+    def apply_jitter(self, seed: jax.random.KeyArray) -> Model:
+        """
+        Applies jittering to the values of all variables in the model according to
+        their :attr:`.Var.jitter_dist`.
+        """
+        vars_ = self.vars
+        seeds = jax.random.split(seed, len(vars_))
+
+        for var, seed in zip(vars_.values(), seeds):
+            if var.jitter_dist is not None:
+                var.value = var.apply_jitter(seed)
+
+        return self
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

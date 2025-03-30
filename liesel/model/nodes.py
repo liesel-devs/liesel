@@ -23,6 +23,7 @@ from typing import (
     Union,
 )
 
+import jax.numpy as jnp
 import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as jd
 import tensorflow_probability.substrates.numpy.bijectors as nb
@@ -32,6 +33,8 @@ from ..distributions.nodist import NoDistribution
 from .viz import plot_nodes, plot_vars
 
 if TYPE_CHECKING:
+    from jax.random import KeyArray
+
     from ..goose.kernel import Kernel
     from .model import Model
 
@@ -1165,6 +1168,11 @@ class Var:
         A :class:`.goose.Kernel` instance or class for easy access via the \
         :attr:`.mcmc_kernel` attribute and collection in the \
         :meth:`~liesel.model.Model.mcmc_kernels` method.
+    jitter_dist
+        A :class:`~tfp.distributions.Distribution` instance that can be used to apply \
+        jittering to the variable's value in :meth:`.Var.apply_jitter`. Also used in \
+        :meth:`.Model.apply_jitter` and :meth:`.Model.jitter_functions`. If ``None`` \
+        (default), no jittering will be applied.
 
     See Also
     --------
@@ -1204,6 +1212,7 @@ class Var:
         "_role",
         "_value_node",
         "_var_value_node",
+        "_jitter_dist",
     )
 
     def __init__(
@@ -1212,6 +1221,7 @@ class Var:
         distribution: Dist | None = None,
         name: str = "",
         mcmc_kernel: type[Kernel] | Kernel | None = None,
+        jitter_dist: Distribution | None = None,
     ):
         self._name = name
         self._value_node: Node = Value(None)
@@ -1232,6 +1242,7 @@ class Var:
         self._observed = False
         self._parameter = False
         self._role = ""
+        self._jitter_dist = jitter_dist
 
         self._mcmc_kernel = mcmc_kernel
 
@@ -1245,6 +1256,7 @@ class Var:
         distribution: Dist | None = None,
         name: str = "",
         mcmc_kernel: type[Kernel] | Kernel | None = None,
+        jitter_dist: Distribution | None = None,
     ) -> Var:
         """
         Initializes a strong variable that acts as a model parameter.
@@ -1291,7 +1303,9 @@ class Var:
         Var(name="")
 
         """
-        var = cls(value, distribution, name, mcmc_kernel=mcmc_kernel)
+        var = cls(
+            value, distribution, name, mcmc_kernel=mcmc_kernel, jitter_dist=jitter_dist
+        )
         var.value_node.monitor = True
         var.parameter = True
         return var
@@ -1455,6 +1469,7 @@ class Var:
         value: Any,
         name: str = "",
         mcmc_kernel: type[Kernel] | Kernel | None = None,
+        jitter_dist: Distribution | None = None,
     ) -> Var:
         """
         Initializes a strong variable without a distribution.
@@ -1490,7 +1505,7 @@ class Var:
         Var(name="")
 
         """
-        var = cls(value, name=name, mcmc_kernel=mcmc_kernel)
+        var = cls(value, name=name, mcmc_kernel=mcmc_kernel, jitter_dist=jitter_dist)
         return var
 
     @property
@@ -1725,6 +1740,12 @@ class Var:
         if self._mcmc_kernel is not None:
             logger.warning(f"Removing MCMC kernel {self._mcmc_kernel} from {self}.")
             self._mcmc_kernel = None
+
+        if self._jitter_dist is not None:
+            logger.warning(
+                f"Removing jitter distribution {self.jitter_dist} from {self}."
+            )
+            self._jitter_dist = None
 
         return tvar
 
@@ -2198,6 +2219,42 @@ class Var:
             height=height,
             prog=prog,
         )
+
+    def apply_jitter(self, seed: KeyArray, value: Array | None = None) -> Array:
+        """
+        Applies jittering to ``value`` according to :attr:`.jitter_dist`.
+
+        Returns ``value + jitter``. The method does not update the variable's value
+        inplace. If ``value`` is ``None`` (default), the variable's current value is
+        used.
+        """
+        if self._jitter_dist is None:
+            return value
+
+        value = value if value is not None else self.value
+        original_shape = jnp.asarray(value).shape
+        value = jnp.atleast_1d(value)
+
+        jitter = self._jitter_dist.sample(sample_shape=jnp.shape(value), seed=seed)
+
+        return jnp.reshape(value + jitter, original_shape)
+
+    @property
+    def jitter_dist(self) -> Distribution | None:
+        """Jitter distribution, used in :meth:`.apply_jitter`."""
+        return self._jitter_dist
+
+    @jitter_dist.setter
+    def jitter_dist(self, value: Distribution):
+        if self.weak:
+            raise ValueError(
+                "Jittering distributions cannot be set for weak variables."
+            )
+        if self.observed:
+            raise ValueError(
+                "Jittering distributions cannot be set for observed variables."
+            )
+        self._jitter_dist = value
 
 
 def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) -> Var:
