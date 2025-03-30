@@ -381,6 +381,27 @@ class TestModel:
         assert len(kernels) == 1
         assert isinstance(kernels["mu"], gs.NUTSKernel)
 
+    @pytest.mark.mcmc
+    def test_mcmc_engine(self):
+        mu = Var(
+            value=0.0,
+            distribution=Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="mu",
+            mcmc_kernel=gs.NUTSKernel,
+        )
+
+        y = Var(
+            jnp.linspace(-3, 3, 50),
+            distribution=Dist(tfd.Normal, loc=mu, scale=1.0),
+            name="y",
+        )
+
+        model = Model([y])
+        engine = model.mcmc_engine(
+            seed=1, num_chains=4, warmup_duration=200, posterior_duration=20
+        )
+        engine.sample_all_epochs()
+
 
 @pytest.mark.xfail
 class TestUserDefinedModelNodes:
