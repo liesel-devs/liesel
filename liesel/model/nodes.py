@@ -1634,9 +1634,6 @@ class Var:
             tvar.parameter = self.parameter  # type: ignore
             self.parameter = False
 
-        elif self.dist_node is None:  # type: ignore
-            raise RuntimeError(f"{repr(self)} has no distribution")
-
         else:
             # avoid infinite recursion
             self.auto_transform = False
