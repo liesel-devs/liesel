@@ -1498,6 +1498,7 @@ class Var:
         self,
         bijector: type[jb.Bijector] | jb.Bijector | None = None,
         *bijector_args,
+        name: str | None = None,
         **bijector_kwargs,
     ) -> Var:
         """
@@ -1521,6 +1522,10 @@ class Var:
             directly.
         bijector_args
             The arguments passed on to the init function of the bijector.
+        name
+            Name for the new, transformed variable. If ``None`` (default), the new \
+            name will be ``<old_name>_transformed``, where ``<old_name>`` is \
+            a placeholder for the current variable's name.
         bijector_kwargs
             The keyword arguments passed on to the init function of the bijector.
 
@@ -1623,12 +1628,18 @@ class Var:
             )
             tvar.parameter = self.parameter  # type: ignore
             self.parameter = False
+
+            if name is not None:
+                tvar.name = name
+
             return tvar
 
         elif self.dist_node is None:
             tvar = _transform_var_without_dist_with_bijector_instance(self, bijector)
             tvar.parameter = self.parameter  # type: ignore
             self.parameter = False
+            if name is not None:
+                tvar.name = name
             return tvar
 
         if self.dist_node is None:  # type: ignore
@@ -1671,6 +1682,9 @@ class Var:
         tvar.parameter = self.parameter  # type: ignore
         self.parameter = False
         self.dist_node = None
+
+        if name is not None:
+            tvar.name = name
 
         return tvar
 
