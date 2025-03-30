@@ -1722,6 +1722,10 @@ class Var:
         self.parameter = False
         self.dist_node = None
 
+        if self._mcmc_kernel is not None:
+            logger.warning(f"Removing MCMC kernel {self._mcmc_kernel} from {self}.")
+            self._mcmc_kernel = None
+
         return tvar
 
     @in_model_method
