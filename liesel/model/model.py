@@ -1605,6 +1605,11 @@ class Model:
             :class:`.goose.Engine`. Otherwise, it returns a pre-filled \
             :class:`.goose.EngineBuilder`. The latter may be useful for custom changes \
             to the MCMC engine after an initial setup.
+
+        See Also
+        --------
+        .goose.EngineBuilder : The engine builder class.
+        .goose.Engine : The engine class.
         """
 
         eb = EngineBuilder(seed=seed, num_chains=num_chains)
