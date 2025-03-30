@@ -1302,7 +1302,6 @@ class Var:
         value: Any,
         distribution: Dist | None = None,
         name: str = "",
-        mcmc_kernel: type[Kernel] | Kernel | None = None,
     ) -> Var:
         """
         Initializes a strong variable that holds observed data.
@@ -1320,10 +1319,6 @@ class Var:
         name
             The name of the variable. If you do not specify a name, a unique name will \
             be automatically generated upon initialization of a :class:`.Model`.
-        mcmc_kernel
-            A :class:`.goose.Kernel` instance or class for easy access via the \
-            :attr:`.mcmc_kernel` attribute and collection in the \
-            :meth:`~liesel.model.Model.mcmc_kernels` method.
 
         See Also
         --------
@@ -1349,7 +1344,7 @@ class Var:
         Var(name="")
 
         """
-        var = cls(value, distribution, name, mcmc_kernel=mcmc_kernel)
+        var = cls(value, distribution, name)
         var.observed = True
         return var
 
