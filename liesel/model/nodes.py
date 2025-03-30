@@ -1502,7 +1502,16 @@ class Var:
         return self._mcmc_kernel
 
     @mcmc_kernel.setter
-    def mcmc_kernel(self, value: Kernel):
+    def mcmc_kernel(self, value: type[Kernel] | Kernel | None):
+        if value is None:
+            self._mcmc_kernel = value
+            return
+
+        if self.weak:
+            raise ValueError(f"{self} is weak, cannot set MCMC kernel.")
+        if self.observed:
+            raise ValueError(f"{self} is observed, cannot set MCMC kernel.")
+
         self._mcmc_kernel = value
 
     def all_input_nodes(self) -> tuple[Node, ...]:
