@@ -1594,7 +1594,7 @@ class Model:
             See :class:`.goose.EngineBuilder`.
         warmup_duration, posterior_duration, term_duration
             See :meth:`.goose.EngineBuilder.set_duration`.
-        thinning_posterior, thinning_war
+        thinning_posterior, thinning_warmup
             See :meth:`.goose.EngineBuilder.set_duration`.
         apply_jitter
             If ``True`` (default), jitter functions will be automatically set with the \
