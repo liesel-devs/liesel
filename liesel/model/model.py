@@ -11,7 +11,7 @@ from collections import Counter
 from collections.abc import Iterable
 from copy import deepcopy
 from types import MappingProxyType
-from typing import IO, Any, Literal, TypeVar
+from typing import IO, TYPE_CHECKING, Any, Literal, TypeVar
 
 import dill
 import jax
@@ -23,6 +23,7 @@ import tensorflow_probability.substrates.jax.distributions as jd
 import tensorflow_probability.substrates.numpy.bijectors as nb
 import tensorflow_probability.substrates.numpy.distributions as nd
 
+from ..goose import EngineBuilder, LieselInterface
 from .nodes import (
     ArgGroup,
     Array,
@@ -39,6 +40,12 @@ from .nodes import (
     is_bijector_class,
 )
 from .viz import plot_nodes, plot_vars
+
+if TYPE_CHECKING:
+    from ..goose.builder import JitterFunctions
+    from ..goose.engine import Engine
+    from ..goose.kernel import Kernel
+
 
 __all__ = ["GraphBuilder", "Model", "load_model", "save_model"]
 
@@ -1532,6 +1539,100 @@ class Model:
             height=height,
             prog=prog,
         )
+
+    def mcmc_kernels(self) -> dict[str, Kernel]:
+        """Returns dictionary of variable names and corresponding MCMC kernels."""
+        return {
+            k: v.mcmc_kernel for k, v in self.vars.items() if v.mcmc_kernel is not None
+        }
+
+    def jitter_functions(self) -> JitterFunctions:
+        """
+        Returns a dictionary of variable names and their jitter functions.
+
+        The output can be passed directly to
+        :meth:`.goose.EngineBuilder.set_jitter_fns`.
+        """
+        return {
+            var.name: var.apply_jitter
+            for var in self.vars.values()
+            if var.jitter_dist is not None
+        }
+
+    def apply_jitter(self, seed: jax.random.KeyArray) -> Model:
+        """
+        Applies jittering to the values of all variables in the model according to
+        their :attr:`.Var.jitter_dist`.
+        """
+        vars_ = self.vars
+        seeds = jax.random.split(seed, len(vars_))
+
+        for var, seed in zip(vars_.values(), seeds):
+            if var.jitter_dist is not None:
+                var.value = var.apply_jitter(seed)
+
+        return self
+
+    def mcmc_engine(
+        self,
+        seed: int,
+        num_chains: int,
+        warmup_duration: int,
+        posterior_duration: int,
+        term_duration: int = 50,
+        thinning_posterior: int = 1,
+        thinning_warmup: int = 1,
+        apply_jitter: bool = True,
+        build: bool = True,
+    ) -> Engine | EngineBuilder:
+        """
+        Sets up an MCMC engine for this model.
+
+        Parameters
+        ----------
+        seed, num_chains
+            See :class:`.goose.EngineBuilder`.
+        warmup_duration, posterior_duration, term_duration
+            See :meth:`.goose.EngineBuilder.set_duration`.
+        thinning_posterior, thinning_warmup
+            See :meth:`.goose.EngineBuilder.set_duration`.
+        apply_jitter
+            If ``True`` (default), jitter functions will be automatically set with the \
+            default jitter functions implied by the model variables' \
+            :attr:`.Var.jitter_dist`.
+        build
+            If ``True`` (default), the function returns the built \
+            :class:`.goose.Engine`. Otherwise, it returns a pre-filled \
+            :class:`.goose.EngineBuilder`. The latter may be useful for custom changes \
+            to the MCMC engine after an initial setup.
+
+        See Also
+        --------
+        .goose.EngineBuilder : The engine builder class.
+        .goose.Engine : The engine class.
+        """
+
+        eb = EngineBuilder(seed=seed, num_chains=num_chains)
+        eb.set_model(LieselInterface(self))
+        eb.set_initial_values(self.state)
+        eb.set_duration(
+            warmup_duration=warmup_duration,
+            posterior_duration=posterior_duration,
+            term_duration=term_duration,
+            thinning_posterior=thinning_posterior,
+            thinning_warmup=thinning_warmup,
+        )
+
+        for kernel in self.mcmc_kernels().values():
+            eb.add_kernel(kernel)
+
+        if apply_jitter:
+            eb.set_jitter_fns(self.jitter_functions())
+
+        if build:
+            return eb.build()
+
+        return eb
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

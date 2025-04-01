@@ -23,6 +23,7 @@ from typing import (
     Union,
 )
 
+import jax.numpy as jnp
 import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as jd
 import tensorflow_probability.substrates.numpy.bijectors as nb
@@ -32,6 +33,9 @@ from ..distributions.nodist import NoDistribution
 from .viz import plot_nodes, plot_vars
 
 if TYPE_CHECKING:
+    from jax.random import KeyArray
+
+    from ..goose.kernel import Kernel
     from .model import Model
 
 __all__ = [
@@ -1160,6 +1164,15 @@ class Var:
     name
         The name of the variable. If you do not specify a name, a unique name will be \
         automatically generated upon initialization of a :class:`.Model`.
+    mcmc_kernel
+        A :class:`.goose.Kernel` instance or class for easy access via the \
+        :attr:`.mcmc_kernel` attribute and collection in the \
+        :meth:`~liesel.model.Model.mcmc_kernels` method.
+    jitter_dist
+        A :class:`~tfp.distributions.Distribution` instance that can be used to apply \
+        jittering to the variable's value in :meth:`.Var.apply_jitter`. Also used in \
+        :meth:`.Model.apply_jitter` and :meth:`.Model.jitter_functions`. If ``None`` \
+        (default), no jittering will be applied.
 
     See Also
     --------
@@ -1189,6 +1202,7 @@ class Var:
 
     __slots__ = (
         "info",
+        "_mcmc_kernel",
         "_auto_transform",
         "_dist_node",
         "_groups",
@@ -1198,6 +1212,7 @@ class Var:
         "_role",
         "_value_node",
         "_var_value_node",
+        "_jitter_dist",
     )
 
     def __init__(
@@ -1205,6 +1220,8 @@ class Var:
         value: Any,
         distribution: Dist | None = None,
         name: str = "",
+        mcmc_kernel: type[Kernel] | Kernel | None = None,
+        jitter_dist: Distribution | None = None,
     ):
         self._name = name
         self._value_node: Node = Value(None)
@@ -1225,13 +1242,21 @@ class Var:
         self._observed = False
         self._parameter = False
         self._role = ""
+        self._jitter_dist = jitter_dist
+
+        self._mcmc_kernel = mcmc_kernel
 
         self.info: dict[str, Any] = {}
         """Additional meta-information about the variable as a dict."""
 
     @classmethod
     def new_param(
-        cls, value: Any, distribution: Dist | None = None, name: str = ""
+        cls,
+        value: Any,
+        distribution: Dist | None = None,
+        name: str = "",
+        mcmc_kernel: type[Kernel] | Kernel | None = None,
+        jitter_dist: Distribution | None = None,
     ) -> Var:
         """
         Initializes a strong variable that acts as a model parameter.
@@ -1249,6 +1274,10 @@ class Var:
         name
             The name of the variable. If you do not specify a name, a unique name will \
             be automatically generated upon initialization of a :class:`.Model`.
+        mcmc_kernel
+            A :class:`.goose.Kernel` instance or class for easy access via the \
+            :attr:`.mcmc_kernel` attribute and collection in the \
+            :meth:`~liesel.model.Model.mcmc_kernels` method.
 
         See Also
         --------
@@ -1274,14 +1303,19 @@ class Var:
         Var(name="")
 
         """
-        var = cls(value, distribution, name)
+        var = cls(
+            value, distribution, name, mcmc_kernel=mcmc_kernel, jitter_dist=jitter_dist
+        )
         var.value_node.monitor = True
         var.parameter = True
         return var
 
     @classmethod
     def new_obs(
-        cls, value: Any, distribution: Dist | None = None, name: str = ""
+        cls,
+        value: Any,
+        distribution: Dist | None = None,
+        name: str = "",
     ) -> Var:
         """
         Initializes a strong variable that holds observed data.
@@ -1430,7 +1464,13 @@ class Var:
         return var
 
     @classmethod
-    def new_value(cls, value: Any, name: str = "") -> Var:
+    def new_value(
+        cls,
+        value: Any,
+        name: str = "",
+        mcmc_kernel: type[Kernel] | Kernel | None = None,
+        jitter_dist: Distribution | None = None,
+    ) -> Var:
         """
         Initializes a strong variable without a distribution.
 
@@ -1443,6 +1483,10 @@ class Var:
         name
             The name of the variable. If you do not specify a name, a unique name will \
             be automatically generated upon initialization of a :class:`.Model`.
+        mcmc_kernel
+            A :class:`.goose.Kernel` instance or class for easy access via the \
+            :attr:`.mcmc_kernel` attribute and collection in the \
+            :meth:`~liesel.model.Model.mcmc_kernels` method.
 
         See Also
         --------
@@ -1461,8 +1505,29 @@ class Var:
         Var(name="")
 
         """
-        var = cls(value, name=name)
+        var = cls(value, name=name, mcmc_kernel=mcmc_kernel, jitter_dist=jitter_dist)
         return var
+
+    @property
+    def mcmc_kernel(self) -> Kernel | None:
+        """MCMC kernel for this variable."""
+        if isinstance(self._mcmc_kernel, type):
+            self._mcmc_kernel = self._mcmc_kernel([self.name])  # type: ignore
+
+        return self._mcmc_kernel
+
+    @mcmc_kernel.setter
+    def mcmc_kernel(self, value: type[Kernel] | Kernel | None):
+        if value is None:
+            self._mcmc_kernel = value
+            return
+
+        if self.weak:
+            raise ValueError(f"{self} is weak, cannot set MCMC kernel.")
+        if self.observed:
+            raise ValueError(f"{self} is observed, cannot set MCMC kernel.")
+
+        self._mcmc_kernel = value
 
     def all_input_nodes(self) -> tuple[Node, ...]:
         """Returns all input *nodes* as a unique tuple."""
@@ -1623,54 +1688,60 @@ class Var:
             )
             tvar.parameter = self.parameter  # type: ignore
             self.parameter = False
-            return tvar
 
         elif self.dist_node is None:
             tvar = _transform_var_without_dist_with_bijector_instance(self, bijector)
             tvar.parameter = self.parameter  # type: ignore
             self.parameter = False
-            return tvar
 
-        if self.dist_node is None:  # type: ignore
-            raise RuntimeError(f"{repr(self)} has no distribution")
-
-        # avoid infinite recursion
-        self.auto_transform = False
-
-        # use default event space bijector if bijector is None
-        use_default_bijector = bijector is None
-        if use_default_bijector:
-            dist_inst = self.dist_node.init_dist()
-            default_bijector = dist_inst.experimental_default_event_space_bijector
-
-        if use_default_bijector and default_bijector is None:
-            raise RuntimeError(
-                f"{self} has distribution without default event space bijector "
-                "and no bijector was given"
-            )
-
-        if is_bijector_class(bijector) or use_default_bijector:
-            tvar = _transform_var_with_bijector_class(
-                self, bijector, *bijector_args, **bijector_kwargs
-            )
-        elif isinstance(bijector, jb.Bijector):
-            if bijector_args or bijector_kwargs:
-                raise RuntimeError(
-                    "You passed a bijector instance and "
-                    "nonempty bijector arguments. You should either initialise your "
-                    "bijector directly with the arguments, or pass a bijector class "
-                    "instead. The first option is preferred, if the bijector arguments"
-                    "are constant."
-                )
-            tvar = _transform_var_with_bijector_instance(self, bijector)
         else:
-            raise TypeError(
-                f"Argument {bijector=} is of invalid type {type(bijector)}."
-            )
+            # avoid infinite recursion
+            self.auto_transform = False
 
-        tvar.parameter = self.parameter  # type: ignore
-        self.parameter = False
-        self.dist_node = None
+            # use default event space bijector if bijector is None
+            use_default_bijector = bijector is None
+            if use_default_bijector:
+                dist_inst = self.dist_node.init_dist()
+                default_bijector = dist_inst.experimental_default_event_space_bijector
+
+            if use_default_bijector and default_bijector is None:
+                raise RuntimeError(
+                    f"{self} has distribution without default event space bijector "
+                    "and no bijector was given"
+                )
+
+            if is_bijector_class(bijector) or use_default_bijector:
+                tvar = _transform_var_with_bijector_class(
+                    self, bijector, *bijector_args, **bijector_kwargs
+                )
+            elif isinstance(bijector, jb.Bijector):
+                if bijector_args or bijector_kwargs:
+                    raise RuntimeError(
+                        "You passed a bijector instance and nonempty bijector"
+                        " arguments. You should either initialise your bijector"
+                        " directly with the arguments, or pass a bijector class"
+                        " instead. The first option is preferred, if the bijector"
+                        " argumentsare constant."
+                    )
+                tvar = _transform_var_with_bijector_instance(self, bijector)
+            else:
+                raise TypeError(
+                    f"Argument {bijector=} is of invalid type {type(bijector)}."
+                )
+
+            tvar.parameter = self.parameter  # type: ignore
+            self.parameter = False
+            self.dist_node = None
+
+        if self._mcmc_kernel is not None:
+            logger.warning(f"Removing MCMC kernel {self._mcmc_kernel} from {self}.")
+            self._mcmc_kernel = None
+
+        if self._jitter_dist is not None:
+            logger.warning(
+                f"Removing jitter distribution {self.jitter_dist} from {self}."
+            )
+            self._jitter_dist = None
 
         return tvar
 
@@ -2144,6 +2215,42 @@ class Var:
             height=height,
             prog=prog,
         )
+
+    def apply_jitter(self, seed: KeyArray, value: Array | None = None) -> Array:
+        """
+        Applies jittering to ``value`` according to :attr:`.jitter_dist`.
+
+        Returns ``value + jitter``. The method does not update the variable's value
+        inplace. If ``value`` is ``None`` (default), the variable's current value is
+        used.
+        """
+        if self._jitter_dist is None:
+            return value
+
+        value = value if value is not None else self.value
+        original_shape = jnp.asarray(value).shape
+        value = jnp.atleast_1d(value)
+
+        jitter = self._jitter_dist.sample(sample_shape=jnp.shape(value), seed=seed)
+
+        return jnp.reshape(value + jitter, original_shape)
+
+    @property
+    def jitter_dist(self) -> Distribution | None:
+        """Jitter distribution, used in :meth:`.apply_jitter`."""
+        return self._jitter_dist
+
+    @jitter_dist.setter
+    def jitter_dist(self, value: Distribution):
+        if self.weak:
+            raise ValueError(
+                "Jittering distributions cannot be set for weak variables."
+            )
+        if self.observed:
+            raise ValueError(
+                "Jittering distributions cannot be set for observed variables."
+            )
+        self._jitter_dist = value
 
 
 def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) -> Var:
