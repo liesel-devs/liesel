@@ -11,7 +11,7 @@ from collections import Counter
 from collections.abc import Iterable
 from copy import deepcopy
 from types import MappingProxyType
-from typing import IO, Any, Literal, TypeVar
+from typing import IO, TYPE_CHECKING, Any, Literal, TypeVar
 
 import dill
 import jax
@@ -39,6 +39,9 @@ from .nodes import (
     is_bijector_class,
 )
 from .viz import plot_nodes, plot_vars
+
+if TYPE_CHECKING:
+    from ..goose.builder import JitterFunctions
 
 __all__ = ["GraphBuilder", "Model", "load_model", "save_model"]
 
@@ -1532,6 +1535,33 @@ class Model:
             height=height,
             prog=prog,
         )
+
+    def jitter_functions(self) -> JitterFunctions:
+        """
+        Returns a dictionary of variable names and their jitter functions.
+
+        The output can be passed directly to
+        :meth:`.goose.EngineBuilder.set_jitter_fns`.
+        """
+        return {
+            var.name: var.apply_jitter
+            for var in self.vars.values()
+            if var.jitter_dist is not None
+        }
+
+    def apply_jitter(self, seed: jax.random.KeyArray) -> Model:
+        """
+        Applies jittering to the values of all variables in the model according to
+        their :attr:`.Var.jitter_dist`.
+        """
+        vars_ = self.vars
+        seeds = jax.random.split(seed, len(vars_))
+
+        for var, seed in zip(vars_.values(), seeds):
+            if var.jitter_dist is not None:
+                var.value = var.apply_jitter(seed)
+
+        return self
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

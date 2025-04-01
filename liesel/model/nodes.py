@@ -23,6 +23,7 @@ from typing import (
     Union,
 )
 
+import jax.numpy as jnp
 import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as jd
 import tensorflow_probability.substrates.numpy.bijectors as nb
@@ -32,6 +33,8 @@ from ..distributions.nodist import NoDistribution
 from .viz import plot_nodes, plot_vars
 
 if TYPE_CHECKING:
+    from jax.random import KeyArray
+
     from .model import Model
 
 __all__ = [
@@ -1160,6 +1163,11 @@ class Var:
     name
         The name of the variable. If you do not specify a name, a unique name will be \
         automatically generated upon initialization of a :class:`.Model`.
+    jitter_dist
+        A :class:`~tfp.distributions.Distribution` instance that can be used to apply \
+        jittering to the variable's value in :meth:`.Var.apply_jitter`. Also used in \
+        :meth:`.Model.apply_jitter` and :meth:`.Model.jitter_functions`. If ``None`` \
+        (default), no jittering will be applied.
 
     See Also
     --------
@@ -1198,6 +1206,7 @@ class Var:
         "_role",
         "_value_node",
         "_var_value_node",
+        "_jitter_dist",
     )
 
     def __init__(
@@ -1205,6 +1214,7 @@ class Var:
         value: Any,
         distribution: Dist | None = None,
         name: str = "",
+        jitter_dist: Distribution | None = None,
     ):
         self._name = name
         self._value_node: Node = Value(None)
@@ -1225,13 +1235,18 @@ class Var:
         self._observed = False
         self._parameter = False
         self._role = ""
+        self._jitter_dist = jitter_dist
 
         self.info: dict[str, Any] = {}
         """Additional meta-information about the variable as a dict."""
 
     @classmethod
     def new_param(
-        cls, value: Any, distribution: Dist | None = None, name: str = ""
+        cls,
+        value: Any,
+        distribution: Dist | None = None,
+        name: str = "",
+        jitter_dist: Distribution | None = None,
     ) -> Var:
         """
         Initializes a strong variable that acts as a model parameter.
@@ -1274,7 +1289,7 @@ class Var:
         Var(name="")
 
         """
-        var = cls(value, distribution, name)
+        var = cls(value, distribution, name, jitter_dist=jitter_dist)
         var.value_node.monitor = True
         var.parameter = True
         return var
@@ -1430,7 +1445,9 @@ class Var:
         return var
 
     @classmethod
-    def new_value(cls, value: Any, name: str = "") -> Var:
+    def new_value(
+        cls, value: Any, name: str = "", jitter_dist: Distribution | None = None
+    ) -> Var:
         """
         Initializes a strong variable without a distribution.
 
@@ -1461,7 +1478,7 @@ class Var:
         Var(name="")
 
         """
-        var = cls(value, name=name)
+        var = cls(value, name=name, jitter_dist=jitter_dist)
         return var
 
     def all_input_nodes(self) -> tuple[Node, ...]:
@@ -1671,6 +1688,12 @@ class Var:
         tvar.parameter = self.parameter  # type: ignore
         self.parameter = False
         self.dist_node = None
+
+        if self._jitter_dist is not None:
+            logger.warning(
+                f"Removing jitter distribution {self.jitter_dist} from {self}."
+            )
+            self._jitter_dist = None
 
         return tvar
 
@@ -2144,6 +2167,42 @@ class Var:
             height=height,
             prog=prog,
         )
+
+    def apply_jitter(self, seed: KeyArray, value: Array | None = None) -> Array:
+        """
+        Applies jittering to ``value`` according to :attr:`.jitter_dist`.
+
+        Returns ``value + jitter``. The method does not update the variable's value
+        inplace. If ``value`` is ``None`` (default), the variable's current value is
+        used.
+        """
+        if self._jitter_dist is None:
+            return value
+
+        value = value if value is not None else self.value
+        original_shape = jnp.asarray(value).shape
+        value = jnp.atleast_1d(value)
+
+        jitter = self._jitter_dist.sample(sample_shape=jnp.shape(value), seed=seed)
+
+        return jnp.reshape(value + jitter, original_shape)
+
+    @property
+    def jitter_dist(self) -> Distribution | None:
+        """Jitter distribution, used in :meth:`.apply_jitter`."""
+        return self._jitter_dist
+
+    @jitter_dist.setter
+    def jitter_dist(self, value: Distribution):
+        if self.weak:
+            raise ValueError(
+                "Jittering distributions cannot be set for weak variables."
+            )
+        if self.observed:
+            raise ValueError(
+                "Jittering distributions cannot be set for observed variables."
+            )
+        self._jitter_dist = value
 
 
 def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) -> Var:
