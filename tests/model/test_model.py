@@ -10,6 +10,7 @@ import jax.random as rnd
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
+import liesel.goose as gs
 from liesel.model.model import GraphBuilder, Model, save_model
 from liesel.model.nodes import Calc, Dist, Group, TransientNode, Value, Var
 
@@ -350,6 +351,35 @@ class TestModel:
 
         assert "x_transformed" in new_model.vars
         assert new_model.vars["x_transformed"].value == pytest.approx(0.54132485)
+
+    def test_mcmc_kernels(self):
+        mu = Var(
+            value=0.0,
+            distribution=Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="mu",
+            mcmc_kernel=gs.NUTSKernel,
+        )
+
+        model = Model([mu])
+
+        kernels = model.mcmc_kernels()
+
+        assert len(kernels) == 1
+        assert isinstance(kernels["mu"], gs.NUTSKernel)
+
+        mu = Var(
+            value=0.0,
+            distribution=Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="mu",
+            mcmc_kernel=gs.NUTSKernel(["mu"]),
+        )
+
+        model = Model([mu])
+
+        kernels = model.mcmc_kernels()
+
+        assert len(kernels) == 1
+        assert isinstance(kernels["mu"], gs.NUTSKernel)
 
 
 @pytest.mark.xfail

@@ -11,7 +11,7 @@ from collections import Counter
 from collections.abc import Iterable
 from copy import deepcopy
 from types import MappingProxyType
-from typing import IO, Any, Literal, TypeVar
+from typing import IO, TYPE_CHECKING, Any, Literal, TypeVar
 
 import dill
 import jax
@@ -39,6 +39,9 @@ from .nodes import (
     is_bijector_class,
 )
 from .viz import plot_nodes, plot_vars
+
+if TYPE_CHECKING:
+    from ..goose.kernel import Kernel
 
 __all__ = ["GraphBuilder", "Model", "load_model", "save_model"]
 
@@ -1532,6 +1535,12 @@ class Model:
             height=height,
             prog=prog,
         )
+
+    def mcmc_kernels(self) -> dict[str, Kernel]:
+        """Returns dictionary of variable names and corresponding MCMC kernels."""
+        return {
+            k: v.mcmc_kernel for k, v in self.vars.items() if v.mcmc_kernel is not None
+        }
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
