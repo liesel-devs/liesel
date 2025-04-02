@@ -14,6 +14,8 @@ import seaborn as sns
 
 from liesel.goose.engine import SamplingResults
 
+from .types import Array
+
 
 def _raise_chain_indices_error(
     chain_indices: Sequence[int], num_original_chains: int
@@ -254,7 +256,7 @@ def _collect_subparam_dfs(
 
 
 def _collect_param_dfs(
-    results: SamplingResults,
+    results: SamplingResults | dict[str, Array],
     params: str | list[str] | None = None,
     param_indices: int | Sequence[int] | None = None,
     chain_indices: int | Sequence[int] | None = None,
@@ -263,10 +265,13 @@ def _collect_param_dfs(
 ) -> pd.DataFrame:
     """Combines individual data frames for each parameter into a single data frame."""
 
-    if include_warmup:
+    if isinstance(results, dict):
+        samples = results
+    elif include_warmup:
         samples = results.get_samples()
     else:
         samples = results.get_posterior_samples()
+
     params = _validate_params(samples, params)
 
     return pd.concat(
@@ -280,7 +285,7 @@ def _collect_param_dfs(
 
 
 def _setup_plot_df(
-    results: SamplingResults,
+    results: SamplingResults | dict[str, Array],
     params: str | list[str] | None,
     param_indices: int | Sequence[int] | None,
     chain_indices: int | Sequence[int] | None,
@@ -300,7 +305,7 @@ def _setup_plot_df(
 
 
 def _setup_scatterplot_df(
-    results: SamplingResults,
+    results: SamplingResults | dict[str, Array],
     params: str | list[str] | None,
     param_indices: int | Sequence[int] | None,
     chain_indices: int | Sequence[int] | None,
@@ -384,7 +389,7 @@ def save_figure(g: sns.FacetGrid | None = None, save_path: str | None = None) ->
 
 
 def plot_trace(
-    results: SamplingResults,
+    results: SamplingResults | dict[str, Array],
     params: str | list[str] | None = None,
     param_indices: int | Sequence[int] | None = None,
     chain_indices: int | Sequence[int] | None = None,
@@ -409,7 +414,8 @@ def plot_trace(
     results
         Result object of the sampling process. Must have a method
         ``get_posterior_samples()`` which extracts all samples from the posterior
-        distribution.
+        distribution. Alternatively, you can directly supply a dictionary of samples,
+        for example the output of :meth:`.SamplingResults.get_posterior_samples`.
     params
         Names of the model parameters that are contained in the plot. Must coincide
         with the dictionary keys of the `Position` with the posterior samples. If
@@ -499,7 +505,7 @@ def plot_trace(
 
 
 def plot_density(
-    results: SamplingResults,
+    results: SamplingResults | dict[str, Array],
     params: str | list[str] | None = None,
     param_indices: int | Sequence[int] | None = None,
     chain_indices: int | Sequence[int] | None = None,
@@ -523,7 +529,8 @@ def plot_density(
     results
         Result object of the sampling process. Must have a method
         ``get_posterior_samples()`` which extracts all samples from the posterior
-        distribution.
+        distribution. Alternatively, you can directly supply a dictionary of samples,
+        for example the output of :meth:`.SamplingResults.get_posterior_samples`.
     params
         Names of the model parameters that are contained in the plot. Must coincide
         with the dictionary keys of the ``Position`` with the posterior samples. If
@@ -623,7 +630,7 @@ def _compute_max_lags(
 
 
 def plot_cor(
-    results: SamplingResults,
+    results: SamplingResults | dict[str, Array],
     params: str | list[str] | None = None,
     param_indices: int | Sequence[int] | None = None,
     chain_indices: int | Sequence[int] | None = None,
@@ -648,7 +655,8 @@ def plot_cor(
     results
         Result object of the sampling process. Must have a method
         ``get_posterior_samples()`` which extracts all samples from the posterior
-        distribution.
+        distribution. Alternatively, you can directly supply a dictionary of samples,
+        for example the output of :meth:`.SamplingResults.get_posterior_samples`.
     params
         Names of the model parameters that are contained in the plot. Must coincide
         with the dictionary keys of the ``Position`` with the posterior samples. If
@@ -856,7 +864,7 @@ def _get_title(plot_df: pd.DataFrame, title: str | None) -> str:
 
 
 def plot_param(
-    results: SamplingResults,
+    results: SamplingResults | dict[str, Array],
     param: str,
     param_index: int | None = None,
     chain_indices: int | Sequence[int] | None = None,
@@ -880,7 +888,8 @@ def plot_param(
     results
         Result object of the sampling process. Must have a method
         ``get_posterior_samples()`` which extracts all samples from the posterior
-        distribution.
+        distribution. Alternatively, you can directly supply a dictionary of samples,
+        for example the output of :meth:`.SamplingResults.get_posterior_samples`.
     param
         Name of a single model parameter that is contained in the plot. Must coincide
         with one dictionary key of the ``Position`` with the posterior samples.
@@ -954,7 +963,7 @@ def plot_param(
 
 
 def plot_scatter(
-    results: SamplingResults,
+    results: SamplingResults | dict[str, Array],
     params: list[str],
     param_indices: tuple[int, int],
     chain_indices: int | Sequence[int] | None = None,
@@ -977,7 +986,8 @@ def plot_scatter(
     results
         Result object of the sampling process. Must have a method
         ``get_posterior_samples()`` which extracts all samples from the posterior
-        distribution.
+        distribution. Alternatively, you can directly supply a dictionary of samples,
+        for example the output of :meth:`.SamplingResults.get_posterior_samples`.
     params
         Names of the model parameters that are contained in the plot. Must coincide with
         the dictionary keys of the ``Position`` with the posterior samples.
@@ -1072,7 +1082,7 @@ def plot_scatter(
 
 
 def plot_pairs(
-    results: SamplingResults,
+    results: SamplingResults | dict[str, Array],
     params: str | list[str] | None = None,
     param_indices: int | Sequence[int] | None = None,
     chain_indices: int | Sequence[int] | None = None,
@@ -1096,7 +1106,8 @@ def plot_pairs(
     results
         Result object of the sampling process. Must have a method
         ``get_posterior_samples()`` which extracts all samples from the posterior
-        distribution.
+        distribution. Alternatively, you can directly supply a dictionary of samples,
+        for example the output of :meth:`.SamplingResults.get_posterior_samples`.
     params
         Names of the model parameters that are contained in the plot. Must coincide with
         the dictionary keys of the ``Position`` with the posterior samples. If ``None``,
