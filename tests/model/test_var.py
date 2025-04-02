@@ -556,7 +556,8 @@ class TestVarConstructors:
 
 
 class TestVarTransform:
-    def test_transform_weak_var_with_distribtution_inst(self) -> None:
+    @pytest.mark.parametrize("name", ("newname", None))
+    def test_transform_weak_var_with_distribtution_inst(self, name) -> None:
         """
         Tests transformation of a weak var with distribution when the bijector is passed
         as an instance.
@@ -570,7 +571,12 @@ class TestVarTransform:
             name="x_batched",
         )
 
-        x_batched_transformed = x_batched.transform(tfp.bijectors.Exp())
+        x_batched_transformed = x_batched.transform(tfp.bijectors.Exp(), name=name)
+
+        if name is None:
+            assert x_batched_transformed.name == f"{x_batched.name}_transformed"
+        else:
+            assert x_batched_transformed.name == name
 
         assert x_batched_transformed.value == pytest.approx(jnp.log(x.value[1]))
 
@@ -579,7 +585,8 @@ class TestVarTransform:
         x_batched.update()
         assert x_batched_transformed.value == pytest.approx(jnp.log(x.value[2]))
 
-    def test_transform_weak_var_with_distribtution_class(self) -> None:
+    @pytest.mark.parametrize("name", ("newname", None))
+    def test_transform_weak_var_with_distribtution_class(self, name) -> None:
         """
         Tests transformation of a weak var with distribution when the bijector is passed
         as a class.
@@ -593,7 +600,14 @@ class TestVarTransform:
             name="x_batched",
         )
 
-        x_batched_transformed = x_batched.transform(tfp.bijectors.Scale, scale=2.0)
+        x_batched_transformed = x_batched.transform(
+            tfp.bijectors.Scale, scale=2.0, name=name
+        )
+
+        if name is None:
+            assert x_batched_transformed.name == f"{x_batched.name}_transformed"
+        else:
+            assert x_batched_transformed.name == name
 
         assert x_batched_transformed.value == pytest.approx(x.value[1] / 2.0)
 
@@ -602,10 +616,16 @@ class TestVarTransform:
         x_batched.update()
         assert x_batched_transformed.value == pytest.approx(x.value[2] / 2.0)
 
-    def test_transform_weak_var_with_bijector_instance(self) -> None:
+    @pytest.mark.parametrize("name", ("newname", None))
+    def test_transform_weak_var_with_bijector_instance(self, name) -> None:
         tau = lnodes.Var.new_param(10.0, name="tau")
         tau_sqrt = lnodes.Var.new_calc(jnp.sqrt, tau)
-        log_tau_sqrt = tau_sqrt.transform(tfp.bijectors.Exp())
+        log_tau_sqrt = tau_sqrt.transform(tfp.bijectors.Exp(), name=name)
+
+        if name is None:
+            assert log_tau_sqrt.name == f"{tau_sqrt.name}_transformed"
+        else:
+            assert log_tau_sqrt.name == name
 
         assert tau.value == pytest.approx(10.0)
         assert tau_sqrt.value == pytest.approx(jnp.sqrt(10.0))
@@ -618,12 +638,20 @@ class TestVarTransform:
         assert not log_tau_sqrt.parameter
         assert not tau_sqrt.parameter
 
-    def test_transform_weak_var_with_bijector_class(self) -> None:
+    @pytest.mark.parametrize("name", ("newname", None))
+    def test_transform_weak_var_with_bijector_class(self, name) -> None:
         tau = lnodes.Var.new_param(10.0, name="tau")
         tau_sqrt = lnodes.Var.new_calc(jnp.sqrt, tau)
 
         scale = lnodes.Var.new_param(2.0, name="bijector_scale")
-        scaled_tau_sqrt = tau_sqrt.transform(tfp.bijectors.Scale, scale=scale)
+        scaled_tau_sqrt = tau_sqrt.transform(
+            tfp.bijectors.Scale, scale=scale, name=name
+        )
+
+        if name is None:
+            assert scaled_tau_sqrt.name == f"{tau_sqrt.name}_transformed"
+        else:
+            assert scaled_tau_sqrt.name == name
 
         assert tau.value == pytest.approx(10.0)
         assert tau_sqrt.value == pytest.approx(jnp.sqrt(10.0))
@@ -636,9 +664,15 @@ class TestVarTransform:
         assert not scaled_tau_sqrt.parameter
         assert not tau_sqrt.parameter
 
-    def test_transform_without_dist_with_bijector_instance(self) -> None:
+    @pytest.mark.parametrize("name", ("newname", None))
+    def test_transform_without_dist_with_bijector_instance(self, name) -> None:
         tau = lnodes.Var.new_param(10.0, name="tau")
-        log_tau = tau.transform(tfp.bijectors.Exp())
+        log_tau = tau.transform(tfp.bijectors.Exp(), name=name)
+
+        if name is None:
+            assert log_tau.name == f"{tau.name}_transformed"
+        else:
+            assert log_tau.name == name
 
         assert tau.value == pytest.approx(10.0)
         assert log_tau.value == pytest.approx(jnp.log(10.0))
@@ -648,11 +682,17 @@ class TestVarTransform:
         assert not tau.parameter
         assert log_tau.parameter
 
-    def test_transform_without_dist_with_bijector_class(self) -> None:
+    @pytest.mark.parametrize("name", ("newname", None))
+    def test_transform_without_dist_with_bijector_class(self, name) -> None:
         tau = lnodes.Var.new_param(10.0, name="tau")
 
         scale = lnodes.Var.new_param(2.0, name="bijector_scale")
-        log_tau = tau.transform(tfp.bijectors.Scale, scale=scale)
+        log_tau = tau.transform(tfp.bijectors.Scale, scale=scale, name=name)
+
+        if name is None:
+            assert log_tau.name == f"{tau.name}_transformed"
+        else:
+            assert log_tau.name == name
 
         assert tau.value == pytest.approx(10.0)
         assert log_tau.value == pytest.approx(5.0)
@@ -662,11 +702,17 @@ class TestVarTransform:
         assert not tau.parameter
         assert log_tau.parameter
 
-    def test_transform_instance(self) -> None:
+    @pytest.mark.parametrize("name", ("newname", None))
+    def test_transform_instance(self, name) -> None:
         prior = lnodes.Dist(tfp.distributions.HalfCauchy, loc=0.0, scale=25.0)
         tau = lnodes.Var(10.0, prior, name="tau")
-        log_tau = tau.transform(tfp.bijectors.Exp())
+        log_tau = tau.transform(tfp.bijectors.Exp(), name=name)
         tau.update()
+
+        if name is None:
+            assert log_tau.name == f"{tau.name}_transformed"
+        else:
+            assert log_tau.name == name
 
         assert tau.weak
         assert not log_tau.weak
@@ -699,13 +745,19 @@ class TestVarTransform:
         with pytest.raises(ValueError):
             tau.transform(tfp.bijectors.Exp)
 
-    def test_transform_class_with_args(self) -> None:
+    @pytest.mark.parametrize("name", ("newname", None))
+    def test_transform_class_with_args(self, name) -> None:
         prior = lnodes.Dist(tfp.distributions.HalfCauchy, loc=0.0, scale=25.0)
         tau = lnodes.Var(10.0, prior, name="tau")
         transformed_tau = tau.transform(
-            tfp.bijectors.Softplus, hinge_softness=lnodes.Var(0.9)
+            tfp.bijectors.Softplus, hinge_softness=lnodes.Var(0.9), name=name
         )
         tau.update()
+
+        if name is None:
+            assert transformed_tau.name == f"{tau.name}_transformed"
+        else:
+            assert transformed_tau.name == name
 
         bijector = tfp.bijectors.Softplus(hinge_softness=0.9)
 
@@ -736,11 +788,17 @@ class TestVarTransform:
         transformed_tau_gb.dist_node.update()  # type: ignore
         assert transformed_tau.log_prob == pytest.approx(transformed_tau_gb.log_prob)
 
-    def test_transform_default(self) -> None:
+    @pytest.mark.parametrize("name", ("newname", None))
+    def test_transform_default(self, name) -> None:
         prior = lnodes.Dist(tfp.distributions.HalfCauchy, loc=0.0, scale=25.0)
         tau = lnodes.Var(10.0, prior, name="tau")
-        log_tau = tau.transform()
+        log_tau = tau.transform(name=name)
         tau.update()
+
+        if name is None:
+            assert log_tau.name == f"{tau.name}_transformed"
+        else:
+            assert log_tau.name == name
 
         assert tau.weak
         assert not log_tau.weak
