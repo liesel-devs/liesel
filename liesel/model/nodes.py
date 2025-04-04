@@ -32,7 +32,10 @@ from ..distributions.nodist import NoDistribution
 from .viz import plot_nodes, plot_vars
 
 if TYPE_CHECKING:
+    from ..goose import MCMCSpec
     from .model import Model
+
+    InferenceTypes = Union[MCMCSpec, None, dict[str, MCMCSpec]]
 
 __all__ = [
     "Array",
@@ -1160,6 +1163,8 @@ class Var:
     name
         The name of the variable. If you do not specify a name, a unique name will be \
         automatically generated upon initialization of a :class:`.Model`.
+    inference
+        Additional information that can be used to set up inference algorithms.
 
     See Also
     --------
@@ -1189,6 +1194,7 @@ class Var:
 
     __slots__ = (
         "info",
+        "inference",
         "_auto_transform",
         "_dist_node",
         "_groups",
@@ -1205,6 +1211,7 @@ class Var:
         value: Any,
         distribution: Dist | None = None,
         name: str = "",
+        inference: InferenceTypes = None,
     ):
         self._name = name
         self._value_node: Node = Value(None)
@@ -1229,9 +1236,15 @@ class Var:
         self.info: dict[str, Any] = {}
         """Additional meta-information about the variable as a dict."""
 
+        self.inference = inference
+
     @classmethod
     def new_param(
-        cls, value: Any, distribution: Dist | None = None, name: str = ""
+        cls,
+        value: Any,
+        distribution: Dist | None = None,
+        name: str = "",
+        inference: InferenceTypes = None,
     ) -> Var:
         """
         Initializes a strong variable that acts as a model parameter.
@@ -1249,6 +1262,8 @@ class Var:
         name
             The name of the variable. If you do not specify a name, a unique name will \
             be automatically generated upon initialization of a :class:`.Model`.
+        inference
+            Additional information that can be used to set up inference algorithms.
 
         See Also
         --------
@@ -1274,7 +1289,7 @@ class Var:
         Var(name="")
 
         """
-        var = cls(value, distribution, name)
+        var = cls(value, distribution, name, inference=inference)
         var.value_node.monitor = True
         var.parameter = True
         return var
@@ -1433,7 +1448,9 @@ class Var:
         return var
 
     @classmethod
-    def new_value(cls, value: Any, name: str = "") -> Var:
+    def new_value(
+        cls, value: Any, name: str = "", inference: InferenceTypes = None
+    ) -> Var:
         """
         Initializes a strong variable without a distribution.
 
@@ -1446,6 +1463,8 @@ class Var:
         name
             The name of the variable. If you do not specify a name, a unique name will \
             be automatically generated upon initialization of a :class:`.Model`.
+        inference
+            Additional information that can be used to set up inference algorithms.
 
         See Also
         --------
@@ -1464,8 +1483,17 @@ class Var:
         Var(name="")
 
         """
-        var = cls(value, name=name)
+        var = cls(value, name=name, inference=inference)
         return var
+
+    def get_inference(self, key: str | None) -> InferenceTypes:
+        if isinstance(self.inference, dict):
+            if key is None:
+                raise ValueError(
+                    f"{key=} is invalid. Possible keys: {list(self.inference)}."
+                )
+            return self.inference[key]
+        return self.inference
 
     def all_input_nodes(self) -> tuple[Node, ...]:
         """Returns all input *nodes* as a unique tuple."""
