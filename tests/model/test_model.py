@@ -190,6 +190,24 @@ class TestModel:
 
         assert model.log_prob == pytest.approx(model.log_lik + model.log_prior)
 
+    def test_parameters(self, model: Model) -> None:
+        assert len(model.parameters) == 2
+        assert "sigma_hat" in model.parameters
+        assert "beta_hat" in model.parameters
+
+        parameters_log_prob = [var.log_prob.sum() for var in model.parameters.values()]
+        assert sum(parameters_log_prob) == pytest.approx(model.log_prior)
+
+    def test_observed(self, model: Model) -> None:
+        assert len(model.observed) == 2
+        assert "y_var" in model.observed
+        assert "X" in model.observed
+
+        observed_log_prob = [
+            jnp.atleast_1d(var.log_prob).sum() for var in model.observed.values()
+        ]
+        assert sum(observed_log_prob) == pytest.approx(model.log_lik)
+
     def test_var_graph(self, model: Model) -> None:
         """
         Verifies that all model vars are present in the graph and vice versa.
@@ -351,6 +369,116 @@ class TestModel:
         assert "x_transformed" in new_model.vars
         assert new_model.vars["x_transformed"].value == pytest.approx(0.54132485)
 
+    def test_extract_position(self, model) -> None:
+        pos = model.extract_position(["z"])
+        assert pos["z"] == pytest.approx(model.nodes["z"].value)
+
+    def test_update_state(self, model) -> None:
+        pos = {"z": 3.0}
+        state = model.update_state(pos, inplace=False)
+        assert model.extract_position(["z"], model_state=state)["z"] == pytest.approx(
+            3.0
+        )
+        assert model.nodes["z"].value != pytest.approx(3.0)
+
+        # updating the state from above
+        pos = {"sigma_hat": 20.0}
+        state = model.update_state(pos, inplace=False, model_state=state)
+
+        # extracted position from updated state should contain the updated values
+        extracted_pos = model.extract_position(["z", "sigma_hat"], model_state=state)
+        assert extracted_pos["z"] == pytest.approx(3.0)
+        assert extracted_pos["sigma_hat"] == pytest.approx(20.0)
+
+        # original model state should be unchanged
+        assert model.nodes["z"] != pytest.approx(3.0)
+        assert model.vars["sigma_hat"].value != pytest.approx(20.0)
+
+        pos = {"z": 3.0}
+        state = model.update_state(pos, inplace=True)
+        assert model.extract_position(["z"], model_state=state)["z"] == pytest.approx(
+            3.0
+        )
+        assert model.nodes["z"].value == pytest.approx(3.0)
+
+
+class TestPredictions:
+    def test_predict_at_current_state(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+        }
+
+        # manual prediction
+        manual_pred = jnp.einsum(
+            "nk,...k->...n", model.vars["X"].value, samples["beta_hat"]
+        )
+
+        # predictions at current values for all vars
+        pred = model.predict(samples=samples)
+        assert jnp.allclose(pred["mu"], manual_pred)
+        assert pred["mu"].shape == (4, 3, 500)
+        assert len(pred) == len(model.vars)
+
+    def test_predict_for_specific_var(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+        }
+
+        # manual prediction
+        manual_pred = jnp.einsum(
+            "nk,...k->...n", model.vars["X"].value, samples["beta_hat"]
+        )
+
+        # predictions at current values for mu
+        pred = model.predict(samples=samples, predict=["mu"])
+
+        assert jnp.allclose(pred["mu"], manual_pred)
+        assert pred["mu"].shape == (4, 3, 500)
+        assert len(pred) == 1
+
+    def test_predict_at_newdata(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+        }
+
+        # predictions at new values for X
+        xnew = tfd.Normal(loc=0.0, scale=1.0).sample(
+            sample_shape=model.vars["X"].value.shape, seed=rnd.PRNGKey(7)
+        )
+
+        assert not jnp.allclose(xnew, model.vars["X"].value)
+
+        manual_pred = jnp.einsum("nk,...k->...n", xnew, samples["beta_hat"])
+
+        pred = model.predict(samples=samples, predict=["mu"], newdata={"X": xnew})
+        assert jnp.allclose(pred["mu"], manual_pred)
+        assert pred["mu"].shape == (4, 3, 500)
+
+    def test_predict_at_newdata_with_new_shape(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+        }
+
+        # predictions at new values for X with different N
+        xnew = tfd.Normal(loc=0.0, scale=1.0).sample(
+            sample_shape=(10, 2), seed=rnd.PRNGKey(7)
+        )
+
+        manual_pred = jnp.einsum("nk,...k->...n", xnew, samples["beta_hat"])
+
+        pred = model.predict(samples=samples, predict=["mu"], newdata={"X": xnew})
+        assert jnp.allclose(pred["mu"], manual_pred)
+        assert pred["mu"].shape == (4, 3, 10)
+
+        # if the newdata shape does not work with some required shapes downstream,
+        # we run into a typerror
+        with pytest.raises(TypeError):
+            model.predict(samples=samples, newdata={"X": xnew})
+
 
 @pytest.mark.xfail
 class TestUserDefinedModelNodes:
@@ -474,3 +602,300 @@ def test_save_model() -> None:
     fh = tempfile.TemporaryFile()
     save_model(model, fh)
     fh.close()
+
+
+@pytest.fixture
+def linreg():
+    X = Var(
+        value=tfd.Uniform(low=-1.0, high=1.0).sample((100, 2), rnd.key(3)), name="X"
+    )
+    b = Var(
+        value=jnp.zeros(2),
+        distribution=Dist(tfd.Normal, loc=0.0, scale=1.0),
+        name="b",
+    )
+    mu = Var.new_calc(jnp.dot, X, b, name="mu")
+
+    sigma = Var(1.0, Dist(tfd.InverseGamma, concentration=5.0, scale=0.5), name="sigma")
+    y = Var(jnp.zeros(X.value.shape[0]), Dist(tfd.Normal, mu, sigma), name="y")
+    model = Model([y])
+    yield model
+
+
+class TestSample:
+    def test_sample_prior(self):
+        """
+        Test that the function runs and shows expected behavior in a minimal example.
+        """
+        mu = Var(0.0, Dist(tfd.Normal, loc=2.0, scale=1.0), name="mu")
+        sigma = Var(
+            1.0, Dist(tfd.InverseGamma, concentration=5.0, scale=0.5), name="sigma"
+        )
+        x = Var(0.0, Dist(tfd.Normal, mu, sigma), name="x")
+        model = Model([x])
+
+        # sample with x being fixed
+        # so x will not be sampled
+        samples = model.sample(shape=(1, 100), seed=rnd.key(1), fixed=["x"])
+
+        assert "mu" in samples  # mu should be sampled
+        assert "sigma" in samples  # sigma should be sampled
+        assert "x" not in samples  # x should not be sampled
+
+        assert samples["mu"].shape == (1, 100)  # verify correct shape
+
+        # basic plausibility checks for sampling from the correct distribution
+        # this is not a tough check though.
+        assert samples["mu"].mean() == pytest.approx(2.0, abs=0.3)
+        assert samples["mu"].std() == pytest.approx(1.0, abs=0.5)
+
+        assert samples["sigma"].shape == (1, 100)  # verify correct shape of sigma
+
+        # basic plausibility checks for sampling from the correct distribution
+        # this is not a tough check though.
+        sigma_mean = sigma.dist_node.init_dist().mean()
+        sigma_std = sigma.dist_node.init_dist().stddev()
+        assert samples["sigma"].mean() == pytest.approx(sigma_mean, abs=0.1)
+        assert samples["sigma"].std() == pytest.approx(sigma_std, abs=0.1)
+
+        # now sample all variables, including x
+        samples = model.sample(shape=(1, 100), seed=rnd.key(1))
+
+        assert "x" in samples  # verify that x is in samples
+        assert samples["x"].shape == (1, 100)  # verify shape
+
+    def test_sample_prior_linreg(self, linreg: Model):
+        """
+        Test that the function runs and shows expected behavior in a slightly more
+        elaborate example (linear regression).
+        """
+        model = linreg
+
+        # sample with y fixed; i.e. y will not be sampled
+        samples = model.sample(shape=(1, 100), seed=rnd.key(1), fixed=["y"])
+
+        assert "b" in samples  # verify that b has been sampled
+        assert "sigma" in samples  # verify that sigma has been sampled
+        assert "y" not in samples  # verify that y has NOT ben sampled
+
+        assert samples["b"].shape == (1, 100, 2)  # verify shape of b samples
+
+        # basic plausibility checks for sampling from the correct distribution
+        # this is not a tough check though.
+        assert samples["b"].mean(axis=(0, 1)) == pytest.approx(0.0, abs=0.5)
+        assert samples["b"].std(axis=(0, 1)) == pytest.approx(1.0, abs=0.5)
+
+        assert samples["sigma"].shape == (1, 100)  # verify shape of sigma samples
+        # basic plausibility checks for sampling from the correct distribution
+        # this is not a tough check though.
+        sigma = model.vars["sigma"]
+        sigma_mean = sigma.dist_node.init_dist().mean()  # type: ignore
+        sigma_std = sigma.dist_node.init_dist().stddev()  # type: ignore
+        assert samples["sigma"].mean() == pytest.approx(sigma_mean, abs=0.1)
+        assert samples["sigma"].std() == pytest.approx(sigma_std, abs=0.1)
+
+        # now sample all nodes, including y
+        samples = model.sample(shape=(1, 80), seed=rnd.key(1))
+
+        assert "y" in samples  # verify that y has been sampled
+        # verify shape of y samples
+        # because we have (1, 80) samples of regression coefficients and
+        # (100,) covariate observations, the expected shape for y is (1, 80, 100),
+        # where the shape is organized as (sample_shape, event_shape)
+        assert samples["y"].shape == (1, 80, 100)
+
+        # basic plausibility checks for sampling from the correct distribution
+        # this is not a tough check though.
+        y_samples_mean = samples["y"].mean(axis=(0, 1))
+        assert jnp.allclose(y_samples_mean, 0.0, atol=0.5)
+
+    def test_sample_from_custom_dist(self, linreg: Model):
+        model = linreg
+
+        # sample with y fixed; i.e. y will not be sampled
+        samples = model.sample(shape=(1, 100), seed=rnd.key(1), fixed=["y"])
+
+        assert "b" in samples  # verify that b has been sampled
+        assert "sigma" in samples  # verify that sigma has been sampled
+        assert "y" not in samples  # verify that y has NOT ben sampled
+
+        samples2 = model.sample(
+            shape=(1, 100),
+            seed=rnd.key(1),
+            fixed=["y"],
+            dists={"b": Dist(tfd.Uniform, low=0.1, high=0.2)},
+        )
+
+        assert "b" in samples2
+        assert not jnp.allclose(samples["b"], samples2["b"])
+        assert jnp.all(samples2["b"] <= 0.2)
+        assert jnp.all(samples2["b"] >= 0.1)
+
+    def test_sample_from_custom_dist_with_variable_dependent_param(self):
+        min_ = Var.new_param(0.1, Dist(tfd.Uniform, low=0.1, high=0.2), name="min")
+        max_ = Var.new_calc(lambda x: x + 0.1, x=min_, name="max")
+
+        m = Var.new_param(0.0, name="m")
+        y = Var.new_obs(0.0, Dist(tfd.Normal, loc=m, scale=1.0), name="y")
+
+        model = Model([y, min_, max_])
+
+        samples1 = model.sample(shape=(1, 100), seed=rnd.key(1))
+        assert "m" not in samples1
+
+        samples2 = model.sample(
+            shape=(1, 100),
+            seed=rnd.key(1),
+            dists={"m": Dist(tfd.Uniform, low=min_, high=max_)},
+        )
+
+        assert "m" in samples2
+
+        max_samples = max_.predict(samples2)
+
+        assert jnp.all(samples2["m"] > samples2["min"])
+        assert jnp.all(samples2["m"] < max_samples)
+
+    def test_sample_from_custom_dist_var_not_found(self):
+        min_ = Var.new_param(0.1, Dist(tfd.Uniform, low=0.1, high=0.2), name="min")
+        max_ = Var.new_calc(lambda x: x + 0.1, x=min_, name="max")
+
+        m = Var.new_param(0.0, name="m")
+        y = Var.new_obs(0.0, Dist(tfd.Normal, loc=m, scale=1.0), name="y")
+
+        model = Model([y, min_, max_])
+
+        with pytest.raises(ValueError):
+            model.sample(
+                shape=(1, 100),
+                seed=rnd.key(1),
+                dists={"s": Dist(tfd.Uniform, low=min_, high=max_)},
+            )
+
+    def test_sample_from_custom_dist_weak_var(self):
+        min_ = Var.new_param(0.1, Dist(tfd.Uniform, low=0.1, high=0.2), name="min")
+        max_ = Var.new_calc(lambda x: x + 0.1, x=min_, name="max")
+
+        m = Var.new_param(0.0, name="m")
+        y = Var.new_obs(0.0, Dist(tfd.Normal, loc=m, scale=1.0), name="y")
+
+        model = Model([y, min_, max_])
+
+        with pytest.raises(ValueError):
+            model.sample(
+                shape=(1, 100),
+                seed=rnd.key(1),
+                dists={"max": Dist(tfd.Uniform, low=min_, high=max_)},
+            )
+
+    def test_sample_from_custom_dist_with_pseudo_circular_graph(self):
+        """
+        This is an interesting edge case.
+        In the model below, we have
+
+            m ~ U(min, max)
+
+        and when sampling, I change the distribution for min:
+
+            min ~ U(0.1, 0.2)  ->  min ~ U(0.48, m)
+
+        This is circular. During sampling however, the circularity does not cause an
+        error. Instead, the value of m in the current state of the model gets inserted
+        in the distribution for min, such that we have
+
+            min ~ U(0.48, 0.5).
+
+        """
+        min_ = Var.new_param(0.1, Dist(tfd.Uniform, low=0.1, high=0.2), name="min")
+        max_ = Var.new_calc(lambda x: x + 0.1, x=min_, name="max")
+
+        m = Var.new_param(0.5, Dist(tfd.Uniform, low=min_, high=max_), name="m")
+        y = Var.new_obs(0.0, Dist(tfd.Normal, loc=m, scale=1.0), name="y")
+
+        model = Model([y, min_, max_])
+
+        samples = model.sample(shape=(1, 100), seed=rnd.key(1))
+
+        max_samples = max_.predict(samples)
+
+        assert jnp.all(samples["m"] > samples["min"])
+        assert jnp.all(samples["m"] < max_samples)
+
+        samples2 = model.sample(
+            shape=(1, 100),
+            seed=rnd.key(1),
+            dists={"min": Dist(tfd.Uniform, low=0.48, high=m)},
+        )
+
+        assert "m" in samples2
+        assert jnp.all(samples2["min"] < 0.5)
+        assert jnp.all(samples2["min"] > 0.48)
+
+        max_samples = max_.predict(samples2)
+
+        assert jnp.all(samples2["m"] > samples2["min"])
+        assert jnp.all(samples2["m"] < max_samples)
+
+    def test_sample_posterior(self, linreg: Model):
+        model = linreg
+
+        samples1 = model.sample(shape=(2, 8), seed=rnd.key(7), fixed=["y"])
+        samples2 = model.sample(
+            shape=(11,), seed=rnd.key(8), posterior_samples=samples1
+        )
+
+        assert "y" not in samples1  # verify that y was not sampled in samples1
+
+        # in samples2, the variables for which we provided samples are not sampled again
+        # this leaves only 'y' as a variable with a probability distribution to be
+        # sampled. So len(samples2) should be 1.
+        assert len(samples2) == 1
+        assert "y" in samples2  # verify that the sampled variable is y
+
+        # the shape of the new sample for y is now
+        # (sample_shape, chain, iter, event_shape)
+        # in this case: sample_shape = 11
+        # with (chain, iter), I use MCMC terminology here. In this example, they refer
+        # to the elements of the sample shape for sample1
+        assert samples2["y"].shape == (11, 2, 8, 100)
+
+    def test_sample_posterior_at_newdata(self, linreg: Model):
+        model = linreg
+
+        samples1 = model.sample(
+            shape=(2, 8),
+            seed=rnd.key(7),
+        )
+
+        x_shape = model.vars["X"].value.shape
+        x_new = tfd.Uniform(low=10.0, high=11.0).sample(x_shape, seed=rnd.key(9))
+        samples2 = model.sample(
+            shape=(2, 8),
+            seed=rnd.key(8),
+            newdata={"X": x_new},
+        )
+
+        assert not jnp.allclose(samples1["y"], samples2["y"])
+
+    def test_sample_posterior_shape_of_posterior_samples(self, linreg: Model):
+        model = linreg
+        # the values in posterior_samples *have* to have leading (chain, iter) axes
+        # if one of them is missing, the function errors
+        samples1 = model.sample(shape=(2,), seed=rnd.key(7), fixed=["y"])
+        with pytest.raises(RuntimeError):
+            model.sample(shape=(11,), seed=rnd.key(8), posterior_samples=samples1)
+
+        # *too many* leading axes also cause errors
+        samples1 = model.sample(shape=(3, 2, 8), seed=rnd.key(7), fixed=["y"])
+        with pytest.raises(RuntimeError):
+            model.sample(shape=(11,), seed=rnd.key(8), posterior_samples=samples1)
+
+    def test_sample_posterior_consistency_of_fixed(self, linreg: Model):
+        model = linreg
+        # If a variable name that is given in 'fixed' is also included in
+        # 'posterior_samples', the function raises an error.
+        samples1 = model.sample(shape=(2, 8), seed=rnd.key(7), fixed=["y"])
+        with pytest.raises(ValueError):
+            model.sample(
+                shape=(11,), seed=rnd.key(8), posterior_samples=samples1, fixed=["b"]
+            )

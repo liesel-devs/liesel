@@ -8,7 +8,7 @@ import logging
 import re
 import warnings
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from copy import deepcopy
 from types import MappingProxyType
 from typing import IO, Any, Literal, TypeVar
@@ -1234,6 +1234,29 @@ class Model:
         subgraph = self.var_graph.subgraph(nodes_to_include)
         return subgraph
 
+    def parental_submodel(self, *of: Var | Node) -> Model:
+        """
+        Returns a new model that consists only of the given variables and nodes and \
+        their parent variables and nodes. The new model contains copies of these \
+        variables and nodes.
+        """
+        nodes_to_include = set()
+
+        for node in of:
+            if isinstance(node, Var):
+                nodes_to_include.update(nx.ancestors(self.var_graph, node))
+            else:
+                nodes_to_include.update(nx.ancestors(self.node_graph, node))
+            nodes_to_include.add(node)
+
+        copy_of_nodes_to_include = deepcopy(nodes_to_include)
+
+        for node in copy_of_nodes_to_include:
+            if hasattr(node, "_unset_model"):
+                node._unset_model()
+
+        return Model(list(copy_of_nodes_to_include))
+
     @property
     def log_lik(self) -> Array:
         """
@@ -1384,6 +1407,186 @@ class Model:
 
         return self
 
+    def sample(
+        self,
+        shape: Sequence[int],
+        seed: jax.random.KeyArray,
+        posterior_samples: dict[str, Array] | None = None,
+        fixed: Sequence[str] = (),
+        newdata: dict[str, Array] | None = None,
+        dists: dict[str, Dist] | None = None,
+    ) -> dict[str, Array]:
+        """
+        Draws samples from the model.
+
+        Parameters
+        ----------
+        shape
+            Sample shape.
+        seed
+            The seed is split and distributed to the distribution nodes in the model. \
+            Must be a ``KeyArray``, i.e. an array of shape (2,) and dtype ``uint32``. \
+            See :mod:`jax.random` for more details.
+        posterior_samples
+            Dictionary of samples at which to evaluate predictions. All values of the \
+            dictionary are assumed to have two leading dimensions corresponding to \
+            ``(nchains, niteration)``.
+        fixed
+            The names of the nodes or variables to be excluded from the simulation. \
+            By default, no nodes or variables are skipped.
+        newdata
+            Dictionary of new data at which to produce samples. The keys should \
+            correspond to variable or node names in the model whose values should be \
+            set to the given values before sampling. If ``None`` \
+            (default), the current variable values are used.
+        dists
+            Can be used to provide a dictionary of variable names and :class:`.Dist` \
+            instances to use in sampling. If ``None`` (default), samples are drawn for \
+            each variable using their :attr:`.Var.dist_node`.
+
+        Returns
+        -------
+        A dictionary of variable and node names and their sampled values. Includes
+        only sampled variables.
+        """
+        posterior_samples = posterior_samples if posterior_samples is not None else {}
+        state_before = self.state
+
+        if newdata:
+            state_for_sampling = self.update_state(newdata)
+        else:
+            state_for_sampling = state_before
+
+        dists = dists if dists is not None else {}
+
+        for var_name in dists:
+            vars_ = self.vars
+            if var_name not in vars_:
+                raise ValueError(f"No variable with name '{var_name}' found.")
+
+            if vars_[var_name].weak:
+                raise ValueError(f"Variable '{var_name}' is weak, cannot sample.")
+
+        dists_list = [
+            node
+            for node in self._simulation_nodes
+            if isinstance(node, Dist)
+            and node.at is not None
+            and node.name not in fixed
+            and node.at.name not in fixed
+            and (node.var is not None and node.var.name not in fixed)
+        ]
+
+        for name in fixed:
+            if name in posterior_samples:
+                raise ValueError(
+                    f"Inconsistency: {name=} listed in 'fixed', but samples are"
+                    " provided in 'posterior_samples'."
+                )
+
+        if posterior_samples:
+            samples_shape = next(iter(posterior_samples.values())).shape[:2]
+        else:
+            samples_shape = ()
+
+        sampling_specs = {}
+
+        for i, dist in enumerate(dists_list):
+            tfp_dist = dist.init_dist()
+
+            event_shape = tfp_dist.event_shape
+            batch_shape = tfp_dist.batch_shape
+            value_shape = jnp.asarray(dist.at.value).shape  # type: ignore
+            sample_index = len(value_shape) - len(batch_shape) - len(event_shape)
+            sample_shape = value_shape[:sample_index]
+
+            if isinstance(dist.at, VarValue):
+                var_name = dist.at.var.name  # type: ignore
+                value_var = dist.at.inputs[0]
+            else:
+                var_name = dist.at.name  # type: ignore
+                value_var = dist.at  # type: ignore
+
+            if var_name not in posterior_samples:
+
+                # pulls manually defined distribution form dists dict, returns current
+                # dist otherwise
+                dist = dists.get(var_name, dist)
+
+                sampling_specs[var_name] = {
+                    "shape": sample_shape,
+                    "dist": dist,
+                    "i": i,
+                    "value_var": value_var,
+                }
+
+        for var_name, dist in dists.items():
+            if var_name in sampling_specs:
+                continue
+
+            i += 1
+            tfp_dist = dist.init_dist()
+            event_shape = tfp_dist.event_shape
+            batch_shape = tfp_dist.batch_shape
+            sample_index = len(value_shape) - len(batch_shape) - len(event_shape)
+            sample_shape = value_shape[:sample_index]
+            value_shape = jnp.asarray(self.vars[var_name].value).shape  # type: ignore
+
+            value_var = self.vars[var_name].value_node
+
+            sampling_specs[var_name] = {
+                "shape": sample_shape,
+                "dist": dist,
+                "i": i,
+                "value_var": value_var,
+            }
+
+        nsamples = int(jnp.prod(jnp.asarray(shape)))
+        seeds = jax.random.split(
+            seed, (nsamples,) + samples_shape + (len(sampling_specs),)
+        )
+
+        def one_draw(position, seeds):
+            self.state = self.update_state(position, state_for_sampling)
+
+            sampled_position = {}
+            for name, spec in sampling_specs.items():
+                tfp_dist = spec["dist"].init_dist()
+                value = tfp_dist.sample(spec["shape"], seeds[spec["i"]])
+                sampled_position[name] = value
+                spec["value_var"].value = value
+
+            return sampled_position
+
+        def reshape(a):
+            return jnp.reshape(a, shape=shape + a.shape[1:])
+
+        if not posterior_samples:
+            draw_chains = jax.vmap(one_draw, in_axes=(None, 0), out_axes=0)
+            drawn_samples = draw_chains({}, seeds)
+            self.state = state_before
+            return jax.tree.map(reshape, drawn_samples)
+
+        draw_iter = jax.vmap(one_draw, in_axes=(0, 0), out_axes=0)
+        draw_chains = jax.vmap(draw_iter, in_axes=(0, 0), out_axes=0)
+        draw_samples = jax.vmap(draw_chains, in_axes=(None, 0), out_axes=0)
+
+        # filter samples to include only samples that belong to the model
+        vars_and_nodes = list(self.vars) + list(self.nodes)
+        filtered_samples = {
+            k: v for k, v in posterior_samples.items() if k in vars_and_nodes
+        }
+        try:
+            drawn_samples = draw_samples(filtered_samples, seeds)
+            self.state = state_before
+        except Exception as e:
+            msg = (
+                "Error during sampling. Make sure to check sample shapes! The values in"
+                " 'posterior_samples' must have two leading batching dimensions."
+            )
+            raise RuntimeError(msg) from e
+        return jax.tree.map(reshape, drawn_samples)
+
     @property
     def state(self) -> dict[str, NodeState]:
         """The state of the model as a dict of node names and states."""
@@ -1430,6 +1633,18 @@ class Model:
     def vars(self) -> MappingProxyType[str, Var]:
         """A mapping of the model variables with their names as keys."""
         return MappingProxyType(self._vars)
+
+    @property
+    def parameters(self) -> MappingProxyType[str, Var]:
+        """A mapping of the model parameters with their names as keys."""
+        params = {k: v for k, v in self._vars.items() if v.parameter}
+        return MappingProxyType(params)
+
+    @property
+    def observed(self) -> MappingProxyType[str, Var]:
+        """A mapping of the observed model variables with their names as keys."""
+        params = {k: v for k, v in self._vars.items() if v.observed}
+        return MappingProxyType(params)
 
     def __repr__(self) -> str:
         brackets = f"({len(self._nodes)} nodes, {len(self._vars)} vars)"
@@ -1533,6 +1748,150 @@ class Model:
             prog=prog,
         )
 
+    def extract_position(
+        self,
+        position_keys: Sequence[str],
+        model_state: dict[str, NodeState] | None = None,
+    ) -> dict[str, Array]:
+        """
+        Extracts a position from a model state.
+
+        Parameters
+        ----------
+        position_keys
+            An iterable of variable or node names.
+        model_state
+            A dictionary of node names and their corresponding :class:`.NodeState`. \
+            If ``None`` (default), the model's current state is used.
+        """
+        model_state = model_state if model_state is not None else self.state
+        position = {}
+
+        for key in position_keys:
+            try:
+                position[key] = model_state[key].value
+            except KeyError:
+                node_key = self.vars[key].value_node.name
+                position[key] = model_state[node_key].value
+
+        return position
+
+    def update_state(
+        self,
+        position: dict[str, Array],
+        model_state: dict[str, NodeState] | None = None,
+        inplace: bool = False,
+    ) -> dict[str, NodeState]:
+        """
+        Updates and returns a model state given a position.
+
+        Parameters
+        ----------
+        position
+            A dictionary of variable or node names and values.
+        model_state
+            A dictionary of node names and their corresponding :class:`.NodeState`. \
+            If ``None`` (default), the model's current state is used.
+        inplace
+            If ``False`` (default), a new model state is returned, while the current \
+            model's state is left unchanged. If ``True``, the current model's state is \
+            updated in place.
+
+        Warnings
+        --------
+        The ``model_state`` must be up-to-date, i.e. it must *not* contain any outdated
+        nodes. Updates can only be triggered through new variable or node values in the
+        ``position``. If you supply a ``model_state`` with outdated nodes, these nodes
+        and their outputs will not be updated.
+        """
+        model = self._copy_computational_model() if not inplace else self
+
+        # sets all outdated flags in the model state to false
+        # this is required to make the function jittable
+
+        model.state = model_state if model_state is not None else self.state
+
+        for node in model.nodes.values():
+            node._outdated = False
+
+        for key, value in position.items():
+            try:
+                model.nodes[key].value = value  # type: ignore  # data node
+            except KeyError:
+                model.vars[key].value = value
+
+        model.update()
+        return model.state
+
+    def predict(
+        self,
+        samples: dict[str, Array],
+        predict: Sequence[str] | None = None,
+        newdata: dict[str, Array] | None = None,
+    ) -> dict[str, Array]:
+        """
+        Returns a dictionary of predictions.
+
+        Parameters
+        ----------
+        samples
+            Dictionary of samples at which to evaluate predictions. All values of the \
+            dictionary are assumed to have two leading dimensions corresponding to \
+            ``(nchains, niteration)``.
+        predict
+            Sequence of strings, which are the names of nodes or variables. \
+            Predictions will be returned only for the nodes or variables inlcuded \
+            here. If ``None`` (default), predictions will be returned for all \
+            *variables* in the model (but not for nodes).
+        newdata
+            Dictionary of new data at which to evaluate predictions. The keys should \
+            correspond to variable or node names in the model whose values should be \
+            set to the given values before evaluating predictions. If ``None`` \
+            (default), the current variable values are used.
+        """
+
+        predict_names = predict
+
+        # extract nodes and vars for target nodes
+        if predict_names is None:
+            # use full model without copying
+            submodel = self
+            predict_names = list(self.vars)  # output only vars
+        else:
+            predict_nodes_: list[Var | Node] = []
+            for name in predict_names:
+                try:
+                    predict_nodes_.append(self.vars[name])
+                except KeyError:
+                    predict_nodes_.append(self.nodes[name])
+
+            # construct submodel for target nodes
+            submodel = self.parental_submodel(*predict_nodes_)
+
+        # update submodel with new data, if any were given
+        newdata = newdata if newdata is not None else {}
+        submodel.state = submodel.update_state(newdata)
+
+        # filter samples to include only samples that belong to the submodel
+        vars_and_nodes = list(submodel.vars) + list(submodel.nodes)
+        filtered_samples = {k: v for k, v in samples.items() if k in vars_and_nodes}
+
+        # single prediction function
+        def predict_one(samples):
+            updated_state = submodel.update_state(
+                samples, submodel.state, inplace=False
+            )
+            return submodel.extract_position(predict_names, updated_state)
+
+        # map over iterations
+        predict_iter = jax.vmap(predict_one, in_axes=0, out_axes=0)
+
+        # map over chains
+        predict_chains = jax.vmap(predict_iter, in_axes=0, out_axes=0)
+
+        # apply function
+        return predict_chains(filtered_samples)
+
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Save and load models ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1575,3 +1934,68 @@ def load_model(file: str | IO[bytes]) -> Any:
         model = dill.load(file)
 
     return model
+
+
+class TemporaryModel:
+    def __init__(self, *vars_and_nodes, verbose: bool = False, silent: bool = False):
+        self.vars_and_nodes = vars_and_nodes
+        self.verbose = verbose
+        self.silent = silent
+
+        if verbose and silent:
+            raise ValueError(f"{verbose=} and {silent=} cannot both be True.")
+
+        self.gb = None
+        self.model = None
+        self.var_names = None
+        self.node_names = None
+        self.vars = None
+        self.nodes = None
+
+    def __enter__(self):
+        verbose = self.verbose
+
+        gb = GraphBuilder().add(*self.vars_and_nodes)
+        nodes, _vars = gb._all_nodes_and_vars()
+
+        automatically_set_names = gb._set_missing_names()
+        var_names = automatically_set_names["vars"]
+        node_names = automatically_set_names["nodes"]
+
+        if verbose and not self.silent:
+            if var_names:
+                names_ = f"The automatically assigned names are: {var_names}. "
+                logger.info(f"Unnamed variables were temporarily named. {names_}")
+            if node_names:
+                names_ = f"The automatically assigned names are: {node_names}. "
+                logger.info(f"Unnamed nodes were temporarily named. {names_}")
+        elif not self.silent:
+            if var_names or node_names:
+                logger.info("Unnamed variables and/or nodes were temporarily named.")
+
+        model = gb.build_model()
+
+        self.gb = gb
+        self.model = model
+        self.var_names = var_names
+        self.node_names = node_names
+        self.vars = _vars
+        self.nodes = nodes
+        return model
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.model.pop_nodes_and_vars()
+
+        vars_dict = {var_.name: var_ for var_ in self.vars}
+        nodes_dict = {node.name: node for node in self.nodes}
+
+        for name in self.var_names:
+            vars_dict[name].name = ""
+
+        for name in self.node_names:
+            nodes_dict[name].name = ""
+
+        self.gb.nodes.clear()
+        self.gb.vars.clear()
+
+        return False  # Returning False means exceptions are not suppressed
