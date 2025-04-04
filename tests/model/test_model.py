@@ -709,6 +709,133 @@ class TestSample:
         y_samples_mean = samples["y"].mean(axis=(0, 1))
         assert jnp.allclose(y_samples_mean, 0.0, atol=0.5)
 
+    def test_sample_from_custom_dist(self, linreg: Model):
+        model = linreg
+
+        # sample with y fixed; i.e. y will not be sampled
+        samples = model.sample(shape=(1, 100), seed=rnd.key(1), fixed=["y"])
+
+        assert "b" in samples  # verify that b has been sampled
+        assert "sigma" in samples  # verify that sigma has been sampled
+        assert "y" not in samples  # verify that y has NOT ben sampled
+
+        samples2 = model.sample(
+            shape=(1, 100),
+            seed=rnd.key(1),
+            fixed=["y"],
+            dists={"b": Dist(tfd.Uniform, low=0.1, high=0.2)},
+        )
+
+        assert "b" in samples2
+        assert not jnp.allclose(samples["b"], samples2["b"])
+        assert jnp.all(samples2["b"] <= 0.2)
+        assert jnp.all(samples2["b"] >= 0.1)
+
+    def test_sample_from_custom_dist_with_variable_dependent_param(self):
+        min_ = Var.new_param(0.1, Dist(tfd.Uniform, low=0.1, high=0.2), name="min")
+        max_ = Var.new_calc(lambda x: x + 0.1, x=min_, name="max")
+
+        m = Var.new_param(0.0, name="m")
+        y = Var.new_obs(0.0, Dist(tfd.Normal, loc=m, scale=1.0), name="y")
+
+        model = Model([y, min_, max_])
+
+        samples1 = model.sample(shape=(1, 100), seed=rnd.key(1))
+        assert "m" not in samples1
+
+        samples2 = model.sample(
+            shape=(1, 100),
+            seed=rnd.key(1),
+            dists={"m": Dist(tfd.Uniform, low=min_, high=max_)},
+        )
+
+        assert "m" in samples2
+
+        max_samples = max_.predict(samples2)
+
+        assert jnp.all(samples2["m"] > samples2["min"])
+        assert jnp.all(samples2["m"] < max_samples)
+
+    def test_sample_from_custom_dist_var_not_found(self):
+        min_ = Var.new_param(0.1, Dist(tfd.Uniform, low=0.1, high=0.2), name="min")
+        max_ = Var.new_calc(lambda x: x + 0.1, x=min_, name="max")
+
+        m = Var.new_param(0.0, name="m")
+        y = Var.new_obs(0.0, Dist(tfd.Normal, loc=m, scale=1.0), name="y")
+
+        model = Model([y, min_, max_])
+
+        with pytest.raises(ValueError):
+            model.sample(
+                shape=(1, 100),
+                seed=rnd.key(1),
+                dists={"s": Dist(tfd.Uniform, low=min_, high=max_)},
+            )
+
+    def test_sample_from_custom_dist_weak_var(self):
+        min_ = Var.new_param(0.1, Dist(tfd.Uniform, low=0.1, high=0.2), name="min")
+        max_ = Var.new_calc(lambda x: x + 0.1, x=min_, name="max")
+
+        m = Var.new_param(0.0, name="m")
+        y = Var.new_obs(0.0, Dist(tfd.Normal, loc=m, scale=1.0), name="y")
+
+        model = Model([y, min_, max_])
+
+        with pytest.raises(ValueError):
+            model.sample(
+                shape=(1, 100),
+                seed=rnd.key(1),
+                dists={"max": Dist(tfd.Uniform, low=min_, high=max_)},
+            )
+
+    def test_sample_from_custom_dist_with_pseudo_circular_graph(self):
+        """
+        This is an interesting edge case.
+        In the model below, we have
+
+            m ~ U(min, max)
+
+        and when sampling, I change the distribution for min:
+
+            min ~ U(0.1, 0.2)  ->  min ~ U(0.48, m)
+
+        This is circular. During sampling however, the circularity does not cause an
+        error. Instead, the value of m in the current state of the model gets inserted
+        in the distribution for min, such that we have
+
+            min ~ U(0.48, 0.5).
+
+        """
+        min_ = Var.new_param(0.1, Dist(tfd.Uniform, low=0.1, high=0.2), name="min")
+        max_ = Var.new_calc(lambda x: x + 0.1, x=min_, name="max")
+
+        m = Var.new_param(0.5, Dist(tfd.Uniform, low=min_, high=max_), name="m")
+        y = Var.new_obs(0.0, Dist(tfd.Normal, loc=m, scale=1.0), name="y")
+
+        model = Model([y, min_, max_])
+
+        samples = model.sample(shape=(1, 100), seed=rnd.key(1))
+
+        max_samples = max_.predict(samples)
+
+        assert jnp.all(samples["m"] > samples["min"])
+        assert jnp.all(samples["m"] < max_samples)
+
+        samples2 = model.sample(
+            shape=(1, 100),
+            seed=rnd.key(1),
+            dists={"min": Dist(tfd.Uniform, low=0.48, high=m)},
+        )
+
+        assert "m" in samples2
+        assert jnp.all(samples2["min"] < 0.5)
+        assert jnp.all(samples2["min"] > 0.48)
+
+        max_samples = max_.predict(samples2)
+
+        assert jnp.all(samples2["m"] > samples2["min"])
+        assert jnp.all(samples2["m"] < max_samples)
+
     def test_sample_posterior(self, linreg: Model):
         model = linreg
 

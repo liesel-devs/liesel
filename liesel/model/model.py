@@ -1413,6 +1413,7 @@ class Model:
         seed: jax.random.KeyArray,
         posterior_samples: dict[str, Array] | None = None,
         fixed: Sequence[str] = (),
+        dists: dict[str, Dist] | None = None,
     ) -> dict[str, Array]:
         """
         Draws samples from the model.
@@ -1432,6 +1433,10 @@ class Model:
         fixed
             The names of the nodes or variables to be excluded from the simulation. \
             By default, no nodes or variables are skipped.
+        dists
+            Can be used to provide a dictionary of variable names and :class:`.Dist` \
+            instances to use in sampling. If ``None`` (default), samples are drawn for \
+            each variable using their :attr:`.Var.dist_node`.
 
         Returns
         -------
@@ -1441,7 +1446,17 @@ class Model:
         posterior_samples = posterior_samples if posterior_samples is not None else {}
         state_before = self.state
 
-        dists = [
+        dists = dists if dists is not None else {}
+
+        for var_name in dists:
+            vars_ = self.vars
+            if var_name not in vars_:
+                raise ValueError(f"No variable with name '{var_name}' found.")
+
+            if vars_[var_name].weak:
+                raise ValueError(f"Variable '{var_name}' is weak, cannot sample.")
+
+        dists_list = [
             node
             for node in self._simulation_nodes
             if isinstance(node, Dist)
@@ -1463,12 +1478,9 @@ class Model:
         else:
             samples_shape = ()
 
-        nsamples = int(jnp.prod(jnp.asarray(shape)))
-        seeds = jax.random.split(seed, (nsamples,) + samples_shape + (len(dists),))
-
         sampling_specs = {}
 
-        for i, dist in enumerate(dists):
+        for i, dist in enumerate(dists_list):
             tfp_dist = dist.init_dist()
 
             event_shape = tfp_dist.event_shape
@@ -1485,6 +1497,11 @@ class Model:
                 value_var = dist.at  # type: ignore
 
             if var_name not in posterior_samples:
+
+                # pulls manually defined distribution form dists dict, returns current
+                # dist otherwise
+                dist = dists.get(var_name, dist)
+
                 sampling_specs[var_name] = {
                     "shape": sample_shape,
                     "dist": dist,
@@ -1492,8 +1509,34 @@ class Model:
                     "value_var": value_var,
                 }
 
+        for var_name, dist in dists.items():
+            if var_name in sampling_specs:
+                continue
+
+            i += 1
+            tfp_dist = dist.init_dist()
+            event_shape = tfp_dist.event_shape
+            batch_shape = tfp_dist.batch_shape
+            sample_index = len(value_shape) - len(batch_shape) - len(event_shape)
+            sample_shape = value_shape[:sample_index]
+            value_shape = jnp.asarray(self.vars[var_name].value).shape  # type: ignore
+
+            value_var = self.vars[var_name].value_node
+
+            sampling_specs[var_name] = {
+                "shape": sample_shape,
+                "dist": dist,
+                "i": i,
+                "value_var": value_var,
+            }
+
+        nsamples = int(jnp.prod(jnp.asarray(shape)))
+        seeds = jax.random.split(
+            seed, (nsamples,) + samples_shape + (len(sampling_specs),)
+        )
+
         def one_draw(position, seeds):
-            self.state = self.update_state(position, self.state)
+            self.state = self.update_state(position, state_before)
 
             sampled_position = {}
             for name, spec in sampling_specs.items():

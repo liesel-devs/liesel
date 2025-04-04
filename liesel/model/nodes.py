@@ -2081,6 +2081,7 @@ class Var:
         seed: jax.random.KeyArray,
         posterior_samples: dict[str, Array] | None = None,
         fixed: Sequence[str] = (),
+        dists: dict[str, Dist] | None = None,
     ) -> dict[str, Array]:
         """
         Draws samples from the parental model for this variable.
@@ -2100,6 +2101,10 @@ class Var:
         fixed
             The names of the nodes or variables to be excluded from the simulation. \
             By default, no nodes or variables are skipped.
+        dists
+            Can be used to provide a dictionary of variable names and :class:`.Dist` \
+            instances to use in sampling. If ``None`` (default), samples are drawn for \
+            each variable using their :attr:`.Var.dist_node`.
 
         Returns
         -------
@@ -2109,7 +2114,11 @@ class Var:
         if self.model:
             submodel = self.model.parental_submodel(self)
             drawn_samples = submodel.sample(
-                shape=shape, seed=seed, posterior_samples=posterior_samples, fixed=fixed
+                shape=shape,
+                seed=seed,
+                posterior_samples=posterior_samples,
+                fixed=fixed,
+                dists=dists,
             )
             return drawn_samples
 
@@ -2117,7 +2126,11 @@ class Var:
 
         with TemporaryModel(self, silent=True) as model:
             drawn_samples = model.sample(
-                shape=shape, seed=seed, posterior_samples=posterior_samples, fixed=fixed
+                shape=shape,
+                seed=seed,
+                posterior_samples=posterior_samples,
+                fixed=fixed,
+                dists=dists,
             )
 
             return drawn_samples
