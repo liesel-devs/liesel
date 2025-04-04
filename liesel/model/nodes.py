@@ -2081,6 +2081,7 @@ class Var:
         seed: jax.random.KeyArray,
         posterior_samples: dict[str, Array] | None = None,
         fixed: Sequence[str] = (),
+        newdata: dict[str, Array] | None = None,
         dists: dict[str, Dist] | None = None,
     ) -> dict[str, Array]:
         """
@@ -2101,6 +2102,11 @@ class Var:
         fixed
             The names of the nodes or variables to be excluded from the simulation. \
             By default, no nodes or variables are skipped.
+        newdata
+            Dictionary of new data at which to produce samples. The keys should \
+            correspond to variable or node names in the model whose values should be \
+            set to the given values before sampling. If ``None`` \
+            (default), the current variable values are used.
         dists
             Can be used to provide a dictionary of variable names and :class:`.Dist` \
             instances to use in sampling. If ``None`` (default), samples are drawn for \
@@ -2118,6 +2124,7 @@ class Var:
                 seed=seed,
                 posterior_samples=posterior_samples,
                 fixed=fixed,
+                newdata=newdata,
                 dists=dists,
             )
             return drawn_samples
@@ -2130,6 +2137,7 @@ class Var:
                 seed=seed,
                 posterior_samples=posterior_samples,
                 fixed=fixed,
+                newdata=newdata,
                 dists=dists,
             )
 

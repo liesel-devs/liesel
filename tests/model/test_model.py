@@ -859,6 +859,28 @@ class TestSample:
         # to the elements of the sample shape for sample1
         assert samples2["y"].shape == (11, 2, 8, 100)
 
+    def test_sample_posterior_at_newdata(self, linreg: Model):
+        model = linreg
+
+        samples1 = model.sample(shape=(2, 8), seed=rnd.key(7), fixed=["y"])
+
+        samples2 = model.sample(
+            shape=(11,),
+            seed=rnd.key(8),
+            posterior_samples=samples1,
+        )
+
+        x_shape = model.vars["X"].value.shape
+        x_new = tfd.Uniform(low=10.0, high=11.0).sample(x_shape, seed=rnd.key(9))
+        samples3 = model.sample(
+            shape=(11,),
+            seed=rnd.key(8),
+            posterior_samples=samples1,
+            newdata={"X": x_new},
+        )
+
+        assert not jnp.allclose(samples2["y"], samples3["y"])
+
     def test_sample_posterior_shape_of_posterior_samples(self, linreg: Model):
         model = linreg
         # the values in posterior_samples *have* to have leading (chain, iter) axes

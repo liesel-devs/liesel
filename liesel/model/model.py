@@ -1413,6 +1413,7 @@ class Model:
         seed: jax.random.KeyArray,
         posterior_samples: dict[str, Array] | None = None,
         fixed: Sequence[str] = (),
+        newdata: dict[str, Array] | None = None,
         dists: dict[str, Dist] | None = None,
     ) -> dict[str, Array]:
         """
@@ -1433,6 +1434,11 @@ class Model:
         fixed
             The names of the nodes or variables to be excluded from the simulation. \
             By default, no nodes or variables are skipped.
+        newdata
+            Dictionary of new data at which to produce samples. The keys should \
+            correspond to variable or node names in the model whose values should be \
+            set to the given values before sampling. If ``None`` \
+            (default), the current variable values are used.
         dists
             Can be used to provide a dictionary of variable names and :class:`.Dist` \
             instances to use in sampling. If ``None`` (default), samples are drawn for \
@@ -1445,6 +1451,11 @@ class Model:
         """
         posterior_samples = posterior_samples if posterior_samples is not None else {}
         state_before = self.state
+
+        if newdata:
+            state_for_sampling = self.update_state(newdata)
+        else:
+            state_for_sampling = state_before
 
         dists = dists if dists is not None else {}
 
@@ -1536,7 +1547,7 @@ class Model:
         )
 
         def one_draw(position, seeds):
-            self.state = self.update_state(position, state_before)
+            self.state = self.update_state(position, state_for_sampling)
 
             sampled_position = {}
             for name, spec in sampling_specs.items():
@@ -1559,8 +1570,14 @@ class Model:
         draw_iter = jax.vmap(one_draw, in_axes=(0, 0), out_axes=0)
         draw_chains = jax.vmap(draw_iter, in_axes=(0, 0), out_axes=0)
         draw_samples = jax.vmap(draw_chains, in_axes=(None, 0), out_axes=0)
+
+        # filter samples to include only samples that belong to the model
+        vars_and_nodes = list(self.vars) + list(self.nodes)
+        filtered_samples = {
+            k: v for k, v in posterior_samples.items() if k in vars_and_nodes
+        }
         try:
-            drawn_samples = draw_samples(posterior_samples, seeds)
+            drawn_samples = draw_samples(filtered_samples, seeds)
             self.state = state_before
         except Exception as e:
             msg = (
