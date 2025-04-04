@@ -7,21 +7,27 @@ engine in a well-defined state. Furthermore, the builder can return different en
 implementations.
 """
 
+from __future__ import annotations
+
 import logging
 import math
 from collections.abc import Iterable
-from typing import cast
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, cast
 
 import jax
 import jax.numpy as jnp
+import tensorflow_probability.substrates.jax.distributions as tfd
 
 from liesel.option import Option
 
 from .engine import Engine
 from .epoch import EpochConfig, EpochManager
+from .interface import LieselInterface
 from .kernel_sequence import KernelSequence
 from .pytree import stack_leaves
 from .types import (
+    Array,
     JitterFunctions,
     Kernel,
     KeyArray,
@@ -30,6 +36,10 @@ from .types import (
     QuantityGenerator,
 )
 from .warmup import stan_epochs
+
+if TYPE_CHECKING:
+    from liesel.model import Model, Var
+
 
 logger = logging.getLogger(__name__)
 
@@ -485,3 +495,164 @@ class EngineBuilder:
             quantity_generators=self.quantity_generators,
             show_progress=self.show_progress,
         )
+
+
+@dataclass
+class LieselMCMC:
+    model: Model
+    which: str | None = None
+
+    def get_spec(self, var: Var) -> MCMCSpec | None:
+        inference = var.get_inference(self.which)
+        if not isinstance(inference, MCMCSpec):
+            raise ValueError(
+                f"Attribute 'inference' of variable {var} is of type"
+                f" {type(inference)}, but expected type 'MCMCSetup'."
+            )
+        return inference
+
+    def kernel_groups(self) -> dict[str, _KernelGroup]:
+        vars_ = self.model.vars
+        kernel_groups: dict[str, _KernelGroup] = {}
+
+        # collect kernels
+        for name, var in vars_.items():
+            inference = self.get_spec(var)
+
+            if not inference:
+                continue
+
+            group_name = inference.kernel_group
+
+            if group_name is None:  # if this is a kernel without group
+                kernel_groups[name] = _KernelGroup(
+                    kernel=inference.kernel,
+                    kwargs=inference.kernel_kwargs,
+                    position_keys=[name],
+                )
+
+            elif group_name in kernel_groups:  # check group and append var name
+                group = kernel_groups[group_name]
+                same_kernel = group.kernel is inference.kernel
+                if not same_kernel:
+                    raise ValueError(
+                        "Found incoherent kernel classes for kernel group"
+                        f" {group_name}."
+                    )
+
+                same_kwargs = group.kwargs == inference.kernel_kwargs
+                if not same_kwargs:
+                    raise ValueError(
+                        f"Found incoherent kwargs for kernel group {group_name}."
+                    )
+                group.position_keys.append(name)
+
+            else:  # start a new group
+                kernel_groups[group_name] = _KernelGroup(
+                    kernel=inference.kernel,
+                    kwargs=inference.kernel_kwargs,
+                    position_keys=[name],
+                )
+
+        return kernel_groups
+
+    def kernel_list(self) -> list[Kernel]:
+        kernel_groups = self.kernel_groups()
+        kernel_list = [
+            g.kernel(g.position_keys, **g.kwargs)  # type: ignore
+            for g in kernel_groups.values()
+        ]
+        return kernel_list
+
+    def jitter_functions(self) -> JitterFunctions:
+        jitter_functions: JitterFunctions = {}
+        for name, var in self.model.vars.items():
+            inference = self.get_spec(var)
+            if inference is not None and inference.jitter_dist is not None:
+                jitter_functions[name] = inference.apply_jitter
+
+        return jitter_functions
+
+    def engine_builder(
+        self,
+        seed: int,
+        num_chains: int,
+        warmup_duration: int,
+        posterior_duration: int,
+        term_duration: int = 50,
+        thinning_warmup: int = 1,
+        thinning_posterior: int = 1,
+        apply_jitter: bool = True,
+    ) -> EngineBuilder:
+        eb = EngineBuilder(seed=seed, num_chains=num_chains)
+        eb.set_model(LieselInterface(self.model))
+        eb.set_initial_values(self.model.state)
+        eb.set_duration(
+            warmup_duration=warmup_duration,
+            posterior_duration=posterior_duration,
+            term_duration=term_duration,
+            thinning_posterior=thinning_posterior,
+            thinning_warmup=thinning_warmup,
+        )
+
+        for kernel in self.kernel_list():
+            eb.add_kernel(kernel)
+
+        if apply_jitter:
+            eb.set_jitter_fns(self.jitter_functions())
+
+        return eb
+
+    def engine(
+        self,
+        seed: int,
+        num_chains: int,
+        warmup_duration: int,
+        posterior_duration: int,
+        term_duration: int = 50,
+        thinning_warmup: int = 1,
+        thinning_posterior: int = 1,
+        apply_jitter: bool = True,
+    ) -> Engine:
+        eb = self.engine_builder(
+            seed=seed,
+            num_chains=num_chains,
+            warmup_duration=warmup_duration,
+            posterior_duration=posterior_duration,
+            term_duration=term_duration,
+            thinning_warmup=thinning_warmup,
+            thinning_posterior=thinning_posterior,
+            apply_jitter=apply_jitter,
+        )
+
+        return eb.build()
+
+
+@dataclass
+class _KernelGroup:
+    kernel: type[Kernel]
+    kwargs: dict[str, Any] = field(default_factory=dict)
+    position_keys: list[str] = field(default_factory=list)
+
+
+@dataclass
+class MCMCSpec:
+    kernel: type[Kernel]
+    kernel_kwargs: dict[str, Any] = field(default_factory=dict)
+    kernel_group: str | None = None
+    jitter_dist: tfd.Distribution | None = None
+
+    def apply_jitter(self, seed: KeyArray, value: Array) -> Array:
+        """
+        Applies jittering to ``value`` according to :attr:`.jitter_dist`.
+        Returns ``value + jitter``.
+        """
+        if self.jitter_dist is None:
+            return value
+
+        original_shape = jnp.asarray(value).shape
+        value = jnp.atleast_1d(value)
+
+        jitter = self.jitter_dist.sample(sample_shape=jnp.shape(value), seed=seed)
+
+        return jnp.reshape(value + jitter, original_shape)

@@ -3,6 +3,8 @@ Goose MCMC framework.
 """
 
 from .builder import EngineBuilder as EngineBuilder
+from .builder import LieselMCMC as LieselMCMC
+from .builder import MCMCSpec as MCMCSpec
 from .engine import Engine as Engine
 from .engine import SamplingResults
 from .epoch import EpochConfig, EpochType
@@ -40,6 +42,8 @@ __all__ = [
     "LieselInterface",
     "Engine",
     "EngineBuilder",
+    "MCMCSpec",
+    "LieselMCMC",
     "EpochConfig",
     "EpochType",
     "GibbsKernel",
