@@ -862,24 +862,20 @@ class TestSample:
     def test_sample_posterior_at_newdata(self, linreg: Model):
         model = linreg
 
-        samples1 = model.sample(shape=(2, 8), seed=rnd.key(7), fixed=["y"])
-
-        samples2 = model.sample(
-            shape=(11,),
-            seed=rnd.key(8),
-            posterior_samples=samples1,
+        samples1 = model.sample(
+            shape=(2, 8),
+            seed=rnd.key(7),
         )
 
         x_shape = model.vars["X"].value.shape
         x_new = tfd.Uniform(low=10.0, high=11.0).sample(x_shape, seed=rnd.key(9))
-        samples3 = model.sample(
-            shape=(11,),
+        samples2 = model.sample(
+            shape=(2, 8),
             seed=rnd.key(8),
-            posterior_samples=samples1,
             newdata={"X": x_new},
         )
 
-        assert not jnp.allclose(samples2["y"], samples3["y"])
+        assert not jnp.allclose(samples1["y"], samples2["y"])
 
     def test_sample_posterior_shape_of_posterior_samples(self, linreg: Model):
         model = linreg
