@@ -1555,7 +1555,7 @@ class Var:
             The arguments passed on to the init function of the bijector.
         inference
             Additional information that can be used to set up inference algorithms for \
-            the new, transformed variable. If ``"transfer"`` (default), the inference \
+            the new, transformed variable. If ``"transfer"``, the inference \
             information will be transferred from the original variable to the new one. \
             If ``None`` (default), the new variable will have no inference information.\
             In any case, all inference information will be removed from the original \
