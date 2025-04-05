@@ -1,6 +1,8 @@
+import pickle
 import typing
 import warnings
 
+import dill
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -762,3 +764,27 @@ class TestVarTransform:
         log_tau.dist_node.update()  # type: ignore
         log_tau_gb.dist_node.update()  # type: ignore
         assert log_tau.log_prob == pytest.approx(log_tau_gb.log_prob)
+
+    def test_pickle_model_with_transformed_var(self, tmp_path):
+        prior = lsl.Dist(tfp.distributions.HalfCauchy, loc=0.0, scale=25.0)
+        tau = lsl.Var(10.0, prior, name="tau")
+        _ = tau.transform()
+
+        model = lsl.Model([tau])
+
+        with pytest.raises(AttributeError):
+            with open(tmp_path / "model.pkl", "wb") as f:
+                pickle.dump(model, f)
+
+            with open(tmp_path / "model.pkl", "rb") as f:
+                model2 = pickle.load(f)
+
+        with open(tmp_path / "model.pkl", "wb") as f:
+            dill.dump(model, f)
+
+        with open(tmp_path / "model.pkl", "rb") as f:
+            model2 = dill.load(f)
+
+        assert len(model2.vars) == len(model.vars)
+        assert len(model2.nodes) == len(model.nodes)
+        assert model2.log_prob == pytest.approx(model.log_prob)
