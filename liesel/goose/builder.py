@@ -507,7 +507,7 @@ class LieselMCMC:
         if not isinstance(inference, MCMCSpec):
             raise ValueError(
                 f"Attribute 'inference' of variable {var} is of type"
-                f" {type(inference)}, but expected type 'MCMCSetup'."
+                f" {type(inference)}, but expected type '{MCMCSpec}'."
             )
         return inference
 
