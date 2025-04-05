@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import Literal
 
 import jax
@@ -78,11 +79,12 @@ class FlatLogProb:
 
     Parameters
     ----------
-    *names
-        Names of the variables at which to evaluate the log probability. Other \
-        variables will be kept fixed at their current values in the model state.
     model
         A Liesel model instance.
+    param_names
+        Names of the variables at which to evaluate the log probability. Other \
+        variables will be kept fixed at their current values in the model state. \
+        If ``None`` (default), all *parameter* variables in the model will be used.
     component
         Which component of the model's log probability to evaluate.
     diff_mode
@@ -91,14 +93,19 @@ class FlatLogProb:
 
     def __init__(
         self,
-        *names: str,
         model: Model,
+        param_names: Sequence[str] | None = None,
         component: Literal["log_prob", "log_lik", "log_prior"] = "log_prob",
         diff_mode: Literal["forward", "reverse"] = "forward",
     ):
         self.model = model
 
-        position = self.model.extract_position(names, self.model.state)
+        if param_names is None:
+            param_names = [
+                var.name for var in self.model.vars.values() if var.parameter
+            ]
+
+        position = self.model.extract_position(param_names, self.model.state)
         _, unravel_fn = jax.flatten_util.ravel_pytree(position)
         self.unravel_fn = unravel_fn
 
