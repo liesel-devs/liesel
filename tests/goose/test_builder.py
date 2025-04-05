@@ -5,6 +5,7 @@ some tests for the engine builder
 import jax
 import jax.numpy as jnp
 import pytest
+import tensorflow_probability.substrates.jax.bijectors as tfb
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.goose as gs
@@ -232,3 +233,44 @@ class TestLieselMCMC:
 
         eb = mcmc.engine_builder(1, 4, 200, 100)
         assert len(eb.jitter_fns.expect("")) == 2
+
+    def test_transform_var_with_inference_transfer(self):
+        sigma = lsl.Var.new_param(
+            1.0,
+            lsl.Dist(tfd.InverseGamma, concentration=2.0, scale=1.0),
+            inference=gs.MCMCSpec(gs.IWLSKernel),
+            name="sigma",
+        )
+        inference = sigma.inference
+
+        log_sigma = sigma.transform(tfb.Exp(), inference="transfer")
+        assert log_sigma.inference is inference
+        assert sigma.inference is None
+
+    def test_transform_var_with_inference_new(self):
+        sigma = lsl.Var.new_param(
+            1.0,
+            lsl.Dist(tfd.InverseGamma, concentration=2.0, scale=1.0),
+            inference=gs.MCMCSpec(gs.IWLSKernel),
+            name="sigma",
+        )
+        inference = sigma.inference
+
+        log_sigma = sigma.transform(tfb.Exp(), inference=gs.MCMCSpec(gs.NUTSKernel))
+        assert log_sigma.inference is not inference
+        assert sigma.inference is None
+        assert log_sigma.inference.kernel is gs.NUTSKernel
+
+    def test_transform_var_with_inference_none(self):
+        sigma = lsl.Var.new_param(
+            1.0,
+            lsl.Dist(tfd.InverseGamma, concentration=2.0, scale=1.0),
+            inference=gs.MCMCSpec(gs.IWLSKernel),
+            name="sigma",
+        )
+        inference = sigma.inference
+
+        log_sigma = sigma.transform(tfb.Exp())
+        assert log_sigma.inference is not inference
+        assert sigma.inference is None
+        assert log_sigma.inference is None
