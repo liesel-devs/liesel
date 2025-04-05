@@ -38,8 +38,7 @@ class LogProb:
         elif diff_mode == "reverse":
             self._hessian_fn = jax.jacrev(self._grad_fn)
         else:
-            raise ValueError(f"Unrecognized argumetn value {diff_mode=}")
-
+            raise ValueError(f"Unrecognized argument value {diff_mode=}")
         self.component = component
         self.diff_mode = diff_mode
 
