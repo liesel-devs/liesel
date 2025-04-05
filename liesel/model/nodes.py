@@ -1654,54 +1654,50 @@ class Var:
             )
             tvar.parameter = self.parameter  # type: ignore
             self.parameter = False
-            return tvar
 
         elif self.dist_node is None:
             tvar = _transform_var_without_dist_with_bijector_instance(self, bijector)
             tvar.parameter = self.parameter  # type: ignore
             self.parameter = False
-            return tvar
 
-        if self.dist_node is None:  # type: ignore
-            raise RuntimeError(f"{repr(self)} has no distribution")
-
-        # avoid infinite recursion
-        self.auto_transform = False
-
-        # use default event space bijector if bijector is None
-        use_default_bijector = bijector is None
-        if use_default_bijector:
-            dist_inst = self.dist_node.init_dist()
-            default_bijector = dist_inst.experimental_default_event_space_bijector
-
-        if use_default_bijector and default_bijector is None:
-            raise RuntimeError(
-                f"{self} has distribution without default event space bijector "
-                "and no bijector was given"
-            )
-
-        if is_bijector_class(bijector) or use_default_bijector:
-            tvar = _transform_var_with_bijector_class(
-                self, bijector, *bijector_args, **bijector_kwargs
-            )
-        elif isinstance(bijector, jb.Bijector):
-            if bijector_args or bijector_kwargs:
-                raise RuntimeError(
-                    "You passed a bijector instance and "
-                    "nonempty bijector arguments. You should either initialise your "
-                    "bijector directly with the arguments, or pass a bijector class "
-                    "instead. The first option is preferred, if the bijector arguments"
-                    "are constant."
-                )
-            tvar = _transform_var_with_bijector_instance(self, bijector)
         else:
-            raise TypeError(
-                f"Argument {bijector=} is of invalid type {type(bijector)}."
-            )
+            # avoid infinite recursion
+            self.auto_transform = False
 
-        tvar.parameter = self.parameter  # type: ignore
-        self.parameter = False
-        self.dist_node = None
+            # use default event space bijector if bijector is None
+            use_default_bijector = bijector is None
+            if use_default_bijector:
+                dist_inst = self.dist_node.init_dist()
+                default_bijector = dist_inst.experimental_default_event_space_bijector
+
+            if use_default_bijector and default_bijector is None:
+                raise RuntimeError(
+                    f"{self} has distribution without default event space bijector "
+                    "and no bijector was given"
+                )
+
+            if is_bijector_class(bijector) or use_default_bijector:
+                tvar = _transform_var_with_bijector_class(
+                    self, bijector, *bijector_args, **bijector_kwargs
+                )
+            elif isinstance(bijector, jb.Bijector):
+                if bijector_args or bijector_kwargs:
+                    raise RuntimeError(
+                        "You passed a bijector instance and nonempty bijector"
+                        " arguments. You should either initialise your bijector"
+                        " directly with the arguments, or pass a bijector class"
+                        " instead. The first option is preferred, if the bijector"
+                        " argumentsare constant."
+                    )
+                tvar = _transform_var_with_bijector_instance(self, bijector)
+            else:
+                raise TypeError(
+                    f"Argument {bijector=} is of invalid type {type(bijector)}."
+                )
+
+            tvar.parameter = self.parameter  # type: ignore
+            self.parameter = False
+            self.dist_node = None
 
         return tvar
 
