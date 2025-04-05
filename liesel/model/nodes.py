@@ -1526,6 +1526,7 @@ class Var:
         self,
         bijector: type[jb.Bijector] | jb.Bijector | None = None,
         *bijector_args,
+        inference: InferenceTypes | Literal["transfer"] = None,
         **bijector_kwargs,
     ) -> Var:
         """
@@ -1549,6 +1550,13 @@ class Var:
             directly.
         bijector_args
             The arguments passed on to the init function of the bijector.
+        inference
+            Additional information that can be used to set up inference algorithms for \
+            the new, transformed variable. If ``"transfer"`` (default), the inference \
+            information will be transferred from the original variable to the new one. \
+            If ``None`` (default), the new variable will have no inference information.\
+            In any case, all inference information will be removed from the original \
+            variable upon transformation.
         bijector_kwargs
             The keyword arguments passed on to the init function of the bijector.
 
@@ -1696,6 +1704,8 @@ class Var:
             self.parameter = False
             self.dist_node = None
 
+        tvar.inference = self.inference if inference == "transfer" else inference
+        self.inference = None
         return tvar
 
     @in_model_method
