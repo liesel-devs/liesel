@@ -32,7 +32,10 @@ from ..distributions.nodist import NoDistribution
 from .viz import plot_nodes, plot_vars
 
 if TYPE_CHECKING:
+    from ..goose import MCMCSpec
     from .model import Model
+
+    InferenceTypes = Union[MCMCSpec, None, dict[str, MCMCSpec]]
 
 __all__ = [
     "Array",
@@ -1160,6 +1163,8 @@ class Var:
     name
         The name of the variable. If you do not specify a name, a unique name will be \
         automatically generated upon initialization of a :class:`.Model`.
+    inference
+        Additional information that can be used to set up inference algorithms.
 
     See Also
     --------
@@ -1189,6 +1194,7 @@ class Var:
 
     __slots__ = (
         "info",
+        "inference",
         "_auto_transform",
         "_dist_node",
         "_groups",
@@ -1205,6 +1211,7 @@ class Var:
         value: Any,
         distribution: Dist | None = None,
         name: str = "",
+        inference: InferenceTypes = None,
     ):
         self._name = name
         self._value_node: Node = Value(None)
@@ -1229,9 +1236,15 @@ class Var:
         self.info: dict[str, Any] = {}
         """Additional meta-information about the variable as a dict."""
 
+        self.inference = inference
+
     @classmethod
     def new_param(
-        cls, value: Any, distribution: Dist | None = None, name: str = ""
+        cls,
+        value: Any,
+        distribution: Dist | None = None,
+        name: str = "",
+        inference: InferenceTypes = None,
     ) -> Var:
         """
         Initializes a strong variable that acts as a model parameter.
@@ -1249,6 +1262,8 @@ class Var:
         name
             The name of the variable. If you do not specify a name, a unique name will \
             be automatically generated upon initialization of a :class:`.Model`.
+        inference
+            Additional information that can be used to set up inference algorithms.
 
         See Also
         --------
@@ -1274,7 +1289,7 @@ class Var:
         Var(name="")
 
         """
-        var = cls(value, distribution, name)
+        var = cls(value, distribution, name, inference=inference)
         var.value_node.monitor = True
         var.parameter = True
         return var
@@ -1433,7 +1448,9 @@ class Var:
         return var
 
     @classmethod
-    def new_value(cls, value: Any, name: str = "") -> Var:
+    def new_value(
+        cls, value: Any, name: str = "", inference: InferenceTypes = None
+    ) -> Var:
         """
         Initializes a strong variable without a distribution.
 
@@ -1446,6 +1463,8 @@ class Var:
         name
             The name of the variable. If you do not specify a name, a unique name will \
             be automatically generated upon initialization of a :class:`.Model`.
+        inference
+            Additional information that can be used to set up inference algorithms.
 
         See Also
         --------
@@ -1464,8 +1483,17 @@ class Var:
         Var(name="")
 
         """
-        var = cls(value, name=name)
+        var = cls(value, name=name, inference=inference)
         return var
+
+    def get_inference(self, key: str | None) -> InferenceTypes:
+        if isinstance(self.inference, dict):
+            if key is None:
+                raise ValueError(
+                    f"{key=} is invalid. Possible keys: {list(self.inference)}."
+                )
+            return self.inference[key]
+        return self.inference
 
     def all_input_nodes(self) -> tuple[Node, ...]:
         """Returns all input *nodes* as a unique tuple."""
@@ -1502,6 +1530,7 @@ class Var:
         bijector: type[jb.Bijector] | jb.Bijector | None = None,
         *bijector_args,
         name: str | None = None,
+        inference: InferenceTypes | Literal["transfer"] = None,
         **bijector_kwargs,
     ) -> Var:
         """
@@ -1529,6 +1558,13 @@ class Var:
             Name for the new, transformed variable. If ``None`` (default), the new \
             name will be ``<old_name>_transformed``, where ``<old_name>`` is \
             a placeholder for the current variable's name.
+        inference
+            Additional information that can be used to set up inference algorithms for \
+            the new, transformed variable. If ``"transfer"``, the inference \
+            information will be transferred from the original variable to the new one. \
+            If ``None`` (default), the new variable will have no inference information.\
+            In any case, all inference information will be removed from the original \
+            variable upon transformation.
         bijector_kwargs
             The keyword arguments passed on to the init function of the bijector.
 
@@ -1679,6 +1715,37 @@ class Var:
         if name is not None:
             tvar.name = name
 
+            if use_default_bijector and default_bijector is None:
+                raise RuntimeError(
+                    f"{self} has distribution without default event space bijector "
+                    "and no bijector was given"
+                )
+
+            if is_bijector_class(bijector) or use_default_bijector:
+                tvar = _transform_var_with_bijector_class(
+                    self, bijector, *bijector_args, **bijector_kwargs
+                )
+            elif isinstance(bijector, jb.Bijector):
+                if bijector_args or bijector_kwargs:
+                    raise RuntimeError(
+                        "You passed a bijector instance and nonempty bijector"
+                        " arguments. You should either initialise your bijector"
+                        " directly with the arguments, or pass a bijector class"
+                        " instead. The first option is preferred, if the bijector"
+                        " argumentsare constant."
+                    )
+                tvar = _transform_var_with_bijector_instance(self, bijector)
+            else:
+                raise TypeError(
+                    f"Argument {bijector=} is of invalid type {type(bijector)}."
+                )
+
+            tvar.parameter = self.parameter  # type: ignore
+            self.parameter = False
+            self.dist_node = None
+
+        tvar.inference = self.inference if inference == "transfer" else inference
+        self.inference = None
         return tvar
 
     @in_model_method
