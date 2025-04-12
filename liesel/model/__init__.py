@@ -21,6 +21,7 @@ from .legacy import (
     Smooth,
     SmoothingParam,
 )
+from .logprob import FlatLogProb, LogProb
 from .model import GraphBuilder, Model, load_model, save_model
 from .nodes import (  # TODO: Bijector?
     Array,
