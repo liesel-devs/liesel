@@ -190,6 +190,24 @@ class TestModel:
 
         assert model.log_prob == pytest.approx(model.log_lik + model.log_prior)
 
+    def test_parameters(self, model: Model) -> None:
+        assert len(model.parameters) == 2
+        assert "sigma_hat" in model.parameters
+        assert "beta_hat" in model.parameters
+
+        parameters_log_prob = [var.log_prob.sum() for var in model.parameters.values()]
+        assert sum(parameters_log_prob) == pytest.approx(model.log_prior)
+
+    def test_observed(self, model: Model) -> None:
+        assert len(model.observed) == 2
+        assert "y_var" in model.observed
+        assert "X" in model.observed
+
+        observed_log_prob = [
+            jnp.atleast_1d(var.log_prob).sum() for var in model.observed.values()
+        ]
+        assert sum(observed_log_prob) == pytest.approx(model.log_lik)
+
     def test_var_graph(self, model: Model) -> None:
         """
         Verifies that all model vars are present in the graph and vice versa.
