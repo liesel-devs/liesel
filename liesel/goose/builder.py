@@ -504,6 +504,9 @@ class LieselMCMC:
 
     def get_spec(self, var: Var) -> MCMCSpec | None:
         inference = var.get_inference(self.which)
+        if inference is None:
+            return inference
+
         if not isinstance(inference, MCMCSpec):
             raise ValueError(
                 f"Attribute 'inference' of variable {var} is of type"
