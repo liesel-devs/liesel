@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 import math
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, cast
 
@@ -633,14 +633,14 @@ class LieselMCMC:
 
 @dataclass
 class _KernelGroup:
-    kernel: type[Kernel]
+    kernel: Callable[..., Kernel]
     kwargs: dict[str, Any] = field(default_factory=dict)
     position_keys: list[str] = field(default_factory=list)
 
 
 @dataclass
 class MCMCSpec:
-    kernel: type[Kernel]
+    kernel: Callable[..., Kernel]
     kernel_kwargs: dict[str, Any] = field(default_factory=dict)
     kernel_group: str | None = None
     jitter_dist: tfd.Distribution | None = None
