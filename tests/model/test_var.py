@@ -548,14 +548,14 @@ class TestVarConstructors:
         assert loc.weak
 
     def test_new_calc_with_dist(self):
-        loc = lnodes.Var.new_calc(
+        loc = lsl.Var.new_calc(
             lambda x: x + 1.0,
-            distribution=lnodes.Dist(tfp.distributions.Normal, loc=0.0, scale=1.0),
+            distribution=lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=1.0),
             x=1.0,
             name="loc",
         )
         loc.update()
-        assert isinstance(loc, lnodes.Var)
+        assert isinstance(loc, lsl.Var)
         assert loc.value == pytest.approx(2.0)
         assert loc.weak
         assert loc.dist_node is not None
