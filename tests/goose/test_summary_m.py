@@ -1,6 +1,7 @@
 import jax.numpy as jnp
 import numpy as np
 
+from liesel.__version__ import __version__
 from liesel.goose.engine import SamplingResults
 from liesel.goose.summary_m import SamplesSummary, Summary
 
@@ -222,6 +223,11 @@ def test_quantity_shape(result_for_quants: SamplingResults):
     assert summary.quantities["hdi"]["bar"].shape == (4, 2, 3, 5, 7)
     assert summary.quantities["hdi"]["baz"].shape == (4, 2)
 
+    
+def test_liesel_version(result: SamplingResults):
+    summary = Summary(result, per_chain=True)
+
+    assert summary.liesel_version == __version__
 
 class TestSamplesSummary:
     def test_shapes(self, result: SamplingResults):
