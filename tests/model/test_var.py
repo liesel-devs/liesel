@@ -2,9 +2,8 @@ import pickle
 import typing
 import warnings
 
-
-import jax
 import dill
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -804,7 +803,7 @@ class TestVarTransform:
         assert len(model2.vars) == len(model.vars)
         assert len(model2.nodes) == len(model.nodes)
         assert model2.log_prob == pytest.approx(model.log_prob)
-        
+
 
 class TestVarPredictions:
     def test_predict(self) -> None:
@@ -814,16 +813,16 @@ class TestVarPredictions:
         e = jax.random.normal(jax.random.PRNGKey(2), (n,))
         y = x * b + e
 
-        xvar = lnodes.Var.new_obs(x, name="x")
-        bvar = lnodes.Var.new_param(jnp.array([b]), name="b")
-        loc = lnodes.Var.new_calc(lambda x, b: x * b, x=xvar, b=bvar, name="loc")
-        scale = lnodes.Var.new_param(jnp.array([1.0]), name="scale")
+        xvar = lsl.Var.new_obs(x, name="x")
+        bvar = lsl.Var.new_param(jnp.array([b]), name="b")
+        loc = lsl.Var.new_calc(lambda x, b: x * b, x=xvar, b=bvar, name="loc")
+        scale = lsl.Var.new_param(jnp.array([1.0]), name="scale")
         scale.transform(tfp.bijectors.Exp())
-        yvar = lnodes.Var.new_obs(
-            y, lnodes.Dist(tfp.distributions.Normal, loc=loc, scale=scale), name="y"
+        yvar = lsl.Var.new_obs(
+            y, lsl.Dist(tfp.distributions.Normal, loc=loc, scale=scale), name="y"
         )
 
-        _ = lmodel.Model([yvar])
+        _ = lsl.Model([yvar])
 
         samples = {"b": jax.random.uniform(jax.random.PRNGKey(3), (4, 7))}
 
@@ -845,4 +844,3 @@ class TestVarPredictions:
         assert jnp.allclose(pred, xnew * jnp.expand_dims(samples["b"], -1))
         assert pred.shape[-1] != x.shape[-1]
         assert pred.shape[-1] == xnew.shape[-1]
-
