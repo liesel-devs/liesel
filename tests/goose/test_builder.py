@@ -235,6 +235,10 @@ class TestLieselMCMC:
         assert len(eb.jitter_fns.expect("")) == 2
 
     def test_transform_var_with_inference_new(self):
+        """
+        It is allowed to pass a new inferece object during transformation.
+        In this case, the inference object of the original variable is removed.
+        """
         sigma = lsl.Var.new_param(
             1.0,
             lsl.Dist(tfd.InverseGamma, concentration=2.0, scale=1.0),
@@ -249,6 +253,11 @@ class TestLieselMCMC:
         assert log_sigma.inference.kernel is gs.NUTSKernel
 
     def test_transform_var_with_inference_none(self):
+        """
+        Default behavior when trying to transform a variable *with* inference
+        information: Error. You need to declare explicitly, what you want to do.
+        In this case, ``"drop"`` means the inference information is deleted.
+        """
         sigma = lsl.Var.new_param(
             1.0,
             lsl.Dist(tfd.InverseGamma, concentration=2.0, scale=1.0),
@@ -262,5 +271,22 @@ class TestLieselMCMC:
 
         log_sigma = sigma.transform(tfb.Exp(), inference="drop")
         assert log_sigma.inference is not inference
+        assert sigma.inference is None
+        assert log_sigma.inference is None
+
+    def test_transform_var_without_inference(self):
+        """
+        Default when the original variable has no inference information:
+        Everything works smoothly.
+        """
+        sigma = lsl.Var.new_param(
+            1.0,
+            lsl.Dist(tfd.InverseGamma, concentration=2.0, scale=1.0),
+            name="sigma",
+        )
+
+        log_sigma = sigma.transform(tfb.Exp())
+
+        assert log_sigma.inference is None
         assert sigma.inference is None
         assert log_sigma.inference is None
