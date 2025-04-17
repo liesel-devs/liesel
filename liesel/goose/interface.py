@@ -280,16 +280,7 @@ class LieselInterface:
         model_state
             A dictionary of node names and their corresponding :class:`.NodeState`.
         """
-        position = {}
-
-        for key in position_keys:
-            try:
-                position[key] = model_state[key].value
-            except KeyError:
-                node_key = self._model.vars[key].value_node.name
-                position[key] = model_state[node_key].value
-
-        return Position(position)
+        return self._model.extract_position(position_keys, model_state)  # type: ignore
 
     def update_state(self, position: Position, model_state: ModelState) -> ModelState:
         """
@@ -309,23 +300,7 @@ class LieselInterface:
         ``position``. If you supply a ``model_state`` with outdated nodes, these nodes
         and their outputs will not be updated.
         """
-
-        # sets all outdated flags in the model state to false
-        # this is required to make the function jittable
-
-        self._model.state = model_state
-
-        for node in self._model.nodes.values():
-            node._outdated = False
-
-        for key, value in position.items():
-            try:
-                self._model.nodes[key].value = value  # type: ignore  # data node
-            except KeyError:
-                self._model.vars[key].value = value
-
-        self._model.update()
-        return self._model.state
+        return self._model.update_state(position, model_state)
 
     def log_prob(self, model_state: ModelState) -> float:
         """
