@@ -420,6 +420,24 @@ class TestPredictions:
         assert pred["mu"].shape == (4, 3, 500)
         assert len(pred) == len(model.vars)
 
+    def test_predict_with_unused_samples(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+            "unused": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+        }
+
+        # manual prediction
+        manual_pred = jnp.einsum(
+            "nk,...k->...n", model.vars["X"].value, samples["beta_hat"]
+        )
+
+        # predictions at current values for all vars
+        pred = model.predict(samples=samples)
+        assert jnp.allclose(pred["mu"], manual_pred)
+        assert pred["mu"].shape == (4, 3, 500)
+        assert len(pred) == len(model.vars)
+
     def test_predict_for_specific_var(self, model) -> None:
         samples = {
             "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
