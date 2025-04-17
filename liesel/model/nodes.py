@@ -1705,7 +1705,7 @@ class Var:
                         " arguments. You should either initialise your bijector"
                         " directly with the arguments, or pass a bijector class"
                         " instead. The first option is preferred, if the bijector"
-                        " argumentsare constant."
+                        " arguments are constant."
                     )
                 tvar = _transform_var_with_bijector_instance(self, bijector)
             else:
