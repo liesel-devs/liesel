@@ -1654,7 +1654,7 @@ class Var:
             raise ValueError(
                 f"{self} has inference information in the .inference attribute. "
                 "To proceed with transformation, the .inference information needs to"
-                "be explicitly removed. You can transform with ``infrence='drop'``."
+                "be explicitly removed. You can transform with ``inference='drop'``."
             )
         # if self.weak:
         #     raise RuntimeError(f"{repr(self)} is weak")
