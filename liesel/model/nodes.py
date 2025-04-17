@@ -1333,6 +1333,7 @@ class Var:
         cls,
         function: Callable[..., Any],
         *inputs: Any,
+        distribution: Dist | None = None,
         name: str = "",
         _needs_seed: bool = False,
         update_on_init: bool = True,
@@ -1360,7 +1361,9 @@ class Var:
             will be converted to :class:`.Value` nodes. The values of these inputs \
             will be passed to the wrapped function in the same order they are entered \
             here.
-        _name
+        distribution
+            The probability distribution of the variable.
+        name
             The name of the node. If you do not specify a name, a unique name will be \
             automatically generated upon initialization of a :class:`.Model`.
         _needs_seed
@@ -1426,7 +1429,7 @@ class Var:
             update_on_init=update_on_init,
             **kwinputs,
         )
-        var = cls(calc, name=name)
+        var = cls(calc, distribution=distribution, name=name)
         return var
 
     @classmethod
@@ -2090,6 +2093,31 @@ class Var:
             height=height,
             prog=prog,
         )
+
+    @in_model_method
+    def predict(
+        self,
+        samples: dict[str, Array],
+        newdata: dict[str, Array] | None = None,
+    ) -> Array:
+        """
+        Returns an array of predictions for this variable.
+
+        Parameters
+        ----------
+        samples
+            Dictionary of samples at which to evaluate predictions. All values of the \
+            dictionary are assumed to have two leading dimensions corresponding to \
+            ``(nchains, niteration)``.
+        newdata
+            Dictionary of new data at which to evaluate predictions. The keys should \
+            correspond to variable or node names in the model whose values should be \
+            set to the given values before evaluating predictions.
+        """
+
+        submodel = self.model.parental_submodel(self)  # type: ignore
+        pred = submodel.predict(samples=samples, predict=[self.name], newdata=newdata)
+        return pred[self.name]
 
     def plot_nodes(
         self,
