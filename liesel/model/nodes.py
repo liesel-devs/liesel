@@ -8,7 +8,7 @@ import logging
 import warnings
 import weakref
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Hashable, Iterable
+from collections.abc import Callable, Hashable, Iterable, Sequence
 from functools import wraps
 from itertools import chain
 from types import MappingProxyType
@@ -23,6 +23,7 @@ from typing import (
     Union,
 )
 
+import jax
 import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as jd
 import tensorflow_probability.substrates.numpy.bijectors as nb
@@ -1977,60 +1978,18 @@ class Var:
                     subgraph = self.model.node_parental_subgraph(*filtered_nodes)
                     return plot_nodes(subgraph, **kwargs)
 
-        from liesel.model import GraphBuilder
+        from liesel.model.model import TemporaryModel
 
-        gb = GraphBuilder().add(self)
-        nodes, _vars = gb._all_nodes_and_vars()
-
-        automatically_set_names = gb._set_missing_names()
-        var_names = automatically_set_names["vars"]
-        node_names = automatically_set_names["nodes"]
-        if var_names:
-            if verbose:
-                names_ = f"The automatically assigned names are: {var_names}. "
-            else:
-                names_ = ""
-            logger.info(
-                f"Unnamed variables were temporarily named for plotting. {names_}"
-                "The names are reset"
-                " after plotting."
-            )
-        if node_names:
-            if verbose:
-                names_ = f"The automatically assigned names are: {node_names}. "
-            else:
-                names_ = ""
-            logger.info(
-                f"Unnamed nodes were temporarily named for plotting. {names_}"
-                "The names are reset"
-                " after plotting."
-            )
-
-        model = gb.build_model()
-
-        match which:
-            case "vars":
-                subgraph = model.var_parental_subgraph(self)
-                plot_vars(subgraph, **kwargs)
-            case "nodes":
-                self_nodes = [self.value_node, self.dist_node, self.var_value_node]
-                filtered_nodes = [nd for nd in self_nodes if nd is not None]
-                subgraph = model.node_parental_subgraph(*filtered_nodes)
-                plot_nodes(subgraph, **kwargs)
-
-        model.pop_nodes_and_vars()
-
-        vars_dict = {var_.name: var_ for var_ in _vars}
-        nodes_dict = {node.name: node for node in nodes}
-
-        for name in var_names:
-            vars_dict[name].name = ""
-
-        for name in node_names:
-            nodes_dict[name].name = ""
-
-        gb.nodes.clear()
-        gb.vars.clear()
+        with TemporaryModel(self, verbose=verbose) as model:
+            match which:
+                case "vars":
+                    subgraph = model.var_parental_subgraph(self)
+                    plot_vars(subgraph, **kwargs)
+                case "nodes":
+                    self_nodes = [self.value_node, self.dist_node, self.var_value_node]
+                    filtered_nodes = [nd for nd in self_nodes if nd is not None]
+                    subgraph = model.node_parental_subgraph(*filtered_nodes)
+                    plot_nodes(subgraph, **kwargs)
 
     def plot_vars(
         self,
@@ -2114,6 +2073,74 @@ class Var:
         submodel = self.model.parental_submodel(self)  # type: ignore
         pred = submodel.predict(samples=samples, predict=[self.name], newdata=newdata)
         return pred[self.name]
+
+    def sample(
+        self,
+        shape: Sequence[int],
+        seed: jax.random.KeyArray,
+        posterior_samples: dict[str, Array] | None = None,
+        fixed: Sequence[str] = (),
+        newdata: dict[str, Array] | None = None,
+        dists: dict[str, Dist] | None = None,
+    ) -> dict[str, Array]:
+        """
+        Draws samples from the parental model for this variable.
+
+        Parameters
+        ----------
+        shape
+            Sample shape.
+        seed
+            The seed is split and distributed to the distribution nodes in the model. \
+            Must be a ``KeyArray``, i.e. an array of shape (2,) and dtype ``uint32``. \
+            See :mod:`jax.random` for more details.
+        posterior_samples
+            Dictionary of samples at which to evaluate predictions. All values of the \
+            dictionary are assumed to have two leading dimensions corresponding to \
+            ``(nchains, niteration)``.
+        fixed
+            The names of the nodes or variables to be excluded from the simulation. \
+            By default, no nodes or variables are skipped.
+        newdata
+            Dictionary of new data at which to produce samples. The keys should \
+            correspond to variable or node names in the model whose values should be \
+            set to the given values before sampling. If ``None`` \
+            (default), the current variable values are used.
+        dists
+            Can be used to provide a dictionary of variable names and :class:`.Dist` \
+            instances to use in sampling. If ``None`` (default), samples are drawn for \
+            each variable using their :attr:`.Var.dist_node`.
+
+        Returns
+        -------
+        A dictionary of variable and node names and their sampled values. Includes
+        only sampled variables.
+        """
+        if self.model:
+            submodel = self.model.parental_submodel(self)
+            drawn_samples = submodel.sample(
+                shape=shape,
+                seed=seed,
+                posterior_samples=posterior_samples,
+                fixed=fixed,
+                newdata=newdata,
+                dists=dists,
+            )
+            return drawn_samples
+
+        from .model import TemporaryModel
+
+        with TemporaryModel(self, silent=True) as model:
+            drawn_samples = model.sample(
+                shape=shape,
+                seed=seed,
+                posterior_samples=posterior_samples,
+                fixed=fixed,
+                newdata=newdata,
+                dists=dists,
+            )
+
+            return drawn_samples
 
     def plot_nodes(
         self,
