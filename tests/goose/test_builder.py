@@ -234,19 +234,6 @@ class TestLieselMCMC:
         eb = mcmc.engine_builder(1, 4, 200, 100)
         assert len(eb.jitter_fns.expect("")) == 2
 
-    def test_transform_var_with_inference_transfer(self):
-        sigma = lsl.Var.new_param(
-            1.0,
-            lsl.Dist(tfd.InverseGamma, concentration=2.0, scale=1.0),
-            inference=gs.MCMCSpec(gs.IWLSKernel),
-            name="sigma",
-        )
-        inference = sigma.inference
-
-        log_sigma = sigma.transform(tfb.Exp(), inference="transfer")
-        assert log_sigma.inference is inference
-        assert sigma.inference is None
-
     def test_transform_var_with_inference_new(self):
         sigma = lsl.Var.new_param(
             1.0,
@@ -270,7 +257,10 @@ class TestLieselMCMC:
         )
         inference = sigma.inference
 
-        log_sigma = sigma.transform(tfb.Exp())
+        with pytest.raises(ValueError):
+            sigma.transform(tfb.Exp())
+
+        log_sigma = sigma.transform(tfb.Exp(), inference="drop")
         assert log_sigma.inference is not inference
         assert sigma.inference is None
         assert log_sigma.inference is None

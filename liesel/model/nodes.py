@@ -1529,7 +1529,7 @@ class Var:
         self,
         bijector: type[jb.Bijector] | jb.Bijector | None = None,
         *bijector_args,
-        inference: InferenceTypes | Literal["transfer"] = None,
+        inference: InferenceTypes | Literal["drop"] = None,
         **bijector_kwargs,
     ) -> Var:
         """
@@ -1555,11 +1555,12 @@ class Var:
             The arguments passed on to the init function of the bijector.
         inference
             Additional information that can be used to set up inference algorithms for \
-            the new, transformed variable. If ``"transfer"``, the inference \
-            information will be transferred from the original variable to the new one. \
-            If ``None`` (default), the new variable will have no inference information.\
-            In any case, all inference information will be removed from the original \
-            variable upon transformation.
+            the new, transformed variable. If ``"drop"``, the inference \
+            information will be dropped from the original variable. \
+            The new variable will have no inference information. \
+            If ``None`` (default), the new variable will likewise have no inference \
+            information, but an error will be raised if there is inference information \
+            on the original variable.
         bijector_kwargs
             The keyword arguments passed on to the init function of the bijector.
 
@@ -1573,7 +1574,10 @@ class Var:
             If the variable is weak or if the variable has no distribution.
         ValueError
             If the argument ``bijector`` is ``None``, but the distribution does
-            not have a default event space bijector.
+            not have a default event space bijector. Also, if in the arguments to
+            :meth:`.transform` is ``inference=None`` but the variable
+            attribute :attr:`.inference` is not ``None``.
+
 
         Notes
         -----
@@ -1646,6 +1650,12 @@ class Var:
         >>> scale.update().log_prob
         0.0
         """
+        if inference is None and self.inference:
+            raise ValueError(
+                f"{self} has inference information in the .inference attribute. "
+                "To proceed with transformation, the .inference information needs to"
+                "be explicitly removed. You can transform with ``infrence='drop'``."
+            )
         # if self.weak:
         #     raise RuntimeError(f"{repr(self)} is weak")
 
@@ -1707,8 +1717,11 @@ class Var:
             self.parameter = False
             self.dist_node = None
 
-        tvar.inference = self.inference if inference == "transfer" else inference
-        self.inference = None
+        if inference == "drop":
+            self.inference = None
+        else:
+            self.inference = None
+            tvar.inference = inference
         return tvar
 
     @in_model_method
