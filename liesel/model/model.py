@@ -1449,16 +1449,19 @@ class Model:
         A dictionary of variable and node names and their sampled values. Includes
         only sampled variables.
         """
-        posterior_samples = posterior_samples if posterior_samples is not None else {}
+        # Pre-processing
+        # ------------------------------------------------------------------------------
         state_before = self.state
-
-        if newdata:
-            state_for_sampling = self.update_state(newdata)
-        else:
-            state_for_sampling = state_before
-
+        posterior_samples = posterior_samples if posterior_samples is not None else {}
+        state_for_sampling = (
+            self.update_state(newdata) if newdata is not None else state_before
+        )
         dists = dists if dists is not None else {}
 
+        # Input validation
+        # ------------------------------------------------------------------------------
+
+        # validate values in dists
         for var_name in dists:
             vars_ = self.vars
             if var_name not in vars_:
@@ -1467,6 +1470,18 @@ class Model:
             if vars_[var_name].weak:
                 raise ValueError(f"Variable '{var_name}' is weak, cannot sample.")
 
+        # validate consistency of 'fixed' and 'posterior_samples' arguments
+        for name in fixed:
+            if name in posterior_samples:
+                raise ValueError(
+                    f"Inconsistency: {name=} listed in 'fixed', but samples are"
+                    " provided in 'posterior_samples'."
+                )
+
+        # Collect sampling information
+        # ------------------------------------------------------------------------------
+
+        # collect relevant distribution nodes in model
         dists_list = [
             node
             for node in self._simulation_nodes
@@ -1477,20 +1492,8 @@ class Model:
             and (node.var is not None and node.var.name not in fixed)
         ]
 
-        for name in fixed:
-            if name in posterior_samples:
-                raise ValueError(
-                    f"Inconsistency: {name=} listed in 'fixed', but samples are"
-                    " provided in 'posterior_samples'."
-                )
-
-        if posterior_samples:
-            samples_shape = next(iter(posterior_samples.values())).shape[:2]
-        else:
-            samples_shape = ()
-
+        # collect information for sampling by processing dist nodes
         sampling_specs = {}
-
         for i, dist in enumerate(dists_list):
             tfp_dist = dist.init_dist()
 
@@ -1509,7 +1512,7 @@ class Model:
 
             if var_name not in posterior_samples:
 
-                # pulls manually defined distribution form dists dict, returns current
+                # pulls manually defined distribution from dists dict, returns current
                 # dist otherwise
                 dist = dists.get(var_name, dist)
 
@@ -1520,8 +1523,12 @@ class Model:
                     "value_var": value_var,
                 }
 
+        # add information for custom dists for variables that are not yet covered.
         for var_name, dist in dists.items():
+
             if var_name in sampling_specs:
+                # in this case, the variable has already been added to sampling specs,
+                # and it is also already using the custom dist
                 continue
 
             i += 1
@@ -1541,32 +1548,75 @@ class Model:
                 "value_var": value_var,
             }
 
-        nsamples = int(jnp.prod(jnp.asarray(shape)))
+        # Shape handling
+        # ------------------------------------------------------------------------------
+
+        # set up shape of samples
+        samples_shape = (
+            next(iter(posterior_samples.values())).shape[:2]
+            if posterior_samples
+            else ()
+        )
+        nsamples = int(jnp.prod(jnp.asarray(shape)))  # total number of samples to draw
+
+        # set up all seeds that will be needed
         seeds = jax.random.split(
             seed, (nsamples,) + samples_shape + (len(sampling_specs),)
         )
 
+        def reshape(a):
+            # brings samples into the desired shape based on input argument.
+            # shape=(3,4)
+            # nsamples=12
+            # shape of drawn samples: (12,...)
+            # reshaped to (3,4, ...)
+            return jnp.reshape(a, shape=shape + a.shape[1:])
+
+        # Workhorse function
+        # ------------------------------------------------------------------------------
+
         def one_draw(position, seeds):
+            # the position argument is for updating the state with posterior samples
+
+            # update model state using the position (a single posterior sample, if any)
+            # and the state_for_sampling, which includes the observed values from
+            # newdata.
             self.state = self.update_state(position, state_for_sampling)
 
+            # draw samples in order of the model graph
             sampled_position = {}
             for name, spec in sampling_specs.items():
+                # initializes the distribution node using the current model state,
+                # which may have been influenced by 'position', 'newdata', or sampled
+                # values from variables higher up the model hierarchy
                 tfp_dist = spec["dist"].init_dist()
+
+                # draw the actual sample
                 value = tfp_dist.sample(spec["shape"], seeds[spec["i"]])
+
+                # save the sampled value
                 sampled_position[name] = value
+
+                # update the variable's value with the sampled value so that the
+                # distributions of variables further down the model hierarchy will be
+                # correctly initialized based on the sampled values higher up
                 spec["value_var"].value = value
 
             return sampled_position
 
-        def reshape(a):
-            return jnp.reshape(a, shape=shape + a.shape[1:])
-
         if not posterior_samples:
             draw_chains = jax.vmap(one_draw, in_axes=(None, 0), out_axes=0)
+            # since we have no posterior samples, we use position={}
             drawn_samples = draw_chains({}, seeds)
+
+            # reset model state to reverse side-effects from the calls to one_draw
             self.state = state_before
+
+            # return reshaped version of samples
             return jax.tree.map(reshape, drawn_samples)
 
+        # this branch of the function continues only if posterior_samples is not None
+        # -----------------------------------------------------------------------------
         draw_iter = jax.vmap(one_draw, in_axes=(0, 0), out_axes=0)
         draw_chains = jax.vmap(draw_iter, in_axes=(0, 0), out_axes=0)
         draw_samples = jax.vmap(draw_chains, in_axes=(None, 0), out_axes=0)
@@ -1576,6 +1626,7 @@ class Model:
         filtered_samples = {
             k: v for k, v in posterior_samples.items() if k in vars_and_nodes
         }
+
         try:
             drawn_samples = draw_samples(filtered_samples, seeds)
             self.state = state_before
@@ -1594,6 +1645,7 @@ class Model:
 
             raise error_to_raise from e
 
+        # return reshaped version of samples
         return jax.tree.map(reshape, drawn_samples)
 
     @property
