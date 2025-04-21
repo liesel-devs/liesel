@@ -5,6 +5,7 @@ from collections.abc import Generator
 from itertools import combinations
 from types import MappingProxyType
 
+import jax
 import jax.numpy as jnp
 import jax.random as rnd
 import pytest
@@ -726,6 +727,18 @@ class TestSample:
         # this is not a tough check though.
         y_samples_mean = samples["y"].mean(axis=(0, 1))
         assert jnp.allclose(y_samples_mean, 0.0, atol=0.5)
+
+    @pytest.mark.xfail
+    def test_sample_prior_linreg_jit(self, linreg: Model):
+        model = linreg
+
+        # sample with y fixed; i.e. y will not be sampled
+        jitted_sample = jax.jit(
+            model.sample,
+            static_argnames=["fixed", "newdata", "posterior_samples", "dists"],
+        )
+
+        jitted_sample(shape=(1, 100), seed=rnd.key(1))
 
     def test_sample_from_custom_dist(self, linreg: Model):
         model = linreg
