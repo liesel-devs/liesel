@@ -1584,7 +1584,16 @@ class Model:
                 "Error during sampling. Make sure to check sample shapes! The values in"
                 " 'posterior_samples' must have two leading batching dimensions."
             )
-            raise RuntimeError(msg) from e
+
+            try:
+                error_to_raise = e.__class__(msg)
+            except Exception:
+                # fallback in case e has a custom error class that cannot simply
+                # be instantiated with a message.
+                error_to_raise = RuntimeError(msg)
+
+            raise error_to_raise from e
+
         return jax.tree.map(reshape, drawn_samples)
 
     @property

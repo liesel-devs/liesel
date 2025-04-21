@@ -900,7 +900,7 @@ class TestSample:
         # the values in posterior_samples *have* to have leading (chain, iter) axes
         # if one of them is missing, the function errors
         samples1 = model.sample(shape=(2,), seed=rnd.key(7), fixed=["y"])
-        with pytest.raises(RuntimeError):
+        with pytest.raises(ValueError):
             model.sample(shape=(11,), seed=rnd.key(8), posterior_samples=samples1)
 
         # *too many* leading axes also cause errors
