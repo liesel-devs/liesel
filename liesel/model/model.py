@@ -1946,6 +1946,30 @@ def load_model(file: str | IO[bytes]) -> Any:
 
 
 class TemporaryModel:
+    """
+    A contextmanager for creating a temporary model.
+
+    Unnamed variables and nodes will be named temporarily. Their names will be reset
+    when the context closes.
+
+    Example use::
+
+        with TemporaryModel(variable) as model:
+            print(model.log_prob)
+
+    Parameters
+    ----------
+    vars_and_nodes
+        Variable-length collection of variables and nodes that should be used to build \
+        the temporary model.
+    verbose
+        If ``verbose=True``, the detailed information about temporarily namend \
+        variables will be logged. If ``verbose=False``,  this is reduced to a short
+        note.
+    silent
+        If ``silent=True``, all logging will be suppressed.
+    """
+
     def __init__(self, *vars_and_nodes, verbose: bool = False, silent: bool = False):
         self.vars_and_nodes = vars_and_nodes
         self.verbose = verbose
