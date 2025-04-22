@@ -1704,8 +1704,9 @@ class Model:
     @property
     def observed(self) -> MappingProxyType[str, Var]:
         """A mapping of the observed model variables with their names as keys."""
-        params = {k: v for k, v in self._vars.items() if v.observed}
-        return MappingProxyType(params)
+        observed = {k: v for k, v in self._vars.items() if v.observed}
+        return MappingProxyType(observed)
+
 
     def __repr__(self) -> str:
         brackets = f"({len(self._nodes)} nodes, {len(self._vars)} vars)"
