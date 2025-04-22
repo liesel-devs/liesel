@@ -1707,7 +1707,6 @@ class Model:
         observed = {k: v for k, v in self._vars.items() if v.observed}
         return MappingProxyType(observed)
 
-
     def __repr__(self) -> str:
         brackets = f"({len(self._nodes)} nodes, {len(self._vars)} vars)"
         return type(self).__name__ + brackets
