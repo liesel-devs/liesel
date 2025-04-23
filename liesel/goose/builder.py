@@ -580,23 +580,11 @@ class LieselMCMC:
         self,
         seed: int,
         num_chains: int,
-        warmup_duration: int,
-        posterior_duration: int,
-        term_duration: int = 50,
-        thinning_warmup: int = 1,
-        thinning_posterior: int = 1,
         apply_jitter: bool = True,
     ) -> EngineBuilder:
         eb = EngineBuilder(seed=seed, num_chains=num_chains)
         eb.set_model(LieselInterface(self.model))
         eb.set_initial_values(self.model.state)
-        eb.set_duration(
-            warmup_duration=warmup_duration,
-            posterior_duration=posterior_duration,
-            term_duration=term_duration,
-            thinning_posterior=thinning_posterior,
-            thinning_warmup=thinning_warmup,
-        )
 
         for kernel in self.kernel_list():
             eb.add_kernel(kernel)
@@ -605,30 +593,6 @@ class LieselMCMC:
             eb.set_jitter_fns(self.jitter_functions())
 
         return eb
-
-    def engine(
-        self,
-        seed: int,
-        num_chains: int,
-        warmup_duration: int,
-        posterior_duration: int,
-        term_duration: int = 50,
-        thinning_warmup: int = 1,
-        thinning_posterior: int = 1,
-        apply_jitter: bool = True,
-    ) -> Engine:
-        eb = self.engine_builder(
-            seed=seed,
-            num_chains=num_chains,
-            warmup_duration=warmup_duration,
-            posterior_duration=posterior_duration,
-            term_duration=term_duration,
-            thinning_warmup=thinning_warmup,
-            thinning_posterior=thinning_posterior,
-            apply_jitter=apply_jitter,
-        )
-
-        return eb.build()
 
 
 @dataclass
