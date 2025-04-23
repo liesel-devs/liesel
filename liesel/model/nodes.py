@@ -1530,6 +1530,7 @@ class Var:
         bijector: type[jb.Bijector] | jb.Bijector | None = None,
         *bijector_args,
         inference: InferenceTypes | Literal["drop"] = None,
+        name: str | None = None,
         **bijector_kwargs,
     ) -> Var:
         """
@@ -1561,6 +1562,10 @@ class Var:
             If ``None`` (default), the new variable will likewise have no inference \
             information, but an error will be raised if there is inference information \
             on the original variable.
+        name
+            Name for the new, transformed variable. If ``None`` (default), the new \
+            name will be ``<old_name>_transformed``, where ``<old_name>`` is \
+            a placeholder for the current variable's name.
         bijector_kwargs
             The keyword arguments passed on to the init function of the bijector.
 
@@ -1705,7 +1710,7 @@ class Var:
                         " arguments. You should either initialise your bijector"
                         " directly with the arguments, or pass a bijector class"
                         " instead. The first option is preferred, if the bijector"
-                        " arguments are constant."
+                        " argumentsare constant."
                     )
                 tvar = _transform_var_with_bijector_instance(self, bijector)
             else:
@@ -1716,6 +1721,9 @@ class Var:
             tvar.parameter = self.parameter  # type: ignore
             self.parameter = False
             self.dist_node = None
+
+        if name is not None:
+            tvar.name = name
 
         if inference == "drop":
             self.inference = None
