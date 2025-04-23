@@ -68,7 +68,7 @@ class TestLieselMCMC:
         model = lsl.Model([mu])
 
         mcmc = gs.LieselMCMC(model)
-        eb = mcmc.engine_builder(seed=1, num_chains=4)
+        eb = mcmc.get_engine_builder(seed=1, num_chains=4)
         eb.set_duration(warmup_duration=200, posterior_duration=100)
         engine = eb.build()
 
@@ -92,12 +92,12 @@ class TestLieselMCMC:
         model = lsl.Model([mu])
 
         with pytest.raises(ValueError):
-            gs.LieselMCMC(model).kernel_list()
+            gs.LieselMCMC(model).get_kernel_list()
 
-        kernels = gs.LieselMCMC(model, which="a").kernel_list()
+        kernels = gs.LieselMCMC(model, which="a").get_kernel_list()
         assert isinstance(kernels[0], gs.NUTSKernel)
 
-        kernels = gs.LieselMCMC(model, which="b").kernel_list()
+        kernels = gs.LieselMCMC(model, which="b").get_kernel_list()
         assert isinstance(kernels[0], gs.IWLSKernel)
 
     def test_multiple_and_single_specs(self):
@@ -121,13 +121,13 @@ class TestLieselMCMC:
         model = lsl.Model([mu, sigma])
 
         with pytest.raises(ValueError):
-            gs.LieselMCMC(model).kernel_list()
+            gs.LieselMCMC(model).get_kernel_list()
 
-        kernels = gs.LieselMCMC(model, which="a").kernel_list()
+        kernels = gs.LieselMCMC(model, which="a").get_kernel_list()
         assert isinstance(kernels[0], gs.IWLSKernel)
         assert isinstance(kernels[1], gs.NUTSKernel)
 
-        kernels = gs.LieselMCMC(model, which="b").kernel_list()
+        kernels = gs.LieselMCMC(model, which="b").get_kernel_list()
         assert isinstance(kernels[0], gs.IWLSKernel)
         assert isinstance(kernels[1], gs.IWLSKernel)
 
@@ -151,7 +151,7 @@ class TestLieselMCMC:
         model = lsl.Model([mu, sigma])
 
         mcmc = gs.LieselMCMC(model)
-        kernels = mcmc.kernel_list()
+        kernels = mcmc.get_kernel_list()
 
         assert len(kernels) == 1
         assert kernels[0].position_keys == ("sigma", "mu")
@@ -175,7 +175,7 @@ class TestLieselMCMC:
 
         mcmc = gs.LieselMCMC(model)
         with pytest.raises(ValueError):
-            mcmc.kernel_list()
+            mcmc.get_kernel_list()
 
         mu = lsl.Var.new_param(
             0.0,
@@ -199,7 +199,7 @@ class TestLieselMCMC:
 
         mcmc = gs.LieselMCMC(model)
         with pytest.raises(ValueError):
-            mcmc.kernel_list()
+            mcmc.get_kernel_list()
 
     def test_jitter_functions(self):
         mu = lsl.Var.new_param(
@@ -227,11 +227,11 @@ class TestLieselMCMC:
         model = lsl.Model([mu, sigma])
 
         mcmc = gs.LieselMCMC(model)
-        jitter_fns = mcmc.jitter_functions()
+        jitter_fns = mcmc.get_jitter_functions()
 
         assert len(jitter_fns) == 2
 
-        eb = mcmc.engine_builder(1, 4)
+        eb = mcmc.get_engine_builder(1, 4)
         assert len(eb.jitter_fns.expect("")) == 2
 
     def test_transform_var_with_inference_new(self):

@@ -514,7 +514,7 @@ class LieselMCMC:
             )
         return inference
 
-    def kernel_groups(self) -> dict[str, _KernelGroup]:
+    def get_kernel_groups(self) -> dict[str, _KernelGroup]:
         vars_ = self.model.vars
         kernel_groups: dict[str, _KernelGroup] = {}
 
@@ -559,15 +559,15 @@ class LieselMCMC:
 
         return kernel_groups
 
-    def kernel_list(self) -> list[Kernel]:
-        kernel_groups = self.kernel_groups()
+    def get_kernel_list(self) -> list[Kernel]:
+        kernel_groups = self.get_kernel_groups()
         kernel_list = [
             g.kernel(g.position_keys, **g.kwargs)  # type: ignore
             for g in kernel_groups.values()
         ]
         return kernel_list
 
-    def jitter_functions(self) -> JitterFunctions:
+    def get_jitter_functions(self) -> JitterFunctions:
         jitter_functions: JitterFunctions = {}
         for name, var in self.model.vars.items():
             inference = self.get_spec(var)
@@ -576,7 +576,7 @@ class LieselMCMC:
 
         return jitter_functions
 
-    def engine_builder(
+    def get_engine_builder(
         self,
         seed: int,
         num_chains: int,
@@ -586,11 +586,11 @@ class LieselMCMC:
         eb.set_model(LieselInterface(self.model))
         eb.set_initial_values(self.model.state)
 
-        for kernel in self.kernel_list():
+        for kernel in self.get_kernel_list():
             eb.add_kernel(kernel)
 
         if apply_jitter:
-            eb.set_jitter_fns(self.jitter_functions())
+            eb.set_jitter_fns(self.get_jitter_functions())
 
         return eb
 
