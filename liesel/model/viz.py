@@ -143,8 +143,13 @@ def _prepare_figure(graph, width, height, prog):
             "Consider installing Graphviz: https://graphviz.org/download"
         )
 
-        # node_size = {node: 2.0 for node in graph}
-        # pos = nx.forceatlas2_layout(graph, node_size=node_size, seed=42)
+        pos = nx.kamada_kawai_layout(graph.to_undirected())
+    except Exception as e:
+        logger.warning(
+            "Graphviz via pydot failed. Using fallback graph layout. "
+            f"Raised exception: {e}"
+        )
+
         pos = nx.kamada_kawai_layout(graph.to_undirected())
 
     return fig, axis, pos
