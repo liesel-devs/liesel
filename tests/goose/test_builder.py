@@ -68,9 +68,9 @@ class TestLieselMCMC:
         model = lsl.Model([mu])
 
         mcmc = gs.LieselMCMC(model)
-        engine = mcmc.engine(
-            seed=1, num_chains=4, warmup_duration=200, posterior_duration=100
-        )
+        eb = mcmc.engine_builder(seed=1, num_chains=4)
+        eb.set_duration(warmup_duration=200, posterior_duration=100)
+        engine = eb.build()
 
         engine.sample_all_epochs()
         results = engine.get_results()
@@ -231,7 +231,7 @@ class TestLieselMCMC:
 
         assert len(jitter_fns) == 2
 
-        eb = mcmc.engine_builder(1, 4, 200, 100)
+        eb = mcmc.engine_builder(1, 4)
         assert len(eb.jitter_fns.expect("")) == 2
 
     def test_transform_var_with_inference_new(self):
