@@ -135,28 +135,24 @@ def _prepare_figure(graph, width, height, prog):
     fig, axis = plt.subplots()
     fig.set_size_inches(width, height)
 
-    if _is_pygraphviz_installed():
-        pos = nx.drawing.nx_agraph.graphviz_layout(graph, prog=prog)
-    else:
+    try:
+        pos = nx.nx_pydot.pydot_layout(graph, prog=prog)
+    except FileNotFoundError:
         logger.warning(
-            "PyGraphviz was not found in the current environment. "
-            "Using fallback graph layout. Consider installing PyGraphviz: "
-            "https://pygraphviz.github.io/documentation/stable/install.html"
+            "Graphviz not found in PATH. Using fallback graph layout. "
+            "Consider installing Graphviz: https://graphviz.org/download"
         )
-        pos = nx.fruchterman_reingold_layout(graph)
+
+        pos = nx.kamada_kawai_layout(graph.to_undirected())
+    except Exception as e:
+        logger.warning(
+            "Graphviz via pydot failed. Using fallback graph layout. "
+            f"Raised exception: {e}"
+        )
+
+        pos = nx.kamada_kawai_layout(graph.to_undirected())
 
     return fig, axis, pos
-
-
-def _is_pygraphviz_installed():
-    """Checks if pygraphviz is installed."""
-
-    try:
-        import pygraphviz  # noqa: F401
-    except ImportError:
-        return False
-    else:
-        return True
 
 
 def _add_nodes_with_distribution_to_plot(graph, axis, pos):
