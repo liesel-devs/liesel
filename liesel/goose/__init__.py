@@ -3,8 +3,6 @@ Goose MCMC framework.
 """
 
 from .builder import EngineBuilder as EngineBuilder
-from .builder import LieselMCMC as LieselMCMC
-from .builder import MCMCSpec as MCMCSpec
 from .engine import Engine as Engine
 from .engine import SamplingResults
 from .epoch import EpochConfig, EpochType
@@ -17,6 +15,8 @@ from .interface import (
     NamedTupleInterface,
 )
 from .iwls import IWLSKernel
+from .mcmc_spec import LieselMCMC as LieselMCMC
+from .mcmc_spec import MCMCSpec as MCMCSpec
 from .mh_kernel import MHKernel, MHProposal
 from .models import DataClassModel, DictModel
 from .nuts import NUTSKernel
