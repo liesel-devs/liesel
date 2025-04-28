@@ -7,6 +7,8 @@ engine in a well-defined state. Furthermore, the builder can return different en
 implementations.
 """
 
+from __future__ import annotations
+
 import logging
 import math
 from collections.abc import Iterable

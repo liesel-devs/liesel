@@ -15,6 +15,8 @@ from .interface import (
     NamedTupleInterface,
 )
 from .iwls import IWLSKernel
+from .mcmc_spec import LieselMCMC as LieselMCMC
+from .mcmc_spec import MCMCSpec as MCMCSpec
 from .mh_kernel import MHKernel, MHProposal
 from .models import DataClassModel, DictModel
 from .nuts import NUTSKernel
@@ -40,6 +42,8 @@ __all__ = [
     "LieselInterface",
     "Engine",
     "EngineBuilder",
+    "MCMCSpec",
+    "LieselMCMC",
     "EpochConfig",
     "EpochType",
     "GibbsKernel",
