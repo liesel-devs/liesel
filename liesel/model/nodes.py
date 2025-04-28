@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from ..goose import MCMCSpec
     from .model import Model
 
-    InferenceTypes = Union[MCMCSpec, None, dict[str, MCMCSpec]]
+    InferenceTypes = Union[MCMCSpec, None, dict[str, MCMCSpec], Any]
 
 __all__ = [
     "Array",
