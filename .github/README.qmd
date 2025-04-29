@@ -122,7 +122,7 @@ gs.plot_param(results, param="loc")
 
 ## Installation
 
-Liesel requires Python &ge; 3.10. Create and activate a virtual environment, and install the latest release from PyPI:
+Liesel requires Python &ge; 3.13. Create and activate a virtual environment, and install the latest release from PyPI:
 
 ```
 pip install liesel
