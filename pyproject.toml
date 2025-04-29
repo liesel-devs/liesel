@@ -26,7 +26,6 @@ extend-select = [
 ]
 
 extend-ignore = [
-    "E731",
     "F401",
 ]
 
