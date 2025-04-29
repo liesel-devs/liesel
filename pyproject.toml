@@ -28,7 +28,7 @@ extend-select = [
 extend-ignore = [
 ]
 
-[format]
+[tool.ruff.format]
 docstring-code-format = true
 quote-style = "double"
 indent-style = "space"

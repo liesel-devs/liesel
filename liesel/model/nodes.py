@@ -2715,7 +2715,7 @@ class Group:
 
     Retrieve the value of a variable from a model state:
 
-    >>> model_state = {my_var.value_node.name: lsl.NodeState(10., False)}
+    >>> model_state = {my_var.value_node.name: lsl.NodeState(10.0, False)}
     >>> grp.value_from(model_state, "short_name")
     10.0
     """

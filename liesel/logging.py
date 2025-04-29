@@ -14,6 +14,7 @@ def setup_logger() -> None:
     The global log level for Liesel can be adjusted like this::
 
         import logging
+
         logger = logging.getLogger("liesel")
         logger.level = logging.WARNING
 
@@ -114,9 +115,7 @@ def add_file_handler(
         import liesel as lsl
 
         lsl.logging.add_file_handler(
-            path="path/to/goose_warnings.log",
-            level="warning",
-            logger="liesel.goose"
+            path="path/to/goose_warnings.log", level="warning", logger="liesel.goose"
         )
 
         logger = logging.getLogger("liesel")

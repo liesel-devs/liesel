@@ -45,9 +45,9 @@ def usedocs(of: object, greedy: bool = True):
             def parent_method(self):
                 '''Method documentation.'''
 
+
         @usedocs(ParentClass)
         class InheritingClass:
-
             def parent_method(self):
                 pass
     """
