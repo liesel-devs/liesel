@@ -29,3 +29,9 @@ extend-ignore = [
     "E731",
     "F401",
 ]
+
+[format]
+docstring-code-format = true
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false

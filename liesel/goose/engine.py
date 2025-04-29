@@ -635,7 +635,9 @@ class Engine:
         None | KernelStates,
         None | dict[str, GeneratedQuantity],
     ]:
-        def scan_f(carry: Carry, key: KeyArray) -> tuple[
+        def scan_f(
+            carry: Carry, key: KeyArray
+        ) -> tuple[
             Carry,
             tuple[
                 Position,

@@ -415,7 +415,6 @@ class Node(ABC):
         return input_dict
 
     def __getitem__(self, key: int | str) -> Node | Var:
-
         if isinstance(key, int):
             try:
                 return self._iloc[key]
@@ -2021,7 +2020,6 @@ class Var:
     def _plot(
         self, which: Literal["vars", "nodes"] = "vars", verbose: bool = False, **kwargs
     ) -> None:
-
         if self.model is not None:
             match which:
                 case "vars":
