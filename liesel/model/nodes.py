@@ -1434,8 +1434,9 @@ class Var:
         >>> print(scale.update().value)
         2.7182817
 
-        .. _docs: https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html # noqa
-        """
+        .. _docs: https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html
+        """  # noqa: E501
+
         calc = Calc(
             function,
             *inputs,

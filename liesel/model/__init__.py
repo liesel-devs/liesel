@@ -22,12 +22,12 @@ from .legacy import (
     SmoothingParam,
 )
 from .model import GraphBuilder, Model, load_model, save_model
-from .nodes import (  # TODO: Bijector?
+from .nodes import (
     Array,
     Calc,
     Data,
     Dist,
-    Distribution,
+    Distribution,  # TODO: Bijector?
     Group,
     InputGroup,
     Node,
