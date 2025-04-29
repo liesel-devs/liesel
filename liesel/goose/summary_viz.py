@@ -792,7 +792,7 @@ def _set_colors(plot_df: pd.DataFrame, color_list: list[str] | None) -> list[str
 
 
 def _setup_grid(
-    figure_size: tuple[int | float, int | float]
+    figure_size: tuple[int | float, int | float],
 ) -> tuple[plt.Figure, Any, Any, Any]:
     """
     Initializes plotting grid with one large subplot for the trace plot and two smaller
