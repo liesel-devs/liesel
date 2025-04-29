@@ -199,16 +199,16 @@ loc
 kernel_00
 </td>
 <td>
--0.095
+-0.113
 </td>
 <td>
-0.452
+0.458
 </td>
 <td>
--0.823
+-0.865
 </td>
 <td>
--0.100
+-0.118
 </td>
 <td>
 0.664
@@ -217,13 +217,13 @@ kernel_00
 4000
 </td>
 <td>
-1488.973
+1300.899
 </td>
 <td>
-2085.720
+2052.033
 </td>
 <td>
-1.001
+1.005
 </td>
 </tr>
 </tbody>
@@ -283,7 +283,7 @@ divergent transition
 warmup
 </th>
 <td>
-47
+49
 </td>
 <td>
 0.012
@@ -311,7 +311,7 @@ gs.plot_param(results, param="loc")
 
 ## Installation
 
-Liesel requires Python ≥ 3.10. Create and activate a virtual
+Liesel requires Python ≥ 3.13. Create and activate a virtual
 environment, and install the latest release from PyPI:
 
     pip install liesel
