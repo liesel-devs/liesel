@@ -31,7 +31,7 @@ jobs:
       #       ${{ runner.os }}-pip-${{ matrix.python-version }}-
 
       - name: Install liesel
-        run: uv sync --locked --all-extras --dev
+        run: uv sync --locked --dev
 
       - name: Run pytest
         run: uv run pytest --run-mcmc

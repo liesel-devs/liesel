@@ -24,7 +24,7 @@ jobs:
           python-version-file: "pyproject.toml"
 
       - name: Install liesel
-        run: uv sync --locked --all-extras --dev
+        run: uv sync --locked --dev
 
       - name: Run pre-commit
         run: uv run pre-commit run -a
