@@ -26,7 +26,6 @@ extend-select = [
 ]
 
 extend-ignore = [
-    "F401",
 ]
 
 [format]
