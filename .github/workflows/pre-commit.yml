@@ -27,4 +27,4 @@ jobs:
         run: uv sync --locked --all-extras --dev
 
       - name: Run pre-commit
-        run: pre-commit run -a
+        run: uv run pre-commit run -a
