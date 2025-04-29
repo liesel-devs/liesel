@@ -20,7 +20,6 @@ from typing import (
     NamedTuple,
     TypeGuard,
     TypeVar,
-    Union,
 )
 
 import tensorflow_probability.substrates.jax.bijectors as jb
@@ -35,7 +34,7 @@ if TYPE_CHECKING:
     from ..goose import MCMCSpec
     from .model import Model
 
-    InferenceTypes = Union[MCMCSpec, None, dict[str, MCMCSpec], Any]
+    type InferenceTypes = None | MCMCSpec | dict[str, MCMCSpec] | Any
 
 __all__ = [
     "Array",
@@ -58,9 +57,9 @@ __all__ = [
     "add_group",
 ]
 
-Array = Any
-Distribution = Union[jd.Distribution, nd.Distribution]
-Bijector = Union[jb.Bijector, nb.Bijector]
+type Array = Any
+type Distribution = jd.Distribution | nd.Distribution
+type Bijector = jb.Bijector | nb.Bijector
 
 T = TypeVar("T", bound=Hashable)
 
