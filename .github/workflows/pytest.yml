@@ -17,26 +17,24 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/pyproject.toml', '**/setup.py', '**/requirements*.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-${{ matrix.python-version }}-
+      # - name: Cache pip
+      #   uses: actions/cache@v4
+      #   with:
+      #     path: ~/.cache/pip
+      #     key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/pyproject.toml', '**/setup.py', '**/requirements*.txt') }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-pip-${{ matrix.python-version }}-
 
       - name: Install liesel
-        run: |
-          pip install --upgrade .[dev]
-          pip list
+        run: uv sync --locked --all-extras --dev
 
       - name: Run pytest
-        run: pytest --cov=liesel --run-mcmc
+        run: uv run pytest --cov=liesel --run-mcmc
 
       - name: Create coverage badge
         uses: tj-actions/coverage-badge-py@v2
