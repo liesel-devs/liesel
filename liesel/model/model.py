@@ -1635,7 +1635,6 @@ class Model:
 
         try:
             drawn_samples = draw_samples(filtered_samples, seeds)
-            self.state = state_before
         except Exception as e:
             msg = (
                 "Error during sampling. Make sure to check sample shapes! The values in"
@@ -1650,6 +1649,8 @@ class Model:
                 error_to_raise = RuntimeError(msg)
 
             raise error_to_raise from e
+        finally:
+            self.state = state_before
 
         # return reshaped version of samples
         return jax.tree.map(reshape, drawn_samples)
