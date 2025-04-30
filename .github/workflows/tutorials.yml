@@ -2,7 +2,7 @@ name: tutorials
 
 on:
   push:
-    branches: [main, activate-tutorials-action]
+    branches: [main]
   pull_request:
     branches: [main]
 
