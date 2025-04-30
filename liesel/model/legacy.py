@@ -4,7 +4,6 @@ Imitates the API from v0.1.
 
 from __future__ import annotations
 
-import warnings
 from typing import Any, cast
 
 import jax.numpy as jnp
@@ -187,59 +186,3 @@ def Smooth(
     var = Var(calc, distribution, name)
     var.role = "Smooth"
     return var
-
-
-def Obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> Var:
-    """
-    Declares an observed variable.
-
-    .. deprecated:: 0.2.6
-        Use lsl.Var.new_obs() instead. This alias will be removed in v0.4.0
-
-    Sets the :attr:`.Var.observed` flag. If the observed variable is a
-    random variable, i.e. if it has an associated probability distribution,
-    its log-probability is automatically added to the model log-likelihood
-    (see :attr:`.Model.log_lik`).
-
-    Returns
-    -------
-    An observed variable.
-
-    See Also
-    --------
-    :func:`.obs` : New alias. Sould be used in future code.
-    """
-    warnings.warn(
-        "Use lsl.Var.new_obs() instead. This class will be removed in v0.4.0",
-        FutureWarning,
-    )
-    return Var.new_obs(value, distribution, name)
-
-
-def Param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> Var:
-    """
-    Declares a parameter variable.
-
-    .. deprecated:: 0.2.6
-        Use lsl.Var.new_param() instead. This alias will be removed in v0.4.0
-
-    Sets the :attr:`.Var.parameter` flag. If the parameter variable is a
-    random variable, i.e. if it has an associated probability distribution,
-    its log-probability is automatically added to the model log-prior
-    (see :attr:`.Model.log_prior`).
-
-
-    Returns
-    -------
-    A parameter variable.
-
-
-    See Also
-    --------
-    :func:`.param` : New alias. Sould be used in future code.
-    """
-    warnings.warn(
-        "Use lsl.Var.new_param() instead. This class will be removed in v0.4.0",
-        FutureWarning,
-    )
-    return Var.new_param(value, distribution, name)

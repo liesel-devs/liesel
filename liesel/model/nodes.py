@@ -5,7 +5,6 @@ Nodes and variables.
 from __future__ import annotations
 
 import logging
-import warnings
 import weakref
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Hashable, Iterable
@@ -48,14 +47,11 @@ __all__ = [
     "InputGroup",
     "Node",
     "NodeState",
-    "obs",
-    "param",
     "TransientCalc",
     "TransientDist",
     "TransientIdentity",
     "TransientNode",
     "Var",
-    "add_group",
 ]
 
 Array = Any
@@ -2451,210 +2447,6 @@ def _transform_var_without_dist_with_bijector_class(
     var.value_node = Calc(bijection_forward, transformed_var, *args, **kwargs)
 
     return transformed_var
-
-
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Variable helpers ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-
-def obs(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> Var:
-    """
-    Helper function that returns an observed :class:`.Var`.
-
-    .. deprecated:: v0.2.10
-        Use :meth:`.Var.new_obs` instead. This function will be removed in v0.4.0.
-
-    Sets the :attr:`.Var.observed` flag. If the observed variable is a random variable,
-    i.e. if it has an associated probability distribution, its log-probability is
-    automatically added to the model log-likelihood (see :attr:`.Model.log_lik`).
-
-    Parameters
-    ----------
-    value
-        The value of the variable.
-    distribution
-        The probability distribution of the variable.
-    name
-        The name of the variable. If you do not specify a name, a unique name will be \
-        automatically generated upon initialization of a :class:`.Model`.
-
-
-    Returns
-    -------
-    An observed variable.
-
-    See Also
-    --------
-    .Var.new_obs : Initializes a strong variable that holds observed data.
-
-    Notes
-    -----
-
-    A variable will compute its log probability only when :meth:`.Calc.update` is
-    called. This does not happen automatically upon initialization. Commonly, the first
-    time this method is called is during the initialization of a :class:`.Model`. To
-    update the value immediately, you can call :meth:`.Var.update` manually.
-
-
-    Examples
-    --------
-
-    >>> import tensorflow_probability.substrates.jax.distributions as tfd
-
-    We can declare an observed variable with a normal distribution as the observation
-    model:
-
-    >>> dist = lsl.Dist(tfd.Normal, loc=0.0, scale=1.0)
-    >>> y = lsl.Var.new_obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y")
-    >>> y
-    Var(name="y")
-
-    Now we build the model graph:
-
-    >>> model = lsl.Model([y])
-
-    The log-likelihood of the model is the sum of the log-probabilities of all observed
-    variables. In this case this is only our ``y`` variable:
-
-    >>> model.log_lik
-    Array(-3.0068154, dtype=float32)
-
-    >>> jnp.sum(y.log_prob)
-    Array(-3.0068154, dtype=float32)
-
-    """
-    warnings.warn(
-        "Use lsl.Var.new_obs() instead. This function will be removed in v0.4.0",
-        FutureWarning,
-    )
-    var = Var(value, distribution, name)
-    var.observed = True
-    return var
-
-
-def param(value: Any | Calc, distribution: Dist | None = None, name: str = "") -> Var:
-    """
-    Helper function that returns a parameter :class:`.Var`.
-
-    .. deprecated:: v0.2.10
-        Use :meth:`.Var.new_param` instead. This function will be removed in v0.4.0.
-
-    Sets the :attr:`.Var.parameter` flag. If the parameter variable is a
-    random variable, i.e. if it has an associated probability distribution,
-    its log-probability is automatically added to the model log-prior
-    (see :attr:`.Model.log_prior`).
-
-    Parameters
-    ----------
-    value
-        The value of the parameter.
-    distribution
-        The probability distribution of the parameter.
-    name
-        The name of the parameter. If you do not specify a name, a unique name will be \
-        automatically generated upon initialization of a :class:`.Model`.
-
-    Returns
-    -------
-    A parameter variable.
-
-    See Also
-    --------
-    .Var.new_param : Initializes a strong variable that acts as a model parameter.
-
-    Notes
-    -----
-
-    A variable will compute its log probability only when :meth:`.Calc.update` is
-    called. This does not happen automatically upon initialization. Commonly, the first
-    time this method is called is during the initialization of a :class:`.Model`. To
-    update the value immediately, you can call :meth:`.Var.update` manually.
-
-    Examples
-    --------
-
-    >>> import tensorflow_probability.substrates.jax.distributions as tfd
-
-    A variance parameter with an inverse-gamma prior:
-
-    >>> prior = lsl.Dist(tfd.InverseGamma, concentration=0.1, scale=0.1)
-    >>> variance = lsl.Var.new_param(1.0, prior, name="variance")
-    >>> variance
-    Var(name="variance")
-
-    We can use this parameter variable in the distribution of an observed variable:
-
-    >>> scale = lsl.Calc(jnp.sqrt, variance)
-    >>> dist = lsl.Dist(tfd.Normal, loc=0.0, scale=scale)
-    >>> y = lsl.Var.new_obs(jnp.array([-0.5, 0.0, 0.5]), dist, name="y")
-    >>> y
-    Var(name="y")
-
-    Now we can build the model graph:
-
-    >>> model = lsl.Model([y])
-
-    The log_prior of the model is the sum of the log-priors of all parameters. In this
-    case this is only our ``variance`` parameter:
-
-    >>> model.log_prior
-    Array(-2.582971, dtype=float32)
-
-    >>> variance.log_prob
-    Array(-2.582971, dtype=float32)
-
-    The log-likelihood of the model is the sum of the log-probabilities of all observed
-    variables. In this case this is only our ``y`` variable:
-
-    >>> model.log_lik
-    Array(-3.0068154, dtype=float32)
-
-    >>> jnp.sum(y.log_prob)
-    Array(-3.0068154, dtype=float32)
-
-    """
-    warnings.warn(
-        "Use lsl.Var.new_param() instead. This function will be removed in v0.4.0",
-        FutureWarning,
-    )
-    var = Var(value, distribution, name)
-    var.value_node.monitor = True
-    var.parameter = True
-    return var
-
-
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Other helpers ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-
-def add_group(name: str, **kwargs: Node | Var) -> Group:
-    """
-    Assigns the nodes and variables to a group.
-
-    .. deprecated:: 0.2.2
-        Use the :class:`.Group` object directly. This function will be removed in
-        v0.4.0.
-
-    Parameters
-    ----------
-    name
-        The name of the group.
-    kwargs
-        The nodes and variables in the group with their keys in the group as keywords.
-
-    See Also
-    --------
-    .Node.groups : The groups that a node is a part of.
-    .Group : A group of nodes and variables.
-    """
-    warnings.warn(
-        "The `add_group` function is deprecated and will be removed in v0.4.0. "
-        "Use the `Group` object directly.",
-        FutureWarning,
-    )
-    return Group(name, **kwargs)
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
