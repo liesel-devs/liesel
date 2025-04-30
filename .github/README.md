@@ -316,12 +316,14 @@ environment, and install the latest release from PyPI:
 
     pip install liesel
 
-You can also install the development version from GitHub:
+You can also install the development version from GitHub. Liesel uses
+`uv` for the project management so make sure the tool is installed.
 
     git clone https://github.com/liesel-devs/liesel.git
     cd liesel
-    pip install .
-    # or `pip install -e .[dev]` for an editable install including the dev utils
+    uv sync
+    # or `uv sync --dev` for an editable install including the dev dependencies
+    # or `uv sync --locked` for an installation using the dependencies locked in the uv.lock file
 
 Liesel depends on JAX and `jaxlib`. As of now, there are no official
 `jaxlib` wheels for Windows. If you are on Windows, the JAX developers
@@ -344,6 +346,10 @@ Please run
 2.  make sure the tests don’t fail with `pytest --run-mcmc`, and
 3.  make sure the examples in your docstrings are up-to-date with
     `pytest --doctest-modules liesel`.
+
+when you are using `uv` to manage the project, you can run these
+commends in the virtual environment by prepending `uv run` to the
+commands, e.g., `uv run pre-commit run -a`.
 
 ## Acknowledgements
 
