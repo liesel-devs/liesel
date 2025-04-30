@@ -704,7 +704,7 @@ class Calc(Node):
         automatically generated upon initialization of a :class:`.Model`.
     _needs_seed
         Whether the node needs a seed / PRNG key.
-    update_on_init
+    _update_on_init
         If ``True``, the calculator will try to evaluate its function upon \
         initialization.
     **kwinputs
@@ -763,14 +763,14 @@ class Calc(Node):
         *inputs: Any,
         _name: str = "",
         _needs_seed: bool = False,
-        update_on_init: bool = True,
+        _update_on_init: bool = True,
         **kwinputs: Any,
     ):
         super().__init__(*inputs, **kwinputs, _name=_name, _needs_seed=_needs_seed)
         self._function = function
-        self.update_on_init = update_on_init
+        self._update_on_init = _update_on_init
 
-        if self.update_on_init:
+        if self._update_on_init:
             try:
                 self.update()
             except Exception as e:
@@ -1350,7 +1350,7 @@ class Var:
         distribution: Dist | None = None,
         name: str = "",
         _needs_seed: bool = False,
-        update_on_init: bool = True,
+        _update_on_init: bool = True,
         **kwinputs: Any,
     ) -> Var:
         """
@@ -1382,7 +1382,7 @@ class Var:
             automatically generated upon initialization of a :class:`.Model`.
         _needs_seed
             Whether the node needs a seed / PRNG key.
-        update_on_init
+        _update_on_init
             If ``True``, the calculator will try to evaluate its function upon \
             initialization.
         **kwinputs
@@ -1441,7 +1441,7 @@ class Var:
             *inputs,
             _name=f"{name}_calc",
             _needs_seed=_needs_seed,
-            update_on_init=update_on_init,
+            _update_on_init=_update_on_init,
             **kwinputs,
         )
         var = cls(calc, distribution=distribution, name=name)
@@ -2265,7 +2265,7 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
         value_kwinputs = var.value_node.kwinputs
         value_node_needs_seed = var.value_node.needs_seed
         try:
-            value_node_upadte_on_init = var.value_node.update_on_init  # type: ignore
+            value_node_upadte_on_init = var.value_node._update_on_init  # type: ignore
         except AttributeError as e:
             raise e
 
@@ -2275,7 +2275,7 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
                 *value_inputs,
                 _name="",
                 _needs_seed=value_node_needs_seed,
-                update_on_init=value_node_upadte_on_init,
+                _update_on_init=value_node_upadte_on_init,
                 **value_kwinputs,
             ),
             transformed_dist,
@@ -2352,7 +2352,7 @@ def _transform_var_with_bijector_class(
         value_kwinputs = var.value_node.kwinputs
         value_node_needs_seed = var.value_node.needs_seed
         try:
-            value_node_upadte_on_init = var.value_node.update_on_init  # type: ignore
+            value_node_upadte_on_init = var.value_node._update_on_init  # type: ignore
         except AttributeError as e:
             raise e
 
@@ -2362,7 +2362,7 @@ def _transform_var_with_bijector_class(
                 *value_inputs,
                 _name="",
                 _needs_seed=value_node_needs_seed,
-                update_on_init=value_node_upadte_on_init,
+                _update_on_init=value_node_upadte_on_init,
                 **value_kwinputs,
             ),
             dist_node_transformed,
