@@ -1,9 +1,11 @@
 name: tutorials
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+
 jobs:
   setup:
     runs-on: ubuntu-latest
@@ -11,20 +13,22 @@ jobs:
     outputs:
       qmd_files: ${{ steps.find-qmd.outputs.files }}
       python_path: ${{ steps.python-path.outputs.python_path }}
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Install Ubuntu packages
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends r-base r-cran-remotes r-cran-tidyverse r-cran-vgam libpng-dev
-          sudo apt-get install -y --no-install-recommends graphviz graphviz-dev
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.13.0"
+
+      - name: Install Ubuntu packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            r-base r-cran-remotes r-cran-tidyverse r-cran-vgam \
+            libpng-dev graphviz graphviz-dev
 
       - name: Cache pip
         uses: actions/cache@v4
@@ -33,12 +37,6 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml', '**/setup.py', '**/requirements*.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-3.13-
-
-      - name: Install Liesel
-        run: |
-          pip install --upgrade pip
-          pip install .
-          pip list
 
       - name: Install RLiesel
         run: |
@@ -52,8 +50,8 @@ jobs:
         id: python-path
         run: |
           PYTHON_PATH=$(which python)
-          echo "RETICULATE_PYTHON=$PYTHON_PATH" >> $GITHUB_ENV
           echo "python_path=$PYTHON_PATH" >> $GITHUB_OUTPUT
+          echo "RETICULATE_PYTHON=$PYTHON_PATH" >> $GITHUB_ENV
           sudo Rscript -e "write('Sys.setenv(RETICULATE_PYTHON=\"$PYTHON_PATH\")', file='~/.Rprofile', append=TRUE)"
 
       - name: Find QMD files
@@ -61,15 +59,13 @@ jobs:
         run: |
           files=$(find docs/source/tutorials/qmd -name "*.qmd" -type f | jq -R -s -c 'split("\n")[:-1]')
           echo "files=$files" >> $GITHUB_OUTPUT
-          echo "Found QMD files: $files"
 
-      - name: Setup virtual environment for cache
+      - name: Setup virtual environment
         run: |
           python -m venv .venv
           source .venv/bin/activate
           pip install --upgrade pip
-          pip install .[dev,pymc]
-          pip install pygraphviz
+          pip install .
 
       - name: Cache virtual environment
         uses: actions/cache@v4
@@ -96,10 +92,10 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Install minimal Ubuntu packages
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends r-base
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13.0"
 
       - name: Restore virtual environment
         uses: actions/cache/restore@v4
@@ -118,27 +114,22 @@ jobs:
       - name: Install Quarto
         uses: quarto-dev/quarto-actions/setup@v2
 
-      - name: Set Python path for R
-        run: |
-          echo "RETICULATE_PYTHON=${{ needs.setup.outputs.python_path }}" >> $GITHUB_ENV
-          echo "QUARTO_PYTHON=${{ needs.setup.outputs.python_path }}" >> $GITHUB_ENV
-          sudo Rscript -e "write('Sys.setenv(RETICULATE_PYTHON=\"${{ needs.setup.outputs.python_path }}\")', file='~/.Rprofile', append=TRUE)"
-
-      - name: Activate virtual environment
-        run: |
-          source .venv/bin/activate
+      - name: Validate Quarto installation
+        run: quarto check
 
       - name: Render tutorial
         uses: quarto-dev/quarto-actions/render@v2
         with:
           path: ${{ matrix.qmd_file }}
         env:
-          RETICULATE_PYTHON: ${{ env.RETICULATE_PYTHON }}
-          QUARTO_PYTHON: ${{ env.QUARTO_PYTHON }}
+          RETICULATE_PYTHON: ${{ needs.setup.outputs.python_path }}
+          QUARTO_PYTHON: ${{ needs.setup.outputs.python_path }}
 
       - name: Upload rendered output
         uses: actions/upload-artifact@v4
         with:
           name: rendered-output-${{ matrix.qmd_file }}
-          path: ${{ matrix.qmd_file }}*
+          path: |
+            ${{ matrix.qmd_file }}.html
+            ${{ matrix.qmd_file }}.pdf
           if-no-files-found: warn
