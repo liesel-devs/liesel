@@ -25,7 +25,7 @@ def _raise_chain_indices_error(
         chain_index not in range(num_original_chains) for chain_index in chain_indices
     ):
         raise ValueError(
-            f"All chain indices must be between 0 and {num_original_chains-1} "
+            f"All chain indices must be between 0 and {num_original_chains - 1} "
             "(bounds inclusive)."
         )
 
@@ -79,7 +79,7 @@ def _raise_param_indices_error(
     ):
         raise ValueError(
             f"All param indices for {param} must be between "
-            f"0 and {num_original_subparams-1} (bounds inclusive)."
+            f"0 and {num_original_subparams - 1} (bounds inclusive)."
         )
 
 

@@ -92,6 +92,7 @@ def local_caplog():
 
         import liesel.model.distreg as dr
 
+
         def test_build_empty(local_caplog):
             with local_caplog() as caplog:
                 drb = dr.DistRegBuilder()

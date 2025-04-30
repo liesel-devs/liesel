@@ -415,7 +415,6 @@ class Node(ABC):
         return input_dict
 
     def __getitem__(self, key: int | str) -> Node | Var:
-
         if isinstance(key, int):
             try:
                 return self._iloc[key]
@@ -1434,8 +1433,9 @@ class Var:
         >>> print(scale.update().value)
         2.7182817
 
-        .. _docs: https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html # noqa
-        """
+        .. _docs: https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html
+        """  # noqa: E501
+
         calc = Calc(
             function,
             *inputs,
@@ -2020,7 +2020,6 @@ class Var:
     def _plot(
         self, which: Literal["vars", "nodes"] = "vars", verbose: bool = False, **kwargs
     ) -> None:
-
         if self.model is not None:
             match which:
                 case "vars":
@@ -2716,7 +2715,7 @@ class Group:
 
     Retrieve the value of a variable from a model state:
 
-    >>> model_state = {my_var.value_node.name: lsl.NodeState(10., False)}
+    >>> model_state = {my_var.value_node.name: lsl.NodeState(10.0, False)}
     >>> grp.value_from(model_state, "short_name")
     10.0
     """

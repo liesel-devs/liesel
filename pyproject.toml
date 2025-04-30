@@ -2,10 +2,6 @@
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.isort]
-profile = "black"
-py_version = 313
-
 [tool.mypy]
 files = ["liesel", "tests"]
 ignore_missing_imports = true
@@ -19,3 +15,21 @@ follow_imports = "skip"
 [tool.pytest.ini_options]
 testpaths = "tests"
 # only report deprecation / pending deprecation / future warnings from liesel
+
+[tool.ruff.lint]
+extend-select = [
+    "F",    # pyflakes (flake8 core)
+    "E",    # pycodestyle errors (flake8)
+    "W",    # pycodestyle warnings (flake8)
+    "I",    # isort (import sorting)
+    "UP",   # pyupgrade (modern syntax)
+]
+
+extend-ignore = [
+]
+
+[tool.ruff.format]
+docstring-code-format = true
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false

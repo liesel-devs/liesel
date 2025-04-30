@@ -352,9 +352,9 @@ def optim_flat(
     # ---------------------------------------------------------------------------------
     # Validation input
     if restore_best_position:
-        assert (
-            save_position_history
-        ), "Cannot restore best position if history is not saved."
+        assert save_position_history, (
+            "Cannot restore best position if history is not saved."
+        )
 
     # ---------------------------------------------------------------------------------
     # Pre-process inputs

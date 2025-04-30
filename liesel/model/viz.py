@@ -220,7 +220,6 @@ def _draw_edges(graph, axis, pos, is_var):
         value_edges = []
 
         for edge in edges:
-
             # find distribution edges
             if edge[1].has_dist:
                 edge_0_output_nodes = set(edge[0].all_output_nodes())
