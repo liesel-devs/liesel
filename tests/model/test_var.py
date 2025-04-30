@@ -1,6 +1,5 @@
 import pickle
 import typing
-import warnings
 
 import dill
 import jax
@@ -734,24 +733,6 @@ class TestVarTransform:
         assert tau.value == pytest.approx(10.0)
         assert log_tau.value == pytest.approx(np.log(10.0))
 
-        prior = lsl.Dist(tfp.distributions.HalfCauchy, loc=0.0, scale=25.0)
-        tau = lsl.Var(10.0, prior, name="tau")
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", (FutureWarning))
-            log_tau_gb = lsl.GraphBuilder().transform(tau, tfp.bijectors.Exp())
-
-        assert tau.weak
-        assert not log_tau.weak
-
-        tau.update()
-        assert tau.value == pytest.approx(np.exp(log_tau.value))
-        assert tau.value == pytest.approx(10.0)
-        assert log_tau_gb.value == pytest.approx(np.log(10.0))
-
-        log_tau.dist_node.update()  # type: ignore
-        log_tau_gb.dist_node.update()  # type: ignore
-        assert log_tau.log_prob == pytest.approx(log_tau_gb.log_prob)
-
     def test_transform_class_no_args(self) -> None:
         prior = lsl.Dist(tfp.distributions.HalfCauchy, loc=0.0, scale=25.0)
         tau = lsl.Var(10.0, prior, name="tau")
@@ -781,26 +762,6 @@ class TestVarTransform:
         assert tau.value == pytest.approx(10.0)
         assert transformed_tau.value == pytest.approx(bijector.inverse(10.0))
 
-        prior = lsl.Dist(tfp.distributions.HalfCauchy, loc=0.0, scale=25.0)
-        tau = lsl.Var(10.0, prior, name="tau")
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", (FutureWarning))
-            transformed_tau_gb = lsl.GraphBuilder().transform(
-                tau, tfp.bijectors.Softplus, hinge_softness=lsl.Var(0.9)
-            )
-
-        assert tau.weak
-        assert not transformed_tau.weak
-
-        tau.update()
-        assert tau.value == pytest.approx(bijector.forward(transformed_tau.value))
-        assert tau.value == pytest.approx(10.0)
-        assert transformed_tau_gb.value == pytest.approx(bijector.inverse(10.0))
-
-        transformed_tau.dist_node.update()  # type: ignore
-        transformed_tau_gb.dist_node.update()  # type: ignore
-        assert transformed_tau.log_prob == pytest.approx(transformed_tau_gb.log_prob)
-
     @pytest.mark.parametrize("name", ("newname", None))
     def test_transform_default(self, name) -> None:
         prior = lsl.Dist(tfp.distributions.HalfCauchy, loc=0.0, scale=25.0)
@@ -819,24 +780,6 @@ class TestVarTransform:
         assert tau.value == pytest.approx(np.exp(log_tau.value))
         assert tau.value == pytest.approx(10.0)
         assert log_tau.value == pytest.approx(np.log(10.0))
-
-        prior = lsl.Dist(tfp.distributions.HalfCauchy, loc=0.0, scale=25.0)
-        tau = lsl.Var(10.0, prior, name="tau")
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", (FutureWarning))
-            log_tau_gb = lsl.GraphBuilder().transform(tau)
-
-        assert tau.weak
-        assert not log_tau.weak
-
-        tau.update()
-        assert tau.value == pytest.approx(np.exp(log_tau.value))
-        assert tau.value == pytest.approx(10.0)
-        assert log_tau_gb.value == pytest.approx(np.log(10.0))
-
-        log_tau.dist_node.update()  # type: ignore
-        log_tau_gb.dist_node.update()  # type: ignore
-        assert log_tau.log_prob == pytest.approx(log_tau_gb.log_prob)
 
     def test_pickle_model_with_transformed_var(self, tmp_path):
         prior = lsl.Dist(tfp.distributions.HalfCauchy, loc=0.0, scale=25.0)
