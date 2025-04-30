@@ -155,7 +155,7 @@ class DistRegBuilder(GraphBuilder):
         a_var = Var.new_param(a, name=name + "_a")
         b_var = Var.new_param(b, name=name + "_b")
 
-        rank_var = Var.new_param(matrix_rank(K), name=name + "_rank")
+        rank_var = Var.new_param(float(matrix_rank(K)), name=name + "_rank")
         tau2_distribution = Dist(tfd.InverseGamma, concentration=a_var, scale=b_var)
         tau2_var = Var.new_param(10000.0, tau2_distribution, name + "_tau2")
 
