@@ -36,23 +36,16 @@ jobs:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml', '**/setup.py', '**/requirements*.txt') }}
           restore-keys: |
-            ${{ runner.os }}-pip-3.13-
+            ${{ runner.os }}-
 
       - name: Install RLiesel
         run: |
           sudo Rscript -e "install.packages('reticulate', repos='https://cloud.r-project.org')"
           sudo Rscript -e "remotes::install_github('liesel-devs/rliesel', auth_token = '${{ secrets.GITHUB_TOKEN }}', upgrade = 'never')"
 
-      - name: Install Quarto
-        uses: quarto-dev/quarto-actions/setup@v2
-
-      - name: Configure Python for R
+      - name: Export Python path
         id: python-path
-        run: |
-          PYTHON_PATH=$(which python)
-          echo "python_path=$PYTHON_PATH" >> $GITHUB_OUTPUT
-          echo "RETICULATE_PYTHON=$PYTHON_PATH" >> $GITHUB_ENV
-          sudo Rscript -e "write('Sys.setenv(RETICULATE_PYTHON=\"$PYTHON_PATH\")', file='~/.Rprofile', append=TRUE)"
+        run: echo "python_path=$(which python)" >> $GITHUB_OUTPUT
 
       - name: Find QMD files
         id: find-qmd
