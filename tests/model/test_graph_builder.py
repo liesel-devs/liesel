@@ -1,5 +1,3 @@
-import warnings
-
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -36,9 +34,7 @@ def test_transform() -> None:
     def forward_dx(x):
         return jnp.reciprocal(1 + jnp.exp(-x))
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", (FutureWarning))
-        var_trans = lmodel.GraphBuilder().transform(var)
+    var_trans = var.transform()
 
     assert var.weak
     assert var.dist_node is None
@@ -94,9 +90,7 @@ def test_transform_with_bijector_instance() -> None:
     def forward_dx(x):
         return jnp.reciprocal(1 + jnp.exp(-x))
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", (FutureWarning))
-        var_trans = lmodel.GraphBuilder().transform(var, tfp.bijectors.Softplus())
+    var_trans = var.transform(tfp.bijectors.Softplus())
 
     assert var.weak
     assert var.dist_node is None
@@ -149,9 +143,7 @@ def test_transform_with_param_outdated() -> None:
     def forward_dx(x):
         return jnp.reciprocal(1 + jnp.exp(-x))
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", (FutureWarning))
-        var_trans = lmodel.GraphBuilder().transform(var)
+    var_trans = var.transform()
 
     assert var.weak
     assert var.dist_node is None
@@ -203,10 +195,8 @@ def test_transform_with_param() -> None:
 
     rate.update()
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", (FutureWarning))
-        # rate is not outdated. transform should also set value
-        var_trans = lmodel.GraphBuilder().transform(var)
+    # rate is not outdated. transform should also set value
+    var_trans = var.transform()
 
     assert var.weak
     assert var.dist_node is None
@@ -245,10 +235,7 @@ def test_transform_user() -> None:
         tfp.distributions.Exponential(rate).log_prob(val)
     )
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", (FutureWarning))
-        warnings.simplefilter("ignore", (UserWarning))
-        var_trans = lmodel.GraphBuilder().transform(var, tfp.bijectors.Exp)
+    var_trans = var.transform(tfp.bijectors.Exp())
 
     assert var.weak
     assert var.dist_node is None
@@ -289,12 +276,7 @@ def test_transform_user_bijector_with_input() -> None:
     # positional argument
     dist = lnodes.Dist(tfp.distributions.Exponential, rate)
     var = lnodes.Var(val, dist)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", (FutureWarning))
-        warnings.simplefilter("ignore", (UserWarning))
-        var_trans = lmodel.GraphBuilder().transform(
-            var, tfp.bijectors.Softplus, sp_param
-        )
+    var_trans = var.transform(tfp.bijectors.Softplus, sp_param)
 
     var_trans.update()
     var.update()
@@ -311,12 +293,7 @@ def test_transform_user_bijector_with_input() -> None:
     # keyword argument
     dist = lnodes.Dist(tfp.distributions.Exponential, rate)
     var = lnodes.Var(val, dist)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", (FutureWarning))
-        warnings.simplefilter("ignore", (UserWarning))
-        var_trans = lmodel.GraphBuilder().transform(
-            var, tfp.bijectors.Softplus, hinge_softness=sp_param
-        )
+    var_trans = var.transform(tfp.bijectors.Softplus, hinge_softness=sp_param)
 
     var_trans.update()
     var.update()
@@ -334,23 +311,17 @@ def test_transform_user_bijector_with_input() -> None:
 def test_transform_twice() -> None:
     dist = lnodes.Dist(tfp.distributions.Exponential, 1.0)
     var = lnodes.Var(1.0, dist)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", (FutureWarning))
-        lmodel.GraphBuilder().transform(var)
+    var.transform()
 
     with pytest.raises(RuntimeError):
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", (FutureWarning))
-            lmodel.GraphBuilder().transform(var)
+        var.transform()
 
 
 def test_transform_no_bijector() -> None:
     dist = lnodes.Dist(tfp.distributions.Poisson, 1.0)
     var = lnodes.Var(1, dist)
     with pytest.raises(RuntimeError):
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", (FutureWarning))
-            lmodel.GraphBuilder().transform(var)
+        var.transform()
 
 
 @pytest.mark.xfail
@@ -358,9 +329,7 @@ def test_transform_no_bijector_delayed_check() -> None:
     lamb = lnodes.Calc(lambda x, y: x + y, 1.0, 1.0)
     dist = lnodes.Dist(tfp.distributions.Poisson, lamb)
     var = lnodes.Var(1.0, dist)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", (FutureWarning))
-        var_trans = lmodel.GraphBuilder().transform(var)
+    var_trans = var.transform()
 
     lamb.update()
     with pytest.raises(RuntimeError):
@@ -370,9 +339,7 @@ def test_transform_no_bijector_delayed_check() -> None:
 def test_transform_no_dist() -> None:
     var = lnodes.Var(1, None)
     with pytest.raises(RuntimeError):
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", (FutureWarning))
-            lmodel.GraphBuilder().transform(var)
+        var.transform()
 
 
 def test_transform_weak() -> None:
@@ -381,9 +348,7 @@ def test_transform_weak() -> None:
     var = lnodes.Var(x, dist)
     assert var.weak
     with pytest.raises(RuntimeError):
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", (FutureWarning))
-            lmodel.GraphBuilder().transform(var)
+        var.transform()
 
 
 def test_groups() -> None:
@@ -457,6 +422,4 @@ def test_transform_raises_error_for_duplicate_nodes() -> None:
 
     with pytest.raises(RuntimeError):
         gb.add(*nodes.values(), *vars.values())
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", (FutureWarning))
-            gb.transform(vars["x"])
+        x.transform()
