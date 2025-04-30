@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: '0 9 * * 2'  # Every Tuesday at 09:00 UTC
 
 jobs:
   discover-files:
