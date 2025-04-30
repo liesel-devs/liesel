@@ -57,6 +57,7 @@ model = r.model
 
 builder = lsl.dist_reg_mcmc(model, seed=42, num_chains=4)
 builder.set_duration(warmup_duration=5000, posterior_duration=1000)
+builder.show_progress = False
 
 engine = builder.build()
 engine.sample_all_epochs()
@@ -169,9 +170,9 @@ very beneficial to use individual NUTS samplers for blocks of parameters. This
 is pretty much the same strategy that we apply to the IWLS sampler, too.
 
 
+
 ```{python}
 #| label: nuts-sampling
-
 
 builder = gs.EngineBuilder(seed=42, num_chains=4)
 
@@ -179,13 +180,18 @@ builder.set_model(gs.LieselInterface(model))
 
 # add NUTS kernels
 parameters = [name for name, var in model.vars.items() if var.parameter]
+
 for parameter in parameters:
   builder.add_kernel(gs.NUTSKernel([parameter]))
 
 
 builder.set_initial_values(model.state)
 
-builder.set_duration(warmup_duration=5000, posterior_duration=1000)
+builder.set_epochs(
+  gs.stan_epochs(warmup_duration=5000, posterior_duration=1000, init_duration=750, term_duration=500)
+)
+
+builder.show_progress = False
 
 engine = builder.build()
 engine.sample_all_epochs()
