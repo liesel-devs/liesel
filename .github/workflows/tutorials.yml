@@ -48,18 +48,9 @@ jobs:
         with:
           python-version-file: "pyproject.toml"
 
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml', '**/setup.py', '**/requirements*.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-${{ matrix.python-version }}-
-
       - name: Install Liesel
         run: |
           uv sync --locked --dev --group pymc
-          uv pip install pygraphviz
           uv pip list
 
       - name: Install RLiesel
@@ -70,10 +61,10 @@ jobs:
       - name: Install Quarto
         uses: quarto-dev/quarto-actions/setup@v2
 
-      - name: Configure Python for R
+      - name: Configure Python for R (use uv's virtualenv)
         run: |
-          echo "RETICULATE_PYTHON=$(which python)" >> $GITHUB_ENV
-          sudo Rscript -e "write('Sys.setenv(RETICULATE_PYTHON=\"$(which python)\")', file='~/.Rprofile', append=TRUE)"
+          echo "RETICULATE_PYTHON=${PWD}/.venv/bin/python" >> $GITHUB_ENV
+          echo "Sys.setenv(RETICULATE_PYTHON='${PWD}/.venv/bin/python')" >> ~/.Rprofile
 
       - name: Render Quarto file ${{ matrix.file }}
         uses: quarto-dev/quarto-actions/render@v2
