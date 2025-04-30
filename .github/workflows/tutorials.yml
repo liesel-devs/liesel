@@ -49,7 +49,15 @@ jobs:
       - name: Install Quarto
         uses: quarto-dev/quarto-actions/setup@v2
 
+      - name: Configure Python for R
+        run: |
+          echo "RETICULATE_PYTHON=$(which python)" >> $GITHUB_ENV
+          sudo Rscript -e "write('Sys.setenv(RETICULATE_PYTHON=\"$(which python)\")', file='~/.Rprofile', append=TRUE)"
+
       - name: Render tutorials
         uses: quarto-dev/quarto-actions/render@v2
         with:
           path: docs/source/tutorials/qmd
+        env:
+          RETICULATE_PYTHON: ${{ env.RETICULATE_PYTHON }}
+          QUARTO_PYTHON: ${{ env.RETICULATE_PYTHON }}
