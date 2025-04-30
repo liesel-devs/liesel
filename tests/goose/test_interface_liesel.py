@@ -76,7 +76,7 @@ def test_sample_transformed_model(model: Model):
     vsigma = vars["sigma"]
     vsigma.dist_node = Dist(tfd.InverseGamma, 0.1, 0.1)
     gb = GraphBuilder().add(*vars.values())
-    gb.transform(vsigma)
+    vsigma.transform()
     model = gb.build_model()
 
     mcmc_seed = 1337
