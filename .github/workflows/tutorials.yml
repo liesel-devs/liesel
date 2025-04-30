@@ -18,8 +18,8 @@ jobs:
       - name: Find Quarto files
         id: set-matrix
         run: |
-          files=$(find docs/source/tutorials/qmd -name '*.qmd' -printf '%P\n' | jq -R . | jq -s .)
-          echo "matrix={\"file\": $files}" >> $GITHUB_OUTPUT
+          files=$(find docs/source/tutorials/qmd -name '*.qmd' -printf '%P\n' | jq -R . | jq -s -c '{file: .}')
+          echo "matrix=$files" >> $GITHUB_OUTPUT
 
   render:
     needs: discover-files
