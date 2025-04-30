@@ -1321,7 +1321,7 @@ class Model:
 
         return nodes, _vars
 
-    def set_seed(self, seed: jax.random.KeyArray) -> Model:
+    def set_seed(self, seed: jax.Array) -> Model:
         """
         Splits and sets the seed / PRNG key.
 
@@ -1329,8 +1329,10 @@ class Model:
         ----------
         seed
             The seed is split and distributed to the seed nodes of the model.
-            Must be a ``KeyArray``, i.e. an array of shape (2,) and dtype ``uint32``.
-            See :mod:`jax.random` for more details.
+            Must be a jax RNG key array that satisfies
+            ``jnp.issubdtype(key.dtype, jax.dtypes.prng_key)``.
+            See :mod:`jax.random` and
+            https://docs.jax.dev/en/latest/jep/9263-typed-keys.html for more details.
         """
         seeds = jax.random.split(seed, len(self._seed_nodes))
 
@@ -1339,7 +1341,7 @@ class Model:
 
         return self
 
-    def simulate(self, seed: jax.random.KeyArray, skip: Iterable[str] = ()) -> Model:
+    def simulate(self, seed: jax.Array, skip: Iterable[str] = ()) -> Model:
         """
         Updates the model state simulating from the probability distributions in the
         model using a provided random seed, optionally skipping specified nodes.
@@ -1347,9 +1349,11 @@ class Model:
         Parameters
         ----------
         seed
-            The seed is split and distributed to the distribution nodes in the model.
-            Must be a ``KeyArray``, i.e. an array of shape (2,) and dtype ``uint32``.
-            See :mod:`jax.random` for more details.
+            The seed is split and distributed to the seed nodes of the model. \
+            Must be a jax RNG key array that satisfies \
+            ``jnp.issubdtype(key.dtype, jax.dtypes.prng_key)``. \
+            See :mod:`jax.random` and \
+            https://docs.jax.dev/en/latest/jep/9263-typed-keys.html for more details.
         skip
             The names of the nodes or variables to be excluded from the simulation. \
             By default, no nodes or variables are skipped.
@@ -1410,7 +1414,7 @@ class Model:
     def sample(
         self,
         shape: Sequence[int],
-        seed: jax.random.KeyArray,
+        seed: jax.Array,
         posterior_samples: dict[str, Array] | None = None,
         fixed: Sequence[str] = (),
         newdata: dict[str, Array] | None = None,
@@ -1424,9 +1428,11 @@ class Model:
         shape
             Sample shape.
         seed
-            The seed is split and distributed to the distribution nodes in the model. \
-            Must be a ``KeyArray``, i.e. an array of shape (2,) and dtype ``uint32``. \
-            See :mod:`jax.random` for more details.
+            The seed is split and distributed to the seed nodes of the model. \
+            Must be a jax RNG key array that satisfies \
+            ``jnp.issubdtype(key.dtype, jax.dtypes.prng_key)``. \
+            See :mod:`jax.random` and \
+            https://docs.jax.dev/en/latest/jep/9263-typed-keys.html for more details.
         posterior_samples
             Dictionary of samples at which to evaluate predictions. All values of the \
             dictionary are assumed to have two leading dimensions corresponding to \

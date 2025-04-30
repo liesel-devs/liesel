@@ -2081,7 +2081,7 @@ class Var:
     def sample(
         self,
         shape: Sequence[int],
-        seed: jax.random.KeyArray,
+        seed: jax.Array,
         posterior_samples: dict[str, Array] | None = None,
         fixed: Sequence[str] = (),
         newdata: dict[str, Array] | None = None,
@@ -2095,9 +2095,11 @@ class Var:
         shape
             Sample shape.
         seed
-            The seed is split and distributed to the distribution nodes in the model. \
-            Must be a ``KeyArray``, i.e. an array of shape (2,) and dtype ``uint32``. \
-            See :mod:`jax.random` for more details.
+            The seed is split and distributed to the seed nodes of the model. \
+            Must be a jax RNG key array that satisfies \
+            ``jnp.issubdtype(key.dtype, jax.dtypes.prng_key)``. \
+            See :mod:`jax.random` and \
+            https://docs.jax.dev/en/latest/jep/9263-typed-keys.html for more details.
         posterior_samples
             Dictionary of samples at which to evaluate predictions. All values of the \
             dictionary are assumed to have two leading dimensions corresponding to \
