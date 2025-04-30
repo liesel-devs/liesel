@@ -199,31 +199,31 @@ loc
 kernel_00
 </td>
 <td>
--0.113
+-0.109
 </td>
 <td>
-0.458
+0.448
 </td>
 <td>
--0.865
+-0.829
 </td>
 <td>
--0.118
+-0.119
 </td>
 <td>
-0.664
+0.645
 </td>
 <td>
 4000
 </td>
 <td>
-1300.899
+1416.594
 </td>
 <td>
-2052.033
+2268.975
 </td>
 <td>
-1.005
+1.006
 </td>
 </tr>
 </tbody>
@@ -283,10 +283,10 @@ divergent transition
 warmup
 </th>
 <td>
-49
+53
 </td>
 <td>
-0.012
+0.013
 </td>
 </tr>
 <tr>
@@ -333,15 +333,8 @@ or try the unofficial `jaxlib` wheels from
 <https://github.com/cloudhan/jax-windows-builder>.
 
 If you are using the `lsl.plot_model()` function, installing
-`pygraphviz` will greatly improve the layout of the model graphs. Make
-sure you have the [Graphviz](https://graphviz.org) development headers
-on your system and run:
-
-    pip install pygraphviz
-
-Again, the installation is a bit more challenging on Windows, but there
-are [instructions on the `pygraphviz`
-website](https://pygraphviz.github.io/documentation/stable/install.html#windows).
+[Graphviz](https://graphviz.org) will greatly improve the layout of the
+model graphs.
 
 ## Development
 
