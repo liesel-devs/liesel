@@ -3,7 +3,6 @@ Liesel modeling framework.
 """
 
 from .distreg import DistRegBuilder, dist_reg_mcmc, tau2_gibbs_kernel
-from .goose import GooseModel
 from .legacy import (
     PIT,
     Addition,
