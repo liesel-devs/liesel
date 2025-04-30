@@ -1661,8 +1661,8 @@ class Var:
                 "To proceed with transformation, the .inference information needs to"
                 "be explicitly removed. You can transform with ``inference='drop'``."
             )
-        # if self.weak:
-        #     raise RuntimeError(f"{repr(self)} is weak")
+        if self.weak:
+            raise RuntimeError(f"{repr(self)} is weak")
 
         if is_bijector_class(bijector) and not (bijector_args or bijector_kwargs):
             raise ValueError(
@@ -2387,17 +2387,10 @@ def _transform_var_with_bijector_class(
 def _transform_var_without_dist_with_bijector_instance(
     var: Var, bijector_inst: jb.Bijector
 ) -> Var:
-    if var.strong:
-        transformed_var = Var(
-            bijector_inst.inverse(var.value),
-            name=f"{var.name}_transformed",
-        )
-    else:
-        transformed_var = Var.new_calc(
-            bijector_inst.inverse,
-            var.value_node,
-            name=f"{var.name}_transformed",
-        )
+    transformed_var = Var(
+        bijector_inst.inverse(var.value),
+        name=f"{var.name}_transformed",
+    )
 
     var.value_node = Calc(bijector_inst.forward, transformed_var)
 
