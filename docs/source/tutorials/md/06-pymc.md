@@ -108,7 +108,7 @@ Let’s take a look at our model:
 spike_and_slab_model
 ```
 
-    <pymc.model.core.Model object at 0x31e938350>
+    <pymc.model.core.Model object at 0x141ad5d30>
 
 The class {class}`.PyMCInterface` offers an interface between PyMC and
 Goose. By default, the constructor of {class}`.PyMCInterface` keeps
@@ -162,140 +162,41 @@ builder.positions_included = ["sigma2", "tau"]
 engine = builder.build()
 ```
 
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
+    /Users/johannesbrachem/.pyenv/versions/3.13.1/envs/liesel-3.13-numpy2/lib/python3.13/site-packages/jax/_src/numpy/array_methods.py:122: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/jax-ml/jax#current-gotchas for more.
+      return lax_numpy.astype(self, dtype, copy=copy, device=device)
 
 ``` python
 engine.sample_all_epochs()
 ```
 
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    <string>:6: UserWarning: Explicitly requested dtype <class 'numpy.int64'> requested in asarray is not available, and will be truncated to dtype int32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
-      return lax_numpy.astype(arr, dtype, copy=copy, device=device)
+
+      0%|                                                  | 0/3 [00:00<?, ?chunk/s]<string>:6: UserWarning: Explicitly requested dtype <class 'numpy.int64'> requested in asarray is not available, and will be truncated to dtype int32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/jax-ml/jax#current-gotchas for more.
+
+     33%|##############                            | 1/3 [00:02<00:05,  2.91s/chunk]
+    100%|##########################################| 3/3 [00:02<00:00,  1.03chunk/s]
+
+      0%|                                                  | 0/1 [00:00<?, ?chunk/s]
+    100%|########################################| 1/1 [00:00<00:00, 2132.34chunk/s]
+
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 4082.05chunk/s]
+
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
+    100%|########################################| 4/4 [00:00<00:00, 4733.98chunk/s]
+
+      0%|                                                  | 0/8 [00:00<?, ?chunk/s]
+    100%|#########################################| 8/8 [00:00<00:00, 865.25chunk/s]
+
+      0%|                                                 | 0/20 [00:00<?, ?chunk/s]
+    100%|#######################################| 20/20 [00:00<00:00, 281.01chunk/s]
+
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 3419.73chunk/s]
+
+      0%|                                                 | 0/80 [00:00<?, ?chunk/s]
+     36%|##############1                        | 29/80 [00:00<00:00, 277.47chunk/s]
+     71%|###########################7           | 57/80 [00:00<00:00, 236.33chunk/s]
+    100%|#######################################| 80/80 [00:00<00:00, 232.26chunk/s]
 
 Now, we can take a look at the summary of the results and at the trace
 plots.
@@ -305,23 +206,27 @@ results = engine.get_results()
 print(gs.Summary(results))
 ```
 
-    /Users/johannesbrachem/.pyenv/versions/3.12.2/envs/liesel-3.12/lib/python3.12/site-packages/arviz/stats/diagnostics.py:592: RuntimeWarning: invalid value encountered in scalar divide
+    /Users/johannesbrachem/.pyenv/versions/3.13.1/envs/liesel-3.13-numpy2/lib/python3.13/site-packages/arviz/stats/diagnostics.py:845: RuntimeWarning: invalid value encountered in scalar divide
+      varsd = varvar / evar / 4
+    /Users/johannesbrachem/.pyenv/versions/3.13.1/envs/liesel-3.13-numpy2/lib/python3.13/site-packages/arviz/stats/diagnostics.py:845: RuntimeWarning: invalid value encountered in scalar divide
+      varsd = varvar / evar / 4
+    /Users/johannesbrachem/.pyenv/versions/3.13.1/envs/liesel-3.13-numpy2/lib/python3.13/site-packages/arviz/stats/diagnostics.py:596: RuntimeWarning: invalid value encountered in scalar divide
       (between_chain_variance / within_chain_variance + num_samples - 1) / (num_samples)
                              var_fqn     kernel  ...   hdi_low  hdi_high
     variable                                     ...
-    beta                     beta[0]  kernel_00  ...  2.982809  3.091639
-    beta                     beta[1]  kernel_00  ... -0.065701  0.037979
-    beta                     beta[2]  kernel_00  ...  3.907461  4.008257
-    beta                     beta[3]  kernel_00  ... -0.056007  0.046994
+    beta                     beta[0]  kernel_00  ...  2.983979  3.089679
+    beta                     beta[1]  kernel_00  ... -0.060213  0.037683
+    beta                     beta[2]  kernel_00  ...  3.901725  4.003946
+    beta                     beta[3]  kernel_00  ... -0.052502  0.048943
     delta                   delta[0]  kernel_01  ...  1.000000  1.000000
     delta                   delta[1]  kernel_01  ...  0.000000  0.000000
     delta                   delta[2]  kernel_01  ...  1.000000  1.000000
     delta                   delta[3]  kernel_01  ...  0.000000  0.000000
-    sigma2                    sigma2          -  ...  0.938498  1.085219
-    sigma2_log__        sigma2_log__  kernel_00  ... -0.060389  0.084482
-    tau                          tau          -  ...  0.326789  0.695013
-    tau_log__              tau_log__  kernel_00  ...  0.872283  3.359922
-    theta_logodds__  theta_logodds__  kernel_00  ... -0.722746  0.823660
+    sigma2                    sigma2          -  ...  0.941187  1.091447
+    sigma2_log__        sigma2_log__  kernel_00  ... -0.059287  0.088789
+    tau                          tau          -  ...  0.316583  0.679981
+    tau_log__              tau_log__  kernel_00  ...  0.961559  3.379387
+    theta_logodds__  theta_logodds__  kernel_00  ... -0.769520  0.753686
 
     [13 rows x 17 columns]
 
