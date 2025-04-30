@@ -330,7 +330,7 @@ def test_transient_calculator_error_in_update() -> None:
         calc.value
 
 
-def test_calculator_update_on_init_error(local_caplog) -> None:
+def test_calculator__update_on_init_error(local_caplog) -> None:
     def _raise_error(a):
         raise RuntimeError("Testing Error")
 
@@ -351,7 +351,7 @@ def test_calculator_update_on_init_error(local_caplog) -> None:
 
 
 @pytest.mark.parametrize("Calc", [Calc, TransientCalc])
-def test_calculator_update_on_init(Calc, local_caplog) -> None:
+def test_calculator__update_on_init(Calc, local_caplog) -> None:
     a = Value(0.0)
     b = Calc(np.exp, a)
     assert b.value == pytest.approx(1.0)

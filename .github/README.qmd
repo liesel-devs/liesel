@@ -141,13 +141,7 @@ uv sync
 
 Liesel depends on JAX and `jaxlib`. As of now, there are no official `jaxlib` wheels for Windows. If you are on Windows, the JAX developers recommend using the [Windows Subsystem for Linux](https://docs.microsoft.com/en-us/windows/wsl/about). Alternatively, you can [build `jaxlib` from source](https://jax.readthedocs.io/en/latest/developer.html#additional-notes-for-building-jaxlib-from-source-on-windows) or try the unofficial `jaxlib` wheels from <https://github.com/cloudhan/jax-windows-builder>.
 
-If you are using the `lsl.plot_model()` function, installing `pygraphviz` will greatly improve the layout of the model graphs. Make sure you have the [Graphviz](https://graphviz.org) development headers on your system and run:
-
-```
-pip install pygraphviz
-```
-
-Again, the installation is a bit more challenging on Windows, but there are [instructions on the `pygraphviz` website](https://pygraphviz.github.io/documentation/stable/install.html#windows).
+If you are using the `lsl.plot_model()` function, installing [Graphviz](https://graphviz.org) will greatly improve the layout of the model graphs.
 
 ## Development
 
