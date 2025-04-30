@@ -15,7 +15,7 @@ jobs:
       - name: Install Ubuntu packages
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends r-base r-cran-remotes r-cran-tidyverse r-cran-vgam r-cran-reticulate
+          sudo apt-get install -y --no-install-recommends r-base r-cran-remotes r-cran-tidyverse r-cran-vgam
           sudo apt-get install -y --no-install-recommends graphviz graphviz-dev
 
       - name: Check out repository
@@ -30,7 +30,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/pyproject.toml', '**/setup.py', '**/requirements*.txt') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml', '**/setup.py', '**/requirements*.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-${{ matrix.python-version }}-
 
@@ -43,6 +43,7 @@ jobs:
 
       - name: Install RLiesel
         run: |
+          sudo Rscript -e "install.packages('reticulate', repos='https://cloud.r-project.org')"
           sudo Rscript -e "remotes::install_github('liesel-devs/rliesel', auth_token = '${{ secrets.GITHUB_TOKEN }}', upgrade = 'never')"
 
       - name: Install Quarto
