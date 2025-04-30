@@ -140,7 +140,6 @@ class DataclassInterface:
     We define a dataclass representing the model state:
 
     >>> from dataclasses import dataclass
-    ...
     >>> @dataclass
     ... class State:
     ...     x: jnp.ndarray
@@ -343,7 +342,6 @@ class NamedTupleInterface:
     We define a subclass of NamedTuple representing the model state:
 
     >>> from typing import NamedTuple
-    ...
     >>> class State(NamedTuple):
     ...     x: jnp.ndarray
     ...     loc: jnp.ndarray

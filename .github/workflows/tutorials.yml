@@ -1,10 +1,10 @@
 name: tutorials
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  # push:
+  #   branches: [main]
+  # pull_request:
+  #   branches: [main]
 
 jobs:
   docs:
@@ -21,17 +21,19 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: "Set up Python"
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version-file: "pyproject.toml"
 
       - name: Install Liesel
         run: |
-          pip install --upgrade pip
-          pip install .[dev,pymc]
-          pip install pygraphviz
-          pip list
+          uv sync --locked --dev --group pymc
+          uv pip install pygraphviz
+          uv pip list
 
       - name: Install RLiesel
         run: |

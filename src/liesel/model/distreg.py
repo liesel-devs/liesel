@@ -21,12 +21,13 @@ from .nodes import Array, Bijector, Dist, Distribution, Group, NodeState, Var
 
 matrix_rank = np.linalg.matrix_rank
 
-tau2_jitter_fn: JitterFunction = lambda key, val: jax.random.truncated_normal(
-    key, 0.0, 1e2, val.shape, val.dtype
-)
-beta_jitter_fn: JitterFunction = lambda key, val: val + jax.random.uniform(
-    key, val.shape, val.dtype, -2.0, 2.0
-)
+
+def _tau2_jitter_fn(key, val):
+    return jax.random.truncated_normal(key, 0.0, 1e2, val.shape, val.dtype)
+
+
+def _beta_jitter_fn(key, val):
+    return val + jax.random.uniform(key, val.shape, val.dtype, -2.0, 2.0)
 
 
 class DistRegBuilder(GraphBuilder):
@@ -274,8 +275,8 @@ def dist_reg_mcmc(
     model: Model,
     seed: int,
     num_chains: int,
-    tau2_jitter_fn: JitterFunction = tau2_jitter_fn,
-    beta_jitter_fn: JitterFunction = beta_jitter_fn,
+    tau2_jitter_fn: JitterFunction = _tau2_jitter_fn,
+    beta_jitter_fn: JitterFunction = _beta_jitter_fn,
 ) -> EngineBuilder:
     """
     Configures an :class:`~.goose.EngineBuilder` for a distributional regression model.

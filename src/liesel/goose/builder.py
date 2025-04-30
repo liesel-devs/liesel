@@ -7,6 +7,8 @@ engine in a well-defined state. Furthermore, the builder can return different en
 implementations.
 """
 
+from __future__ import annotations
+
 import logging
 import math
 from collections.abc import Iterable
@@ -288,7 +290,7 @@ class EngineBuilder:
         >>> true_mu = 2.0
         >>> true_sigma = 1.0
 
-        >>> x_vec = tfd.Normal(loc=true_mu, scale=true_sigma).sample((n, ), key)
+        >>> x_vec = tfd.Normal(loc=true_mu, scale=true_sigma).sample((n,), key)
 
         Then, we define the distribution we want to sample from, which is
         parametrized by a single parameter `mu`.

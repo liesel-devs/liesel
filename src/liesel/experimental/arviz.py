@@ -41,9 +41,9 @@ def to_arviz_inference_data(
     .. code-block:: python
 
         # re-interpret the data
-        llpw_extracted = idat.posterior['loglik_pointwise']
-        idat.posterior = idat.posterior.drop('loglik_pointwise')
-        idat.add_groups({'log_likelihood': {'observed': llpw_extracted}})
+        llpw_extracted = idat.posterior["loglik_pointwise"]
+        idat.posterior = idat.posterior.drop("loglik_pointwise")
+        idat.add_groups({"log_likelihood": {"observed": llpw_extracted}})
         az.waic(idat)
 
         # Computed from 300 posterior samples and 10 observations log-likelihood matrix.

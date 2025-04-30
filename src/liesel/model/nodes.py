@@ -20,7 +20,6 @@ from typing import (
     NamedTuple,
     TypeGuard,
     TypeVar,
-    Union,
 )
 
 import jax
@@ -33,7 +32,10 @@ from ..distributions.nodist import NoDistribution
 from .viz import plot_nodes, plot_vars
 
 if TYPE_CHECKING:
+    from ..goose import MCMCSpec
     from .model import Model
+
+    type InferenceTypes = None | MCMCSpec | dict[str, MCMCSpec] | Any
 
 __all__ = [
     "Array",
@@ -56,9 +58,9 @@ __all__ = [
     "add_group",
 ]
 
-Array = Any
-Distribution = Union[jd.Distribution, nd.Distribution]
-Bijector = Union[jb.Bijector, nb.Bijector]
+type Array = Any
+type Distribution = jd.Distribution | nd.Distribution
+type Bijector = jb.Bijector | nb.Bijector
 
 T = TypeVar("T", bound=Hashable)
 
@@ -413,7 +415,6 @@ class Node(ABC):
         return input_dict
 
     def __getitem__(self, key: int | str) -> Node | Var:
-
         if isinstance(key, int):
             try:
                 return self._iloc[key]
@@ -703,7 +704,7 @@ class Calc(Node):
         automatically generated upon initialization of a :class:`.Model`.
     _needs_seed
         Whether the node needs a seed / PRNG key.
-    update_on_init
+    _update_on_init
         If ``True``, the calculator will try to evaluate its function upon \
         initialization.
     **kwinputs
@@ -762,14 +763,14 @@ class Calc(Node):
         *inputs: Any,
         _name: str = "",
         _needs_seed: bool = False,
-        update_on_init: bool = True,
+        _update_on_init: bool = True,
         **kwinputs: Any,
     ):
         super().__init__(*inputs, **kwinputs, _name=_name, _needs_seed=_needs_seed)
         self._function = function
-        self.update_on_init = update_on_init
+        self._update_on_init = _update_on_init
 
-        if self.update_on_init:
+        if self._update_on_init:
             try:
                 self.update()
             except Exception as e:
@@ -1161,6 +1162,8 @@ class Var:
     name
         The name of the variable. If you do not specify a name, a unique name will be \
         automatically generated upon initialization of a :class:`.Model`.
+    inference
+        Additional information that can be used to set up inference algorithms.
 
     See Also
     --------
@@ -1190,6 +1193,7 @@ class Var:
 
     __slots__ = (
         "info",
+        "inference",
         "_auto_transform",
         "_dist_node",
         "_groups",
@@ -1206,6 +1210,7 @@ class Var:
         value: Any,
         distribution: Dist | None = None,
         name: str = "",
+        inference: InferenceTypes = None,
     ):
         self._name = name
         self._value_node: Node = Value(None)
@@ -1230,9 +1235,15 @@ class Var:
         self.info: dict[str, Any] = {}
         """Additional meta-information about the variable as a dict."""
 
+        self.inference = inference
+
     @classmethod
     def new_param(
-        cls, value: Any, distribution: Dist | None = None, name: str = ""
+        cls,
+        value: Any,
+        distribution: Dist | None = None,
+        name: str = "",
+        inference: InferenceTypes = None,
     ) -> Var:
         """
         Initializes a strong variable that acts as a model parameter.
@@ -1250,6 +1261,8 @@ class Var:
         name
             The name of the variable. If you do not specify a name, a unique name will \
             be automatically generated upon initialization of a :class:`.Model`.
+        inference
+            Additional information that can be used to set up inference algorithms.
 
         See Also
         --------
@@ -1275,7 +1288,7 @@ class Var:
         Var(name="")
 
         """
-        var = cls(value, distribution, name)
+        var = cls(value, distribution, name, inference=inference)
         var.value_node.monitor = True
         var.parameter = True
         return var
@@ -1337,7 +1350,7 @@ class Var:
         distribution: Dist | None = None,
         name: str = "",
         _needs_seed: bool = False,
-        update_on_init: bool = True,
+        _update_on_init: bool = True,
         **kwinputs: Any,
     ) -> Var:
         """
@@ -1369,7 +1382,7 @@ class Var:
             automatically generated upon initialization of a :class:`.Model`.
         _needs_seed
             Whether the node needs a seed / PRNG key.
-        update_on_init
+        _update_on_init
             If ``True``, the calculator will try to evaluate its function upon \
             initialization.
         **kwinputs
@@ -1420,21 +1433,24 @@ class Var:
         >>> print(scale.update().value)
         2.7182817
 
-        .. _docs: https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html # noqa
-        """
+        .. _docs: https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html
+        """  # noqa: E501
+
         calc = Calc(
             function,
             *inputs,
             _name=f"{name}_calc",
             _needs_seed=_needs_seed,
-            update_on_init=update_on_init,
+            _update_on_init=_update_on_init,
             **kwinputs,
         )
         var = cls(calc, distribution=distribution, name=name)
         return var
 
     @classmethod
-    def new_value(cls, value: Any, name: str = "") -> Var:
+    def new_value(
+        cls, value: Any, name: str = "", inference: InferenceTypes = None
+    ) -> Var:
         """
         Initializes a strong variable without a distribution.
 
@@ -1447,6 +1463,8 @@ class Var:
         name
             The name of the variable. If you do not specify a name, a unique name will \
             be automatically generated upon initialization of a :class:`.Model`.
+        inference
+            Additional information that can be used to set up inference algorithms.
 
         See Also
         --------
@@ -1465,8 +1483,17 @@ class Var:
         Var(name="")
 
         """
-        var = cls(value, name=name)
+        var = cls(value, name=name, inference=inference)
         return var
+
+    def get_inference(self, key: str | None) -> InferenceTypes:
+        if isinstance(self.inference, dict):
+            if key is None:
+                raise ValueError(
+                    f"{key=} is invalid. Possible keys: {list(self.inference)}."
+                )
+            return self.inference[key]
+        return self.inference
 
     def all_input_nodes(self) -> tuple[Node, ...]:
         """Returns all input *nodes* as a unique tuple."""
@@ -1502,6 +1529,7 @@ class Var:
         self,
         bijector: type[jb.Bijector] | jb.Bijector | None = None,
         *bijector_args,
+        inference: InferenceTypes | Literal["drop"] = None,
         name: str | None = None,
         **bijector_kwargs,
     ) -> Var:
@@ -1526,6 +1554,14 @@ class Var:
             directly.
         bijector_args
             The arguments passed on to the init function of the bijector.
+        inference
+            Additional information that can be used to set up inference algorithms for \
+            the new, transformed variable. If ``"drop"``, the inference \
+            information will be dropped from the original variable. \
+            The new variable will have no inference information. \
+            If ``None`` (default), the new variable will likewise have no inference \
+            information, but an error will be raised if there is inference information \
+            on the original variable.
         name
             Name for the new, transformed variable. If ``None`` (default), the new \
             name will be ``<old_name>_transformed``, where ``<old_name>`` is \
@@ -1543,7 +1579,10 @@ class Var:
             If the variable is weak or if the variable has no distribution.
         ValueError
             If the argument ``bijector`` is ``None``, but the distribution does
-            not have a default event space bijector.
+            not have a default event space bijector. Also, if in the arguments to
+            :meth:`.transform` is ``inference=None`` but the variable
+            attribute :attr:`.inference` is not ``None``.
+
 
         Notes
         -----
@@ -1616,6 +1655,12 @@ class Var:
         >>> scale.update().log_prob
         0.0
         """
+        if inference is None and self.inference:
+            raise ValueError(
+                f"{self} has inference information in the .inference attribute. "
+                "To proceed with transformation, the .inference information needs to"
+                "be explicitly removed. You can transform with ``inference='drop'``."
+            )
         # if self.weak:
         #     raise RuntimeError(f"{repr(self)} is weak")
 
@@ -1680,6 +1725,11 @@ class Var:
         if name is not None:
             tvar.name = name
 
+        if inference == "drop":
+            self.inference = None
+        else:
+            self.inference = None
+            tvar.inference = inference
         return tvar
 
     @in_model_method
@@ -1970,7 +2020,6 @@ class Var:
     def _plot(
         self, which: Literal["vars", "nodes"] = "vars", verbose: bool = False, **kwargs
     ) -> None:
-
         if self.model is not None:
             match which:
                 case "vars":
@@ -2244,7 +2293,7 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
         value_kwinputs = var.value_node.kwinputs
         value_node_needs_seed = var.value_node.needs_seed
         try:
-            value_node_upadte_on_init = var.value_node.update_on_init  # type: ignore
+            value_node_upadte_on_init = var.value_node._update_on_init  # type: ignore
         except AttributeError as e:
             raise e
 
@@ -2254,7 +2303,7 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
                 *value_inputs,
                 _name="",
                 _needs_seed=value_node_needs_seed,
-                update_on_init=value_node_upadte_on_init,
+                _update_on_init=value_node_upadte_on_init,
                 **value_kwinputs,
             ),
             transformed_dist,
@@ -2331,7 +2380,7 @@ def _transform_var_with_bijector_class(
         value_kwinputs = var.value_node.kwinputs
         value_node_needs_seed = var.value_node.needs_seed
         try:
-            value_node_upadte_on_init = var.value_node.update_on_init  # type: ignore
+            value_node_upadte_on_init = var.value_node._update_on_init  # type: ignore
         except AttributeError as e:
             raise e
 
@@ -2341,7 +2390,7 @@ def _transform_var_with_bijector_class(
                 *value_inputs,
                 _name="",
                 _needs_seed=value_node_needs_seed,
-                update_on_init=value_node_upadte_on_init,
+                _update_on_init=value_node_upadte_on_init,
                 **value_kwinputs,
             ),
             dist_node_transformed,
@@ -2694,7 +2743,7 @@ class Group:
 
     Retrieve the value of a variable from a model state:
 
-    >>> model_state = {my_var.value_node.name: lsl.NodeState(10., False)}
+    >>> model_state = {my_var.value_node.name: lsl.NodeState(10.0, False)}
     >>> grp.value_from(model_state, "short_name")
     10.0
     """

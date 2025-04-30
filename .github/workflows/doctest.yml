@@ -15,15 +15,17 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: "Set up Python"
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version-file: "pyproject.toml"
 
       - name: Install liesel
-        run: |
-          pip install .[dev,pymc]
-          pip list
+        run: uv sync --locked --dev --group pymc
 
       - name: Run pytest
-        run: pytest --doctest-modules liesel
+        run: uv run pytest --doctest-modules src/liesel
