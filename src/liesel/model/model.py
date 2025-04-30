@@ -1519,7 +1519,6 @@ class Model:
                 value_var = dist.at  # type: ignore
 
             if var_name not in posterior_samples:
-
                 # pulls manually defined distribution from dists dict, returns current
                 # dist otherwise
                 dist = dists.get(var_name, dist)
@@ -1533,7 +1532,6 @@ class Model:
 
         # add information for custom dists for variables that are not yet covered.
         for var_name, dist in dists.items():
-
             if var_name in sampling_specs:
                 # in this case, the variable has already been added to sampling specs,
                 # and it is also already using the custom dist
