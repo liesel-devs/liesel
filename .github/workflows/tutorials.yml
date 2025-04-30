@@ -7,28 +7,24 @@ on:
     branches: [main]
 
 jobs:
-  setup:
+  docs:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    outputs:
-      qmd_files: ${{ steps.find-qmd.outputs.files }}
-      python_path: ${{ steps.python-path.outputs.python_path }}
+    timeout-minutes: 45
 
     steps:
+      - name: Install Ubuntu packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends r-base r-cran-remotes r-cran-tidyverse r-cran-vgam libpng-dev
+          sudo apt-get install -y --no-install-recommends graphviz graphviz-dev
+
       - name: Check out repository
         uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13.0"
-
-      - name: Install Ubuntu packages
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            r-base r-cran-remotes r-cran-tidyverse r-cran-vgam \
-            libpng-dev graphviz graphviz-dev
+          python-version: "3.13"
 
       - name: Cache pip
         uses: actions/cache@v4
@@ -36,93 +32,32 @@ jobs:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml', '**/setup.py', '**/requirements*.txt') }}
           restore-keys: |
-            ${{ runner.os }}-
+            ${{ runner.os }}-pip-${{ matrix.python-version }}-
+
+      - name: Install Liesel
+        run: |
+          pip install --upgrade pip
+          pip install .[dev,pymc]
+          pip install pygraphviz
+          pip list
 
       - name: Install RLiesel
         run: |
           sudo Rscript -e "install.packages('reticulate', repos='https://cloud.r-project.org')"
           sudo Rscript -e "remotes::install_github('liesel-devs/rliesel', auth_token = '${{ secrets.GITHUB_TOKEN }}', upgrade = 'never')"
 
-      - name: Export Python path
-        id: python-path
-        run: echo "python_path=$(which python)" >> $GITHUB_OUTPUT
-
-      - name: Find QMD files
-        id: find-qmd
-        run: |
-          files=$(find docs/source/tutorials/qmd -name "*.qmd" -type f | jq -R -s -c 'split("\n")[:-1]')
-          echo "files=$files" >> $GITHUB_OUTPUT
-
-      - name: Setup virtual environment
-        run: |
-          python -m venv .venv
-          source .venv/bin/activate
-          pip install --upgrade pip
-          pip install .
-
-      - name: Cache virtual environment
-        uses: actions/cache@v4
-        with:
-          path: .venv
-          key: ${{ runner.os }}-venv-${{ hashFiles('**/pyproject.toml', '**/setup.py', '**/requirements*.txt') }}
-
-      - name: Cache R packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.local/share/R
-          key: ${{ runner.os }}-r-packages-${{ hashFiles('**/*.R') }}
-
-  render:
-    needs: setup
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        qmd_file: ${{ fromJson(needs.setup.outputs.qmd_files) }}
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13.0"
-
-      - name: Restore virtual environment
-        uses: actions/cache/restore@v4
-        with:
-          path: .venv
-          key: ${{ runner.os }}-venv-${{ hashFiles('**/pyproject.toml', '**/setup.py', '**/requirements*.txt') }}
-          fail-on-cache-miss: true
-
-      - name: Restore R packages
-        uses: actions/cache/restore@v4
-        with:
-          path: ~/.local/share/R
-          key: ${{ runner.os }}-r-packages-${{ hashFiles('**/*.R') }}
-          fail-on-cache-miss: true
-
       - name: Install Quarto
         uses: quarto-dev/quarto-actions/setup@v2
 
-      - name: Validate Quarto installation
-        run: quarto check
+      - name: Configure Python for R
+        run: |
+          echo "RETICULATE_PYTHON=$(which python)" >> $GITHUB_ENV
+          sudo Rscript -e "write('Sys.setenv(RETICULATE_PYTHON=\"$(which python)\")', file='~/.Rprofile', append=TRUE)"
 
-      - name: Render tutorial
+      - name: Render tutorials
         uses: quarto-dev/quarto-actions/render@v2
         with:
-          path: ${{ matrix.qmd_file }}
+          path: docs/source/tutorials/qmd
         env:
-          RETICULATE_PYTHON: ${{ needs.setup.outputs.python_path }}
-          QUARTO_PYTHON: ${{ needs.setup.outputs.python_path }}
-
-      - name: Upload rendered output
-        uses: actions/upload-artifact@v4
-        with:
-          name: rendered-output-${{ matrix.qmd_file }}
-          path: |
-            ${{ matrix.qmd_file }}.html
-            ${{ matrix.qmd_file }}.pdf
-          if-no-files-found: warn
+          RETICULATE_PYTHON: ${{ env.RETICULATE_PYTHON }}
+          QUARTO_PYTHON: ${{ env.RETICULATE_PYTHON }}
