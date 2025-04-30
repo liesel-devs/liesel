@@ -28,7 +28,7 @@ jobs:
         run: uv sync --locked --dev
 
       - name: Run pytest
-        run: uv run pytest --cov=liesel --run-mcmc
+        run: uv run pytest --cov=liesel
 
       - name: Create coverage badge
         uses: tj-actions/coverage-badge-py@v2
