@@ -1,7 +1,7 @@
 name: update-tutorials
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # trigger manually from GitHub UI
 
 jobs:
   render-all:
