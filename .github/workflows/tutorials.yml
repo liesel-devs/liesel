@@ -140,5 +140,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rendered-output-${{ matrix.qmd_file }}
-          path: ${{ matrix.qmd_file | replace('.qmd', '') }}*
+          path: ${{ matrix.qmd_file }}*
           if-no-files-found: warn
