@@ -12,7 +12,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pandas as pd
-from deprecated.sphinx import deprecated
 
 from liesel.__version__ import __version__
 from liesel.goose.engine import ErrorLog, SamplingResults
@@ -465,75 +464,6 @@ class Summary:
 
     def __str__(self):
         return str(self.to_dataframe())
-
-    @classmethod
-    @deprecated(
-        reason=(
-            "Functionality moved directly to the __init__. Will be removed in v0.4.0."
-        ),
-        version="0.1.4",
-    )
-    def from_result(
-        cls,
-        result: SamplingResults,
-        additional_chain: Position | None = None,
-        quantiles: Sequence[float] = (0.05, 0.5, 0.95),
-        hdi_prob: float = 0.9,
-        selected: list[str] | None = None,
-        deselected: list[str] | None = None,
-        per_chain=False,
-    ) -> Summary:
-        """
-        Alias for :meth:`.from_results` for backwards compatibility.
-
-        In addition to the name, there are two further subtle differences to
-        :meth:`.from_results`.
-
-        - The argument ``result`` is in singular. The method :meth:`.from_results` uses
-          the plural instead.
-        - The argument ``result`` is of type :class:`.SamplingResult`, which itself is
-          an alias for :meth:`.SamplingResults`.
-        """
-
-        return cls.from_results(
-            results=result,
-            additional_chain=additional_chain,
-            quantiles=quantiles,
-            hdi_prob=hdi_prob,
-            selected=selected,
-            deselected=deselected,
-            per_chain=per_chain,
-        )
-
-    @staticmethod
-    @deprecated(
-        reason=(
-            "Functionality moved directly to the __init__. Will be removed in v0.4.0."
-        ),
-        version="0.1.4",
-    )
-    def from_results(
-        results: SamplingResults,
-        additional_chain: Position | None = None,
-        quantiles: Sequence[float] = (0.05, 0.5, 0.95),
-        hdi_prob: float = 0.9,
-        selected: list[str] | None = None,
-        deselected: list[str] | None = None,
-        per_chain=False,
-    ) -> Summary:
-        """
-        Creates a :class:`.Summary` object from a results object.
-        """
-
-        return Summary(
-            results=results,
-            additional_chain=additional_chain,
-            quantiles=quantiles,
-            hdi_prob=hdi_prob,
-            selected=selected,
-            deselected=deselected,
-            per_chain=per_chain,
-        )
 
 
 def _create_quantity_dict(
