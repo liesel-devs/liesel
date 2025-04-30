@@ -22,6 +22,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       - name: Install liesel
         run: uv sync --locked --dev
