@@ -7,9 +7,26 @@ on:
     branches: [main]
 
 jobs:
-  docs:
+  discover-files:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Find Quarto files
+        id: set-matrix
+        run: |
+          files=$(find docs/source/tutorials/qmd -name '*.qmd' -printf '%P\n' | jq -R . | jq -s .)
+          echo "matrix={\"file\": $files}" >> $GITHUB_OUTPUT
+
+  render:
+    needs: discover-files
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      matrix: ${{ fromJson(needs.discover-files.outputs.matrix) }}
 
     steps:
       - name: Install Ubuntu packages
@@ -54,10 +71,10 @@ jobs:
           echo "RETICULATE_PYTHON=$(which python)" >> $GITHUB_ENV
           sudo Rscript -e "write('Sys.setenv(RETICULATE_PYTHON=\"$(which python)\")', file='~/.Rprofile', append=TRUE)"
 
-      - name: Render tutorials
+      - name: Render Quarto file ${{ matrix.file }}
         uses: quarto-dev/quarto-actions/render@v2
         with:
-          path: docs/source/tutorials/qmd
+          path: docs/source/tutorials/qmd/${{ matrix.file }}
         env:
           RETICULATE_PYTHON: ${{ env.RETICULATE_PYTHON }}
           QUARTO_PYTHON: ${{ env.RETICULATE_PYTHON }}
