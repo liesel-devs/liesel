@@ -1426,12 +1426,6 @@ class Model:
         """
         Draws samples from the model.
 
-
-        Note
-        ----
-        When compiling this function within, the arguemtns `shape`, `fixed`, and `dists`
-        must be static.
-
         Parameters
         ----------
         shape
@@ -1458,6 +1452,11 @@ class Model:
             Can be used to provide a dictionary of variable names and :class:`.Dist` \
             instances to use in sampling. If ``None`` (default), samples are drawn for \
             each variable using their :attr:`.Var.dist_node`.
+
+        Notes
+        -----
+        When compiling this function with ``jax.jit``, the arguments ``shape``,
+        ``fixed``, and ``dists`` must be static.
 
         Returns
         -------
