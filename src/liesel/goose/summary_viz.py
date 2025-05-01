@@ -381,7 +381,7 @@ def save_figure(g: sns.FacetGrid | None = None, save_path: str | None = None) ->
 
     if save_path is not None:
         if g is not None:
-            g.fig.savefig(save_path)
+            g.figure.savefig(save_path)
         else:
             plt.savefig(save_path)
     else:
