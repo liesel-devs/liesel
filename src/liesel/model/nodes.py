@@ -1535,7 +1535,8 @@ class Var:
         Creates a new variable on the unconstrained space ``R**n`` with the appropriate
         transformed distribution, turning the original variable into a weak variable
         without an associated distribution. The transformation is performed using
-        TFP's bijector classes.
+        TFP's bijector classes; see the `TFP bijectors documentation \
+        <https://www.tensorflow.org/probability/api_docs/python/tfp/bijectors>`_.
 
 
         Parameters
