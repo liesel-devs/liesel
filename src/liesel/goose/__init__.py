@@ -18,7 +18,6 @@ from .iwls import IWLSKernel
 from .mcmc_spec import LieselMCMC as LieselMCMC
 from .mcmc_spec import MCMCSpec as MCMCSpec
 from .mh_kernel import MHKernel, MHProposal
-from .models import DataClassModel, DictModel
 from .nuts import NUTSKernel
 from .optim import OptimResult, Stopper, history_to_df, optim_flat
 from .rw import RWKernel

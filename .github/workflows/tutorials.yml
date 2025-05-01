@@ -50,7 +50,7 @@ jobs:
 
       - name: Install Liesel
         run: |
-          uv sync --locked --dev --group pymc
+          uv sync --locked --group dev --group pymc
           uv pip list
 
       - name: Install RLiesel

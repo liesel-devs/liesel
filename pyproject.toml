@@ -21,7 +21,6 @@ requires-python = ">=3.13"
 dependencies = [
     "arviz>=0.15",
     "blackjax>=1.0",
-    "deprecated>=1.2",
     "dill>=0.3",
     "jax>=0.5.0",
     "jaxlib>=0.5.0",
@@ -58,7 +57,6 @@ dev = [
     "sphinx-book-theme>=1.1.0",
     "sphinx-copybutton>=0.5",
     "sphinx-remove-toctrees>=0.0.3",
-    "types-deprecated",
 ]
 
 pymc = [
@@ -83,7 +81,17 @@ follow_imports = "skip"
 
 [tool.pytest.ini_options]
 testpaths = "tests"
-# only report deprecation / pending deprecation / future warnings from liesel
+# turn warnings into errors and filter out specific warnings
+filterwarnings = [
+    "error",
+    # "ignore::DeprecationWarning:tensorflow_probability",
+    "ignore:jax.interpreters.xla.pytype_aval_mappings is deprecated:DeprecationWarning:tensorflow_probability.python.internal.backend.jax.ops",
+    "ignore:shape requires ndarray or scalar arguments, got <class 'NoneType'> at position 0. In a future JAX release this will be an error.:DeprecationWarning:tensorflow_probability.python.internal.backend.jax.random_generators",
+    "ignore:.*interactive_bk attribute was deprecated in Matplotlib 3.9.*:matplotlib._api.deprecation.MatplotlibDeprecationWarning",
+
+    # Caused by the use in blackjax
+    "ignore:JAXopt is no longer maintained:DeprecationWarning",
+]
 
 [tool.ruff.lint]
 extend-select = [

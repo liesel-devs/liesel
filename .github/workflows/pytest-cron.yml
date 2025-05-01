@@ -26,7 +26,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install liesel without lockfile
-        run: uv pip install .[dev]  # or `uv pip install .[dev]` if not editable
+        run: uv pip install .[dev,pymc]  # or `uv pip install .[dev]` if not editable
 
       - name: Run pytest
         run: uv pip run pytest --run-mcmc

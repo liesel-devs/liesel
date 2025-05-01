@@ -7,7 +7,6 @@ from __future__ import annotations
 import logging
 import math
 import re
-import warnings
 from collections import Counter
 from collections.abc import Iterable, Sequence
 from copy import deepcopy
@@ -19,25 +18,17 @@ import jax
 import jax.numpy as jnp
 import jax.random
 import networkx as nx
-import tensorflow_probability.substrates.jax.bijectors as jb
-import tensorflow_probability.substrates.jax.distributions as jd
-import tensorflow_probability.substrates.numpy.bijectors as nb
-import tensorflow_probability.substrates.numpy.distributions as nd
 
 from .nodes import (
-    ArgGroup,
     Array,
-    Bijector,
     Calc,
     Dist,
     Group,
-    InputGroup,
     Node,
     NodeState,
     Value,
     Var,
     VarValue,
-    is_bijector_class,
 )
 from .viz import plot_nodes, plot_vars
 
@@ -745,224 +736,6 @@ class GraphBuilder:
             self.replace_node(old.dist_node, new.dist_node)
 
         return self
-
-    def transform(
-        self,
-        var: Var,
-        bijector: type[Bijector] | Bijector | None = None,
-        *args,
-        **kwargs,
-    ) -> Var:
-        """
-        Transforms a variable by adding a new transformed variable as an input.
-
-        .. deprecated:: 0.2.9
-            ``GraphBuilder.transform`` is deprecated.
-            Use :meth:`.Var.transform` instead. This method will be removed in v0.4.0.
-
-        Creates a new variable on the unconstrained space ``R**n`` with the appropriate
-        transformed distribution, turning the original variable into a weak variable
-        without an associated distribution. The transformation is performed using
-        TFP's bijector classes.
-
-        The value of the attribute :attr:`~liesel.model.nodes.Var.parameter` is
-        transferred to the transformed variable and set to ``False`` on the original
-        variable. The attributes :attr:`~liesel.model.nodes.Var.observed` and
-        :attr:`~liesel.model.nodes.Var.role` are set to the default values for
-        the transformed variable and remain unchanged on the original variable.
-
-        Parameters
-        ----------
-        var
-            The variable to transform (and add to the graph).
-        bijector
-            The bijector used to map the new transformed variable to this variable \
-            (forward transformation). If ``None``, the experimental default event \
-            space bijector (see TFP documentation) is used.
-        args
-            The arguments passed on to the init function of the bijector.
-        kwargs
-            The keyword arguments passed on to the init function of the bijector.
-
-        Returns
-        -------
-        The new transformed variable which acts as an input to this variable.
-
-        Raises
-        ------
-        RuntimeError
-            If the variable is weak, has no TFP distribution, the distribution has
-            no default event space bijector and the argument ``bijector`` is ``None``,
-            or the local model for the variable cannot be built.
-
-        Examples
-        --------
-
-        >>> import tensorflow_probability.substrates.jax.distributions as tfd
-        >>> import tensorflow_probability.substrates.jax.bijectors as tfb
-
-        Assume we have a variable ``scale`` that is constrained to be positive, and
-        we want to include the log-transformation of this variable in the model.
-        We first set up the parameter var with its distribution:
-
-        >>> prior = lsl.Dist(tfd.HalfCauchy, loc=0.0, scale=25.0)
-        >>> scale = lsl.Var.new_param(1.0, prior, name="scale")
-
-        Then we create a GraphBuilder and use the ``transform`` method to transform
-        the ``scale`` variable.
-
-        >>> gb = lsl.GraphBuilder()
-        >>> log_scale = gb.transform(scale, bijector=tfb.Exp)
-        >>> log_scale
-        Var(name="scale_transformed")
-
-        Now the ``log_scale`` has a log probability, and the ``scale`` variable is
-        has not:
-
-        >>> log_scale.update().log_prob
-        Array(-3.6720574, dtype=float32)
-
-        >>> scale.update().log_prob
-        0.0
-        """
-
-        warnings.warn(
-            "GraphBuilder.transform is deprecated. Use Var.transform instead. "
-            "This method will be removed in v0.4.0",
-            FutureWarning,
-        )
-
-        if var.weak:
-            raise RuntimeError(f"{repr(var)} is weak")
-
-        if var.dist_node is None:
-            raise RuntimeError(f"{repr(var)} has no distribution")
-
-        if not is_bijector_class(bijector) and (args or kwargs):
-            raise RuntimeError(
-                "You passed a bijector instance and "
-                "nonempty bijector arguments. You should either initialise your "
-                "bijector directly with the arguments, or pass a bijector class "
-                "instead."
-            )
-
-        # avoid name clashes
-        self._set_missing_names()
-
-        if var.value_node in self.nodes:
-            raise RuntimeError(
-                f"{var.value_node.name} is already present in the GraphBuilder. "
-                + "If you have added some Node objects to the GraphBuilder, "
-                "try to add only the Var objects instead."
-            )
-
-        # avoid infinite recursion
-        var.auto_transform = False
-
-        try:
-            Model([var])
-        except Exception:
-            raise RuntimeError(f"Cannot build local model for {repr(var)}")
-
-        self.add(var)
-
-        # if we got this far, we can assume:
-        # - the var and its inputs have numeric values
-        # - the var and its inputs are up-to-date
-
-        tfp_dist = var.dist_node.init_dist()
-        default_bijector = tfp_dist.experimental_default_event_space_bijector()
-        has_default_bijector = default_bijector is not None
-        use_default_bijector = bijector is None
-
-        if use_default_bijector and not has_default_bijector:
-            raise RuntimeError(
-                f"{repr(var)} has distribution without default event space bijector "
-                "and no bijector was given"
-            )
-
-        using_bijector_instance = not use_default_bijector and not isinstance(
-            bijector, type
-        )
-
-        if isinstance(bijector, type) and not (args or kwargs):
-            warnings.warn(
-                "You passed a bijector class instead of an instance, but did not "
-                "provide any arguments. You should either provide arguments "
-                "or pass an instance of the bijector class.",
-            )
-
-        if isinstance(tfp_dist, jd.Distribution):
-            tfd = jd
-            tfb = jb
-        elif isinstance(tfp_dist, nd.Distribution):
-            tfd = nd
-            tfb = nb
-        else:
-            raise RuntimeError(f"{repr(var)} has no TFP distribution")
-
-        # no copy necessary:
-        # >>> from copy import copy
-        # >>> import tensorflow_probability.substrates.numpy.distributions as tfd
-        # >>> CopiedNormal = copy(tfd.Normal)
-        # >>> CopiedNormal is tfd.Normal
-        # True
-
-        tfp_dist_cls = var.dist_node.distribution
-
-        dist_inputs = InputGroup(
-            *var.dist_node.inputs,
-            **var.dist_node.kwinputs,  # type: ignore
-        )
-
-        bijector_inputs = InputGroup(*args, **kwargs)
-
-        # define distribution "class" for the transformed var
-        def make_transformed_distribution(dist_args: ArgGroup, bijector_args: ArgGroup):
-            tfp_dist = tfp_dist_cls(*dist_args.args, **dist_args.kwargs)
-
-            if use_default_bijector:
-                bijector_cls = tfp_dist.experimental_default_event_space_bijector
-                bijector_obj = bijector_cls(*bijector_args.args, **bijector_args.kwargs)
-            elif using_bijector_instance:
-                bijector_obj = bijector
-            else:
-                bijector_cls = bijector
-                bijector_obj = bijector_cls(*bijector_args.args, **bijector_args.kwargs)
-
-            bijector_inv = tfb.Invert(bijector_obj)
-
-            return tfd.TransformedDistribution(
-                tfp_dist, bijector_inv, validate_args=tfp_dist.validate_args
-            )
-
-        # build transformed var
-        dist_node_transformed = Dist(
-            make_transformed_distribution, dist_inputs, bijector_inputs
-        )
-
-        # transfer flags
-        dist_node_transformed.needs_seed = var.dist_node.needs_seed
-        dist_node_transformed.per_obs = var.dist_node.per_obs
-
-        # transform value
-        bijector_obj = dist_node_transformed.init_dist().bijector
-        value_transformed = bijector_obj.forward(var.value)
-
-        name_transformed = f"{var.name}_transformed" if var.name else ""
-
-        var_transformed = Var(
-            value_transformed, dist_node_transformed, name_transformed
-        )
-
-        var_transformed.parameter = var.parameter
-
-        # var is now the forward transformation (a weak node without distribution)
-        var.value_node = _transform_back(var_transformed)
-        var.dist_node = None
-        var.parameter = False
-
-        return var_transformed
 
     def update(self) -> GraphBuilder:
         """

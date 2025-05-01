@@ -4,9 +4,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from liesel.goose.engine import Engine, SamplingResults, stack_for_multi
+from liesel.goose.engine import Engine, SamplingResults
 from liesel.goose.interface import DictInterface
 from liesel.goose.kernel_sequence import KernelSequence
+from liesel.goose.pytree import concatenate_leaves, slice_leaves
 from liesel.goose.rw import RWKernel
 from liesel.goose.warmup import stan_epochs
 
@@ -41,7 +42,7 @@ def setup_tests(beta_dim: int, num_chains: int = 3) -> SamplingResults:
 
     num_chains = num_chains
 
-    model_states = stack_for_multi([model_state for _ in range(num_chains)])
+    model_states = _stack_for_multi([model_state for _ in range(num_chains)])
     seeds = jax.random.split(jax.random.PRNGKey(0), num_chains)
 
     engine = Engine(
@@ -62,3 +63,9 @@ def setup_tests(beta_dim: int, num_chains: int = 3) -> SamplingResults:
 results_long = setup_tests(beta_dim=5, num_chains=15)
 path3 = os.path.join(os.path.dirname(__file__), "summary_viz_res.pkl")
 results_long.pkl_save(path3)
+
+
+## helper functions
+def _stack_for_multi(chunks: list):
+    chunks = slice_leaves(chunks, jnp.s_[jnp.newaxis, ...])
+    return concatenate_leaves(chunks, axis=0)

@@ -3,7 +3,6 @@ Liesel modeling framework.
 """
 
 from .distreg import DistRegBuilder, dist_reg_mcmc, tau2_gibbs_kernel
-from .goose import GooseModel
 from .legacy import (
     PIT,
     Addition,
@@ -12,8 +11,6 @@ from .legacy import (
     DesignMatrix,
     Hyperparameter,
     InverseLink,
-    Obs,
-    Param,
     Parameter,
     Predictor,
     RegressionCoef,
@@ -38,9 +35,6 @@ from .nodes import (
     TransientNode,
     Value,
     Var,
-    add_group,
-    obs,
-    param,
 )
 from .viz import plot_nodes, plot_vars
 
@@ -56,8 +50,6 @@ __all__ = [
     "DesignMatrix",
     "Hyperparameter",
     "InverseLink",
-    "Obs",
-    "Param",
     "Parameter",
     "Predictor",
     "RegressionCoef",
@@ -83,9 +75,6 @@ __all__ = [
     "TransientNode",
     "Value",
     "Var",
-    "add_group",
-    "obs",
-    "param",
     "plot_nodes",
     "plot_vars",
 ]

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import logging
 import pickle
-import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import partial
@@ -22,7 +21,6 @@ import jax.numpy as jnp
 import jax.random
 import jax.tree_util
 import numpy as np
-from deprecated.sphinx import deprecated
 from tqdm import tqdm
 
 from liesel.option import Option
@@ -66,35 +64,6 @@ class KernelErrorLog(NamedTuple):
 
 
 ErrorLog = dict[str, KernelErrorLog]
-
-
-def _expand_and_stack(chunk, *rest):
-    chunks = [chunk]
-    chunks.extend(rest)
-    expended_chunks = [jnp.expand_dims(chunk, 0) for chunk in chunks]
-    return jnp.concatenate(expended_chunks, axis=0)
-
-
-@deprecated(
-    version="0.1.0", reason="Use the functions from liesel.goose.pytree instead."
-)
-def stack_for_multi(chunks: list):
-    """
-    Combine identically structured pytrees to be used in multichain.
-
-    The function adds a new dimension (axis 0) to each leaf and stacks the leafs
-    along the new axis.
-    """
-
-    warnings.warn(
-        "``stack_for_multi`` is deprecated. Please use the functions"
-        " in the :mod:`.pytree` module.",
-        DeprecationWarning,
-    )
-
-    return jax.tree_util.tree_map(
-        lambda x, *xs: _expand_and_stack(x, *xs), chunks[0], *chunks[1:]
-    )
 
 
 @partial(jax.jit, static_argnums=1)
@@ -281,15 +250,6 @@ class SamplingResults:
         """Loads the pickled object from :attr:`.path`."""
         with open(path, "rb") as f:
             return pickle.load(f)
-
-
-@deprecated(
-    reason="Use SamplingResults. This alias will be removed in v0.4.0", version="0.1.4"
-)
-class SamplingResult(SamplingResults):
-    """Alias of :class:`.SamplingResults` for backwards compatibility."""
-
-    pass
 
 
 class Engine:
