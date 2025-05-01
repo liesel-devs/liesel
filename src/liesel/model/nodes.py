@@ -5,6 +5,7 @@ Nodes and variables.
 from __future__ import annotations
 
 import logging
+import warnings
 import weakref
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Hashable, Iterable, Sequence
