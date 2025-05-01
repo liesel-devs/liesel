@@ -33,6 +33,10 @@ def y(X: jnp.ndarray):
     yield np.asarray(y, dtype=np.float32)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:.*Deprecated in v.0.4.0. "
+    "Will be removed in a future release.*:FutureWarning"
+)
 class TestDistRegBuilder:
     def test_init(self) -> None:
         drb = dr.DistRegBuilder()
@@ -177,6 +181,10 @@ def construct_model_state_from_np_smooth(group: dict[str, Var]) -> dict:
     return model_state
 
 
+@pytest.mark.filterwarnings(
+    "ignore:.*Deprecated in v.0.4.0. "
+    "Will be removed in a future release.*:FutureWarning"
+)
 class TestTau2GibbsKernel:
     def test_return_gibbs_kernel(self, drb_np_smooth: dr.DistRegBuilder) -> None:
         """The function should successfully return a Gibbs kernel."""
@@ -208,6 +216,10 @@ class TestTau2GibbsKernel:
         assert outcome.model_state[g["tau2"].name] > 0.0
 
 
+@pytest.mark.filterwarnings(
+    "ignore:.*Deprecated in v.0.4.0. "
+    "Will be removed in a future release.*:FutureWarning"
+)
 class TestDistRegMCMC:
     def test_dist_reg_mcmc_p_smooth(self, drb: dr.DistRegBuilder) -> None:
         """
