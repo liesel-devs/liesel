@@ -5,6 +5,7 @@ Nodes and variables.
 from __future__ import annotations
 
 import logging
+import warnings
 import weakref
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Hashable, Iterable, Sequence
@@ -2512,6 +2513,9 @@ def _transform_var_without_dist_with_bijector_class(
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
+@warnings.deprecated(
+    "Deprecated in v.0.4.0. Will be removed in a future release", category=FutureWarning
+)
 class Group:
     """
     A group holds a collection of related :class:`.Var` and/or :class:`.Node` objects.
@@ -2525,12 +2529,7 @@ class Group:
     3. Easily retrieve a variable's or a node's value from a :attr:`.Model.state` based
        on their group-specific name via :meth:`.value_from`.
 
-    .. note::
-        We are questioning the need for the ``Group`` object. It may be deprecated in
-        the future. The use-cases are covered by :meth:`.Model.extract_position` and
-        the square-bracket access implemented for :class:`.Var` objects. Please prefer
-        these.
-
+    .. deprecated:: 0.4.0
 
     Parameters
     ----------
