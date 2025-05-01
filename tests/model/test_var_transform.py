@@ -549,13 +549,25 @@ def test_transform_user_bijector_with_input() -> None:
     assert var_trans.log_prob == pytest.approx(trans_log_prob)
 
 
-def test_transform_twice() -> None:
+def test_transform_twice_with_no_bijector_given() -> None:
     dist = lsl.Dist(tfp.distributions.Exponential, 1.0)
     var = lsl.Var(1.0, dist)
     var.transform()
 
+    # fails when trying to use a default bijector, because a weak variable does not
+    # have a default bijector
     with pytest.raises(RuntimeError):
         var.transform()
+
+
+def test_transform_twice() -> None:
+    """
+    While this may not always be a good idea, it is allowed.
+    """
+    dist = lsl.Dist(tfp.distributions.Exponential, 1.0)
+    var = lsl.Var(1.0, dist)
+    var.transform(tfp.bijectors.Exp())
+    var.transform(tfp.bijectors.Exp())
 
 
 def test_transform_no_bijector() -> None:
@@ -579,14 +591,5 @@ def test_transform_no_bijector_delayed_check() -> None:
 
 def test_transform_no_dist() -> None:
     var = lsl.Var(1, None)
-    with pytest.raises(RuntimeError):
-        var.transform()
-
-
-def test_transform_weak() -> None:
-    dist = lsl.Dist(tfp.distributions.Poisson, 1.0)
-    x = lsl.Calc(lambda x, y: x + y, 1.0, 1.0)
-    var = lsl.Var(x, dist)
-    assert var.weak
     with pytest.raises(RuntimeError):
         var.transform()
