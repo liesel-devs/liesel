@@ -1466,10 +1466,9 @@ class Model:
         """
         # Pre-processing
         # ------------------------------------------------------------------------------
-        state_before = self.state
         posterior_samples = posterior_samples if posterior_samples is not None else {}
         state_for_sampling = (
-            self.update_state(newdata) if newdata is not None else state_before
+            self.update_state(newdata) if newdata is not None else self.state
         )
         dists = dists if dists is not None else {}
 
@@ -1628,9 +1627,6 @@ class Model:
             # since we have no posterior samples, we use position={}
             drawn_samples = draw_chains({}, seeds)
 
-            # reset model state to reverse side-effects from the calls to one_draw
-            self.state = state_before
-
             # return reshaped version of samples
             return jax.tree.map(reshape, drawn_samples)
 
@@ -1662,8 +1658,6 @@ class Model:
                 error_to_raise = RuntimeError(msg)
 
             raise error_to_raise from e
-        finally:
-            self.state = state_before
 
         # return reshaped version of samples
         return jax.tree.map(reshape, drawn_samples)
