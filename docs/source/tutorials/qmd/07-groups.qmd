@@ -110,7 +110,7 @@ Next, we create the group for our spline coefficient in a very similar way.
 
 ```{python}
 class SplineCoef(lsl.Group):
-    def __init__(self, name: str, penalty: Array, tau2: lsl.param) -> None:
+    def __init__(self, name: str, penalty: Array, tau2: lsl.Var) -> None:
         penalty_var = lsl.Var(penalty, name=f"{name}_penalty")
 
         evals = jax.numpy.linalg.eigvalsh(penalty)
