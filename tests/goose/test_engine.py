@@ -17,13 +17,17 @@ from liesel.goose.engine import (
     Engine,
     SamplingResults,
     _add_time_dimension,
-    stack_for_multi,
+    # stack_for_multi,
 )
 from liesel.goose.epoch import EpochConfig, EpochState, EpochType
 from liesel.goose.interface import DictInterface
 from liesel.goose.kernel import DefaultTransitionInfo
 from liesel.goose.kernel_sequence import KernelSequence
-from liesel.goose.pytree import register_dataclass_as_pytree
+from liesel.goose.pytree import (
+    concatenate_leaves,
+    register_dataclass_as_pytree,
+    slice_leaves,
+)
 from liesel.goose.types import Array, KeyArray, ModelInterface, ModelState
 from liesel.model import Model, Var
 from liesel.option import Option
@@ -111,7 +115,7 @@ def t_test_engine():
     ]
 
     ms = {"x": jnp.array(1), "y": jnp.array(-1)}
-    mss = stack_for_multi([ms for _ in range(num_chains)])
+    mss = _stack_for_multi([ms for _ in range(num_chains)])
     con = DictInterface(lambda ms: -0.5 * ms["x"] ** 2 - 0.5 * ms["y"])
     ker0 = DetCountingKernel(["x"], DetCountingKernelState.default())
     ker1 = DetCountingKernel(["y"], DetCountingKernelState.default())
@@ -210,3 +214,9 @@ def t_test_engine_builder() -> None:
 
 if __name__ == "__main__":
     t_test_engine_builder()
+
+
+## helper functions
+def _stack_for_multi(chunks: list):
+    chunks = slice_leaves(chunks, jnp.s_[jnp.newaxis, ...])
+    return concatenate_leaves(chunks, axis=0)
