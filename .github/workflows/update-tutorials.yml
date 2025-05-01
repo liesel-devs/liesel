@@ -48,6 +48,7 @@ jobs:
         uses: quarto-dev/quarto-actions/render@v2
         with:
           path: docs/source/tutorials/qmd
+        env:
           RETICULATE_PYTHON: ${{ env.RETICULATE_PYTHON }}
           QUARTO_PYTHON: ${{ env.RETICULATE_PYTHON }}
 
