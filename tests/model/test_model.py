@@ -728,17 +728,22 @@ class TestSample:
         y_samples_mean = samples["y"].mean(axis=(0, 1))
         assert jnp.allclose(y_samples_mean, 0.0, atol=0.5)
 
-    @pytest.mark.xfail
     def test_sample_prior_linreg_jit(self, linreg: Model):
         model = linreg
 
-        # sample with y fixed; i.e. y will not be sampled
         jitted_sample = jax.jit(
             model.sample,
-            static_argnames=["fixed", "newdata", "posterior_samples", "dists"],
+            static_argnames=["shape", "fixed", "dists"],
         )
 
         jitted_sample(shape=(1, 100), seed=rnd.key(1))
+
+        x_shape = model.vars["X"].value.shape
+        x_new = tfd.Uniform(low=10.0, high=11.0).sample(x_shape, seed=rnd.key(9))
+        jitted_sample(shape=(1, 100), seed=rnd.key(1), newdata={"X": x_new})
+        jitted_sample(
+            shape=(1, 100), seed=rnd.key(1), newdata={"X": x_new}, fixed=("y")
+        )
 
     def test_sample_from_custom_dist(self, linreg: Model):
         model = linreg
