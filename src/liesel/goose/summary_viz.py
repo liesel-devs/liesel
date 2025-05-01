@@ -381,11 +381,9 @@ def save_figure(g: sns.FacetGrid | None = None, save_path: str | None = None) ->
 
     if save_path is not None:
         if g is not None:
-            g.fig.savefig(save_path)
+            g.figure.savefig(save_path)
         else:
             plt.savefig(save_path)
-    else:
-        plt.show()
 
 
 def plot_trace(
@@ -404,6 +402,7 @@ def plot_trace(
     aspect_ratio: int = 1,
     save_path: str | None = None,
     include_warmup: bool = False,
+    show: bool = True,
     **kwargs,
 ) -> sns.FacetGrid:
     """
@@ -501,6 +500,8 @@ def plot_trace(
     g = _set_aesthetics(g, title, title_spacing, xlabel, ylabel="")
 
     save_figure(g, save_path)
+    if show:
+        plt.show()
     return g
 
 
@@ -519,6 +520,7 @@ def plot_density(
     height: int = 3,
     aspect_ratio: int = 1,
     save_path: str | None = None,
+    show: bool = True,
     **kwargs,
 ) -> sns.FacetGrid:
     """
@@ -612,6 +614,8 @@ def plot_density(
     g = _set_aesthetics(g, title, title_spacing, xlabel, ylabel="")
 
     save_figure(g, save_path)
+    if show:
+        plt.show()
     return g
 
 
@@ -645,6 +649,7 @@ def plot_cor(
     height: int = 3,
     aspect_ratio: int = 1,
     save_path: str | None = None,
+    show: bool = True,
     **kwargs,
 ) -> sns.FacetGrid:
     """
@@ -757,6 +762,8 @@ def plot_cor(
     g = _set_aesthetics(g, title, title_spacing, xlabel, ylabel="Autocorrelation")
 
     save_figure(g, save_path)
+    if show:
+        plt.show()
     return g
 
 
@@ -878,6 +885,7 @@ def plot_param(
     # default values chosen for default figure size of (9, 6)
     legend_position: tuple[float, float] = (1.2, 0.4),
     save_path: str | None = None,
+    show: bool = True,
 ) -> None:
     """
     Visualizes trace plot, density plot and autocorrelation plot of a single
@@ -961,6 +969,8 @@ def plot_param(
     fig.subplots_adjust(top=title_spacing)
 
     save_figure(save_path=save_path)
+    if show:
+        plt.show()
 
 
 def plot_scatter(
@@ -978,6 +988,7 @@ def plot_scatter(
     legend_position: tuple[float, float] | str = "best",
     save_path: str | None = None,
     include_warmup: bool = False,
+    show: bool = True,
 ):
     """
     Produces a scatterplot of two parameters.
@@ -1081,6 +1092,8 @@ def plot_scatter(
     axis.legend(title="Chain", loc=legend_position, frameon=False)
 
     save_figure(save_path=save_path)
+    if show:
+        plt.show()
 
 
 def plot_pairs(
@@ -1099,6 +1112,7 @@ def plot_pairs(
     aspect_ratio: int = 1,
     save_path: str | None = None,
     include_warmup: bool = False,
+    show: bool = True,
 ):
     """
     Produces a pairplot panel.
@@ -1197,3 +1211,6 @@ def plot_pairs(
         g.fig.subplots_adjust(top=title_spacing)
 
     save_figure(save_path=save_path)
+
+    if show:
+        plt.show()
