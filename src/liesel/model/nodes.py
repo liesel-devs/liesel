@@ -2695,6 +2695,9 @@ def add_group(name: str, **kwargs: Node | Var) -> Group:
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
+@warnings.deprecated(
+    "Deprecated in v.0.4.0. Will be removed in a future release", category=FutureWarning
+)
 class Group:
     """
     A group holds a collection of related :class:`.Var` and/or :class:`.Node` objects.
@@ -2707,6 +2710,8 @@ class Group:
        :attr:`.Node.name`.
     3. Easily retrieve a variable's or a node's value from a :attr:`.Model.state` based
        on their group-specific name via :meth:`.value_from`.
+
+    .. deprecated:: 0.4.0
 
     Parameters
     ----------
