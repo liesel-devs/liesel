@@ -96,7 +96,7 @@ class VarianceIG(lsl.Group):
         b_var = lsl.Var(b, name=f"{name}_b")
 
         prior = lsl.Dist(tfd.InverseGamma, concentration=a_var, scale=b_var)
-        tau2 = lsl.param(start_value, distribution=prior, name=name)
+        tau2 = lsl.Var.new_param(start_value, distribution=prior, name=name)
         super().__init__(name=name, a=a_var, b=b_var, tau2=tau2)
 ```
 
@@ -125,7 +125,7 @@ class SplineCoef(lsl.Group):
         )
         start_value = np.zeros(np.shape(penalty)[-1], np.float32)
 
-        coef = lsl.param(start_value, distribution=prior, name=name)
+        coef = lsl.Var.new_param(start_value, distribution=prior, name=name)
 
         super().__init__(name, coef=coef, penalty=penalty_var, tau2=tau2, rank=rank)
 ```
@@ -202,7 +202,7 @@ class PSpline(lsl.Group):
             name=f"{name}_coef", penalty=penalty, tau2=tau2_group["tau2"]
         )
 
-        basis_matrix = lsl.obs(basis_matrix, name=f"{name}_basis_matrix")
+        basis_matrix = lsl.Var.new_obs(basis_matrix, name=f"{name}_basis_matrix")
         smooth = lsl.Var(
             lsl.Calc(jnp.dot, basis_matrix, coef_group["coef"]), name=name
         )
@@ -343,7 +343,7 @@ class VarianceIG(lsl.Group):
 
         prior = lsl.Dist(tfd.InverseGamma, concentration=self.a, scale=self.b)
 
-        self.tau2 = lsl.param(start_value, distribution=prior, name=name)
+        self.tau2 = lsl.Var.new_param(start_value, distribution=prior, name=name)
         """Variance parameter variable."""
 
         super().__init__(name=name, a=self.a, b=self.b, tau2=self.tau2)

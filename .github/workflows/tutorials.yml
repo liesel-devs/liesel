@@ -1,21 +1,40 @@
 name: tutorials
 
 on:
-  # push:
-  #   branches: [main]
-  # pull_request:
-  #   branches: [main]
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 9 * * 2'  # Every Tuesday at 09:00 UTC
 
 jobs:
-  docs:
+  discover-files:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Find Quarto files
+        id: set-matrix
+        run: |
+          files=$(find docs/source/tutorials/qmd -name '*.qmd' -printf '%P\n' | jq -R . | jq -s -c '{file: .}')
+          echo "matrix=$files" >> $GITHUB_OUTPUT
+
+  render:
+    needs: discover-files
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      matrix: ${{ fromJson(needs.discover-files.outputs.matrix) }}
 
     steps:
       - name: Install Ubuntu packages
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends r-base r-cran-remotes r-cran-tidyverse r-cran-vgam r-cran-reticulate
+          sudo apt-get install -y --no-install-recommends r-base r-cran-remotes r-cran-tidyverse r-cran-vgam libpng-dev
           sudo apt-get install -y --no-install-recommends graphviz graphviz-dev
 
       - name: Check out repository
@@ -32,17 +51,25 @@ jobs:
       - name: Install Liesel
         run: |
           uv sync --locked --dev --group pymc
-          uv pip install pygraphviz
           uv pip list
 
       - name: Install RLiesel
         run: |
+          sudo Rscript -e "install.packages('reticulate', repos='https://cloud.r-project.org')"
           sudo Rscript -e "remotes::install_github('liesel-devs/rliesel', auth_token = '${{ secrets.GITHUB_TOKEN }}', upgrade = 'never')"
 
       - name: Install Quarto
         uses: quarto-dev/quarto-actions/setup@v2
 
-      - name: Render tutorials
+      - name: Configure Python for R (use uv's virtualenv)
+        run: |
+          echo "RETICULATE_PYTHON=${PWD}/.venv/bin/python" >> $GITHUB_ENV
+          echo "Sys.setenv(RETICULATE_PYTHON='${PWD}/.venv/bin/python')" >> ~/.Rprofile
+
+      - name: Render Quarto file ${{ matrix.file }}
         uses: quarto-dev/quarto-actions/render@v2
         with:
-          path: docs/source/tutorials/qmd
+          path: docs/source/tutorials/qmd/${{ matrix.file }}
+        env:
+          RETICULATE_PYTHON: ${{ env.RETICULATE_PYTHON }}
+          QUARTO_PYTHON: ${{ env.RETICULATE_PYTHON }}
