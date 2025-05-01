@@ -2559,8 +2559,11 @@ class Group:
     --------
     Add a variable to a group:
 
-    >>> my_var = lsl.Var(0.0, name="long_unique_variable_name")
-    >>> grp = lsl.Group(name="demo_group", short_name=my_var)
+    >>> import warnings
+    >>> with warnings.catch_warnings():
+    ...     warnings.simplefilter("ignore")
+    ...     my_var = lsl.Var(0.0, name="long_unique_variable_name")
+    ...     grp = lsl.Group(name="demo_group", short_name=my_var)
     >>> grp
     Group(name="demo_group")
 
