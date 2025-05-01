@@ -21,7 +21,6 @@ import jax.numpy as jnp
 import jax.random
 import jax.tree_util
 import numpy as np
-from deprecated.sphinx import deprecated
 from tqdm import tqdm
 
 from liesel.option import Option
@@ -251,15 +250,6 @@ class SamplingResults:
         """Loads the pickled object from :attr:`.path`."""
         with open(path, "rb") as f:
             return pickle.load(f)
-
-
-@deprecated(
-    reason="Use SamplingResults. This alias will be removed in v0.4.0", version="0.1.4"
-)
-class SamplingResult(SamplingResults):
-    """Alias of :class:`.SamplingResults` for backwards compatibility."""
-
-    pass
 
 
 class Engine:
