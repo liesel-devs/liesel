@@ -5,6 +5,7 @@ The model and the graph builder.
 from __future__ import annotations
 
 import logging
+import math
 import re
 from collections import Counter
 from collections.abc import Iterable, Sequence
@@ -1096,7 +1097,7 @@ class Model:
 
         return nodes, _vars
 
-    def set_seed(self, seed: jax.random.KeyArray) -> Model:
+    def set_seed(self, seed: jax.Array) -> Model:
         """
         Splits and sets the seed / PRNG key.
 
@@ -1104,8 +1105,10 @@ class Model:
         ----------
         seed
             The seed is split and distributed to the seed nodes of the model.
-            Must be a ``KeyArray``, i.e. an array of shape (2,) and dtype ``uint32``.
-            See :mod:`jax.random` for more details.
+            Must be a jax RNG key array that satisfies
+            ``jnp.issubdtype(key.dtype, jax.dtypes.prng_key)``.
+            See :mod:`jax.random` and
+            https://docs.jax.dev/en/latest/jep/9263-typed-keys.html for more details.
         """
         seeds = jax.random.split(seed, len(self._seed_nodes))
 
@@ -1114,7 +1117,7 @@ class Model:
 
         return self
 
-    def simulate(self, seed: jax.random.KeyArray, skip: Iterable[str] = ()) -> Model:
+    def simulate(self, seed: jax.Array, skip: Iterable[str] = ()) -> Model:
         """
         Updates the model state simulating from the probability distributions in the
         model using a provided random seed, optionally skipping specified nodes.
@@ -1122,9 +1125,11 @@ class Model:
         Parameters
         ----------
         seed
-            The seed is split and distributed to the distribution nodes in the model.
-            Must be a ``KeyArray``, i.e. an array of shape (2,) and dtype ``uint32``.
-            See :mod:`jax.random` for more details.
+            The seed is split and distributed to the seed nodes of the model. \
+            Must be a jax RNG key array that satisfies \
+            ``jnp.issubdtype(key.dtype, jax.dtypes.prng_key)``. \
+            See :mod:`jax.random` and \
+            https://docs.jax.dev/en/latest/jep/9263-typed-keys.html for more details.
         skip
             The names of the nodes or variables to be excluded from the simulation. \
             By default, no nodes or variables are skipped.
@@ -1181,6 +1186,253 @@ class Model:
                     raise AttributeError(f"Cannot set value of {dist.at}")
 
         return self
+
+    def sample(
+        self,
+        shape: Sequence[int],
+        seed: jax.Array,
+        posterior_samples: dict[str, Array] | None = None,
+        fixed: Sequence[str] = (),
+        newdata: dict[str, Array] | None = None,
+        dists: dict[str, Dist] | None = None,
+    ) -> dict[str, Array]:
+        """
+        Draws samples from the model.
+
+        Parameters
+        ----------
+        shape
+            Sample shape.
+        seed
+            The seed is split and distributed to the seed nodes of the model. \
+            Must be a jax RNG key array that satisfies \
+            ``jnp.issubdtype(key.dtype, jax.dtypes.prng_key)``. \
+            See :mod:`jax.random` and \
+            https://docs.jax.dev/en/latest/jep/9263-typed-keys.html for more details.
+        posterior_samples
+            Dictionary of samples at which to evaluate predictions. All values of the \
+            dictionary are assumed to have two leading dimensions corresponding to \
+            ``(nchains, niteration)``.
+        fixed
+            The names of the nodes or variables to be excluded from the simulation. \
+            By default, no nodes or variables are skipped.
+        newdata
+            Dictionary of new data at which to produce samples. The keys should \
+            correspond to variable or node names in the model whose values should be \
+            set to the given values before sampling. If ``None`` \
+            (default), the current variable values are used.
+        dists
+            Can be used to provide a dictionary of variable names and :class:`.Dist` \
+            instances to use in sampling. If ``None`` (default), samples are drawn for \
+            each variable using their :attr:`.Var.dist_node`.
+
+        Notes
+        -----
+        When compiling this function with ``jax.jit``, the arguments ``shape``,
+        ``fixed``, and ``dists`` must be static.
+
+        Returns
+        -------
+        A dictionary of variable and node names and their sampled values. Includes
+        only sampled variables.
+        """
+        # Pre-processing
+        # ------------------------------------------------------------------------------
+        posterior_samples = posterior_samples if posterior_samples is not None else {}
+        state_for_sampling = (
+            self.update_state(newdata) if newdata is not None else self.state
+        )
+        dists = dists if dists is not None else {}
+
+        # Input validation
+        # ------------------------------------------------------------------------------
+
+        # validate values in dists
+        for var_name in dists:
+            vars_ = self.vars
+            if var_name not in vars_:
+                raise ValueError(f"No variable with name '{var_name}' found.")
+
+            if vars_[var_name].weak:
+                raise ValueError(f"Variable '{var_name}' is weak, cannot sample.")
+
+        # validate consistency of 'fixed' and 'posterior_samples' arguments
+        for name in fixed:
+            if name in posterior_samples:
+                raise ValueError(
+                    f"Inconsistency: {name=} listed in 'fixed', but samples are"
+                    " provided in 'posterior_samples'."
+                )
+
+        # Collect sampling information
+        # ------------------------------------------------------------------------------
+
+        # collect relevant distribution nodes in model
+        dists_list = [
+            node
+            for node in self._simulation_nodes
+            if isinstance(node, Dist)
+            and node.at is not None
+            and node.name not in fixed
+            and node.at.name not in fixed
+            and (node.var is not None and node.var.name not in fixed)
+        ]
+
+        # collect information for sampling by processing dist nodes
+        sampling_specs = {}
+        for i, dist in enumerate(dists_list):
+            tfp_dist = dist.init_dist()
+
+            event_shape = tfp_dist.event_shape
+            batch_shape = tfp_dist.batch_shape
+            value_shape = jnp.asarray(dist.at.value).shape  # type: ignore
+            sample_index = len(value_shape) - len(batch_shape) - len(event_shape)
+            sample_shape = value_shape[:sample_index]
+
+            if isinstance(dist.at, VarValue):
+                var_name = dist.at.var.name  # type: ignore
+                value_var = dist.at.inputs[0]
+            else:
+                var_name = dist.at.name  # type: ignore
+                value_var = dist.at  # type: ignore
+
+            if var_name not in posterior_samples:
+                # pulls manually defined distribution from dists dict, returns current
+                # dist otherwise
+                dist = dists.get(var_name, dist)
+
+                sampling_specs[var_name] = {
+                    "shape": sample_shape,
+                    "dist": dist,
+                    "i": i,
+                    "value_var": value_var,
+                }
+
+        # add information for custom dists for variables that are not yet covered.
+        for var_name, dist in dists.items():
+            if var_name in sampling_specs:
+                # in this case, the variable has already been added to sampling specs,
+                # and it is also already using the custom dist
+                continue
+
+            i += 1
+            tfp_dist = dist.init_dist()
+            event_shape = tfp_dist.event_shape
+            batch_shape = tfp_dist.batch_shape
+            sample_index = len(value_shape) - len(batch_shape) - len(event_shape)
+            sample_shape = value_shape[:sample_index]
+            value_shape = jnp.asarray(self.vars[var_name].value).shape  # type: ignore
+
+            value_var = self.vars[var_name].value_node
+
+            sampling_specs[var_name] = {
+                "shape": sample_shape,
+                "dist": dist,
+                "i": i,
+                "value_var": value_var,
+            }
+
+        # Shape handling
+        # ------------------------------------------------------------------------------
+
+        # set up shape of samples
+        samples_shape = (
+            next(iter(posterior_samples.values())).shape[:2]
+            if posterior_samples
+            else ()
+        )
+        nsamples = math.prod(
+            shape
+        )  # total number of samples to draw (pure python so jit works)
+
+        # set up all seeds that will be needed
+        seeds = jax.random.split(
+            seed, (nsamples,) + samples_shape + (len(sampling_specs),)
+        )
+
+        def reshape(a):
+            # brings samples into the desired shape based on input argument.
+            # shape=(3,4)
+            # nsamples=12
+            # shape of drawn samples: (12,...)
+            # reshaped to (3,4, ...)
+            return jnp.reshape(a, shape=shape + a.shape[1:])
+
+        # Workhorse function
+        # ------------------------------------------------------------------------------
+
+        def one_draw(position, seeds):
+            # the position argument is for updating the state with posterior samples
+            previous_state = self.state
+
+            # update model state using the position (a single posterior sample, if any)
+            # and the state_for_sampling, which includes the observed values from
+            # newdata.
+            self.state = self.update_state(position, state_for_sampling)
+
+            # draw samples in order of the model graph
+            sampled_position = {}
+            for name, spec in sampling_specs.items():
+                # initializes the distribution node using the current model state,
+                # which may have been influenced by 'position', 'newdata', or sampled
+                # values from variables higher up the model hierarchy
+                tfp_dist = spec["dist"].init_dist()
+
+                # draw the actual sample
+                value = tfp_dist.sample(spec["shape"], seeds[spec["i"]])
+
+                # save the sampled value
+                sampled_position[name] = value
+
+                # update the variable's value with the sampled value so that the
+                # distributions of variables further down the model hierarchy will be
+                # correctly initialized based on the sampled values higher up
+                spec["value_var"].value = value
+
+            # to avoid tracer leakage we prevent side effects to persists
+            self.state = previous_state
+
+            return sampled_position
+
+        if not posterior_samples:
+            draw_chains = jax.vmap(one_draw, in_axes=(None, 0), out_axes=0)
+            # since we have no posterior samples, we use position={}
+            drawn_samples = draw_chains({}, seeds)
+
+            # return reshaped version of samples
+            return jax.tree.map(reshape, drawn_samples)
+
+        # this branch of the function continues only if posterior_samples is not None
+        # -----------------------------------------------------------------------------
+        draw_iter = jax.vmap(one_draw, in_axes=(0, 0), out_axes=0)
+        draw_chains = jax.vmap(draw_iter, in_axes=(0, 0), out_axes=0)
+        draw_samples = jax.vmap(draw_chains, in_axes=(None, 0), out_axes=0)
+
+        # filter samples to include only samples that belong to the model
+        vars_and_nodes = list(self.vars) + list(self.nodes)
+        filtered_samples = {
+            k: v for k, v in posterior_samples.items() if k in vars_and_nodes
+        }
+
+        try:
+            drawn_samples = draw_samples(filtered_samples, seeds)
+        except Exception as e:
+            msg = (
+                "Error during sampling. Make sure to check sample shapes! The values in"
+                " 'posterior_samples' must have two leading batching dimensions."
+            )
+
+            try:
+                error_to_raise = e.__class__(msg)
+            except Exception:
+                # fallback in case e has a custom error class that cannot simply
+                # be instantiated with a message.
+                error_to_raise = RuntimeError(msg)
+
+            raise error_to_raise from e
+
+        # return reshaped version of samples
+        return jax.tree.map(reshape, drawn_samples)
 
     @property
     def state(self) -> dict[str, NodeState]:
@@ -1529,3 +1781,92 @@ def load_model(file: str | IO[bytes]) -> Any:
         model = dill.load(file)
 
     return model
+
+
+class TemporaryModel:
+    """
+    A contextmanager for creating a temporary model.
+
+    Unnamed variables and nodes will be named temporarily. Their names will be reset
+    when the context closes.
+
+    Example use::
+
+        with TemporaryModel(variable) as model:
+            print(model.log_prob)
+
+    Parameters
+    ----------
+    vars_and_nodes
+        Variable-length collection of variables and nodes that should be used to build \
+        the temporary model.
+    verbose
+        If ``verbose=True``, the detailed information about temporarily namend \
+        variables will be logged. If ``verbose=False``,  this is reduced to a short
+        note.
+    silent
+        If ``silent=True``, all logging will be suppressed.
+    """
+
+    def __init__(self, *vars_and_nodes, verbose: bool = False, silent: bool = False):
+        self.vars_and_nodes = vars_and_nodes
+        self.verbose = verbose
+        self.silent = silent
+
+        if verbose and silent:
+            raise ValueError(f"{verbose=} and {silent=} cannot both be True.")
+
+        self.gb = None
+        self.model = None
+        self.var_names = None
+        self.node_names = None
+        self.vars = None
+        self.nodes = None
+
+    def __enter__(self):
+        verbose = self.verbose
+
+        gb = GraphBuilder().add(*self.vars_and_nodes)
+        nodes, _vars = gb._all_nodes_and_vars()
+
+        automatically_set_names = gb._set_missing_names()
+        var_names = automatically_set_names["vars"]
+        node_names = automatically_set_names["nodes"]
+
+        if verbose and not self.silent:
+            if var_names:
+                names_ = f"The automatically assigned names are: {var_names}. "
+                logger.info(f"Unnamed variables were temporarily named. {names_}")
+            if node_names:
+                names_ = f"The automatically assigned names are: {node_names}. "
+                logger.info(f"Unnamed nodes were temporarily named. {names_}")
+        elif not self.silent:
+            if var_names or node_names:
+                logger.info("Unnamed variables and/or nodes were temporarily named.")
+
+        model = gb.build_model()
+
+        self.gb = gb
+        self.model = model
+        self.var_names = var_names
+        self.node_names = node_names
+        self.vars = _vars
+        self.nodes = nodes
+        return model
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.model.pop_nodes_and_vars()
+
+        vars_dict = {var_.name: var_ for var_ in self.vars}
+        nodes_dict = {node.name: node for node in self.nodes}
+
+        for name in self.var_names:
+            vars_dict[name].name = ""
+
+        for name in self.node_names:
+            nodes_dict[name].name = ""
+
+        self.gb.nodes.clear()
+        self.gb.vars.clear()
+
+        return False  # Returning False means exceptions are not suppressed

@@ -603,3 +603,61 @@ class TestVarPredictions:
         assert jnp.allclose(pred, xnew * jnp.expand_dims(samples["b"], -1))
         assert pred.shape[-1] != x.shape[-1]
         assert pred.shape[-1] == xnew.shape[-1]
+
+
+class TestVarSample:
+    @pytest.mark.parametrize("build_model", [True, False])
+    def test_sample_with_model(self, build_model) -> None:
+        X = lsl.Var(
+            value=tfp.distributions.Uniform(low=-1.0, high=1.0).sample(
+                (100, 2), jax.random.key(3)
+            ),
+            name="X",
+        )
+        b = lsl.Var(
+            value=jnp.zeros(2),
+            distribution=lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=1.0),
+            name="b",
+        )
+        mu = lsl.Var.new_calc(jnp.dot, X, b, name="mu")
+
+        sigma = lsl.Var(
+            1.0,
+            lsl.Dist(tfp.distributions.InverseGamma, concentration=5.0, scale=0.5),
+            name="sigma",
+        )
+        y = lsl.Var(
+            jnp.zeros(X.value.shape[0]),
+            lsl.Dist(tfp.distributions.Normal, mu, sigma),
+            name="y",
+        )
+        if build_model:
+            _ = lsl.Model([y])
+
+        samples = mu.sample(shape=(1, 100), seed=jax.random.key(2))
+
+        assert len(samples) == 1  # because there is only 1 var in the subgraph
+        assert samples["b"].shape == (1, 100, 2)  # verify correct shape
+
+        # basic plausibility checks for sampling from the correct distribution
+        # this is not a tough check though.
+        assert samples["b"].mean() == pytest.approx(0.0, abs=0.1)
+        assert samples["b"].std() == pytest.approx(1.0, abs=0.1)
+
+        samples = sigma.sample(shape=(1, 100), seed=jax.random.key(2))
+        assert "sigma" in samples
+        assert len(samples) == 1  # because there is only 1 var in the subgraph
+        assert samples["sigma"].shape == (1, 100)  # verify correct shape of sigma
+
+        # basic plausibility checks for sampling from the correct distribution
+        # this is not a tough check though.
+        sigma_mean = sigma.dist_node.init_dist().mean()  # type: ignore
+        sigma_std = sigma.dist_node.init_dist().stddev()  # type: ignore
+        assert samples["sigma"].mean() == pytest.approx(sigma_mean, abs=0.1)
+        assert samples["sigma"].std() == pytest.approx(sigma_std, abs=0.1)
+
+        samples = y.sample(shape=(1, 100), seed=jax.random.key(2))
+        assert len(samples) == 3
+        assert "y" in samples
+        assert "sigma" in samples
+        assert "b" in samples
