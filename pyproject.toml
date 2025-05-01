@@ -89,6 +89,7 @@ filterwarnings = [
     # "ignore::DeprecationWarning:tensorflow_probability",
     "ignore:jax.interpreters.xla.pytype_aval_mappings is deprecated:DeprecationWarning:tensorflow_probability.python.internal.backend.jax.ops",
     "ignore:shape requires ndarray or scalar arguments, got <class 'NoneType'> at position 0. In a future JAX release this will be an error.:DeprecationWarning:tensorflow_probability.python.internal.backend.jax.random_generators",
+    "ignore:.*interactive_bk attribute was deprecated in Matplotlib 3.9.*:matplotlib._api.deprecation.MatplotlibDeprecationWarning",
 
     # Caused by the use in blackjax
     "ignore:JAXopt is no longer maintained:DeprecationWarning",
