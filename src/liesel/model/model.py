@@ -166,14 +166,16 @@ class GraphBuilder:
                     lambda x: x,
                     self.log_lik_node,
                     _name="_model_log_lik",
-                    update_on_init=False,
+                    _update_on_init=False,
                 )
             )
             return self
 
         _, _vars = self._all_nodes_and_vars()
         inputs = (v.dist_node for v in _vars if v.has_dist and v.observed)
-        node = Calc(_reduced_sum, *inputs, _name="_model_log_lik", update_on_init=False)
+        node = Calc(
+            _reduced_sum, *inputs, _name="_model_log_lik", _update_on_init=False
+        )
         self.add(node)
         return self
 
@@ -186,7 +188,7 @@ class GraphBuilder:
                     lambda x: x,
                     self.log_prior_node,
                     _name="_model_log_prior",
-                    update_on_init=False,
+                    _update_on_init=False,
                 )
             )
             return self
@@ -194,7 +196,7 @@ class GraphBuilder:
         _, _vars = self._all_nodes_and_vars()
         inputs = (v.dist_node for v in _vars if v.has_dist and v.parameter)
         node = Calc(
-            _reduced_sum, *inputs, _name="_model_log_prior", update_on_init=False
+            _reduced_sum, *inputs, _name="_model_log_prior", _update_on_init=False
         )
         self.add(node)
         return self
@@ -208,7 +210,7 @@ class GraphBuilder:
                     lambda x: x,
                     self.log_prob_node,
                     _name="_model_log_prob",
-                    update_on_init=False,
+                    _update_on_init=False,
                 )
             )
             return self
@@ -216,7 +218,7 @@ class GraphBuilder:
         nodes, _ = self._all_nodes_and_vars()
         inputs = (n for n in nodes if isinstance(n, Dist))
         node = Calc(
-            _reduced_sum, *inputs, _name="_model_log_prob", update_on_init=False
+            _reduced_sum, *inputs, _name="_model_log_prob", _update_on_init=False
         )
         self.add(node)
         return self

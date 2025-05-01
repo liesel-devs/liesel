@@ -1,6 +1,75 @@
+[project]
+name = "liesel"
+version = "0.3.3"
+description = "A probabilistic programming framework with a focus on semi-parametric regression"
+readme = "README.md"
+authors = [
+    {name = "Paul Wiemann"}, {name = "Hannes Riebl"}, {name = "Johannes Brachem"}, {name = "Gianmarco Callegher"},
+]
+license = "MIT"
+license-files = ["LICENSE.md"]
+keywords = ["statistics", "machine-learning"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Intended Audience :: Science/Research",
+]
+
+
+requires-python = ">=3.13"
+dependencies = [
+    "arviz>=0.15",
+    "blackjax>=1.0",
+    "deprecated>=1.2",
+    "dill>=0.3",
+    "jax>=0.5.0",
+    "jaxlib>=0.5.0",
+    "matplotlib>=3.5",
+    "networkx>=3.4.2",
+    "numpy>=2.0",
+    "optax>=0.1.7",
+    "pandas>=1.4",
+    "pydot>=3.0",
+    "scipy>=1.8.0",
+    "seaborn>=0.13",
+    "tensorflow-probability>=0.17",
+    "tqdm>=4.62",
+]
+
+[project.urls]
+Homepage = "https://liesel-project.org"
+Documentation = "https://liesel-project.org"
+Repository = "https://github.com/liesel-devs/liesel.git"
+
+
+[dependency-groups]
+dev = [
+    "ruff>=0.11.7",
+    "mypy",
+    "myst-nb>=1.0.0",
+    "pre-commit",
+    "pydata-sphinx-theme",
+    "pytest",
+    "pytest-cov",
+    "rtds-action",
+    "sphinx>=7.2.6",
+    "sphinx-autodoc-typehints>=1.19",
+    "sphinx-book-theme>=1.1.0",
+    "sphinx-copybutton>=0.5",
+    "sphinx-remove-toctrees>=0.0.3",
+    "types-deprecated",
+]
+
+pymc = [
+    "pymc>=5.9",
+]
+
+
 [build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 
 [tool.mypy]
 files = ["liesel", "tests"]

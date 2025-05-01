@@ -1,11 +1,14 @@
-name: pytest-pull
+name: pytest-cron
 
 on:
-  pull_request:
-    branches: [main]
+  schedule:
+    - cron: '0 9 * * 2'  # Every Tuesday at 09:00 UTC
+
+env:
+  UV_SYSTEM_PYTHON: 1
 
 jobs:
-  pytest-pull:
+  pytest-cron:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -21,11 +24,12 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
 
-      - name: Install liesel
-        run: uv sync --locked --dev
+      - name: Install liesel without lockfile
+        run: uv pip install .[dev]  # or `uv pip install .[dev]` if not editable
 
       - name: Run pytest
-        run: uv run pytest
+        run: uv pip run pytest --run-mcmc
+
+      - name: Run doctests
+        run: uv run pytest --doctest-modules src/liesel

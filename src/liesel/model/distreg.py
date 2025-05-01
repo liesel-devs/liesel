@@ -102,8 +102,8 @@ class DistRegBuilder(GraphBuilder):
         name = self._smooth_name(name, predictor, "p")
 
         X_var = Var.new_obs(X, name=name + "_X")
-        m_var = Var.new_param(m, name=name + "_m")
-        s_var = Var.new_param(s, name=name + "_s")
+        m_var = Var.new_value(m, name=name + "_m")
+        s_var = Var.new_value(s, name=name + "_s")
 
         beta = np.zeros(np.shape(X)[-1], np.float32)
         beta_distribution = Dist(tfd.Normal, loc=m_var, scale=s_var)
@@ -151,11 +151,11 @@ class DistRegBuilder(GraphBuilder):
         name = self._smooth_name(name, predictor, "np")
 
         X_var = Var.new_obs(X, name=name + "_X")
-        K_var = Var.new_param(K, name=name + "_K")
-        a_var = Var.new_param(a, name=name + "_a")
-        b_var = Var.new_param(b, name=name + "_b")
+        K_var = Var.new_value(K, name=name + "_K")
+        a_var = Var.new_value(a, name=name + "_a")
+        b_var = Var.new_value(b, name=name + "_b")
 
-        rank_var = Var.new_param(matrix_rank(K), name=name + "_rank")
+        rank_var = Var.new_value(float(matrix_rank(K)), name=name + "_rank")
         tau2_distribution = Dist(tfd.InverseGamma, concentration=a_var, scale=b_var)
         tau2_var = Var.new_param(10000.0, tau2_distribution, name + "_tau2")
 

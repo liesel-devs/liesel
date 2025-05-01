@@ -199,31 +199,31 @@ loc
 kernel_00
 </td>
 <td>
--0.113
+-0.109
 </td>
 <td>
-0.458
+0.448
 </td>
 <td>
--0.865
+-0.829
 </td>
 <td>
--0.118
+-0.119
 </td>
 <td>
-0.664
+0.645
 </td>
 <td>
 4000
 </td>
 <td>
-1300.899
+1416.594
 </td>
 <td>
-2052.033
+2268.975
 </td>
 <td>
-1.005
+1.006
 </td>
 </tr>
 </tbody>
@@ -283,10 +283,10 @@ divergent transition
 warmup
 </th>
 <td>
-49
+53
 </td>
 <td>
-0.012
+0.013
 </td>
 </tr>
 <tr>
@@ -316,12 +316,14 @@ environment, and install the latest release from PyPI:
 
     pip install liesel
 
-You can also install the development version from GitHub:
+You can also install the development version from GitHub. Liesel uses
+`uv` for the project management so make sure the tool is installed.
 
     git clone https://github.com/liesel-devs/liesel.git
     cd liesel
-    pip install .
-    # or `pip install -e .[dev]` for an editable install including the dev utils
+    uv sync
+    # or `uv sync --dev` for an editable install including the dev dependencies
+    # or `uv sync --locked` for an installation using the dependencies locked in the uv.lock file
 
 Liesel depends on JAX and `jaxlib`. As of now, there are no official
 `jaxlib` wheels for Windows. If you are on Windows, the JAX developers
@@ -333,15 +335,8 @@ or try the unofficial `jaxlib` wheels from
 <https://github.com/cloudhan/jax-windows-builder>.
 
 If you are using the `lsl.plot_model()` function, installing
-`pygraphviz` will greatly improve the layout of the model graphs. Make
-sure you have the [Graphviz](https://graphviz.org) development headers
-on your system and run:
-
-    pip install pygraphviz
-
-Again, the installation is a bit more challenging on Windows, but there
-are [instructions on the `pygraphviz`
-website](https://pygraphviz.github.io/documentation/stable/install.html#windows).
+[Graphviz](https://graphviz.org) will greatly improve the layout of the
+model graphs.
 
 ## Development
 
@@ -351,6 +346,10 @@ Please run
 2.  make sure the tests don’t fail with `pytest --run-mcmc`, and
 3.  make sure the examples in your docstrings are up-to-date with
     `pytest --doctest-modules liesel`.
+
+when you are using `uv` to manage the project, you can run these
+commends in the virtual environment by prepending `uv run` to the
+commands, e.g., `uv run pre-commit run -a`.
 
 ## Acknowledgements
 
