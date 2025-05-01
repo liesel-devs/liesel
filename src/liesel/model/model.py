@@ -5,6 +5,7 @@ The model and the graph builder.
 from __future__ import annotations
 
 import logging
+import math
 import re
 import warnings
 from collections import Counter
@@ -1425,6 +1426,12 @@ class Model:
         """
         Draws samples from the model.
 
+
+        Note
+        ----
+        When compiling this function within, the arguemtns `shape`, `fixed`, and `dists`
+        must be static.
+
         Parameters
         ----------
         shape
@@ -1563,7 +1570,9 @@ class Model:
             if posterior_samples
             else ()
         )
-        nsamples = int(jnp.prod(jnp.asarray(shape)))  # total number of samples to draw
+        nsamples = math.prod(
+            shape
+        )  # total number of samples to draw (pure python so jit works)
 
         # set up all seeds that will be needed
         seeds = jax.random.split(
