@@ -87,6 +87,10 @@ def test_default_dtype():
     assert interface.log_prob(state).dtype == np.float32
 
 
+@pytest.mark.filterwarnings(
+    "ignore:Explicitly requested dtype float64 requested in astype is not available"
+    ".*:UserWarning"
+)
 def test_simple2():
     model = pm.Model()
 
