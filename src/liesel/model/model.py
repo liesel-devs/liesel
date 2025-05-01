@@ -1591,7 +1591,7 @@ class Model:
 
         def one_draw(position, seeds):
             # the position argument is for updating the state with posterior samples
-            privous_state = self.state
+            previous_state = self.state
 
             # update model state using the position (a single posterior sample, if any)
             # and the state_for_sampling, which includes the observed values from
@@ -1618,7 +1618,7 @@ class Model:
                 spec["value_var"].value = value
 
             # to avoid tracer leakage we prevent side effects to persists
-            self.state = privous_state
+            self.state = previous_state
 
             return sampled_position
 
