@@ -371,7 +371,8 @@ class Engine:
                 self._sample_many,
                 in_axes=(0, None, 0, 0),
                 out_axes=(None, 0, 0, 0, 0, 0, 0),
-            )
+            ),
+            donate_argnames=("kernel_states", "model_state"),
         )
 
     @property
