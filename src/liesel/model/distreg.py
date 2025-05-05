@@ -197,7 +197,7 @@ class DistRegBuilder(GraphBuilder):
         beta_var.inference = MCMCSpec(
             IWLSKernel,
             jitter_dist=tfd.Uniform(
-                low=-2.0,
+                low=jnp.full_like(beta_var.value, -2.0),
                 high=2.0,
             ),
         )
@@ -206,8 +206,8 @@ class DistRegBuilder(GraphBuilder):
             lambda position_keys, group: tau2_gibbs_kernel(group),
             kernel_kwargs={"group": group},
             jitter_dist=tfd.TruncatedNormal(
-                loc=tau2_var.value,
-                scale=tau2_var.value,
+                loc=jnp.full_like(tau2_var.value, 0.0),
+                scale=jnp.full_like(tau2_var.value, 1.0),
                 low=0.0,
                 high=1e2,
             ),

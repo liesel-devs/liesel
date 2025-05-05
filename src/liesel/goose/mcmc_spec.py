@@ -3,9 +3,9 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import TYPE_CHECKING, Any, ParamSpec, Protocol
 
-import jax.numpy as jnp
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 from .builder import EngineBuilder
@@ -17,6 +17,28 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+
+class JitterType(Enum):
+    """
+    Enum representing the type of jitter to be applied to a variable.
+
+    Attributes
+    ----------
+    NONE
+        No jitter is applied.
+    ADDITIVE
+        Additive jitter is applied.
+    MULTIPLICATIVE
+        Multiplicative jitter is applied.
+    REPLACEMENT
+        Value is replaced when jitter is applied.
+    """
+
+    NONE = 0
+    ADDITIVE = 1
+    MULTIPLICATIVE = 2
+    REPLACEMENT = 3
 
 
 @dataclass
@@ -228,12 +250,19 @@ class MCMCSpec:
     jitter_dist
         A TensorFlow Probability distribution used to apply random jitter to the \
         initial value of the variable.
+    jitter_type
+        The type of jitter to be applied. This can be one of the following:
+        - `JitterType.NONE`: No jitter is applied.
+        - `JitterType.ADDITIVE`: Additive jitter is applied.
+        - `JitterType.MULTIPLICATIVE`: Multiplicative jitter is applied.
+        - `JitterType.REPLACEMENT`: Value is replaced when jitter is applied.
     """
 
     kernel: KernelFactory
     kernel_kwargs: dict[str, Any] = field(default_factory=dict)
     kernel_group: str | None = None
     jitter_dist: tfd.Distribution | None = None
+    jitter_type: JitterType = JitterType.ADDITIVE
 
     def apply_jitter(self, seed: KeyArray, value: Array) -> Array:
         """
@@ -254,12 +283,36 @@ class MCMCSpec:
         -------
         The jittered value with the same shape as the input.
         """
-        if self.jitter_dist is None:
+        if self.jitter_dist is None or self.jitter_type == JitterType.NONE:
             return value
 
-        original_shape = jnp.asarray(value).shape
-        value = jnp.atleast_1d(value)
+        # check compatibility of shapes
+        if (
+            self.jitter_dist.batch_shape + self.jitter_dist.event_shape != value.shape
+        ) and (
+            self.jitter_dist.batch_shape.rank + self.jitter_dist.event_shape.rank > 0
+        ):
+            raise ValueError(
+                f"Jitter distribution shapes "
+                f"(batch shape {self.jitter_dist.batch_shape} "
+                f"and event shape {self.jitter_dist.event_shape}) "
+                f"do not match variable shape {value.shape}."
+            )
+        sample_shape = value.shape if self.jitter_dist.batch_shape == () else ()
 
-        jitter = self.jitter_dist.sample(sample_shape=jnp.shape(value), seed=seed)
+        jitter = self.jitter_dist.sample(sample_shape=sample_shape, seed=seed)
 
-        return jnp.reshape(value + jitter, original_shape)
+        if self.jitter_type == JitterType.ADDITIVE:
+            value = value + jitter
+        elif self.jitter_type == JitterType.MULTIPLICATIVE:
+            value = value * jitter
+        elif self.jitter_type == JitterType.REPLACEMENT:
+            value = jitter
+        else:
+            raise ValueError(
+                f"Invalid jitter type: {self.jitter_type}. "
+                "Expected one of JitterType.NONE, JitterType.ADDITIVE, "
+                "JitterType.MULTIPLICATIVE, or JitterType.REPLACEMENT."
+            )
+
+        return value
