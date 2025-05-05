@@ -332,4 +332,16 @@ def dist_reg_mcmc(
         apply_jitter=True,
     )
 
+    var_names = [var.name for var in model.parameters.values()]
+    var_names_in_kernels = [
+        name for kernel in builder.kernels for name in kernel.position_keys
+    ]
+
+    missing_vars = set(var_names) - set(var_names_in_kernels)
+    if missing_vars:
+        raise RuntimeError(
+            f"The following parameters are not associated with any kernel: "
+            f"{missing_vars}"
+        )
+
     return builder

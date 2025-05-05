@@ -1,11 +1,13 @@
+import jax
 import jax.numpy as jnp
 import jax.random as random
-import jax
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 from liesel.goose.mcmc_spec import JitterType, MCMCSpec
-Array = jax.Array
+
+type Array = jax.Array
+
 
 class FixedDistribution(tfd.Distribution):
     def __init__(self, fixed_value: Array):
