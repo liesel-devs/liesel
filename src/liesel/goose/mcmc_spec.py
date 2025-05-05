@@ -4,7 +4,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, ParamSpec, Protocol
+from typing import TYPE_CHECKING, Any, ParamSpec, Protocol, assert_never
 
 import tensorflow_probability.substrates.jax.distributions as tfd
 
@@ -298,21 +298,22 @@ class MCMCSpec:
                 f"and event shape {self.jitter_dist.event_shape}) "
                 f"do not match variable shape {value.shape}."
             )
-        sample_shape = value.shape if self.jitter_dist.batch_shape == () else ()
+        sample_shape = (
+            value.shape
+            if self.jitter_dist.batch_shape + self.jitter_dist.event_shape == ()
+            else ()
+        )
 
         jitter = self.jitter_dist.sample(sample_shape=sample_shape, seed=seed)
 
-        if self.jitter_type == JitterType.ADDITIVE:
-            value = value + jitter
-        elif self.jitter_type == JitterType.MULTIPLICATIVE:
-            value = value * jitter
-        elif self.jitter_type == JitterType.REPLACEMENT:
-            value = jitter
-        else:
-            raise ValueError(
-                f"Invalid jitter type: {self.jitter_type}. "
-                "Expected one of JitterType.NONE, JitterType.ADDITIVE, "
-                "JitterType.MULTIPLICATIVE, or JitterType.REPLACEMENT."
-            )
+        match self.jitter_type:
+            case JitterType.ADDITIVE:
+                value = value + jitter
+            case JitterType.MULTIPLICATIVE:
+                value = value * jitter
+            case JitterType.REPLACEMENT:
+                value = jitter
+            case _:
+                assert_never(self.jitter_type)
 
         return value
