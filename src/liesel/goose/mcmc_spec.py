@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ParamSpec, Protocol
 
 import jax.numpy as jnp
 import tensorflow_probability.substrates.jax.distributions as tfd
@@ -198,6 +198,17 @@ class _KernelGroup:
     position_keys: list[str] = field(default_factory=list)
 
 
+P = ParamSpec("P")
+
+
+class KernelFactory(Protocol[P]):
+    """Create a kernel instance based on the provided position keys and arguments."""
+
+    def __call__(
+        self, position_keys: list[str], *args: P.args, **kwargs: P.kwargs
+    ) -> Kernel: ...
+
+
 @dataclass
 class MCMCSpec:
     """
@@ -207,8 +218,8 @@ class MCMCSpec:
     Parameters
     ----------
     kernel
-        A callable that returns a ``Kernel`` instance when provided with position keys \
-        and keyword arguments.
+        A KernelFactory that returns a ``Kernel`` instance when provided with position
+        keys and keyword arguments.
     kernel_kwargs
         Additional keyword arguments to be passed to the kernel callable.
     kernel_group
@@ -219,7 +230,7 @@ class MCMCSpec:
         initial value of the variable.
     """
 
-    kernel: Callable[..., Kernel]
+    kernel: KernelFactory
     kernel_kwargs: dict[str, Any] = field(default_factory=dict)
     kernel_group: str | None = None
     jitter_dist: tfd.Distribution | None = None
