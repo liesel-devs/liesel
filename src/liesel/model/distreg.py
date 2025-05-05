@@ -12,22 +12,19 @@ import numpy as np
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 from liesel.distributions import MultivariateNormalDegenerate
-from liesel.goose import EngineBuilder, GibbsKernel, IWLSKernel, LieselInterface
-from liesel.goose.types import JitterFunction
+from liesel.goose import (
+    EngineBuilder,
+    GibbsKernel,
+    IWLSKernel,
+    LieselMCMC,
+    MCMCSpec,
+)
 from liesel.option import Option
 
 from .model import GraphBuilder, Model
 from .nodes import Array, Bijector, Dist, Distribution, Group, NodeState, Var
 
 matrix_rank = np.linalg.matrix_rank
-
-
-def _tau2_jitter_fn(key, val):
-    return jax.random.truncated_normal(key, 0.0, 1e2, val.shape, val.dtype)
-
-
-def _beta_jitter_fn(key, val):
-    return val + jax.random.uniform(key, val.shape, val.dtype, -2.0, 2.0)
 
 
 class DistRegBuilder(GraphBuilder):
@@ -118,6 +115,15 @@ class DistRegBuilder(GraphBuilder):
         group = Group(name, smooth=smooth_var, beta=beta_var, X=X_var, m=m_var, s=s_var)
         self.add_groups(group)
 
+        # inference specifications
+        beta_var.inference = MCMCSpec(
+            IWLSKernel,
+            jitter_dist=tfd.Uniform(
+                low=-2.0,
+                high=2.0,
+            ),
+        )
+
         return self
 
     def add_np_smooth(
@@ -187,7 +193,28 @@ class DistRegBuilder(GraphBuilder):
             b=b_var,
         )
 
+        # inference specifications
+        beta_var.inference = MCMCSpec(
+            IWLSKernel,
+            jitter_dist=tfd.Uniform(
+                low=-2.0,
+                high=2.0,
+            ),
+        )
+
+        tau2_var.inference = MCMCSpec(
+            lambda position_keys, group: tau2_gibbs_kernel(group),
+            kernel_kwargs={"group": group},
+            jitter_dist=tfd.TruncatedNormal(
+                loc=tau2_var.value,
+                scale=tau2_var.value,
+                low=0.0,
+                high=1e2,
+            ),
+        )
+
         self.add_groups(group)
+
         return self
 
     def add_predictor(self, name: str, inverse_link: type[Bijector]) -> DistRegBuilder:
@@ -275,8 +302,6 @@ def dist_reg_mcmc(
     model: Model,
     seed: int,
     num_chains: int,
-    tau2_jitter_fn: JitterFunction = _tau2_jitter_fn,
-    beta_jitter_fn: JitterFunction = _beta_jitter_fn,
 ) -> EngineBuilder:
     """
     Configures an :class:`~.goose.EngineBuilder` for a distributional regression model.
@@ -294,36 +319,16 @@ def dist_reg_mcmc(
         The PRNG seed for the engine builder.
     num_chains
         The number of chains to be sampled.
-    tau2_jitter_fn
-        Jittering function for the smoothing parameters.
-    beta_jitter_fn
-        Jittering function for the regression coefficients.
-    See Also
-    --------
-    :meth:`~.goose.EngineBuilder.set_jitter_fns` : Method for setting the jittering
-        functions
     """
 
-    builder = EngineBuilder(seed, num_chains)
+    lslmcmc = LieselMCMC(model)
 
-    builder.set_model(LieselInterface(model))
-    builder.set_initial_values(model.state)
+    # TODO: raise error if a variable is not accosiated with a kernel
 
-    jitter_fns = {}
-
-    for group in model.groups().values():
-        if "tau2" in group:
-            position_key = group["tau2"].name
-            tau2_kernel = tau2_gibbs_kernel(group)  # type: ignore  # only vars
-            builder.add_kernel(tau2_kernel)
-            jitter_fns[position_key] = tau2_jitter_fn
-
-        if "beta" in group:
-            position_key = group["beta"].name
-            beta_kernel = IWLSKernel([position_key])
-            builder.add_kernel(beta_kernel)
-            jitter_fns[position_key] = beta_jitter_fn
-
-    builder.set_jitter_fns(jitter_fns)
+    builder = lslmcmc.get_engine_builder(
+        seed=seed,
+        num_chains=num_chains,
+        apply_jitter=True,
+    )
 
     return builder
