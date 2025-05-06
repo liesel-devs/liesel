@@ -337,3 +337,18 @@ class TestLieselMCMC:
         assert log_sigma.inference is None
         assert sigma.inference is None
         assert log_sigma.inference is None
+
+    @pytest.mark.xfail(reason="Multivariate jitter distributions are not supported.")
+    def test_jitter_draw_multivariate_jitter_dist(self):
+        mu = lsl.Var.new_param(
+            jnp.zeros(3),
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            inference=gs.MCMCSpec(
+                gs.NUTSKernel,
+                kernel_group="a",
+                jitter_dist=tfd.Uniform(low=jnp.full((3,), -1.0), high=1.0),
+            ),
+            name="mu",
+        )
+        model = lsl.Model([mu])
+        gs.LieselMCMC(model)
