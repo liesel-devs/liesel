@@ -236,6 +236,51 @@ class TestLieselMCMC:
         eb = mcmc.get_engine_builder(1, 4)
         assert len(eb.jitter_fns.expect("")) == 2
 
+    def test_jitter_draw_shape(self):
+        # 1d array
+        mu = lsl.Var.new_param(
+            jnp.zeros(3),
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            inference=gs.MCMCSpec(
+                gs.NUTSKernel,
+                kernel_group="a",
+                jitter_dist=tfd.Uniform(low=-1.0, high=1.0),
+            ),
+            name="mu",
+        )
+
+        model = lsl.Model([mu])
+
+        mcmc = gs.LieselMCMC(model)
+
+        jitter_funs = mcmc.get_jitter_functions()
+        jitter_draw = jitter_funs["mu"](jax.random.key(0), mu.value)
+        assert not jnp.all(jitter_draw == jitter_draw[0])  # not all equal
+        # no two are equal
+        assert len(jnp.unique(jitter_draw)) == len(jitter_draw.flatten())
+
+        # 2d array
+        mu = lsl.Var.new_param(
+            jnp.zeros((3, 3)),
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            inference=gs.MCMCSpec(
+                gs.NUTSKernel,
+                kernel_group="a",
+                jitter_dist=tfd.Uniform(low=-1.0, high=1.0),
+            ),
+            name="mu",
+        )
+
+        model = lsl.Model([mu])
+
+        mcmc = gs.LieselMCMC(model)
+
+        jitter_funs = mcmc.get_jitter_functions()
+        jitter_draw = jitter_funs["mu"](jax.random.key(0), mu.value)
+        assert not jnp.all(jitter_draw == jitter_draw[0])  # not all equal
+        # no two are equal
+        assert len(jnp.unique(jitter_draw)) == len(jitter_draw.flatten())
+
     def test_transform_var_with_inference_new(self):
         """
         It is allowed to pass a new inferece object during transformation.
