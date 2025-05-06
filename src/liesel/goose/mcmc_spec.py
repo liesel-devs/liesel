@@ -19,9 +19,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class JitterType(Enum):
+class JitterMethod(Enum):
     """
-    Enum representing the type of jitter to be applied to a variable.
+    Enum representing the way how jitter to be applied to a variable.
 
     Attributes
     ----------
@@ -250,7 +250,7 @@ class MCMCSpec:
     jitter_dist
         A TensorFlow Probability distribution used to apply random jitter to the \
         initial value of the variable.
-    jitter_type
+    jitter_method
         The type of jitter to be applied. This can be one of the following:
         - `JitterType.NONE`: No jitter is applied.
         - `JitterType.ADDITIVE`: Additive jitter is applied.
@@ -262,7 +262,7 @@ class MCMCSpec:
     kernel_kwargs: dict[str, Any] = field(default_factory=dict)
     kernel_group: str | None = None
     jitter_dist: tfd.Distribution | None = None
-    jitter_type: JitterType = JitterType.ADDITIVE
+    jitter_method: JitterMethod = JitterMethod.ADDITIVE
 
     def apply_jitter(self, seed: KeyArray, value: Array) -> Array:
         """
@@ -283,7 +283,7 @@ class MCMCSpec:
         -------
         The jittered value with the same shape as the input.
         """
-        if self.jitter_dist is None or self.jitter_type == JitterType.NONE:
+        if self.jitter_dist is None or self.jitter_method == JitterMethod.NONE:
             return value
 
         # check compatibility of shapes
@@ -306,12 +306,12 @@ class MCMCSpec:
 
         jitter = self.jitter_dist.sample(sample_shape=sample_shape, seed=seed)
 
-        match self.jitter_type:
-            case JitterType.ADDITIVE:
+        match self.jitter_method:
+            case JitterMethod.ADDITIVE:
                 value = value + jitter
-            case JitterType.MULTIPLICATIVE:
+            case JitterMethod.MULTIPLICATIVE:
                 value = value * jitter
-            case JitterType.REPLACEMENT:
+            case JitterMethod.REPLACEMENT:
                 value = jitter
             case _:
                 assert_never(self.jitter_type)
