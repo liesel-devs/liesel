@@ -17,7 +17,7 @@ from liesel.goose import (
     GibbsKernel,
     IWLSKernel,
 )
-from liesel.goose.mcmc_spec import JitterType, LieselMCMC, MCMCSpec
+from liesel.goose.mcmc_spec import JitterMethod, LieselMCMC, MCMCSpec
 from liesel.option import Option
 
 from .model import GraphBuilder, Model
@@ -121,7 +121,7 @@ class DistRegBuilder(GraphBuilder):
                 low=-2.0,
                 high=2.0,
             ),
-            jitter_type=JitterType.REPLACEMENT,
+            jitter_method=JitterMethod.ADDITIVE,
         )
 
         return self
@@ -200,7 +200,7 @@ class DistRegBuilder(GraphBuilder):
                 low=jnp.full_like(beta_var.value, -2.0),
                 high=2.0,
             ),
-            jitter_type=JitterType.REPLACEMENT,
+            jitter_method=JitterMethod.ADDITIVE,
         )
 
         tau2_var.inference = MCMCSpec(
@@ -212,6 +212,7 @@ class DistRegBuilder(GraphBuilder):
                 low=0.0,
                 high=1e2,
             ),
+            jitter_method=JitterMethod.REPLACEMENT,
         )
 
         self.add_groups(group)
