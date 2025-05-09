@@ -297,6 +297,41 @@ class TestLieselMCMC:
         assert len(kernels) == 1
         assert kernels[0].position_keys == ("sigma", "mu")
 
+    def test_kernel_group2(self):
+        spec1 = gs.MCMCSpec(
+            gs.NUTSKernel,
+            kernel_group="a",
+            kernel_kwargs={"mm_diag": True, "da_target_accept": 0.8},
+        )
+
+        spec2 = gs.MCMCSpec(
+            gs.NUTSKernel,
+            kernel_group="a",
+            kernel_kwargs={"mm_diag": True, "da_target_accept": 0.8},
+        )
+
+        mu = lsl.Var.new_param(
+            0.0,
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            inference=spec1,
+            name="mu",
+        )
+
+        sigma = lsl.Var.new_param(
+            1.0,
+            lsl.Dist(tfd.InverseGamma, concentration=1.0, scale=0.5),
+            inference=spec2,
+            name="sigma",
+        )
+
+        model = lsl.Model([mu, sigma])
+
+        mcmc = gs.LieselMCMC(model)
+        kernels = mcmc.get_kernel_list()
+
+        assert len(kernels) == 1
+        assert kernels[0].position_keys == ("sigma", "mu")
+
     def test_incoherent_kernel_group(self):
         mu = lsl.Var.new_param(
             0.0,
