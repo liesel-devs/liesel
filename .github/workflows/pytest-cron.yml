@@ -3,6 +3,7 @@ name: pytest-cron
 on:
   schedule:
     - cron: '0 9 * * 2'  # Every Tuesday at 09:00 UTC
+  workflow_dispatch: # trigger manually from GitHub UI
 
 env:
   UV_SYSTEM_PYTHON: 1
