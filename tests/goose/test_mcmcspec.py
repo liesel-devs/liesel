@@ -7,7 +7,7 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.goose as gs
 import liesel.model as lsl
-from liesel.goose.mcmc_spec import JitterMethod, MCMCSpec
+from liesel.goose.mcmc_spec import MCMCSpec
 
 type Array = jax.Array
 
@@ -67,7 +67,7 @@ class TestMCMCSpec:
         spec = MCMCSpec(
             kernel=self.kernel_factory,
             jitter_dist=tfd.Normal(loc=0.0, scale=1.0),
-            jitter_method=JitterMethod.NONE,
+            jitter_method="none",
         )
         result = spec.apply_jitter(self.key, self.value)
         assert jnp.array_equal(result, self.value)
@@ -79,7 +79,7 @@ class TestMCMCSpec:
         spec = MCMCSpec(
             kernel=self.kernel_factory,
             jitter_dist=FixedDistribution(jnp.array([0.1, 0.2, 0.3])),
-            jitter_method=JitterMethod.ADDITIVE,
+            jitter_method="additive",
         )
 
         result = spec.apply_jitter(self.key, self.value)
@@ -94,7 +94,7 @@ class TestMCMCSpec:
         spec = MCMCSpec(
             kernel=self.kernel_factory,
             jitter_dist=FixedDistribution(fixed_jitter),
-            jitter_method=JitterMethod.MULTIPLICATIVE,
+            jitter_method="multiplicative",
         )
 
         result = spec.apply_jitter(self.key, self.value)
@@ -108,7 +108,7 @@ class TestMCMCSpec:
         spec = MCMCSpec(
             kernel=self.kernel_factory,
             jitter_dist=FixedDistribution(fixed_jitter),
-            jitter_method=JitterMethod.REPLACEMENT,
+            jitter_method="replacement",
         )
 
         result = spec.apply_jitter(self.key, self.value)
@@ -124,7 +124,7 @@ class TestMCMCSpec:
         spec = MCMCSpec(
             kernel=self.kernel_factory,
             jitter_dist=tfd.Normal(loc=0.0, scale=1.0),
-            jitter_method=JitterMethod.ADDITIVE,
+            jitter_method="additive",
         )
 
         # Generate jitter separately to compare
@@ -144,7 +144,7 @@ class TestMCMCSpec:
         spec = MCMCSpec(
             kernel=self.kernel_factory,
             jitter_dist=tfd.Normal(loc=0.0, scale=1.0),
-            jitter_method=JitterMethod.REPLACEMENT,
+            jitter_method="replacement",
         )
         result = spec.apply_jitter(self.key, scalar_value)
         assert result.shape == scalar_value.shape
@@ -174,7 +174,7 @@ class TestMCMCSpec:
             jitter_dist=tfd.MultivariateNormalDiag(
                 loc=jnp.zeros(2), scale_diag=jnp.ones(2)
             ),
-            jitter_method=JitterMethod.ADDITIVE,
+            jitter_method="additive",
         )
 
         with pytest.raises(ValueError, match="do not match variable shape"):
@@ -190,7 +190,7 @@ class TestMCMCSpec:
                 tfd.Normal(loc=jnp.zeros((2, 3)), scale=jnp.ones((2, 3))),
                 reinterpreted_batch_ndims=1,
             ),
-            jitter_method=JitterMethod.ADDITIVE,
+            jitter_method="additive",
         )
 
         result = spec.apply_jitter(self.key, value)

@@ -15,7 +15,7 @@ from .interface import (
     NamedTupleInterface,
 )
 from .iwls import IWLSKernel
-from .mcmc_spec import JitterMethod, LieselMCMC, MCMCSpec
+from .mcmc_spec import LieselMCMC, MCMCSpec
 from .mh_kernel import MHKernel, MHProposal
 from .nuts import NUTSKernel
 from .optim import OptimResult, Stopper, history_to_df, optim_flat
@@ -42,7 +42,6 @@ __all__ = [
     "EngineBuilder",
     "MCMCSpec",
     "LieselMCMC",
-    "JitterMethod",
     "EpochConfig",
     "EpochType",
     "GibbsKernel",

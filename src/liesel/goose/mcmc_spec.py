@@ -3,8 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import TYPE_CHECKING, Any, ParamSpec, Protocol, assert_never
+from typing import TYPE_CHECKING, Any, Literal, ParamSpec, Protocol, assert_never
 
 import tensorflow_probability.substrates.jax.distributions as tfd
 
@@ -17,28 +16,6 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-
-
-class JitterMethod(Enum):
-    """
-    Enum representing the way how jitter to be applied to a variable.
-
-    Attributes
-    ----------
-    NONE
-        No jitter is applied.
-    ADDITIVE
-        Additive jitter is applied.
-    MULTIPLICATIVE
-        Multiplicative jitter is applied.
-    REPLACEMENT
-        Value is replaced when jitter is applied.
-    """
-
-    NONE = 0
-    ADDITIVE = 1
-    MULTIPLICATIVE = 2
-    REPLACEMENT = 3
 
 
 @dataclass
@@ -252,17 +229,28 @@ class MCMCSpec:
         initial value of the variable.
     jitter_method
         The type of jitter to be applied. This can be one of the following:
-        - `JitterType.NONE`: No jitter is applied.
-        - `JitterType.ADDITIVE`: Additive jitter is applied.
-        - `JitterType.MULTIPLICATIVE`: Multiplicative jitter is applied.
-        - `JitterType.REPLACEMENT`: Value is replaced when jitter is applied.
+        - `none`: No jitter is applied.
+        - `additive`: Additive jitter is applied.
+        - `multiplicative`: Multiplicative jitter is applied.
+        - `replacement`: Value is replaced when jitter is applied.
     """
+
+    def __post_init__(self) -> None:
+        if self.jitter_method not in self._JITTER_METHODS:
+            raise ValueError(
+                f"Invalid jitter method: {self.jitter_method}. "
+                f"Expected one of {self._JITTER_METHODS}."
+            )
+
+    _JITTER_METHODS = ["none", "additive", "multiplicative", "replacement"]
 
     kernel: KernelFactory
     kernel_kwargs: dict[str, Any] = field(default_factory=dict)
     kernel_group: str | None = None
     jitter_dist: tfd.Distribution | None = None
-    jitter_method: JitterMethod = JitterMethod.ADDITIVE
+    jitter_method: Literal["none", "additive", "multiplicative", "replacement"] = (
+        "additive"
+    )
 
     def apply_jitter(self, seed: KeyArray, value: Array) -> Array:
         """
@@ -283,7 +271,7 @@ class MCMCSpec:
         -------
         The jittered value with the same shape as the input.
         """
-        if self.jitter_dist is None or self.jitter_method == JitterMethod.NONE:
+        if self.jitter_dist is None or self.jitter_method == "none":
             return value
 
         # check compatibility of shapes
@@ -307,13 +295,13 @@ class MCMCSpec:
         jitter = self.jitter_dist.sample(sample_shape=sample_shape, seed=seed)
 
         match self.jitter_method:
-            case JitterMethod.ADDITIVE:
+            case "additive":
                 value = value + jitter
-            case JitterMethod.MULTIPLICATIVE:
+            case "multiplicative":
                 value = value * jitter
-            case JitterMethod.REPLACEMENT:
+            case "replacement":
                 value = jitter
             case _:
-                assert_never(self.jitter_type)
+                assert_never(self.jitter_method)
 
         return value

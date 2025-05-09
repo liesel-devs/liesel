@@ -13,7 +13,7 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 
 from liesel.distributions import MultivariateNormalDegenerate
 from liesel.goose import EngineBuilder, GibbsKernel, IWLSKernel
-from liesel.goose.mcmc_spec import JitterMethod, LieselMCMC, MCMCSpec
+from liesel.goose.mcmc_spec import LieselMCMC, MCMCSpec
 from liesel.option import Option
 
 from .model import GraphBuilder, Model
@@ -117,7 +117,7 @@ class DistRegBuilder(GraphBuilder):
                 low=-2.0,
                 high=2.0,
             ),
-            jitter_method=JitterMethod.ADDITIVE,
+            jitter_method="additive",
         )
 
         return self
@@ -196,7 +196,7 @@ class DistRegBuilder(GraphBuilder):
                 low=jnp.full_like(beta_var.value, -2.0),
                 high=2.0,
             ),
-            jitter_method=JitterMethod.ADDITIVE,
+            jitter_method="additive",
         )
 
         tau2_var.inference = MCMCSpec(
@@ -208,7 +208,7 @@ class DistRegBuilder(GraphBuilder):
                 low=0.0,
                 high=1e2,
             ),
-            jitter_method=JitterMethod.REPLACEMENT,
+            jitter_method="replacement",
         )
 
         self.add_groups(group)
