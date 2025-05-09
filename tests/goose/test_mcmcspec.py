@@ -331,7 +331,7 @@ class TestLieselMCMC:
             mcmc = gs.LieselMCMC(model)
             kernels = mcmc.get_kernel_list()
 
-        mcmc = gs.LieselMCMC(model, kwargs_strategy=gs.KwargsStrategy.COMPARE_KEYS)
+        mcmc = gs.LieselMCMC(model, kwargs_strategy="compare_keys")
         kernels = mcmc.get_kernel_list()
 
         assert len(kernels) == 1

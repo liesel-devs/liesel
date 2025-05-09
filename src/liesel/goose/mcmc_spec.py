@@ -120,14 +120,14 @@ class LieselMCMC:
                 if not group.kwargs:
                     group.kwargs = inference.kernel_kwargs
                 elif inference.kernel_kwargs:
-                    if self.kwargs_strategy == KwargsStrategy.SINGLE_KWARGS:
+                    if self.kwargs_strategy == "single_kwargs":
                         raise ValueError(
                             "When using "
                             f"{self.kwargs_strategy=}, "
                             "only one spec within each group is allowed to "
                             "define kernel keyword arguments, but we found multiple."
                         )
-                    elif self.kwargs_strategy == KwargsStrategy.COMPARE_KEYS:
+                    elif self.kwargs_strategy == "compare_keys":
                         if not list(group.kwargs) == list(inference.kernel_kwargs):
                             raise ValueError(
                                 "Found incoherent kernel keyword arguments for "
