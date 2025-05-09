@@ -4,6 +4,7 @@ Distributional regression.
 
 from __future__ import annotations
 
+import warnings
 from collections import defaultdict
 
 import jax.numpy as jnp
@@ -332,11 +333,12 @@ def dist_reg_mcmc(
         name for kernel in builder.kernels for name in kernel.position_keys
     ]
 
-    missing_vars = set(var_names) - set(var_names_in_kernels)
-    if missing_vars:
-        raise RuntimeError(
+    vars_with_no_kernels = set(var_names) - set(var_names_in_kernels)
+    if vars_with_no_kernels:
+        warnings.warn(
             f"The following parameters are not associated with any kernel: "
-            f"{missing_vars}"
+            f"{vars_with_no_kernels}",
+            UserWarning,
         )
 
     return builder
