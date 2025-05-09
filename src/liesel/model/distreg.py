@@ -14,9 +14,7 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 from liesel.distributions import MultivariateNormalDegenerate
 from liesel.goose import (
     EngineBuilder,
-    GibbsKernel,
-    IWLSKernel,
-)
+from liesel.goose import EngineBuilder, GibbsKernel, IWLSKernel
 from liesel.goose.mcmc_spec import JitterMethod, LieselMCMC, MCMCSpec
 from liesel.option import Option
 
@@ -324,8 +322,6 @@ def dist_reg_mcmc(
     """
 
     lslmcmc = LieselMCMC(model)
-
-    # TODO: raise error if a variable is not accosiated with a kernel
 
     builder = lslmcmc.get_engine_builder(
         seed=seed,
