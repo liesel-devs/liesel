@@ -31,7 +31,7 @@ jobs:
         run: uv sync --upgrade --all-groups
 
       - name: Run pytest
-        run: uv pip run pytest --run-mcmc
+        run: uv run pytest --run-mcmc
 
       - name: Run doctests
         run: uv run pytest --doctest-modules src/liesel
