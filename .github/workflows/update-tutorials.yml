@@ -2,6 +2,8 @@ name: update-tutorials
 
 on:
   workflow_dispatch: # trigger manually from GitHub UI
+  schedule:
+    - cron: '0 9 1 * *'  # At 09:00 UTC on the 1st day of every month
 
 jobs:
   render-all:
