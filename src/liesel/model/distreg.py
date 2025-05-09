@@ -4,6 +4,7 @@ Distributional regression.
 
 from __future__ import annotations
 
+import warnings
 from collections import defaultdict
 
 import jax.numpy as jnp
@@ -13,7 +14,7 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 
 from liesel.distributions import MultivariateNormalDegenerate
 from liesel.goose import EngineBuilder, GibbsKernel, IWLSKernel
-from liesel.goose.mcmc_spec import JitterMethod, LieselMCMC, MCMCSpec
+from liesel.goose.mcmc_spec import LieselMCMC, MCMCSpec
 from liesel.option import Option
 
 from .model import GraphBuilder, Model
@@ -117,7 +118,7 @@ class DistRegBuilder(GraphBuilder):
                 low=-2.0,
                 high=2.0,
             ),
-            jitter_method=JitterMethod.ADDITIVE,
+            jitter_method="additive",
         )
 
         return self
@@ -196,7 +197,7 @@ class DistRegBuilder(GraphBuilder):
                 low=jnp.full_like(beta_var.value, -2.0),
                 high=2.0,
             ),
-            jitter_method=JitterMethod.ADDITIVE,
+            jitter_method="additive",
         )
 
         tau2_var.inference = MCMCSpec(
@@ -208,7 +209,7 @@ class DistRegBuilder(GraphBuilder):
                 low=0.0,
                 high=1e2,
             ),
-            jitter_method=JitterMethod.REPLACEMENT,
+            jitter_method="replacement",
         )
 
         self.add_groups(group)
@@ -332,11 +333,12 @@ def dist_reg_mcmc(
         name for kernel in builder.kernels for name in kernel.position_keys
     ]
 
-    missing_vars = set(var_names) - set(var_names_in_kernels)
-    if missing_vars:
-        raise RuntimeError(
+    vars_with_no_kernels = set(var_names) - set(var_names_in_kernels)
+    if vars_with_no_kernels:
+        warnings.warn(
             f"The following parameters are not associated with any kernel: "
-            f"{missing_vars}"
+            f"{vars_with_no_kernels}",
+            UserWarning,
         )
 
     return builder

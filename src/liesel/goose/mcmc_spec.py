@@ -3,8 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import TYPE_CHECKING, Any, ParamSpec, Protocol, assert_never
+from typing import TYPE_CHECKING, Any, Literal, ParamSpec, Protocol, assert_never
 
 import tensorflow_probability.substrates.jax.distributions as tfd
 
@@ -17,48 +16,6 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-
-
-class JitterMethod(Enum):
-    """
-    Enum representing the way how jitter to be applied to a variable.
-
-    Attributes
-    ----------
-    NONE
-        No jitter is applied.
-    ADDITIVE
-        Additive jitter is applied.
-    MULTIPLICATIVE
-        Multiplicative jitter is applied.
-    REPLACEMENT
-        Value is replaced when jitter is applied.
-    """
-
-    NONE = 0
-    ADDITIVE = 1
-    MULTIPLICATIVE = 2
-    REPLACEMENT = 3
-
-
-class KwargsStrategy(Enum):
-    """
-    Enum representing the strategy for ensuring consistency of kernel keyword arguments.
-
-    Attributes
-    ----------
-    SINGLE_KWARGS
-        Kernel keyword arguments within a group must be specified on a single
-        :class:`.MCMCSpec`.
-    COMPARE_KEYS
-        Kernel keyword arguments within a group can be specified on multiple
-        :class:`.MCMCSpec` instances, but must  have the same keys. This option is
-        dangerous, because it will not ensure that the *values* associated with the keys
-        are consistent. Silently, only the last seen value will be used.
-    """
-
-    SINGLE_KWARGS = 0
-    COMPARE_KEYS = 1
 
 
 @dataclass
@@ -76,9 +33,9 @@ class LieselMCMC:
         attached to each variable is used.
     kwargs_strategy
         How keyword arguments are handled for kernels in a group. Can be one of:
-        ``KwargsStrategy.SINGLE_KWARGS``: Keyword arguments are defined on only one
+        ``"single_kwargs"``: Keyword arguments are defined on only one
         :class:`.MCMCSpec` object (default).
-        ``KwargsStrategy.COMPARE_KEYS``: Kernel keyword arguments within a group can
+        ``"compare_keys"``: Kernel keyword arguments within a group can
         be specified on multiple :class:`.MCMCSpec` instances, but must  have the same
         keys. This option is dangerous, because it will not ensure that the *values*
         associated with the keys are consistent. Silently, only the last seen value
@@ -87,7 +44,7 @@ class LieselMCMC:
 
     model: Model
     which: str | None = None
-    kwargs_strategy: KwargsStrategy = KwargsStrategy.SINGLE_KWARGS
+    kwargs_strategy: Literal["single_kwargs", "compare_keys"] = "single_kwargs"
 
     def get_spec(self, var: Var) -> MCMCSpec | None:
         """
@@ -297,17 +254,26 @@ class MCMCSpec:
         initial value of the variable.
     jitter_method
         The type of jitter to be applied. This can be one of the following:
-        - `JitterType.NONE`: No jitter is applied.
-        - `JitterType.ADDITIVE`: Additive jitter is applied.
-        - `JitterType.MULTIPLICATIVE`: Multiplicative jitter is applied.
-        - `JitterType.REPLACEMENT`: Value is replaced when jitter is applied.
+        - `none`: No jitter is applied.
+        - `additive`: Additive jitter is applied.
+        - `multiplicative`: Multiplicative jitter is applied.
+        - `replacement`: Value is replaced when jitter is applied.
     """
+
+    def __post_init__(self) -> None:
+        if self.jitter_method not in self._JITTER_METHODS:
+            raise ValueError(
+                f"Invalid jitter method: {self.jitter_method}. "
+                f"Expected one of {self._JITTER_METHODS}."
+            )
+
+    _JITTER_METHODS = ["additive", "multiplicative", "replacement"]
 
     kernel: KernelFactory
     kernel_kwargs: dict[str, Any] = field(default_factory=dict)
     kernel_group: str | None = None
     jitter_dist: tfd.Distribution | None = None
-    jitter_method: JitterMethod = JitterMethod.ADDITIVE
+    jitter_method: Literal["additive", "multiplicative", "replacement"] = "additive"
 
     def apply_jitter(self, seed: KeyArray, value: Array) -> Array:
         """
@@ -328,7 +294,7 @@ class MCMCSpec:
         -------
         The jittered value with the same shape as the input.
         """
-        if self.jitter_dist is None or self.jitter_method == JitterMethod.NONE:
+        if self.jitter_dist is None:
             return value
 
         # check compatibility of shapes
@@ -352,13 +318,13 @@ class MCMCSpec:
         jitter = self.jitter_dist.sample(sample_shape=sample_shape, seed=seed)
 
         match self.jitter_method:
-            case JitterMethod.ADDITIVE:
+            case "additive":
                 value = value + jitter
-            case JitterMethod.MULTIPLICATIVE:
+            case "multiplicative":
                 value = value * jitter
-            case JitterMethod.REPLACEMENT:
+            case "replacement":
                 value = jitter
             case _:
-                assert_never(self.jitter_type)
+                assert_never(self.jitter_method)
 
         return value
