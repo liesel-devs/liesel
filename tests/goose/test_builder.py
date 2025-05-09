@@ -134,7 +134,11 @@ class TestLieselMCMC:
         assert isinstance(kernels[1], gs.IWLSKernel)
 
     def test_kernel_group(self):
-        spec = gs.MCMCSpec(gs.NUTSKernel, kernel_group="a")
+        spec = gs.MCMCSpec(
+            gs.NUTSKernel,
+            kernel_group="a",
+            kernel_kwargs={"mm_diag": True, "da_target_accept": 0.8},
+        )
 
         mu = lsl.Var.new_param(
             0.0,
