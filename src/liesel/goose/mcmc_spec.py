@@ -41,6 +41,26 @@ class JitterMethod(Enum):
     REPLACEMENT = 3
 
 
+class KwargsStrategy(Enum):
+    """
+    Enum representing the strategy for ensuring consistency of kernel keyword arguments.
+
+    Attributes
+    ----------
+    SINGLE_KWARGS
+        Kernel keyword arguments within a group must be specified on a single
+        :class:`.MCMCSpec`.
+    COMPARE_KEYS
+        Kernel keyword arguments within a group can be specified on multiple
+        :class:`.MCMCSpec` instances, but must  have the same keys. This option is
+        dangerous, because it will not ensure that the *values* associated with the keys
+        are consistent. Silently, only the last seen value will be used.
+    """
+
+    SINGLE_KWARGS = 0
+    COMPARE_KEYS = 1
+
+
 @dataclass
 class LieselMCMC:
     """
@@ -54,10 +74,20 @@ class LieselMCMC:
     which
         A named inference configuration to use. If None, the default inference \
         attached to each variable is used.
+    kwargs_strategy
+        How keyword arguments are handled for kernels in a group. Can be one of:
+        ``KwargsStrategy.SINGLE_KWARGS``: Keyword arguments are defined on only one
+        :class:`.MCMCSpec` object (default).
+        ``KwargsStrategy.COMPARE_KEYS``: Kernel keyword arguments within a group can
+        be specified on multiple :class:`.MCMCSpec` instances, but must  have the same
+        keys. This option is dangerous, because it will not ensure that the *values*
+        associated with the keys are consistent. Silently, only the last seen value
+        will be used.
     """
 
     model: Model
     which: str | None = None
+    kwargs_strategy: KwargsStrategy = KwargsStrategy.SINGLE_KWARGS
 
     def get_spec(self, var: Var) -> MCMCSpec | None:
         """
@@ -133,12 +163,22 @@ class LieselMCMC:
                 if not group.kwargs:
                     group.kwargs = inference.kernel_kwargs
                 elif inference.kernel_kwargs:
-                    if not list(group.kwargs) == list(inference.kernel_kwargs):
+                    if self.kwargs_strategy == KwargsStrategy.SINGLE_KWARGS:
                         raise ValueError(
-                            "Found incoherent kernel keyword arguments for "
-                            f"kernel group {group_name}: {list(group.kwargs)} "
-                            f"!= {list(inference.kernel_kwargs)}"
+                            "When using "
+                            f"{self.kwargs_strategy=}, "
+                            "only one spec within each group is allowed to "
+                            "define kernel keyword arguments, but we found multiple."
                         )
+                    elif self.kwargs_strategy == KwargsStrategy.COMPARE_KEYS:
+                        if not list(group.kwargs) == list(inference.kernel_kwargs):
+                            raise ValueError(
+                                "Found incoherent kernel keyword arguments for "
+                                f"kernel group {group_name}: {list(group.kwargs)} "
+                                f"!= {list(inference.kernel_kwargs)}"
+                            )
+                    else:
+                        raise ValueError(f"{self.kwargs_strategy=} not defined.")
 
                 group.position_keys.append(name)
 

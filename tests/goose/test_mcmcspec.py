@@ -326,7 +326,11 @@ class TestLieselMCMC:
 
         model = lsl.Model([mu, sigma])
 
-        mcmc = gs.LieselMCMC(model)
+        with pytest.raises(ValueError):
+            mcmc = gs.LieselMCMC(model)
+            kernels = mcmc.get_kernel_list()
+
+        mcmc = gs.LieselMCMC(model, kwargs_strategy=gs.KwargsStrategy.COMPARE_KEYS)
         kernels = mcmc.get_kernel_list()
 
         assert len(kernels) == 1
