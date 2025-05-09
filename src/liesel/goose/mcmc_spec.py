@@ -108,11 +108,16 @@ class LieselMCMC:
                         f" {group_name}."
                     )
 
-                same_kwargs = group.kwargs == inference.kernel_kwargs
-                if not same_kwargs:
-                    raise ValueError(
-                        f"Found incoherent kwargs for kernel group {group_name}."
-                    )
+                if not group.kwargs:
+                    group.kwargs = inference.kernel_kwargs
+                elif inference.kernel_kwargs:
+                    if not list(group.kwargs) == list(inference.kernel_kwargs):
+                        raise ValueError(
+                            "Found incoherent kernel keyword arguments for "
+                            f"kernel group {group_name}: {list(group.kwargs)} "
+                            f"!= {list(inference.kernel_kwargs)}"
+                        )
+
                 group.position_keys.append(name)
 
             else:
