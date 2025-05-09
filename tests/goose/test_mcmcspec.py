@@ -62,8 +62,9 @@ class TestMCMCSpec:
         result = spec.apply_jitter(self.key, self.value)
         assert jnp.array_equal(result, self.value)
 
+    @pytest.mark.xfail(reason="Jitter method 'none' removed")
     def test_jitter_type_none(self):
-        """Test that no jitter is applied when jitter_type is NONE."""
+        """Test that no jitter is applied when jitter_type is none."""
         spec = MCMCSpec(
             kernel=self.kernel_factory,
             jitter_dist=tfd.Normal(loc=0.0, scale=1.0),

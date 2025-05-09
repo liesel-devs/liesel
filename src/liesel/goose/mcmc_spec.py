@@ -242,15 +242,13 @@ class MCMCSpec:
                 f"Expected one of {self._JITTER_METHODS}."
             )
 
-    _JITTER_METHODS = ["none", "additive", "multiplicative", "replacement"]
+    _JITTER_METHODS = ["additive", "multiplicative", "replacement"]
 
     kernel: KernelFactory
     kernel_kwargs: dict[str, Any] = field(default_factory=dict)
     kernel_group: str | None = None
     jitter_dist: tfd.Distribution | None = None
-    jitter_method: Literal["none", "additive", "multiplicative", "replacement"] = (
-        "additive"
-    )
+    jitter_method: Literal["additive", "multiplicative", "replacement"] = "additive"
 
     def apply_jitter(self, seed: KeyArray, value: Array) -> Array:
         """
@@ -271,7 +269,7 @@ class MCMCSpec:
         -------
         The jittered value with the same shape as the input.
         """
-        if self.jitter_dist is None or self.jitter_method == "none":
+        if self.jitter_dist is None:
             return value
 
         # check compatibility of shapes
