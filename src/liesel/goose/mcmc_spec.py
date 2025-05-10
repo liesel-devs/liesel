@@ -3,9 +3,8 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, ParamSpec, Protocol, assert_never
 
-import jax.numpy as jnp
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 from .builder import EngineBuilder
@@ -198,6 +197,17 @@ class _KernelGroup:
     position_keys: list[str] = field(default_factory=list)
 
 
+P = ParamSpec("P")
+
+
+class KernelFactory(Protocol[P]):
+    """Create a kernel instance based on the provided position keys and arguments."""
+
+    def __call__(
+        self, position_keys: list[str], *args: P.args, **kwargs: P.kwargs
+    ) -> Kernel: ...
+
+
 @dataclass
 class MCMCSpec:
     """
@@ -207,8 +217,8 @@ class MCMCSpec:
     Parameters
     ----------
     kernel
-        A callable that returns a ``Kernel`` instance when provided with position keys \
-        and keyword arguments.
+        A KernelFactory that returns a ``Kernel`` instance when provided with position
+        keys and keyword arguments.
     kernel_kwargs
         Additional keyword arguments to be passed to the kernel callable.
     kernel_group
@@ -217,12 +227,28 @@ class MCMCSpec:
     jitter_dist
         A TensorFlow Probability distribution used to apply random jitter to the \
         initial value of the variable.
+    jitter_method
+        The type of jitter to be applied. This can be one of the following:
+        - `none`: No jitter is applied.
+        - `additive`: Additive jitter is applied.
+        - `multiplicative`: Multiplicative jitter is applied.
+        - `replacement`: Value is replaced when jitter is applied.
     """
 
-    kernel: Callable[..., Kernel]
+    def __post_init__(self) -> None:
+        if self.jitter_method not in self._JITTER_METHODS:
+            raise ValueError(
+                f"Invalid jitter method: {self.jitter_method}. "
+                f"Expected one of {self._JITTER_METHODS}."
+            )
+
+    _JITTER_METHODS = ["additive", "multiplicative", "replacement"]
+
+    kernel: KernelFactory
     kernel_kwargs: dict[str, Any] = field(default_factory=dict)
     kernel_group: str | None = None
     jitter_dist: tfd.Distribution | None = None
+    jitter_method: Literal["additive", "multiplicative", "replacement"] = "additive"
 
     def apply_jitter(self, seed: KeyArray, value: Array) -> Array:
         """
@@ -246,9 +272,34 @@ class MCMCSpec:
         if self.jitter_dist is None:
             return value
 
-        original_shape = jnp.asarray(value).shape
-        value = jnp.atleast_1d(value)
+        # check compatibility of shapes
+        if (
+            self.jitter_dist.batch_shape + self.jitter_dist.event_shape != value.shape
+        ) and (
+            self.jitter_dist.batch_shape.rank + self.jitter_dist.event_shape.rank > 0
+        ):
+            raise ValueError(
+                f"Jitter distribution shapes "
+                f"(batch shape {self.jitter_dist.batch_shape} "
+                f"and event shape {self.jitter_dist.event_shape}) "
+                f"do not match variable shape {value.shape}."
+            )
+        sample_shape = (
+            value.shape
+            if self.jitter_dist.batch_shape + self.jitter_dist.event_shape == ()
+            else ()
+        )
 
-        jitter = self.jitter_dist.sample(sample_shape=jnp.shape(value), seed=seed)
+        jitter = self.jitter_dist.sample(sample_shape=sample_shape, seed=seed)
 
-        return jnp.reshape(value + jitter, original_shape)
+        match self.jitter_method:
+            case "additive":
+                value = value + jitter
+            case "multiplicative":
+                value = value * jitter
+            case "replacement":
+                value = jitter
+            case _:
+                assert_never(self.jitter_method)
+
+        return value
