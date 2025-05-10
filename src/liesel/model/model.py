@@ -19,17 +19,7 @@ import jax.numpy as jnp
 import jax.random
 import networkx as nx
 
-from .nodes import (
-    Array,
-    Calc,
-    Dist,
-    Group,
-    Node,
-    NodeState,
-    Value,
-    Var,
-    VarValue,
-)
+from .nodes import Array, Calc, Dist, Group, Node, NodeState, Value, Var, VarValue
 from .viz import plot_nodes, plot_vars
 
 __all__ = ["GraphBuilder", "Model", "load_model", "save_model"]
@@ -826,6 +816,7 @@ class Model:
         copy: bool = False,
         to_float32: bool = True,
     ):
+        self.to_float32 = to_float32
         if grow:
             model = (
                 GraphBuilder(to_float32=to_float32).add(*nodes_and_vars).build_model()
@@ -1808,7 +1799,13 @@ class TemporaryModel:
         If ``silent=True``, all logging will be suppressed.
     """
 
-    def __init__(self, *vars_and_nodes, verbose: bool = False, silent: bool = False):
+    def __init__(
+        self,
+        *vars_and_nodes,
+        verbose: bool = False,
+        silent: bool = False,
+        to_float32: bool = True,
+    ):
         self.vars_and_nodes = vars_and_nodes
         self.verbose = verbose
         self.silent = silent
@@ -1822,11 +1819,12 @@ class TemporaryModel:
         self.node_names = None
         self.vars = None
         self.nodes = None
+        self.to_float32 = to_float32
 
     def __enter__(self):
         verbose = self.verbose
 
-        gb = GraphBuilder().add(*self.vars_and_nodes)
+        gb = GraphBuilder(to_float32=self.to_float32).add(*self.vars_and_nodes)
         nodes, _vars = gb._all_nodes_and_vars()
 
         automatically_set_names = gb._set_missing_names()
