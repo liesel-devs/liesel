@@ -593,7 +593,3 @@ def test_transform_no_dist() -> None:
     var = lsl.Var(1, None)
     with pytest.raises(RuntimeError):
         var.transform()
-
-
-def test_t1() -> None:
-    assert tfp.bijectors.Exp().forward(1.0) == jnp.exp(1.0)
