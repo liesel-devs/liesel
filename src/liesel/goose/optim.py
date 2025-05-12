@@ -56,7 +56,7 @@ def _find_observed(model: Model) -> dict[str, Var | Node]:
     obs = {
         var_.name: jnp.array(var_.value)
         for var_ in model.vars.values()
-        if var_.observed
+        if var_.observed and not var_.weak
     }
     return obs
 
@@ -234,6 +234,7 @@ def optim_flat(
     model_validation: Model | None = None,
     restore_best_position: bool = True,
     prune_history: bool = True,
+    validate_log_prob_decomposition: bool = True,
     progress_bar: bool = True,
     track_keys: list[str] | None = None,
 ) -> OptimResult:
@@ -390,12 +391,13 @@ def optim_flat(
 
     # ---------------------------------------------------------------------------------
     # Validate model log prob decomposition
-    _validate_log_prob_decomposition(
-        interface_train, position=position, state=model_train.state
-    )
-    _validate_log_prob_decomposition(
-        interface_validation, position=position, state=model_validation.state
-    )
+    if validate_log_prob_decomposition:
+        _validate_log_prob_decomposition(
+            interface_train, position=position, state=model_train.state
+        )
+        _validate_log_prob_decomposition(
+            interface_validation, position=position, state=model_validation.state
+        )
 
     # ---------------------------------------------------------------------------------
     # Define loss function(s)
@@ -406,9 +408,8 @@ def optim_flat(
     def _batched_neg_log_prob(
         position: Position, model_state: ModelState, batch_indices: Array | None = None
     ):
-        if batch_indices is not None:
-            batched_observed = batched_nodes(observed, batch_indices)
-            position = position | batched_observed  # type: ignore
+        batched_observed = batched_nodes(observed, batch_indices)
+        position = position | batched_observed  # type: ignore
 
         updated_state = interface_train.update_state(position, model_state)
         log_lik = likelihood_scalar * updated_state["_model_log_lik"].value
