@@ -316,7 +316,8 @@ def test_find_observed():
     model = lsl.Model([a])
     observed = _find_observed(model)
 
-    assert 'a' in observed
+    assert "a" in observed
+
 
 def test_find_observed_weak():
     n = 10
@@ -326,8 +327,9 @@ def test_find_observed_weak():
     model = lsl.Model([b])
     observed = _find_observed(model)
 
-    assert 'a' in observed
-    assert 'b' not in observed
+    assert "a" in observed
+    assert "b" not in observed
+
 
 class TestStopper:
     def test_stopper_does_not_stop(self):
