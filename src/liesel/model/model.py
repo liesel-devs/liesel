@@ -19,17 +19,7 @@ import jax.numpy as jnp
 import jax.random
 import networkx as nx
 
-from .nodes import (
-    Array,
-    Calc,
-    Dist,
-    Group,
-    Node,
-    NodeState,
-    Value,
-    Var,
-    VarValue,
-)
+from .nodes import Array, Calc, Dist, Group, Node, NodeState, Value, Var, VarValue
 from .viz import plot_nodes, plot_vars
 
 __all__ = ["GraphBuilder", "Model", "load_model", "save_model"]
@@ -826,6 +816,7 @@ class Model:
         copy: bool = False,
         to_float32: bool = True,
     ):
+        self._to_float32 = to_float32
         if grow:
             model = (
                 GraphBuilder(to_float32=to_float32).add(*nodes_and_vars).build_model()
@@ -1031,7 +1022,7 @@ class Model:
             if hasattr(node, "_unset_model"):
                 node._unset_model()
 
-        return Model(list(copy_of_nodes_to_include))
+        return Model(list(copy_of_nodes_to_include), to_float32=self._to_float32)
 
     @property
     def log_lik(self) -> Array:
