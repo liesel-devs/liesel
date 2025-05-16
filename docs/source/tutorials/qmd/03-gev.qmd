@@ -75,7 +75,7 @@ model = r.model
 # concentration == 0.0 seems to break the sampler
 model.vars["concentration_p0_beta"].value = jnp.array([0.1, 0.0])
 
-builder = lsl.dist_reg_mcmc(model, seed=42, num_chains=4, disable_jitter=True)
+builder = lsl.dist_reg_mcmc(model, seed=42, num_chains=4, apply_jitter=False)
 builder.set_duration(warmup_duration=1000, posterior_duration=1000)
 
 engine = builder.build()
