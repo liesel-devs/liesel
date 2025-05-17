@@ -301,6 +301,7 @@ def dist_reg_mcmc(
     model: Model,
     seed: int,
     num_chains: int,
+    apply_jitter: bool = True,
 ) -> EngineBuilder:
     """
     Configures an :class:`~.goose.EngineBuilder` for a distributional regression model.
@@ -318,6 +319,10 @@ def dist_reg_mcmc(
         The PRNG seed for the engine builder.
     num_chains
         The number of chains to be sampled.
+    apply_jitter
+        If ``False``, disables the jittering of the initial distributions regardless of
+        the configuration in the variables inference configuration (see
+        :class:`~.goose.MCMCSpec`).
     """
 
     lslmcmc = LieselMCMC(model)
@@ -325,7 +330,7 @@ def dist_reg_mcmc(
     builder = lslmcmc.get_engine_builder(
         seed=seed,
         num_chains=num_chains,
-        apply_jitter=True,
+        apply_jitter=apply_jitter,
     )
 
     var_names = [var.name for var in model.parameters.values()]
