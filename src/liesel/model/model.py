@@ -1799,17 +1799,10 @@ class TemporaryModel:
         If ``silent=True``, all logging will be suppressed.
     """
 
-    def __init__(
-        self,
-        *vars_and_nodes,
-        verbose: bool = False,
-        silent: bool = False,
-        to_float32: bool = True,
-    ):
+    def __init__(self, *vars_and_nodes, verbose: bool = False, silent: bool = False):
         self.vars_and_nodes = vars_and_nodes
         self.verbose = verbose
         self.silent = silent
-        self.to_float32 = to_float32
 
         if verbose and silent:
             raise ValueError(f"{verbose=} and {silent=} cannot both be True.")
@@ -1824,7 +1817,7 @@ class TemporaryModel:
     def __enter__(self):
         verbose = self.verbose
 
-        gb = GraphBuilder(to_float32=self.to_float32).add(*self.vars_and_nodes)
+        gb = GraphBuilder().add(*self.vars_and_nodes)
         nodes, _vars = gb._all_nodes_and_vars()
 
         automatically_set_names = gb._set_missing_names()

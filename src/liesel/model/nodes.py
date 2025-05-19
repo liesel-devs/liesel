@@ -11,7 +11,15 @@ from collections.abc import Callable, Hashable, Iterable, Sequence
 from functools import wraps
 from itertools import chain
 from types import MappingProxyType
-from typing import IO, TYPE_CHECKING, Any, Literal, NamedTuple, TypeGuard, TypeVar
+from typing import (
+    IO,
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    NamedTuple,
+    TypeGuard,
+    TypeVar,
+)
 
 import jax
 import tensorflow_probability.substrates.jax.bijectors as jb
@@ -2046,8 +2054,7 @@ class Var:
 
         from liesel.model.model import TemporaryModel
 
-        to_float32 = not jax.config.jax_enable_x64
-        with TemporaryModel(self, verbose=verbose, to_float32=to_float32) as model:
+        with TemporaryModel(self, verbose=verbose) as model:
             match which:
                 case "vars":
                     subgraph = model.var_parental_subgraph(self)
@@ -2204,8 +2211,7 @@ class Var:
 
         from .model import TemporaryModel
 
-        to_float32 = not jax.config.jax_enable_x64
-        with TemporaryModel(self, silent=True, to_float32=to_float32) as model:
+        with TemporaryModel(self, silent=True) as model:
             drawn_samples = model.sample(
                 shape=shape,
                 seed=seed,
