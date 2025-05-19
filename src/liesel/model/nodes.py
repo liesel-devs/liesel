@@ -2046,7 +2046,13 @@ class Var:
 
         from liesel.model.model import TemporaryModel
 
-        to_float32 = not jax.config.jax_enable_x64
+        try:
+            to_float32 = not jax.config.jax_enable_x64  # type: ignore
+        except Exception:  # just to be really sure in case anything changes
+            # this is an implicit test of whether x64 flag is enabled
+            import jax.numpy as jnp
+
+            to_float32 = jnp.array(1.0).dtype == jnp.dtype("float32")
         with TemporaryModel(self, verbose=verbose, to_float32=to_float32) as model:
             match which:
                 case "vars":
@@ -2204,7 +2210,13 @@ class Var:
 
         from .model import TemporaryModel
 
-        to_float32 = not jax.config.jax_enable_x64
+        try:
+            to_float32 = not jax.config.jax_enable_x64  # type: ignore
+        except Exception:  # just to be really sure in case anything changes
+            # this is an implicit test of whether x64 flag is enabled
+            import jax.numpy as jnp
+
+            to_float32 = jnp.array(1.0).dtype == jnp.dtype("float32")
         with TemporaryModel(self, silent=True, to_float32=to_float32) as model:
             drawn_samples = model.sample(
                 shape=shape,
