@@ -20,8 +20,8 @@
    {% if methods | reject("in", inherited_members) | reject("equalto", "__init__") | list | length > 0 %}
    .. rubric:: {{ _('Methods') }}
 
-   This section contains does not show inherited methods. Please refer to the
-   documentation of the parent class for documentation on inherited methods.
+   This section does not show inherited methods. Please refer to the documentation
+   of the parent class for documentation on inherited methods.
 
    .. autosummary::
       :toctree:
@@ -41,8 +41,8 @@
    {% if attributes | reject("in", inherited_members) | list | length > 0 %}
    .. rubric:: {{ _('Attributes') }}
 
-   This section contains does not show inherited attributes. Please refer to the
-   documentation of the parent class for documentation on inherited attributes.
+   This section does not show inherited attributes. Please refer to the documentation
+   of the parent class for documentation on inherited attributes.
 
    .. autosummary::
       :template: autosummary/attribute.rst
