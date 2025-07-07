@@ -1,6 +1,4 @@
-"""
-VI framework.
-"""
+"""VI framework."""
 
 from .builder import OptimizerBuilder
 from .interface import LieselInterface

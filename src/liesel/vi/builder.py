@@ -16,25 +16,24 @@ tfd = tfp.distributions
 
 
 class Phi_MultivariateNormalLogCholeskyParametrization(TypedDict):
-    """
-    A TypedDict to specify the parameters for a multivariate normal distribution
-    using a log-Cholesky parametrization.
-    """
+    """A TypedDict to specify the parameters for a multivariate normal distribution
+    using a log-Cholesky parametrization."""
 
     loc: jnp.ndarray
     log_cholesky_parametrization: jnp.ndarray
 
 
 class OptimizerBuilder:
-    """
-    The :class:`.OptimizerBuilder` is used to construct an Optimizer for stochastic variational inference.
+    """The :class:`.OptimizerBuilder` is used to construct an Optimizer for stochastic
+    variational inference.
 
     .. rubric:: Workflow
 
     The general workflow usually looks something like this:
 
     #. Create a builder with :class:`.OptimizerBuilder`.
-    #. Optionally set the optimization parameters (e.g., number of epochs, sample size, batch size).
+    #. Optionally set the optimization parameters (e.g., number of epochs,
+    #  sample size, batch size).
     #. Create an instance of the model interface with :class:`.LieselInterface`
        and set it with :meth:`.set_model`.
     #. Add latent variables with :meth:`.add_latent_variable` and/or
@@ -44,8 +43,10 @@ class OptimizerBuilder:
 
     Optionally, you can also:
 
-    - Configure transformation functions for latent variables using the `transform` parameter.
-    - Specify fixed distribution parameters and optimizer chains for each latent variable.
+    - Configure transformation functions for latent variables using
+      the `transform` parameter.
+    - Specify fixed distribution parameters and optimizer chains
+      for each latent variable.
 
     Parameters
     ----------
@@ -59,9 +60,10 @@ class OptimizerBuilder:
     patience_tol : float, optional
         Tolerance for early stopping based on ELBO improvements.
     window_size : int, optional
-        Number of epochs to wait before early stopping if no improvement is observed.
+        Number of epochs to wait before early stopping if no improvement occurs.
     batch_size : int, optional
-        Batch size used during optimization for subsetting the data; if None, the full dataset is used.
+        Batch size used during optimization for subsetting the data; if None,
+        the full dataset is used.
 
     See Also
     --------
@@ -75,8 +77,8 @@ class OptimizerBuilder:
 
     **Example 1: Adding latent variables separately**
 
-    In this example, we add a univariate latent variable for `sigma_sq` and another for `b`
-    using separate calls to :meth:`.add_latent_variable` (Mean-Field).
+    In this example, we add a univariate latent variable for `sigma_sq` and another for
+    `b` using separate calls to :meth:`.add_latent_variable` (Mean-Field).
 
     >>> import jax.numpy as jnp
     >>> import optax
@@ -207,8 +209,7 @@ class OptimizerBuilder:
         self.latent_variables = []
 
     def set_model(self, interface: LieselInterface) -> None:
-        """
-        Set the model interface for the optimizer.
+        """Set the model interface for the optimizer.
 
         Parameters:
             interface (LieselInterface): An instance that provides access to the model.
@@ -219,14 +220,13 @@ class OptimizerBuilder:
         self,
         names: list[str],
         dist_class: Callable,
-        *,  # enforce keyword-only arguments, leaves us flexibility to not specify arguments for fixed_distribution_params, but leaves it together
+        *,
         phi: dict[str, float],
         fixed_distribution_params: dict[str, float] | None = None,
         optimizer_chain: optax.GradientTransformation,
         transform: Callable | tfb.Bijector | None = None,
     ) -> None:
-        """
-        Add a latent variable to the optimizer configuration by adding a variational
+        """Add a latent variable to the optimizer configuration by adding a variational
         distribution for each latent variable independently (Mean-Field Approach).
 
         The 'transform' parameter can be:
@@ -242,9 +242,12 @@ class OptimizerBuilder:
             names (List[str]): List of parameter names.
             dist_class (Callable): Distribution class (e.g., tfd.Normal).
             phi (Dict[str, float]): Dictionary containing the initial parameters.
-            fixed_distribution_params (Optional[Dict[str, float]]): Optional fixed parameters for the distribution.
-            optimizer_chain (optax.GradientTransformation): Optimizer chain for gradient transformations.
-            transform (Optional[Union[Callable, tfb.Bijector]]): Transformation to apply on the latent variable.
+            fixed_distribution_params (Optional[Dict[str, float]]): Optional fixed
+            parameters for the distribution.
+            optimizer_chain (optax.GradientTransformation): Optimizer chain for gradient
+            transformations.
+            transform (Optional[Union[Callable, tfb.Bijector]]): Transformation to
+            apply on the latent variable.
         """
         if isinstance(names, str):
             names = [names]
@@ -268,20 +271,25 @@ class OptimizerBuilder:
         optimizer_chain: optax.GradientTransformation,
         transform: Callable | tfb.Bijector | None = None,
     ) -> None:
-        """
-        Adds a multivariate latent variable to the optimizer configuration (Gaussian Full-Rank)
-        with shared covariance of different latent variables.
+        """Adds a multivariate latent variable to the optimizer configuration (Gaussian
+        Full-Rank) with shared covariance of different latent variables.
 
         If fixed_distribution_params does not include 'd' (the total dimension),
-        it is computed from the model's parameter shapes. If phi is not provided,
-        a default is generated with ones for the location and a computed log-Cholesky vector.
+        it is computed from the model's parameter shapes. If phi is
+        not provided, a default is generated with ones for the location and a
+        computed log-Cholesky vector.
 
         Parameters:
-            names (List[str]): List of parameter names to be grouped as a multivariate variable.
-            phi (Optional[Phi_MultivariateNormalLogCholeskyParametrization]): Initial parameters for the distribution.
-            fixed_distribution_params (Optional[Dict[str, float]]): Optional fixed parameters for the distribution.
-            optimizer_chain (optax.GradientTransformation): Optimizer chain for gradient transformations.
-            transform (Optional[Union[Callable, tfb.Bijector]]): Transformation to apply on the latent variable.
+            names (List[str]): List of parameter names to be grouped as a
+            multivariate variable.
+            phi (Optional[Phi_MultivariateNormalLogCholeskyParametrization]): Initial
+            parameters for the distribution.
+            fixed_distribution_params (Optional[Dict[str, float]]): Optional
+            fixed parameters for the distribution.
+            optimizer_chain (optax.GradientTransformation): Optimizer chain for
+            gradient transformations.
+            transform (Optional[Union[Callable, tfb.Bijector]]): Transformation to apply
+            on the latent variable.
         """
         if fixed_distribution_params is None:
             fixed_distribution_params = {}
@@ -313,11 +321,11 @@ class OptimizerBuilder:
         )
 
     def build(self) -> Optimizer:
-        """
-        Build and return an Optimizer instance based on the current configuration.
+        """Build and return an Optimizer instance based on the current configuration.
 
         Returns:
-            Optimizer: An optimizer configured with the specified model interface and latent variables.
+            Optimizer: An optimizer configured with the specified model interface and
+            latent variables.
         """
         if self._model_interface is None:
             raise ValueError(

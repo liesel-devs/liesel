@@ -30,7 +30,8 @@ class LieselInterface:
         the log probability over the entire dataset.
 
         Parameters:
-            param_values (Dict[str, jnp.ndarray]): Dictionary of parameter names and their values.
+            param_values (Dict[str, jnp.ndarray]): Dictionary of parameter names
+            and their values.
             dim_data: Dimensionality of the data.
             batch_size: Size of the batch (optional).
             batch_indices: Indices for batching (optional).

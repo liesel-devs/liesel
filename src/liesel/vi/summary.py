@@ -9,19 +9,19 @@ import seaborn as sns
 
 
 class Summary:
-    """
-    Posterior statistics and diagnostics.
+    """Posterior statistics and diagnostics.
 
     This summary object computes key posterior statistics for each latent variable,
     including the posterior mean, variance, 2.5% and 97.5% quantiles, and the highest
-    density interval (HDI) all based on samples from the posterior distributins. Oriented on lsl.goose module.
+    density interval (HDI) all based on samples from the posterior distributins.
+    Oriented on lsl.goose module.
 
     Parameters
     ----------
     results : dict
         Dictionary containing the inference results with the following keys:
-          - "final_variational_distributions": dict mapping latent variable names to their final
-            variational distribution objects.
+          - "final_variational_distributions": dict mapping latent variable names
+            to their final variational distribution objects.
           - "elbo_values": list or array of ELBO values over iterations.
           - "samples": dict mapping latent variable names to pre-generated samples.
     """
@@ -35,9 +35,11 @@ class Summary:
 
     def compute_posterior_summary(self, hdi_prob: float = 0.9) -> pd.DataFrame:
         """
-        Compute and return a tidy table of univariate summary statistics for each latent variable's posterior.
-        Note: This summary ignores any interactions or covariances between variables. In cases of multivariate latent variables,
-        while covariance is taken into account during optimization, only the marginal summaries for each individual variable are displayed.
+        Compute and return a tidy table of univariate summary statistics for each latent
+        variable's posterior. Note: This summary ignores any interactions or covariances
+        between variables. In cases of multivariate latent variables, while covariance
+        is taken into account during optimization, only the marginal summaries for each
+        individual variable are displayed.
 
         For each latent variable $ \theta $, the following statistics are computed:
 
@@ -48,7 +50,8 @@ class Summary:
         Q_{0.025}(\theta) &= \text{2.5\\% quantile},\\[1mm]
         Q_{0.975}(\theta) &= \text{97.5\\% quantile},\\[1mm]
         \text{HDI}_{\text{low}}(\theta),\\ \text{HDI}_{\text{high}}(\theta) &=
-        \text{Highest Density Interval at the specified level (e.g. 90\\% if } hdi\\_prob=0.9\text{)}.
+        \text{Highest Density Interval at the specified level (e.g. 90\\% if }
+        hdi\\_prob=0.9\text{)}.
         \\end{align}
         $$
 
@@ -95,7 +98,8 @@ class Summary:
                     )
             else:
                 raise ValueError(
-                    "compute_posterior_summary only supports scalar or 1D latent variables."
+                    "compute_posterior_summary only supports scalar or 1D"
+                    "latent variables."
                 )
         df = pd.DataFrame(rows)
         return df
@@ -109,8 +113,7 @@ class Summary:
         color: str = "blue",
         save_path: str = None,
     ) -> None:
-        """
-        Plot the ELBO progression over iterations.
+        """Plot the ELBO progression over iterations.
 
         Parameters
         ----------
@@ -145,8 +148,7 @@ class Summary:
         xlabel: str = None,
         save_path: str = None,
     ) -> None:
-        """
-        Plot the posterior density of a latent variable using pre-generated samples.
+        """Plot the posterior density of a latent variable using pre-generated samples.
 
         Parameters
         ----------
@@ -207,8 +209,7 @@ class Summary:
         style: str = "whitegrid",
         save_path: str = None,
     ) -> None:
-        """
-        Produce a pairwise scatter plot matrix for a multivariate latent variable.
+        """Produce a pairwise scatter plot matrix for a multivariate latent variable.
 
         Parameters
         ----------

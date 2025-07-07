@@ -6,7 +6,6 @@ import jax
 import jax.numpy as jnp
 import jax.tree_util
 import optax
-
 from optax import GradientTransformation, OptState
 from tensorflow_probability.substrates import jax as tfp
 from tensorflow_probability.substrates.jax.distributions import (
@@ -19,12 +18,12 @@ tfd = tfp.distributions
 
 
 class Optimizer:
-    """
-    Optimizer for stochastic variational inference.
+    """Optimizer for stochastic variational inference.
 
-    This class performs variational inference by optimizing the ELBO using gradient-based
-    methods. It initializes variational distributions based on a given model interface and latent
-    variable configurations, then runs an optimization loop over a specified number of epochs.
+    This class performs variational inference by optimizing the ELBO using gradient-
+    based methods. It initializes variational distributions based on a given model
+    interface and latent variable configurations, then runs an optimization loop over a
+    specified number of epochs.
     """
 
     def __init__(
@@ -38,8 +37,7 @@ class Optimizer:
         patience_tol: float | None = None,
         window_size: int | None = None,
     ) -> None:
-        """
-        Initialize the Optimizer.
+        """Initialize the Optimizer.
 
         Parameters
         ----------
@@ -58,7 +56,7 @@ class Optimizer:
         patience_tol : float, optional
             Tolerance for early stopping based on ELBO improvements.
         window_size : int, optional
-            Number of epochs to wait before early stopping if no improvement is observed.
+            Number of epochs to wait before early stopping if no improvement occurs.
         """
         self.seed = seed
         self.n_epochs = n_epochs
@@ -138,15 +136,13 @@ class Optimizer:
         phi: dict[str, Any],
         fixed_distribution_params: dict[str, Any],
     ) -> TfpDistribution:
-        """Builds a TFP distribution with given parameters phi and fixed_distribution_params."""
+        """Builds a TFP distribution with given parameters phi and
+        fixed_distribution_params."""
         return dist_class(**phi, **fixed_distribution_params)
 
     def _process_full_rank_configs(self) -> None:
-        """
-        Process configurations for Full-Rank latent variables and
-        checks dimensions for configurations with multiple variables and sets
-        a unique full_rank_key.
-        """
+        """Process configurations for Full-Rank latent variables and checks dimensions
+        for configurations with multiple variables and sets a unique full_rank_key."""
         model_params = self.model_interface.get_params()
 
         for config in self.latent_vars_config:
@@ -188,7 +184,9 @@ class Optimizer:
 
         if not (phi_keys == fixed_keys == dist_keys):
             raise ValueError(
-                f"Mismatch in keys: phi_keys={phi_keys}, fixed_keys={fixed_keys}, dist_keys={dist_keys}"
+                f"Mismatch in keys: phi_keys={phi_keys}, "
+                f"fixed_keys={fixed_keys}, "
+                f"dist_keys={dist_keys}"
             )
 
         distributions = {
@@ -213,13 +211,14 @@ class Optimizer:
         return opt_state, tx
 
     def fit(self) -> None:
-        """
-        Run the optimization loop to update variational parameters by maximizing the negative ELBO.
+        """Run the optimization loop to update variational parameters by maximizing the
+        negative ELBO.
 
-        This method iterates over the specified number of epochs. At each epoch, the data is
-        partitioned into batches (if a batch_size is provided) and a jitted 'step' function is
-        executed to compute the ELBO, its gradients, and update the variational parameters.
-        Early stopping is implemented based on the relative improvement of the ELBO.
+        This method iterates over the specified number of epochs. At each epoch, the
+        data is partitioned into batches (if a batch_size is provided) and a jitted
+        'step' function is executed to compute the ELBO, its gradients, and update the
+        variational parameters. Early stopping is implemented based on the relative
+        improvement of the ELBO.
         """
         n_epochs = self.n_epochs
         dim_data = self.dim_data
@@ -241,8 +240,7 @@ class Optimizer:
             batch_indices: jnp.ndarray,
             S: int,
         ) -> tuple[dict[str, Any], OptState, float, jax.random.PRNGKey]:
-            """
-            Perform a single optimization step.
+            """Perform a single optimization step.
 
             Parameters
             ----------
@@ -287,8 +285,7 @@ class Optimizer:
         def epoch_batches(
             phi: dict[str, Any], opt_state: OptState, rng_key: jax.random.PRNGKey
         ) -> tuple[dict[str, Any], OptState, jax.random.PRNGKey, float]:
-            """
-            Process all batches in one epoch and compute the mean ELBO.
+            """Process all batches in one epoch and compute the mean ELBO.
 
             Parameters
             ----------
@@ -347,18 +344,19 @@ class Optimizer:
         )
 
         def epoch_body(state):
-            """
-            Update the epoch state and log progress using relative ELBO improvement.
+            """Update the epoch state and log progress using relative ELBO improvement.
 
             Parameters
             ----------
             state : tuple
-                Contains (epoch, phi, opt_state, rng_key, best_elbo, window_counter, elbo_array).
+                Contains (epoch, phi, opt_state, rng_key, best_elbo, window_counter,
+                elbo_array).
 
             Returns
             -------
             tuple
-                Updated state: (epoch+1, phi, opt_state, rng_key, new_best_elbo, new_window_counter, elbo_array).
+                Updated state: (epoch+1, phi, opt_state, rng_key, new_best_elbo,
+                new_window_counter, elbo_array).
             """
             epoch, phi, opt_state, rng_key, best_elbo, window_counter, elbo_array = (
                 state
@@ -389,17 +387,18 @@ class Optimizer:
                         epoch=epoch + 1,
                         elbo=current_elbo,
                     ),
-                    0,  
+                    0,
                 )[1],
                 lambda _: 0,
                 operand=0,
-                )
-            
+            )
+
             _ = jax.lax.cond(
                 new_window_counter >= window_size,
                 lambda _: (
                     jax.debug.print(
-                        "Early stopping triggered at epoch: {epoch:6d} with ELBO: {elbo:.4f} - Relative Improvement: {imp:.4f}",
+                        "Early stopping triggered at epoch: {epoch:6d} with ELBO: "
+                        "{elbo:.4f} - Relative Improvement: {imp:.4f}",
                         epoch=epoch + 1,
                         elbo=current_elbo,
                         imp=-improvement,
@@ -408,7 +407,7 @@ class Optimizer:
                 )[1],
                 lambda _: 0,
                 operand=0,
-                        )
+            )
             return (
                 epoch + 1,
                 phi,
@@ -421,12 +420,14 @@ class Optimizer:
 
         def loop_cond(state):
             """
-            Loop condition: Continue while epoch < n_epochs and window_counter < window_size.
+            Loop condition: Continue while epoch < n_epochs
+            and window_counter < window_size.
 
             Parameters
             ----------
             state : tuple
-                Contains (epoch, phi, opt_state, rng_key, best_elbo, window_counter, elbo_array).
+                Contains (epoch, phi, opt_state, rng_key, best_elbo, window_counter,
+                elbo_array).
 
             Returns
             -------
@@ -450,8 +451,7 @@ class Optimizer:
         self.final_variational_distributions = self.get_final_distributions()
 
     def _elbo(self, phi, rng_key, dim_data, batch_size, batch_indices, S):
-        """
-        Compute the negative ELBO (Evidence Lower Bound) for variational inference.
+        """Compute the negative ELBO (Evidence Lower Bound) for variational inference.
 
         Parameters
         ----------
@@ -481,7 +481,8 @@ class Optimizer:
 
         @jax.jit
         def _single_sample_elbo(rng_key_sample):
-            """Compute the ELBO for a single sample by accessing the model via the Interface instance."""
+            """Compute the ELBO for a single sample by accessing the model via the
+            Interface instance."""
             samples, log_det_jac, log_q = self._sample_variational(phi, rng_key_sample)
             log_prob = self.model_interface.compute_log_prob(
                 samples, dim_data, batch_size, batch_indices
@@ -493,8 +494,8 @@ class Optimizer:
         return -elbo, rng_key
 
     def _apply_transform(self, z, transform_spec):
-        """
-        Apply a transformation to variable z and compute the log-determinant of its Jacobian.
+        """Apply a transformation to variable z and compute the log-determinant of its
+        Jacobian.
 
         Parameters
         ----------
@@ -525,13 +526,13 @@ class Optimizer:
             return z_transformed, ldj
         else:
             raise ValueError(
-                "Only tfb.Bijector instances and Python callables are supported as transforms"
+                "Only tfb.Bijector instances and Python callables are supported "
+                "as transforms"
             )
 
     def _sample_single_variable(self, pname, phi, rng_key, transform_spec):
-        """
-        Sample a single latent variable using its fully reparameterizable
-        variational distribution.
+        """Sample a single latent variable using its fully reparameterizable variational
+        distribution.
 
         Parameters
         ----------
@@ -547,9 +548,10 @@ class Optimizer:
         Returns
         -------
         tuple
-            (z_transformed, ldj, log_q, rng_key) where z_transformed is the sampled and transformed variable,
-            ldj is the log-determinant of the Jacobian, log_q is the log probability under the variational distribution,
-            and rng_key is the updated random key.
+            (z_transformed, ldj, log_q, rng_key) where z_transformed is the sampled and
+             transformed variable, ldj is the log-determinant of the Jacobian, log_q is
+             the log probability under the variational distribution,
+             and rng_key is the updated random key.
         """
         pval = phi[pname]
 
@@ -573,8 +575,9 @@ class Optimizer:
 
     def _sample_full_rank(self, config, phi, rng_key, name_to_transform):
         """
-        Sample latent variables jointly using a Full-Rank variational distribution a self created
-        instance of a TFP distribution: the MultivariateNormalLogCholeskyParametrization.
+        Sample latent variables jointly using a Full-Rank variational distribution
+        a self created instance of a TFP distribution: the
+        MultivariateNormalLogCholeskyParametrization.
 
         Parameters
         ----------
@@ -590,9 +593,9 @@ class Optimizer:
         Returns
         -------
         tuple
-            (samples, total_ldj, log_q, rng_key) where samples is a dict of transformed samples,
-            total_ldj is the sum of log-determinants, log_q is the log probability of the sample,
-            and rng_key is the updated random key.
+            (samples, total_ldj, log_q, rng_key) where samples is a dict of transformed
+            samples, total_ldj is the sum of log-determinants, log_q is the
+            log probability of the sample, and rng_key is the updated random key.
         """
         full_rank_key = config["full_rank_key"]
         pval = phi[full_rank_key]
@@ -637,8 +640,7 @@ class Optimizer:
         return samples, total_ldj, log_q, rng_key
 
     def _sample_variational(self, phi, rng_key):
-        """
-        Sample from the variational distribution for all latent variables.
+        """Sample from the variational distribution for all latent variables.
 
         Parameters
         ----------
@@ -684,16 +686,15 @@ class Optimizer:
         return samples, total_ldj, total_log_q
 
     def get_final_distributions(self) -> dict[str, TfpDistribution]:
-        """
-        Construct and return the final variational distributions after applying specified
-        transformations back into constrained space by applying bijectors. DOes differ
-        for univariate and multivariate latent variables by key.
+        """Construct and return the final variational distributions after applying
+        specified transformations back into constrained space by applying bijectors.
+        DOes differ for univariate and multivariate latent variables by key.
 
         Returns
         -------
         dict
-            Mapping from latent variable names to their final variational distribution objects
-            while providing valid TFP distributions.
+            Mapping from latent variable names to their final variational distribution
+            objects while providing valid TFP distributions.
         """
         final_results = {}
 
@@ -701,7 +702,7 @@ class Optimizer:
             names = config["names"]
             key = self._config_key(
                 config
-            )  # returns config["names"][0] if univariate, or if multivariate config["full_rank_key"]
+            )  # Returns config["names"][0] or config["full_rank_key"] if multivariate
             transform = config.get("transform", None)
             dist_class = self.variational_dists_class[key]
             phi_original = self.phi[key]
@@ -725,13 +726,13 @@ class Optimizer:
         return final_results
 
     def get_results(self, n_samples: int = 10_000, seed: int = 42) -> dict[str, Any]:
-        """
-        Generate inference results by sampling from the final variational distributions
-        consistently, handling both univariate and multivariate latent variables.
+        """Generate inference results by sampling from the final variational
+        distributions consistently, handling both univariate and multivariate latent
+        variables.
 
-        For multivariate latent variables, this method samples once from the composite distribution
-        (using the composite key) and splits the flat sample into individual components based on the
-        dimensions from the model parameters.
+        For multivariate latent variables, this method samples once from the composite
+        distribution (using the composite key) and splits the flat sample into
+        individual components based on the dimensions from the model parameters.
 
         Parameters
         ----------
@@ -744,7 +745,8 @@ class Optimizer:
         -------
         results : dict
             Dictionary containing:
-            - "final_variational_distributions": the final variational distribution objects.
+            - "final_variational_distributions": the final variational distribution
+              objects.
             - "elbo_values": the ELBO progression.
             - "samples": a dict mapping latent variable names to their samples.
             - "seed": the updated PRNGKey after sampling.
