@@ -2,7 +2,7 @@
 Liesel probabilistic programming framework.
 """
 
-from . import bijectors, distributions, goose, model
+from . import bijectors, distributions, goose, model, vi 
 from .__version__ import __version__, __version_info__
 from .logging import reset_logger, setup_logger
 
@@ -17,6 +17,7 @@ __all__ = [
     "distributions",
     "goose",
     "model",
+    "vi",
     "reset_logger",
     "setup_logger",
 ]
