@@ -6,8 +6,6 @@ import jax
 import jax.numpy as jnp
 import jax.tree_util
 import optax
-#rom jax.experimental import host_callback as hcb
-from jax import pure_callback as hcb
 
 from optax import GradientTransformation, OptState
 from tensorflow_probability.substrates import jax as tfp
@@ -393,26 +391,70 @@ class Optimizer:
                 improvement > patience_tol, 0, window_counter + 1
             )
 
-            _ = jax.lax.cond(
-                jnp.equal(jnp.mod(epoch + 1, 1000), 0),
-                lambda _: print_and_return_zero(
-                    "Epoch: {:6d} - ELBO: {:.4f}", epoch + 1, current_elbo
-                ),
-                lambda _: 0,
-                operand=0,
-            )
+            # _ = jax.lax.cond(
+            #     jnp.equal(jnp.mod(epoch + 1, 1000), 0),
+            #     lambda _: print_and_return_zero(
+            #         "Epoch: {:6d} - ELBO: {:.4f}", epoch + 1, current_elbo
+            #     ),
+            #     lambda _: 0,
+            #     operand=0,
+            # )
+
+            # _ = jax.lax.cond(
+            #     new_window_counter >= window_size,
+            #     lambda _: print_and_return_zero(
+            #         "Early stopping triggered at epoch: {:6d} with ELBO: {:.4f} - Relative Improvement: {:.4f}",
+            #         epoch + 1,
+            #         current_elbo,
+            #         -improvement,
+            #     ),
+            #     lambda _: 0,
+            #     operand=0,
+            # )
+
 
             _ = jax.lax.cond(
-                new_window_counter >= window_size,
-                lambda _: print_and_return_zero(
-                    "Early stopping triggered at epoch: {:6d} with ELBO: {:.4f} - Relative Improvement: {:.4f}",
-                    epoch + 1,
-                    current_elbo,
-                    -improvement,
-                ),
+                jnp.equal(jnp.mod(epoch + 1, 1000), 0),
+                lambda _: (
+                    jax.debug.print(
+                        "Epoch: {epoch:6d} — ELBO: {elbo:.4f}",
+                        epoch=epoch + 1,
+                        elbo=current_elbo,
+                    ),
+                    0,  # damit die Funktion einen int zurückliefert
+                )[1],
                 lambda _: 0,
                 operand=0,
-            )
+                )
+            
+            #_ = jax.lax.cond(
+                # new_window_counter >= window_size,
+                # lambda _: (
+                #     jax.debug.print(
+                #         "Early stopping triggered at epoch: {epoch:6d} with ELBO: {elbo:.4f} - Relative Improvement: {improvement:.4f}",
+                #         epoch=epoch + 1,
+                #         elbo=current_elbo,
+                #         imporv=-improvement,
+                #     ),
+                #     0,  # damit die Funktion einen int zurückliefert
+                # )[1],
+                # lambda _: 0,
+                # operand=0,
+                # )
+            _ = jax.lax.cond(
+                new_window_counter >= window_size,
+                lambda _: (
+                    jax.debug.print(
+                        "Early stopping triggered at epoch: {epoch:6d} with ELBO: {elbo:.4f} - Relative Improvement: {imp:.4f}",
+                        epoch=epoch + 1,
+                        elbo=current_elbo,
+                        imp=-improvement,
+                    ),
+                    0,
+                )[1],
+                lambda _: 0,
+                operand=0,
+                        )
             return (
                 epoch + 1,
                 phi,
