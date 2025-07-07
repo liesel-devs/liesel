@@ -1,0 +1,342 @@
+from typing import Dict, List, Optional, Union, Callable, TypedDict
+
+import tensorflow_probability.substrates.jax.bijectors as tfb
+from tensorflow_probability.substrates import jax as tfp
+import jax.numpy as jnp
+import optax
+import jax
+
+from .interface import LieselInterface
+from .optimizer import Optimizer
+from liesel.distributions import MultivariateNormalLogCholeskyParametrization
+
+tfd = tfp.distributions
+
+
+class Phi_MultivariateNormalLogCholeskyParametrization(TypedDict):
+    """
+    A TypedDict to specify the parameters for a multivariate normal distribution
+    using a log-Cholesky parametrization.
+    """
+
+    loc: jnp.ndarray
+    log_cholesky_parametrization: jnp.ndarray
+
+
+class OptimizerBuilder:
+    """
+    The :class:`.OptimizerBuilder` is used to construct an Optimizer for stochastic variational inference.
+
+    .. rubric:: Workflow
+
+    The general workflow usually looks something like this:
+
+    #. Create a builder with :class:`.OptimizerBuilder`.
+    #. Optionally set the optimization parameters (e.g., number of epochs, sample size, batch size).
+    #. Create an instance of the model interface with :class:`.LieselInterface`
+       and set it with :meth:`.set_model`.
+    #. Add latent variables with :meth:`.add_latent_variable` and/or
+       :meth:`.add_multivariate_latent_variable`.
+    #. Build an :class:`~.optimizer.Optimizer` with :meth:`.build`.
+    #. Run optimization using :meth:`.fit`.
+
+    Optionally, you can also:
+
+    - Configure transformation functions for latent variables using the `transform` parameter.
+    - Specify fixed distribution parameters and optimizer chains for each latent variable.
+
+    Parameters
+    ----------
+    seed : int
+        Random seed used for reproducibility and for jittering initial values. Based on
+        jax.random.PRNGKey, so it should be a non-negative integer.
+    n_epochs : int
+        Number of epochs to run the optimization.
+    S : int
+        Number of samples used in the variational estimation.
+    patience_tol : float, optional
+        Tolerance for early stopping based on ELBO improvements.
+    window_size : int, optional
+        Number of epochs to wait before early stopping if no improvement is observed.
+    batch_size : int, optional
+        Batch size used during optimization for subsetting the data; if None, the full dataset is used.
+
+    See Also
+    --------
+    ~.optimizer.Optimizer : The Optimizer constructed by this builder.
+    ~.interface.LieselInterface : Interface for the model.
+    ~.optax.GradientTransformation : The optimizer chain transformation.
+
+    Examples
+    --------
+    The following examples demonstrate two ways to add latent variables:
+
+    **Example 1: Adding latent variables separately**
+
+    In this example, we add a univariate latent variable for `sigma_sq` and another for `b`
+    using separate calls to :meth:`.add_latent_variable` (Mean-Field).
+
+    >>> import jax.numpy as jnp
+    >>> import optax
+    >>> import tensorflow_probability.substrates.jax.bijectors as tfb
+    >>> from tensorflow_probability.substrates import jax as tfp
+    >>> tfd = tfp.distributions
+    >>>
+    >>> # Set up a minimal model.
+    >>> X_m = lsl.obs(X, name="X_m")
+    >>> dist_b = lsl.Dist(tfd.Normal, loc=0.0, scale=10.0)
+    >>> b = lsl.param(jnp.array([10.0, 10.0, 10.0, 10.0]), dist_b, name="b")
+    >>> def linear_model(X, b): 
+    >>> return X @ b 
+
+    >>> mu = lsl.Var(lsl.Calc(linear_model, X=X_m, b=b), name="mu")
+
+    >>> a = lsl.Var(0.01, name="a")
+    >>> b_var_dist = lsl.Var(0.01, name="b_var_dist")
+
+    >>> sigma_sq_dist = lsl.Dist(tfd.InverseGamma, concentration=a, scale=b_var_dist)
+    >>> sigma_sq = lsl.param(1.0, sigma_sq_dist, name="sigma_sq")
+    >>> sigma = lsl.Var(lsl.Calc(jnp.sqrt, sigma_sq), name="sigma")
+
+    >>> y_dist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
+    >>> y_m = lsl.obs(y, y_dist, name="y_m")
+
+    >>> gb = lsl.GraphBuilder().add(y_m)
+    >>> gb.plot_vars()
+
+    >>> model = gb.build_model()
+    >>>
+    >>> # Initialize the builder.
+    >>> builder = OptimizerBuilder(seed=0, n_epochs=10000, batch_size=64, S=32,
+    ...                            patience_tol=0.001, window_size=100)
+    >>>
+    >>> # Set up the model interface.
+    >>> interface = LieselInterface(model)
+    >>> builder.set_model(interface)
+    >>>
+    >>> # Define optimizer chains.
+    >>> optimizer_chain1 = optax.chain(
+    ...     optax.clip(1),
+    ...     optax.adam(learning_rate=0.001)
+    ... )
+    >>> optimizer_chain2 = optax.chain(
+    ...     optax.clip(1),
+    ...     optax.adam(learning_rate=0.001)
+    ... )
+    >>>
+    >>> # Add a univariate latent variable for sigma_sq.
+    >>> builder.add_latent_variable(
+    ...     ["sigma_sq"],
+    ...     dist_class=tfd.Normal,
+    ...     phi={"loc": 1.0, "scale": 0.5},
+    ...     optimizer_chain=optimizer_chain1,
+    ...     transform=tfb.Exp()
+    ... )
+    >>>
+    >>> # Add a univariate latent variable for b.
+    >>> builder.add_latent_variable(
+    ...     ["b"],
+    ...     dist_class=tfd.Normal,
+    ...     phi={"loc": jnp.zeros(4), "scale": jnp.ones(4)},
+    ...     optimizer_chain=optimizer_chain2,
+    ...     transform=None
+    ... )
+    >>>
+    >>> # Build and run the optimizer.
+    >>> optimizer = builder.build()
+    >>> optimizer.fit()
+
+    **Example 2: Adding latent variables jointly as multivariate (Gaussian Full-Rank)**
+
+    In this example, we add both `sigma_sq` and `b` together using a single call to
+    :meth:`.add_multivariate_latent_variable`. Assume the same model 
+    specification as in the previous example.
+
+    >>> # Initialize the builder as before.
+    >>> builder = OptimizerBuilder(seed=0, n_epochs=10000, batch_size=64, S=32,
+    ...                            patience_tol=0.001, window_size=100)
+    >>>
+    >>> # Set up the model interface.
+    >>> builder.set_model(interface)
+    >>>
+    >>> # Define an optimizer chain.
+    >>> optimizer_chain = optax.chain(
+    ...     optax.clip(1),
+    ...     optax.adam(learning_rate=0.001)
+    ... )
+    >>>
+    >>> # Add a multivariate latent variable for both b and sigma_sq.
+    >>> builder.add_multivariate_latent_variable(
+    ...     ["b", "sigma_sq"],
+    ...     phi={
+    ...         "loc": jnp.ones(5),
+    ...         "log_cholesky_parametrization": builder.make_log_cholesky_like(5)
+    ...     },
+    ...     fixed_distribution_params={'validate_args': True, "d": 5},
+    ...     optimizer_chain=optimizer_chain,
+    ...     transform=None
+    ... )
+    >>>
+    >>> # Build and run the optimizer.
+    >>> optimizer = builder.build()
+    >>> optimizer.fit()
+    """
+
+    def __init__(
+        self,
+        seed: int = 0,
+        n_epochs: int = 10_000,
+        S: int = 32,
+        patience_tol: Optional[float] = None,
+        window_size: Optional[int] = None,
+        batch_size: Optional[int] = None,
+    ) -> None:
+        self.seed = seed
+        self.n_epochs = n_epochs
+        self.patience_tol = patience_tol
+        self.window_size = window_size
+        self.batch_size = batch_size
+        self.S = S
+        self._model_interface = None
+        self.latent_variables = []
+
+    def set_model(self, interface: LieselInterface) -> None:
+        """
+        Set the model interface for the optimizer.
+
+        Parameters:
+            interface (LieselInterface): An instance that provides access to the model.
+        """
+        self._model_interface = interface
+
+    def add_latent_variable(
+        self,
+        names: List[str],
+        dist_class: Callable,
+        *,  # enforce keyword-only arguments, leaves us flexibility to not specify arguments for fixed_distribution_params, but leaves it together
+        phi: Dict[str, float],
+        fixed_distribution_params: Optional[Dict[str, float]] = None,
+        optimizer_chain: optax.GradientTransformation,
+        transform: Optional[Union[Callable, tfb.Bijector]] = None,
+    ) -> None:
+        """
+        Add a latent variable to the optimizer configuration by adding a variational
+        distribution for each latent variable independently (Mean-Field Approach).
+
+        The 'transform' parameter can be:
+          - None
+          - A Python callable (performance optimized using JAX), e.g.:
+            def custom_transform(z):
+                z_transformed = jnp.exp(z)
+                logdet = jnp.sum(z)
+                return z_transformed, logdet
+          - A TFP Bijector instance (e.g., tfb.Exp() or tfb.Sigmoid(low=a, high=b)).
+
+        Parameters:
+            names (List[str]): List of parameter names.
+            dist_class (Callable): Distribution class (e.g., tfd.Normal).
+            phi (Dict[str, float]): Dictionary containing the initial parameters.
+            fixed_distribution_params (Optional[Dict[str, float]]): Optional fixed parameters for the distribution.
+            optimizer_chain (optax.GradientTransformation): Optimizer chain for gradient transformations.
+            transform (Optional[Union[Callable, tfb.Bijector]]): Transformation to apply on the latent variable.
+        """
+        if isinstance(names, str):
+            names = [names]
+        self.latent_variables.append(
+            {
+                "names": names,
+                "dist_class": dist_class,
+                "phi": phi,
+                "fixed_distribution_params": fixed_distribution_params,
+                "optimizer_chain": optimizer_chain,
+                "transform": transform,
+            }
+        )
+
+    def add_multivariate_latent_variable(
+        self,
+        names: List[str],
+        phi: Optional[Phi_MultivariateNormalLogCholeskyParametrization] = None,
+        *,
+        fixed_distribution_params: Optional[Dict[str, float]] = None,
+        optimizer_chain: optax.GradientTransformation,
+        transform: Optional[Union[Callable, tfb.Bijector]] = None,
+    ) -> None:
+        """
+        Adds a multivariate latent variable to the optimizer configuration (Gaussian Full-Rank)
+        with shared covariance of different latent variables.
+
+        If fixed_distribution_params does not include 'd' (the total dimension),
+        it is computed from the model's parameter shapes. If phi is not provided,
+        a default is generated with ones for the location and a computed log-Cholesky vector.
+
+        Parameters:
+            names (List[str]): List of parameter names to be grouped as a multivariate variable.
+            phi (Optional[Phi_MultivariateNormalLogCholeskyParametrization]): Initial parameters for the distribution.
+            fixed_distribution_params (Optional[Dict[str, float]]): Optional fixed parameters for the distribution.
+            optimizer_chain (optax.GradientTransformation): Optimizer chain for gradient transformations.
+            transform (Optional[Union[Callable, tfb.Bijector]]): Transformation to apply on the latent variable.
+        """
+        if fixed_distribution_params is None:
+            fixed_distribution_params = {}
+
+        if "d" not in fixed_distribution_params:
+            d = sum(
+                jnp.array(self._model_interface.model.vars[var].value).size
+                for var in names
+            )
+            fixed_distribution_params["d"] = d
+
+        d = fixed_distribution_params["d"]
+
+        if phi is None:
+            phi = {
+                "loc": jnp.ones(d),
+                "log_cholesky_parametrization": self.make_log_cholesky_like(d),
+            }
+
+        self.latent_variables.append(
+            {
+                "names": names,
+                "dist_class": MultivariateNormalLogCholeskyParametrization,
+                "phi": phi,
+                "fixed_distribution_params": fixed_distribution_params,
+                "optimizer_chain": optimizer_chain,
+                "transform": transform,
+            }
+        )
+
+    def build(self) -> Optimizer:
+        """
+        Build and return an Optimizer instance based on the current configuration.
+
+        Returns:
+            Optimizer: An optimizer configured with the specified model interface and latent variables.
+        """
+        if self._model_interface is None:
+            raise ValueError(
+                "Model interface not set. Call builder.set_model(...) first."
+            )
+
+        return Optimizer(
+            seed=self.seed,
+            n_epochs=self.n_epochs,
+            S=self.S,
+            patience_tol=self.patience_tol,
+            window_size=self.window_size,
+            batch_size=self.batch_size,
+            model_interface=self._model_interface,
+            latent_variables=self.latent_variables,
+        )
+
+    def make_log_cholesky_like(self, d: int) -> jnp.ndarray:
+        n = d * (d + 1) // 2
+        arr = jnp.zeros((n,), dtype=jnp.float32)
+
+        def body_fun(row, arr):
+            offset = (row * (row + 1)) // 2
+            arr = arr.at[offset + row].set(1.1)
+            return arr
+
+        arr = jax.lax.fori_loop(0, d, body_fun, arr)
+        return arr
