@@ -85,23 +85,24 @@ class OptimizerBuilder:
     >>> tfd = tfp.distributions
     >>>
     >>> # Set up a minimal model.
-    >>> X_m = lsl.obs(X, name="X_m")
+    >>> X_m = lsl.Var.new_obs(X, name="X_m")
     >>> dist_b = lsl.Dist(tfd.Normal, loc=0.0, scale=10.0)
-    >>> b = lsl.param(jnp.array([10.0, 10.0, 10.0, 10.0]), dist_b, name="b")
+    >>> b = lsl.Var.new_param(jnp.array([10.0, 10.0, 10.0, 10.0]), dist_b, name="b")
     >>> def linear_model(X, b):
     >>> return X @ b
 
-    >>> mu = lsl.Var(lsl.Calc(linear_model, X=X_m, b=b), name="mu")
+    >>> mu = lsl.Var.new_calc(linear_model, X=X_m, b=b, name="mu")
 
-    >>> a = lsl.Var(0.01, name="a")
-    >>> b_var_dist = lsl.Var(0.01, name="b_var_dist")
+    >>> a = lsl.Var.new_value(0.01, name="a")
+    >>> b_var_dist = lsl.new_value(0.01, name="b_var_dist")
 
     >>> sigma_sq_dist = lsl.Dist(tfd.InverseGamma, concentration=a, scale=b_var_dist)
-    >>> sigma_sq = lsl.param(1.0, sigma_sq_dist, name="sigma_sq")
-    >>> sigma = lsl.Var(lsl.Calc(jnp.sqrt, sigma_sq), name="sigma")
+    >>> sigma_sq = lsl.Var.new_param(1.0, sigma_sq_dist, name="sigma_sq")
+    >>> sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma")
+
 
     >>> y_dist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
-    >>> y_m = lsl.obs(y, y_dist, name="y_m")
+    >>> y_m = lsl.Var.new_obs(y, y_dist, name="y_m")
 
     >>> gb = lsl.GraphBuilder().add(y_m)
     >>> gb.plot_vars()

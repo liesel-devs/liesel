@@ -346,16 +346,6 @@ class Optimizer:
             initial_elbo_array,
         )
 
-        def print_and_return_zero(fmt, *args):
-            """
-            Print a formatted message and return 0.
-            """
-
-            def _print_fn(vals, transforms):
-                print(fmt.format(*vals))
-
-            return hcb.id_tap(_print_fn, args, result=jnp.array(0))
-
         def epoch_body(state):
             """
             Update the epoch state and log progress using relative ELBO improvement.
@@ -391,28 +381,6 @@ class Optimizer:
                 improvement > patience_tol, 0, window_counter + 1
             )
 
-            # _ = jax.lax.cond(
-            #     jnp.equal(jnp.mod(epoch + 1, 1000), 0),
-            #     lambda _: print_and_return_zero(
-            #         "Epoch: {:6d} - ELBO: {:.4f}", epoch + 1, current_elbo
-            #     ),
-            #     lambda _: 0,
-            #     operand=0,
-            # )
-
-            # _ = jax.lax.cond(
-            #     new_window_counter >= window_size,
-            #     lambda _: print_and_return_zero(
-            #         "Early stopping triggered at epoch: {:6d} with ELBO: {:.4f} - Relative Improvement: {:.4f}",
-            #         epoch + 1,
-            #         current_elbo,
-            #         -improvement,
-            #     ),
-            #     lambda _: 0,
-            #     operand=0,
-            # )
-
-
             _ = jax.lax.cond(
                 jnp.equal(jnp.mod(epoch + 1, 1000), 0),
                 lambda _: (
@@ -421,26 +389,12 @@ class Optimizer:
                         epoch=epoch + 1,
                         elbo=current_elbo,
                     ),
-                    0,  # damit die Funktion einen int zurückliefert
+                    0,  
                 )[1],
                 lambda _: 0,
                 operand=0,
                 )
             
-            #_ = jax.lax.cond(
-                # new_window_counter >= window_size,
-                # lambda _: (
-                #     jax.debug.print(
-                #         "Early stopping triggered at epoch: {epoch:6d} with ELBO: {elbo:.4f} - Relative Improvement: {improvement:.4f}",
-                #         epoch=epoch + 1,
-                #         elbo=current_elbo,
-                #         imporv=-improvement,
-                #     ),
-                #     0,  # damit die Funktion einen int zurückliefert
-                # )[1],
-                # lambda _: 0,
-                # operand=0,
-                # )
             _ = jax.lax.cond(
                 new_window_counter >= window_size,
                 lambda _: (
