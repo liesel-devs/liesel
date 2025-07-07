@@ -1,12 +1,11 @@
-from typing import Dict, Any
+from typing import Any
 
-import jax.numpy as jnp
-
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
-import numpy as np
 import arviz as az
+import jax.numpy as jnp
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
 
 
 class Summary:
@@ -27,7 +26,7 @@ class Summary:
           - "samples": dict mapping latent variable names to pre-generated samples.
     """
 
-    def __init__(self, results: Dict[str, Any]):
+    def __init__(self, results: dict[str, Any]):
         self.final_variational_distributions = results[
             "final_variational_distributions"
         ]
@@ -44,13 +43,13 @@ class Summary:
 
         $$
         \begin{align}
-        \mu &= \mathbb{E}[\theta],\\[1mm]
-        \sigma^2 &= \mathbb{V}[\theta],\\[1mm]
-        Q_{0.025}(\theta) &= \text{2.5\% quantile},\\[1mm]
-        Q_{0.975}(\theta) &= \text{97.5\% quantile},\\[1mm]
-        \text{HDI}_{\text{low}}(\theta),\ \text{HDI}_{\text{high}}(\theta) &=
-        \text{Highest Density Interval at the specified level (e.g. 90\% if } hdi\_prob=0.9\text{)}.
-        \end{align}
+        \\mu &= \\mathbb{E}[\theta],\\[1mm]
+        \\sigma^2 &= \\mathbb{V}[\theta],\\[1mm]
+        Q_{0.025}(\theta) &= \text{2.5\\% quantile},\\[1mm]
+        Q_{0.975}(\theta) &= \text{97.5\\% quantile},\\[1mm]
+        \text{HDI}_{\text{low}}(\theta),\\ \text{HDI}_{\text{high}}(\theta) &=
+        \text{Highest Density Interval at the specified level (e.g. 90\\% if } hdi\\_prob=0.9\text{)}.
+        \\end{align}
         $$
 
         Returns

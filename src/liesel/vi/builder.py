@@ -1,14 +1,16 @@
-from typing import Dict, List, Optional, Union, Callable, TypedDict
+from collections.abc import Callable
+from typing import TypedDict
 
-import tensorflow_probability.substrates.jax.bijectors as tfb
-from tensorflow_probability.substrates import jax as tfp
+import jax
 import jax.numpy as jnp
 import optax
-import jax
+import tensorflow_probability.substrates.jax.bijectors as tfb
+from tensorflow_probability.substrates import jax as tfp
+
+from liesel.distributions import MultivariateNormalLogCholeskyParametrization
 
 from .interface import LieselInterface
 from .optimizer import Optimizer
-from liesel.distributions import MultivariateNormalLogCholeskyParametrization
 
 tfd = tfp.distributions
 
@@ -86,8 +88,8 @@ class OptimizerBuilder:
     >>> X_m = lsl.obs(X, name="X_m")
     >>> dist_b = lsl.Dist(tfd.Normal, loc=0.0, scale=10.0)
     >>> b = lsl.param(jnp.array([10.0, 10.0, 10.0, 10.0]), dist_b, name="b")
-    >>> def linear_model(X, b): 
-    >>> return X @ b 
+    >>> def linear_model(X, b):
+    >>> return X @ b
 
     >>> mu = lsl.Var(lsl.Calc(linear_model, X=X_m, b=b), name="mu")
 
@@ -107,22 +109,22 @@ class OptimizerBuilder:
     >>> model = gb.build_model()
     >>>
     >>> # Initialize the builder.
-    >>> builder = OptimizerBuilder(seed=0, n_epochs=10000, batch_size=64, S=32,
-    ...                            patience_tol=0.001, window_size=100)
+    >>> builder = OptimizerBuilder(
+    ...     seed=0,
+    ...     n_epochs=10000,
+    ...     batch_size=64,
+    ...     S=32,
+    ...     patience_tol=0.001,
+    ...     window_size=100,
+    ... )
     >>>
     >>> # Set up the model interface.
     >>> interface = LieselInterface(model)
     >>> builder.set_model(interface)
     >>>
     >>> # Define optimizer chains.
-    >>> optimizer_chain1 = optax.chain(
-    ...     optax.clip(1),
-    ...     optax.adam(learning_rate=0.001)
-    ... )
-    >>> optimizer_chain2 = optax.chain(
-    ...     optax.clip(1),
-    ...     optax.adam(learning_rate=0.001)
-    ... )
+    >>> optimizer_chain1 = optax.chain(optax.clip(1), optax.adam(learning_rate=0.001))
+    >>> optimizer_chain2 = optax.chain(optax.clip(1), optax.adam(learning_rate=0.001))
     >>>
     >>> # Add a univariate latent variable for sigma_sq.
     >>> builder.add_latent_variable(
@@ -130,7 +132,7 @@ class OptimizerBuilder:
     ...     dist_class=tfd.Normal,
     ...     phi={"loc": 1.0, "scale": 0.5},
     ...     optimizer_chain=optimizer_chain1,
-    ...     transform=tfb.Exp()
+    ...     transform=tfb.Exp(),
     ... )
     >>>
     >>> # Add a univariate latent variable for b.
@@ -139,7 +141,7 @@ class OptimizerBuilder:
     ...     dist_class=tfd.Normal,
     ...     phi={"loc": jnp.zeros(4), "scale": jnp.ones(4)},
     ...     optimizer_chain=optimizer_chain2,
-    ...     transform=None
+    ...     transform=None,
     ... )
     >>>
     >>> # Build and run the optimizer.
@@ -149,32 +151,35 @@ class OptimizerBuilder:
     **Example 2: Adding latent variables jointly as multivariate (Gaussian Full-Rank)**
 
     In this example, we add both `sigma_sq` and `b` together using a single call to
-    :meth:`.add_multivariate_latent_variable`. Assume the same model 
+    :meth:`.add_multivariate_latent_variable`. Assume the same model
     specification as in the previous example.
 
     >>> # Initialize the builder as before.
-    >>> builder = OptimizerBuilder(seed=0, n_epochs=10000, batch_size=64, S=32,
-    ...                            patience_tol=0.001, window_size=100)
+    >>> builder = OptimizerBuilder(
+    ...     seed=0,
+    ...     n_epochs=10000,
+    ...     batch_size=64,
+    ...     S=32,
+    ...     patience_tol=0.001,
+    ...     window_size=100,
+    ... )
     >>>
     >>> # Set up the model interface.
     >>> builder.set_model(interface)
     >>>
     >>> # Define an optimizer chain.
-    >>> optimizer_chain = optax.chain(
-    ...     optax.clip(1),
-    ...     optax.adam(learning_rate=0.001)
-    ... )
+    >>> optimizer_chain = optax.chain(optax.clip(1), optax.adam(learning_rate=0.001))
     >>>
     >>> # Add a multivariate latent variable for both b and sigma_sq.
     >>> builder.add_multivariate_latent_variable(
     ...     ["b", "sigma_sq"],
     ...     phi={
     ...         "loc": jnp.ones(5),
-    ...         "log_cholesky_parametrization": builder.make_log_cholesky_like(5)
+    ...         "log_cholesky_parametrization": builder.make_log_cholesky_like(5),
     ...     },
-    ...     fixed_distribution_params={'validate_args': True, "d": 5},
+    ...     fixed_distribution_params={"validate_args": True, "d": 5},
     ...     optimizer_chain=optimizer_chain,
-    ...     transform=None
+    ...     transform=None,
     ... )
     >>>
     >>> # Build and run the optimizer.
@@ -187,9 +192,9 @@ class OptimizerBuilder:
         seed: int = 0,
         n_epochs: int = 10_000,
         S: int = 32,
-        patience_tol: Optional[float] = None,
-        window_size: Optional[int] = None,
-        batch_size: Optional[int] = None,
+        patience_tol: float | None = None,
+        window_size: int | None = None,
+        batch_size: int | None = None,
     ) -> None:
         self.seed = seed
         self.n_epochs = n_epochs
@@ -211,13 +216,13 @@ class OptimizerBuilder:
 
     def add_latent_variable(
         self,
-        names: List[str],
+        names: list[str],
         dist_class: Callable,
         *,  # enforce keyword-only arguments, leaves us flexibility to not specify arguments for fixed_distribution_params, but leaves it together
-        phi: Dict[str, float],
-        fixed_distribution_params: Optional[Dict[str, float]] = None,
+        phi: dict[str, float],
+        fixed_distribution_params: dict[str, float] | None = None,
         optimizer_chain: optax.GradientTransformation,
-        transform: Optional[Union[Callable, tfb.Bijector]] = None,
+        transform: Callable | tfb.Bijector | None = None,
     ) -> None:
         """
         Add a latent variable to the optimizer configuration by adding a variational
@@ -255,12 +260,12 @@ class OptimizerBuilder:
 
     def add_multivariate_latent_variable(
         self,
-        names: List[str],
-        phi: Optional[Phi_MultivariateNormalLogCholeskyParametrization] = None,
+        names: list[str],
+        phi: Phi_MultivariateNormalLogCholeskyParametrization | None = None,
         *,
-        fixed_distribution_params: Optional[Dict[str, float]] = None,
+        fixed_distribution_params: dict[str, float] | None = None,
         optimizer_chain: optax.GradientTransformation,
-        transform: Optional[Union[Callable, tfb.Bijector]] = None,
+        transform: Callable | tfb.Bijector | None = None,
     ) -> None:
         """
         Adds a multivariate latent variable to the optimizer configuration (Gaussian Full-Rank)

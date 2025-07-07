@@ -1,21 +1,23 @@
-from typing import Dict, List, Optional, Any, Callable, Tuple, Type
 import math
+from functools import partial
+from typing import Any
+
 import jax
 import jax.numpy as jnp
-import optax
-from optax import GradientTransformation, OptState 
-from tensorflow_probability.substrates import jax as tfp
-from tensorflow_probability.substrates.jax.distributions import Distribution as TfpDistribution
 import jax.tree_util
-import sys
-from jax.experimental import host_callback as hcb
-from functools import partial
+import optax
+#rom jax.experimental import host_callback as hcb
+from jax import pure_callback as hcb
+
+from optax import GradientTransformation, OptState
+from tensorflow_probability.substrates import jax as tfp
+from tensorflow_probability.substrates.jax.distributions import (
+    Distribution as TfpDistribution,
+)
 
 from .interface import LieselInterface
 
 tfd = tfp.distributions
-
-
 
 
 class Optimizer:
@@ -33,10 +35,10 @@ class Optimizer:
         n_epochs: int,
         S: int,
         model_interface: LieselInterface,
-        latent_variables: List[Dict],
-        batch_size: Optional[int] = None,
-        patience_tol: Optional[float] = None,
-        window_size: Optional[int] = None,
+        latent_variables: list[dict],
+        batch_size: int | None = None,
+        patience_tol: float | None = None,
+        window_size: int | None = None,
     ) -> None:
         """
         Initialize the Optimizer.
@@ -70,7 +72,7 @@ class Optimizer:
         self.latent_vars_config = latent_variables
         self.rng_key = jax.random.PRNGKey(self.seed)
 
-        self._process_full_rank_configs()  
+        self._process_full_rank_configs()
 
         self.variational_dists_class = self._init_variational_dists_class()
         self.phi = self._init_phi()
@@ -90,7 +92,7 @@ class Optimizer:
         except StopIteration:
             raise ValueError("No observed data found in model.")
 
-    def _init_variational_dists_class(self) -> Dict[str, Type[TfpDistribution]]:
+    def _init_variational_dists_class(self) -> dict[str, type[TfpDistribution]]:
         """Initialize variational distribution classes."""
         variational_dists_class = {
             self._config_key(config): config["dist_class"]
@@ -98,7 +100,7 @@ class Optimizer:
         }
         return variational_dists_class
 
-    def _init_phi(self) -> Dict[str, Any]:
+    def _init_phi(self) -> dict[str, Any]:
         """Initialize the phi dictionary."""
         phi = {
             self._config_key(config): config["phi"]
@@ -106,7 +108,7 @@ class Optimizer:
         }
         return phi
 
-    def _init_fixed_distribution_params(self) -> Dict[str, Dict[str, Any]]:
+    def _init_fixed_distribution_params(self) -> dict[str, dict[str, Any]]:
         """Initialize fixed distribution parameters."""
         fixed_distribution_params = {
             self._config_key(config): (
@@ -118,7 +120,7 @@ class Optimizer:
         }
         return fixed_distribution_params
 
-    def _init_transform_dict(self) -> Dict[str, GradientTransformation]:
+    def _init_transform_dict(self) -> dict[str, GradientTransformation]:
         """Initialize the transform dictionary."""
         optim_dict = {
             self._config_key(config): config["optimizer_chain"]
@@ -132,7 +134,12 @@ class Optimizer:
             config["names"][0] if len(config["names"]) == 1 else config["full_rank_key"]
         )
 
-    def _build_distribution(self, dist_class: Type[TfpDistribution], phi: Dict[str, Any], fixed_distribution_params: Dict[str, Any]) -> TfpDistribution:
+    def _build_distribution(
+        self,
+        dist_class: type[TfpDistribution],
+        phi: dict[str, Any],
+        fixed_distribution_params: dict[str, Any],
+    ) -> TfpDistribution:
         """Builds a TFP distribution with given parameters phi and fixed_distribution_params."""
         return dist_class(**phi, **fixed_distribution_params)
 
@@ -175,7 +182,7 @@ class Optimizer:
 
                 config["full_rank_key"] = "Full Rank:" + "_".join(names)
 
-    def _validate_and_build_distributions(self) -> Dict[str, TfpDistribution]:
+    def _validate_and_build_distributions(self) -> dict[str, TfpDistribution]:
         """Validate matching, consistency and build the variational distributions."""
         phi_keys = set(self.phi.keys())
         fixed_keys = set(self.fixed_distribution_params.keys())
@@ -196,7 +203,7 @@ class Optimizer:
         }
         return distributions
 
-    def _init_optimizer(self) -> Tuple[OptState, GradientTransformation]:
+    def _init_optimizer(self) -> tuple[OptState, GradientTransformation]:
         """Initialize the optimizer state and transformation."""
 
         def label_fn(params):
@@ -207,7 +214,7 @@ class Optimizer:
         opt_state = tx.init(self.phi)
         return opt_state, tx
 
-    def fit(self) -> None: 
+    def fit(self) -> None:
         """
         Run the optimization loop to update variational parameters by maximizing the negative ELBO.
 
@@ -227,14 +234,15 @@ class Optimizer:
         )  # Assume dim_data is divisible by batch_size
 
         @partial(jax.jit, static_argnames=["batch_size", "S"])
-        def step(current_phi: Dict[str, Any],
-                 opt_state: OptState, # Use OptState here
-                 rng_key: jax.random.PRNGKey,
-                 dim_data: int,
-                 batch_size: int,
-                 batch_indices: jnp.ndarray,
-                 S: int
-                 ) -> Tuple[Dict[str, Any], OptState, float, jax.random.PRNGKey]:
+        def step(
+            current_phi: dict[str, Any],
+            opt_state: OptState,  # Use OptState here
+            rng_key: jax.random.PRNGKey,
+            dim_data: int,
+            batch_size: int,
+            batch_indices: jnp.ndarray,
+            S: int,
+        ) -> tuple[dict[str, Any], OptState, float, jax.random.PRNGKey]:
             """
             Perform a single optimization step.
 
@@ -278,10 +286,9 @@ class Optimizer:
             new_phis = optax.apply_updates(current_phi, updates)
             return new_phis, new_opt_state, loss_val, new_rng_key
 
-        def epoch_batches(phi: Dict[str, Any],
-                          opt_state: OptState, 
-                          rng_key: jax.random.PRNGKey
-                          ) -> Tuple[Dict[str, Any], OptState, jax.random.PRNGKey, float]: 
+        def epoch_batches(
+            phi: dict[str, Any], opt_state: OptState, rng_key: jax.random.PRNGKey
+        ) -> tuple[dict[str, Any], OptState, jax.random.PRNGKey, float]:
             """
             Process all batches in one epoch and compute the mean ELBO.
 
@@ -671,7 +678,6 @@ class Optimizer:
                 total_ldj += ldj
                 total_log_q += log_q
             else:
-
                 full_samples, ldj, log_q, rng_key = self._sample_full_rank(
                     config, phi, rng_key, name_to_transform
                 )
@@ -681,7 +687,7 @@ class Optimizer:
 
         return samples, total_ldj, total_log_q
 
-    def get_final_distributions(self) -> Dict[str, TfpDistribution]:
+    def get_final_distributions(self) -> dict[str, TfpDistribution]:
         """
         Construct and return the final variational distributions after applying specified
         transformations back into constrained space by applying bijectors. DOes differ
@@ -722,7 +728,7 @@ class Optimizer:
                 final_results[key] = final_distribution
         return final_results
 
-    def get_results(self, n_samples: int = 10_000, seed: int = 42) -> Dict[str, Any]:
+    def get_results(self, n_samples: int = 10_000, seed: int = 42) -> dict[str, Any]:
         """
         Generate inference results by sampling from the final variational distributions
         consistently, handling both univariate and multivariate latent variables.

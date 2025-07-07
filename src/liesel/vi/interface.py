@@ -1,4 +1,3 @@
-from typing import Dict
 import copy
 
 import jax.numpy as jnp
@@ -8,7 +7,7 @@ class LieselInterface:
     def __init__(self, model):
         self.model = model
 
-    def get_params(self) -> Dict[str, jnp.ndarray]:
+    def get_params(self) -> dict[str, jnp.ndarray]:
         """Retrieve model parameters as a dictionary."""
         params = {
             pname: jnp.array(var.value) for pname, var in self.model.vars.items()
@@ -17,7 +16,7 @@ class LieselInterface:
 
     def compute_log_prob(
         self,
-        param_values: Dict[str, jnp.ndarray],
+        param_values: dict[str, jnp.ndarray],
         dim_data,
         batch_size=None,
         batch_indices=None,
