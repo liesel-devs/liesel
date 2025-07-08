@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import jax
 import jax.numpy as jnp
@@ -205,8 +205,10 @@ class OptimizerBuilder:
         self.window_size = window_size
         self.batch_size = batch_size
         self.S = S
-        self._model_interface = None
-        self.latent_variables = []
+        # self._model_interface = None
+        # self.latent_variables = []
+        self._model_interface: LieselInterface | None = None
+        self.latent_variables: list[dict[str, Any]] = []
 
     def set_model(self, interface: LieselInterface) -> None:
         """Set the model interface for the optimizer.
@@ -293,6 +295,9 @@ class OptimizerBuilder:
         """
         if fixed_distribution_params is None:
             fixed_distribution_params = {}
+        assert self._model_interface is not None, (
+            "Model interface not set. Call set_model(...) first."
+        )
 
         if "d" not in fixed_distribution_params:
             d = sum(
@@ -301,7 +306,7 @@ class OptimizerBuilder:
             )
             fixed_distribution_params["d"] = d
 
-        d = fixed_distribution_params["d"]
+        d = int(fixed_distribution_params["d"])
 
         if phi is None:
             phi = {

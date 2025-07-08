@@ -111,7 +111,7 @@ class Summary:
         ylabel: str = "ELBO",
         style: str = "whitegrid",
         color: str = "blue",
-        save_path: str = None,
+        save_path: str | None = None,
     ) -> None:
         """Plot the ELBO progression over iterations.
 
@@ -143,10 +143,10 @@ class Summary:
     def plot_density(
         self,
         variable: str,
-        title: str = None,
+        title: str | None = None,
         style: str = "whitegrid",
-        xlabel: str = None,
-        save_path: str = None,
+        xlabel: str | None = None,
+        save_path: str | None = None,
     ) -> None:
         """Plot the posterior density of a latent variable using pre-generated samples.
 
@@ -195,7 +195,7 @@ class Summary:
             if title is None:
                 title = f"Density Plot for {variable}"
             fig.suptitle(title)
-            fig.tight_layout(rect=[0, 0, 1, 0.95])
+            fig.tight_layout(rect=(0, 0, 1, 0.95))
             if save_path:
                 plt.savefig(save_path)
             plt.show()
@@ -205,9 +205,9 @@ class Summary:
     def plot_pairwise(
         self,
         variable: str,
-        title: str = None,
+        title: str | None = None,
         style: str = "whitegrid",
-        save_path: str = None,
+        save_path: str | None = None,
     ) -> None:
         """Produce a pairwise scatter plot matrix for a multivariate latent variable.
 

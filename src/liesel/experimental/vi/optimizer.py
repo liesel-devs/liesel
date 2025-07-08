@@ -77,7 +77,7 @@ class Optimizer:
         self.initial_distributions = self._validate_and_build_distributions()
 
         self.opt_state, self.optimizer = self._init_optimizer()
-        self.elbo_values = []
+        self.elbo_values: list[float] = []
 
         try:
             self.dim_data = next(
@@ -751,7 +751,7 @@ class Optimizer:
             - "samples": a dict mapping latent variable names to their samples.
             - "seed": the updated PRNGKey after sampling.
         """
-        results = {}
+        results: dict[str, Any] = {}
         samples = {}
         seed = jax.random.PRNGKey(seed)
         keys = jax.random.split(seed, len(self.latent_vars_config) + 1)
