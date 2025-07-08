@@ -17,18 +17,18 @@ pd.options.display.html.border = 0
 
 # Bayesian Measurement Error Correction
 
-In this tutorial, we implement a flexible distributional regression model 
-with Bayesian measurement error correction in Liesel. The model should capture the 
-(potentially) non-linear effect of a continuous covariate $x$, which is 
-assumed to be suspect of a measurement error. 
+In this tutorial, we implement a flexible distributional regression model
+with Bayesian measurement error correction in Liesel. The model should capture the
+(potentially) non-linear effect of a continuous covariate $x$, which is
+assumed to be suspect of a measurement error.
 
 ## Measurement Error
 
 Assuming a total number of $M$ replicates of the covariate $x$ affected by
-measurement error we can write the measurement error model as 
+measurement error we can write the measurement error model as
 
 $$
-\tilde{x}_i^{(m)} = x_i + u_i^{(m)}, \quad m = 1, \ldots, M. 
+\tilde{x}_i^{(m)} = x_i + u_i^{(m)}, \quad m = 1, \ldots, M.
 $$
 
 The measurement error is assumed to follow a multivariate Gaussian model,
@@ -41,9 +41,9 @@ $$
 The fundamental concept behind Bayesian measurement error correction is
 to treat the true, unknown covariate values $x_i$ as additional latent variables.
 These values are then imputed using MCMC simulations while simultaneously
-estimating all other parameters of the model. To achieve this, a prior distribution 
+estimating all other parameters of the model. To achieve this, a prior distribution
 is assigned to $x_i$. Additional flexibility is achieved by adding hyperpriors with
-assigned prior distributions to the distribution parameters of $x_i$. 
+assigned prior distributions to the distribution parameters of $x_i$.
 $$
 x_i \sim N(\mu_x,\tau^2_x), \quad \mu_x \sim N(0, \tau^2_{\mu}), \quad \tau^2_x \sim IG(a_x,b_x)
 $$
@@ -66,7 +66,7 @@ tfd = tfp.distributions
 ```
 ## Data
 
-We will start by simulating some data with replicates. To introduce heteroscedasticity we scale the first half of the 
+We will start by simulating some data with replicates. To introduce heteroscedasticity we scale the first half of the
 covariance matrices by one and the second by two.
 
 ```{python}
@@ -113,12 +113,12 @@ variances = np.random.choice([0.3, 0.5], size=n)
 y_true = np.sin(x)
 y = np.random.normal(loc=np.sin(x), scale=np.sqrt(variances))
 
-# Convert to JAX arrays 
+# Convert to JAX arrays
 x = jnp.array(x)
 x_tilde = jnp.array(np.array(replicates))
 y = jnp.array(y)
 sigma = jnp.array(np.stack(sigma_matrices))
-``` 
+```
 ``` {python}
 # Plot Data
 fig, ax1 = plt.subplots(figsize=(8, 4))
@@ -136,13 +136,13 @@ ax1.grid(True, alpha=0.3)
 ```
 ## Implementing the Model in Liesel
 
-Now that we have our data we can define our distributions from above in Liesel, 
+Now that we have our data we can define our distributions from above in Liesel,
 setting $\tau^2_{\mu} = 1000^2$ and $a_x = b_x = 0.001$.
 We will initialize $x$ using the mean of our observed measurements. We also need to assign a distribution to the observed
-measurements, where we chose a 
-[`multivariate normal distribution`](https://www.tensorflow.org/probability/api_docs/python/tfp/distributions/MultivariateNormalFullCovariance?hl=en). Note that we are building 
-a hierarchical model by providing a {class}`.Var` instance for the `loc` and `scale` 
-arguments of the different distributions. 
+measurements, where we chose a
+[`multivariate normal distribution`](https://www.tensorflow.org/probability/api_docs/python/tfp/distributions/MultivariateNormalFullCovariance?hl=en). Note that we are building
+a hierarchical model by providing a {class}`.Var` instance for the `loc` and `scale`
+arguments of the different distributions.
 
 ```{python}
 # Define hyperparameters for variance of x
@@ -185,7 +185,7 @@ x_tilde_var = lsl.Var.new_obs(
     name="x_tilde"
 )
 ```
-## The Distributional Regression Model 
+## The Distributional Regression Model
 
 Following that we will set up our distributional regression model using P-splines. Assuming a Gaussian with $N(\mu_i, \sigma_i^{2})$ for the response, the regression parameters are linked to the model parameters by $\mu_i = \eta^{\mu}(x_i)$ and $\sigma_i^{2} = exp(\eta^{\sigma^{2}}(x_i))$, where $exp(\cdot)$ ensures positivity of the scale parameter. The predictors are then given by:
 
@@ -202,7 +202,7 @@ $$
 $\beta_{0}$ being an intercept term, and
 
 $$
-f(\cdot) = \mathbf{b}_i'\boldsymbol{\beta}.   
+f(\cdot) = \mathbf{b}_i'\boldsymbol{\beta}.
 $$
 
 $\mathbf{b}_i'$ is defined as the vector of the evaluations of the basis function and $\boldsymbol{\beta}$ represents the corresponding vector of the basis coefficients. In our implementation we set $\beta_0 = 0$. We generate equidistant knots based on the observed $x$-values and construct cubic B-spline basis matrices for both functions using the Liesel {func}`.basis_matrix()` implementation. The number of knots is set to 20.
@@ -256,7 +256,7 @@ with prior variance $\tau^2$ and a positive semi-definite prior precision matrix
 To enforce smoothness in the spline models, second-order
 difference penalties in the prior precision matrices are implemented
 
-```{python} 
+```{python}
 # Define hyperparameters for the variance of the mean function
 a_var_mu = lsl.Var(0.001, name = "a_mu")
 b_var_mu = lsl.Var(0.001, name = "b_mu")
@@ -320,8 +320,8 @@ prior_coef_mu  = lsl.Dist(
 start_value_mu = np.zeros(np.shape(penalty)[-1], np.float32)
 coef_mu = lsl.Var.new_param(start_value_mu, distribution= prior_coef_mu, name= "coef_mu")
 ```
-Then we can implement functions to calculate the the standard deviation and mean of our response, using 
-{class}`.new_calc`.       
+Then we can implement functions to calculate the the standard deviation and mean of our response, using
+{class}`.new_calc`.
 
 ```{python}
 # Compute the scale (standard deviation) of y using the spline model
@@ -364,12 +364,12 @@ And take a look at our model
 ```{python}
 # create joint model for x and y
 model = lsl.Model([y_var, x_tilde_var])
-     
+
 # Plot tree
 model.plot_vars()
 ```
 
-## MCMC Inference 
+## MCMC Inference
 
 We choose {class}`~.goose.IWLSKernel` Kernels for generating posterior samples of the scale and mean coefficients.
 To draw from $\mu_x$, $\tau^2_x$, $\tau^2_{\mu}$ and $\tau^2_{\sigma}$ we use Gibbs kernels ({class}`~.goose.GibbsKernel`) kernels, as this allows us to use custom transition functions for our parameters. The full conditionals are:
@@ -382,7 +382,7 @@ $$
 \end{eqnarray}.
 $$
 
-```{python} 
+```{python}
 def transition_tau_mu(prng_key, model_state):
     """
     Sample tau2_mu from its posterior distribution using Gibbs sampling.
@@ -584,13 +584,13 @@ Now we can take a look at our results of our parameters
 
 ```{python}
 results = engine.get_results()
-summary = gs.Summary(results)    
+summary = gs.Summary(results)
 
 summary
 ```
  And the traceplots for the first three $\mu$ and $\sigma$ coefficients
 
-```{python} 
+```{python}
 # Plot the treace of all scale coefficients
 gs.plot_trace(results, "coef_scale", range(3))
 ```

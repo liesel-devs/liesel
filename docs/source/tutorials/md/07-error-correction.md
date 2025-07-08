@@ -13,7 +13,7 @@ Assuming a total number of $M$ replicates of the covariate $x$ affected
 by measurement error we can write the measurement error model as
 
 $$
-\tilde{x}_i^{(m)} = x_i + u_i^{(m)}, \quad m = 1, \ldots, M. 
+\tilde{x}_i^{(m)} = x_i + u_i^{(m)}, \quad m = 1, \ldots, M.
 $$
 
 The measurement error is assumed to follow a multivariate Gaussian
@@ -103,7 +103,7 @@ variances = np.random.choice([0.3, 0.5], size=n)
 y_true = np.sin(x)
 y = np.random.normal(loc=np.sin(x), scale=np.sqrt(variances))
 
-# Convert to JAX arrays 
+# Convert to JAX arrays
 x = jnp.array(x)
 x_tilde = jnp.array(np.array(replicates))
 y = jnp.array(y)
@@ -185,7 +185,7 @@ $$
 $\beta_{0}$ being an intercept term, and
 
 $$
-f(\cdot) = \mathbf{b}_i'\boldsymbol{\beta}.   
+f(\cdot) = \mathbf{b}_i'\boldsymbol{\beta}.
 $$
 
 where $\mathbf{b}_i'$ is defined as the vector of the evaluations of the
@@ -243,7 +243,7 @@ $\boldsymbol{\beta}$ is assigned a prior distribution $$\begin{equation}
 f(\boldsymbol{\beta}|\tau^2) \propto (\tau^2)^{-\frac{\textrm{rk}(K)}{2}} \exp \left( -\frac{1}{2\tau^2}\boldsymbol{\beta}'K\boldsymbol{\beta} \right),
 \end{equation}
 $$ with prior variance $\tau^2$ and a positive semi-definite prior
-precision matrix $K$.  
+precision matrix $K$.
 To enforce smoothness in the spline models, second-order difference
 penalties in the prior precision matrices are implemented
 
@@ -357,7 +357,7 @@ And take a look at our model
 ``` python
 # create joint model for x and y
 model = lsl.Model([y_var, x_tilde_var])
-     
+
 # Plot tree
 model.plot_vars()
 ```
@@ -691,7 +691,7 @@ Now we can take a look at our results of our parameters
 
 ``` python
 results = engine.get_results()
-summary = gs.Summary(results)    
+summary = gs.Summary(results)
 
 summary
 ```
