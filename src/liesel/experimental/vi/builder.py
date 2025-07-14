@@ -311,7 +311,7 @@ class OptimizerBuilder:
         parameter_bijectors_default = self._obtain_parameter_default_bijectors(
             dist_class
         )
-        parameter_bijectors = self._merge_bijectors(
+        parameter_bijectors = self._merge_parameter_bijectors(
             parameter_bijectors_default, parameter_bijectors
         )
 
