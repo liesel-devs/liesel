@@ -232,7 +232,9 @@ class OptimizerBuilder:
         default_bijectors: dict[str, tfb.Bijector],
         custom_bijectors: dict[str, tfb.Bijector] | None,
     ) -> dict[str, tfb.Bijector]:
-        merged_dict = default_bijectors | (custom_bijectors if custom_bijectors is not None else {})
+        merged_dict = default_bijectors | (
+            custom_bijectors if custom_bijectors is not None else {}
+        )
         return merged_dict
 
     def add_latent_variable(
@@ -275,8 +277,11 @@ class OptimizerBuilder:
         if isinstance(names, str):
             names = [names]
 
-        parameter_default_bijectors = self._obtain_parameter_default_bijectors(
+        parameter_bijectors_default = self._obtain_parameter_default_bijectors(
             dist_class
+        )
+        parameter_bijectors = self._merge_bijectors(
+            parameter_bijectors_default, parameter_bijectors
         )
 
         self.latent_variables.append(
@@ -287,6 +292,7 @@ class OptimizerBuilder:
                 "fixed_distribution_params": fixed_distribution_params,
                 "optimizer_chain": optimizer_chain,
                 "transform": transform,
+                "parameter_bijectors": parameter_bijectors,
             }
         )
 
