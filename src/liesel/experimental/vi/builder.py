@@ -353,6 +353,8 @@ class OptimizerBuilder:
         if isinstance(names, str):
             names = [names]
 
+        self._validate_latent_variable_keys(dist_class, parameter_bijectors, phi)
+
         parameter_bijectors_default = self._obtain_parameter_default_bijectors(
             dist_class
         )
