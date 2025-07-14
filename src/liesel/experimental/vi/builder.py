@@ -216,6 +216,17 @@ class OptimizerBuilder:
         """
         self._model_interface = interface
 
+    def _obtain_parameter_default_bijectors(self, dist_class):
+        parameter_properties = dist_class.parameter_properties()
+        parameter_names = parameter_properties.keys()
+        parameter_default_bijectors = {
+            parameter_name: parameter_properties[
+                f"{parameter_name}"
+            ].default_constraining_bijector_fn()
+            for parameter_name in parameter_names
+        }
+        return parameter_default_bijectors
+
     def add_latent_variable(
         self,
         names: list[str],
@@ -251,6 +262,7 @@ class OptimizerBuilder:
         """
         if isinstance(names, str):
             names = [names]
+
         self.latent_variables.append(
             {
                 "names": names,
