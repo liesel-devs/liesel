@@ -227,6 +227,14 @@ class OptimizerBuilder:
         }
         return parameter_default_bijectors
 
+    def _update_parameter_bijectors(
+        self,
+        default_bijectors: dict[str, tfb.Bijector],
+        custom_bijectors: dict[str, tfb.Bijector],
+    ) -> dict[str, tfb.Bijector]:
+        updated_dict = default_bijectors | custom_bijectors
+        return updated_dict
+
     def add_latent_variable(
         self,
         names: list[str],
@@ -260,8 +268,8 @@ class OptimizerBuilder:
             transformations.
             transform (Optional[Union[Callable, tfb.Bijector]]): Transformation to
             apply on the latent variable.
-            parameter_bijectors (dict[str, tfb.Bijector] | None) – Optional overrides 
-            that replace the parameter's default tfp.util.ParameterProperties bijector, 
+            parameter_bijectors (dict[str, tfb.Bijector] | None) – Optional overrides
+            that replace the parameter's default tfp.util.ParameterProperties bijector,
             mapping the parameter from unconstrained to a constrained space.
         """
         if isinstance(names, str):
