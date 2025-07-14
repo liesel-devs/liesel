@@ -230,10 +230,10 @@ class OptimizerBuilder:
     def _merge_parameter_bijectors(
         self,
         default_bijectors: dict[str, tfb.Bijector],
-        custom_bijectors: dict[str, tfb.Bijector],
+        custom_bijectors: dict[str, tfb.Bijector] | None,
     ) -> dict[str, tfb.Bijector]:
-        updated_dict = default_bijectors | custom_bijectors
-        return updated_dict
+        merged_dict = default_bijectors | (custom_bijectors if custom_bijectors is not None else {})
+        return merged_dict
 
     def add_latent_variable(
         self,
