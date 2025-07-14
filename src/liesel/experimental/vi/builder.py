@@ -244,6 +244,25 @@ class OptimizerBuilder:
         default_bijectors: dict[str, tfb.Bijector],
         custom_bijectors: dict[str, tfb.Bijector] | None,
     ) -> dict[str, tfb.Bijector]:
+        """Merge default and custom parameter bijectors.
+
+        Default bijectors are taken from the distribution’s parameter properties,
+        while custom bijectors (if provided) override any defaults for matching
+        parameter names.
+
+        Parameters
+        ----------
+        default_bijectors : dict[str, tfb.Bijector]
+            Mapping of parameter names to their default bijectors.
+        custom_bijectors : dict[str, tfb.Bijector] | None
+            Optional mapping of parameter names to user-supplied bijectors that
+            should replace the defaults.
+
+        Returns
+        -------
+        dict[str, tfb.Bijector]
+            A combined mapping where custom bijectors take precedence.
+        """
         merged_dict = default_bijectors | (
             custom_bijectors if custom_bijectors is not None else {}
         )
