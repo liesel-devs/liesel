@@ -277,7 +277,7 @@ class OptimizerBuilder:
         fixed_distribution_params: dict[str, float] | None = None,
         optimizer_chain: optax.GradientTransformation,
         transform: Callable | tfb.Bijector | None = None,
-        parameter_bijectors: dict[str, tfb.Bijector] | None,
+        parameter_bijectors: dict[str, tfb.Bijector] | None = None,
     ) -> None:
         """Add a latent variable to the optimizer configuration by adding a variational
         distribution for each latent variable independently (Mean-Field Approach).
