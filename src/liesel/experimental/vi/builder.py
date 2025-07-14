@@ -216,6 +216,51 @@ class OptimizerBuilder:
         """
         self._model_interface = interface
 
+    def _validate_latent_variable_keys(
+        self,
+        dist_class: Callable,
+        parameter_bijectors: dict[str, tfb.Bijector] | None = None,
+        phi: dict[str, float] | None = None,
+    ) -> None:
+        """Validate that custom keys are unique and match the distribution parameters.
+
+        All keys supplied in ``parameter_bijectors`` and ``phi`` must be unique
+        (within their respective dictionaries) **and** belong to the set of valid
+        parameter names returned by
+        ``dist_class.parameter_properties().keys()``.  A ``ValueError`` is raised
+        if any requirement is violated.
+
+        Parameters
+        ----------
+        dist_class : Callable
+            TensorFlow Probability distribution class (e.g., ``tfd.Normal``).
+        parameter_bijectors : dict[str, tfb.Bijector] | None, default None
+            Optional user-supplied bijectors.
+        phi : dict[str, float] | None, default None
+            Optional initial variational parameters.
+
+        Raises
+        ------
+        ValueError
+            If duplicate keys are found or if a key is not a valid parameter
+            of ``dist_class``.
+        """
+        valid_keys = set(dist_class.parameter_properties().keys())
+
+        def _check(name: str, mapping: dict[str, object] | None) -> None:
+            if mapping is None:
+                return
+            invalid = set(mapping) - valid_keys
+            if invalid:
+                raise ValueError(
+                    f"Invalid key(s) in '{name}': {invalid}. "
+                    f"Valid keys are: {valid_keys}."
+                )
+
+        _check("parameter_bijectors", parameter_bijectors)
+        _check("phi", phi)
+
+
     def _obtain_parameter_default_bijectors(self, dist_class):
         """Return the default constraining bijectors for all parameters of a
         TensorFlow Probability distribution.
