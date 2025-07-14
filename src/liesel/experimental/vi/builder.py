@@ -217,6 +217,18 @@ class OptimizerBuilder:
         self._model_interface = interface
 
     def _obtain_parameter_default_bijectors(self, dist_class):
+        """Return the default constraining bijectors for all parameters of a
+        TensorFlow Probability distribution.
+
+        Parameters:
+            dist_class : Callable
+            The TensorFlow Probability distribution class (e.g., ``tfd.Normal``).
+
+        Returns:
+        dict[str, tfb.Bijector]
+            A mapping of parameter names to their default constraining bijectors,
+            provided by ``dist_class.parameter_properties()``.
+        """
         parameter_properties = dist_class.parameter_properties()
         parameter_names = parameter_properties.keys()
         parameter_default_bijectors = {
