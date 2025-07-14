@@ -263,6 +263,12 @@ class OptimizerBuilder:
         if isinstance(names, str):
             names = [names]
 
+        parameter_default_bijectors = self._obtain_parameter_default_bijectors(
+            dist_class
+        )
+
+        
+
         self.latent_variables.append(
             {
                 "names": names,
