@@ -236,6 +236,7 @@ class OptimizerBuilder:
         fixed_distribution_params: dict[str, float] | None = None,
         optimizer_chain: optax.GradientTransformation,
         transform: Callable | tfb.Bijector | None = None,
+        parameter_bijectors: dict[str, tfb.Bijector] | None,
     ) -> None:
         """Add a latent variable to the optimizer configuration by adding a variational
         distribution for each latent variable independently (Mean-Field Approach).
@@ -259,6 +260,9 @@ class OptimizerBuilder:
             transformations.
             transform (Optional[Union[Callable, tfb.Bijector]]): Transformation to
             apply on the latent variable.
+            parameter_bijectors (dict[str, tfb.Bijector] | None) – Optional overrides 
+            that replace the parameter's default tfp.util.ParameterProperties bijector, 
+            mapping the parameter from unconstrained to a constrained space.
         """
         if isinstance(names, str):
             names = [names]
@@ -266,8 +270,6 @@ class OptimizerBuilder:
         parameter_default_bijectors = self._obtain_parameter_default_bijectors(
             dist_class
         )
-
-        
 
         self.latent_variables.append(
             {
