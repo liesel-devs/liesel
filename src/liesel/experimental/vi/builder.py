@@ -227,7 +227,7 @@ class OptimizerBuilder:
         }
         return parameter_default_bijectors
 
-    def _update_parameter_bijectors(
+    def _merge_parameter_bijectors(
         self,
         default_bijectors: dict[str, tfb.Bijector],
         custom_bijectors: dict[str, tfb.Bijector],
