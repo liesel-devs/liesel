@@ -1652,11 +1652,20 @@ class Model:
         for node in model.nodes.values():
             node._outdated = False
 
-        for key, value in position.items():
-            try:
-                model.nodes[key].value = value  # type: ignore  # data node
-            except KeyError:
-                model.vars[key].value = value
+        # temporarily disable auto_update to avoid shape incompatibilities
+        # when updating variables sequentially with new shapes
+        original_auto_update = model.auto_update
+        model.auto_update = False
+
+        try:
+            for key, value in position.items():
+                try:
+                    model.nodes[key].value = value  # type: ignore  # data node
+                except KeyError:
+                    model.vars[key].value = value
+        finally:
+            # restore original auto_update setting
+            model.auto_update = original_auto_update
 
         model.update()
         return model.state
