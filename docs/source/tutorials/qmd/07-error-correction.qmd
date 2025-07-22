@@ -20,7 +20,7 @@ pd.options.display.html.border = 0
 In this tutorial, we implement a flexible distributional regression model
 with Bayesian measurement error correction in Liesel. The model should capture the
 (potentially) non-linear effect of a continuous covariate $x$, which is
-assumed to be suspect of a measurement error.
+assumed to be affected by measurement error.
 
 ## Measurement Error
 
@@ -42,7 +42,7 @@ The fundamental concept behind Bayesian measurement error correction is
 to treat the true, unknown covariate values $x_i$ as additional latent variables.
 These values are then imputed using MCMC simulations while simultaneously
 estimating all other parameters of the model. To achieve this, a prior distribution
-is assigned to $x_i$. Additional flexibility is achieved by adding hyperpriors with
+is assigned to $x_i$. We further add hyperpriors with
 assigned prior distributions to the distribution parameters of $x_i$.
 $$
 x_i \sim N(\mu_x,\tau^2_x), \quad \mu_x \sim N(0, \tau^2_{\mu}), \quad \tau^2_x \sim IG(a_x,b_x)
@@ -210,7 +210,7 @@ $$
 f(\cdot) = \mathbf{b}_i'\boldsymbol{\beta}.
 $$
 
-$\mathbf{b}_i'$ is defined as the vector of the evaluations of the basis function and $\boldsymbol{\beta}$ represents the corresponding vector of the basis coefficients. In our implementation we set $\beta_0 = 0$. We generate equidistant knots based on the observed $x$-values and construct cubic B-spline basis matrices for both functions using the Liesel {func}`.basis_matrix()` implementation. The number of knots is set to 20.
+$\mathbf{b}_i'$ is defined as the vector of the evaluations of the basis function and $\boldsymbol{\beta}$ represents the corresponding vector of the basis coefficients. In our implementation we set $\beta_0 = 0$, since we use an uncentered P-spline that already contains an intercept. We generate equidistant knots based on the observed $x$-values and construct cubic B-spline basis matrices for both functions using the Liesel {func}`.basis_matrix()` implementation. The number of knots is set to 20.
 
 ```{python}
 #| label: P-splines
