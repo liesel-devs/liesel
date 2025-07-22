@@ -25,7 +25,7 @@ assumed to be suspect of a measurement error.
 ## Measurement Error
 
 Assuming a total number of $M$ replicates of the covariate $x$ affected by
-measurement error we can write the measurement error model as
+measurement error, we can write the measurement error model as
 
 $$
 \tilde{x}_i^{(m)} = x_i + u_i^{(m)}, \quad m = 1, \ldots, M.
@@ -35,7 +35,7 @@ The measurement error is assumed to follow a multivariate Gaussian model,
 such that
 
 $$
-\mathbf{u}_i \sim N_M(\mathbf{0}, \mathbf{\Sigma}_{u,i})
+\mathbf{u}_i \sim N_M(\mathbf{0}, \mathbf{\Sigma}_{u,i}).
 $$
 
 The fundamental concept behind Bayesian measurement error correction is
@@ -50,6 +50,7 @@ $$
 
 
 ```{python}
+#| label: imports
 import jax
 import jax.numpy as jnp
 import liesel.model as lsl
@@ -58,6 +59,7 @@ import liesel.contrib.splines as splines
 import tensorflow_probability.substrates.jax as tfp
 import tensorflow_probability.substrates.jax.bijectors as tfb
 import numpy as np
+import matplotlib.pyplot as plt
 
 from liesel.contrib.splines import equidistant_knots, basis_matrix
 from liesel.distributions.mvn_degen import MultivariateNormalDegenerate
@@ -70,6 +72,7 @@ We will start by simulating some data with replicates. To introduce heteroscedas
 covariance matrices by one and the second by two.
 
 ```{python}
+#| label: data
 # Define the number of samples and replicates
 n = 500  # Number of data points
 M = 3    # Number of replicates per sample
@@ -77,7 +80,7 @@ c_u = 0.75 # define measurement error covariance
 
 np.random.seed(123)
 
-x = np.random.normal(loc=10, scale=5, size=n)
+x = np.random.normal(loc = 10, scale = 5, size = n)
 
 # Generate covariance matrices
 def create_sigma_me(dim_sigma_me, c_u):
@@ -109,9 +112,9 @@ for i in range(n):
     replicates.append(samples)
 
 # Generate response variable y
-variances = np.random.choice([0.3, 0.5], size=n)
+variances = np.random.choice([0.3, 0.5], size = n)
 y_true = np.sin(x)
-y = np.random.normal(loc=np.sin(x), scale=np.sqrt(variances))
+y = np.random.normal(loc = np.sin(x), scale = np.sqrt(variances))
 
 # Convert to JAX arrays
 x = jnp.array(x)
@@ -120,6 +123,7 @@ y = jnp.array(y)
 sigma = jnp.array(np.stack(sigma_matrices))
 ```
 ``` {python}
+#| label: plot-data
 # Plot Data
 fig, ax1 = plt.subplots(figsize=(8, 4))
 
@@ -137,14 +141,15 @@ ax1.grid(True, alpha=0.3)
 ## Implementing the Model in Liesel
 
 Now that we have our data we can define our distributions from above in Liesel,
-setting $\tau^2_{\mu} = 1000^2$ and $a_x = b_x = 0.001$.
+setting $\tau^2_{\mu} = 1000$ and $a_x = b_x = 0.001$.
 We will initialize $x$ using the mean of our observed measurements. We also need to assign a distribution to the observed
-measurements, where we chose a
+measurements, where we choose a
 [`multivariate normal distribution`](https://www.tensorflow.org/probability/api_docs/python/tfp/distributions/MultivariateNormalFullCovariance?hl=en). Note that we are building
 a hierarchical model by providing a {class}`.Var` instance for the `loc` and `scale`
 arguments of the different distributions.
 
 ```{python}
+#| label: distributions
 # Define hyperparameters for variance of x
 a_x = lsl.Var.new_param(0.001, name = "a_x")
 b_x = lsl.Var.new_param(0.001, name = "b_x")
@@ -155,21 +160,21 @@ tau2_x = lsl.Var.new_param(10.0, distribution = tau2_x_prior, name = "tau2_x")
 
 # Define hyperparameters for mu_x (mean of x)
 location_mu_x_prior = lsl.Var.new_param(0.0, name = "location_mu_x_prior")
-scale_mu_x_prior = lsl.Var.new_param(1000.0, name= "scale_mu_x_prior")
+scale_mu_x_prior = lsl.Var.new_param(1000.0, name = "scale_mu_x_prior")
 
 # Define prior for mu_x using a Normal distribution
 mu_x_prior = lsl.Dist(tfd.Normal, loc = location_mu_x_prior, scale = scale_mu_x_prior)
 
 # Define mu_x as a parameter with the prior distribution
-mu_x= lsl.Var.new_param(0.0, distribution = mu_x_prior, name = "mu_x")
+mu_x = lsl.Var.new_param(0.0, distribution = mu_x_prior, name = "mu_x")
 
 # Define prior distribution for x
 x_prior_dist = lsl.Dist(tfd.Normal, loc = mu_x, scale = tau2_x)
 
 # Estimate x using the mean of replicates and assign a prior distribution
-x_estimated = lsl.Var.new_param(jnp.expand_dims(x_tilde.mean(axis=1), -1), # initial estimation is the mean of the replicates
+x_estimated = lsl.Var.new_param(jnp.expand_dims(x_tilde.mean(axis = 1), -1), # initial estimation is the mean of the replicates
                                 distribution = x_prior_dist,
-                                name="x_estimated")
+                                name = "x_estimated")
 
 # Define likelihood model for measurement error
 measurement_dist = lsl.Dist(
@@ -181,8 +186,8 @@ measurement_dist = lsl.Dist(
 # Define x_tilde (observed replicates) as observed data in the probabilistic model
 x_tilde_var = lsl.Var.new_obs(
     value = x_tilde,
-    distribution=measurement_dist,
-    name="x_tilde"
+    distribution = measurement_dist,
+    name = "x_tilde"
 )
 ```
 ## The Distributional Regression Model
@@ -208,37 +213,38 @@ $$
 $\mathbf{b}_i'$ is defined as the vector of the evaluations of the basis function and $\boldsymbol{\beta}$ represents the corresponding vector of the basis coefficients. In our implementation we set $\beta_0 = 0$. We generate equidistant knots based on the observed $x$-values and construct cubic B-spline basis matrices for both functions using the Liesel {func}`.basis_matrix()` implementation. The number of knots is set to 20.
 
 ```{python}
+#| label: P-splines
 # Define Number of knots/spline parameters to use
 n_param_splines = 20
 
 # Generate equidistant knots for spline basis functions based on the mean of replicates (x_tilde)
-knots = equidistant_knots(jnp.expand_dims(x_tilde.mean(axis=1), -1), n_param=n_param_splines, order=3)
+knots = equidistant_knots(jnp.expand_dims(x_tilde.mean(axis = 1), -1), n_param = n_param_splines, order = 3)
 
 # Compute spline basis matrix for modeling the mean function
 basis_matrix_var_mu = lsl.Var.new_calc(
     lambda x: splines.basis_matrix(
         x.squeeze(),
-        knots=knots,    # Use precomputed knots
-        order=3,        # Cubic spline basis
-        outer_ok=True),
+        knots = knots,    # Use precomputed knots
+        order = 3,        # Cubic spline basis
+        outer_ok = True),
     x = x_estimated,
-    name="basis_matrix_mu"
+    name = "basis_matrix_mu"
 )
 
 # Compute spline basis matrix for modeling the scale
 basis_matrix_var_scale = lsl.Var.new_calc(
     lambda x: splines.basis_matrix(
         x.squeeze(),
-        knots=knots,
-        order=3,
-        outer_ok=True),
+        knots = knots,
+        order = 3,
+        outer_ok = True),
     x = x_estimated,
-    name="basis_matrix_scale"
+    name = "basis_matrix_scale"
 )
 
 # Define intercept parameters for the mean and scale functions in the spline model
-b0_mu = lsl.Var.new_param(0.0, name="b0_mu")
-b0_scale = lsl.Var.new_param(0.0, name="b0_scale")
+b0_mu = lsl.Var.new_param(0.0, name = "b0_mu")
+b0_scale = lsl.Var.new_param(0.0, name = "b0_scale")
 
 # Predictive function for the spline model
 # Computes the linear predictor: intercept + basis function expansion
@@ -253,10 +259,11 @@ f(\boldsymbol{\beta}|\tau^2) \propto (\tau^2)^{-\frac{\textrm{rk}(K)}{2}} \exp \
 \end{equation}
 $$
 with prior variance $\tau^2$ and a positive semi-definite prior precision matrix $K$.\
-To enforce smoothness in the spline models, second-order
-difference penalties in the prior precision matrices are implemented
+To enforce smoothness in the spline models, we use second-order
+difference penalties for the prior precision matrices.
 
 ```{python}
+#| label: P-spline priors
 # Define hyperparameters for the variance of the mean function
 a_var_mu = lsl.Var(0.001, name = "a_mu")
 b_var_mu = lsl.Var(0.001, name = "b_mu")
@@ -266,71 +273,71 @@ a_var_scale = lsl.Var(0.001, name = "a_scale")
 b_var_scale = lsl.Var(0.001, name = "b_scale")
 
 # Define prior tau2_mu distributions using Inverse Gamma
-prior_tau2_mu = lsl.Dist(tfd.InverseGamma, concentration=a_var_mu, scale=b_var_mu)
-tau2_mu = lsl.Var.new_param(10.0, distribution = prior_tau2_mu, name= "tau2_mu")
+prior_tau2_mu = lsl.Dist(tfd.InverseGamma, concentration = a_var_mu, scale = b_var_mu)
+tau2_mu = lsl.Var.new_param(10.0, distribution = prior_tau2_mu, name = "tau2_mu")
 
 # Define prior tau2_scale distributions using Inverse Gamma
 prior_tau2_scale = lsl.Dist(tfd.InverseGamma, concentration = a_var_scale, scale = b_var_scale)
-tau2_scale = lsl.Var.new_param(10.0, distribution = prior_tau2_scale, name= "tau2_scale")
+tau2_scale = lsl.Var.new_param(10.0, distribution = prior_tau2_scale, name = "tau2_scale")
 
 # Compute P-spline penalty matrix (2nd-order difference for smoothness)
-penalty = splines.pspline_penalty(d=n_param_splines,diff=2)
+penalty = splines.pspline_penalty(d = n_param_splines, diff = 2)
 
 # Define penalty matrices for scale and mean functions
-penalty_scale = lsl.Var(penalty, name= "penalty_scale")
-penalty_mu = lsl.Var(penalty, name= "penalty_mu")
+penalty_scale = lsl.Var(penalty, name = "penalty_scale")
+penalty_mu = lsl.Var(penalty, name = "penalty_mu")
 
 # Compute eigenvalues of the penalty matrix
 evals = jax.numpy.linalg.eigvalsh(penalty)
 
 # Compute rank of the penalty matrix (number of positive eigenvalues)
-rank_scale = lsl.Value(jnp.sum(evals > 0.0), _name= "rank_scale")
-rank_mu = lsl.Value(jnp.sum(evals > 0.0), _name= "rank_mu")
+rank_scale = lsl.Value(jnp.sum(evals > 0.0), _name = "rank_scale")
+rank_mu = lsl.Value(jnp.sum(evals > 0.0), _name = "rank_mu")
 
 # Compute log determinant of the penalty matrix (ignoring zero eigenvalues)
 log_pdet = jnp.log(jnp.where(evals > 0.0, evals, 1.0)).sum()
-log_pdet_mu = lsl.Value(log_pdet, _name= "log_pdet_mu")
-log_pdet_scale = lsl.Value(log_pdet, _name= "log_pdet_scale")
+log_pdet_mu = lsl.Value(log_pdet, _name = "log_pdet_mu")
+log_pdet_scale = lsl.Value(log_pdet, _name = "log_pdet_scale")
 
 # Define prior distribution for spline coefficients (scale function)
 prior_coef_scale  = lsl.Dist(
     MultivariateNormalDegenerate.from_penalty,
-    loc= jnp.zeros(shape=(n_param_splines,)),
-    var= tau2_scale,
-    pen= penalty_scale,
+    loc = jnp.zeros(shape = (n_param_splines,)),
+    var = tau2_scale,
+    pen = penalty_scale,
     rank = rank_scale,
-    log_pdet=log_pdet_scale
+    log_pdet = log_pdet_scale
     )
 
 # Initialize spline coefficients for scale function
 start_value_scale = np.zeros(np.shape(penalty)[-1], np.float32)
-coef_scale = lsl.Var.new_param(start_value_scale, distribution= prior_coef_scale, name= "coef_scale")
+coef_scale = lsl.Var.new_param(start_value_scale, distribution = prior_coef_scale, name = "coef_scale")
 
 # Define prior distribution for spline coefficients (mean function)
-prior_coef_mu  = lsl.Dist(
+prior_coef_mu = lsl.Dist(
     MultivariateNormalDegenerate.from_penalty,
-    loc= jnp.zeros(shape=(n_param_splines,)),
-    var=tau2_mu,
-    pen= penalty_mu,
+    loc = jnp.zeros(shape = (n_param_splines,)),
+    var = tau2_mu,
+    pen = penalty_mu,
     rank = rank_mu,
-    log_pdet=log_pdet_mu
+    log_pdet = log_pdet_mu
     )
 
 # Initialize spline coefficients for mean function
 start_value_mu = np.zeros(np.shape(penalty)[-1], np.float32)
-coef_mu = lsl.Var.new_param(start_value_mu, distribution= prior_coef_mu, name= "coef_mu")
+coef_mu = lsl.Var.new_param(start_value_mu, distribution = prior_coef_mu, name = "coef_mu")
 ```
-Then we can implement functions to calculate the the standard deviation and mean of our response, using
-{class}`.new_calc`.
+Then we can implement functions to calculate the the standard deviation and mean of our response, using {meth}`~.model.Var.new_calc`.
 
 ```{python}
+#| label: std-and-mean
 # Compute the scale (standard deviation) of y using the spline model
 scale_of_y = lsl.Var.new_calc(
     pred_fn,
-    beta0=b0_scale,                       # Intercept for scale function
-    spline_coef=coef_scale,               # Spline coefficients for scale
-    basis_matrix=basis_matrix_var_scale,  # Basis matrix for scale
-    name="scale_of_y"
+    beta0 = b0_scale,                       # Intercept for scale function
+    spline_coef = coef_scale,               # Spline coefficients for scale
+    basis_matrix = basis_matrix_var_scale,  # Basis matrix for scale
+    name = "scale_of_y"
 )
 
 # Transform scale_of_y to ensure positivity (exponential transformation)
@@ -339,29 +346,30 @@ scale_of_y_transformed = lsl.Var.new_calc(jnp.exp, scale_of_y, name = "scale_of_
 # Compute the mean (mu) of y using the spline model
 mu_of_y = lsl.Var.new_calc(
     pred_fn,
-    beta0= b0_mu,
+    beta0 = b0_mu,
     spline_coef = coef_mu,
     basis_matrix = basis_matrix_var_mu,
-    name="mu_of_y"
+    name = "mu_of_y"
 )
 
 # Define the likelihood distribution of y (Normal with estimated mean and scale)
 y_dist = lsl.Dist(
     tfd.Normal,
-    loc=mu_of_y,
-    scale= scale_of_y_transformed
+    loc = mu_of_y,
+    scale = scale_of_y_transformed
   )
 
 # Define y as an observed variable with the specified distribution
 y_var = lsl.Var.new_obs(
-    value=y,
-    distribution=y_dist,
-    name="y"
+    value = y,
+    distribution = y_dist,
+    name = "y"
 )
 ```
 And take a look at our model
 
 ```{python}
+#| label: plot-vars
 # create joint model for x and y
 model = lsl.Model([y_var, x_tilde_var])
 
@@ -371,8 +379,8 @@ model.plot_vars()
 
 ## MCMC Inference
 
-We choose {class}`~.goose.IWLSKernel` Kernels for generating posterior samples of the scale and mean coefficients.
-To draw from $\mu_x$, $\tau^2_x$, $\tau^2_{\mu}$ and $\tau^2_{\sigma}$ we use Gibbs kernels ({class}`~.goose.GibbsKernel`) kernels, as this allows us to use custom transition functions for our parameters. The full conditionals are:
+We choose {class}`~.goose.IWLSKernel` kernels for generating posterior samples of the scale and mean coefficients.
+To draw from $\mu_x$, $\tau^2_x$, $\tau^2_{\mu}$ and $\tau^2_{\sigma}$ we use Gibbs kernels ({class}`~.goose.GibbsKernel`), as this allows us to use custom transition functions for our parameters. The full conditionals are:
 
 $$
 \begin{eqnarray}
@@ -382,7 +390,11 @@ $$
 \end{eqnarray}.
 $$
 
+Further we utilize a Metropolis-Hastings kernel ({class}`~.goose.MHKernel`)  to sample the $x$ values. This also allows us to implement our own
+transition function.
+
 ```{python}
+#| label: transition-functions
 def transition_tau_mu(prng_key, model_state):
     """
     Sample tau2_mu from its posterior distribution using Gibbs sampling.
@@ -397,7 +409,7 @@ def transition_tau_mu(prng_key, model_state):
     # Extract relevant parameters from model state
     pos = interface.extract_position(
         position_keys=["a_mu", "b_mu", "rank_mu", "penalty_mu", "coef_mu"],
-        model_state=model_state
+        model_state = model_state
     )
     # Extract values from position
     a_prior = pos["a_mu"]
@@ -429,8 +441,8 @@ def transition_tau_scale(prng_key, model_state):
     """
     # Extract relevant parameters from model state
     pos = interface.extract_position(
-        position_keys=["a_scale", "b_scale", "rank_scale", "penalty_scale", "coef_scale"],
-        model_state=model_state
+        position_keys = ["a_scale", "b_scale", "rank_scale", "penalty_scale", "coef_scale"],
+        model_state = model_state
     )
     # Extract values from position
     a_prior = pos["a_scale"]
@@ -461,8 +473,8 @@ def transition_mu_x(prng_key, model_state):
     """
     # Extract relevant parameters from model state
     pos = interface.extract_position(
-        position_keys=["x_estimated", "tau2_mu", "tau2_x", "a_x", "b_x"],
-        model_state=model_state
+        position_keys = ["x_estimated", "tau2_mu", "tau2_x", "a_x", "b_x"],
+        model_state = model_state
     )
     x = pos["x_estimated"]
     n = len(x)
@@ -495,8 +507,8 @@ def transition_tau2_x(prng_key, model_state):
     """
     # Extract relevant parameters from model state
     pos = interface.extract_position(
-        position_keys=["a_x", "b_x", "x_estimated", "mu_x", "b_x"],
-        model_state=model_state
+        position_keys = ["a_x", "b_x", "x_estimated", "mu_x", "b_x"],
+        model_state = model_state
     )
     a_x = pos["a_x"]
     b_x = pos["b_x"]
@@ -509,7 +521,7 @@ def transition_tau2_x(prng_key, model_state):
     beta_new = b_x + ((x - mu_x)**2).sum() / 2
 
     # Sample tau2_x from the inverse gamma distribution
-    tau2_x = jnp.squeeze(tfd.InverseGamma(concentration=alpha_new, scale=beta_new).sample(seed=prng_key))
+    tau2_x = jnp.squeeze(tfd.InverseGamma(concentration = alpha_new, scale = beta_new).sample(seed = prng_key))
 
     return {"tau2_x" : tau2_x}
 
@@ -528,7 +540,7 @@ def x_proposal(key, model_state, step_size):
     # Extract current values of x_estimated and x_tilde from model state
     pos = interface.extract_position(
         position_keys=["x_estimated", "x_tilde"],
-        model_state=model_state
+        model_state = model_state
     )
     x_current = pos["x_estimated"].squeeze()  # Turn from (n, 1) into (n,)
     n, m = pos["x_tilde"].shape
@@ -536,7 +548,7 @@ def x_proposal(key, model_state, step_size):
     # Initialize the step size scaling factor and covariance matrix
     g = 1.0
     M = m
-    eye_matrices = jnp.eye(m, dtype=jnp.float32)
+    eye_matrices = jnp.eye(m, dtype = jnp.float32)
 
     # Create a stack of identity matrices and draw normal samples
     sigma = jnp.stack([eye_matrices for _ in range(n)])  # (n, m, m)
@@ -550,18 +562,19 @@ def x_proposal(key, model_state, step_size):
     x_proposed = x_current + scale_factor * normal_samples * step_size  # (n,)
     pos = {"x_estimated": jnp.expand_dims(x_proposed, -1)}  # Turn back into (n, 1)
 
-    return gs.MHProposal(pos, log_correction=0.0)
+    return gs.MHProposal(pos, log_correction = 0.0)
 
 ```
-Further we utilize a Metropolis-Hastings kernel ({class}`~.goose.MHKernel`)  to sample the $x$ values. This also allows us to implement our own
-transition function We set up our engine and draw 5000 posterior samples.
+ We set up our engine and draw 10.000 posterior samples.
 
 ```{python}
+#| label: kernels
 #add kernels and return engine
 interface = gs.LieselInterface(model)
 eb_sample = gs.EngineBuilder(seed = 2 , num_chains=4)
 eb_sample.set_model(gs.LieselInterface(model))
 eb_sample.set_initial_values(model.state)
+eb_sample.show_progress = False
 
 eb_sample.add_kernel(gs.IWLSKernel(["coef_scale"]))
 eb_sample.add_kernel(gs.IWLSKernel(["coef_mu"]))
@@ -573,35 +586,38 @@ eb_sample.add_kernel(gs.GibbsKernel(["tau2_x"], transition_tau2_x))
 
 
 
-eb_sample.set_duration(warmup_duration = 1000, posterior_duration = 5000, thinning_posterior=10)
+eb_sample.set_duration(warmup_duration = 5000, posterior_duration = 10000, thinning_posterior = 10)
 
 eb_sample.positions_included = ["mu_of_y", "scale_of_y_transformed"]
 
 engine = eb_sample.build()
 engine.sample_all_epochs()
 ```
-Now we can take a look at our results of our parameters
+Now we can take a look at the results for our parameters
 
 ```{python}
+#| label: view-results
 results = engine.get_results()
-summary = gs.Summary(results)
-
-summary
+gs.Summary(results, deselected = ["x_estimated", "scale_of_y_transformed", "mu_of_y", "mu_x", "tau2_mu", "tau2_scale", "tau2_x"])
 ```
+
  And the traceplots for the first three $\mu$ and $\sigma$ coefficients
 
 ```{python}
-# Plot the treace of all scale coefficients
-gs.plot_trace(results, "coef_scale", range(3))
+#| label: plot-trace_scale
+# Plot the trace of all scale coefficients
+fig = gs.plot_trace(results, "coef_mu", range(3))
 ```
 
 ```{python}
-# Plot the treace of all location coefficients
-gs.plot_trace(results, "coef_mu", range(3))
+#| label: plot-trace-mean
+# Plot the trace of all location coefficients
+fig = gs.plot_trace(results, "coef_scale", range(3))
 ```
 
-And at $\mu$
+And at $\mu_x$
 
 ```{python}
+#| label: plot-mu_x
 gs.plot_param(results, "mu_x")
 ```
