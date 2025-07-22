@@ -496,6 +496,35 @@ class TestPredictions:
         with pytest.raises(TypeError):
             model.predict(samples=samples, newdata={"X": xnew})
 
+    def test_predict_multiple_vars_new_shapes_issue_291(self) -> None:
+        # create model with variables of shape (3,)
+        x1 = Var.new_obs(jnp.ones(3), name="x1")
+        x2 = Var.new_obs(jnp.ones(3), name="x2")
+
+        # needed for provide samples
+        dummy_param = Var.new_param(jnp.array(0.0), name="dummy")
+
+        # create a calculation that depends on compatible shapes
+        calc_sum = Var.new_calc(
+            lambda y0, y1, y2: (y0 + y1).sum() + y2,
+            x1,
+            x2,
+            dummy_param,
+            name="calc_sum",
+        )
+        model = GraphBuilder().add(x1, x2, calc_sum, dummy_param).build_model()
+
+        # update with variables of different but compatible shapes
+        pred = model.predict(
+            samples={"dummy": jnp.array([[0.0], [0.0]])},
+            predict=["calc_sum"],
+            newdata={"x1": jnp.ones(5), "x2": jnp.ones(5)},
+        )
+
+        # verify prediction works - calc_sum should be 10.0 (5 + 5 + 0 = 10)
+        assert pred["calc_sum"].shape == (2, 1)
+        assert jnp.allclose(pred["calc_sum"], 10.0)
+
 
 @pytest.mark.xfail
 class TestUserDefinedModelNodes:
