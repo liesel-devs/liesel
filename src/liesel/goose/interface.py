@@ -111,6 +111,16 @@ class DictInterface:
         """
         return self._log_prob_fn(model_state)
 
+    def log_prob_subset(self, model_state: ModelState, subset_name: str) -> float:
+        """
+        Computes the unnormalized log-probability of a named subset.
+
+        Raises NotImplementedError as DictInterface does not support subset queries.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support subset log prob queries."
+        )
+
 
 @usedocs(ModelInterface)
 class DataclassInterface:
@@ -203,6 +213,16 @@ class DataclassInterface:
             An instance of the dataclass representing the model state.
         """
         return self._log_prob_fn(model_state)
+
+    def log_prob_subset(self, model_state: ModelState, subset_name: str) -> float:
+        """
+        Computes the unnormalized log-probability of a named subset.
+
+        Raises NotImplementedError as DataclassInterface does not support subsets.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support subset log prob queries."
+        )
 
     def update_state(self, position: Position, model_state: ModelState) -> ModelState:
         """
@@ -311,6 +331,35 @@ class LieselInterface:
             A dictionary of node names and their corresponding :class:`.NodeState`.
         """
         return model_state["_model_log_prob"].value
+
+    def log_prob_subset(self, model_state: ModelState, subset_name: str) -> float:
+        """
+        Computes the unnormalized log-probability of a named subset.
+
+        Parameters
+        ----------
+        model_state
+            A dictionary of node names and their corresponding :class:`.NodeState`.
+        subset_name
+            Name of the subset calc node to query. Node needs to be manually created in
+            the model using :func:`~liesel.model.create_subset_log_prob_calc`.
+
+        Returns
+        -------
+        The unnormalized log-probability of the specified subset.
+
+        Raises
+        ------
+        KeyError
+            If the subset_name does not exist in the model state.
+        """
+        try:
+            return model_state[subset_name].value
+        except KeyError:
+            raise KeyError(
+                f"Subset calc node '{subset_name}' not found in model state. "
+                f"Available nodes: {list(model_state.keys())}"
+            )
 
 
 class NamedTupleInterface:
@@ -423,3 +472,13 @@ class NamedTupleInterface:
             A dictionary of node names and their corresponding :class:`.NodeState`.
         """
         return self._log_prob_fn(model_state)
+
+    def log_prob_subset(self, model_state: ModelState, subset_name: str) -> float:
+        """
+        Computes the unnormalized log-probability of a named subset.
+
+        Raises NotImplementedError as NamedTupleInterface does not support subsets.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support subset log prob queries."
+        )

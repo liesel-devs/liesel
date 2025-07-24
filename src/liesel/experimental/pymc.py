@@ -164,3 +164,13 @@ class PyMCInterface:
         """Computes the unnormalized log-probability given the model state."""
         rv_values = [model_state[rv] for rv in self._rv_names]
         return self._log_prob(rv_values)
+
+    def log_prob_subset(self, model_state: ModelState, subset_name: str) -> float:
+        """
+        Computes the unnormalized log-probability of a named subset.
+
+        Raises NotImplementedError as PyMCInterface does not support subset queries.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support subset log prob queries."
+        )

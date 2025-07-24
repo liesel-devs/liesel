@@ -101,6 +101,16 @@ class ModelInterface(Protocol):
 
         raise NotImplementedError
 
+    def log_prob_subset(self, model_state: ModelState, subset_name: str) -> float:
+        """
+        Computes the unnormalized log-probability of a named subset.
+
+        Parameter `subset_name` names the subset to query
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support subset log prob queries."
+        )
+
 
 class Kernel(Protocol[TKernelState, TTransitionInfo, TTuningInfo]):
     """Protocol for a transition kernel."""
