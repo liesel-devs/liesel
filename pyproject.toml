@@ -1,6 +1,6 @@
 [project]
 name = "liesel"
-version = "0.4.0-dev"
+version = "0.4.1"
 description = "A probabilistic programming framework with a focus on semi-parametric regression"
 readme = "README.md"
 authors = [
