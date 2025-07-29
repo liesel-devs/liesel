@@ -41,6 +41,48 @@ def _reduced_sum(*args: Array) -> Array:
     return sum(reduced)
 
 
+def create_subset_log_prob_calc(subset_nodes: list[Dist | Var], name: str) -> Calc:
+    """
+    Create calc node that sums log prob of specified dist nodes/variables.
+
+    Parameters
+    ----------
+    subset_nodes
+        List of Dist nodes or Vars with Dist values to include in subset.
+    name
+        Name for the subset log prob calc node.
+
+    Returns
+    -------
+    Calc node that computes the sum of log probabilities for the subset.
+
+    Raises
+    ------
+    ValueError
+        If no valid Dist nodes found in subset_nodes.
+    """
+    # Filter subset_nodes to actual Dist nodes
+    valid_dist_nodes = []
+
+    for item in subset_nodes:
+        if isinstance(item, Dist):
+            valid_dist_nodes.append(item)
+        elif isinstance(item, Var):
+            # Check if this Var has a Dist node
+            if item.has_dist and item.dist_node is not None:
+                valid_dist_nodes.append(item.dist_node)
+
+    if not valid_dist_nodes:
+        raise ValueError(
+            f"No valid Dist nodes found in subset_nodes for calc node '{name}'. "
+            "Ensure the specified nodes/variables contain Dist values."
+        )
+
+    # Create Calc node using _reduced_sum like _model_log_prob
+    node = Calc(_reduced_sum, *valid_dist_nodes, _name=name, _update_on_init=False)
+    return node
+
+
 def _transform_back(var_transformed: Var) -> Calc:
     """
     Creates a :class:`.Calc` mapping a transformed parameter back to
