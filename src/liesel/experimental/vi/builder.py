@@ -1,11 +1,14 @@
 from collections.abc import Callable
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import jax
 import jax.numpy as jnp
 import optax
 import tensorflow_probability.substrates.jax.bijectors as tfb
 from tensorflow_probability.substrates import jax as tfp
+from tensorflow_probability.substrates.jax.distributions import (
+    Distribution as TfpDistribution,
+)
 
 from liesel.distributions import MultivariateNormalLogCholeskyParametrization
 
@@ -205,8 +208,7 @@ class OptimizerBuilder:
         self.window_size = window_size
         self.batch_size = batch_size
         self.S = S
-        self._model_interface = None
-        self.latent_variables = []
+        self.latent_variables: list[dict[str, Any]] = []
 
     def set_model(self, interface: LieselInterface) -> None:
         """Set the model interface for the optimizer.
@@ -218,7 +220,7 @@ class OptimizerBuilder:
 
     def _validate_latent_variable_keys(
         self,
-        dist_class: Callable,
+        dist_class: type[TfpDistribution],
         parameter_bijectors: dict[str, tfb.Bijector] | None = None,
         phi: dict[str, float] | None = None,
     ) -> None:
@@ -247,7 +249,7 @@ class OptimizerBuilder:
         """
         valid_keys = set(dist_class.parameter_properties().keys())
 
-        def _check(name: str, mapping: dict[str, object] | None) -> None:
+        def _check(name: str, mapping: dict[str, Any] | None) -> None:
             if mapping is None:
                 return
             invalid = set(mapping) - valid_keys
@@ -259,7 +261,6 @@ class OptimizerBuilder:
 
         _check("parameter_bijectors", parameter_bijectors)
         _check("phi", phi)
-
 
     def _obtain_parameter_default_bijectors(self, dist_class):
         """Return the default constraining bijectors for all parameters of a
@@ -316,7 +317,7 @@ class OptimizerBuilder:
     def add_latent_variable(
         self,
         names: list[str],
-        dist_class: Callable,
+        dist_class: type[TfpDistribution],
         *,
         phi: dict[str, float],
         fixed_distribution_params: dict[str, float] | None = None,
