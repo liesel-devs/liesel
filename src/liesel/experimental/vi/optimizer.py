@@ -73,11 +73,13 @@ class Optimizer:
         self.variational_dists_class = self._init_variational_dists_class()
         self.phi = self._init_phi()
         self.fixed_distribution_params = self._init_fixed_distribution_params()
+        self.parameter_bijectors = self._init_parameter_bijectors()  #####
 
         self.initial_distributions = self._validate_and_build_distributions()
 
         self.opt_state, self.optimizer = self._init_optimizer()
-        self.elbo_values = []
+        self.elbo_values: list[float] = []
+        self.phi_evolution: list[dict[str, dict[str, Any]]] = []
 
         try:
             self.dim_data = next(
@@ -116,6 +118,13 @@ class Optimizer:
         }
         return fixed_distribution_params
 
+    def _init_parameter_bijectors(self) -> dict[str, dict[str, Any] | None]:  ######
+        """Collect per-parameter bijectors (may be None)."""
+        return {
+            self._config_key(config): config.get("parameter_bijectors", None)
+            for config in self.latent_vars_config
+        }
+
     def _init_transform_dict(self) -> dict[str, GradientTransformation]:
         """Initialize the transform dictionary."""
         optim_dict = {
@@ -130,15 +139,37 @@ class Optimizer:
             config["names"][0] if len(config["names"]) == 1 else config["full_rank_key"]
         )
 
-    def _build_distribution(
+    def _apply_parameter_bijectors(  ###############
+        self,
+        phi: dict[str, Any],
+        parameter_bijectors: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Apply constraining bijectors (if any) to distribution parameters in phi.
+
+        These bijectors map the parameters of the variational distribution into their
+        valid domain. They are not the latent-variable transforms.
+        """
+        if parameter_bijectors is None:
+            return phi
+        out = {}
+        for p_name, p_val in phi.items():
+            bij = parameter_bijectors.get(p_name)
+            if bij is not None:
+                out[p_name] = bij.forward(p_val)
+            else:
+                out[p_name] = p_val
+        return out
+
+    def _build_distribution(  ############ expanded
         self,
         dist_class: type[TfpDistribution],
         phi: dict[str, Any],
         fixed_distribution_params: dict[str, Any],
+        parameter_bijectors: dict[str, Any] | None = None,
     ) -> TfpDistribution:
-        """Builds a TFP distribution with given parameters phi and
-        fixed_distribution_params."""
-        return dist_class(**phi, **fixed_distribution_params)
+        """Build a TFP distribution with constrained parameters."""
+        phi_constrained = self._apply_parameter_bijectors(phi, parameter_bijectors)
+        return dist_class(**phi_constrained, **fixed_distribution_params)
 
     def _process_full_rank_configs(self) -> None:
         """Process configurations for Full-Rank latent variables and checks dimensions
@@ -181,8 +212,9 @@ class Optimizer:
         phi_keys = set(self.phi.keys())
         fixed_keys = set(self.fixed_distribution_params.keys())
         dist_keys = set(self.variational_dists_class.keys())
+        bij_keys = set(self.parameter_bijectors.keys())  #######
 
-        if not (phi_keys == fixed_keys == dist_keys):
+        if not (phi_keys == fixed_keys == dist_keys == bij_keys):
             raise ValueError(
                 f"Mismatch in keys: phi_keys={phi_keys}, "
                 f"fixed_keys={fixed_keys}, "
@@ -194,6 +226,7 @@ class Optimizer:
                 self.variational_dists_class[key],
                 self.phi[key],
                 self.fixed_distribution_params[key],
+                self.parameter_bijectors.get(key),
             )
             for key in phi_keys
         }
@@ -228,7 +261,7 @@ class Optimizer:
         S = self.S
         number_batches = (
             dim_data // batch_size
-        )  # Assume dim_data is divisible by batch_size
+        )  # Assumption: dim_data is divisible by batch_size
 
         @partial(jax.jit, static_argnames=["batch_size", "S"])
         def step(
@@ -559,6 +592,7 @@ class Optimizer:
             self.variational_dists_class[pname],
             pval,
             self.fixed_distribution_params[pname],
+            self.parameter_bijectors.get(pname),  ####### expanded
         )
 
         if dist_obj.reparameterization_type == tfd.FULLY_REPARAMETERIZED:
@@ -604,6 +638,7 @@ class Optimizer:
             self.variational_dists_class[full_rank_key],
             pval,
             self.fixed_distribution_params[full_rank_key],
+            self.parameter_bijectors.get(full_rank_key),  ####### expanded
         )
 
         rng_key, subkey = jax.random.split(rng_key)
@@ -703,21 +738,27 @@ class Optimizer:
             key = self._config_key(
                 config
             )  # Returns config["names"][0] or config["full_rank_key"] if multivariate
-            transform = config.get("transform", None)
+            # transform = config.get("transform", None)
             dist_class = self.variational_dists_class[key]
             phi_original = self.phi[key]
+            phi_after_param = self._apply_parameter_bijectors(
+                phi_original, self.parameter_bijectors.get(key)
+            )
 
-            phi_transformed = {}
-            for param_name, param_value in phi_original.items():
-                if transform is None:
-                    phi_transformed[param_name] = param_value
-                elif callable(transform) and not hasattr(transform, "forward"):
-                    phi_transformed[param_name], _ = transform(param_value)
-                elif hasattr(transform, "forward"):
-                    phi_transformed[param_name] = transform.forward(param_value)
+            # phi_transformed = {}
+            # for param_name, param_value in phi_original.items():
+            #     if transform is None:
+            #         phi_transformed[param_name] = param_value
+            #     elif callable(transform) and not hasattr(transform, "forward"):
+            #         phi_transformed[param_name], _ = transform(param_value)
+            #     elif hasattr(transform, "forward"):
+            #         phi_transformed[param_name] = transform.forward(param_value)
 
             final_distribution = self._build_distribution(
-                dist_class, phi_transformed, self.fixed_distribution_params[key]
+                dist_class,
+                phi_after_param,
+                self.fixed_distribution_params[key],
+                parameter_bijectors=None,  # already applied
             )
 
             final_results.update({name: final_distribution for name in names})
@@ -751,7 +792,7 @@ class Optimizer:
             - "samples": a dict mapping latent variable names to their samples.
             - "seed": the updated PRNGKey after sampling.
         """
-        results = {}
+        # results = {}
         samples = {}
         seed = jax.random.PRNGKey(seed)
         keys = jax.random.split(seed, len(self.latent_vars_config) + 1)
@@ -784,10 +825,16 @@ class Optimizer:
                         split_samples[j], (n_samples,) + var_shape
                     )
 
-        results["final_variational_distributions"] = (
-            self.final_variational_distributions
-        )
-        results["elbo_values"] = self.elbo_values
-        results["samples"] = samples
-        results["seed"] = keys[0]
+        results = {
+            "final_variational_distributions": self.final_variational_distributions,
+            "elbo_values": self.elbo_values,
+            "samples": samples,
+            "seed": keys[0],
+        }
+        # results["final_variational_distributions"] = (
+        #     self.final_variational_distributions
+        # )
+        # results["elbo_values"] = self.elbo_values
+        # results["samples"] = samples
+        # results["seed"] = keys[0]
         return results
