@@ -541,25 +541,19 @@ class Optimizer:
 
         for key, config in self.latent_vars_config.items():
             names = config["names"]
-            # transform = config.get("transform", None)
             dist_class = self.variational_dists_class[key]
-            phi_original = self.phi[key]
-            phi_after_param = self._apply_parameter_bijectors(
-                phi_original, self.parameter_bijectors.get(key)
-            )
-
-            # phi_transformed = {}
-            # for param_name, param_value in phi_original.items():
-            #     if transform is None:
-            #         phi_transformed[param_name] = param_value
-            #     elif callable(transform) and not hasattr(transform, "forward"):
-            #         phi_transformed[param_name], _ = transform(param_value)
-            #     elif hasattr(transform, "forward"):
-            #         phi_transformed[param_name] = transform.forward(param_value)
+            phi_unconstrained = self.phi[key]
+            parameter_bijectors = config["variational_param_bijectors"]
+            
+            # Apply bijector forward to transform unconstrained to constrained parameters
+            phi_constrained = {}
+            for p_name, p_val in phi_unconstrained.items():
+                bij = parameter_bijectors[p_name]
+                phi_constrained[p_name] = bij.forward(p_val)
 
             final_distribution = self._build_distribution(
                 dist_class,
-                phi_after_param,
+                phi_constrained,
                 self.fixed_distribution_params[key],
                 parameter_bijectors=None,  # already applied
             )
