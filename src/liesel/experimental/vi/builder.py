@@ -348,74 +348,76 @@ class OptimizerBuilder:
             parameter_bijectors_default, variational_param_bijectors
         )
 
-        self.latent_variables.append(
-            {
-                "names": latent_variable_names,
-                "dist_class": dist_class,
-                "phi": phi,
-                "fixed_distribution_params": fixed_distribution_params,
-                "optimizer_chain": optimizer_chain,
-                "variational_param_bijectors": parameter_bijectors,
-            }
-        )
+        # Create the configuration
+        config = {
+            "names": latent_variable_names,
+            "dist_class": dist_class,
+            "phi": phi,
+            "fixed_distribution_params": fixed_distribution_params,
+            "optimizer_chain": optimizer_chain,
+            "variational_param_bijectors": parameter_bijectors,
+        }
+        
+        # Validate the configuration by attempting to build the distribution
+        distribution = self._validate_and_build_distributions(config)
+        # Store event shape information for future use
+        config["event_shape"] = distribution.event_shape
+        
+        self.latent_variables.append(config)
 
-    def add_multivariate_latent_variable(
-        self,
-        names: list[str],
-        phi: dict[str, Any] | None = None,
-        *,
-        fixed_distribution_params: dict[str, float] | None = None,
-        optimizer_chain: optax.GradientTransformation,
-        transform: Callable | tfb.Bijector | None = None,
-    ) -> None:
-        """Adds a multivariate latent variable to the optimizer configuration (Gaussian
-        Full-Rank) with shared covariance of different latent variables.
-
-        If fixed_distribution_params does not include 'd' (the total dimension),
-        it is computed from the model's parameter shapes. If phi is
-        not provided, a default is generated with ones for the location and a
-        computed log-Cholesky vector.
-
-        Parameters:
-            names (List[str]): List of parameter names to be grouped as a
-            multivariate variable.
-            phi (Optional[Dict[str, Any]]): Initial
-            parameters for the distribution.
-            fixed_distribution_params (Optional[Dict[str, float]]): Optional
-            fixed parameters for the distribution.
-            optimizer_chain (optax.GradientTransformation): Optimizer chain for
-            gradient transformations.
-            transform (Optional[Union[Callable, tfb.Bijector]]): Transformation to apply
-            on the latent variable.
+    def _validate_and_build_distributions(self, config: dict[str, Any]) -> TfpDistribution:
+        """Validate and build a single variational distribution from configuration.
+        
+        This method attempts to build the distribution to validate that the configuration
+        is correct and returns the built distribution for further inspection (e.g., event shape).
+        
+        Parameters
+        ----------
+        config : dict[str, Any]
+            Configuration dictionary for a single latent variable.
+            
+        Returns
+        -------
+        TfpDistribution
+            The built distribution object.
+            
+        Raises
+        ------
+        ValueError
+            If the distribution cannot be built due to invalid configuration.
         """
-        if fixed_distribution_params is None:
-            fixed_distribution_params = {}
-
-        if "d" not in fixed_distribution_params:
-            d = sum(
-                jnp.array(self._model_interface.model.vars[var].value).size
-                for var in names
+        try:
+            # Extract configuration components
+            dist_class = config["dist_class"]
+            phi = config["phi"]
+            fixed_distribution_params = config.get("fixed_distribution_params", {})
+            parameter_bijectors = config.get("variational_param_bijectors", None)
+            
+            # Apply parameter bijectors if they exist
+            if parameter_bijectors is not None:
+                phi_constrained = {}
+                for p_name, p_val in phi.items():
+                    bij = parameter_bijectors.get(p_name)
+                    if bij is not None:
+                        phi_constrained[p_name] = bij.forward(p_val)
+                    else:
+                        phi_constrained[p_name] = p_val
+            else:
+                phi_constrained = phi
+            
+            # Build the distribution
+            distribution = dist_class(
+                **phi_constrained, 
+                **(fixed_distribution_params if fixed_distribution_params is not None else {})
             )
-            fixed_distribution_params["d"] = d
-
-        d = fixed_distribution_params["d"]
-
-        if phi is None:
-            phi = {
-                "loc": jnp.ones(d),
-                "log_cholesky_parametrization": self.make_log_cholesky_like(d),
-            }
-
-        self.latent_variables.append(
-            {
-                "names": names,
-                "dist_class": MultivariateNormalLogCholeskyParametrization,
-                "phi": phi,
-                "fixed_distribution_params": fixed_distribution_params,
-                "optimizer_chain": optimizer_chain,
-                "transform": transform,
-            }
-        )
+            
+            return distribution
+            
+        except Exception as e:
+            names = config.get("names", ["unknown"])
+            raise ValueError(
+                f"Failed to build variational distribution for latent variable(s) {names}: {str(e)}"
+            ) from e
 
     def build(self) -> Optimizer:
         """Build and return an Optimizer instance based on the current configuration.
