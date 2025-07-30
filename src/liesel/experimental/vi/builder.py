@@ -262,17 +262,17 @@ class OptimizerBuilder:
 
     def _get_latent_var_dims(self, latent_variable_names: list[str]) -> dict[str, int]:
         """Get the dimensionality of each latent variable from the model.
-        
+
         Parameters
         ----------
         latent_variable_names : list[str]
             List of latent variable names.
-            
+
         Returns
         -------
         dict[str, int]
             Mapping from variable names to their dimensionalities.
-            
+
         Raises
         ------
         KeyError
@@ -280,22 +280,22 @@ class OptimizerBuilder:
         """
         model_params = self._model_interface.get_params()
         dims = {}
-        
+
         for pname in latent_variable_names:
             if pname not in model_params:
-                raise KeyError(
-                    f"Parameter {pname} not found in model parameters"
-                )
+                raise KeyError(f"Parameter {pname} not found in model parameters")
             dims[pname] = int(jnp.prod(jnp.array(model_params[pname].shape)))
-            
+
         return dims
-    
-    def _validate_dimensionality(self, 
-                              latent_variable_names: list[str], 
-                              event_shape: int,
-                              variable_dims: dict[str, int]) -> None:
+
+    def _validate_dimensionality(
+        self,
+        latent_variable_names: list[str],
+        event_shape: int,
+        variable_dims: dict[str, int],
+    ) -> None:
         """Validate that the total dimensions match the event shape.
-        
+
         Parameters
         ----------
         latent_variable_names : list[str]
@@ -304,14 +304,14 @@ class OptimizerBuilder:
             Event shape of the variational distribution.
         variable_dims : dict[str, int]
             Mapping from variable names to their dimensionalities.
-            
+
         Raises
         ------
         ValueError
             If dimensions don't match the event shape.
         """
         total_dim = sum(variable_dims[name] for name in latent_variable_names)
-        
+
         if event_shape != total_dim:
             raise ValueError(
                 f"Dimension mismatch for latent variables {latent_variable_names}: "
@@ -356,7 +356,9 @@ class OptimizerBuilder:
         if isinstance(latent_variable_names, str):
             latent_variable_names = [latent_variable_names]
 
-        self._validate_latent_variable_keys(dist_class, variational_param_bijectors, phi)
+        self._validate_latent_variable_keys(
+            dist_class, variational_param_bijectors, phi
+        )
 
         parameter_bijectors_default = self._obtain_parameter_default_bijectors(
             dist_class
@@ -365,7 +367,6 @@ class OptimizerBuilder:
             parameter_bijectors_default, variational_param_bijectors
         )
 
-        # Create the configuration
         config = {
             "names": latent_variable_names,
             "dist_class": dist_class,
@@ -374,34 +375,32 @@ class OptimizerBuilder:
             "optimizer_chain": optimizer_chain,
             "variational_param_bijectors": parameter_bijectors,
         }
-        
-        # Validate the configuration by attempting to build the distribution
+
         distribution = self._validate_and_build_distributions(config)
-        
-        # Validate that the distribution is fully reparameterized
+
         self._validate_fully_reparameterized_dist(distribution, latent_variable_names)
-        
-        # Store event shape and variable dimensions
+
         event_shape = int(jnp.prod(jnp.array(distribution.event_shape.as_list())))
         config["event_shape"] = event_shape
         variable_dims = self._get_latent_var_dims(latent_variable_names)
         config["variable_dims"] = variable_dims
-        
-        # Validate dimensionality
+
         self._validate_dimensionality(latent_variable_names, event_shape, variable_dims)
-        
+
         self.latent_variables.append(config)
 
-    def _validate_fully_reparameterized_dist(self, distribution: TfpDistribution, latent_variable_names: list[str]) -> None:
+    def _validate_fully_reparameterized_dist(
+        self, distribution: TfpDistribution, latent_variable_names: list[str]
+    ) -> None:
         """Validate that the distribution is fully reparameterized.
-        
+
         Parameters
         ----------
         distribution : TfpDistribution
             The distribution to validate.
         latent_variable_names : list[str]
             List of latent variable names for error reporting.
-            
+
         Raises
         ------
         NotImplementedError
@@ -414,35 +413,35 @@ class OptimizerBuilder:
                 f"Got reparameterization type: {distribution.reparameterization_type}"
             )
 
-    def _validate_and_build_distributions(self, config: dict[str, Any]) -> TfpDistribution:
+    def _validate_and_build_distributions(
+        self, config: dict[str, Any]
+    ) -> TfpDistribution:
         """Validate and build a single variational distribution from configuration.
-        
+
         This method attempts to build the distribution to validate that the configuration
         is correct and returns the built distribution for further inspection (e.g., event shape).
-        
+
         Parameters
         ----------
         config : dict[str, Any]
             Configuration dictionary for a single latent variable.
-            
+
         Returns
         -------
         TfpDistribution
             The built distribution object.
-            
+
         Raises
         ------
         ValueError
             If the distribution cannot be built due to invalid configuration.
         """
         try:
-            # Extract configuration components
             dist_class = config["dist_class"]
             phi = config["phi"]
             fixed_distribution_params = config.get("fixed_distribution_params", {})
             parameter_bijectors = config.get("variational_param_bijectors", None)
-            
-            # Apply parameter bijectors if they exist
+
             if parameter_bijectors is not None:
                 phi_constrained = {}
                 for p_name, p_val in phi.items():
@@ -453,15 +452,19 @@ class OptimizerBuilder:
                         phi_constrained[p_name] = p_val
             else:
                 phi_constrained = phi
-            
+
             # Build the distribution
             distribution = dist_class(
-                **phi_constrained, 
-                **(fixed_distribution_params if fixed_distribution_params is not None else {})
+                **phi_constrained,
+                **(
+                    fixed_distribution_params
+                    if fixed_distribution_params is not None
+                    else {}
+                ),
             )
-            
+
             return distribution
-            
+
         except Exception as e:
             names = config.get("names", ["unknown"])
             raise ValueError(
