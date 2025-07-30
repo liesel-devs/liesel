@@ -73,7 +73,6 @@ class Optimizer:
         self.fixed_distribution_params = self._init_fixed_distribution_params()
         self.variational_param_bijectors = self._init_variational_param_bijectors()
 
-        self.initial_distributions = self._build_initial_distributions()
 
         self.opt_state, self.optimizer = self._init_optimizer()
         self.elbo_values: list[float] = []
@@ -153,22 +152,6 @@ class Optimizer:
         return dist_class(**phi_constrained, **fixed_distribution_params)
 
 
-    def _build_initial_distributions(self) -> dict[str, TfpDistribution]:
-        """Build the initial variational distributions from the configuration.
-        
-        Since validation has already been done in the builder, this method simply
-        builds the distributions without additional validation.
-        """
-        distributions = {
-            key: self._build_variational_distribution(
-                self.variational_dists_class[key],
-                self.phi[key],
-                self.fixed_distribution_params[key],
-                self.variational_param_bijectors[key],
-            )
-            for key in self.phi.keys()
-        }
-        return distributions
 
     def _init_optimizer(self) -> tuple[OptState, GradientTransformation]:
         """Initialize the optimizer state and transformation."""
