@@ -39,7 +39,7 @@ class OptimizerBuilder:
     #  sample size, batch size).
     #. Create an instance of the model interface with :class:`.LieselInterface`
        and set it with :meth:`.set_model`.
-    #. Add latent variables with :meth:`.add_latent_variable` and/or
+    #. Add latent variables with :meth:`.add_variational_distribution` and/or
        :meth:`.add_multivariate_latent_variable`.
     #. Build an :class:`~.optimizer.Optimizer` with :meth:`.build`.
     #. Run optimization using :meth:`.fit`.
@@ -81,7 +81,7 @@ class OptimizerBuilder:
     **Example 1: Adding latent variables separately**
 
     In this example, we add a univariate latent variable for `sigma_sq` and another for
-    `b` using separate calls to :meth:`.add_latent_variable` (Mean-Field).
+    `b` using separate calls to :meth:`.add_variational_distribution` (Mean-Field).
 
     >>> import jax.numpy as jnp
     >>> import optax
@@ -133,7 +133,7 @@ class OptimizerBuilder:
     >>> optimizer_chain2 = optax.chain(optax.clip(1), optax.adam(learning_rate=0.001))
     >>>
     >>> # Add a univariate latent variable for sigma_sq.
-    >>> builder.add_latent_variable(
+    >>> builder.add_variational_distribution(
     ...     ["sigma_sq"],
     ...     dist_class=tfd.Normal,
     ...     phi={"loc": 1.0, "scale": 0.5},
@@ -142,7 +142,7 @@ class OptimizerBuilder:
     ... )
     >>>
     >>> # Add a univariate latent variable for b.
-    >>> builder.add_latent_variable(
+    >>> builder.add_variational_distribution(
     ...     ["b"],
     ...     dist_class=tfd.Normal,
     ...     phi={"loc": jnp.zeros(4), "scale": jnp.ones(4)},
@@ -314,7 +314,7 @@ class OptimizerBuilder:
         )
         return merged_dict
 
-    def add_latent_variable(
+    def add_variational_distribution(
         self,
         latent_variable_names: list[str],
         dist_class: type[TfpDistribution],
