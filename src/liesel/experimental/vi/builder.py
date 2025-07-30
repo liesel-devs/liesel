@@ -10,7 +10,6 @@ from tensorflow_probability.substrates.jax.distributions import (
     Distribution as TfpDistribution,
 )
 
-from liesel.distributions import MultivariateNormalLogCholeskyParametrization
 
 from .interface import LieselInterface
 from .optimizer import Optimizer
@@ -31,8 +30,7 @@ class OptimizerBuilder:
     #  sample size, batch size).
     #. Create an instance of the model interface with :class:`.LieselInterface`
        and set it with :meth:`.set_model`.
-    #. Add latent variables with :meth:`.add_variational_distribution` and/or
-       :meth:`.add_multivariate_latent_variable`.
+    #. Add latent variables with :meth:`.add_variational_distribution`.
     #. Build an :class:`~.optimizer.Optimizer` with :meth:`.build`.
     #. Run optimization using :meth:`.fit`.
 
@@ -66,9 +64,7 @@ class OptimizerBuilder:
 
     Examples
     --------
-    The following examples demonstrate two ways to add latent variables:
-
-    **Example 1: Adding latent variables separately**
+    **Adding latent variables**
 
     In this example, we add a univariate latent variable for `sigma_sq` and another for
     `b` using separate calls to :meth:`.add_variational_distribution` (Mean-Field).
@@ -136,44 +132,6 @@ class OptimizerBuilder:
     ...     dist_class=tfd.Normal,
     ...     phi={"loc": jnp.zeros(4), "scale": jnp.ones(4)},
     ...     optimizer_chain=optimizer_chain2,
-    ... )
-    >>>
-    >>> # Build and run the optimizer.
-    >>> optimizer = builder.build()
-    >>> optimizer.fit()
-
-    **Example 2: Adding latent variables jointly as multivariate (Gaussian Full-Rank)**
-
-    In this example, we add both `sigma_sq` and `b` together using a single call to
-    :meth:`.add_multivariate_latent_variable`. Assume the same model
-    specification as in the previous example.
-
-    >>> # Initialize the builder as before.
-    >>> builder = OptimizerBuilder(
-    ...     seed=0,
-    ...     n_epochs=10000,
-    ...     batch_size=64,
-    ...     S=32,
-    ...     patience_tol=0.001,
-    ...     window_size=100,
-    ... )
-    >>>
-    >>> # Set up the model interface.
-    >>> builder.set_model(interface)
-    >>>
-    >>> # Define an optimizer chain.
-    >>> optimizer_chain = optax.chain(optax.clip(1), optax.adam(learning_rate=0.001))
-    >>>
-    >>> # Add a multivariate latent variable for both b and sigma_sq.
-    >>> builder.add_multivariate_latent_variable(
-    ...     ["b", "sigma_sq"],
-    ...     phi={
-    ...         "loc": jnp.ones(5),
-    ...         "log_cholesky_parametrization": builder.make_log_cholesky_like(5),
-    ...     },
-    ...     fixed_distribution_params={"validate_args": True, "d": 5},
-    ...     optimizer_chain=optimizer_chain,
-    ...     transform=None,
     ... )
     >>>
     >>> # Build and run the optimizer.
