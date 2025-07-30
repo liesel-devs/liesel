@@ -437,6 +437,16 @@ class OptimizerBuilder:
                 "Model interface not set. Call builder.set_model(...) first."
             )
 
+        latent_variables_dict = {}
+        for config in self.latent_variables:
+            names = config["names"]
+            # Create a readable key by joining the latent variable names
+            if len(names) == 1:
+                key = names[0]
+            else:
+                key = "_".join(names)
+            latent_variables_dict[key] = config
+
         return Optimizer(
             seed=self.seed,
             n_epochs=self.n_epochs,
@@ -445,7 +455,7 @@ class OptimizerBuilder:
             window_size=self.window_size,
             batch_size=self.batch_size,
             model_interface=self._model_interface,
-            latent_variables=self.latent_variables,
+            latent_variables=latent_variables_dict,
         )
 
     def make_log_cholesky_like(self, d: int) -> jnp.ndarray:
