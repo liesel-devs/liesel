@@ -135,36 +135,21 @@ class Optimizer:
 
 
 
-    def _apply_parameter_bijectors(  ###############
-        self,
-        phi: dict[str, Any],
-        parameter_bijectors: dict[str, Any] | None,
-    ) -> dict[str, Any]:
-        """Apply constraining bijectors (if any) to distribution parameters in phi.
 
-        These bijectors map the parameters of the variational distribution into their
-        valid domain. They are not the latent-variable transforms.
-        """
-        if parameter_bijectors is None:
-            return phi
-        out = {}
-        for p_name, p_val in phi.items():
-            bij = parameter_bijectors.get(p_name)
-            if bij is not None:
-                out[p_name] = bij.forward(p_val)
-            else:
-                out[p_name] = p_val
-        return out
-
-    def _build_distribution(  ############ expanded
+    def _build_distribution(
         self,
         dist_class: type[TfpDistribution],
         phi: dict[str, Any],
         fixed_distribution_params: dict[str, Any],
-        parameter_bijectors: dict[str, Any] | None = None,
+        variational_param_bijectors: dict[str, Any],
     ) -> TfpDistribution:
         """Build a TFP distribution with constrained parameters."""
-        phi_constrained = self._apply_parameter_bijectors(phi, parameter_bijectors)
+        
+        phi_constrained = {}
+        for p_name, p_val in phi.items():
+            bij = variational_param_bijectors[p_name]
+            phi_constrained[p_name] = bij.forward(p_val)
+            
         return dist_class(**phi_constrained, **fixed_distribution_params)
 
 
