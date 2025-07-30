@@ -260,6 +260,65 @@ class OptimizerBuilder:
         )
         return merged_dict
 
+    def _get_latent_var_dims(self, latent_variable_names: list[str]) -> dict[str, int]:
+        """Get the dimensionality of each latent variable from the model.
+        
+        Parameters
+        ----------
+        latent_variable_names : list[str]
+            List of latent variable names.
+            
+        Returns
+        -------
+        dict[str, int]
+            Mapping from variable names to their dimensionalities.
+            
+        Raises
+        ------
+        KeyError
+            If a parameter is not found in the model.
+        """
+        model_params = self._model_interface.get_params()
+        dims = {}
+        
+        for pname in latent_variable_names:
+            if pname not in model_params:
+                raise KeyError(
+                    f"Parameter {pname} not found in model parameters"
+                )
+            dims[pname] = int(jnp.prod(jnp.array(model_params[pname].shape)))
+            
+        return dims
+    
+    def _validate_dimensionality(self, 
+                              latent_variable_names: list[str], 
+                              event_shape: int,
+                              variable_dims: dict[str, int]) -> None:
+        """Validate that the total dimensions match the event shape.
+        
+        Parameters
+        ----------
+        latent_variable_names : list[str]
+            List of latent variable names.
+        event_shape : int
+            Event shape of the variational distribution.
+        variable_dims : dict[str, int]
+            Mapping from variable names to their dimensionalities.
+            
+        Raises
+        ------
+        ValueError
+            If dimensions don't match the event shape.
+        """
+        total_dim = sum(variable_dims[name] for name in latent_variable_names)
+        
+        if event_shape != total_dim:
+            raise ValueError(
+                f"Dimension mismatch for latent variables {latent_variable_names}: "
+                f"expected event shape dimension {event_shape}, "
+                f"got total variable dimensions {total_dim}"
+            )
+
     def add_variational_distribution(
         self,
         latent_variable_names: list[str],
@@ -318,8 +377,15 @@ class OptimizerBuilder:
         
         # Validate the configuration by attempting to build the distribution
         distribution = self._validate_and_build_distributions(config)
-        # Store event shape information for future use
-        config["event_shape"] = distribution.event_shape
+        
+        # Store event shape and variable dimensions
+        event_shape = int(jnp.prod(jnp.array(distribution.event_shape.as_list())))
+        config["event_shape"] = event_shape
+        variable_dims = self._get_latent_var_dims(latent_variable_names)
+        config["variable_dims"] = variable_dims
+        
+        # Validate dimensionality
+        self._validate_dimensionality(latent_variable_names, event_shape, variable_dims)
         
         self.latent_variables.append(config)
 

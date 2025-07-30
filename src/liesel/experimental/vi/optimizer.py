@@ -68,14 +68,12 @@ class Optimizer:
         self.latent_vars_config = latent_variables
         self.rng_key = jax.random.PRNGKey(self.seed)
 
-        self._process_full_rank_configs()
-
         self.variational_dists_class = self._init_variational_dists_class()
         self.phi = self._init_phi()
         self.fixed_distribution_params = self._init_fixed_distribution_params()
         self.parameter_bijectors = self._init_parameter_bijectors()  #####
 
-        self.initial_distributions = self._validate_and_build_distributions()
+        self.initial_distributions = self._build_initial_distributions()
 
         self.opt_state, self.optimizer = self._init_optimizer()
         self.elbo_values: list[float] = []
@@ -171,56 +169,13 @@ class Optimizer:
         phi_constrained = self._apply_parameter_bijectors(phi, parameter_bijectors)
         return dist_class(**phi_constrained, **fixed_distribution_params)
 
-    def _process_full_rank_configs(self) -> None:
-        """Process configurations for Full-Rank latent variables and checks dimensions
-        for configurations with multiple variables and sets a unique full_rank_key."""
-        model_params = self.model_interface.get_params()
 
-        for config in self.latent_vars_config.values():
-            names = config["names"]
-
-            if len(names) > 1:
-                dims = []
-                for pname in names:
-                    if pname not in model_params:
-                        raise KeyError(
-                            f"Parameter {pname} not found in model parameters"
-                        )
-                    dims.append(math.prod(model_params[pname].shape))
-
-                total_dim = sum(dims)
-                phi_conf = config["phi"]
-
-                if phi_conf["loc"].shape[0] != total_dim:
-                    raise ValueError(
-                        f"Dimension mismatch for full rank latent variables {names}: "
-                        f"expected loc dim {total_dim}, got {phi_conf['loc'].shape[0]}"
-                    )
-
-                expected_len = total_dim * (total_dim + 1) // 2
-                if phi_conf["log_cholesky_parametrization"].shape[0] != expected_len:
-                    raise ValueError(
-                        f"Dimension mismatch for full rank latent variables {names}: "
-                        f"expected a flattened Cholesky of length {expected_len}, "
-                        f"got {phi_conf['log_cholesky_parametrization'].shape[0]}"
-                    )
-
-                config["full_rank_key"] = "Full Rank:" + "_".join(names)
-
-    def _validate_and_build_distributions(self) -> dict[str, TfpDistribution]:
-        """Validate matching, consistency and build the variational distributions."""
-        phi_keys = set(self.phi.keys())
-        fixed_keys = set(self.fixed_distribution_params.keys())
-        dist_keys = set(self.variational_dists_class.keys())
-        bij_keys = set(self.parameter_bijectors.keys())  #######
-
-        if not (phi_keys == fixed_keys == dist_keys == bij_keys):
-            raise ValueError(
-                f"Mismatch in keys: phi_keys={phi_keys}, "
-                f"fixed_keys={fixed_keys}, "
-                f"dist_keys={dist_keys}"
-            )
-
+    def _build_initial_distributions(self) -> dict[str, TfpDistribution]:
+        """Build the initial variational distributions from the configuration.
+        
+        Since validation has already been done in the builder, this method simply
+        builds the distributions without additional validation.
+        """
         distributions = {
             key: self._build_distribution(
                 self.variational_dists_class[key],
@@ -228,7 +183,7 @@ class Optimizer:
                 self.fixed_distribution_params[key],
                 self.parameter_bijectors.get(key),
             )
-            for key in phi_keys
+            for key in self.phi.keys()
         }
         return distributions
 
