@@ -91,51 +91,56 @@ class Optimizer:
     def _init_variational_dists_class(self) -> dict[str, type[TfpDistribution]]:
         """Initialize variational distribution classes."""
         variational_dists_class = {
-            self._config_key(config): config["dist_class"]
-            for config in self.latent_vars_config.values()
+            key: config["dist_class"]
+            for key, config in self.latent_vars_config.items()
         }
         return variational_dists_class
 
     def _init_phi(self) -> dict[str, Any]:
-        """Initialize the phi dictionary."""
-        phi = {
-            self._config_key(config): config["phi"]
-            for config in self.latent_vars_config.values()
-        }
+        """Initialize the phi dictionary using unconstrained parameters for optimization.
+        The phi dict from builder.py contains constrained parameters; for optimization,
+        we store unconstrained parameters by applying the inverse bijector.
+        """
+        phi = {}
+        for key, config in self.latent_vars_config.items():
+            phi_constrained = config["phi"]
+            parameter_bijectors = config["variational_param_bijectors"]
+            
+            phi_unconstrained = {}
+            for p_name, p_val in phi_constrained.items():
+                bij = parameter_bijectors[p_name]
+                phi_unconstrained[p_name] = bij.inverse(p_val)
+            
+            phi[key] = phi_unconstrained
         return phi
 
     def _init_fixed_distribution_params(self) -> dict[str, dict[str, Any]]:
         """Initialize fixed distribution parameters."""
         fixed_distribution_params = {
-            self._config_key(config): (
+            key: (
                 config["fixed_distribution_params"]
                 if config["fixed_distribution_params"] is not None
                 else {}
             )
-            for config in self.latent_vars_config.values()
+            for key, config in self.latent_vars_config.items()
         }
         return fixed_distribution_params
 
     def _init_parameter_bijectors(self) -> dict[str, dict[str, Any] | None]:  ######
         """Collect per-parameter bijectors (may be None)."""
         return {
-            self._config_key(config): config.get("variational_param_bijectors", None)
-            for config in self.latent_vars_config.values()
+            key: config.get("variational_param_bijectors", None)
+            for key, config in self.latent_vars_config.items()
         }
 
     def _init_transform_dict(self) -> dict[str, GradientTransformation]:
         """Initialize the transform dictionary."""
         optim_dict = {
-            self._config_key(config): config["optimizer_chain"]
-            for config in self.latent_vars_config.values()
+            key: config["optimizer_chain"]
+            for key, config in self.latent_vars_config.items()
         }
         return optim_dict
 
-    def _config_key(self, config) -> str:
-        """Generate a configuration key from variable names."""
-        return (
-            config["names"][0] if len(config["names"]) == 1 else config["full_rank_key"]
-        )
 
     def _apply_parameter_bijectors(  ###############
         self,
@@ -481,81 +486,6 @@ class Optimizer:
         elbo = jnp.mean(elbo_samples)
         return -elbo, rng_key
 
-    def _apply_transform(self, z, transform_spec):
-        """Apply a transformation to variable z and compute the log-determinant of its
-        Jacobian.
-
-        Parameters
-        ----------
-        z : jnp.ndarray
-            Input variable to be transformed.
-        transform_spec : callable or tfb.Bijector or None
-            Transformation to apply.
-
-        Returns
-        -------
-        tuple
-            (z_transformed, ldj) where ldj is the log-determinant of the transformation.
-        """
-        if transform_spec is None:
-            return z, 0.0
-
-        elif callable(transform_spec) and not hasattr(transform_spec, "forward"):
-            return transform_spec(z)
-
-        elif hasattr(transform_spec, "forward") and hasattr(
-            transform_spec, "forward_log_det_jacobian"
-        ):
-            z_transformed = transform_spec.forward(z)
-            event_ndims = 1 if z.ndim == 1 else 0
-            ldj = transform_spec.forward_log_det_jacobian(z, event_ndims=event_ndims)
-            if ldj.ndim > 0:
-                ldj = jnp.sum(ldj)
-            return z_transformed, ldj
-        else:
-            raise ValueError(
-                "Only tfb.Bijector instances and Python callables are supported "
-                "as transforms"
-            )
-
-    def _sample_single_variable(self, pname, phi, rng_key, transform_spec):
-        """Sample a single latent variable using its fully reparameterizable variational
-        distribution.
-
-        Parameters
-        ----------
-        pname : str
-            Name of the latent variable.
-        phi : dict
-            Dictionary of variational parameters.
-        rng_key : jax.random.PRNGKey
-            Random key for sampling.
-        transform_spec : callable or tfb.Bijector or None
-            Transformation to apply to the sampled variable.
-
-        Returns
-        -------
-        tuple
-            (z_transformed, ldj, log_q, rng_key) where z_transformed is the sampled and
-             transformed variable, ldj is the log-determinant of the Jacobian, log_q is
-             the log probability under the variational distribution,
-             and rng_key is the updated random key.
-        """
-        pval = phi[pname]
-
-        dist_obj = self._build_distribution(
-            self.variational_dists_class[pname],
-            pval,
-            self.fixed_distribution_params[pname],
-            self.parameter_bijectors.get(pname),  ####### expanded
-        )
-
-        rng_key, subkey = jax.random.split(rng_key)
-        z = dist_obj.sample(seed=subkey)
-        log_q = dist_obj.log_prob(z)
-        z_transformed, ldj = self._apply_transform(z, transform_spec)
-
-        return z_transformed, ldj, log_q, rng_key
 
     def _sample_and_compute_variational_log_prob(self, phi, rng_key):
         """Sample from the variational distribution for all latent variables and compute log probabilities.
@@ -576,9 +506,7 @@ class Optimizer:
         samples = {}
         total_log_q = 0.0
 
-        for config in self.latent_vars_config.values():
-            # Get the configuration key for this latent variable
-            key = self._config_key(config)
+        for key, config in self.latent_vars_config.items():
             pval = phi[key]
             
             # Build the variational distribution
@@ -614,11 +542,8 @@ class Optimizer:
         """
         final_results = {}
 
-        for config in self.latent_vars_config.values():
+        for key, config in self.latent_vars_config.items():
             names = config["names"]
-            key = self._config_key(
-                config
-            )  # Returns config["names"][0] or config["full_rank_key"] if multivariate
             # transform = config.get("transform", None)
             dist_class = self.variational_dists_class[key]
             phi_original = self.phi[key]
