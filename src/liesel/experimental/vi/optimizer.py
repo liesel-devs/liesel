@@ -471,11 +471,11 @@ class Optimizer:
         def _single_sample_elbo(rng_key_sample):
             """Compute the ELBO for a single sample by accessing the model via the
             Interface instance."""
-            samples, log_det_jac, log_q = self._sample_variational(phi, rng_key_sample)
+            samples, log_q = self._sample_and_compute_variational_log_prob(phi, rng_key_sample)
             log_prob = self.model_interface.compute_log_prob(
                 samples, dim_data, batch_size, batch_indices
             )
-            return log_prob + log_det_jac - log_q
+            return log_prob - log_q
 
         elbo_samples = jax.vmap(_single_sample_elbo)(subkeys)
         elbo = jnp.mean(elbo_samples)
@@ -562,8 +562,8 @@ class Optimizer:
 
         return z_transformed, ldj, log_q, rng_key
 
-    def _sample_variational(self, phi, rng_key):
-        """Sample from the variational distribution for all latent variables.
+    def _sample_and_compute_variational_log_prob(self, phi, rng_key):
+        """Sample from the variational distribution for all latent variables and compute log probabilities.
 
         Parameters
         ----------
@@ -575,38 +575,36 @@ class Optimizer:
         Returns
         -------
         tuple
-            (samples, total_ldj, total_log_q) where samples is a dict of all
-            sampled and transformed latent variables, total_ldj is the cumulative
-            log-determinant, and total_log_q is the sum of log probabilities.
+            (samples, total_log_q) where samples is a dict of all sampled latent variables
+            and total_log_q is the sum of log probabilities under the variational distributions.
         """
         samples = {}
-        total_ldj = 0.0
         total_log_q = 0.0
 
-        name_to_transform = {
-            pname: config.get("transform", None)
-            for config in self.latent_vars_config.values()
-            for pname in config["names"]
-        }
-
         for config in self.latent_vars_config.values():
-            if len(config["names"]) == 1:
-                pname = config["names"][0]
-                z_transformed, ldj, log_q, rng_key = self._sample_single_variable(
-                    pname, phi, rng_key, name_to_transform[pname]
-                )
-                samples[pname] = z_transformed
-                total_ldj += ldj
-                total_log_q += log_q
-            else:
-                full_samples, ldj, log_q, rng_key = self._sample_full_rank(
-                    config, phi, rng_key, name_to_transform
-                )
-                samples.update(full_samples)
-                total_ldj += ldj
+            # Get the configuration key for this latent variable
+            key = self._config_key(config)
+            pval = phi[key]
+            
+            # Build the variational distribution
+            dist_obj = self._build_distribution(
+                self.variational_dists_class[key],
+                pval,
+                self.fixed_distribution_params[key],
+                self.parameter_bijectors.get(key),
+            )
+            
+            # Sample from the distribution
+            rng_key, subkey = jax.random.split(rng_key)
+            z = dist_obj.sample(seed=subkey)
+            log_q = dist_obj.log_prob(z)
+            
+            # For each latent variable name in this configuration
+            for pname in config["names"]:
+                samples[pname] = z
                 total_log_q += log_q
 
-        return samples, total_ldj, total_log_q
+        return samples, total_log_q
 
     def get_final_distributions(self) -> dict[str, TfpDistribution]:
         """Construct and return the final variational distributions after applying
