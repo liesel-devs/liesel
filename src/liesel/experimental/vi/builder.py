@@ -46,8 +46,6 @@ class OptimizerBuilder:
 
     Optionally, you can also:
 
-    - Configure transformation functions for latent variables using
-      the `transform` parameter.
     - Specify fixed distribution parameters and optimizer chains
       for each latent variable.
 
@@ -138,7 +136,6 @@ class OptimizerBuilder:
     ...     dist_class=tfd.Normal,
     ...     phi={"loc": 1.0, "scale": 0.5},
     ...     optimizer_chain=optimizer_chain1,
-    ...     transform=tfb.Exp(),
     ... )
     >>>
     >>> # Add a univariate latent variable for b.
@@ -147,7 +144,6 @@ class OptimizerBuilder:
     ...     dist_class=tfd.Normal,
     ...     phi={"loc": jnp.zeros(4), "scale": jnp.ones(4)},
     ...     optimizer_chain=optimizer_chain2,
-    ...     transform=None,
     ... )
     >>>
     >>> # Build and run the optimizer.
@@ -322,20 +318,10 @@ class OptimizerBuilder:
         phi: dict[str, float],
         fixed_distribution_params: dict[str, float] | None = None,
         optimizer_chain: optax.GradientTransformation,
-        transform: Callable | tfb.Bijector | None = None,
         variational_param_bijectors: dict[str, tfb.Bijector] | None = None,
     ) -> None:
         """Add a latent variable to the optimizer configuration by adding a variational
         distribution for each latent variable independently (Mean-Field Approach).
-
-        The 'transform' parameter can be:
-          - None
-          - A Python callable (performance optimized using JAX), e.g.:
-            def custom_transform(z):
-                z_transformed = jnp.exp(z)
-                logdet = jnp.sum(z)
-                return z_transformed, logdet
-          - A TFP Bijector instance (e.g., tfb.Exp() or tfb.Sigmoid(low=a, high=b)).
 
         Parameters:
             latent_variable_names (List[str]): List of parameter names.
@@ -345,8 +331,6 @@ class OptimizerBuilder:
             parameters for the distribution.
             optimizer_chain (optax.GradientTransformation): Optimizer chain for gradient
             transformations.
-            transform (Optional[Union[Callable, tfb.Bijector]]): Transformation to
-            apply on the latent variable.
             variational_param_bijectors (dict[str, tfb.Bijector] | None) – Optional overrides
             that replace the parameter's default tfp.util.ParameterProperties bijector,
             mapping the parameter from unconstrained to a constrained space.
@@ -370,7 +354,6 @@ class OptimizerBuilder:
                 "phi": phi,
                 "fixed_distribution_params": fixed_distribution_params,
                 "optimizer_chain": optimizer_chain,
-                "transform": transform,
                 "variational_param_bijectors": parameter_bijectors,
             }
         )
