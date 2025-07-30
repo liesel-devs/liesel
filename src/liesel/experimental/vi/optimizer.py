@@ -32,7 +32,7 @@ class Optimizer:
         n_epochs: int,
         S: int,
         model_interface: LieselInterface,
-        latent_variables: list[dict],
+        latent_variables: dict[str, dict],
         batch_size: int | None = None,
         patience_tol: float | None = None,
         window_size: int | None = None,
@@ -49,8 +49,8 @@ class Optimizer:
             Number of Monte Carlo samples.
         model_interface : LieselInterface
             Interface to access the model parameters data and quantities.
-        latent_variables : List[Dict]
-            List of configurations for each latent variable.
+        latent_variables : Dict[str, Dict]
+            Dict of configurations for each latent variable.
         batch_size : int, optional
             Batch size for data subsetting; if None, the full dataset is used.
         patience_tol : float, optional
@@ -94,7 +94,7 @@ class Optimizer:
         """Initialize variational distribution classes."""
         variational_dists_class = {
             self._config_key(config): config["dist_class"]
-            for config in self.latent_vars_config
+            for config in self.latent_vars_config.values()
         }
         return variational_dists_class
 
@@ -102,7 +102,7 @@ class Optimizer:
         """Initialize the phi dictionary."""
         phi = {
             self._config_key(config): config["phi"]
-            for config in self.latent_vars_config
+            for config in self.latent_vars_config.values()
         }
         return phi
 
@@ -114,22 +114,22 @@ class Optimizer:
                 if config["fixed_distribution_params"] is not None
                 else {}
             )
-            for config in self.latent_vars_config
+            for config in self.latent_vars_config.values()
         }
         return fixed_distribution_params
 
     def _init_parameter_bijectors(self) -> dict[str, dict[str, Any] | None]:  ######
         """Collect per-parameter bijectors (may be None)."""
         return {
-            self._config_key(config): config.get("parameter_bijectors", None)
-            for config in self.latent_vars_config
+            self._config_key(config): config.get("variational_param_bijectors", None)
+            for config in self.latent_vars_config.values()
         }
 
     def _init_transform_dict(self) -> dict[str, GradientTransformation]:
         """Initialize the transform dictionary."""
         optim_dict = {
             self._config_key(config): config["optimizer_chain"]
-            for config in self.latent_vars_config
+            for config in self.latent_vars_config.values()
         }
         return optim_dict
 
@@ -176,7 +176,7 @@ class Optimizer:
         for configurations with multiple variables and sets a unique full_rank_key."""
         model_params = self.model_interface.get_params()
 
-        for config in self.latent_vars_config:
+        for config in self.latent_vars_config.values():
             names = config["names"]
 
             if len(names) > 1:
@@ -697,11 +697,11 @@ class Optimizer:
 
         name_to_transform = {
             pname: config.get("transform", None)
-            for config in self.latent_vars_config
+            for config in self.latent_vars_config.values()
             for pname in config["names"]
         }
 
-        for config in self.latent_vars_config:
+        for config in self.latent_vars_config.values():
             if len(config["names"]) == 1:
                 pname = config["names"][0]
                 z_transformed, ldj, log_q, rng_key = self._sample_single_variable(
@@ -733,7 +733,7 @@ class Optimizer:
         """
         final_results = {}
 
-        for config in self.latent_vars_config:
+        for config in self.latent_vars_config.values():
             names = config["names"]
             key = self._config_key(
                 config
@@ -799,7 +799,7 @@ class Optimizer:
 
         model_params = self.model_interface.get_params()
 
-        for i, config in enumerate(self.latent_vars_config):
+        for i, config in enumerate(self.latent_vars_config.values()):
             if len(config["names"]) == 1:
                 name = config["names"][0]
                 dist = self.final_variational_distributions[name]
