@@ -323,6 +323,15 @@ class OptimizerBuilder:
         """Add a latent variable to the optimizer configuration by adding a variational
         distribution for each latent variable independently (Mean-Field Approach).
 
+        The user passed variational parameters (here named ``phi``) are expected
+        to be in the to the distribution class according space which is the
+        constrained space.
+
+        The ``variational_param_bijectors`` can be used to specify bijectors
+        for the variational parameters. The expected behaviour is that if the
+        user passes custom, then the forward should be from unconstrained ->
+        constrained and the inverse method from constrained -> unconstrained.
+
         Parameters:
             latent_variable_names (List[str]): List of parameter names.
             dist_class (Callable): Distribution class (e.g., tfd.Normal).
