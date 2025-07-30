@@ -73,7 +73,6 @@ class Optimizer:
         self.fixed_distribution_params = self._init_fixed_distribution_params()
         self.variational_param_bijectors = self._init_variational_param_bijectors()
 
-
         self.opt_state, self.optimizer = self._init_optimizer()
         self.elbo_values: list[float] = []
         self.phi_evolution: list[dict[str, dict[str, Any]]] = []
@@ -90,8 +89,7 @@ class Optimizer:
     def _init_variational_dists_class(self) -> dict[str, type[TfpDistribution]]:
         """Initialize variational distribution classes."""
         variational_dists_class = {
-            key: config["dist_class"]
-            for key, config in self.latent_vars_config.items()
+            key: config["dist_class"] for key, config in self.latent_vars_config.items()
         }
         return variational_dists_class
 
@@ -104,12 +102,12 @@ class Optimizer:
         for key, config in self.latent_vars_config.items():
             phi_constrained = config["phi"]
             parameter_bijectors = config["variational_param_bijectors"]
-            
+
             phi_unconstrained = {}
             for p_name, p_val in phi_constrained.items():
                 bij = parameter_bijectors[p_name]
                 phi_unconstrained[p_name] = bij.inverse(p_val)
-            
+
             phi[key] = phi_unconstrained
         return phi
 
@@ -132,9 +130,6 @@ class Optimizer:
             for key, config in self.latent_vars_config.items()
         }
 
-
-
-
     def _build_variational_distribution(
         self,
         dist_class: type[TfpDistribution],
@@ -143,15 +138,13 @@ class Optimizer:
         variational_param_bijectors: dict[str, Any],
     ) -> TfpDistribution:
         """Build a TFP distribution with constrained parameters."""
-        
+
         phi_constrained = {}
         for p_name, p_val in phi.items():
             bij = variational_param_bijectors[p_name]
             phi_constrained[p_name] = bij.forward(p_val)
-            
+
         return dist_class(**phi_constrained, **fixed_distribution_params)
-
-
 
     def _init_optimizer(self) -> tuple[OptState, GradientTransformation]:
         """Initialize the optimizer state and transformation."""
@@ -441,7 +434,9 @@ class Optimizer:
         def _single_sample_elbo(rng_key_sample):
             """Compute the ELBO for a single sample by accessing the model via the
             Interface instance."""
-            samples, log_q = self._sample_and_compute_variational_log_prob(phi, rng_key_sample)
+            samples, log_q = self._sample_and_compute_variational_log_prob(
+                phi, rng_key_sample
+            )
             log_prob = self.model_interface.compute_log_prob(
                 samples, dim_data, batch_size, batch_indices
             )
@@ -450,7 +445,6 @@ class Optimizer:
         elbo_samples = jax.vmap(_single_sample_elbo)(subkeys)
         elbo = jnp.mean(elbo_samples)
         return -elbo, rng_key
-
 
     def _sample_and_compute_variational_log_prob(self, phi, rng_key):
         """Sample from the variational distribution for all latent variables and compute log probabilities.
@@ -473,21 +467,18 @@ class Optimizer:
 
         for key, config in self.latent_vars_config.items():
             pval = phi[key]
-            
-            # Build the variational distribution
+
             dist_obj = self._build_variational_distribution(
                 self.variational_dists_class[key],
                 pval,
                 self.fixed_distribution_params[key],
                 self.variational_param_bijectors[key],
             )
-            
-            # Sample from the distribution
+
             rng_key, subkey = jax.random.split(rng_key)
             z = dist_obj.sample(seed=subkey)
             log_q = dist_obj.log_prob(z)
-            
-            # For each latent variable name in this configuration
+
             for pname in config["names"]:
                 samples[pname] = z
                 total_log_q += log_q
