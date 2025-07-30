@@ -126,10 +126,10 @@ class Optimizer:
         }
         return fixed_distribution_params
 
-    def _init_parameter_bijectors(self) -> dict[str, dict[str, Any] | None]:  ######
-        """Collect per-parameter bijectors (may be None)."""
+    def _init_parameter_bijectors(self) -> dict[str, dict[str, Any]]:
+        """Collect per-parameter bijectors."""
         return {
-            key: config.get("variational_param_bijectors", None)
+            key: config["variational_param_bijectors"]
             for key, config in self.latent_vars_config.items()
         }
 
