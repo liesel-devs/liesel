@@ -550,15 +550,10 @@ class Optimizer:
             self.parameter_bijectors.get(pname),  ####### expanded
         )
 
-        if dist_obj.reparameterization_type == tfd.FULLY_REPARAMETERIZED:
-            rng_key, subkey = jax.random.split(rng_key)
-            z = dist_obj.sample(seed=subkey)
-            log_q = dist_obj.log_prob(z)
-            z_transformed, ldj = self._apply_transform(z, transform_spec)
-        else:
-            raise NotImplementedError(
-                "Only fully reparameterized distributions are supported so far."
-            )
+        rng_key, subkey = jax.random.split(rng_key)
+        z = dist_obj.sample(seed=subkey)
+        log_q = dist_obj.log_prob(z)
+        z_transformed, ldj = self._apply_transform(z, transform_spec)
 
         return z_transformed, ldj, log_q, rng_key
 

@@ -378,6 +378,9 @@ class OptimizerBuilder:
         # Validate the configuration by attempting to build the distribution
         distribution = self._validate_and_build_distributions(config)
         
+        # Validate that the distribution is fully reparameterized
+        self._validate_fully_reparameterized_dist(distribution, latent_variable_names)
+        
         # Store event shape and variable dimensions
         event_shape = int(jnp.prod(jnp.array(distribution.event_shape.as_list())))
         config["event_shape"] = event_shape
@@ -388,6 +391,28 @@ class OptimizerBuilder:
         self._validate_dimensionality(latent_variable_names, event_shape, variable_dims)
         
         self.latent_variables.append(config)
+
+    def _validate_fully_reparameterized_dist(self, distribution: TfpDistribution, latent_variable_names: list[str]) -> None:
+        """Validate that the distribution is fully reparameterized.
+        
+        Parameters
+        ----------
+        distribution : TfpDistribution
+            The distribution to validate.
+        latent_variable_names : list[str]
+            List of latent variable names for error reporting.
+            
+        Raises
+        ------
+        NotImplementedError
+            If the distribution is not fully reparameterized.
+        """
+        if distribution.reparameterization_type != tfd.FULLY_REPARAMETERIZED:
+            raise NotImplementedError(
+                f"Only fully reparameterized distributions are supported for "
+                f"latent variable(s) {latent_variable_names}. "
+                f"Got reparameterization type: {distribution.reparameterization_type}"
+            )
 
     def _validate_and_build_distributions(self, config: dict[str, Any]) -> TfpDistribution:
         """Validate and build a single variational distribution from configuration.
