@@ -133,13 +133,6 @@ class Optimizer:
             for key, config in self.latent_vars_config.items()
         }
 
-    def _init_transform_dict(self) -> dict[str, GradientTransformation]:
-        """Initialize the transform dictionary."""
-        optim_dict = {
-            key: config["optimizer_chain"]
-            for key, config in self.latent_vars_config.items()
-        }
-        return optim_dict
 
 
     def _apply_parameter_bijectors(  ###############
@@ -198,7 +191,11 @@ class Optimizer:
         def label_fn(params):
             return {k: k for k in params if k in self.phi}
 
-        optim_dict = self._init_transform_dict()
+        # Build optimizer dictionary directly from latent_vars_config
+        optim_dict = {
+            key: config["optimizer_chain"]
+            for key, config in self.latent_vars_config.items()
+        }
         tx = optax.multi_transform(optim_dict, label_fn)
         opt_state = tx.init(self.phi)
         return opt_state, tx
