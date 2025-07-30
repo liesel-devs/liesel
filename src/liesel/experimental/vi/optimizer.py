@@ -136,7 +136,7 @@ class Optimizer:
 
 
 
-    def _build_distribution(
+    def _build_variational_distribution(
         self,
         dist_class: type[TfpDistribution],
         phi: dict[str, Any],
@@ -160,7 +160,7 @@ class Optimizer:
         builds the distributions without additional validation.
         """
         distributions = {
-            key: self._build_distribution(
+            key: self._build_variational_distribution(
                 self.variational_dists_class[key],
                 self.phi[key],
                 self.fixed_distribution_params[key],
@@ -492,7 +492,7 @@ class Optimizer:
             pval = phi[key]
             
             # Build the variational distribution
-            dist_obj = self._build_distribution(
+            dist_obj = self._build_variational_distribution(
                 self.variational_dists_class[key],
                 pval,
                 self.fixed_distribution_params[key],
@@ -530,7 +530,7 @@ class Optimizer:
             phi_unconstrained = self.phi[key]
             parameter_bijectors = config["variational_param_bijectors"]
 
-            final_distribution = self._build_distribution(
+            final_distribution = self._build_variational_distribution(
                 dist_class,
                 phi_unconstrained,
                 self.fixed_distribution_params[key],
