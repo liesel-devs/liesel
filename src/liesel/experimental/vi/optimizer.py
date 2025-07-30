@@ -164,7 +164,7 @@ class Optimizer:
                 self.variational_dists_class[key],
                 self.phi[key],
                 self.fixed_distribution_params[key],
-                self.parameter_bijectors.get(key),
+                self.parameter_bijectors[key],
             )
             for key in self.phi.keys()
         }
@@ -496,7 +496,7 @@ class Optimizer:
                 self.variational_dists_class[key],
                 pval,
                 self.fixed_distribution_params[key],
-                self.parameter_bijectors.get(key),
+                self.parameter_bijectors[key],
             )
             
             # Sample from the distribution
@@ -529,18 +529,12 @@ class Optimizer:
             dist_class = self.variational_dists_class[key]
             phi_unconstrained = self.phi[key]
             parameter_bijectors = config["variational_param_bijectors"]
-            
-            # Apply bijector forward to transform unconstrained to constrained parameters
-            phi_constrained = {}
-            for p_name, p_val in phi_unconstrained.items():
-                bij = parameter_bijectors[p_name]
-                phi_constrained[p_name] = bij.forward(p_val)
 
             final_distribution = self._build_distribution(
                 dist_class,
-                phi_constrained,
+                phi_unconstrained,
                 self.fixed_distribution_params[key],
-                parameter_bijectors=None,  # already applied
+                parameter_bijectors,
             )
 
             final_results.update({name: final_distribution for name in names})
