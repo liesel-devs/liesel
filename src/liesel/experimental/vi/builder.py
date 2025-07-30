@@ -18,14 +18,6 @@ from .optimizer import Optimizer
 tfd = tfp.distributions
 
 
-class Phi_MultivariateNormalLogCholeskyParametrization(TypedDict):
-    """A TypedDict to specify the parameters for a multivariate normal distribution
-    using a log-Cholesky parametrization."""
-
-    loc: jnp.ndarray
-    log_cholesky_parametrization: jnp.ndarray
-
-
 class OptimizerBuilder:
     """The :class:`.OptimizerBuilder` is used to construct an Optimizer for stochastic
     variational inference.
@@ -370,7 +362,7 @@ class OptimizerBuilder:
     def add_multivariate_latent_variable(
         self,
         names: list[str],
-        phi: Phi_MultivariateNormalLogCholeskyParametrization | None = None,
+        phi: dict[str, Any] | None = None,
         *,
         fixed_distribution_params: dict[str, float] | None = None,
         optimizer_chain: optax.GradientTransformation,
@@ -387,7 +379,7 @@ class OptimizerBuilder:
         Parameters:
             names (List[str]): List of parameter names to be grouped as a
             multivariate variable.
-            phi (Optional[Phi_MultivariateNormalLogCholeskyParametrization]): Initial
+            phi (Optional[Dict[str, Any]]): Initial
             parameters for the distribution.
             fixed_distribution_params (Optional[Dict[str, float]]): Optional
             fixed parameters for the distribution.
