@@ -71,7 +71,7 @@ class Optimizer:
         self.variational_dists_class = self._init_variational_dists_class()
         self.phi = self._init_phi()
         self.fixed_distribution_params = self._init_fixed_distribution_params()
-        self.parameter_bijectors = self._init_parameter_bijectors()  #####
+        self.variational_param_bijectors = self._init_variational_param_bijectors()
 
         self.initial_distributions = self._build_initial_distributions()
 
@@ -126,7 +126,7 @@ class Optimizer:
         }
         return fixed_distribution_params
 
-    def _init_parameter_bijectors(self) -> dict[str, dict[str, Any]]:
+    def _init_variational_param_bijectors(self) -> dict[str, dict[str, Any]]:
         """Collect per-parameter bijectors."""
         return {
             key: config["variational_param_bijectors"]
@@ -164,7 +164,7 @@ class Optimizer:
                 self.variational_dists_class[key],
                 self.phi[key],
                 self.fixed_distribution_params[key],
-                self.parameter_bijectors[key],
+                self.variational_param_bijectors[key],
             )
             for key in self.phi.keys()
         }
@@ -496,7 +496,7 @@ class Optimizer:
                 self.variational_dists_class[key],
                 pval,
                 self.fixed_distribution_params[key],
-                self.parameter_bijectors[key],
+                self.variational_param_bijectors[key],
             )
             
             # Sample from the distribution
@@ -528,7 +528,7 @@ class Optimizer:
             names = config["names"]
             dist_class = self.variational_dists_class[key]
             phi_unconstrained = self.phi[key]
-            parameter_bijectors = self.parameter_bijectors[key]
+            parameter_bijectors = self.variational_param_bijectors[key]
 
             final_distribution = self._build_variational_distribution(
                 dist_class,
