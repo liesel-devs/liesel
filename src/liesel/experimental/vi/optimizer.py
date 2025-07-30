@@ -528,7 +528,7 @@ class Optimizer:
             names = config["names"]
             dist_class = self.variational_dists_class[key]
             phi_unconstrained = self.phi[key]
-            parameter_bijectors = config["variational_param_bijectors"]
+            parameter_bijectors = self.parameter_bijectors[key]
 
             final_distribution = self._build_variational_distribution(
                 dist_class,
