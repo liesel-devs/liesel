@@ -316,7 +316,7 @@ class OptimizerBuilder:
 
     def add_latent_variable(
         self,
-        names: list[str],
+        latent_variable_names: list[str],
         dist_class: type[TfpDistribution],
         *,
         phi: dict[str, float],
@@ -338,7 +338,7 @@ class OptimizerBuilder:
           - A TFP Bijector instance (e.g., tfb.Exp() or tfb.Sigmoid(low=a, high=b)).
 
         Parameters:
-            names (List[str]): List of parameter names.
+            latent_variable_names (List[str]): List of parameter names.
             dist_class (Callable): Distribution class (e.g., tfd.Normal).
             phi (Dict[str, float]): Dictionary containing the initial parameters.
             fixed_distribution_params (Optional[Dict[str, float]]): Optional fixed
@@ -351,8 +351,8 @@ class OptimizerBuilder:
             that replace the parameter's default tfp.util.ParameterProperties bijector,
             mapping the parameter from unconstrained to a constrained space.
         """
-        if isinstance(names, str):
-            names = [names]
+        if isinstance(latent_variable_names, str):
+            latent_variable_names = [latent_variable_names]
 
         self._validate_latent_variable_keys(dist_class, variational_param_bijectors, phi)
 
@@ -365,13 +365,13 @@ class OptimizerBuilder:
 
         self.latent_variables.append(
             {
-                "names": names,
+                "names": latent_variable_names,
                 "dist_class": dist_class,
                 "phi": phi,
                 "fixed_distribution_params": fixed_distribution_params,
                 "optimizer_chain": optimizer_chain,
                 "transform": transform,
-                "parameter_bijectors": parameter_bijectors,
+                "variational_param_bijectors": parameter_bijectors,
             }
         )
 
