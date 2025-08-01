@@ -75,41 +75,46 @@ class OptimizerBuilder:
     >>> from tensorflow_probability.substrates import jax as tfp
     >>> tfd = tfp.distributions
     >>>
+    >>> import liesel.model as lsl
+    >>> from liesel.experimental.vi import OptimizerBuilder, LieselInterface
+    >>>
+    >>> X = jnp.full((4,4), 1)
+    >>> y = jnp.array([1,1,1,1])
+    >>>
     >>> # Set up a minimal model.
     >>> X_m = lsl.Var.new_obs(X, name="X_m")
     >>> dist_b = lsl.Dist(tfd.Normal, loc=0.0, scale=10.0)
     >>> b = lsl.Var.new_param(jnp.array([10.0, 10.0, 10.0, 10.0]), dist_b, name="b")
     >>> def linear_model(X, b):
-    >>> return X @ b
-
+    ...     return X @ b
+    >>>
     >>> mu = lsl.Var.new_calc(linear_model, X=X_m, b=b, name="mu")
-
-    >>> a = lsl.Var.new_value(0.01, name="a")
-    >>> b_var_dist = lsl.new_value(0.01, name="b_var_dist")
-
+    >>>
+    >>> a = lsl.Var.new_value(0.001, name="a")
+    >>> b_var_dist = lsl.Var.new_value(0.001, name="b_var_dist")
+    >>>
     >>> sigma_sq_dist = lsl.Dist(tfd.InverseGamma, concentration=a, scale=b_var_dist)
     >>> sigma_sq = lsl.Var.new_param(1.0, sigma_sq_dist, name="sigma_sq")
-    >>> sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma")
-
-
-    >>> y_dist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
+    >>> log_sigma_sq = sigma_sq.transform(None)
+    >>>
+    >>> #sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma")
+    >>>
+    >>> y_dist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma_sq)
     >>> y_m = lsl.Var.new_obs(y, y_dist, name="y_m")
-
+    >>>
     >>> gb = lsl.GraphBuilder().add(y_m)
     >>> gb.plot_vars()
-
-    >>> model = gb.build_model()
     >>>
+    >>> model = gb.build_model()
     >>> # Initialize the builder.
     >>> builder = OptimizerBuilder(
     ...     seed=0,
     ...     n_epochs=10000,
-    ...     batch_size=64,
+    ...     batch_size=None,
     ...     S=32,
     ...     patience_tol=0.001,
     ...     window_size=100,
     ... )
-    >>>
     >>> # Set up the model interface.
     >>> interface = LieselInterface(model)
     >>> builder.set_model(interface)
@@ -117,15 +122,13 @@ class OptimizerBuilder:
     >>> # Define optimizer chains.
     >>> optimizer_chain1 = optax.chain(optax.clip(1), optax.adam(learning_rate=0.001))
     >>> optimizer_chain2 = optax.chain(optax.clip(1), optax.adam(learning_rate=0.001))
-    >>>
     >>> # Add a univariate latent variable for sigma_sq.
     >>> builder.add_variational_distribution(
-    ...     ["sigma_sq"],
+    ...     ["sigma_sq_transformed"],
     ...     dist_class=tfd.Normal,
     ...     phi={"loc": 1.0, "scale": 0.5},
     ...     optimizer_chain=optimizer_chain1,
     ... )
-    >>>
     >>> # Add a univariate latent variable for b.
     >>> builder.add_variational_distribution(
     ...     ["b"],
@@ -133,7 +136,6 @@ class OptimizerBuilder:
     ...     phi={"loc": jnp.zeros(4), "scale": jnp.ones(4)},
     ...     optimizer_chain=optimizer_chain2,
     ... )
-    >>>
     >>> # Build and run the optimizer.
     >>> optimizer = builder.build()
     >>> optimizer.fit()
