@@ -78,8 +78,10 @@ class OptimizerBuilder:
     >>> import liesel.model as lsl
     >>> from liesel.experimental.vi import OptimizerBuilder, LieselInterface
     >>>
-    >>> X = jnp.full((4,4), 1)
-    >>> y = jnp.array([1,1,1,1])
+    >>> key = jax.random.PRNGKey(0)
+    >>> X = jax.random.normal(key, (100, 4))
+    >>> true_b = jnp.array([1.0, -2.0, 0.5, 3.0])
+    >>> y = X @ true_b + jax.random.normal(key, (100,)) * 0.5
     >>>
     >>> # Set up a minimal model.
     >>> X_m = lsl.Var.new_obs(X, name="X_m")
@@ -128,13 +130,17 @@ class OptimizerBuilder:
     ...     dist_class=tfd.Normal,
     ...     phi={"loc": 1.0, "scale": 0.5},
     ...     optimizer_chain=optimizer_chain1,
+    ...     variational_param_bijectors={
+    ...         "loc": tfb.Identity(),
+    ...         "scale": tfb.Softplus()
+    ...     }
     ... )
     >>> # Add a univariate latent variable for b.
     >>> builder.add_variational_distribution(
     ...     ["b"],
     ...     dist_class=tfd.Normal,
     ...     phi={"loc": jnp.zeros(4), "scale": jnp.ones(4)},
-    ...     optimizer_chain=optimizer_chain2,
+    ...     optimizer_chain=optimizer_chain2
     ... )
     >>> # Build and run the optimizer.
     >>> optimizer = builder.build()
