@@ -1,7 +1,5 @@
-from collections.abc import Callable
-from typing import Any, TypedDict
+from typing import Any
 
-import jax
 import jax.numpy as jnp
 import optax
 import tensorflow_probability.substrates.jax.bijectors as tfb
@@ -9,7 +7,6 @@ from tensorflow_probability.substrates import jax as tfp
 from tensorflow_probability.substrates.jax.distributions import (
     Distribution as TfpDistribution,
 )
-
 
 from .interface import LieselInterface
 from .optimizer import Optimizer
@@ -99,7 +96,7 @@ class OptimizerBuilder:
     >>> sigma_sq = lsl.Var.new_param(1.0, sigma_sq_dist, name="sigma_sq")
     >>> log_sigma_sq = sigma_sq.transform(None)
     >>>
-    >>> #sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma")
+    >>> # sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma")
     >>>
     >>> y_dist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma_sq)
     >>> y_m = lsl.Var.new_obs(y, y_dist, name="y_m")
@@ -132,15 +129,15 @@ class OptimizerBuilder:
     ...     optimizer_chain=optimizer_chain1,
     ...     variational_param_bijectors={
     ...         "loc": tfb.Identity(),
-    ...         "scale": tfb.Softplus()
-    ...     }
+    ...         "scale": tfb.Softplus(),
+    ...     },
     ... )
     >>> # Add a univariate latent variable for b.
     >>> builder.add_variational_distribution(
     ...     ["b"],
     ...     dist_class=tfd.Normal,
     ...     phi={"loc": jnp.zeros(4), "scale": jnp.ones(4)},
-    ...     optimizer_chain=optimizer_chain2
+    ...     optimizer_chain=optimizer_chain2,
     ... )
     >>> # Build and run the optimizer.
     >>> optimizer = builder.build()
@@ -318,7 +315,8 @@ class OptimizerBuilder:
         ValueError
             If dimensions don't match the event shape.
         """
-        # TODO: Fix dimensionality validation bug
+        # TODO: Fix dimensionality validation bug, and consider the
+        # new block logic (full rank).
         # total_dim = sum(variable_dims[name] for name in latent_variable_names)
         #
         # if event_shape != total_dim:
@@ -357,11 +355,11 @@ class OptimizerBuilder:
             phi (Dict[str, float]): Dictionary containing the initial parameters.
             fixed_distribution_params (Optional[Dict[str, float]]): Optional fixed
             parameters for the distribution.
-            optimizer_chain (optax.GradientTransformation): Optimizer chain for gradient
-            transformations.
-            variational_param_bijectors (dict[str, tfb.Bijector] | None) – Optional overrides
-            that replace the parameter's default tfp.util.ParameterProperties bijector,
-            mapping the parameter from unconstrained to a constrained space.
+            optimizer_chain (optax.GradientTransformation): Optimizer chain for
+            gradient transformations.
+            variational_param_bijectors (dict[str, tfb.Bijector] | None) - Optional
+            overrides that replace the parameter's default tfp.util.ParameterProperties
+            bijector, mapping the parameter from unconstrained to a constrained space.
         """
         if isinstance(latent_variable_names, str):
             latent_variable_names = [latent_variable_names]
@@ -386,6 +384,11 @@ class OptimizerBuilder:
             "variational_param_bijectors": parameter_bijectors,
         }
 
+        if len(latent_variable_names) > 1:
+            config["full_rank_key"] = "_".join(latent_variable_names)
+        else:
+            config["full_rank_key"] = latent_variable_names[0]
+
         distribution = self._validate_and_build_distributions(config)
 
         self._validate_fully_reparameterized_dist(distribution, latent_variable_names)
@@ -394,6 +397,15 @@ class OptimizerBuilder:
         config["event_shape"] = event_shape
         variable_dims = self._get_latent_var_dims(latent_variable_names)
         config["variable_dims"] = variable_dims
+        config["dims_list"] = [int(v) for v in variable_dims.values()]
+        dims_list = config["dims_list"]
+        if len(dims_list) > 1:
+            import numpy as np
+
+            split_indices = list(np.cumsum(dims_list)[:-1])
+        else:
+            split_indices = []
+        config["split_indices"] = split_indices
 
         self._validate_dimensionality(latent_variable_names, event_shape, variable_dims)
 
@@ -428,8 +440,9 @@ class OptimizerBuilder:
     ) -> TfpDistribution:
         """Validate and build a single variational distribution from configuration.
 
-        This method attempts to build the distribution to validate that the configuration
-        is correct and returns the built distribution for further inspection (e.g., event shape).
+        This method attempts to build the distribution to validate that the
+        configuration is correct and returns the built distribution for further
+        inspection (e.g., event shape).
 
         Parameters
         ----------
@@ -478,7 +491,8 @@ class OptimizerBuilder:
         except Exception as e:
             names = config.get("names", ["unknown"])
             raise ValueError(
-                f"Failed to build variational distribution for latent variable(s) {names}: {str(e)}"
+                "Failed to build variational distribution for latent variable(s) "
+                f"{names}: {str(e)}"
             ) from e
 
     def build(self) -> Optimizer:
@@ -496,7 +510,6 @@ class OptimizerBuilder:
         latent_variables_dict = {}
         for config in self.latent_variables:
             names = config["names"]
-            # Create a readable key by joining the latent variable names
             if len(names) == 1:
                 key = names[0]
             else:
@@ -513,15 +526,3 @@ class OptimizerBuilder:
             model_interface=self._model_interface,
             latent_variables=latent_variables_dict,
         )
-
-    def make_log_cholesky_like(self, d: int) -> jnp.ndarray:
-        n = d * (d + 1) // 2
-        arr = jnp.zeros((n,), dtype=jnp.float32)
-
-        def body_fun(row, arr):
-            offset = (row * (row + 1)) // 2
-            arr = arr.at[offset + row].set(1.1)
-            return arr
-
-        arr = jax.lax.fori_loop(0, d, body_fun, arr)
-        return arr

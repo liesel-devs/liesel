@@ -1,4 +1,3 @@
-import math
 from functools import partial
 from typing import Any
 
@@ -94,9 +93,10 @@ class Optimizer:
         return variational_dists_class
 
     def _init_phi(self) -> dict[str, Any]:
-        """Initialize the phi dictionary using unconstrained parameters for optimization.
-        The phi dict from builder.py contains constrained parameters; for optimization,
-        we store unconstrained parameters by applying the inverse bijector.
+        """Initialize the phi dictionary using unconstrained parameters for
+        optimization. The phi dict from builder.py contains constrained
+        parameters; for optimization, we store unconstrained parameters by
+        applying the inverse bijector.
         """
         phi = {}
         for key, config in self.latent_vars_config.items():
@@ -447,7 +447,8 @@ class Optimizer:
         return -elbo, rng_key
 
     def _sample_and_compute_variational_log_prob(self, phi, rng_key):
-        """Sample from the variational distribution for all latent variables and compute log probabilities.
+        """Sample from the variational distribution for all latent variables
+            and compute log probabilities.
 
         Parameters
         ----------
@@ -459,29 +460,40 @@ class Optimizer:
         Returns
         -------
         tuple
-            (samples, total_log_q) where samples is a dict of all sampled latent variables
-            and total_log_q is the sum of log probabilities under the variational distributions.
+            (samples, total_log_q) where samples is a dict of all sampled latent
+            variables and total_log_q is the sum of log probabilities under the
+            variational distributions.
         """
         samples = {}
         total_log_q = 0.0
+        model_params = self.model_interface.get_params()
 
         for key, config in self.latent_vars_config.items():
             pval = phi[key]
-
             dist_obj = self._build_variational_distribution(
                 self.variational_dists_class[key],
                 pval,
                 self.fixed_distribution_params[key],
                 self.variational_param_bijectors[key],
             )
-
             rng_key, subkey = jax.random.split(rng_key)
             z = dist_obj.sample(seed=subkey)
             log_q = dist_obj.log_prob(z)
 
-            for pname in config["names"]:
-                samples[pname] = z
-                total_log_q += log_q
+            if len(config["names"]) == 1:
+                varname = config["names"][0]
+                samples[varname] = z
+            else:
+                split_indices = config["split_indices"]
+                if split_indices:
+                    split_samples = jnp.split(z, split_indices, axis=-1)
+                else:
+                    split_samples = [z]
+
+                for n, s in zip(config["names"], split_samples):
+                    orig_shape = model_params[n].shape
+                    samples[n] = s.reshape(orig_shape)
+            total_log_q += log_q
 
         return samples, total_log_q
 
@@ -511,7 +523,9 @@ class Optimizer:
                 parameter_bijectors,
             )
 
-            final_results.update({name: final_distribution for name in names})
+            for name in names:
+                final_results[name] = final_distribution
+
             if len(names) > 1:
                 final_results[key] = final_distribution
         return final_results
@@ -542,38 +556,33 @@ class Optimizer:
             - "samples": a dict mapping latent variable names to their samples.
             - "seed": the updated PRNGKey after sampling.
         """
-        # results = {}
+
         samples = {}
         seed = jax.random.PRNGKey(seed)
         keys = jax.random.split(seed, len(self.latent_vars_config) + 1)
-
         model_params = self.model_interface.get_params()
 
-        for i, config in enumerate(self.latent_vars_config.values()):
-            if len(config["names"]) == 1:
-                name = config["names"][0]
-                dist = self.final_variational_distributions[name]
-                samples[name] = dist.sample(n_samples, seed=keys[i + 1])
+        for i, (key, config) in enumerate(self.latent_vars_config.items()):
+            dist = self.final_variational_distributions[key]
+            n_vars = len(config["names"])
+            z = dist.sample(n_samples, seed=keys[i + 1])
+
+            if n_vars == 1:
+                varname = config["names"][0]
+                samples[varname] = z
             else:
-                composite_key = config["full_rank_key"]
-                dist = self.final_variational_distributions[composite_key]
-                composite_sample = dist.sample(n_samples, seed=keys[i + 1])
-                dims = []
-                for var in config["names"]:
-                    dims.append(int(jnp.prod(jnp.array(model_params[var].shape))))
-                total_dim = sum(dims)
-                flat_sample = jnp.reshape(composite_sample, (n_samples, total_dim))
-                cum_dims = []
-                running_sum = 0
-                for d in dims[:-1]:
-                    running_sum += d
-                    cum_dims.append(running_sum)
-                split_samples = jnp.split(flat_sample, cum_dims, axis=1)
-                for j, var in enumerate(config["names"]):
-                    var_shape = model_params[var].shape
-                    samples[var] = jnp.reshape(
-                        split_samples[j], (n_samples,) + var_shape
-                    )
+                split_indices = config["split_indices"]
+                if split_indices:
+                    flat_z = z.reshape(n_samples, -1)
+                    split_samples = jnp.split(flat_z, split_indices, axis=-1)
+                else:
+                    split_samples = [z]
+
+                flat_z = z.reshape(n_samples, -1)
+                split_samples = jnp.split(flat_z, split_indices, axis=-1)
+                for n, s in zip(config["names"], split_samples):
+                    orig_shape = model_params[n].shape
+                    samples[n] = s.reshape((n_samples,) + orig_shape)
 
         results = {
             "final_variational_distributions": self.final_variational_distributions,
@@ -581,10 +590,5 @@ class Optimizer:
             "samples": samples,
             "seed": keys[0],
         }
-        # results["final_variational_distributions"] = (
-        #     self.final_variational_distributions
-        # )
-        # results["elbo_values"] = self.elbo_values
-        # results["samples"] = samples
-        # results["seed"] = keys[0]
+
         return results
