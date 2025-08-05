@@ -470,7 +470,7 @@ class OptimizerBuilder:
                 for p_name, p_val in phi.items():
                     bij = parameter_bijectors.get(p_name)
                     if bij is not None:
-                        phi_constrained[p_name] = bij.forward(p_val)
+                        phi_constrained[p_name] = bij.forward(bij.inverse(p_val))
                     else:
                         phi_constrained[p_name] = p_val
             else:
