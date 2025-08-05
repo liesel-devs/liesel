@@ -68,13 +68,13 @@ class Optimizer:
         self.rng_key = jax.random.PRNGKey(self.seed)
 
         self.variational_dists_class = self._init_variational_dists_class()
-        self.phi = self._init_phi()
+        self.variational_params = self._init_variational_params()
         self.fixed_distribution_params = self._init_fixed_distribution_params()
         self.variational_param_bijectors = self._init_variational_param_bijectors()
 
         self.opt_state, self.optimizer = self._init_optimizer()
         self.elbo_values: list[float] = []
-        self.phi_evolution: list[dict[str, dict[str, Any]]] = []
+        self.variational_params_evolution: list[dict[str, dict[str, Any]]] = []
 
         try:
             self.dim_data = next(
@@ -92,24 +92,24 @@ class Optimizer:
         }
         return variational_dists_class
 
-    def _init_phi(self) -> dict[str, Any]:
-        """Initialize the phi dictionary using unconstrained parameters for
-        optimization. The phi dict from builder.py contains constrained
+    def _init_variational_params(self) -> dict[str, Any]:
+        """Initialize the variational_params dictionary using unconstrained parameters for
+        optimization. The variational_params dict from builder.py contains constrained
         parameters; for optimization, we store unconstrained parameters by
         applying the inverse bijector.
         """
-        phi = {}
+        variational_params = {}
         for key, config in self.latent_vars_config.items():
-            phi_constrained = config["phi"]
+            variational_params_constrained = config["variational_params"]
             parameter_bijectors = config["variational_param_bijectors"]
 
-            phi_unconstrained = {}
-            for p_name, p_val in phi_constrained.items():
+            variational_params_unconstrained = {}
+            for p_name, p_val in variational_params_constrained.items():
                 bij = parameter_bijectors[p_name]
-                phi_unconstrained[p_name] = bij.inverse(p_val)
+                variational_params_unconstrained[p_name] = bij.inverse(p_val)
 
-            phi[key] = phi_unconstrained
-        return phi
+            variational_params[key] = variational_params_unconstrained
+        return variational_params
 
     def _init_fixed_distribution_params(self) -> dict[str, dict[str, Any]]:
         """Initialize fixed distribution parameters."""
@@ -133,24 +133,24 @@ class Optimizer:
     def _build_variational_distribution(
         self,
         dist_class: type[TfpDistribution],
-        phi: dict[str, Any],
+        variational_params: dict[str, Any],
         fixed_distribution_params: dict[str, Any],
         variational_param_bijectors: dict[str, Any],
     ) -> TfpDistribution:
         """Build a TFP distribution with constrained parameters."""
 
-        phi_constrained = {}
-        for p_name, p_val in phi.items():
+        variational_params_constrained = {}
+        for p_name, p_val in variational_params.items():
             bij = variational_param_bijectors[p_name]
-            phi_constrained[p_name] = bij.forward(p_val)
+            variational_params_constrained[p_name] = bij.forward(p_val)
 
-        return dist_class(**phi_constrained, **fixed_distribution_params)
+        return dist_class(**variational_params_constrained, **fixed_distribution_params)
 
     def _init_optimizer(self) -> tuple[OptState, GradientTransformation]:
         """Initialize the optimizer state and transformation."""
 
         def label_fn(params):
-            return {k: k for k in params if k in self.phi}
+            return {k: k for k in params if k in self.variational_params}
 
         # Build optimizer dictionary directly from latent_vars_config
         optim_dict = {
@@ -158,7 +158,7 @@ class Optimizer:
             for key, config in self.latent_vars_config.items()
         }
         tx = optax.multi_transform(optim_dict, label_fn)
-        opt_state = tx.init(self.phi)
+        opt_state = tx.init(self.variational_params)
         return opt_state, tx
 
     def fit(self) -> None:
@@ -183,7 +183,7 @@ class Optimizer:
 
         @partial(jax.jit, static_argnames=["batch_size", "S"])
         def step(
-            current_phi: dict[str, Any],
+            current_variational_params: dict[str, Any],
             opt_state: OptState,  # Use OptState here
             rng_key: jax.random.PRNGKey,
             dim_data: int,
@@ -195,7 +195,7 @@ class Optimizer:
 
             Parameters
             ----------
-            current_phi : dict
+            current_variational_params : dict
                 Current variational parameters.
             opt_state : object
                 Current optimizer state.
@@ -212,7 +212,7 @@ class Optimizer:
 
             Returns
             -------
-            new_phis : dict
+            new_variational_paramss : dict
                 Updated variational parameters.
             new_opt_state : object
                 Updated optimizer state.
@@ -226,21 +226,21 @@ class Optimizer:
                     p, key, dim_data, batch_size, batch_indices, S
                 ),
                 has_aux=True,
-            )(current_phi, rng_key)
+            )(current_variational_params, rng_key)
             updates, new_opt_state = self.optimizer.update(
-                grads, opt_state, current_phi
+                grads, opt_state, current_variational_params
             )
-            new_phis = optax.apply_updates(current_phi, updates)
-            return new_phis, new_opt_state, loss_val, new_rng_key
+            new_variational_paramss = optax.apply_updates(current_variational_params, updates)
+            return new_variational_paramss, new_opt_state, loss_val, new_rng_key
 
         def epoch_batches(
-            phi: dict[str, Any], opt_state: OptState, rng_key: jax.random.PRNGKey
+            variational_params: dict[str, Any], opt_state: OptState, rng_key: jax.random.PRNGKey
         ) -> tuple[dict[str, Any], OptState, jax.random.PRNGKey, float]:
             """Process all batches in one epoch and compute the mean ELBO.
 
             Parameters
             ----------
-            phi : dict
+            variational_params : dict
                 Current variational parameters.
             opt_state : object
                 Current optimizer state.
@@ -249,7 +249,7 @@ class Optimizer:
 
             Returns
             -------
-            phi : dict
+            variational_params : dict
                 Updated variational parameters.
             opt_state : object
                 Updated optimizer state.
@@ -263,30 +263,30 @@ class Optimizer:
             epoch_elbos = jnp.zeros((number_batches,))
 
             def batch_step(i, state):
-                phi, opt_state, rng_key, epoch_elbos, all_indices = state
+                variational_params, opt_state, rng_key, epoch_elbos, all_indices = state
                 start = i * batch_size
                 batch_indices = jax.lax.dynamic_slice(
                     all_indices, (start,), (batch_size,)
                 )
-                phi, opt_state, loss_val, rng_key = step(
-                    phi, opt_state, rng_key, dim_data, batch_size, batch_indices, S
+                variational_params, opt_state, loss_val, rng_key = step(
+                    variational_params, opt_state, rng_key, dim_data, batch_size, batch_indices, S
                 )
                 epoch_elbos = epoch_elbos.at[i].set(-loss_val)
-                return phi, opt_state, rng_key, epoch_elbos, all_indices
+                return variational_params, opt_state, rng_key, epoch_elbos, all_indices
 
-            phi, opt_state, rng_key, epoch_elbos, _ = jax.lax.fori_loop(
+            variational_params, opt_state, rng_key, epoch_elbos, _ = jax.lax.fori_loop(
                 0,
                 number_batches,
                 batch_step,
-                (phi, opt_state, rng_key, epoch_elbos, all_indices),
+                (variational_params, opt_state, rng_key, epoch_elbos, all_indices),
             )
             current_elbo = jnp.mean(epoch_elbos)
-            return phi, opt_state, rng_key, current_elbo
+            return variational_params, opt_state, rng_key, current_elbo
 
         initial_elbo_array = jnp.zeros((n_epochs,))
         initial_state = (
             0,
-            self.phi,
+            self.variational_params,
             self.opt_state,
             self.rng_key,
             -jnp.inf,
@@ -300,20 +300,20 @@ class Optimizer:
             Parameters
             ----------
             state : tuple
-                Contains (epoch, phi, opt_state, rng_key, best_elbo, window_counter,
+                Contains (epoch, variational_params, opt_state, rng_key, best_elbo, window_counter,
                 elbo_array).
 
             Returns
             -------
             tuple
-                Updated state: (epoch+1, phi, opt_state, rng_key, new_best_elbo,
+                Updated state: (epoch+1, variational_params, opt_state, rng_key, new_best_elbo,
                 new_window_counter, elbo_array).
             """
-            epoch, phi, opt_state, rng_key, best_elbo, window_counter, elbo_array = (
+            epoch, variational_params, opt_state, rng_key, best_elbo, window_counter, elbo_array = (
                 state
             )
-            phi, opt_state, rng_key, current_elbo = epoch_batches(
-                phi, opt_state, rng_key
+            variational_params, opt_state, rng_key, current_elbo = epoch_batches(
+                variational_params, opt_state, rng_key
             )
             elbo_array = elbo_array.at[epoch].set(current_elbo)
             epsilon = 1e-8
@@ -361,7 +361,7 @@ class Optimizer:
             )
             return (
                 epoch + 1,
-                phi,
+                variational_params,
                 opt_state,
                 rng_key,
                 new_best_elbo,
@@ -377,7 +377,7 @@ class Optimizer:
             Parameters
             ----------
             state : tuple
-                Contains (epoch, phi, opt_state, rng_key, best_elbo, window_counter,
+                Contains (epoch, variational_params, opt_state, rng_key, best_elbo, window_counter,
                 elbo_array).
 
             Returns
@@ -385,28 +385,28 @@ class Optimizer:
             bool
                 True if the loop should continue, False otherwise.
             """
-            epoch, phi, opt_state, rng_key, best_elbo, window_counter, elbo_array = (
+            epoch, variational_params, opt_state, rng_key, best_elbo, window_counter, elbo_array = (
                 state
             )
             return (epoch < n_epochs) & (window_counter < window_size)
 
         final_state = jax.lax.while_loop(loop_cond, epoch_body, initial_state)
-        epoch_count, phi, opt_state, rng_key, best_elbo, window_counter, elbo_array = (
+        epoch_count, variational_params, opt_state, rng_key, best_elbo, window_counter, elbo_array = (
             final_state
         )
 
-        self.phi = phi
+        self.variational_params = variational_params
         self.opt_state = opt_state
         self.rng_key = rng_key
         self.elbo_values = elbo_array[:epoch_count].tolist()
         self.final_variational_distributions = self.get_final_distributions()
 
-    def _elbo(self, phi, rng_key, dim_data, batch_size, batch_indices, S):
+    def _elbo(self, variational_params, rng_key, dim_data, batch_size, batch_indices, S):
         """Compute the negative ELBO (Evidence Lower Bound) for variational inference.
 
         Parameters
         ----------
-        phi : dict
+        variational_params : dict
             Current variational parameters.
         rng_key : jax.random.PRNGKey
             Random key for sampling.
@@ -435,7 +435,7 @@ class Optimizer:
             """Compute the ELBO for a single sample by accessing the model via the
             Interface instance."""
             samples, log_q = self._sample_and_compute_variational_log_prob(
-                phi, rng_key_sample
+                variational_params, rng_key_sample
             )
             log_prob = self.model_interface.compute_log_prob(
                 samples, dim_data, batch_size, batch_indices
@@ -446,13 +446,13 @@ class Optimizer:
         elbo = jnp.mean(elbo_samples)
         return -elbo, rng_key
 
-    def _sample_and_compute_variational_log_prob(self, phi, rng_key):
+    def _sample_and_compute_variational_log_prob(self, variational_params, rng_key):
         """Sample from the variational distribution for all latent variables
             and compute log probabilities.
 
         Parameters
         ----------
-        phi : dict
+        variational_params : dict
             Dictionary of variational parameters.
         rng_key : jax.random.PRNGKey
             Random key for sampling.
@@ -469,7 +469,7 @@ class Optimizer:
         model_params = self.model_interface.get_params()
 
         for key, config in self.latent_vars_config.items():
-            pval = phi[key]
+            pval = variational_params[key]
             dist_obj = self._build_variational_distribution(
                 self.variational_dists_class[key],
                 pval,
@@ -513,12 +513,12 @@ class Optimizer:
         for key, config in self.latent_vars_config.items():
             names = config["names"]
             dist_class = self.variational_dists_class[key]
-            phi_unconstrained = self.phi[key]
+            variational_params_unconstrained = self.variational_params[key]
             parameter_bijectors = self.variational_param_bijectors[key]
 
             final_distribution = self._build_variational_distribution(
                 dist_class,
-                phi_unconstrained,
+                variational_params_unconstrained,
                 self.fixed_distribution_params[key],
                 parameter_bijectors,
             )

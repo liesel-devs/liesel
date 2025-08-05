@@ -27,7 +27,7 @@ class OptimizerBuilder:
     #  sample size, batch size).
     #. Create an instance of the model interface with :class:`.LieselInterface`
        and set it with :meth:`.set_model`.
-    #. Add latent variables with :meth:`.add_variational_distribution`.
+    #. Add latent variables with :meth:`.add_variational_dist`.
     #. Build an :class:`~.optimizer.Optimizer` with :meth:`.build`.
     #. Run optimization using :meth:`.fit`.
 
@@ -64,7 +64,7 @@ class OptimizerBuilder:
     **Adding latent variables**
 
     In this example, we add a univariate latent variable for `sigma_sq` and another for
-    `b` using separate calls to :meth:`.add_variational_distribution` (Mean-Field).
+    `b` using separate calls to :meth:`.add_variational_dist` (Mean-Field).
 
     >>> import jax.numpy as jnp
     >>> import optax
@@ -122,10 +122,10 @@ class OptimizerBuilder:
     >>> optimizer_chain1 = optax.chain(optax.clip(1), optax.adam(learning_rate=0.001))
     >>> optimizer_chain2 = optax.chain(optax.clip(1), optax.adam(learning_rate=0.001))
     >>> # Add a univariate latent variable for sigma_sq.
-    >>> builder.add_variational_distribution(
+    >>> builder.add_variational_dist(
     ...     ["sigma_sq_transformed"],
     ...     dist_class=tfd.Normal,
-    ...     phi={"loc": 1.0, "scale": 0.5},
+    ...     variational_params={"loc": 1.0, "scale": 0.5},
     ...     optimizer_chain=optimizer_chain1,
     ...     variational_param_bijectors={
     ...         "loc": tfb.Identity(),
@@ -133,10 +133,10 @@ class OptimizerBuilder:
     ...     },
     ... )
     >>> # Add a univariate latent variable for b.
-    >>> builder.add_variational_distribution(
+    >>> builder.add_variational_dist(
     ...     ["b"],
     ...     dist_class=tfd.Normal,
-    ...     phi={"loc": jnp.zeros(4), "scale": jnp.ones(4)},
+    ...     variational_params={"loc": jnp.zeros(4), "scale": jnp.ones(4)},
     ...     optimizer_chain=optimizer_chain2,
     ... )
     >>> # Build and run the optimizer.
@@ -173,11 +173,11 @@ class OptimizerBuilder:
         self,
         dist_class: type[TfpDistribution],
         parameter_bijectors: dict[str, tfb.Bijector] | None = None,
-        phi: dict[str, float] | None = None,
+        variational_params: dict[str, float] | None = None,
     ) -> None:
         """Validate that custom keys are unique and match the distribution parameters.
 
-        All keys supplied in ``parameter_bijectors`` and ``phi`` must be unique
+        All keys supplied in ``parameter_bijectors`` and ``variational_params`` must be unique
         (within their respective dictionaries) **and** belong to the set of valid
         parameter names returned by
         ``dist_class.parameter_properties().keys()``.  A ``ValueError`` is raised
@@ -189,7 +189,7 @@ class OptimizerBuilder:
             TensorFlow Probability distribution class (e.g., ``tfd.Normal``).
         parameter_bijectors : dict[str, tfb.Bijector] | None, default None
             Optional user-supplied bijectors.
-        phi : dict[str, float] | None, default None
+        variational_params : dict[str, float] | None, default None
             Optional initial variational parameters.
 
         Raises
@@ -211,7 +211,7 @@ class OptimizerBuilder:
                 )
 
         _check("parameter_bijectors", parameter_bijectors)
-        _check("phi", phi)
+        _check("variational_params", variational_params)
 
     def _obtain_parameter_default_bijectors(self, dist_class):
         """Return the default constraining bijectors for all parameters of a
@@ -327,12 +327,12 @@ class OptimizerBuilder:
         #     )
         pass
 
-    def add_variational_distribution(
+    def add_variational_dist(
         self,
         latent_variable_names: list[str],
         dist_class: type[TfpDistribution],
         *,
-        phi: dict[str, float],
+        variational_params: dict[str, float],
         fixed_distribution_params: dict[str, float] | None = None,
         optimizer_chain: optax.GradientTransformation,
         variational_param_bijectors: dict[str, tfb.Bijector] | None = None,
@@ -340,7 +340,7 @@ class OptimizerBuilder:
         """Add a latent variable to the optimizer configuration by adding a variational
         distribution for each latent variable independently (Mean-Field Approach).
 
-        The user passed variational parameters (here named ``phi``) are expected
+        The user passed variational parameters (here named ``variational_params``) are expected
         to be in the to the distribution class according space which is the
         constrained space.
 
@@ -352,7 +352,7 @@ class OptimizerBuilder:
         Parameters:
             latent_variable_names (List[str]): List of parameter names.
             dist_class (Callable): Distribution class (e.g., tfd.Normal).
-            phi (Dict[str, float]): Dictionary containing the initial parameters.
+            variational_params (Dict[str, float]): Dictionary containing the initial parameters.
             fixed_distribution_params (Optional[Dict[str, float]]): Optional fixed
             parameters for the distribution.
             optimizer_chain (optax.GradientTransformation): Optimizer chain for
@@ -365,7 +365,7 @@ class OptimizerBuilder:
             latent_variable_names = [latent_variable_names]
 
         self._validate_latent_variable_keys(
-            dist_class, variational_param_bijectors, phi
+            dist_class, variational_param_bijectors, variational_params
         )
 
         parameter_bijectors_default = self._obtain_parameter_default_bijectors(
@@ -378,7 +378,7 @@ class OptimizerBuilder:
         config = {
             "names": latent_variable_names,
             "dist_class": dist_class,
-            "phi": phi,
+            "variational_params": variational_params,
             "fixed_distribution_params": fixed_distribution_params,
             "optimizer_chain": optimizer_chain,
             "variational_param_bijectors": parameter_bijectors,
@@ -461,24 +461,24 @@ class OptimizerBuilder:
         """
         try:
             dist_class = config["dist_class"]
-            phi = config["phi"]
+            variational_params = config["variational_params"]
             fixed_distribution_params = config.get("fixed_distribution_params", {})
             parameter_bijectors = config.get("variational_param_bijectors", None)
 
             if parameter_bijectors is not None:
-                phi_constrained = {}
-                for p_name, p_val in phi.items():
+                variational_params_constrained = {}
+                for p_name, p_val in variational_params.items():
                     bij = parameter_bijectors.get(p_name)
                     if bij is not None:
-                        phi_constrained[p_name] = bij.forward(bij.inverse(p_val))
+                        variational_params_constrained[p_name] = bij.forward(bij.inverse(p_val))
                     else:
-                        phi_constrained[p_name] = p_val
+                        variational_params_constrained[p_name] = p_val
             else:
-                phi_constrained = phi
+                variational_params_constrained = variational_params
 
             # Build the distribution
             distribution = dist_class(
-                **phi_constrained,
+                **variational_params_constrained,
                 **(
                     fixed_distribution_params
                     if fixed_distribution_params is not None
