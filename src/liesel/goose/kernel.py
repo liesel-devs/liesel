@@ -149,13 +149,27 @@ class ModelMixin:
     def log_prob_fn(self, model_state: ModelState) -> Callable[[Position], float]:
         """
         Returns the log-probability function with the position as the only argument.
+
+        If the kernel has a subset_logp_name attribute, uses subset log probability
+        evaluation instead of the full model log probability.
         """
 
-        def log_prob_fn(position: Position) -> float:
-            new_model_state = self.model.update_state(position, model_state)
-            return self.model.log_prob(new_model_state)
+        if hasattr(self, "subset_logp_name") and self.subset_logp_name is not None:
 
-        return log_prob_fn
+            def subset_log_prob_fn(position: Position) -> float:
+                new_model_state = self.model.update_state(position, model_state)
+                return self.model.log_prob_subset(
+                    new_model_state, self.subset_logp_name
+                )
+
+            return subset_log_prob_fn
+        else:
+
+            def log_prob_fn(position: Position) -> float:
+                new_model_state = self.model.update_state(position, model_state)
+                return self.model.log_prob(new_model_state)
+
+            return log_prob_fn
 
 
 class TransitionMixin(Generic[TKernelState, TTransitionInfo]):
