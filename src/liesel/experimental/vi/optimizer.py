@@ -74,7 +74,6 @@ class Optimizer:
 
         self.opt_state, self.optimizer = self._init_optimizer()
         self.elbo_values: list[float] = []
-        self.variational_params_evolution: list[dict[str, dict[str, Any]]] = []
 
         try:
             self.dim_data = next(
@@ -556,7 +555,6 @@ class Optimizer:
             - "samples": a dict mapping latent variable names to their samples.
             - "seed": the updated PRNGKey after sampling.
         """
-
         samples = {}
         seed = jax.random.PRNGKey(seed)
         keys = jax.random.split(seed, len(self.latent_vars_config) + 1)

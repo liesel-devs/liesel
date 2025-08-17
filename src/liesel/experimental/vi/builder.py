@@ -1,4 +1,5 @@
-from typing import Any
+from collections.abc import Callable
+from typing import Any, TypedDict
 
 import jax.numpy as jnp
 import optax
@@ -159,6 +160,7 @@ class OptimizerBuilder:
         self.window_size = window_size
         self.batch_size = batch_size
         self.S = S
+        self._model_interface: LieselInterface | None = None
         self.latent_variables: list[dict[str, Any]] = []
 
     def set_model(self, interface: LieselInterface) -> None:
@@ -361,6 +363,7 @@ class OptimizerBuilder:
             overrides that replace the parameter's default tfp.util.ParameterProperties
             bijector, mapping the parameter from unconstrained to a constrained space.
         """
+        
         if isinstance(latent_variable_names, str):
             latent_variable_names = [latent_variable_names]
 
