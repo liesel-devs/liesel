@@ -6,6 +6,7 @@ from .builder import EngineBuilder as EngineBuilder
 from .engine import Engine as Engine
 from .engine import SamplingResults
 from .epoch import EpochConfig, EpochType
+from .ess import ESSKernel
 from .gibbs import GibbsKernel
 from .hmc import HMCKernel
 from .interface import (
@@ -44,6 +45,7 @@ __all__ = [
     "LieselMCMC",
     "EpochConfig",
     "EpochType",
+    "ESSKernel",
     "GibbsKernel",
     "HMCKernel",
     "IWLSKernel",
