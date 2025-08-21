@@ -46,7 +46,8 @@ class ESSKernel(
 
     ESS is designed for models with Gaussian priors on the parameters being sampled.
     It generates proposals by sampling along an ellipse defined by the prior covariance
-    and uses only the likelihood for acceptance decisions.
+    and uses only the likelihood for acceptance decisions. The sampler becomes more
+    efficient when the likelihood is less informative relative to the prior.
 
     The kernel automatically separates the prior contribution of the sampled variable
     from the rest of the model (likelihood + other priors) by computing
