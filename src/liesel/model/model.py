@@ -819,7 +819,9 @@ class Model:
         self._to_float32 = to_float32
         if grow:
             model = (
-                GraphBuilder(to_float32=to_float32).add(*nodes_and_vars).build_model()
+                GraphBuilder(to_float32=to_float32)
+                .add(*nodes_and_vars)
+                .build_model(copy=copy)
             )
             nodes_and_vars = [*model.nodes.values(), *model.vars.values()]
             model.pop_nodes_and_vars()
@@ -1007,22 +1009,19 @@ class Model:
         their parent variables and nodes. The new model contains copies of these \
         variables and nodes.
         """
+
         nodes_to_include = set()
 
         for node in of:
             if isinstance(node, Var):
                 nodes_to_include.update(nx.ancestors(self.var_graph, node))
+
             else:
                 nodes_to_include.update(nx.ancestors(self.node_graph, node))
+
             nodes_to_include.add(node)
 
-        copy_of_nodes_to_include = deepcopy(nodes_to_include)
-
-        for node in copy_of_nodes_to_include:
-            if hasattr(node, "_unset_model"):
-                node._unset_model()
-
-        return Model(list(copy_of_nodes_to_include), to_float32=self._to_float32)
+        return Model(list(nodes_to_include), to_float32=self._to_float32, copy=True)
 
     @property
     def log_lik(self) -> Array:

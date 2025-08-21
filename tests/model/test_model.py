@@ -111,6 +111,14 @@ class TestModel:
         assert len(nodes_and_vars[0]) == len(model.nodes) - 3
         assert len(nodes_and_vars[1]) == len(model.vars)
 
+    def test_copy_model(self, model: Model) -> None:
+        vars_ = list(model.vars.values())
+        model_copy = Model(vars_, copy=True)
+        assert len(model_copy.vars) == len(model.vars)
+
+        with pytest.raises(RuntimeError):
+            Model(vars_, copy=False)
+
     def test_copy_unfrozen(self, model: Model) -> None:
         """Verifies that the vars and nodes are unfrozen."""
         nodes_and_vars = model.copy_nodes_and_vars()
