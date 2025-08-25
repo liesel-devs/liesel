@@ -819,9 +819,7 @@ class Model:
         self._to_float32 = to_float32
         if grow:
             model = (
-                GraphBuilder(to_float32=to_float32)
-                .add(*nodes_and_vars)
-                .build_model(copy=copy)
+                GraphBuilder(to_float32=to_float32).add(*nodes_and_vars).build_model()
             )
             nodes_and_vars = [*model.nodes.values(), *model.vars.values()]
             model.pop_nodes_and_vars()
