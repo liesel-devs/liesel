@@ -1,5 +1,4 @@
-from collections.abc import Callable
-from typing import Any, TypedDict
+from typing import Any
 
 import jax.numpy as jnp
 import optax
@@ -179,11 +178,10 @@ class OptimizerBuilder:
     ) -> None:
         """Validate that custom keys are unique and match the distribution parameters.
 
-        All keys supplied in ``parameter_bijectors`` and ``variational_params`` must be unique
-        (within their respective dictionaries) **and** belong to the set of valid
-        parameter names returned by
-        ``dist_class.parameter_properties().keys()``.  A ``ValueError`` is raised
-        if any requirement is violated.
+        All keys supplied in ``parameter_bijectors`` and ``variational_params`` must be
+        unique (within their respective dictionaries) **and** belong to the set of
+        valid parameter names returned by ``dist_class.parameter_properties().keys()``.
+        A ``ValueError`` is raised if any requirement is violated.
 
         Parameters
         ----------
@@ -285,7 +283,9 @@ class OptimizerBuilder:
         KeyError
             If a parameter is not found in the model.
         """
+        assert self._model_interface is not None
         model_params = self._model_interface.get_params()
+
         dims = {}
 
         for pname in latent_variable_names:
@@ -342,8 +342,8 @@ class OptimizerBuilder:
         """Add a latent variable to the optimizer configuration by adding a variational
         distribution for each latent variable independently (Mean-Field Approach).
 
-        The user passed variational parameters (here named ``variational_params``) are expected
-        to be in the to the distribution class according space which is the
+        The user passed variational parameters (here named ``variational_params``) are
+        expected to be in the to the distribution class according space which is the
         constrained space.
 
         The ``variational_param_bijectors`` can be used to specify bijectors
@@ -354,7 +354,8 @@ class OptimizerBuilder:
         Parameters:
             latent_variable_names (List[str]): List of parameter names.
             dist_class (Callable): Distribution class (e.g., tfd.Normal).
-            variational_params (Dict[str, float]): Dictionary containing the initial parameters.
+            variational_params (Dict[str, float]): Dictionary containing the
+            initial parameters.
             fixed_distribution_params (Optional[Dict[str, float]]): Optional fixed
             parameters for the distribution.
             optimizer_chain (optax.GradientTransformation): Optimizer chain for
@@ -363,7 +364,7 @@ class OptimizerBuilder:
             overrides that replace the parameter's default tfp.util.ParameterProperties
             bijector, mapping the parameter from unconstrained to a constrained space.
         """
-        
+
         if isinstance(latent_variable_names, str):
             latent_variable_names = [latent_variable_names]
 
@@ -473,7 +474,9 @@ class OptimizerBuilder:
                 for p_name, p_val in variational_params.items():
                     bij = parameter_bijectors.get(p_name)
                     if bij is not None:
-                        variational_params_constrained[p_name] = bij.forward(bij.inverse(p_val))
+                        variational_params_constrained[p_name] = bij.forward(
+                            bij.inverse(p_val)
+                        )
                     else:
                         variational_params_constrained[p_name] = p_val
             else:
