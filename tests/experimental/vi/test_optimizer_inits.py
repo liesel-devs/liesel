@@ -11,6 +11,7 @@ tfd = tfp.distributions
 
 # --- Minimal stubs / fixtures -------------------------------------------------
 
+
 class DummyVar:
     def __init__(self, value, observed=True):
         self.value = jnp.asarray(value)
@@ -55,11 +56,14 @@ def make_latent_config():
 
 # --- _init_variational_dists_class -------------------------------------------
 
+
 def test_accepts_tfp_distribution_class():
     latent = make_latent_config()
     latent["z"]["dist_class"] = tfd.Normal
     opt = Optimizer(
-        seed=0, n_epochs=1, S=2,
+        seed=0,
+        n_epochs=1,
+        S=2,
         model_interface=DummyInterface({"z": jnp.array(0.0)}),
         latent_variables=latent,
     )
@@ -72,21 +76,23 @@ def test_rejects_distribution_instance_not_class():
     latent["z"]["dist_class"] = tfd.Normal(loc=0.0, scale=1.0)
     with pytest.raises(ValueError, match="dist_class.*class|TFP|Distribution"):
         Optimizer(
-            seed=0, n_epochs=1, S=2,
+            seed=0,
+            n_epochs=1,
+            S=2,
             model_interface=DummyInterface({"z": jnp.array(0.0)}),
             latent_variables=latent,
         )
 
 
-@pytest.mark.xfail(
-    reason="Should fail: dist_class is not a TFP Distribution class"
-)
+@pytest.mark.xfail(reason="Should fail: dist_class is not a TFP Distribution class")
 def test_rejects_non_tfp_distribution_class():
     latent = make_latent_config()
     latent["z"]["dist_class"] = object
     with pytest.raises(ValueError, match="TFP|Distribution|dist_class"):
         Optimizer(
-            seed=0, n_epochs=1, S=2,
+            seed=0,
+            n_epochs=1,
+            S=2,
             model_interface=DummyInterface({"z": jnp.array(0.0)}),
             latent_variables=latent,
         )
@@ -94,10 +100,13 @@ def test_rejects_non_tfp_distribution_class():
 
 # --- _init_variational_params -------------------------------------------------
 
+
 def test_init_variational_params_inverse_bijectors():
     latent = make_latent_config()
     opt = Optimizer(
-        seed=0, n_epochs=1, S=2,
+        seed=0,
+        n_epochs=1,
+        S=2,
         model_interface=DummyInterface({"z": jnp.array(0.0)}),
         latent_variables=latent,
     )
@@ -111,7 +120,9 @@ def test_init_variational_params_missing_bijector_key_raises():
     latent["z"]["variational_param_bijectors"].pop("scale")
     with pytest.raises(KeyError):
         _ = Optimizer(
-            seed=0, n_epochs=1, S=2,
+            seed=0,
+            n_epochs=1,
+            S=2,
             model_interface=DummyInterface({"z": jnp.array(0.0)}),
             latent_variables=latent,
         )
@@ -121,7 +132,9 @@ def test_init_fixed_params_validate_args_separate_from_variational():
     latent = make_latent_config()
     latent["z"]["fixed_distribution_params"] = {"validate_args": True}
     opt = Optimizer(
-        seed=0, n_epochs=1, S=2,
+        seed=0,
+        n_epochs=1,
+        S=2,
         model_interface=DummyInterface({"z": jnp.array(0.0)}),
         latent_variables=latent,
     )
@@ -136,7 +149,9 @@ def test_init_variational_params_inverse_bijectors_scale_softplus_roundtrip():
         latent = make_latent_config()
         latent["z"]["variational_params"]["scale"] = jnp.array(s)
         opt = Optimizer(
-            seed=0, n_epochs=1, S=2,
+            seed=0,
+            n_epochs=1,
+            S=2,
             model_interface=DummyInterface({"z": jnp.array(0.0)}),
             latent_variables=latent,
         )
@@ -150,7 +165,9 @@ def test_init_variational_params_inverse_bijectors_scale_softplus_roundtrip():
 def test_unconstrained_values_are_finite_after_init():
     latent = make_latent_config()
     opt = Optimizer(
-        seed=0, n_epochs=1, S=2,
+        seed=0,
+        n_epochs=1,
+        S=2,
         model_interface=DummyInterface({"z": jnp.array(0.0)}),
         latent_variables=latent,
     )
@@ -162,7 +179,9 @@ def test_unconstrained_values_are_finite_after_init():
 def test_init_fixed_distribution_params_handles_none():
     latent = make_latent_config()
     opt = Optimizer(
-        seed=0, n_epochs=1, S=2,
+        seed=0,
+        n_epochs=1,
+        S=2,
         model_interface=DummyInterface({"z": jnp.array(0.0)}),
         latent_variables=latent,
     )
@@ -172,7 +191,9 @@ def test_init_fixed_distribution_params_handles_none():
 def test_init_variational_param_bijectors_mapping():
     latent = make_latent_config()
     opt = Optimizer(
-        seed=0, n_epochs=1, S=2,
+        seed=0,
+        n_epochs=1,
+        S=2,
         model_interface=DummyInterface({"z": jnp.array(0.0)}),
         latent_variables=latent,
     )
@@ -183,7 +204,9 @@ def test_init_variational_param_bijectors_mapping():
 def test_init_optimizer_and_update_step_tree_shapes():
     latent = make_latent_config()
     opt = Optimizer(
-        seed=0, n_epochs=1, S=2,
+        seed=0,
+        n_epochs=1,
+        S=2,
         model_interface=DummyInterface({"z": jnp.array(0.0)}),
         latent_variables=latent,
     )
@@ -195,6 +218,7 @@ def test_init_optimizer_and_update_step_tree_shapes():
 
 
 # --- _build_variational_distribution -----------------------------------------
+
 
 def test_build_applies_bijectors_and_merges_fixed():
     latent = make_latent_config()
@@ -255,6 +279,7 @@ def test_build_mvn_diag_shapes():
 
 # --- _init_optimizer (multi_transform) ---------------------------------------
 
+
 def test_init_optimizer_assigns_different_transforms_per_block():
     latent = {
         "z": {
@@ -308,7 +333,7 @@ def test_init_optimizer_errors_if_optimizer_chain_missing():
             "dist_class": tfd.Normal,
             "variational_params": {"loc": jnp.array(0.0), "scale": jnp.array(1.0)},
             "fixed_distribution_params": {},
-            "optimizer_chain": None,  
+            "optimizer_chain": None,
             "variational_param_bijectors": {
                 "loc": tfb.Identity(),
                 "scale": tfb.Softplus(),
@@ -321,6 +346,7 @@ def test_init_optimizer_errors_if_optimizer_chain_missing():
 
 
 # --- General structure / coherence -------------------------------------------
+
 
 def test_init_structure_key_coherence_only():
     params = {"z": jnp.array(0.0), "beta": jnp.zeros(3)}
@@ -351,7 +377,9 @@ def test_init_structure_key_coherence_only():
         },
     }
     opt = Optimizer(
-        seed=0, n_epochs=1, S=2,
+        seed=0,
+        n_epochs=1,
+        S=2,
         model_interface=DummyInterface(params),
         latent_variables=latent,
     )
@@ -402,7 +430,10 @@ def test_multi_block_update_tree_matches_each_block():
             "variational_params": {"loc": jnp.array(0.0), "scale": jnp.array(1.0)},
             "fixed_distribution_params": {},
             "optimizer_chain": optax.adam(1e-3),
-            "variational_param_bijectors": {"loc": tfb.Identity(), "scale": tfb.Softplus()},
+            "variational_param_bijectors": {
+                "loc": tfb.Identity(),
+                "scale": tfb.Softplus(),
+            },
             "split_indices": [],
         },
         "beta": {
@@ -411,7 +442,10 @@ def test_multi_block_update_tree_matches_each_block():
             "variational_params": {"loc": jnp.zeros(3), "scale_diag": jnp.ones(3)},
             "fixed_distribution_params": {},
             "optimizer_chain": optax.sgd(1e-1),
-            "variational_param_bijectors": {"loc": tfb.Identity(), "scale_diag": tfb.Softplus()},
+            "variational_param_bijectors": {
+                "loc": tfb.Identity(),
+                "scale_diag": tfb.Softplus(),
+            },
             "split_indices": [],
         },
     }
@@ -427,4 +461,3 @@ def test_multi_block_update_tree_matches_each_block():
     assert set(updates["beta"].keys()) == set(opt.variational_params["beta"].keys())
     for k in updates["beta"]:
         assert updates["beta"][k].shape == opt.variational_params["beta"][k].shape
-
