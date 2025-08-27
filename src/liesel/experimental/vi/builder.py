@@ -1,5 +1,4 @@
-from collections.abc import Callable
-from typing import Any, TypedDict
+from typing import Any
 
 import jax.numpy as jnp
 import optax
@@ -348,7 +347,7 @@ class OptimizerBuilder:
 
         The ``variational_param_bijectors`` can be used to specify bijectors
         for the variational parameters. The expected behaviour is that if the
-        user passes custom, then the forward should be from unconstrained ->
+        user passes a custom bijector, then the forward should be from unconstrained ->
         constrained and the inverse method from constrained -> unconstrained.
 
         Parameters:
@@ -363,7 +362,7 @@ class OptimizerBuilder:
             overrides that replace the parameter's default tfp.util.ParameterProperties
             bijector, mapping the parameter from unconstrained to a constrained space.
         """
-        
+
         if isinstance(latent_variable_names, str):
             latent_variable_names = [latent_variable_names]
 
@@ -473,7 +472,9 @@ class OptimizerBuilder:
                 for p_name, p_val in variational_params.items():
                     bij = parameter_bijectors.get(p_name)
                     if bij is not None:
-                        variational_params_constrained[p_name] = bij.forward(bij.inverse(p_val))
+                        variational_params_constrained[p_name] = bij.forward(
+                            bij.inverse(p_val)
+                        )
                     else:
                         variational_params_constrained[p_name] = p_val
             else:
