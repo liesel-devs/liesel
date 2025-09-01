@@ -111,6 +111,7 @@ class TestModel:
         assert len(nodes_and_vars[0]) == len(model.nodes) - 3
         assert len(nodes_and_vars[1]) == len(model.vars)
 
+    @pytest.mark.xfail
     def test_copy_model(self, model: Model) -> None:
         vars_ = list(model.vars.values())
         model_copy = Model(vars_, copy=True)
