@@ -184,6 +184,107 @@ class TestSetModel:
 # -- Unit Tests - add_variational_dist Method --
 
 
+class TestDimensionValidation:
+    """Test dimension validation in add_variational_dist method."""
+
+    def test_matching_event_shape_scalar(
+        self, builder_with_defaults, mock_model_interface, optimizer_chain
+    ):
+        """Test validation passes when dimensions match event shape for scalars."""
+        builder_with_defaults.set_model(mock_model_interface)
+
+        # This should pass: param2 is 1D, Normal with scalar params has event_shape=()
+        # No ValueError should be raised
+        builder_with_defaults.add_variational_dist(
+            ["param2"],  # 1D parameter
+            dist_class=tfd.Normal,
+            variational_params={"loc": 0.0, "scale": 1.0},
+            optimizer_chain=optimizer_chain,
+        )
+
+        # Check that event_shape was correctly computed as 1 (scalar distribution)
+        config = builder_with_defaults.latent_variables[0]
+        assert config["event_shape"] == 1
+        assert config["dims_list"] == [1]  # param2 has 1 dimension
+
+    def test_matching_event_shape_vector(
+        self, builder_with_defaults, mock_model_interface, optimizer_chain
+    ):
+        """Test validation passes when dimensions match event shape for vectors."""
+        builder_with_defaults.set_model(mock_model_interface)
+
+        # This should pass: param1 is 2D, MultivariateNormalDiag with 2D has
+        # event_shape=(2,)
+        # No ValueError should be raised
+        builder_with_defaults.add_variational_dist(
+            ["param1"],  # 2D parameter
+            dist_class=tfd.MultivariateNormalDiag,
+            variational_params={"loc": jnp.zeros(2), "scale_diag": jnp.ones(2)},
+            optimizer_chain=optimizer_chain,
+        )
+
+        # Check that event_shape was correctly computed as 2
+        config = builder_with_defaults.latent_variables[0]
+        assert config["event_shape"] == 2
+        assert config["dims_list"] == [2]  # param1 has 2 dimensions
+
+    def test_batch_shape_confusion_error(
+        self, builder_with_defaults, mock_model_interface, optimizer_chain
+    ):
+        """Test that batch shape confusion raises informative error."""
+        builder_with_defaults.set_model(mock_model_interface)
+
+        # This should fail: trying to use batched Normal for 2D parameter
+        # Single variable case - should only show multivariate option
+        with pytest.raises(
+            ValueError,
+            match="use a multivariate distribution with the desired structure instead",
+        ):
+            builder_with_defaults.add_variational_dist(
+                ["param1"],  # 2D parameter
+                dist_class=tfd.Normal,
+                variational_params={
+                    "loc": jnp.zeros(2),
+                    "scale": jnp.ones(2),
+                },  # Creates batch_shape=(2,)
+                optimizer_chain=optimizer_chain,
+            )
+
+    def test_batch_shape_confusion_multiple_vars(
+        self, builder_with_defaults, mock_model_interface, optimizer_chain
+    ):
+        """Test batch shape confusion with multiple variables."""
+        builder_with_defaults.set_model(mock_model_interface)
+
+        # This should fail: param1(2D) + param2(1D) = 3D, but Normal with 3D
+        # params has batch_shape=(3,)
+        with pytest.raises(
+            ValueError,
+            match=r"Total latent variable dim\. \(3\) match batch_shape",
+        ):
+            builder_with_defaults.add_variational_dist(
+                ["param1", "param2"],  # 2D + 1D = 3D total
+                dist_class=tfd.Normal,
+                variational_params={"loc": jnp.zeros(3), "scale": jnp.ones(3)},
+                optimizer_chain=optimizer_chain,
+            )
+
+    def test_general_dimension_mismatch(
+        self, builder_with_defaults, mock_model_interface, optimizer_chain
+    ):
+        """Test general dimension mismatch error."""
+        builder_with_defaults.set_model(mock_model_interface)
+
+        # This should fail: param1 is 2D but MultivariateNormalDiag is 5D
+        with pytest.raises(ValueError, match="must match the event shape"):
+            builder_with_defaults.add_variational_dist(
+                ["param1"],  # 2D parameter
+                dist_class=tfd.MultivariateNormalDiag,
+                variational_params={"loc": jnp.zeros(5), "scale_diag": jnp.ones(5)},
+                optimizer_chain=optimizer_chain,
+            )
+
+
 class TestAddVariationalDist:
     """Test the add_variational_dist method."""
 
