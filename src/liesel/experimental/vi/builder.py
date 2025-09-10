@@ -326,7 +326,7 @@ class OptimizerBuilder:
             If dimensions don't match the event shape or if batch shape confusion
             is detected.
         """
-        # Convert tensors to tuples for clearer error messages
+        # Convert tensors to tuples for the error messages
         event_shape_tuple = (
             tuple(event_shape_tensor.tolist()) if event_shape_tensor.size > 0 else ()
         )
@@ -352,7 +352,7 @@ class OptimizerBuilder:
 
         total_dim = sum(variable_dims[name] for name in latent_variable_names)
 
-        # Check if dimensions match event shape (all good)
+        # Check if dimensions match event shape (All good case)
         if event_shape == total_dim:
             return
 
@@ -361,7 +361,7 @@ class OptimizerBuilder:
             int(jnp.prod(batch_shape_tensor)) if batch_shape_tensor.size > 0 else 0
         )
 
-        # Check for batch shape confusion (common mistake)
+        # Check for batch shape confusion (Case 1 mistake)
         if batch_size == total_dim and batch_size > 1:
             if len(latent_variable_names) > 1:
                 # Multiple variables - show both options
@@ -392,14 +392,14 @@ class OptimizerBuilder:
                     f"This suggests you're trying to model the variational dist. "
                     f"with batched distributions.\n\n"
                     f"In Liesel VI, use a multivariate distribution with the desired "
-                    f"structure instead:\n"
+                    f"independence structure:\n"
                     f"For example, use tfd.MultivariateNormalDiag instead of "
                     f"batched tfd.Normal\n\n"
                     f"Why: Each add_variational_dist call should represent ONE "
                     f"variational distribution."
                 )
 
-        # General dimension mismatch
+        # General dimension mismatch (Case 2 mistake)
         raise ValueError(
             f"Dimension mismatch:\n"
             f"Total latent variable dim.: {total_dim}\n"

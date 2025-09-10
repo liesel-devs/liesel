@@ -238,7 +238,7 @@ class TestDimensionValidation:
         # Single variable case - should only show multivariate option
         with pytest.raises(
             ValueError,
-            match="use a multivariate distribution with the desired structure instead",
+            match="In Liesel VI, use a multivariate distribution",
         ):
             builder_with_defaults.add_variational_dist(
                 ["param1"],  # 2D parameter
@@ -260,7 +260,7 @@ class TestDimensionValidation:
         # params has batch_shape=(3,)
         with pytest.raises(
             ValueError,
-            match=r"Total latent variable dim\. \(3\) match batch_shape",
+            match="In Liesel VI, use one of these approaches instead",
         ):
             builder_with_defaults.add_variational_dist(
                 ["param1", "param2"],  # 2D + 1D = 3D total
