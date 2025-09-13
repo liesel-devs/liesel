@@ -7,13 +7,11 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-
 import pandas as pd
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 from liesel.experimental.vi import Summary
-
 
 # --- Fixtures & helpers ----------------------------------------------
 
@@ -30,7 +28,10 @@ class DummyResults:
 
         dummy_dist2 = tfd.InverseGamma(concentration=1.0, scale=1.0)
 
-        self.final_variational_distributions = {"b": dummy_dist, "sigma_sq": dummy_dist2}
+        self.final_variational_distributions = {
+            "b": dummy_dist,
+            "sigma_sq": dummy_dist2,
+        }
 
         noise = tfd.Uniform(low=-1, high=1).sample(1000, seed=subkey2)
         self.elbo_values = -jnp.square(jnp.arange(11, 1, -0.01)) + noise
@@ -62,7 +63,9 @@ def summary():
 
 
 def sample_cov(X):
-    """Compute sample covariance matrix (unbiased) for X with shape [n_samples, n_features]."""
+    """
+    Compute sample covariance matrix for X with shape [n_samples, n_features].
+    """
     X_centered = X - jnp.mean(X, axis=0)
     cov = (X_centered.T @ X_centered) / (X.shape[0] - 1)
     return cov
@@ -106,7 +109,15 @@ def test_summary_stats_match_theoretical_distributions(summary):
 
 def test_posterior_summary_structure(summary):
     df = summary.compute_posterior_summary()
-    expected_cols = ["variable", "mean", "variance", "2.5%", "97.5%", "hdi_low", "hdi_high"]
+    expected_cols = [
+        "variable",
+        "mean",
+        "variance",
+        "2.5%",
+        "97.5%",
+        "hdi_low",
+        "hdi_high",
+    ]
     assert isinstance(df, pd.DataFrame)
     assert all(col in df.columns for col in expected_cols)
     assert len(df) > 0
@@ -127,9 +138,11 @@ def test_posterior_summary_invalid_shape(summary):
 
 
 def test_posterior_variance_matches_sample_cov(summary):
-    """Compare the variance column from the summary to the empirical covariance diagonal."""
+    """
+    Compare the variance column from the summary to the empirical covariance diagonal.
+    """
     df = summary.compute_posterior_summary()
-    samples = summary.samples["b"]  
+    samples = summary.samples["b"]
     cov_emp = sample_cov(samples)
     var_from_summary = df[df["variable"].str.startswith("b[")]["variance"].values
     diag_cov = jnp.diag(jnp.asarray(cov_emp))
