@@ -307,15 +307,15 @@ class OptimizerBuilder:
 
         Parameters
         ----------
-        latent_variable_names : list[str]
+        latent_variable_names
             List of latent variable names.
-        event_shape_tensor : jnp.ndarray
+        event_shape_tensor
             Event shape tensor from distribution.event_shape_tensor().
-        variable_dims : dict[str, int]
+        variable_dims
             Mapping from variable names to their dimensionalities.
-        batch_shape_tensor : jnp.ndarray
+        batch_shape_tensor
             Batch shape tensor from distribution.batch_shape_tensor().
-        dist_class_name : str
+        dist_class_name
             Name of the distribution class for error messages.
 
         Raises
