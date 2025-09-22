@@ -3,6 +3,7 @@ from typing import Any
 import jax.numpy as jnp
 import optax
 import tensorflow_probability.substrates.jax.bijectors as tfb
+from jax.typing import ArrayLike
 from tensorflow_probability.substrates import jax as tfp
 from tensorflow_probability.substrates.jax.distributions import (
     Distribution as TfpDistribution,
@@ -298,9 +299,9 @@ class OptimizerBuilder:
     def _validate_dimensionality(
         self,
         latent_variable_names: list[str],
-        event_shape_tensor: jnp.ndarray,
+        event_shape_tensor: ArrayLike,
         variable_dims: dict[str, int],
-        batch_shape_tensor: jnp.ndarray,
+        batch_shape_tensor: ArrayLike,
         dist_class_name: str,
     ) -> None:
         """Validate that the total dimensions match the event shape.
