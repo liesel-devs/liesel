@@ -1,4 +1,5 @@
-# test_liesel_interface.py
+"""Unit tests for the VI Interface class."""
+
 import copy
 
 import jax
@@ -7,7 +8,7 @@ import pytest
 
 from liesel.experimental.vi import LieselInterface
 
-
+# --- Dummy model & helper to create interface -------------------------------
 class DummyVar:
     def __init__(self, value, observed=True):
         self.value = jnp.asarray(value)
@@ -41,7 +42,7 @@ def make_interface(y=jnp.arange(5.0), theta=1.0, with_unobserved=True):
     return LieselInterface(model), model
 
 
-# ----- get_params --------------------------------------------------------------
+# --- get_params --------------------------------------------------------------
 
 
 def test_get_params_returns_dict():
@@ -59,7 +60,7 @@ def test_get_params_returns_arrays_and_contains_all_vars():
     assert params["theta"].shape == model.vars["theta"].value.shape
 
 
-# ----- compute_log_prob (full data) -------------------------------------------
+# --- compute_log_prob (full data) -------------------------------------------
 
 
 def test_compute_log_prob_full_equals_model_update():
@@ -82,7 +83,7 @@ def test_compute_log_prob_raises_on_unknown_param():
         interface.compute_log_prob({"does_not_exist": jnp.array(0.0)}, dim_data=5)
 
 
-# ----- compute_log_prob (batching semantics) ----------------------------------
+# --- compute_log_prob (batching semantics) ----------------------------------
 
 
 def test_compute_log_prob_batch_scales_likelihood_only():
@@ -155,7 +156,7 @@ def test_batch_indices_accept_flat_list():
     assert isinstance(out, jnp.ndarray)
 
 
-# ----- _subset_data unit tests -------------------------------------------------
+# --- _subset_data unit tests -------------------------------------------------
 
 
 def test_subset_data_flat_model_2d_observed_rows_in_place():
@@ -229,7 +230,7 @@ def test_subset_data_accepts_tensor_observed_with_leading_batch_axis():
     assert jnp.allclose(model.vars["y"].value, expected)
 
 
-# ----- helper to mirror batch_step index windows ------------------------------
+# --- Helper to mirror batch_step index windows ------------------------------
 
 
 def collect_batch_indices(dim_data: int, batch_size: int, key: jax.Array):
@@ -244,7 +245,7 @@ def collect_batch_indices(dim_data: int, batch_size: int, key: jax.Array):
     return all_indices, batches
 
 
-# ----- applying batch_step indices to flat models -----------------------------
+# --- Applying batch_step indices to flat models -----------------------------
 
 
 def test_batch_step_indices_work_with_flat_1d_2d_and_higherD_observed():

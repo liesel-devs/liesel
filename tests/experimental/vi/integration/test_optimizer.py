@@ -1,3 +1,5 @@
+"""Unit and Integration tests for the Optimizer class."""
+
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -5,16 +7,14 @@ import jax
 import jax.numpy as jnp
 import optax
 import pytest
+import tensorflow_probability.substrates.jax.distributions as tfd
 import tensorflow_probability.substrates.jax.bijectors as tfb
-from tensorflow_probability.substrates import jax as tfp
 
 from liesel.experimental.vi import LieselInterface
 from liesel.experimental.vi.optimizer import Optimizer
 
-tfd = tfp.distributions
 
-
-# ==== Fakes / helpers =========================================================
+# --- Fakes / helpers ----------------------------------------------------------
 
 
 class FakeBijector:
@@ -75,7 +75,7 @@ class DummyInterface:
         return jnp.array(0.0)
 
 
-# ==== Fixtures ================================================================
+# --- Fixtures --------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -248,9 +248,7 @@ def patch_init_optimizer(monkeypatch):
 
     monkeypatch.setattr(Optimizer, "_init_optimizer", fake_init_optimizer)
 
-
-# ==== Tests from file 1 =======================================================
-
+# --- Tests --------------------------------------------------------------------
 
 def test_accepts_tfp_distribution_class(make_latent_config):
     latent = make_latent_config()
@@ -639,9 +637,6 @@ def test_multi_block_update_tree_matches_each_block():
     assert set(updates["beta"].keys()) == set(opt.variational_params["beta"].keys())
     for k in updates["beta"]:
         assert updates["beta"][k].shape == opt.variational_params["beta"][k].shape
-
-
-# ==== Tests from file 2 =======================================================
 
 
 class TestSampleAndLogProbCompute:

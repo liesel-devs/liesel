@@ -5,15 +5,14 @@ from unittest.mock import Mock
 import jax.numpy as jnp
 import optax
 import pytest
+import tensorflow_probability.substrates.jax.distributions as tfd
 import tensorflow_probability.substrates.jax.bijectors as tfb
-from tensorflow_probability.substrates import jax as tfp
 
 from liesel.experimental.vi import LieselInterface, OptimizerBuilder
 
-tfd = tfp.distributions
 
 
-# -- Fixtures --
+# --- Fixtures --------------------------------------------------------------
 
 
 @pytest.fixture
@@ -76,7 +75,7 @@ def optimizer_chain():
     return optax.adam(learning_rate=0.001)
 
 
-# -- Unit Tests - Initialization --
+# --- Unit Tests - Initialization ------------------------------------------
 
 
 class TestOptimizerBuilderInitialization:
@@ -156,7 +155,7 @@ class TestOptimizerBuilderInitialization:
         assert builder.batch_size == batch_size
 
 
-# -- Unit Tests - set_model Method --
+# -- Unit Tests - set_model Method ------------------------------------------
 
 
 class TestSetModel:
@@ -181,7 +180,7 @@ class TestSetModel:
         assert builder_with_defaults._model_interface is second_interface
 
 
-# -- Unit Tests - add_variational_dist Method --
+# --- Unit Tests - add_variational_dist Method --------------------------------
 
 
 class TestAddVariationalDist:
@@ -816,7 +815,7 @@ class TestBuildMethod:
         assert isinstance(optimizer2, DummyOptimizer)
 
 
-# -- Unit Tests - Minimal tests for default bijectors --
+# -- Unit Tests - Minimal tests for default bijectors -----------------------
 
 
 class TestDefaultBijectors:
@@ -862,7 +861,7 @@ def test_validate_dimensionality_will_check_total_dims():
         )
 
 
-# -- Integration Tests - Returning Optimizer --
+# -- Integration Tests - Returning Optimizer ---------------------------------
 
 
 def test_build_returns_optimizer_instance(

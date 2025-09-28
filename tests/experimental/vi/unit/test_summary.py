@@ -1,11 +1,11 @@
+"""Unit tests for the VI Summary class."""
+
 import os
 import tempfile
 
 import jax
 import jax.numpy as jnp
 import matplotlib
-
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 import pytest
@@ -13,7 +13,8 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 
 from liesel.experimental.vi import Summary
 
-# --- Fixtures & helpers ----------------------------------------------
+
+# --- Fixtures & helpers ----------------------------------------------------
 
 
 class DummyResults:
@@ -71,7 +72,7 @@ def sample_cov(X):
     return cov
 
 
-# --- Tests compute_posterior_summary ---------------------------------
+# --- Tests compute_posterior_summary -------------------------------------
 
 
 def test_summary_stats_match_theoretical_distributions(summary):
@@ -149,7 +150,7 @@ def test_posterior_variance_matches_sample_cov(summary):
     assert jnp.allclose(var_from_summary, diag_cov, rtol=0.2)
 
 
-# --- Tests plot_elbo -------------------------------------------------
+# --- Tests plot_elbo ------------------------------------------------------
 
 
 def test_plot_elbo_runs(summary):
@@ -165,7 +166,7 @@ def test_plot_elbo_saves_file(summary):
     plt.close("all")
 
 
-# --- Tests plot_density ----------------------------------------------
+# --- Tests plot_density -----------------------------------------------------
 
 
 def test_plot_density_scalar(summary):
@@ -199,7 +200,7 @@ def test_plot_density_saves_file(summary):
     plt.close("all")
 
 
-# --- Tests plot_pairwise ---------------------------------------------
+# --- Tests plot_pairwise ----------------------------------------------------
 
 
 def test_plot_pairwise_vector(summary):
@@ -227,7 +228,7 @@ def test_plot_pairwise_saves_file(summary):
     plt.close("all")
 
 
-# --- Tests: string representations -----------------------------------
+# --- Tests: string representations ------------------------------------------
 
 
 def test_str_and_repr(summary):
