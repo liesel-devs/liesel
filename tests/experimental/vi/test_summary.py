@@ -154,7 +154,7 @@ def test_posterior_variance_matches_sample_cov(summary):
 
 def test_plot_elbo_runs(summary):
     summary.plot_elbo()
-    plt.close('all')
+    plt.close("all")
 
 
 def test_plot_elbo_saves_file(summary):
@@ -162,7 +162,7 @@ def test_plot_elbo_saves_file(summary):
         path = os.path.join(tmpdir, "elbo.png")
         summary.plot_elbo(save_path=path)
         assert os.path.exists(path)
-    plt.close('all')
+    plt.close("all")
 
 
 # --- Tests plot_density ----------------------------------------------
@@ -170,25 +170,25 @@ def test_plot_elbo_saves_file(summary):
 
 def test_plot_density_scalar(summary):
     summary.plot_density("sigma_sq")
-    plt.close('all')
+    plt.close("all")
 
 
 def test_plot_density_vector(summary):
     summary.plot_density("b")
-    plt.close('all')
+    plt.close("all")
 
 
 def test_plot_density_invalid_variable(summary):
     with pytest.raises(ValueError):
         summary.plot_density("not_a_var")
-    plt.close('all')
+    plt.close("all")
 
 
 def test_plot_density_invalid_dim(summary):
     summary.samples["bad"] = jnp.ones((10, 2, 2, 2))
     with pytest.raises(ValueError):
         summary.plot_density("bad")
-    plt.close('all')
+    plt.close("all")
 
 
 def test_plot_density_saves_file(summary):
@@ -196,7 +196,7 @@ def test_plot_density_saves_file(summary):
         path = os.path.join(tmpdir, "density.png")
         summary.plot_density("b", save_path=path)
         assert os.path.exists(path)
-    plt.close('all')
+    plt.close("all")
 
 
 # --- Tests plot_pairwise ---------------------------------------------
@@ -204,18 +204,19 @@ def test_plot_density_saves_file(summary):
 
 def test_plot_pairwise_vector(summary):
     summary.plot_pairwise("b")
-    plt.close('all')
+    plt.close("all")
+
 
 def test_plot_pairwise_scalar(summary):
     summary.plot_pairwise("sigma_sq")
-    plt.close('all')
+    plt.close("all")
 
 
 def test_plot_pairwise_invalid_dim(summary):
     summary.samples["bad"] = jnp.ones((10, 2, 2))
     with pytest.raises(ValueError):
         summary.plot_pairwise("bad")
-    plt.close('all')
+    plt.close("all")
 
 
 def test_plot_pairwise_saves_file(summary):
@@ -223,7 +224,7 @@ def test_plot_pairwise_saves_file(summary):
         path = os.path.join(tmpdir, "pairwise.png")
         summary.plot_pairwise("b", save_path=path)
         assert os.path.exists(path)
-    plt.close('all')
+    plt.close("all")
 
 
 # --- Tests: string representations -----------------------------------
