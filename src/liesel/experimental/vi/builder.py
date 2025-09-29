@@ -403,9 +403,9 @@ class OptimizerBuilder:
         else:
             config["full_rank_key"] = latent_variable_names[0]
 
-        distribution = self._validate_and_build_distributions(config)
-
-        self._validate_fully_reparameterized_dist(distribution, latent_variable_names)
+        distribution = self._validate_and_build_distributions(
+            config, latent_variable_names
+        )
 
         event_shape = int(jnp.prod(jnp.array(distribution.event_shape.as_list())))
         config["event_shape"] = event_shape
@@ -425,53 +425,32 @@ class OptimizerBuilder:
 
         self.latent_variables.append(config)
 
-    def _validate_fully_reparameterized_dist(
-        self, distribution: TfpDistribution, latent_variable_names: list[str]
-    ) -> None:
-        """Validate that the distribution is fully reparameterized.
-
-        Parameters
-        ----------
-        distribution : TfpDistribution
-            The distribution to validate.
-        latent_variable_names : list[str]
-            List of latent variable names for error reporting.
-
-        Raises
-        ------
-        NotImplementedError
-            If the distribution is not fully reparameterized.
-        """
-        if distribution.reparameterization_type != tfd.FULLY_REPARAMETERIZED:
-            raise NotImplementedError(
-                f"Only fully reparameterized distributions are supported for "
-                f"latent variable(s) {latent_variable_names}. "
-                f"Got reparameterization type: {distribution.reparameterization_type}"
-            )
-
     def _validate_and_build_distributions(
-        self, config: dict[str, Any]
+        self, config: dict[str, Any], latent_variable_names: list[str]
     ) -> TfpDistribution:
         """Validate and build a single variational distribution from configuration.
 
-        This method attempts to build the distribution to validate that the
-        configuration is correct and returns the built distribution for further
-        inspection (e.g., event shape).
+        This method builds the distribution and validates that it's fully
+        reparameterized.
 
         Parameters
         ----------
         config : dict[str, Any]
             Configuration dictionary for a single latent variable.
+        latent_variable_names : list[str]
+            List of latent variable names for error reporting.
 
         Returns
         -------
         TfpDistribution
-            The built distribution object.
+            The built and validated distribution object.
 
         Raises
         ------
         ValueError
             If the distribution cannot be built due to invalid configuration.
+        NotImplementedError
+            If the distribution is not fully reparameterized.
         """
         try:
             dist_class = config["dist_class"]
@@ -501,6 +480,15 @@ class OptimizerBuilder:
                     else {}
                 ),
             )
+
+            # Validate that the distribution is fully reparameterized
+            if distribution.reparameterization_type != tfd.FULLY_REPARAMETERIZED:
+                raise NotImplementedError(
+                    f"Only fully reparameterized distributions are supported for "
+                    f"latent variable(s) {latent_variable_names}. "
+                    f"Got reparameterization type: "
+                    f"{distribution.reparameterization_type}"
+                )
 
             return distribution
 
