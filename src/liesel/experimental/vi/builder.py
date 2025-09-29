@@ -164,8 +164,10 @@ class OptimizerBuilder:
     def set_model(self, interface: LieselInterface) -> None:
         """Set the model interface for the optimizer.
 
-        Parameters:
-            interface (LieselInterface): An instance that provides access to the model.
+        Parameters
+        ----------
+        interface
+            An instance that provides access to the model.
         """
         self._model_interface = interface
 
@@ -185,12 +187,14 @@ class OptimizerBuilder:
 
         Parameters
         ----------
-        dist_class : Callable
+        dist_class
             TensorFlow Probability distribution class (e.g., ``tfd.Normal``).
-        parameter_bijectors : dict[str, tfb.Bijector] | None, default None
-            Optional user-supplied bijectors.
-        variational_params : dict[str, float] | None, default None
-            Optional initial variational parameters.
+        parameter_bijectors
+            Optional user-supplied bijectors. If ``None`` (default), no custom
+            bijectors are used.
+        variational_params
+            Optional initial variational parameters. If ``None`` (default), no
+            initial parameters are provided.
 
         Raises
         ------
@@ -216,11 +220,13 @@ class OptimizerBuilder:
         """Return the default constraining bijectors for all parameters of a
         TensorFlow Probability distribution.
 
-        Parameters:
-            dist_class : Callable
+        Parameters
+        ----------
+        dist_class
             The TensorFlow Probability distribution class (e.g., ``tfd.Normal``).
 
-        Returns:
+        Returns
+        -------
         dict[str, tfb.Bijector]
             A mapping of parameter names to their default constraining bijectors,
             provided by ``dist_class.parameter_properties()``.
@@ -248,9 +254,9 @@ class OptimizerBuilder:
 
         Parameters
         ----------
-        default_bijectors : dict[str, tfb.Bijector]
+        default_bijectors
             Mapping of parameter names to their default bijectors.
-        custom_bijectors : dict[str, tfb.Bijector] | None
+        custom_bijectors
             Optional mapping of parameter names to user-supplied bijectors that
             should replace the defaults.
 
@@ -269,7 +275,7 @@ class OptimizerBuilder:
 
         Parameters
         ----------
-        latent_variable_names : list[str]
+        latent_variable_names
             List of latent variable names.
 
         Returns
@@ -303,11 +309,11 @@ class OptimizerBuilder:
 
         Parameters
         ----------
-        latent_variable_names : list[str]
+        latent_variable_names
             List of latent variable names.
-        event_shape : int
+        event_shape
             Event shape of the variational distribution.
-        variable_dims : dict[str, int]
+        variable_dims
             Mapping from variable names to their dimensionalities.
 
         Raises
@@ -349,18 +355,22 @@ class OptimizerBuilder:
         user passes a custom bijector, then the forward should be from unconstrained ->
         constrained and the inverse method from constrained -> unconstrained.
 
-        Parameters:
-            latent_variable_names (List[str]): List of parameter names.
-            dist_class (Callable): Distribution class (e.g., tfd.Normal).
-            variational_params (Dict[str, float]): Dictionary containing the initial
-            parameters.
-            fixed_distribution_params (Optional[Dict[str, float]]): Optional fixed
-            parameters for the distribution.
-            optimizer_chain (optax.GradientTransformation): Optimizer chain for
-            gradient transformations.
-            variational_param_bijectors (dict[str, tfb.Bijector] | None) - Optional
-            overrides that replace the parameter's default tfp.util.ParameterProperties
-            bijector, mapping the parameter from unconstrained to a constrained space.
+        Parameters
+        ----------
+        latent_variable_names
+            List of parameter names.
+        dist_class
+            Distribution class (e.g., ``tfd.Normal``).
+        variational_params
+            Dictionary containing the initial parameters.
+        fixed_distribution_params
+            Optional fixed parameters for the distribution.
+        optimizer_chain
+            Optimizer chain for gradient transformations.
+        variational_param_bijectors
+            Optional overrides that replace the parameter's default
+            ``tfp.util.ParameterProperties`` bijector, mapping the parameter from
+            unconstrained to a constrained space.
         """
 
         if isinstance(latent_variable_names, str):
@@ -435,9 +445,9 @@ class OptimizerBuilder:
 
         Parameters
         ----------
-        config : dict[str, Any]
+        config
             Configuration dictionary for a single latent variable.
-        latent_variable_names : list[str]
+        latent_variable_names
             List of latent variable names for error reporting.
 
         Returns
