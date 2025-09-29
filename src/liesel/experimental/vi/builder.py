@@ -94,7 +94,7 @@ class OptimizerBuilder:
     >>>
     >>> sigma_sq_dist = lsl.Dist(tfd.InverseGamma, concentration=a, scale=b_var_dist)
     >>> sigma_sq = lsl.Var.new_param(1.0, sigma_sq_dist, name="sigma_sq")
-    >>> log_sigma_sq = sigma_sq.transform(None)
+    >>> log_sigma_sq = sigma_sq.transform()
     >>>
     >>> # sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma")
     >>>
