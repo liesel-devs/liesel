@@ -1,5 +1,6 @@
 # test_liesel_interface.py
 import copy
+
 import jax
 import jax.numpy as jnp
 import pytest
@@ -30,8 +31,9 @@ class DummyModel:
         y = self.vars["y"].value
         theta = self.vars["theta"].value
         self.log_lik = -0.5 * jnp.sum((y - theta) ** 2)
-        self.log_prior = -0.5 * jnp.sum(theta ** 2)
+        self.log_prior = -0.5 * jnp.sum(theta**2)
         self.log_prob = self.log_lik + self.log_prior
+
 
 # --- Fixtures -----------------------------------------------------------------
 def make_interface(y=jnp.arange(5.0), theta=1.0, with_unobserved=True):
@@ -40,6 +42,7 @@ def make_interface(y=jnp.arange(5.0), theta=1.0, with_unobserved=True):
 
 
 # ----- get_params --------------------------------------------------------------
+
 
 def test_get_params_returns_dict():
     interface, _ = make_interface()
@@ -57,6 +60,7 @@ def test_get_params_returns_arrays_and_contains_all_vars():
 
 
 # ----- compute_log_prob (full data) -------------------------------------------
+
 
 def test_compute_log_prob_full_equals_model_update():
     interface, model = make_interface(y=jnp.array([0.0, 1.0, 2.0, 3.0]), theta=1.5)
@@ -80,6 +84,7 @@ def test_compute_log_prob_raises_on_unknown_param():
 
 # ----- compute_log_prob (batching semantics) ----------------------------------
 
+
 def test_compute_log_prob_batch_scales_likelihood_only():
     y = jnp.array([0.0, 1.0, 2.0, 3.0, 4.0])
     theta = 1.0
@@ -96,7 +101,7 @@ def test_compute_log_prob_batch_scales_likelihood_only():
 
     y_b = y[batch_idx]
     ll_batch = -0.5 * jnp.sum((y_b - theta) ** 2)
-    expected = (N / len(batch_idx)) * ll_batch + (-0.5 * theta ** 2)
+    expected = (N / len(batch_idx)) * ll_batch + (-0.5 * theta**2)
     assert jnp.allclose(got, expected)
 
 
@@ -152,6 +157,7 @@ def test_batch_indices_accept_flat_list():
 
 # ----- _subset_data unit tests -------------------------------------------------
 
+
 def test_subset_data_flat_model_2d_observed_rows_in_place():
     y2d = jnp.arange(5 * 3, dtype=float).reshape(5, 3)
     interface, model = make_interface(y=y2d, theta=0.0, with_unobserved=True)
@@ -171,7 +177,9 @@ def test_subset_data_flat_model_2d_observed_rows_in_place():
 
 
 def test_subset_data_empty_indices_yields_empty_first_axis():
-    interface, model = make_interface(y=jnp.arange(6.0), theta=0.0, with_unobserved=True)
+    interface, model = make_interface(
+        y=jnp.arange(6.0), theta=0.0, with_unobserved=True
+    )
     theta_before = model.vars["theta"].value.copy()
     u_before = model.vars["u"].value.copy()
 
@@ -183,10 +191,12 @@ def test_subset_data_empty_indices_yields_empty_first_axis():
 
 
 def test_subset_data_flat_model_1d_2d_observed_only_in_place():
-    interface, model = make_interface(y=jnp.array([10., 20., 30.]), theta=1.5, with_unobserved=True)
-    model.vars["theta_test"] = DummyVar(jnp.array([[1, 9, 1],
-                                                   [1, 9, 1],
-                                                   [1, 9, 1]]), observed=True)
+    interface, model = make_interface(
+        y=jnp.array([10.0, 20.0, 30.0]), theta=1.5, with_unobserved=True
+    )
+    model.vars["theta_test"] = DummyVar(
+        jnp.array([[1, 9, 1], [1, 9, 1], [1, 9, 1]]), observed=True
+    )
 
     y_before = model.vars["y"].value.copy()
     theta_before = model.vars["theta"].value.copy()
@@ -197,7 +207,9 @@ def test_subset_data_flat_model_1d_2d_observed_only_in_place():
 
     assert result is model
     assert jnp.allclose(model.vars["y"].value, y_before[jnp.array([0, 2])])
-    assert jnp.allclose(model.vars["theta_test"].value, theta_before_test[jnp.array([0, 2])])
+    assert jnp.allclose(
+        model.vars["theta_test"].value, theta_before_test[jnp.array([0, 2])]
+    )
     assert jnp.allclose(model.vars["theta"].value, theta_before)
     assert jnp.allclose(model.vars["u"].value, u_before)
 
@@ -219,6 +231,7 @@ def test_subset_data_accepts_tensor_observed_with_leading_batch_axis():
 
 # ----- helper to mirror batch_step index windows ------------------------------
 
+
 def collect_batch_indices(dim_data: int, batch_size: int, key: jax.Array):
     _, perm_key = jax.random.split(key)
     all_indices = jax.random.permutation(perm_key, dim_data)
@@ -233,19 +246,24 @@ def collect_batch_indices(dim_data: int, batch_size: int, key: jax.Array):
 
 # ----- applying batch_step indices to flat models -----------------------------
 
+
 def test_batch_step_indices_work_with_flat_1d_2d_and_higherD_observed():
     N, B = 9, 3
     key = jax.random.PRNGKey(2)
     _, batches = collect_batch_indices(N, B, key)
 
     for idx in batches:
-        interface, m1 = make_interface(y=jnp.arange(float(N)), theta=0.0, with_unobserved=False)
+        interface, m1 = make_interface(
+            y=jnp.arange(float(N)), theta=0.0, with_unobserved=False
+        )
         y_before = m1.vars["y"].value.copy()
         interface._subset_data(m1, idx)
         assert m1.vars["y"].value.shape == (idx.size,)
         assert jnp.allclose(m1.vars["y"].value, y_before[idx, ...])
 
-        interface, m2 = make_interface(y=jnp.arange(float(N * 3)).reshape(N, 3), theta=0.0, with_unobserved=False)
+        interface, m2 = make_interface(
+            y=jnp.arange(float(N * 3)).reshape(N, 3), theta=0.0, with_unobserved=False
+        )
         Y2_before = m2.vars["y"].value.copy()
         interface._subset_data(m2, idx)
         assert m2.vars["y"].value.shape == (idx.size, 3)
