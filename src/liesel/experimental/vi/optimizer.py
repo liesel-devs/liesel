@@ -92,10 +92,11 @@ class Optimizer:
         return variational_dists_class
 
     def _init_variational_params(self) -> dict[str, Any]:
-        """Initialize the variational_params dictionary using unconstrained parameters for
-        optimization. The variational_params dict from builder.py contains constrained
-        parameters; for optimization, we store unconstrained parameters by
-        applying the inverse bijector.
+        """Initialize the variational_params dictionary using unconstrained parameters.
+
+        The variational_params dict from builder.py contains constrained parameters;
+        for optimization, we store unconstrained parameters by applying the inverse
+        bijector.
         """
         variational_params = {}
         for key, config in self.latent_vars_config.items():
@@ -309,14 +310,14 @@ class Optimizer:
             Parameters
             ----------
             state : tuple
-                Contains (epoch, variational_params, opt_state, rng_key, best_elbo, window_counter,
-                elbo_array).
+                Contains (epoch, variational_params, opt_state, rng_key, best_elbo,
+                window_counter, elbo_array).
 
             Returns
             -------
             tuple
-                Updated state: (epoch+1, variational_params, opt_state, rng_key, new_best_elbo,
-                new_window_counter, elbo_array).
+                Updated state: (epoch+1, variational_params, opt_state, rng_key,
+                new_best_elbo, new_window_counter, elbo_array).
             """
             (
                 epoch,
@@ -392,8 +393,8 @@ class Optimizer:
             Parameters
             ----------
             state : tuple
-                Contains (epoch, variational_params, opt_state, rng_key, best_elbo, window_counter,
-                elbo_array).
+                Contains (epoch, variational_params, opt_state, rng_key, best_elbo,
+                window_counter, elbo_array).
 
             Returns
             -------
