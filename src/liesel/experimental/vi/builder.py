@@ -109,7 +109,6 @@ class OptimizerBuilder:
     >>> builder = OptimizerBuilder(
     ...     seed=0,
     ...     n_epochs=10000,
-    ...     batch_size=None,
     ...     S=32,
     ...     patience_tol=0.001,
     ...     window_size=100,
