@@ -370,12 +370,24 @@ class OptimizerBuilder:
             dist_class, variational_param_bijectors, variational_params
         )
 
-        parameter_bijectors_default = self._obtain_parameter_default_bijectors(
-            dist_class
-        )
-        parameter_bijectors = self._merge_parameter_bijectors(
-            parameter_bijectors_default, variational_param_bijectors
-        )
+        # Only obtain default bijectors for parameters not provided by the user
+        parameter_properties = dist_class.parameter_properties()
+        parameter_bijectors = {}
+
+        for param_name in parameter_properties.keys():
+            if (
+                variational_param_bijectors
+                and param_name in variational_param_bijectors
+            ):
+                # Use user-provided bijector
+                parameter_bijectors[param_name] = variational_param_bijectors[
+                    param_name
+                ]
+            else:
+                # Use default bijector
+                parameter_bijectors[param_name] = parameter_properties[
+                    param_name
+                ].default_constraining_bijector_fn()
 
         config = {
             "names": latent_variable_names,
