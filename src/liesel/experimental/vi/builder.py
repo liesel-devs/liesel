@@ -95,7 +95,7 @@ class OptimizerBuilder:
     >>>
     >>> sigma_sq_dist = lsl.Dist(tfd.InverseGamma, concentration=a, scale=b_var_dist)
     >>> sigma_sq = lsl.Var.new_param(1.0, sigma_sq_dist, name="sigma_sq")
-    >>> log_sigma_sq = sigma_sq.transform()
+    >>> log_sigma_sq = sigma_sq.transform(None)
     >>>
     >>> # sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma")
     >>>
@@ -110,6 +110,7 @@ class OptimizerBuilder:
     >>> builder = OptimizerBuilder(
     ...     seed=0,
     ...     n_epochs=10000,
+    ...     batch_size=None,
     ...     S=32,
     ...     patience_tol=0.001,
     ...     window_size=100,
@@ -165,10 +166,8 @@ class OptimizerBuilder:
     def set_model(self, interface: LieselInterface) -> None:
         """Set the model interface for the optimizer.
 
-        Parameters
-        ----------
-        interface
-            An instance that provides access to the model.
+        Parameters:
+            interface (LieselInterface): An instance that provides access to the model.
         """
         self._model_interface = interface
 
@@ -181,25 +180,18 @@ class OptimizerBuilder:
         """Validate that custom keys are unique and match the distribution parameters.
 
         All keys supplied in ``parameter_bijectors`` and ``variational_params`` must be
-        unique (within their respective dictionaries) **and** belong to the set of valid
-        parameter names returned by
-        ``dist_class.parameter_properties().keys()``.  A ``ValueError`` is raised
-        if any requirement is violated.
-        All keys supplied in ``parameter_bijectors`` and ``variational_params`` must be
         unique (within their respective dictionaries) **and** belong to the set of
         valid parameter names returned by ``dist_class.parameter_properties().keys()``.
         A ``ValueError`` is raised if any requirement is violated.
 
         Parameters
         ----------
-        dist_class
+        dist_class : Callable
             TensorFlow Probability distribution class (e.g., ``tfd.Normal``).
-        parameter_bijectors
-            Optional user-supplied bijectors. If ``None`` (default), no custom
-            bijectors are used.
-        variational_params
-            Optional initial variational parameters. If ``None`` (default), no
-            initial parameters are provided.
+        parameter_bijectors : dict[str, tfb.Bijector] | None, default None
+            Optional user-supplied bijectors.
+        variational_params : dict[str, float] | None, default None
+            Optional initial variational parameters.
 
         Raises
         ------
@@ -210,13 +202,14 @@ class OptimizerBuilder:
         valid_keys = set(dist_class.parameter_properties().keys())
 
         def _check(name: str, mapping: dict[str, Any] | None) -> None:
-            if mapping is not None:
-                invalid = set(mapping) - valid_keys
-                if invalid:
-                    raise ValueError(
-                        f"Invalid key(s) in '{name}': {invalid}. "
-                        f"Valid keys are: {valid_keys}."
-                    )
+            if mapping is None:
+                return
+            invalid = set(mapping) - valid_keys
+            if invalid:
+                raise ValueError(
+                    f"Invalid key(s) in '{name}': {invalid}. "
+                    f"Valid keys are: {valid_keys}."
+                )
 
         _check("parameter_bijectors", parameter_bijectors)
         _check("variational_params", variational_params)
@@ -225,13 +218,11 @@ class OptimizerBuilder:
         """Return the default constraining bijectors for all parameters of a
         TensorFlow Probability distribution.
 
-        Parameters
-        ----------
-        dist_class
+        Parameters:
+            dist_class : Callable
             The TensorFlow Probability distribution class (e.g., ``tfd.Normal``).
 
-        Returns
-        -------
+        Returns:
         dict[str, tfb.Bijector]
             A mapping of parameter names to their default constraining bijectors,
             provided by ``dist_class.parameter_properties()``.
@@ -259,9 +250,9 @@ class OptimizerBuilder:
 
         Parameters
         ----------
-        default_bijectors
+        default_bijectors : dict[str, tfb.Bijector]
             Mapping of parameter names to their default bijectors.
-        custom_bijectors
+        custom_bijectors : dict[str, tfb.Bijector] | None
             Optional mapping of parameter names to user-supplied bijectors that
             should replace the defaults.
 
@@ -280,7 +271,7 @@ class OptimizerBuilder:
 
         Parameters
         ----------
-        latent_variable_names
+        latent_variable_names : list[str]
             List of latent variable names.
 
         Returns
@@ -293,7 +284,6 @@ class OptimizerBuilder:
         KeyError
             If a parameter is not found in the model.
         """
-        assert self._model_interface is not None
         assert self._model_interface is not None
         model_params = self._model_interface.get_params()
 
@@ -319,11 +309,7 @@ class OptimizerBuilder:
         Parameters
         ----------
         latent_variable_names
-        latent_variable_names
             List of latent variable names.
-        event_shape
-            Event shape of the variational distribution.
-        variable_dims
         event_shape_tensor
             Event shape tensor from distribution.event_shape_tensor().
         variable_dims
@@ -438,31 +424,13 @@ class OptimizerBuilder:
 
         The user passed variational parameters (here named ``variational_params``) are
         expected to be in the to the distribution class according space which is the
-        The user passed variational parameters (here named ``variational_params``) are
-        expected to be in the to the distribution class according space which is the
         constrained space.
 
         The ``variational_param_bijectors`` can be used to specify bijectors
         for the variational parameters. The expected behaviour is that if the
-        user passes a custom bijector, then the forward should be from unconstrained ->
+        user passes custom, then the forward should be from unconstrained ->
         constrained and the inverse method from constrained -> unconstrained.
 
-        Parameters
-        ----------
-        latent_variable_names
-            List of parameter names.
-        dist_class
-            Distribution class (e.g., ``tfd.Normal``).
-        variational_params
-            Dictionary containing the initial parameters.
-        fixed_distribution_params
-            Optional fixed parameters for the distribution.
-        optimizer_chain
-            Optimizer chain for gradient transformations.
-        variational_param_bijectors
-            Optional overrides that replace the parameter's default
-            ``tfp.util.ParameterProperties`` bijector, mapping the parameter from
-            unconstrained to a constrained space.
         Parameters:
             latent_variable_names (List[str]): List of parameter names.
             dist_class (Callable): Distribution class (e.g., tfd.Normal).
@@ -477,7 +445,6 @@ class OptimizerBuilder:
             bijector, mapping the parameter from unconstrained to a constrained space.
         """
 
-
         if isinstance(latent_variable_names, str):
             latent_variable_names = [latent_variable_names]
 
@@ -485,24 +452,12 @@ class OptimizerBuilder:
             dist_class, variational_param_bijectors, variational_params
         )
 
-        # Only obtain default bijectors for parameters not provided by the user
-        parameter_properties = dist_class.parameter_properties()
-        parameter_bijectors = {}
-
-        for param_name in parameter_properties.keys():
-            if (
-                variational_param_bijectors
-                and param_name in variational_param_bijectors
-            ):
-                # Use user-provided bijector
-                parameter_bijectors[param_name] = variational_param_bijectors[
-                    param_name
-                ]
-            else:
-                # Use default bijector
-                parameter_bijectors[param_name] = parameter_properties[
-                    param_name
-                ].default_constraining_bijector_fn()
+        parameter_bijectors_default = self._obtain_parameter_default_bijectors(
+            dist_class
+        )
+        parameter_bijectors = self._merge_parameter_bijectors(
+            parameter_bijectors_default, variational_param_bijectors
+        )
 
         config = {
             "names": latent_variable_names,
@@ -556,32 +511,53 @@ class OptimizerBuilder:
 
         self.latent_variables.append(config)
 
-    def _validate_and_build_distributions(
-        self, config: dict[str, Any], latent_variable_names: list[str]
-    ) -> TfpDistribution:
-        """Validate and build a single variational distribution from configuration.
-
-        This method builds the distribution and validates that it's fully
-        reparameterized.
+    def _validate_fully_reparameterized_dist(
+        self, distribution: TfpDistribution, latent_variable_names: list[str]
+    ) -> None:
+        """Validate that the distribution is fully reparameterized.
 
         Parameters
         ----------
-        config
-            Configuration dictionary for a single latent variable.
-        latent_variable_names
+        distribution : TfpDistribution
+            The distribution to validate.
+        latent_variable_names : list[str]
             List of latent variable names for error reporting.
+
+        Raises
+        ------
+        NotImplementedError
+            If the distribution is not fully reparameterized.
+        """
+        if distribution.reparameterization_type != tfd.FULLY_REPARAMETERIZED:
+            raise NotImplementedError(
+                f"Only fully reparameterized distributions are supported for "
+                f"latent variable(s) {latent_variable_names}. "
+                f"Got reparameterization type: {distribution.reparameterization_type}"
+            )
+
+    def _validate_and_build_distributions(
+        self, config: dict[str, Any]
+    ) -> TfpDistribution:
+        """Validate and build a single variational distribution from configuration.
+
+        This method attempts to build the distribution to validate that the
+        configuration is correct and returns the built distribution for further
+        inspection (e.g., event shape).
+
+        Parameters
+        ----------
+        config : dict[str, Any]
+            Configuration dictionary for a single latent variable.
 
         Returns
         -------
         TfpDistribution
-            The built and validated distribution object.
+            The built distribution object.
 
         Raises
         ------
         ValueError
             If the distribution cannot be built due to invalid configuration.
-        NotImplementedError
-            If the distribution is not fully reparameterized.
         """
         try:
             dist_class = config["dist_class"]
@@ -594,9 +570,6 @@ class OptimizerBuilder:
                 for p_name, p_val in variational_params.items():
                     bij = parameter_bijectors.get(p_name)
                     if bij is not None:
-                        variational_params_constrained[p_name] = bij.forward(
-                            bij.inverse(p_val)
-                        )
                         variational_params_constrained[p_name] = bij.forward(
                             bij.inverse(p_val)
                         )
@@ -614,15 +587,6 @@ class OptimizerBuilder:
                     else {}
                 ),
             )
-
-            # Validate that the distribution is fully reparameterized
-            if distribution.reparameterization_type != tfd.FULLY_REPARAMETERIZED:
-                raise NotImplementedError(
-                    f"Only fully reparameterized distributions are supported for "
-                    f"latent variable(s) {latent_variable_names}. "
-                    f"Got reparameterization type: "
-                    f"{distribution.reparameterization_type}"
-                )
 
             return distribution
 

@@ -305,10 +305,10 @@ class TestMVNDegenerateBatches:
     def test_shape_unequal_sample_shapes(self, beta, K, tau2) -> None:
         """Input samples must be of the same size."""
         mvn = MultivariateNormalDegenerate(loc=0.0, prec=K / tau2)
-        with pytest.raises(TypeError):
+        with pytest.raises(ValueError):
             mvn.log_prob([[beta, beta], [beta]])
 
-        with pytest.raises(TypeError):
+        with pytest.raises(ValueError):
             mvn.log_prob([[beta, beta], beta])
 
     def test_from_penalty_batch(self, beta, K, tau2) -> None:

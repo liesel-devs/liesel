@@ -40,21 +40,21 @@ class Optimizer:
 
         Parameters
         ----------
-        seed
+        seed : int
             Random seed for reproducibility.
-        n_epochs
+        n_epochs : int
             Number of epochs to run the optimization.
-        S
+        S : int
             Number of Monte Carlo samples.
-        model_interface
+        model_interface : LieselInterface
             Interface to access the model parameters data and quantities.
-        latent_variables
+        latent_variables : Dict[str, Dict]
             Dict of configurations for each latent variable.
-        batch_size
-            Batch size for data subsetting. If ``None``, the full dataset is used.
-        patience_tol
+        batch_size : int, optional
+            Batch size for data subsetting; if None, the full dataset is used.
+        patience_tol : float, optional
             Tolerance for early stopping based on ELBO improvements.
-        window_size
+        window_size : int, optional
             Number of epochs to wait before early stopping if no improvement occurs.
         """
         self.seed = seed
@@ -92,11 +92,10 @@ class Optimizer:
         return variational_dists_class
 
     def _init_variational_params(self) -> dict[str, Any]:
-        """Initialize the variational_params dictionary using unconstrained parameters.
-
-        The variational_params dict from builder.py contains constrained parameters;
-        for optimization, we store unconstrained parameters by applying the inverse
-        bijector.
+        """Initialize the variational_params dictionary using unconstrained parameters
+        for optimization. The variational_params dict from builder.py contains
+        constrained parameters; for optimization, we store unconstrained parameters by
+        applying the inverse bijector.
         """
         variational_params = {}
         for key, config in self.latent_vars_config.items():
@@ -195,24 +194,24 @@ class Optimizer:
 
             Parameters
             ----------
-            current_variational_params
+            current_variational_params : dict
                 Current variational parameters.
-            opt_state
+            opt_state : object
                 Current optimizer state.
-            rng_key
+            rng_key : jax.random.PRNGKey
                 Current random key.
-            dim_data
+            dim_data : int
                 Total number of data points.
-            batch_size
+            batch_size : int
                 Size of the current batch.
-            batch_indices
+            batch_indices : array-like
                 Indices for the current batch.
-            S
+            S : int
                 Number of Monte Carlo samples.
 
             Returns
             -------
-            new_variational_params : dict
+            new_variational_paramss : dict
                 Updated variational parameters.
             new_opt_state : object
                 Updated optimizer state.
@@ -230,10 +229,10 @@ class Optimizer:
             updates, new_opt_state = self.optimizer.update(
                 grads, opt_state, current_variational_params
             )
-            new_variational_params = optax.apply_updates(
+            new_variational_paramss = optax.apply_updates(
                 current_variational_params, updates
             )
-            return new_variational_params, new_opt_state, loss_val, new_rng_key
+            return new_variational_paramss, new_opt_state, loss_val, new_rng_key
 
         def epoch_batches(
             variational_params: dict[str, Any],
@@ -244,11 +243,11 @@ class Optimizer:
 
             Parameters
             ----------
-            variational_params
+            variational_params : dict
                 Current variational parameters.
-            opt_state
+            opt_state : object
                 Current optimizer state.
-            rng_key
+            rng_key : jax.random.PRNGKey
                 Current random key.
 
             Returns
@@ -309,7 +308,7 @@ class Optimizer:
 
             Parameters
             ----------
-            state
+            state : tuple
                 Contains (epoch, variational_params, opt_state, rng_key, best_elbo,
                 window_counter, elbo_array).
 
@@ -392,7 +391,7 @@ class Optimizer:
 
             Parameters
             ----------
-            state
+            state : tuple
                 Contains (epoch, variational_params, opt_state, rng_key, best_elbo,
                 window_counter, elbo_array).
 
@@ -436,17 +435,17 @@ class Optimizer:
 
         Parameters
         ----------
-        variational_params
+        variational_params : dict
             Current variational parameters.
-        rng_key
+        rng_key : jax.random.PRNGKey
             Random key for sampling.
-        dim_data
+        dim_data : int
             Total number of data points.
-        batch_size
+        batch_size : int
             Batch size used for subsetting the data.
-        batch_indices
+        batch_indices : array-like
             Indices corresponding to the current batch.
-        S
+        S : int
             Number of Monte Carlo samples.
 
         Returns
@@ -482,9 +481,9 @@ class Optimizer:
 
         Parameters
         ----------
-        variational_params
+        variational_params : dict
             Dictionary of variational parameters.
-        rng_key
+        rng_key : jax.random.PRNGKey
             Random key for sampling.
 
         Returns
