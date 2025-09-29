@@ -177,8 +177,8 @@ class OptimizerBuilder:
     ) -> None:
         """Validate that custom keys are unique and match the distribution parameters.
 
-        All keys supplied in ``parameter_bijectors`` and ``variational_params`` must be unique
-        (within their respective dictionaries) **and** belong to the set of valid
+        All keys supplied in ``parameter_bijectors`` and ``variational_params`` must be
+        unique (within their respective dictionaries) **and** belong to the set of valid
         parameter names returned by
         ``dist_class.parameter_properties().keys()``.  A ``ValueError`` is raised
         if any requirement is violated.
@@ -201,14 +201,13 @@ class OptimizerBuilder:
         valid_keys = set(dist_class.parameter_properties().keys())
 
         def _check(name: str, mapping: dict[str, Any] | None) -> None:
-            if mapping is None:
-                return
-            invalid = set(mapping) - valid_keys
-            if invalid:
-                raise ValueError(
-                    f"Invalid key(s) in '{name}': {invalid}. "
-                    f"Valid keys are: {valid_keys}."
-                )
+            if mapping is not None:
+                invalid = set(mapping) - valid_keys
+                if invalid:
+                    raise ValueError(
+                        f"Invalid key(s) in '{name}': {invalid}. "
+                        f"Valid keys are: {valid_keys}."
+                    )
 
         _check("parameter_bijectors", parameter_bijectors)
         _check("variational_params", variational_params)
@@ -283,6 +282,7 @@ class OptimizerBuilder:
         KeyError
             If a parameter is not found in the model.
         """
+        assert self._model_interface is not None
         model_params = self._model_interface.get_params()
         dims = {}
 
@@ -340,8 +340,8 @@ class OptimizerBuilder:
         """Add a latent variable to the optimizer configuration by adding a variational
         distribution for each latent variable independently (Mean-Field Approach).
 
-        The user passed variational parameters (here named ``variational_params``) are expected
-        to be in the to the distribution class according space which is the
+        The user passed variational parameters (here named ``variational_params``) are
+        expected to be in the to the distribution class according space which is the
         constrained space.
 
         The ``variational_param_bijectors`` can be used to specify bijectors
@@ -352,7 +352,8 @@ class OptimizerBuilder:
         Parameters:
             latent_variable_names (List[str]): List of parameter names.
             dist_class (Callable): Distribution class (e.g., tfd.Normal).
-            variational_params (Dict[str, float]): Dictionary containing the initial parameters.
+            variational_params (Dict[str, float]): Dictionary containing the initial
+            parameters.
             fixed_distribution_params (Optional[Dict[str, float]]): Optional fixed
             parameters for the distribution.
             optimizer_chain (optax.GradientTransformation): Optimizer chain for
