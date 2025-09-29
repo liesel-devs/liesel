@@ -211,7 +211,7 @@ class Optimizer:
 
             Returns
             -------
-            new_variational_paramss : dict
+            new_variational_params : dict
                 Updated variational parameters.
             new_opt_state : object
                 Updated optimizer state.
@@ -229,11 +229,15 @@ class Optimizer:
             updates, new_opt_state = self.optimizer.update(
                 grads, opt_state, current_variational_params
             )
-            new_variational_paramss = optax.apply_updates(current_variational_params, updates)
-            return new_variational_paramss, new_opt_state, loss_val, new_rng_key
+            new_variational_params = optax.apply_updates(
+                current_variational_params, updates
+            )
+            return new_variational_params, new_opt_state, loss_val, new_rng_key
 
         def epoch_batches(
-            variational_params: dict[str, Any], opt_state: OptState, rng_key: jax.random.PRNGKey
+            variational_params: dict[str, Any],
+            opt_state: OptState,
+            rng_key: jax.random.PRNGKey,
         ) -> tuple[dict[str, Any], OptState, jax.random.PRNGKey, float]:
             """Process all batches in one epoch and compute the mean ELBO.
 
@@ -268,7 +272,13 @@ class Optimizer:
                     all_indices, (start,), (batch_size,)
                 )
                 variational_params, opt_state, loss_val, rng_key = step(
-                    variational_params, opt_state, rng_key, dim_data, batch_size, batch_indices, S
+                    variational_params,
+                    opt_state,
+                    rng_key,
+                    dim_data,
+                    batch_size,
+                    batch_indices,
+                    S,
                 )
                 epoch_elbos = epoch_elbos.at[i].set(-loss_val)
                 return variational_params, opt_state, rng_key, epoch_elbos, all_indices
@@ -308,9 +318,15 @@ class Optimizer:
                 Updated state: (epoch+1, variational_params, opt_state, rng_key, new_best_elbo,
                 new_window_counter, elbo_array).
             """
-            epoch, variational_params, opt_state, rng_key, best_elbo, window_counter, elbo_array = (
-                state
-            )
+            (
+                epoch,
+                variational_params,
+                opt_state,
+                rng_key,
+                best_elbo,
+                window_counter,
+                elbo_array,
+            ) = state
             variational_params, opt_state, rng_key, current_elbo = epoch_batches(
                 variational_params, opt_state, rng_key
             )
@@ -384,15 +400,27 @@ class Optimizer:
             bool
                 True if the loop should continue, False otherwise.
             """
-            epoch, variational_params, opt_state, rng_key, best_elbo, window_counter, elbo_array = (
-                state
-            )
+            (
+                epoch,
+                variational_params,
+                opt_state,
+                rng_key,
+                best_elbo,
+                window_counter,
+                elbo_array,
+            ) = state
             return (epoch < n_epochs) & (window_counter < window_size)
 
         final_state = jax.lax.while_loop(loop_cond, epoch_body, initial_state)
-        epoch_count, variational_params, opt_state, rng_key, best_elbo, window_counter, elbo_array = (
-            final_state
-        )
+        (
+            epoch_count,
+            variational_params,
+            opt_state,
+            rng_key,
+            best_elbo,
+            window_counter,
+            elbo_array,
+        ) = final_state
 
         self.variational_params = variational_params
         self.opt_state = opt_state
@@ -400,7 +428,9 @@ class Optimizer:
         self.elbo_values = elbo_array[:epoch_count].tolist()
         self.final_variational_distributions = self.get_final_distributions()
 
-    def _elbo(self, variational_params, rng_key, dim_data, batch_size, batch_indices, S):
+    def _elbo(
+        self, variational_params, rng_key, dim_data, batch_size, batch_indices, S
+    ):
         """Compute the negative ELBO (Evidence Lower Bound) for variational inference.
 
         Parameters
