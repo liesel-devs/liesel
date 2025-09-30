@@ -554,7 +554,9 @@ class OptimizerBuilder:
                 for p_name, p_val in variational_params.items():
                     bij = parameter_bijectors.get(p_name)
                     if bij is not None:
-                        variational_params_constrained[p_name] = bij.forward(bij.inverse(p_val))
+                        variational_params_constrained[p_name] = bij.forward(
+                            bij.inverse(p_val)
+                        )
                     else:
                         variational_params_constrained[p_name] = p_val
             else:
@@ -582,7 +584,6 @@ class OptimizerBuilder:
             )
 
         return distribution
-
 
     def build(self) -> Optimizer:
         """Build and return an Optimizer instance based on the current configuration.
