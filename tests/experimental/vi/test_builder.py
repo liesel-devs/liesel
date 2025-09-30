@@ -10,6 +10,7 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 
 from liesel.experimental.vi import LieselInterface, OptimizerBuilder
 
+
 @pytest.fixture
 def mock_model_interface():
     """Create a mock LieselInterface parameters for testing."""

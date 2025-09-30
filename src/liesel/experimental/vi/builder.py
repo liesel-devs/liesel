@@ -111,8 +111,8 @@ class OptimizerBuilder:
     ...     seed=0,
     ...     n_epochs=10000,
     ...     S=32,
-    ...     patience_tol=0.001,
-    ...     window_size=100,
+    ...     patience_tol=1e-4,
+    ...     window_size=500,
     ... )
     >>> # Set up the model interface.
     >>> interface = LieselInterface(model)
@@ -135,8 +135,15 @@ class OptimizerBuilder:
     >>> # Add a univariate latent variable for b.
     >>> builder.add_variational_dist(
     ...     ["b"],
-    ...     dist_class=tfd.Normal,
-    ...     variational_params={"loc": jnp.zeros(4), "scale": jnp.ones(4)},
+    ...     dist_class=tfd.MultivariateNormalDiag,
+    ...     variational_params={"loc": jnp.zeros(4), "scale_diag": jnp.ones(4)},
+    ...     optimizer_chain=optimizer_chain2,
+    ... )
+    >>> # Or use joint multivariate latent variable for b and sigma_sq
+    >>> builder.add_variational_dist(
+    ...     ["b", "sigma_sq_transformed"],
+    ...     dist_class=tfd.MultivariateNormalDiag,
+    ...     variational_params={"loc": jnp.zeros(5), "scale_diag": jnp.ones(5)},
     ...     optimizer_chain=optimizer_chain2,
     ... )
     >>> # Build and run the optimizer.
