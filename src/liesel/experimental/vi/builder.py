@@ -542,76 +542,47 @@ class OptimizerBuilder:
     def _validate_and_build_distributions(
         self, config: dict[str, Any], latent_variable_names: list[str]
     ) -> TfpDistribution:
-        """Validate and build a single variational distribution from configuration.
+        dist_class = config["dist_class"]
+        variational_params = config["variational_params"]
+        fixed_distribution_params = config.get("fixed_distribution_params", {})
+        parameter_bijectors = config.get("variational_param_bijectors", None)
 
-        This method builds the distribution and validates that it's fully
-        reparameterized.
-
-        Parameters
-        ----------
-        config
-            Configuration dictionary for a single latent variable.
-        latent_variable_names
-            List of latent variable names for error reporting.
-
-        Returns
-        -------
-        TfpDistribution
-            The built and validated distribution object.
-
-        Raises
-        ------
-        ValueError
-            If the distribution cannot be built due to invalid configuration.
-        NotImplementedError
-            If the distribution is not fully reparameterized.
-        """
         try:
-            dist_class = config["dist_class"]
-            variational_params = config["variational_params"]
-            fixed_distribution_params = config.get("fixed_distribution_params", {})
-            parameter_bijectors = config.get("variational_param_bijectors", None)
-
+            # Build-time: bijectors + distribution ctor (wrap any failure)
             if parameter_bijectors is not None:
                 variational_params_constrained = {}
                 for p_name, p_val in variational_params.items():
                     bij = parameter_bijectors.get(p_name)
                     if bij is not None:
-                        variational_params_constrained[p_name] = bij.forward(
-                            bij.inverse(p_val)
-                        )
+                        variational_params_constrained[p_name] = bij.forward(bij.inverse(p_val))
                     else:
                         variational_params_constrained[p_name] = p_val
             else:
                 variational_params_constrained = variational_params
 
-            # Build the distribution
             distribution = dist_class(
                 **variational_params_constrained,
-                **(
-                    fixed_distribution_params
-                    if fixed_distribution_params is not None
-                    else {}
-                ),
+                **(fixed_distribution_params or {}),
             )
-
-            # Validate that the distribution is fully reparameterized
-            if distribution.reparameterization_type != tfd.FULLY_REPARAMETERIZED:
-                raise NotImplementedError(
-                    f"Only fully reparameterized distributions are supported for "
-                    f"latent variable(s) {latent_variable_names}. "
-                    f"Got reparameterization type: "
-                    f"{distribution.reparameterization_type}"
-                )
-
-            return distribution
 
         except Exception as e:
             names = config.get("names", ["unknown"])
-            raise ValueError(
+            msg = (
                 "Failed to build variational distribution for latent variable(s) "
-                f"{names}: {str(e)}"
-            ) from e
+                f"{names}: {e}"
+            )
+            raise ValueError(msg) from e
+
+        # Validation-time: preserve the specific error type/message
+        if distribution.reparameterization_type != tfd.FULLY_REPARAMETERIZED:
+            raise AttributeError(
+                "Only fully reparameterized distributions are supported for "
+                f"latent variable(s) {latent_variable_names}. "
+                f"Got reparameterization type: {distribution.reparameterization_type}"
+            )
+
+        return distribution
+
 
     def build(self) -> Optimizer:
         """Build and return an Optimizer instance based on the current configuration.
