@@ -1,26 +1,18 @@
-from collections.abc import Callable
-from typing import Any, TypedDict
+from typing import Any
 
-import jax
 import jax.numpy as jnp
 import optax
 import tensorflow_probability.substrates.jax.bijectors as tfb
+from jax.typing import ArrayLike
 from tensorflow_probability.substrates import jax as tfp
-
-from liesel.distributions import MultivariateNormalLogCholeskyParametrization
+from tensorflow_probability.substrates.jax.distributions import (
+    Distribution as TfpDistribution,
+)
 
 from .interface import LieselInterface
 from .optimizer import Optimizer
 
 tfd = tfp.distributions
-
-
-class Phi_MultivariateNormalLogCholeskyParametrization(TypedDict):
-    """A TypedDict to specify the parameters for a multivariate normal distribution
-    using a log-Cholesky parametrization."""
-
-    loc: jnp.ndarray
-    log_cholesky_parametrization: jnp.ndarray
 
 
 class OptimizerBuilder:
@@ -36,15 +28,12 @@ class OptimizerBuilder:
     #  sample size, batch size).
     #. Create an instance of the model interface with :class:`.LieselInterface`
        and set it with :meth:`.set_model`.
-    #. Add latent variables with :meth:`.add_latent_variable` and/or
-       :meth:`.add_multivariate_latent_variable`.
+    #. Add latent variables with :meth:`.add_variational_dist`.
     #. Build an :class:`~.optimizer.Optimizer` with :meth:`.build`.
     #. Run optimization using :meth:`.fit`.
 
     Optionally, you can also:
 
-    - Configure transformation functions for latent variables using
-      the `transform` parameter.
     - Specify fixed distribution parameters and optimizer chains
       for each latent variable.
 
@@ -73,12 +62,10 @@ class OptimizerBuilder:
 
     Examples
     --------
-    The following examples demonstrate two ways to add latent variables:
-
-    **Example 1: Adding latent variables separately**
+    **Adding latent variables**
 
     In this example, we add a univariate latent variable for `sigma_sq` and another for
-    `b` using separate calls to :meth:`.add_latent_variable` (Mean-Field).
+    `b` using separate calls to :meth:`.add_variational_dist` (Mean-Field).
 
     >>> import jax.numpy as jnp
     >>> import optax
@@ -86,41 +73,47 @@ class OptimizerBuilder:
     >>> from tensorflow_probability.substrates import jax as tfp
     >>> tfd = tfp.distributions
     >>>
+    >>> import liesel.model as lsl
+    >>> from liesel.experimental.vi import OptimizerBuilder, LieselInterface
+    >>>
+    >>> key = jax.random.PRNGKey(0)
+    >>> X = jax.random.normal(key, (100, 4))
+    >>> true_b = jnp.array([1.0, -2.0, 0.5, 3.0])
+    >>> y = X @ true_b + jax.random.normal(key, (100,)) * 0.5
+    >>>
     >>> # Set up a minimal model.
     >>> X_m = lsl.Var.new_obs(X, name="X_m")
     >>> dist_b = lsl.Dist(tfd.Normal, loc=0.0, scale=10.0)
     >>> b = lsl.Var.new_param(jnp.array([10.0, 10.0, 10.0, 10.0]), dist_b, name="b")
     >>> def linear_model(X, b):
-    >>> return X @ b
-
+    ...     return X @ b
+    >>>
     >>> mu = lsl.Var.new_calc(linear_model, X=X_m, b=b, name="mu")
-
-    >>> a = lsl.Var.new_value(0.01, name="a")
-    >>> b_var_dist = lsl.new_value(0.01, name="b_var_dist")
-
+    >>>
+    >>> a = lsl.Var.new_value(0.001, name="a")
+    >>> b_var_dist = lsl.Var.new_value(0.001, name="b_var_dist")
+    >>>
     >>> sigma_sq_dist = lsl.Dist(tfd.InverseGamma, concentration=a, scale=b_var_dist)
     >>> sigma_sq = lsl.Var.new_param(1.0, sigma_sq_dist, name="sigma_sq")
-    >>> sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma")
-
-
-    >>> y_dist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
+    >>> log_sigma_sq = sigma_sq.transform()
+    >>>
+    >>> # sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma")
+    >>>
+    >>> y_dist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma_sq)
     >>> y_m = lsl.Var.new_obs(y, y_dist, name="y_m")
-
+    >>>
     >>> gb = lsl.GraphBuilder().add(y_m)
     >>> gb.plot_vars()
-
-    >>> model = gb.build_model()
     >>>
+    >>> model = gb.build_model()
     >>> # Initialize the builder.
     >>> builder = OptimizerBuilder(
     ...     seed=0,
     ...     n_epochs=10000,
-    ...     batch_size=64,
     ...     S=32,
-    ...     patience_tol=0.001,
-    ...     window_size=100,
+    ...     patience_tol=1e-4,
+    ...     window_size=500,
     ... )
-    >>>
     >>> # Set up the model interface.
     >>> interface = LieselInterface(model)
     >>> builder.set_model(interface)
@@ -128,63 +121,31 @@ class OptimizerBuilder:
     >>> # Define optimizer chains.
     >>> optimizer_chain1 = optax.chain(optax.clip(1), optax.adam(learning_rate=0.001))
     >>> optimizer_chain2 = optax.chain(optax.clip(1), optax.adam(learning_rate=0.001))
-    >>>
     >>> # Add a univariate latent variable for sigma_sq.
-    >>> builder.add_latent_variable(
-    ...     ["sigma_sq"],
+    >>> builder.add_variational_dist(
+    ...     ["sigma_sq_transformed"],
     ...     dist_class=tfd.Normal,
-    ...     phi={"loc": 1.0, "scale": 0.5},
+    ...     variational_params={"loc": 1.0, "scale": 0.5},
     ...     optimizer_chain=optimizer_chain1,
-    ...     transform=tfb.Exp(),
-    ... )
-    >>>
-    >>> # Add a univariate latent variable for b.
-    >>> builder.add_latent_variable(
-    ...     ["b"],
-    ...     dist_class=tfd.Normal,
-    ...     phi={"loc": jnp.zeros(4), "scale": jnp.ones(4)},
-    ...     optimizer_chain=optimizer_chain2,
-    ...     transform=None,
-    ... )
-    >>>
-    >>> # Build and run the optimizer.
-    >>> optimizer = builder.build()
-    >>> optimizer.fit()
-
-    **Example 2: Adding latent variables jointly as multivariate (Gaussian Full-Rank)**
-
-    In this example, we add both `sigma_sq` and `b` together using a single call to
-    :meth:`.add_multivariate_latent_variable`. Assume the same model
-    specification as in the previous example.
-
-    >>> # Initialize the builder as before.
-    >>> builder = OptimizerBuilder(
-    ...     seed=0,
-    ...     n_epochs=10000,
-    ...     batch_size=64,
-    ...     S=32,
-    ...     patience_tol=0.001,
-    ...     window_size=100,
-    ... )
-    >>>
-    >>> # Set up the model interface.
-    >>> builder.set_model(interface)
-    >>>
-    >>> # Define an optimizer chain.
-    >>> optimizer_chain = optax.chain(optax.clip(1), optax.adam(learning_rate=0.001))
-    >>>
-    >>> # Add a multivariate latent variable for both b and sigma_sq.
-    >>> builder.add_multivariate_latent_variable(
-    ...     ["b", "sigma_sq"],
-    ...     phi={
-    ...         "loc": jnp.ones(5),
-    ...         "log_cholesky_parametrization": builder.make_log_cholesky_like(5),
+    ...     variational_param_bijectors={
+    ...         "loc": tfb.Identity(),
+    ...         "scale": tfb.Softplus(),
     ...     },
-    ...     fixed_distribution_params={"validate_args": True, "d": 5},
-    ...     optimizer_chain=optimizer_chain,
-    ...     transform=None,
     ... )
-    >>>
+    >>> # Add a univariate latent variable for b.
+    >>> builder.add_variational_dist(
+    ...     ["b"],
+    ...     dist_class=tfd.MultivariateNormalDiag,
+    ...     variational_params={"loc": jnp.zeros(4), "scale_diag": jnp.ones(4)},
+    ...     optimizer_chain=optimizer_chain2,
+    ... )
+    >>> # Or use joint multivariate latent variable for b and sigma_sq
+    >>> builder.add_variational_dist(
+    ...     ["b", "sigma_sq_transformed"],
+    ...     dist_class=tfd.MultivariateNormalDiag,
+    ...     variational_params={"loc": jnp.zeros(5), "scale_diag": jnp.ones(5)},
+    ...     optimizer_chain=optimizer_chain2,
+    ... )
     >>> # Build and run the optimizer.
     >>> optimizer = builder.build()
     >>> optimizer.fit()
@@ -205,125 +166,423 @@ class OptimizerBuilder:
         self.window_size = window_size
         self.batch_size = batch_size
         self.S = S
-        # self._model_interface = None
-        # self.latent_variables = []
         self._model_interface: LieselInterface | None = None
         self.latent_variables: list[dict[str, Any]] = []
 
     def set_model(self, interface: LieselInterface) -> None:
         """Set the model interface for the optimizer.
 
-        Parameters:
-            interface (LieselInterface): An instance that provides access to the model.
+        Parameters
+        ----------
+        interface
+            An instance that provides access to the model.
         """
         self._model_interface = interface
 
-    def add_latent_variable(
+    def _validate_latent_variable_keys(
         self,
-        names: list[str],
-        dist_class: Callable,
+        dist_class: type[TfpDistribution],
+        parameter_bijectors: dict[str, tfb.Bijector] | None = None,
+        variational_params: dict[str, float] | None = None,
+    ) -> None:
+        """Validate that custom keys are unique and match the distribution parameters.
+
+        All keys supplied in ``parameter_bijectors`` and ``variational_params`` must be
+        unique (within their respective dictionaries) **and** belong to the set of valid
+        parameter names returned by
+        ``dist_class.parameter_properties().keys()``.  A ``ValueError`` is raised
+        if any requirement is violated.
+
+        Parameters
+        ----------
+        dist_class
+            TensorFlow Probability distribution class (e.g., ``tfd.Normal``).
+        parameter_bijectors
+            Optional user-supplied bijectors. If ``None`` (default), no custom
+            bijectors are used.
+        variational_params
+            Optional initial variational parameters. If ``None`` (default), no
+            initial parameters are provided.
+
+        Raises
+        ------
+        ValueError
+            If duplicate keys are found or if a key is not a valid parameter
+            of ``dist_class``.
+        """
+        valid_keys = set(dist_class.parameter_properties().keys())
+
+        def _check(name: str, mapping: dict[str, Any] | None) -> None:
+            if mapping is not None:
+                invalid = set(mapping) - valid_keys
+                if invalid:
+                    raise ValueError(
+                        f"Invalid key(s) in '{name}': {invalid}. "
+                        f"Valid keys are: {valid_keys}."
+                    )
+
+        _check("parameter_bijectors", parameter_bijectors)
+        _check("variational_params", variational_params)
+
+    def _obtain_parameter_default_bijectors(self, dist_class):
+        """Return the default constraining bijectors for all parameters of a
+        TensorFlow Probability distribution.
+
+        Parameters
+        ----------
+        dist_class
+            The TensorFlow Probability distribution class (e.g., ``tfd.Normal``).
+
+        Returns
+        -------
+        dict[str, tfb.Bijector]
+            A mapping of parameter names to their default constraining bijectors,
+            provided by ``dist_class.parameter_properties()``.
+        """
+        parameter_properties = dist_class.parameter_properties()
+        parameter_names = parameter_properties.keys()
+        parameter_default_bijectors = {
+            parameter_name: parameter_properties[
+                f"{parameter_name}"
+            ].default_constraining_bijector_fn()
+            for parameter_name in parameter_names
+        }
+        return parameter_default_bijectors
+
+    def _merge_parameter_bijectors(
+        self,
+        default_bijectors: dict[str, tfb.Bijector],
+        custom_bijectors: dict[str, tfb.Bijector] | None,
+    ) -> dict[str, tfb.Bijector]:
+        """Merge default and custom parameter bijectors.
+
+        Default bijectors are taken from the distribution’s parameter properties,
+        while custom bijectors (if provided) override any defaults for matching
+        parameter names.
+
+        Parameters
+        ----------
+        default_bijectors
+            Mapping of parameter names to their default bijectors.
+        custom_bijectors
+            Optional mapping of parameter names to user-supplied bijectors that
+            should replace the defaults.
+
+        Returns
+        -------
+        dict[str, tfb.Bijector]
+            A combined mapping where custom bijectors take precedence.
+        """
+        merged_dict = default_bijectors | (
+            custom_bijectors if custom_bijectors is not None else {}
+        )
+        return merged_dict
+
+    def _get_latent_var_dims(self, latent_variable_names: list[str]) -> dict[str, int]:
+        """Get the dimensionality of each latent variable from the model.
+
+        Parameters
+        ----------
+        latent_variable_names
+            List of latent variable names.
+
+        Returns
+        -------
+        dict[str, int]
+            Mapping from variable names to their dimensionalities.
+
+        Raises
+        ------
+        KeyError
+            If a parameter is not found in the model.
+        """
+        assert self._model_interface is not None
+        model_params = self._model_interface.get_params()
+
+        dims = {}
+
+        for pname in latent_variable_names:
+            if pname not in model_params:
+                raise KeyError(f"Parameter {pname} not found in model parameters")
+            dims[pname] = int(jnp.prod(jnp.array(model_params[pname].shape)))
+
+        return dims
+
+    def _validate_dimensionality(
+        self,
+        latent_variable_names: list[str],
+        event_shape_tensor: ArrayLike,
+        variable_dims: dict[str, int],
+        batch_shape_tensor: ArrayLike,
+        dist_class_name: str,
+    ) -> None:
+        """Validate that the total dimensions match the event shape.
+
+        Parameters
+        ----------
+        latent_variable_names
+            List of latent variable names.
+        event_shape_tensor
+            Event shape tensor from distribution.event_shape_tensor().
+        variable_dims
+            Mapping from variable names to their dimensionalities.
+        batch_shape_tensor
+            Batch shape tensor from distribution.batch_shape_tensor().
+        dist_class_name
+            Name of the distribution class for error messages.
+
+        Raises
+        ------
+        NotImplementedError
+            If event shape represents a matrix or higher-dimensional array.
+        ValueError
+            If dimensions don't match the event shape or if batch shape confusion
+            is detected.
+        """
+        # Convert tensors to tuples for the error messages
+        event_shape_tuple = (
+            tuple(event_shape_tensor.tolist()) if event_shape_tensor.size > 0 else ()
+        )
+        batch_shape_tuple = (
+            tuple(batch_shape_tensor.tolist()) if batch_shape_tensor.size > 0 else ()
+        )
+
+        # Check if event shape represents a matrix
+        if len(event_shape_tuple) > 1:
+            raise NotImplementedError(
+                f"Matrix-valued event shapes are not supported.\n"
+                f"The initialization of the {dist_class_name} has "
+                f"event_shape={event_shape_tuple}.\n"
+                f"Currently, only scalar or vector-valued event shapes are "
+                f"supported\n"
+                f"(event shapes like () or (n,), not shapes like (n, m))."
+            )
+
+        # Calculate flattened event shape
+        event_shape = (
+            int(jnp.prod(event_shape_tensor)) if event_shape_tensor.size > 0 else 1
+        )
+
+        total_dim = sum(variable_dims[name] for name in latent_variable_names)
+
+        # Check if dimensions match event shape (All good case)
+        if event_shape == total_dim:
+            return
+
+        # Get batch size for additional validation
+        batch_size = (
+            int(jnp.prod(batch_shape_tensor)) if batch_shape_tensor.size > 0 else 0
+        )
+
+        # Check for batch shape confusion (Case 1 mistake)
+        if batch_size == total_dim and batch_size > 1:
+            if len(latent_variable_names) > 1:
+                # Multiple variables - show both options
+                var_list = ", ".join([f"'{name}'" for name in latent_variable_names])
+                raise ValueError(
+                    f"Dimension mismatch:\n"
+                    f"Total latent variable dim. ({total_dim}) match batch_shape="
+                    f"{batch_shape_tuple}, not event_shape={event_shape_tuple}.\n"
+                    f"This suggests you're trying to model the variational dist. "
+                    f"with batched distributions.\n\n"
+                    f"In Liesel VI, use one of these approaches instead:\n\n"
+                    f"1) Separate add_variational_dist calls for the respective set "
+                    f"of independent latent variables:\n"
+                    f"   [{var_list}]\n\n"
+                    f"2) Use a multivariate distribution with the desired "
+                    f"independence structure:\n"
+                    f"   For example, use tfd.MultivariateNormalDiag instead of "
+                    f"batched tfd.Normal\n\n"
+                    f"Why: Each add_variational_dist call should represent ONE "
+                    f"variational distribution."
+                )
+            else:
+                # Single variable - only show multivariate distribution option
+                raise ValueError(
+                    f"Dimension mismatch:\n"
+                    f"Total latent variable dim. ({total_dim}) match batch_shape="
+                    f"{batch_shape_tuple}, not event_shape={event_shape_tuple}.\n"
+                    f"This suggests you're trying to model the variational dist. "
+                    f"with batched distributions.\n\n"
+                    f"In Liesel VI, use a multivariate distribution with the desired "
+                    f"independence structure:\n"
+                    f"For example, use tfd.MultivariateNormalDiag instead of "
+                    f"batched tfd.Normal\n\n"
+                    f"Why: Each add_variational_dist call should represent ONE "
+                    f"variational distribution."
+                )
+
+        # General dimension mismatch (Case 2 mistake)
+        raise ValueError(
+            f"Dimension mismatch:\n"
+            f"Total latent variable dim.: {total_dim}\n"
+            f"Distribution event_shape: {event_shape_tuple}\n\n"
+            f"The total dimensions of your latent variables must match the "
+            f"event shape."
+        )
+
+    def add_variational_dist(
+        self,
+        latent_variable_names: list[str],
+        dist_class: type[TfpDistribution],
         *,
-        phi: dict[str, float],
+        variational_params: dict[str, float],
         fixed_distribution_params: dict[str, float] | None = None,
         optimizer_chain: optax.GradientTransformation,
-        transform: Callable | tfb.Bijector | None = None,
+        variational_param_bijectors: dict[str, tfb.Bijector] | None = None,
     ) -> None:
         """Add a latent variable to the optimizer configuration by adding a variational
         distribution for each latent variable independently (Mean-Field Approach).
 
-        The 'transform' parameter can be:
-          - None
-          - A Python callable (performance optimized using JAX), e.g.:
-            def custom_transform(z):
-                z_transformed = jnp.exp(z)
-                logdet = jnp.sum(z)
-                return z_transformed, logdet
-          - A TFP Bijector instance (e.g., tfb.Exp() or tfb.Sigmoid(low=a, high=b)).
+        The user passed variational parameters (here named ``variational_params``) are
+        expected to be in the to the distribution class according space which is the
+        constrained space.
 
-        Parameters:
-            names (List[str]): List of parameter names.
-            dist_class (Callable): Distribution class (e.g., tfd.Normal).
-            phi (Dict[str, float]): Dictionary containing the initial parameters.
-            fixed_distribution_params (Optional[Dict[str, float]]): Optional fixed
-            parameters for the distribution.
-            optimizer_chain (optax.GradientTransformation): Optimizer chain for gradient
-            transformations.
-            transform (Optional[Union[Callable, tfb.Bijector]]): Transformation to
-            apply on the latent variable.
+        The ``variational_param_bijectors`` can be used to specify bijectors
+        for the variational parameters. The expected behaviour is that if the
+        user passes a custom bijector, then the forward should be from unconstrained ->
+        constrained and the inverse method from constrained -> unconstrained.
+
+        Parameters
+        ----------
+        latent_variable_names
+            List of parameter names.
+        dist_class
+            Distribution class (e.g., ``tfd.Normal``).
+        variational_params
+            Dictionary containing the initial parameters.
+        fixed_distribution_params
+            Optional fixed parameters for the distribution.
+        optimizer_chain
+            Optimizer chain for gradient transformations.
+        variational_param_bijectors
+            Optional overrides that replace the parameter's default
+            ``tfp.util.ParameterProperties`` bijector, mapping the parameter from
+            unconstrained to a constrained space.
         """
-        if isinstance(names, str):
-            names = [names]
-        self.latent_variables.append(
-            {
-                "names": names,
-                "dist_class": dist_class,
-                "phi": phi,
-                "fixed_distribution_params": fixed_distribution_params,
-                "optimizer_chain": optimizer_chain,
-                "transform": transform,
-            }
+
+        if isinstance(latent_variable_names, str):
+            latent_variable_names = [latent_variable_names]
+
+        self._validate_latent_variable_keys(
+            dist_class, variational_param_bijectors, variational_params
         )
 
-    def add_multivariate_latent_variable(
-        self,
-        names: list[str],
-        phi: Phi_MultivariateNormalLogCholeskyParametrization | None = None,
-        *,
-        fixed_distribution_params: dict[str, float] | None = None,
-        optimizer_chain: optax.GradientTransformation,
-        transform: Callable | tfb.Bijector | None = None,
-    ) -> None:
-        """Adds a multivariate latent variable to the optimizer configuration (Gaussian
-        Full-Rank) with shared covariance of different latent variables.
+        # Only obtain default bijectors for parameters not provided by the user
+        parameter_properties = dist_class.parameter_properties()
+        parameter_bijectors = {}
 
-        If fixed_distribution_params does not include 'd' (the total dimension),
-        it is computed from the model's parameter shapes. If phi is
-        not provided, a default is generated with ones for the location and a
-        computed log-Cholesky vector.
+        for param_name in parameter_properties.keys():
+            if (
+                variational_param_bijectors
+                and param_name in variational_param_bijectors
+            ):
+                # Use user-provided bijector
+                parameter_bijectors[param_name] = variational_param_bijectors[
+                    param_name
+                ]
+            else:
+                # Use default bijector
+                parameter_bijectors[param_name] = parameter_properties[
+                    param_name
+                ].default_constraining_bijector_fn()
 
-        Parameters:
-            names (List[str]): List of parameter names to be grouped as a
-            multivariate variable.
-            phi (Optional[Phi_MultivariateNormalLogCholeskyParametrization]): Initial
-            parameters for the distribution.
-            fixed_distribution_params (Optional[Dict[str, float]]): Optional
-            fixed parameters for the distribution.
-            optimizer_chain (optax.GradientTransformation): Optimizer chain for
-            gradient transformations.
-            transform (Optional[Union[Callable, tfb.Bijector]]): Transformation to apply
-            on the latent variable.
-        """
-        if fixed_distribution_params is None:
-            fixed_distribution_params = {}
-        assert self._model_interface is not None, (
-            "Model interface not set. Call set_model(...) first."
+        config = {
+            "names": latent_variable_names,
+            "dist_class": dist_class,
+            "variational_params": variational_params,
+            "fixed_distribution_params": fixed_distribution_params,
+            "optimizer_chain": optimizer_chain,
+            "variational_param_bijectors": parameter_bijectors,
+        }
+
+        if len(latent_variable_names) > 1:
+            config["full_rank_key"] = "_".join(latent_variable_names)
+        else:
+            config["full_rank_key"] = latent_variable_names[0]
+
+        distribution = self._validate_and_build_distributions(
+            config, latent_variable_names
         )
 
-        if "d" not in fixed_distribution_params:
-            d = sum(
-                jnp.array(self._model_interface.model.vars[var].value).size
-                for var in names
+        # Get shape tensors for validation
+        event_shape_tensor = distribution.event_shape_tensor()
+        batch_shape_tensor = distribution.batch_shape_tensor()
+        dist_class_name = dist_class.__name__
+
+        variable_dims = self._get_latent_var_dims(latent_variable_names)
+        config["variable_dims"] = variable_dims
+        config["dims_list"] = [int(v) for v in variable_dims.values()]
+        dims_list = config["dims_list"]
+        if len(dims_list) > 1:
+            import numpy as np
+
+            split_indices = list(np.cumsum(dims_list)[:-1])
+        else:
+            split_indices = []
+        config["split_indices"] = split_indices
+
+        # Validate dimensionality with shape tensors
+        self._validate_dimensionality(
+            latent_variable_names,
+            event_shape_tensor,
+            variable_dims,
+            batch_shape_tensor,
+            dist_class_name,
+        )
+
+        # Calculate flattened event shape for config after validation
+        event_shape = (
+            int(jnp.prod(event_shape_tensor)) if event_shape_tensor.size > 0 else 1
+        )
+        config["event_shape"] = event_shape
+
+        self.latent_variables.append(config)
+
+    def _validate_and_build_distributions(
+        self, config: dict[str, Any], latent_variable_names: list[str]
+    ) -> TfpDistribution:
+        dist_class = config["dist_class"]
+        variational_params = config["variational_params"]
+        fixed_distribution_params = config.get("fixed_distribution_params", {})
+        parameter_bijectors = config.get("variational_param_bijectors", None)
+
+        try:
+            # Build-time: bijectors + distribution ctor (wrap any failure)
+            if parameter_bijectors is not None:
+                variational_params_constrained = {}
+                for p_name, p_val in variational_params.items():
+                    bij = parameter_bijectors.get(p_name)
+                    if bij is not None:
+                        variational_params_constrained[p_name] = bij.forward(bij.inverse(p_val))
+                    else:
+                        variational_params_constrained[p_name] = p_val
+            else:
+                variational_params_constrained = variational_params
+
+            distribution = dist_class(
+                **variational_params_constrained,
+                **(fixed_distribution_params or {}),
             )
-            fixed_distribution_params["d"] = d
 
-        d = int(fixed_distribution_params["d"])
+        except Exception as e:
+            names = config.get("names", ["unknown"])
+            msg = (
+                "Failed to build variational distribution for latent variable(s) "
+                f"{names}: {e}"
+            )
+            raise ValueError(msg) from e
 
-        if phi is None:
-            phi = {
-                "loc": jnp.ones(d),
-                "log_cholesky_parametrization": self.make_log_cholesky_like(d),
-            }
+        # Validation-time: preserve the specific error type/message
+        if distribution.reparameterization_type != tfd.FULLY_REPARAMETERIZED:
+            raise AttributeError(
+                "Only fully reparameterized distributions are supported for "
+                f"latent variable(s) {latent_variable_names}. "
+                f"Got reparameterization type: {distribution.reparameterization_type}"
+            )
 
-        self.latent_variables.append(
-            {
-                "names": names,
-                "dist_class": MultivariateNormalLogCholeskyParametrization,
-                "phi": phi,
-                "fixed_distribution_params": fixed_distribution_params,
-                "optimizer_chain": optimizer_chain,
-                "transform": transform,
-            }
-        )
+        return distribution
+
 
     def build(self) -> Optimizer:
         """Build and return an Optimizer instance based on the current configuration.
@@ -337,6 +596,15 @@ class OptimizerBuilder:
                 "Model interface not set. Call builder.set_model(...) first."
             )
 
+        latent_variables_dict = {}
+        for config in self.latent_variables:
+            names = config["names"]
+            if len(names) == 1:
+                key = names[0]
+            else:
+                key = "_".join(names)
+            latent_variables_dict[key] = config
+
         return Optimizer(
             seed=self.seed,
             n_epochs=self.n_epochs,
@@ -345,17 +613,5 @@ class OptimizerBuilder:
             window_size=self.window_size,
             batch_size=self.batch_size,
             model_interface=self._model_interface,
-            latent_variables=self.latent_variables,
+            latent_variables=latent_variables_dict,
         )
-
-    def make_log_cholesky_like(self, d: int) -> jnp.ndarray:
-        n = d * (d + 1) // 2
-        arr = jnp.zeros((n,), dtype=jnp.float32)
-
-        def body_fun(row, arr):
-            offset = (row * (row + 1)) // 2
-            arr = arr.at[offset + row].set(1.1)
-            return arr
-
-        arr = jax.lax.fori_loop(0, d, body_fun, arr)
-        return arr

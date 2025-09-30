@@ -1007,22 +1007,23 @@ class Model:
         their parent variables and nodes. The new model contains copies of these \
         variables and nodes.
         """
+
         nodes_to_include = set()
 
         for node in of:
             if isinstance(node, Var):
                 nodes_to_include.update(nx.ancestors(self.var_graph, node))
+
             else:
                 nodes_to_include.update(nx.ancestors(self.node_graph, node))
+
             nodes_to_include.add(node)
 
         copy_of_nodes_to_include = deepcopy(nodes_to_include)
 
-        for node in copy_of_nodes_to_include:
-            if hasattr(node, "_unset_model"):
-                node._unset_model()
-
-        return Model(list(copy_of_nodes_to_include), to_float32=self._to_float32)
+        return Model(
+            list(copy_of_nodes_to_include), to_float32=self._to_float32, copy=False
+        )
 
     @property
     def log_lik(self) -> Array:
@@ -1652,11 +1653,20 @@ class Model:
         for node in model.nodes.values():
             node._outdated = False
 
-        for key, value in position.items():
-            try:
-                model.nodes[key].value = value  # type: ignore  # data node
-            except KeyError:
-                model.vars[key].value = value
+        # temporarily disable auto_update to avoid shape incompatibilities
+        # when updating variables sequentially with new shapes
+        original_auto_update = model.auto_update
+        model.auto_update = False
+
+        try:
+            for key, value in position.items():
+                try:
+                    model.nodes[key].value = value  # type: ignore  # data node
+                except KeyError:
+                    model.vars[key].value = value
+        finally:
+            # restore original auto_update setting
+            model.auto_update = original_auto_update
 
         model.update()
         return model.state
@@ -1713,6 +1723,11 @@ class Model:
         # filter samples to include only samples that belong to the submodel
         vars_and_nodes = list(submodel.vars) + list(submodel.nodes)
         filtered_samples = {k: v for k, v in samples.items() if k in vars_and_nodes}
+        if not filtered_samples:
+            raise ValueError(
+                "No samples provided for the variables or nodes in the submodel."
+                f"Nodes in submodel: {vars_and_nodes}"
+            )
 
         # single prediction function
         def predict_one(samples):
