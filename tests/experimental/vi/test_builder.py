@@ -1,4 +1,4 @@
-"""Unit tests for the OptimizerBuilder class."""
+"""Tests for the OptimizerBuilder class."""
 
 from unittest.mock import Mock
 
@@ -9,9 +9,6 @@ import tensorflow_probability.substrates.jax.bijectors as tfb
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 from liesel.experimental.vi import LieselInterface, OptimizerBuilder
-
-# --- Fixtures --------------------------------------------------------------
-
 
 @pytest.fixture
 def mock_model_interface():
@@ -73,7 +70,7 @@ def optimizer_chain():
     return optax.adam(learning_rate=0.001)
 
 
-# --- Unit Tests - Initialization ------------------------------------------
+# --- Tests - Initialization ---
 
 
 class TestOptimizerBuilderInitialization:
@@ -153,7 +150,7 @@ class TestOptimizerBuilderInitialization:
         assert builder.batch_size == batch_size
 
 
-# -- Unit Tests - set_model Method ------------------------------------------
+# --- Tests - set_model Method ---
 
 
 class TestSetModel:
@@ -178,7 +175,111 @@ class TestSetModel:
         assert builder_with_defaults._model_interface is second_interface
 
 
-# --- Unit Tests - add_variational_dist Method --------------------------------
+# --- Tests - Dimension Validation Method ---
+
+
+class TestDimensionValidation:
+    """Test dimension validation in add_variational_dist method."""
+
+    def test_matching_event_shape_scalar(
+        self, builder_with_defaults, mock_model_interface, optimizer_chain
+    ):
+        """Test validation passes when dimensions match event shape for scalars."""
+        builder_with_defaults.set_model(mock_model_interface)
+
+        # This should pass: param2 is 1D, Normal with scalar params has event_shape=()
+        # No ValueError should be raised
+        builder_with_defaults.add_variational_dist(
+            ["param2"],  # 1D parameter
+            dist_class=tfd.Normal,
+            variational_params={"loc": 0.0, "scale": 1.0},
+            optimizer_chain=optimizer_chain,
+        )
+
+        # Check that event_shape was correctly computed as 1 (scalar distribution)
+        config = builder_with_defaults.latent_variables[0]
+        assert config["event_shape"] == 1
+        assert config["dims_list"] == [1]  # param2 has 1 dimension
+
+    def test_matching_event_shape_vector(
+        self, builder_with_defaults, mock_model_interface, optimizer_chain
+    ):
+        """Test validation passes when dimensions match event shape for vectors."""
+        builder_with_defaults.set_model(mock_model_interface)
+
+        # This should pass: param1 is 2D, MultivariateNormalDiag with 2D has
+        # event_shape=(2,)
+        # No ValueError should be raised
+        builder_with_defaults.add_variational_dist(
+            ["param1"],  # 2D parameter
+            dist_class=tfd.MultivariateNormalDiag,
+            variational_params={"loc": jnp.zeros(2), "scale_diag": jnp.ones(2)},
+            optimizer_chain=optimizer_chain,
+        )
+
+        # Check that event_shape was correctly computed as 2
+        config = builder_with_defaults.latent_variables[0]
+        assert config["event_shape"] == 2
+        assert config["dims_list"] == [2]  # param1 has 2 dimensions
+
+    def test_batch_shape_confusion_error(
+        self, builder_with_defaults, mock_model_interface, optimizer_chain
+    ):
+        """Test that batch shape confusion raises informative error."""
+        builder_with_defaults.set_model(mock_model_interface)
+
+        # This should fail: trying to use batched Normal for 2D parameter
+        # Single variable case - should only show multivariate option
+        with pytest.raises(
+            ValueError,
+            match="In Liesel VI, use a multivariate distribution",
+        ):
+            builder_with_defaults.add_variational_dist(
+                ["param1"],  # 2D parameter
+                dist_class=tfd.Normal,
+                variational_params={
+                    "loc": jnp.zeros(2),
+                    "scale": jnp.ones(2),
+                },  # Creates batch_shape=(2,)
+                optimizer_chain=optimizer_chain,
+            )
+
+    def test_batch_shape_confusion_multiple_vars(
+        self, builder_with_defaults, mock_model_interface, optimizer_chain
+    ):
+        """Test batch shape confusion with multiple variables."""
+        builder_with_defaults.set_model(mock_model_interface)
+
+        # This should fail: param1(2D) + param2(1D) = 3D, but Normal with 3D
+        # params has batch_shape=(3,)
+        with pytest.raises(
+            ValueError,
+            match="In Liesel VI, use one of these approaches instead",
+        ):
+            builder_with_defaults.add_variational_dist(
+                ["param1", "param2"],  # 2D + 1D = 3D total
+                dist_class=tfd.Normal,
+                variational_params={"loc": jnp.zeros(3), "scale": jnp.ones(3)},
+                optimizer_chain=optimizer_chain,
+            )
+
+    def test_general_dimension_mismatch(
+        self, builder_with_defaults, mock_model_interface, optimizer_chain
+    ):
+        """Test general dimension mismatch error."""
+        builder_with_defaults.set_model(mock_model_interface)
+
+        # This should fail: param1 is 2D but MultivariateNormalDiag is 5D
+        with pytest.raises(ValueError, match="must match the event shape"):
+            builder_with_defaults.add_variational_dist(
+                ["param1"],  # 2D parameter
+                dist_class=tfd.MultivariateNormalDiag,
+                variational_params={"loc": jnp.zeros(5), "scale_diag": jnp.ones(5)},
+                optimizer_chain=optimizer_chain,
+            )
+
+
+# --- Tests - add_variational_dist Method ---
 
 
 class TestAddVariationalDist:
@@ -192,15 +293,15 @@ class TestAddVariationalDist:
 
         builder_with_defaults.add_variational_dist(
             ["param1"],
-            dist_class=tfd.Normal,
-            variational_params={"loc": jnp.zeros(2), "scale": jnp.ones(2)},
+            dist_class=tfd.MultivariateNormalDiag,
+            variational_params={"loc": jnp.zeros(2), "scale_diag": jnp.ones(2)},
             optimizer_chain=optimizer_chain,
         )
 
         assert len(builder_with_defaults.latent_variables) == 1
         config = builder_with_defaults.latent_variables[0]
         assert config["names"] == ["param1"]
-        assert config["dist_class"] == tfd.Normal
+        assert config["dist_class"] == tfd.MultivariateNormalDiag
         assert config["full_rank_key"] == "param1"
         assert config["dims_list"] == [2]
         assert config["split_indices"] == []
@@ -213,15 +314,15 @@ class TestAddVariationalDist:
 
         # Pass string instead of list
         builder_with_defaults.add_variational_dist(
-            "param2",  # String instead of list
-            dist_class=tfd.Normal,
-            variational_params={"loc": 0.0, "scale": 1.0},
+            "param1",  # String instead of list
+            dist_class=tfd.MultivariateNormalDiag,
+            variational_params={"loc": jnp.zeros(2), "scale_diag": jnp.ones(2)},
             optimizer_chain=optimizer_chain,
         )
 
         assert len(builder_with_defaults.latent_variables) == 1
         config = builder_with_defaults.latent_variables[0]
-        assert config["names"] == ["param2"]  # Should be converted to list
+        assert config["names"] == ["param1"]  # Should be converted to list
 
     def test_add_multiple_variational_dists(
         self, builder_with_defaults, mock_model_interface, optimizer_chain
@@ -232,8 +333,8 @@ class TestAddVariationalDist:
         # Add first distribution
         builder_with_defaults.add_variational_dist(
             ["param1"],
-            dist_class=tfd.Normal,
-            variational_params={"loc": jnp.zeros(2), "scale": jnp.ones(2)},
+            dist_class=tfd.MultivariateNormalDiag,
+            variational_params={"loc": jnp.zeros(2), "scale_diag": jnp.ones(2)},
             optimizer_chain=optimizer_chain,
         )
 
@@ -255,25 +356,25 @@ class TestAddVariationalDist:
 
         builder_with_defaults.add_variational_dist(
             ["param1"],
-            dist_class=tfd.Normal,
+            dist_class=tfd.MultivariateNormalDiag,
             variational_params={"loc": jnp.zeros(2)},
-            fixed_distribution_params={"scale": jnp.ones(2)},
+            fixed_distribution_params={"scale_diag": jnp.ones(2)},
             optimizer_chain=optimizer_chain,
         )
 
         config = builder_with_defaults.latent_variables[0]
         # Use array_equal for JAX array comparison
         assert jnp.array_equal(
-            config["fixed_distribution_params"]["scale"], jnp.ones(2)
+            config["fixed_distribution_params"]["scale_diag"], jnp.ones(2)
         )
 
-    def test_add_variational_dist_with_custom_bijectors(
+    def test_add_variational_dist_with_all_custom_bijectors(
         self,
         builder_with_defaults,
         mock_model_interface,
         optimizer_chain,
     ):
-        """Test adding variational distribution with custom bijectors."""
+        """Test adding variational distribution with all custom bijectors."""
         builder_with_defaults.set_model(mock_model_interface)
 
         # Use Exp for loc and Identity for scale since they cannot be default bijectors,
@@ -281,16 +382,46 @@ class TestAddVariationalDist:
         custom_bijectors = {"loc": tfb.Exp(), "scale": tfb.Identity()}
 
         builder_with_defaults.add_variational_dist(
-            ["param1"],
+            ["param2"],
             dist_class=tfd.Normal,
-            variational_params={"loc": jnp.zeros(2), "scale": jnp.ones(2)},
+            variational_params={"loc": 0.0, "scale": 1.0},
             optimizer_chain=optimizer_chain,
             variational_param_bijectors=custom_bijectors,
         )
 
         config = builder_with_defaults.latent_variables[0]
+        assert config["variational_param_bijectors"]["loc"] is custom_bijectors["loc"]
         assert (
             config["variational_param_bijectors"]["scale"] is custom_bijectors["scale"]
+        )
+
+    def test_add_variational_dist_with_partial_custom_bijectors(
+        self,
+        builder_with_defaults,
+        mock_model_interface,
+        optimizer_chain,
+    ):
+        """Test adding variational distribution with partially custom bijectors."""
+        builder_with_defaults.set_model(mock_model_interface)
+
+        # Use Exp for loc since that cannot be a default bijector,
+        # making it identifiable as custom.
+        custom_bijector = {"loc": tfb.Exp()}
+        negative_custom_bijector = {"scale": tfb.Identity()}
+
+        builder_with_defaults.add_variational_dist(
+            ["param2"],
+            dist_class=tfd.Normal,
+            variational_params={"loc": 0.0, "scale": 1.0},
+            optimizer_chain=optimizer_chain,
+            variational_param_bijectors=custom_bijector,
+        )
+
+        config = builder_with_defaults.latent_variables[0]
+        assert config["variational_param_bijectors"]["loc"] is custom_bijector["loc"]
+        assert (
+            config["variational_param_bijectors"]["scale"]
+            is not negative_custom_bijector["scale"]
         )
 
     def test_add_variational_dist_multiple_latent_vars_two(
@@ -344,7 +475,7 @@ class TestAddVariationalDist:
             ValueError, match=r"Invalid key\(s\) in 'variational_params'"
         ):
             builder_with_defaults.add_variational_dist(
-                ["param1"],
+                ["param2"],
                 dist_class=tfd.Normal,
                 variational_params={"invalid_param": 0.0},  # Invalid parameter name
                 optimizer_chain=optimizer_chain,
@@ -360,9 +491,9 @@ class TestAddVariationalDist:
             ValueError, match=r"Invalid key\(s\) in 'parameter_bijectors'"
         ):
             builder_with_defaults.add_variational_dist(
-                ["param1"],
+                ["param2"],
                 dist_class=tfd.Normal,
-                variational_params={"loc": jnp.zeros(2), "scale": jnp.ones(2)},
+                variational_params={"loc": 0.0, "scale": 1.0},
                 optimizer_chain=optimizer_chain,
                 variational_param_bijectors={"invalid_key": tfb.Identity()},
             )
@@ -415,9 +546,9 @@ class TestAddVariationalDist:
             ValueError, match="Failed to build variational distribution"
         ):
             builder_with_defaults.add_variational_dist(
-                ["param1"],
+                ["param2"],
                 dist_class=tfd.Normal,
-                variational_params={"loc": jnp.zeros(2), "scale": jnp.ones(2)},
+                variational_params={"loc": 0.0, "scale": 1.0},
                 optimizer_chain=optimizer_chain,
                 variational_param_bijectors={"scale": NotABijector()},
             )
@@ -431,7 +562,7 @@ class TestAddVariationalDist:
         # Bernoulli is not fully reparameterized
         with pytest.raises(NotImplementedError, match="Only fully reparameterized"):
             builder_with_defaults.add_variational_dist(
-                ["param1"],
+                ["param2"],
                 dist_class=tfd.Bernoulli,
                 variational_params={"probs": 0.5},
                 optimizer_chain=optimizer_chain,
@@ -447,23 +578,24 @@ class TestAddVariationalDist:
             ValueError, match="Failed to build variational distribution"
         ):
             builder_with_defaults.add_variational_dist(
-                ["param1"],
+                ["param2"],
                 dist_class=tfd.Normal,
-                variational_params={"loc": jnp.zeros(2)},  # Missing scale
+                variational_params={"loc": 0.0},  # Missing scale
                 optimizer_chain=optimizer_chain,
             )
 
     def test_add_variational_dist_maintains_order(
         self, builder_with_defaults, mock_model_interface, optimizer_chain
     ):
-        """Test that latent variables are stored in order of addition."""
+        """Test that latent variables are stored in order of addition,
+        because that is the expected behavior."""
         builder_with_defaults.set_model(mock_model_interface)
 
         # Add three variables in specific order
         builder_with_defaults.add_variational_dist(
             ["param1"],
-            dist_class=tfd.Normal,
-            variational_params={"loc": jnp.zeros(2), "scale": jnp.ones(2)},
+            dist_class=tfd.MultivariateNormalDiag,
+            variational_params={"loc": jnp.zeros(2), "scale_diag": jnp.ones(2)},
             optimizer_chain=optimizer_chain,
         )
 
@@ -476,8 +608,8 @@ class TestAddVariationalDist:
 
         builder_with_defaults.add_variational_dist(
             ["param3"],
-            dist_class=tfd.Normal,
-            variational_params={"loc": jnp.zeros(4), "scale": jnp.ones(4)},
+            dist_class=tfd.MultivariateNormalDiag,
+            variational_params={"loc": jnp.zeros(4), "scale_diag": jnp.ones(4)},
             optimizer_chain=optimizer_chain,
         )
 
@@ -495,8 +627,8 @@ class TestAddVariationalDist:
 
         builder_with_defaults.add_variational_dist(
             ["param1"],
-            dist_class=tfd.Normal,
-            variational_params={"loc": jnp.zeros(2), "scale": jnp.ones(2)},
+            dist_class=tfd.MultivariateNormalDiag,
+            variational_params={"loc": jnp.zeros(2), "scale_diag": jnp.ones(2)},
             optimizer_chain=optimizer_chain,
         )
 
@@ -520,7 +652,7 @@ class TestAddVariationalDist:
 
         # Additional assertions for key types/values
         assert isinstance(config["names"], list)
-        assert config["dist_class"] == tfd.Normal
+        assert config["dist_class"] == tfd.MultivariateNormalDiag
         assert isinstance(config["variational_params"], dict)
         assert isinstance(config["dims_list"], list)
         assert isinstance(config["split_indices"], list)
@@ -542,10 +674,10 @@ class TestAddVariationalDist:
 
         # Add distribution with both variational and fixed parameters
         builder_with_defaults.add_variational_dist(
-            ["param1"],
+            ["param2"],
             dist_class=tfd.Normal,
-            variational_params={"loc": jnp.array(1.0)},  # Variational parameter
-            fixed_distribution_params={"scale": jnp.array(2.0)},  # Fixed parameter
+            variational_params={"loc": 0.0},  # Variational parameter
+            fixed_distribution_params={"scale": 1.0},  # Fixed parameter
             optimizer_chain=optimizer_chain,
             variational_param_bijectors={
                 "loc": tfb.Identity(),  # Should be kept for variational param
@@ -581,7 +713,7 @@ class TestAddVariationalDist:
             ValueError, match=r"Cannot specify bijectors for fixed.*scale"
         ):
             builder_with_defaults.add_variational_dist(
-                ["param1"],
+                ["param2"],
                 dist_class=tfd.Normal,
                 variational_params={"loc": jnp.array(1.0)},
                 fixed_distribution_params={"scale": jnp.array(2.0)},  # scale is fixed
@@ -609,7 +741,7 @@ class TestAddVariationalDist:
 
         # Add distribution with fixed scale parameter, no custom bijectors provided
         builder_with_defaults.add_variational_dist(
-            ["param1"],
+            ["param2"],
             dist_class=tfd.Normal,
             variational_params={"loc": jnp.array(1.0)},  # Variational parameter
             fixed_distribution_params={"scale": jnp.array(2.0)},  # Fixed parameter
@@ -628,7 +760,7 @@ class TestAddVariationalDist:
         assert "scale" not in config["variational_param_bijectors"]
 
 
-# -- Unit Tests - build Method --
+# --- Tests - build Method ---
 
 
 class TestBuildMethod:
@@ -673,9 +805,9 @@ class TestBuildMethod:
         builder_with_defaults.set_model(mock_model_interface)
 
         builder_with_defaults.add_variational_dist(
-            ["param1"],
+            ["param2"],
             dist_class=tfd.Normal,
-            variational_params={"loc": jnp.zeros(2), "scale": jnp.ones(2)},
+            variational_params={"loc": 0.0, "scale": 1.0},
             optimizer_chain=optimizer_chain,
         )
 
@@ -691,9 +823,9 @@ class TestBuildMethod:
 
         builder_with_defaults.build()
 
-        assert list(captured["latent_variables"].keys()) == ["param1"]
-        config = captured["latent_variables"]["param1"]
-        assert config["names"] == ["param1"]
+        assert list(captured["latent_variables"].keys()) == ["param2"]
+        config = captured["latent_variables"]["param2"]
+        assert config["names"] == ["param2"]
         assert config["dist_class"] == tfd.Normal
 
     def test_build_passes_config_to_optimizer_multiple_latent_vars(
@@ -705,8 +837,8 @@ class TestBuildMethod:
         # Add first variable
         builder_with_defaults.add_variational_dist(
             ["param1"],
-            dist_class=tfd.Normal,
-            variational_params={"loc": jnp.zeros(2), "scale": jnp.ones(2)},
+            dist_class=tfd.MultivariateNormalDiag,
+            variational_params={"loc": jnp.zeros(2), "scale_diag": jnp.ones(2)},
             optimizer_chain=optimizer_chain,
         )
 
@@ -813,7 +945,7 @@ class TestBuildMethod:
         assert isinstance(optimizer2, DummyOptimizer)
 
 
-# -- Unit Tests - Minimal tests for default bijectors -----------------------
+# --- Tests - Minimal tests for default bijectors ---
 
 
 class TestDefaultBijectors:
@@ -840,26 +972,7 @@ class TestDefaultBijectors:
             assert bijectors[param] is not None
 
 
-# -- Unit Tests - Dimensionality validation placeholder --
-
-
-@pytest.mark.xfail(
-    strict=True, reason="Dimensionality validation not implemented yet (TODO in code)"
-)
-def test_validate_dimensionality_will_check_total_dims():
-    """Test that dimensionality validation will check total dimensions."""
-    builder = OptimizerBuilder()
-
-    # When implemented, this should raise ValueError for dimension mismatch
-    with pytest.raises(ValueError, match="Dimension mismatch"):
-        builder._validate_dimensionality(
-            latent_variable_names=["param1"],
-            event_shape=5,  # Intentionally mismatched
-            variable_dims={"param1": 2},
-        )
-
-
-# -- Integration Tests - Returning Optimizer ---------------------------------
+# --- Integration Tests - Returning Optimizer ---
 
 
 def test_build_returns_optimizer_instance(
@@ -885,8 +998,8 @@ def test_build_returns_optimizer_instance(
 
     builder_with_defaults.add_variational_dist(
         ["b"],
-        dist_class=tfd.Normal,
-        variational_params={"loc": jnp.zeros(4), "scale": jnp.ones(4)},
+        dist_class=tfd.MultivariateNormalDiag,
+        variational_params={"loc": jnp.zeros(4), "scale_diag": jnp.ones(4)},
         optimizer_chain=optimizer_chain,
     )
 
