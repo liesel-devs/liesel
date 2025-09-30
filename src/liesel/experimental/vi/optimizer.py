@@ -92,11 +92,10 @@ class Optimizer:
         return variational_dists_class
 
     def _init_variational_params(self) -> dict[str, Any]:
-        """Initialize the variational_params dictionary using unconstrained parameters.
-
-        The variational_params dict from builder.py contains constrained parameters;
-        for optimization, we store unconstrained parameters by applying the inverse
-        bijector.
+        """Initialize the variational_params dictionary using unconstrained parameters
+        for optimization. The variational_params dict from builder.py contains
+        constrained parameters; for optimization, we store unconstrained parameters by
+        applying the inverse bijector.
         """
         variational_params = {}
         for key, config in self.latent_vars_config.items():
@@ -230,6 +229,7 @@ class Optimizer:
             updates, new_opt_state = self.optimizer.update(
                 grads, opt_state, current_variational_params
             )
+
             new_variational_params = optax.apply_updates(
                 current_variational_params, updates
             )

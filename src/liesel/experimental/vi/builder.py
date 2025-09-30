@@ -3,6 +3,7 @@ from typing import Any
 import jax.numpy as jnp
 import optax
 import tensorflow_probability.substrates.jax.bijectors as tfb
+from jax.typing import ArrayLike
 from tensorflow_probability.substrates import jax as tfp
 from tensorflow_probability.substrates.jax.distributions import (
     Distribution as TfpDistribution,
@@ -290,6 +291,7 @@ class OptimizerBuilder:
         """
         assert self._model_interface is not None
         model_params = self._model_interface.get_params()
+
         dims = {}
 
         for pname in latent_variable_names:
@@ -302,8 +304,10 @@ class OptimizerBuilder:
     def _validate_dimensionality(
         self,
         latent_variable_names: list[str],
-        event_shape: int,
+        event_shape_tensor: ArrayLike,
         variable_dims: dict[str, int],
+        batch_shape_tensor: ArrayLike,
+        dist_class_name: str,
     ) -> None:
         """Validate that the total dimensions match the event shape.
 
@@ -311,27 +315,104 @@ class OptimizerBuilder:
         ----------
         latent_variable_names
             List of latent variable names.
-        event_shape
-            Event shape of the variational distribution.
+        event_shape_tensor
+            Event shape tensor from distribution.event_shape_tensor().
         variable_dims
             Mapping from variable names to their dimensionalities.
+        batch_shape_tensor
+            Batch shape tensor from distribution.batch_shape_tensor().
+        dist_class_name
+            Name of the distribution class for error messages.
 
         Raises
         ------
+        NotImplementedError
+            If event shape represents a matrix or higher-dimensional array.
         ValueError
-            If dimensions don't match the event shape.
+            If dimensions don't match the event shape or if batch shape confusion
+            is detected.
         """
-        # TODO: Fix dimensionality validation bug, and consider the
-        # new block logic (full rank).
-        # total_dim = sum(variable_dims[name] for name in latent_variable_names)
-        #
-        # if event_shape != total_dim:
-        #     raise ValueError(
-        #         f"Dimension mismatch for latent variables {latent_variable_names}: "
-        #         f"expected event shape dimension {event_shape}, "
-        #         f"got total variable dimensions {total_dim}"
-        #     )
-        pass
+        # Convert tensors to tuples for the error messages
+        event_shape_tuple = (
+            tuple(event_shape_tensor.tolist()) if event_shape_tensor.size > 0 else ()
+        )
+        batch_shape_tuple = (
+            tuple(batch_shape_tensor.tolist()) if batch_shape_tensor.size > 0 else ()
+        )
+
+        # Check if event shape represents a matrix
+        if len(event_shape_tuple) > 1:
+            raise NotImplementedError(
+                f"Matrix-valued event shapes are not supported.\n"
+                f"The initialization of the {dist_class_name} has "
+                f"event_shape={event_shape_tuple}.\n"
+                f"Currently, only scalar or vector-valued event shapes are "
+                f"supported\n"
+                f"(event shapes like () or (n,), not shapes like (n, m))."
+            )
+
+        # Calculate flattened event shape
+        event_shape = (
+            int(jnp.prod(event_shape_tensor)) if event_shape_tensor.size > 0 else 1
+        )
+
+        total_dim = sum(variable_dims[name] for name in latent_variable_names)
+
+        # Check if dimensions match event shape (All good case)
+        if event_shape == total_dim:
+            return
+
+        # Get batch size for additional validation
+        batch_size = (
+            int(jnp.prod(batch_shape_tensor)) if batch_shape_tensor.size > 0 else 0
+        )
+
+        # Check for batch shape confusion (Case 1 mistake)
+        if batch_size == total_dim and batch_size > 1:
+            if len(latent_variable_names) > 1:
+                # Multiple variables - show both options
+                var_list = ", ".join([f"'{name}'" for name in latent_variable_names])
+                raise ValueError(
+                    f"Dimension mismatch:\n"
+                    f"Total latent variable dim. ({total_dim}) match batch_shape="
+                    f"{batch_shape_tuple}, not event_shape={event_shape_tuple}.\n"
+                    f"This suggests you're trying to model the variational dist. "
+                    f"with batched distributions.\n\n"
+                    f"In Liesel VI, use one of these approaches instead:\n\n"
+                    f"1) Separate add_variational_dist calls for the respective set "
+                    f"of independent latent variables:\n"
+                    f"   [{var_list}]\n\n"
+                    f"2) Use a multivariate distribution with the desired "
+                    f"independence structure:\n"
+                    f"   For example, use tfd.MultivariateNormalDiag instead of "
+                    f"batched tfd.Normal\n\n"
+                    f"Why: Each add_variational_dist call should represent ONE "
+                    f"variational distribution."
+                )
+            else:
+                # Single variable - only show multivariate distribution option
+                raise ValueError(
+                    f"Dimension mismatch:\n"
+                    f"Total latent variable dim. ({total_dim}) match batch_shape="
+                    f"{batch_shape_tuple}, not event_shape={event_shape_tuple}.\n"
+                    f"This suggests you're trying to model the variational dist. "
+                    f"with batched distributions.\n\n"
+                    f"In Liesel VI, use a multivariate distribution with the desired "
+                    f"independence structure:\n"
+                    f"For example, use tfd.MultivariateNormalDiag instead of "
+                    f"batched tfd.Normal\n\n"
+                    f"Why: Each add_variational_dist call should represent ONE "
+                    f"variational distribution."
+                )
+
+        # General dimension mismatch (Case 2 mistake)
+        raise ValueError(
+            f"Dimension mismatch:\n"
+            f"Total latent variable dim.: {total_dim}\n"
+            f"Distribution event_shape: {event_shape_tuple}\n\n"
+            f"The total dimensions of your latent variables must match the "
+            f"event shape."
+        )
 
     def add_variational_dist(
         self,
@@ -417,8 +498,11 @@ class OptimizerBuilder:
             config, latent_variable_names
         )
 
-        event_shape = int(jnp.prod(jnp.array(distribution.event_shape.as_list())))
-        config["event_shape"] = event_shape
+        # Get shape tensors for validation
+        event_shape_tensor = distribution.event_shape_tensor()
+        batch_shape_tensor = distribution.batch_shape_tensor()
+        dist_class_name = dist_class.__name__
+
         variable_dims = self._get_latent_var_dims(latent_variable_names)
         config["variable_dims"] = variable_dims
         config["dims_list"] = [int(v) for v in variable_dims.values()]
@@ -431,7 +515,20 @@ class OptimizerBuilder:
             split_indices = []
         config["split_indices"] = split_indices
 
-        self._validate_dimensionality(latent_variable_names, event_shape, variable_dims)
+        # Validate dimensionality with shape tensors
+        self._validate_dimensionality(
+            latent_variable_names,
+            event_shape_tensor,
+            variable_dims,
+            batch_shape_tensor,
+            dist_class_name,
+        )
+
+        # Calculate flattened event shape for config after validation
+        event_shape = (
+            int(jnp.prod(event_shape_tensor)) if event_shape_tensor.size > 0 else 1
+        )
+        config["event_shape"] = event_shape
 
         self.latent_variables.append(config)
 
