@@ -55,7 +55,7 @@ $$
 $$
 
 
-So let us consider the same model and data from the [linear regression tutorial](01-lin-reg.md#linear-regression), where we had 
+So let us consider the same model and data from the [linear regression tutorial](01-lin-reg.md#linear-regression), where we had
 the underelying model $y_i \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \;\sigma^2)$ with the true parameters $\boldsymbol{\beta} = (\beta_0, \beta_1)' = (1, 2)'$ and $\sigma = 1$.
 
 ``` {python}
@@ -107,7 +107,7 @@ to the root.
 
 In the linear regression tutorial we assumed the weakly informative prior $\beta_0, \beta_1 \sim \mathcal{N}(0, 100^2)$,
 so we start from there and then work our way down. To do so, we need to define its initial value and its node distribution using the
-{class}`.Dist` class. 
+{class}`.Dist` class.
 
 ```{python}
 #| label: beta-distribution
@@ -149,7 +149,7 @@ nodes have been strong.
 sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma").update()
 ```
 
-We do the same to compute the matrix-vector product after constructing the design matrix 
+We do the same to compute the matrix-vector product after constructing the design matrix
 
 ```{python}
 #| label: calculator-setup
@@ -316,7 +316,7 @@ summary = gs.Summary(results)
 summary
 ```
 
-And plot these 
+And plot these
 
 ```{python}
 #| label: trace-plot
@@ -324,4 +324,3 @@ And plot these
 g = gs.plot_trace(results)
 gs.plot_param(results, param="beta", param_index=0)
 ```
-

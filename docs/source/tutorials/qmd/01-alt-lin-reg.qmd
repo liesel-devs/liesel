@@ -303,6 +303,6 @@ with {func}`~.goose.plot_param()`. The following plot shows the parameter $\beta
 gs.plot_param(results, param="beta", param_index=0)
 ```
 
-Here, we end this first tutorial. We have learned how to build a linear regression model and 
+Here, we end this first tutorial. We have learned how to build a linear regression model and
 seen how we can use Kernels for drawing MCMC samples - that is
 quite a bit for the start. Now, have fun modelling with Liesel!
