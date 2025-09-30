@@ -1,19 +1,18 @@
-"""Unit tests for the OptimizerBuilder class."""
+"""Tests for the OptimizerBuilder class."""
 
 from unittest.mock import Mock
 
 import jax.numpy as jnp
 import optax
 import pytest
+import tensorflow_probability.substrates.jax.distributions as tfd
 import tensorflow_probability.substrates.jax.bijectors as tfb
-from tensorflow_probability.substrates import jax as tfp
 
 from liesel.experimental.vi import LieselInterface, OptimizerBuilder
 
-tfd = tfp.distributions
 
 
-# -- Fixtures --
+# --- Fixtures ---
 
 
 @pytest.fixture
@@ -76,7 +75,7 @@ def optimizer_chain():
     return optax.adam(learning_rate=0.001)
 
 
-# -- Unit Tests - Initialization --
+# --- Tests - Initialization ---
 
 
 class TestOptimizerBuilderInitialization:
@@ -156,7 +155,7 @@ class TestOptimizerBuilderInitialization:
         assert builder.batch_size == batch_size
 
 
-# -- Unit Tests - set_model Method --
+# --- Tests - set_model Method ---
 
 
 class TestSetModel:
@@ -181,7 +180,7 @@ class TestSetModel:
         assert builder_with_defaults._model_interface is second_interface
 
 
-# -- Unit Tests - add_variational_dist Method --
+# --- Tests - Dimension Validation Method ---
 
 
 class TestDimensionValidation:
@@ -283,6 +282,9 @@ class TestDimensionValidation:
                 variational_params={"loc": jnp.zeros(5), "scale_diag": jnp.ones(5)},
                 optimizer_chain=optimizer_chain,
             )
+
+
+# --- Tests - add_variational_dist Method ---
 
 
 class TestAddVariationalDist:
@@ -763,7 +765,7 @@ class TestAddVariationalDist:
         assert "scale" not in config["variational_param_bijectors"]
 
 
-# -- Unit Tests - build Method --
+# --- Tests - build Method ---
 
 
 class TestBuildMethod:
@@ -948,7 +950,7 @@ class TestBuildMethod:
         assert isinstance(optimizer2, DummyOptimizer)
 
 
-# -- Unit Tests - Minimal tests for default bijectors --
+# --- Tests - Minimal tests for default bijectors ---
 
 
 class TestDefaultBijectors:
@@ -975,7 +977,7 @@ class TestDefaultBijectors:
             assert bijectors[param] is not None
 
 
-# -- Integration Tests - Returning Optimizer --
+# --- Integration Tests - Returning Optimizer ---
 
 
 def test_build_returns_optimizer_instance(
