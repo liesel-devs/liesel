@@ -5,14 +5,12 @@ import tempfile
 
 import jax
 import jax.numpy as jnp
-import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 from liesel.experimental.vi import Summary
-
 
 # --- Fixtures & helpers ----------------------------------------------------
 

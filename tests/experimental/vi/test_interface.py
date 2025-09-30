@@ -8,6 +8,7 @@ import pytest
 
 from liesel.experimental.vi import LieselInterface
 
+
 # --- Dummy model & helper to create interface -------------------------------
 class DummyVar:
     def __init__(self, value, observed=True):
