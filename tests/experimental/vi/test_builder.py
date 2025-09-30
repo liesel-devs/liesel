@@ -5,12 +5,10 @@ from unittest.mock import Mock
 import jax.numpy as jnp
 import optax
 import pytest
-import tensorflow_probability.substrates.jax.distributions as tfd
 import tensorflow_probability.substrates.jax.bijectors as tfb
+import tensorflow_probability.substrates.jax.distributions as tfd
 
 from liesel.experimental.vi import LieselInterface, OptimizerBuilder
-
-
 
 # --- Fixtures --------------------------------------------------------------
 

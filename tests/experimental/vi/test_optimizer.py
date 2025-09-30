@@ -7,12 +7,11 @@ import jax
 import jax.numpy as jnp
 import optax
 import pytest
-import tensorflow_probability.substrates.jax.distributions as tfd
 import tensorflow_probability.substrates.jax.bijectors as tfb
+import tensorflow_probability.substrates.jax.distributions as tfd
 
 from liesel.experimental.vi import LieselInterface
 from liesel.experimental.vi.optimizer import Optimizer
-
 
 # --- Fakes / helpers ----------------------------------------------------------
 
@@ -248,7 +247,9 @@ def patch_init_optimizer(monkeypatch):
 
     monkeypatch.setattr(Optimizer, "_init_optimizer", fake_init_optimizer)
 
+
 # --- Tests --------------------------------------------------------------------
+
 
 def test_accepts_tfp_distribution_class(make_latent_config):
     latent = make_latent_config()

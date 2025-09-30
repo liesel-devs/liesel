@@ -4,15 +4,17 @@ Each fixture provides data and configuration for a specific conjugate pair.
 """
 
 import jax.numpy as jnp
+import optax
 import pytest
 from tensorflow_probability.substrates import jax as tfp
+
+import liesel.model as lsl
+from liesel.experimental.vi import LieselInterface, OptimizerBuilder
 
 tfd = tfp.distributions
 
 
-# ============================================================================
-# Bernoulli/Binomial - Beta Conjugate Pair
-# ============================================================================
+# --- Bernoulli/Binomial - Beta Conjugate Pair -------------------------------
 
 
 @pytest.fixture
@@ -57,9 +59,7 @@ def bernoulli_beta_config():
     }
 
 
-# ============================================================================
-# Poisson - Gamma Conjugate Pair
-# ============================================================================
+# --- Poisson - Gamma Conjugate Pair -----------------------------------------------
 
 
 @pytest.fixture
@@ -107,9 +107,7 @@ def poisson_gamma_config():
     }
 
 
-# ============================================================================
-# Normal (known variance) - Normal Conjugate Pair
-# ============================================================================
+# --- Normal (known variance) - Normal Conjugate Pair --------------------------------
 
 
 @pytest.fixture
@@ -170,9 +168,7 @@ def normal_known_var_config():
     }
 
 
-# ============================================================================
-# Normal (known mean) - Inverse Gamma Conjugate Pair
-# ============================================================================
+# --- Normal (known mean) - Inverse Gamma Conjugate Pair ------------------------------
 
 
 @pytest.fixture
@@ -224,9 +220,7 @@ def normal_known_mean_config():
     }
 
 
-# ============================================================================
-# Categorical/Multinomial - Dirichlet Conjugate Pair
-# ============================================================================
+# --- Categorical/Multinomial - Dirichlet Conjugate Pair
 
 
 @pytest.fixture
@@ -275,9 +269,7 @@ def categorical_dirichlet_config():
     }
 
 
-# ============================================================================
-# MV-Normal (known covariance) - MV-Normal Conjugate Pair
-# ============================================================================
+# --- MV-Normal (known covariance) - MV-Normal Conjugate Pair ------------------------
 
 
 @pytest.fixture
@@ -338,3 +330,267 @@ def mvn_known_cov_config():
             "scale_tril": 0.01 * jnp.eye(2),
         },
     }
+
+
+# --- Helpers ----------------------------------------------------------------
+
+
+def _allclose(a, b, atol=0.05, rtol=0.05):
+    return bool(jnp.all(jnp.abs(a - b) <= (atol + rtol * jnp.abs(b))))
+
+
+def assert_close_scalar(samples, analytic_dist, atol=0.05, rtol=0.05):
+    s_mean = jnp.mean(samples)
+    a_mean = analytic_dist.mean()
+    assert _allclose(s_mean, a_mean, atol, rtol)
+
+
+def assert_close_vector(samples, true_mean, atol=0.05, rtol=0.05):
+    s_mean = jnp.mean(samples, axis=0)
+    assert _allclose(s_mean, true_mean, atol, rtol)
+
+
+def assert_close_cov(samples_vec, true_cov, atol=0.05, rtol=0.05):
+    emp_cov = jnp.cov(samples_vec.T)
+    assert _allclose(emp_cov, true_cov, atol, rtol)
+
+
+# --- Registry ----------------------------------------------------------------
+
+
+def _beta_bernoulli(get):
+    x = get("bernoulli_beta_data")
+    prior = get("bernoulli_beta_prior_params")
+    post = get("bernoulli_beta_posterior_params")
+    dist_p = lsl.Dist(tfd.Beta, **prior)
+    p = lsl.Var.new_param(0.5, dist_p, name="p")
+    x_dist = lsl.Dist(tfd.Bernoulli, probs=p)
+    x_m = lsl.Var.new_obs(x, x_dist, name="x_m")
+    model = lsl.GraphBuilder().add(x_m).build_model()
+    true_dist = tfd.Beta(**post)
+    guide = dict(
+        dist_class=tfd.Beta,
+        variational_params={"concentration1": 1.0, "concentration0": 1.0},
+    )
+    return dict(
+        name="beta_bernoulli",
+        model=model,
+        var_names=["p"],
+        guide=guide,
+        kind="scalar",
+        true_dist=true_dist,
+        n_epochs=1500,
+        lr=0.03,
+        S=64,
+        n_samples=4000,
+    )
+
+
+def _gamma_poisson(get):
+    y = get("poisson_gamma_data")
+    prior = get("poisson_gamma_prior_params")
+    post = get("poisson_gamma_posterior_params")
+    cfg = get("poisson_gamma_config")
+    dist_lam = lsl.Dist(tfd.Gamma, **prior)
+    lam = lsl.Var.new_param(1.0, dist_lam, name="lam")
+    y_dist = lsl.Dist(tfd.Poisson, rate=lam)
+    y_m = lsl.Var.new_obs(y, y_dist, name="y_m")
+    model = lsl.GraphBuilder().add(y_m).build_model()
+    true_dist = tfd.Gamma(**post)
+    return dict(
+        name="gamma_poisson",
+        model=model,
+        var_names=["lam"],
+        guide=cfg,
+        kind="scalar",
+        true_dist=true_dist,
+        n_epochs=1000,
+        lr=0.05,
+        S=64,
+        n_samples=4000,
+    )
+
+
+def _normal_known_var(get):
+    x = get("normal_known_var_data")
+    sigma = get("normal_known_var_sigma")
+    prior = get("normal_known_var_prior_params")
+    post = get("normal_known_var_posterior_params")
+    cfg = get("normal_known_var_config")
+    dist_mu = lsl.Dist(tfd.Normal, **prior)
+    mu = lsl.Var.new_param(0.0, dist_mu, name="mu")
+    x_dist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
+    x_m = lsl.Var.new_obs(x, x_dist, name="x_m")
+    model = lsl.GraphBuilder().add(x_m).build_model()
+    true_dist = tfd.Normal(**post)
+    return dict(
+        name="normal_known_var",
+        model=model,
+        var_names=["mu"],
+        guide=cfg,
+        kind="scalar",
+        true_dist=true_dist,
+        n_epochs=1000,
+        lr=0.05,
+        S=64,
+        n_samples=4000,
+    )
+
+
+def _normal_known_mean(get):
+    x = get("normal_known_mean_data")
+    mu_known = get("normal_known_mean_mu")
+    prior = get("normal_known_mean_prior_params")
+    post = get("normal_known_mean_posterior_params")
+    cfg = get("normal_known_mean_config")
+    dist_s2 = lsl.Dist(tfd.InverseGamma, **prior)
+    sigma_sq = lsl.Var.new_param(1.0, dist_s2, name="sigma_sq")
+    sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma")
+    x_dist = lsl.Dist(tfd.Normal, loc=mu_known, scale=sigma)
+    x_m = lsl.Var.new_obs(x, x_dist, name="x_m")
+    model = lsl.GraphBuilder().add(x_m).build_model()
+    true_dist = tfd.InverseGamma(**post)
+    return dict(
+        name="normal_known_mean",
+        model=model,
+        var_names=["sigma_sq"],
+        guide=cfg,
+        kind="scalar",
+        true_dist=true_dist,
+        n_epochs=20000,
+        lr=0.01,
+        S=64,
+        n_samples=4000,
+    )
+
+
+def _dirichlet_categorical(get):
+    z = get("categorical_dirichlet_data")
+    prior = get("categorical_dirichlet_prior_params")
+    post = get("categorical_dirichlet_posterior_params")
+    cfg = get("categorical_dirichlet_config")
+    K = prior["concentration"].shape[0]
+    dist_probs = lsl.Dist(tfd.Dirichlet, **prior)
+    probs = lsl.Var.new_param(jnp.ones(K) / K, dist_probs, name="probs")
+    z_dist = lsl.Dist(tfd.Categorical, probs=probs)
+    z_m = lsl.Var.new_obs(z, z_dist, name="z_m")
+    model = lsl.GraphBuilder().add(z_m).build_model()
+    true_dist = tfd.Dirichlet(**post)
+    return dict(
+        name="dirichlet_categorical",
+        model=model,
+        var_names=["probs"],
+        guide=cfg,
+        kind="vector_mean",
+        true_mean=true_dist.mean(),
+        n_epochs=1000,
+        lr=0.05,
+        S=64,
+        n_samples=4000,
+    )
+
+
+def _mvn_known_cov(get):
+    X = get("mvn_known_cov_data")
+    Sigma_known = get("mvn_known_cov_sigma")
+    prior = get("mvn_known_cov_prior_params")
+    post = get("mvn_known_cov_posterior_params")
+    cfg = get("mvn_known_cov_config")
+    dist_mu = lsl.Dist(tfd.MultivariateNormalFullCovariance, **prior)
+    mu = lsl.Var.new_param(prior["loc"], dist_mu, name="mu")
+    X_dist = lsl.Dist(
+        tfd.MultivariateNormalFullCovariance, loc=mu, covariance_matrix=Sigma_known
+    )
+    X_m = lsl.Var.new_obs(X, X_dist, name="X_m")
+    model = lsl.GraphBuilder().add(X_m).build_model()
+    return dict(
+        name="mvn_known_cov",
+        model=model,
+        var_names=["mu"],
+        guide=cfg,
+        kind="vector_and_cov",
+        true_loc=post["loc"],
+        true_cov=post["covariance_matrix"],
+        n_epochs=1500,
+        lr=0.03,
+        S=64,
+        n_samples=5000,
+    )
+
+
+def make_registry(request):
+    get = request.getfixturevalue
+    return {
+        "beta_bernoulli": lambda: _beta_bernoulli(get),
+        "gamma_poisson": lambda: _gamma_poisson(get),
+        "normal_known_var": lambda: _normal_known_var(get),
+        "normal_known_mean": lambda: _normal_known_mean(get),
+        "dirichlet_categorical": lambda: _dirichlet_categorical(get),
+        "mvn_known_cov": lambda: _mvn_known_cov(get),
+    }
+
+
+# --- Scenario Fixture ------------------------------------------------
+
+
+@pytest.fixture
+def scenario(request):
+    registry = make_registry(request)
+    return registry[request.param]()
+
+
+# --- Tests ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    [
+        "beta_bernoulli",
+        "gamma_poisson",
+        "normal_known_var",
+        "normal_known_mean",
+        "dirichlet_categorical",
+        "mvn_known_cov",
+    ],
+    ids=[
+        "Beta-Bernoulli",
+        "Gamma-Poisson",
+        "Normal-Normal_known_var",
+        "Normal_known_mean-InvGamma",
+        "Dirichlet-Categorical",
+        "MVN_known_cov-MVN",
+    ],
+    indirect=True,
+)
+@pytest.mark.mcmc
+def test_conjugate_pairs(scenario):
+    model = scenario["model"]
+    var_names = scenario["var_names"]
+    guide = scenario["guide"]
+    interface = LieselInterface(model)
+    builder = OptimizerBuilder(
+        seed=1, n_epochs=scenario["n_epochs"], batch_size=None, S=scenario["S"]
+    )
+    builder.set_model(interface)
+    builder.add_variational_dist(
+        var_names,
+        guide["dist_class"],
+        variational_params=guide["variational_params"],
+        optimizer_chain=optax.adam(scenario["lr"]),
+    )
+    opt = builder.build()
+    opt.fit()
+    res = opt.get_results(n_samples=scenario["n_samples"], seed=42)
+    if scenario["kind"] == "scalar":
+        key = var_names[0]
+        samples = res["samples"][key]
+        assert_close_scalar(samples, scenario["true_dist"], atol=0.05, rtol=0.05)
+    elif scenario["kind"] == "vector_mean":
+        key = var_names[0]
+        samples = res["samples"][key]
+        assert_close_vector(samples, scenario["true_mean"], atol=0.05, rtol=0.05)
+    elif scenario["kind"] == "vector_and_cov":
+        key = var_names[0]
+        samples = res["samples"][key]
+        assert_close_vector(samples, scenario["true_loc"], atol=0.05, rtol=0.05)
+        assert_close_cov(samples, scenario["true_cov"], atol=0.05, rtol=0.05)
