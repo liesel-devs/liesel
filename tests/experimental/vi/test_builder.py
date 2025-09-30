@@ -560,7 +560,7 @@ class TestAddVariationalDist:
         builder_with_defaults.set_model(mock_model_interface)
 
         # Bernoulli is not fully reparameterized
-        with pytest.raises(NotImplementedError, match="Only fully reparameterized"):
+        with pytest.raises(AttributeError, match="Only fully reparameterized"):
             builder_with_defaults.add_variational_dist(
                 ["param2"],
                 dist_class=tfd.Bernoulli,
