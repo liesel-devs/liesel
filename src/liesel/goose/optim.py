@@ -290,6 +290,8 @@ def optim_flat(
         to ``jax.numpy.nan`` if optimization stops early.
     progress_bar
         Whether to use a progress bar.
+    progress_n_updates
+        How many times to update the progress bar in total.
     track_keys
         List of position keys to track and include in the history.
 
