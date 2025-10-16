@@ -237,7 +237,7 @@ def optim_flat(
     prune_history: bool = True,
     validate_log_prob_decomposition: bool = True,
     progress_bar: bool = True,
-    progress_n_updates: int = 50,
+    progress_n_updates: int = 20,
     track_keys: list[str] | None = None,
 ) -> OptimResult:
     """
