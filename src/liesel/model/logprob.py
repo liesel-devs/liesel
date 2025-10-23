@@ -112,7 +112,8 @@ class FlatLieselLogProb:
     Interface for evaluating the unnormalized log probability of a Liesel model.
 
     Also provides access to the first and second derivatives.
-    The methods :meth:`.FlatLogProb.grad` and :meth:`.FlatLogProb.hessian` are
+    The methods :meth:`.FlatLieselLogProb.grad` and
+    :meth:`.FlatLieselLogProb.hessian` are
     flattened, which means the expect arrays as inputs and return arrays.
 
     Parameters
@@ -126,11 +127,11 @@ class FlatLieselLogProb:
         Which component of the model's log probability to evaluate.
     diff_mode
         Which auto-diff mode to use for the Hessian.
-    
+
     See Also
     --------
     .LieselLogProb: A similar class that returns gradients and hessians as dictionaries.
-    
+
 
     Examples
     --------
@@ -146,9 +147,9 @@ class FlatLieselLogProb:
     Now we initialize the log prob object:
 
     >>> lp = lsl.FlatLieselLogProb(model, ["x"])
-    
+
     And an array of new values to evaluate the log probability at:
-    
+
     >>> xnew = jnp.array([1.0, 2.0])
 
     >>> lp(xnew)
