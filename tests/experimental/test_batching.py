@@ -181,7 +181,7 @@ class TestBatchedLieselInterface:
 
         max_iter = 5
 
-        def inner_body(j, val):
+        def inner_loop_over_batches(j, val):
             grads, i, pos, Bi = val
 
             # update the batch number
@@ -195,7 +195,7 @@ class TestBatchedLieselInterface:
             grads = grads.at[i, j].set(grad_ij_arr)
             return grads, i, pos, Bi
 
-        def outer_body(i, val):
+        def outer_loop_over_iterations(i, val):
             grads, Bi, key = val
 
             # permuting the batch indices for each outer iteration
@@ -210,7 +210,7 @@ class TestBatchedLieselInterface:
             grads, _, pos, Bi = jax.lax.fori_loop(
                 lower=0,
                 upper=Bi.n_full_batches,
-                body_fun=inner_body,
+                body_fun=inner_loop_over_batches,
                 init_val=(grads, i, pos, Bi),
             )
 
@@ -220,7 +220,7 @@ class TestBatchedLieselInterface:
         grads, _, _ = jax.lax.fori_loop(
             lower=0,
             upper=max_iter,
-            body_fun=outer_body,
+            body_fun=outer_loop_over_iterations,
             init_val=(grads_init, Bi, key(0)),
         )
 
