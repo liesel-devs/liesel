@@ -36,16 +36,16 @@ y_vec = X_mat @ true_beta + rng.normal(scale=true_sigma, size=n)
 # Model
 # Part 1: Model for the mean
 beta_prior = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
-beta = lsl.param(value=np.array([0.0, 0.0]), distribution=beta_prior,name="beta")
+beta = lsl.Var.new_param(value=np.array([0.0, 0.0]), distribution=beta_prior,name="beta")
 
-X = lsl.obs(X_mat, name="X")
+X = lsl.Var.new_obs(X_mat, name="X")
 mu = lsl.Var(lsl.Calc(jnp.dot, X, beta), name="mu")
 
 # Part 2: Model for the standard deviation
 a = lsl.Var(0.01, name="a")
 b = lsl.Var(0.01, name="b")
 sigma_sq_prior = lsl.Dist(tfd.InverseGamma, concentration=a, scale=b)
-sigma_sq = lsl.param(value=10.0, distribution=sigma_sq_prior, name="sigma_sq")
+sigma_sq = lsl.Var.new_param(value=10.0, distribution=sigma_sq_prior, name="sigma_sq")
 
 sigma = lsl.Var(lsl.Calc(jnp.sqrt, sigma_sq), name="sigma")
 
@@ -59,17 +59,17 @@ $(\boldsymbol{\beta}', \sigma)'$ with a single NUTS kernel instead of
 using a NUTS kernel for $\boldsymbol{\beta}$ and a Gibbs kernel for
 $\sigma^2$. Since the standard deviation is a positive-valued parameter,
 we need to log-transform it to sample it with a NUTS kernel. The
-{class}`.GraphBuilder` class provides the {meth}`.transform_parameter`
-method for this purpose.
+{class}`.Var` class provides the method {meth}`.Var.transform` for this
+purpose.
 
 ``` python
-gb = lsl.GraphBuilder().add(y)
-gb.transform(sigma_sq, tfb.Exp)
+sigma_sq.transform(tfb.Exp())
 ```
 
     Var(name="sigma_sq_transformed")
 
 ``` python
+gb = lsl.GraphBuilder().add(y)
 model = gb.build_model()
 lsl.plot_vars(model)
 ```
@@ -103,6 +103,33 @@ builder.positions_included = ["sigma_sq"]
 engine = builder.build()
 engine.sample_all_epochs()
 ```
+
+
+      0%|                                                  | 0/3 [00:00<?, ?chunk/s]
+     33%|##############                            | 1/3 [00:01<00:03,  1.89s/chunk]
+    100%|##########################################| 3/3 [00:01<00:00,  1.59chunk/s]
+
+      0%|                                                  | 0/1 [00:00<?, ?chunk/s]
+    100%|########################################| 1/1 [00:00<00:00, 2501.08chunk/s]
+
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 3076.13chunk/s]
+
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
+    100%|########################################| 4/4 [00:00<00:00, 3347.41chunk/s]
+
+      0%|                                                  | 0/8 [00:00<?, ?chunk/s]
+    100%|#########################################| 8/8 [00:00<00:00, 922.28chunk/s]
+
+      0%|                                                 | 0/20 [00:00<?, ?chunk/s]
+    100%|#######################################| 20/20 [00:00<00:00, 257.90chunk/s]
+
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 3049.29chunk/s]
+
+      0%|                                                 | 0/40 [00:00<?, ?chunk/s]
+     60%|#######################4               | 24/40 [00:00<00:00, 229.93chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 200.47chunk/s]
 
 Judging from the trace plots, it seems that all chains have converged.
 
@@ -204,31 +231,31 @@ beta
 kernel_00
 </td>
 <td>
-0.986
+0.989
 </td>
 <td>
-0.089
+0.092
 </td>
 <td>
-0.835
+0.841
 </td>
 <td>
 0.987
 </td>
 <td>
-1.131
+1.138
 </td>
 <td>
 4000
 </td>
 <td>
-1434.460
+1386.502
 </td>
 <td>
-1666.438
+1433.462
 </td>
 <td>
-1.001
+1.003
 </td>
 </tr>
 <tr>
@@ -239,31 +266,31 @@ kernel_00
 kernel_00
 </td>
 <td>
-1.906
+1.900
 </td>
 <td>
-0.157
+0.161
 </td>
 <td>
-1.646
+1.638
 </td>
 <td>
-1.902
+1.903
 </td>
 <td>
-2.168
+2.159
 </td>
 <td>
 4000
 </td>
 <td>
-1433.341
+1370.704
 </td>
 <td>
-1896.020
+1355.871
 </td>
 <td>
-1.001
+1.002
 </td>
 </tr>
 <tr>
@@ -277,31 +304,31 @@ sigma_sq
 \-
 </td>
 <td>
-1.045
+1.044
 </td>
 <td>
-0.068
+0.066
 </td>
 <td>
-0.939
+0.941
 </td>
 <td>
-1.045
+1.042
 </td>
 <td>
-1.159
+1.156
 </td>
 <td>
 4000
 </td>
 <td>
-2210.900
+2468.921
 </td>
 <td>
-1867.822
+2080.546
 </td>
 <td>
-1.003
+1.001
 </td>
 </tr>
 <tr>
@@ -315,31 +342,31 @@ sigma_sq_transformed
 kernel_00
 </td>
 <td>
-0.042
+0.041
 </td>
 <td>
-0.065
+0.063
 </td>
 <td>
--0.062
+-0.061
 </td>
 <td>
-0.044
+0.041
 </td>
 <td>
-0.148
+0.145
 </td>
 <td>
 4000
 </td>
 <td>
-2210.906
+2468.921
 </td>
 <td>
-1867.822
+2080.546
 </td>
 <td>
-1.003
+1.001
 </td>
 </tr>
 </tbody>
@@ -399,10 +426,10 @@ divergent transition
 warmup
 </th>
 <td>
-70
+62
 </td>
 <td>
-0.018
+0.015
 </td>
 </tr>
 <tr>

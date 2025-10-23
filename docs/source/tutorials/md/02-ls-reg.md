@@ -103,10 +103,10 @@ stable sampling process:
 
 ``` python
 dist_beta = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
-beta = lsl.param(jnp.array([10., 10.]), dist_beta, name="beta")
+beta = lsl.Var.new_param(jnp.array([10., 10.]), dist_beta, name="beta")
 
 dist_gamma = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
-gamma = lsl.param(jnp.array([5., 5.]), dist_gamma, name="gamma")
+gamma = lsl.Var.new_param(jnp.array([5., 5.]), dist_gamma, name="gamma")
 ```
 
 The additional complexity of the location-scale model compared to the
@@ -116,8 +116,8 @@ positive scale input, we need to apply the exponential function to the
 linear predictor to ensure positivity.
 
 ``` python
-X = lsl.obs(X_mat, name="X")
-Z = lsl.obs(Z_mat, name="Z")
+X = lsl.Var.new_obs(X_mat, name="X")
+Z = lsl.Var.new_obs(Z_mat, name="Z")
 
 mu = lsl.Var(lsl.Calc(jnp.dot, X, beta), name="mu")
 
@@ -125,7 +125,7 @@ log_scale = lsl.Calc(jnp.dot, Z, gamma)
 scale = lsl.Var(lsl.Calc(jnp.exp, log_scale), name="scale")
 
 dist_y = lsl.Dist(tfd.Normal, loc=mu, scale=scale)
-y = lsl.obs(y_vec, dist_y, name="y")
+y = lsl.Var.new_obs(y_vec, dist_y, name="y")
 ```
 
 We can now combine the nodes in a model and visualize it
@@ -170,6 +170,36 @@ builder.set_duration(warmup_duration=1500, posterior_duration=1000, term_duratio
 engine = builder.build()
 engine.sample_all_epochs()
 ```
+
+
+      0%|                                                  | 0/3 [00:00<?, ?chunk/s]
+     33%|##############                            | 1/3 [00:01<00:03,  1.93s/chunk]
+    100%|##########################################| 3/3 [00:01<00:00,  1.55chunk/s]
+
+      0%|                                                  | 0/1 [00:00<?, ?chunk/s]
+    100%|########################################| 1/1 [00:00<00:00, 2562.19chunk/s]
+
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 3236.35chunk/s]
+
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
+    100%|########################################| 4/4 [00:00<00:00, 3842.70chunk/s]
+
+      0%|                                                  | 0/8 [00:00<?, ?chunk/s]
+    100%|#########################################| 8/8 [00:00<00:00, 422.39chunk/s]
+
+      0%|                                                 | 0/22 [00:00<?, ?chunk/s]
+     73%|############################3          | 16/22 [00:00<00:00, 146.53chunk/s]
+    100%|#######################################| 22/22 [00:00<00:00, 133.29chunk/s]
+
+      0%|                                                 | 0/20 [00:00<?, ?chunk/s]
+     80%|###############################2       | 16/20 [00:00<00:00, 151.28chunk/s]
+    100%|#######################################| 20/20 [00:00<00:00, 139.69chunk/s]
+
+      0%|                                                 | 0/40 [00:00<?, ?chunk/s]
+     48%|##################5                    | 19/40 [00:00<00:00, 182.81chunk/s]
+     95%|#####################################  | 38/40 [00:00<00:00, 134.80chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 138.65chunk/s]
 
 Now that we have 1000 posterior samples per chain, we can check the
 results. Starting with the trace plots just using one chain.

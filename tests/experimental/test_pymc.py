@@ -87,6 +87,10 @@ def test_default_dtype():
     assert interface.log_prob(state).dtype == np.float32
 
 
+@pytest.mark.filterwarnings(
+    "ignore:Explicitly requested dtype float64 requested in astype is not available"
+    ".*:UserWarning"
+)
 def test_simple2():
     model = pm.Model()
 
@@ -114,6 +118,10 @@ def test_simple2():
 
 
 @pytest.mark.mcmc
+@pytest.mark.filterwarnings(
+    "ignore:Explicitly requested dtype float64 requested in astype is not available"
+    ".*:UserWarning"
+)
 def test_mcmc(basic_lm: pm.Model):  # type: ignore
     interface = PyMCInterface(basic_lm, additional_vars=["sigma", "mu[0]"])
     state = interface.get_initial_state()
@@ -141,6 +149,10 @@ def test_mcmc(basic_lm: pm.Model):  # type: ignore
 
 
 @pytest.mark.mcmc
+@pytest.mark.filterwarnings(
+    "ignore:Explicitly requested dtype float64 requested in astype is not available"
+    ".*:UserWarning"
+)
 def test_mcmc_two_kernels(basic_lm: pm.Model):  # type: ignore
     interface = PyMCInterface(basic_lm, additional_vars=["sigma", "mu[0]"])
     state = interface.get_initial_state()

@@ -10,6 +10,7 @@ import liesel.goose as gs
 import liesel.model as lsl
 from liesel.goose.optim import (
     Stopper,
+    _find_observed,
     _generate_batch_indices,
     _validate_log_prob_decomposition,
     history_to_df,
@@ -307,6 +308,27 @@ def test_generate_batches():
 
     for batch in batches:
         assert len(batch) == 9
+
+
+def test_find_observed():
+    n = 10
+    a = lsl.Var.new_obs(jnp.arange(n), name="a")
+    model = lsl.Model([a])
+    observed = _find_observed(model)
+
+    assert "a" in observed
+
+
+def test_find_observed_weak():
+    n = 10
+    a = lsl.Var.new_obs(jnp.arange(n), name="a")
+    b_calc = lsl.Var.new_calc(lambda x: x + 1, a)
+    b = lsl.Var.new_obs(b_calc, name="b")
+    model = lsl.Model([b])
+    observed = _find_observed(model)
+
+    assert "a" in observed
+    assert "b" not in observed
 
 
 class TestStopper:

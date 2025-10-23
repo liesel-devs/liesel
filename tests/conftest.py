@@ -48,7 +48,7 @@ def mcmc_seed(request):
 @contextmanager
 def local_caplog_fn(
     level: int = logging.INFO, name: str = "liesel"
-) -> Generator[LogCaptureHandler, None, None]:
+) -> Generator[LogCaptureHandler]:
     """
     Context manager that captures records from non-propagating loggers.
 
@@ -91,6 +91,7 @@ def local_caplog():
     Usage example::
 
         import liesel.model.distreg as dr
+
 
         def test_build_empty(local_caplog):
             with local_caplog() as caplog:
