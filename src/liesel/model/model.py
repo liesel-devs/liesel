@@ -19,17 +19,7 @@ import jax.numpy as jnp
 import jax.random
 import networkx as nx
 
-from .nodes import (
-    Array,
-    Calc,
-    Dist,
-    Group,
-    Node,
-    NodeState,
-    Value,
-    Var,
-    VarValue,
-)
+from .nodes import Array, Calc, Dist, Group, Node, NodeState, Value, Var, VarValue
 from .viz import plot_nodes, plot_vars
 
 __all__ = ["GraphBuilder", "Model", "load_model", "save_model"]
@@ -826,6 +816,7 @@ class Model:
         copy: bool = False,
         to_float32: bool = True,
     ):
+        self._to_float32 = to_float32
         if grow:
             model = (
                 GraphBuilder(to_float32=to_float32).add(*nodes_and_vars).build_model()
@@ -1016,22 +1007,23 @@ class Model:
         their parent variables and nodes. The new model contains copies of these \
         variables and nodes.
         """
+
         nodes_to_include = set()
 
         for node in of:
             if isinstance(node, Var):
                 nodes_to_include.update(nx.ancestors(self.var_graph, node))
+
             else:
                 nodes_to_include.update(nx.ancestors(self.node_graph, node))
+
             nodes_to_include.add(node)
 
         copy_of_nodes_to_include = deepcopy(nodes_to_include)
 
-        for node in copy_of_nodes_to_include:
-            if hasattr(node, "_unset_model"):
-                node._unset_model()
-
-        return Model(list(copy_of_nodes_to_include))
+        return Model(
+            list(copy_of_nodes_to_include), to_float32=self._to_float32, copy=False
+        )
 
     @property
     def log_lik(self) -> Array:
@@ -1661,11 +1653,20 @@ class Model:
         for node in model.nodes.values():
             node._outdated = False
 
-        for key, value in position.items():
-            try:
-                model.nodes[key].value = value  # type: ignore  # data node
-            except KeyError:
-                model.vars[key].value = value
+        # temporarily disable auto_update to avoid shape incompatibilities
+        # when updating variables sequentially with new shapes
+        original_auto_update = model.auto_update
+        model.auto_update = False
+
+        try:
+            for key, value in position.items():
+                try:
+                    model.nodes[key].value = value  # type: ignore  # data node
+                except KeyError:
+                    model.vars[key].value = value
+        finally:
+            # restore original auto_update setting
+            model.auto_update = original_auto_update
 
         model.update()
         return model.state
@@ -1722,6 +1723,11 @@ class Model:
         # filter samples to include only samples that belong to the submodel
         vars_and_nodes = list(submodel.vars) + list(submodel.nodes)
         filtered_samples = {k: v for k, v in samples.items() if k in vars_and_nodes}
+        if not filtered_samples:
+            raise ValueError(
+                "No samples provided for the variables or nodes in the submodel."
+                f"Nodes in submodel: {vars_and_nodes}"
+            )
 
         # single prediction function
         def predict_one(samples):
@@ -1808,10 +1814,17 @@ class TemporaryModel:
         If ``silent=True``, all logging will be suppressed.
     """
 
-    def __init__(self, *vars_and_nodes, verbose: bool = False, silent: bool = False):
+    def __init__(
+        self,
+        *vars_and_nodes,
+        verbose: bool = False,
+        silent: bool = False,
+        to_float32: bool = True,
+    ):
         self.vars_and_nodes = vars_and_nodes
         self.verbose = verbose
         self.silent = silent
+        self.to_float32 = to_float32
 
         if verbose and silent:
             raise ValueError(f"{verbose=} and {silent=} cannot both be True.")
@@ -1826,7 +1839,7 @@ class TemporaryModel:
     def __enter__(self):
         verbose = self.verbose
 
-        gb = GraphBuilder().add(*self.vars_and_nodes)
+        gb = GraphBuilder(to_float32=self.to_float32).add(*self.vars_and_nodes)
         nodes, _vars = gb._all_nodes_and_vars()
 
         automatically_set_names = gb._set_missing_names()

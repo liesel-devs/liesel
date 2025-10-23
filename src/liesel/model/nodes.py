@@ -11,15 +11,7 @@ from collections.abc import Callable, Hashable, Iterable, Sequence
 from functools import wraps
 from itertools import chain
 from types import MappingProxyType
-from typing import (
-    IO,
-    TYPE_CHECKING,
-    Any,
-    Literal,
-    NamedTuple,
-    TypeGuard,
-    TypeVar,
-)
+from typing import IO, TYPE_CHECKING, Any, Literal, NamedTuple, TypeGuard, TypeVar
 
 import jax
 import tensorflow_probability.substrates.jax.bijectors as jb
@@ -1655,7 +1647,7 @@ class Var:
         if inference is None and self.inference:
             raise ValueError(
                 f"{self} has inference information in the .inference attribute. "
-                "To proceed with transformation, the .inference information needs to"
+                "To proceed with transformation, the .inference information needs to "
                 "be explicitly removed. You can transform with ``inference='drop'``."
             )
 
@@ -2054,7 +2046,14 @@ class Var:
 
         from liesel.model.model import TemporaryModel
 
-        with TemporaryModel(self, verbose=verbose) as model:
+        try:
+            to_float32 = not jax.config.jax_enable_x64  # type: ignore
+        except Exception:  # just to be really sure in case anything changes
+            # this is an implicit test of whether x64 flag is enabled
+            import jax.numpy as jnp
+
+            to_float32 = jnp.array(1.0).dtype == jnp.dtype("float32")
+        with TemporaryModel(self, verbose=verbose, to_float32=to_float32) as model:
             match which:
                 case "vars":
                     subgraph = model.var_parental_subgraph(self)
@@ -2211,7 +2210,14 @@ class Var:
 
         from .model import TemporaryModel
 
-        with TemporaryModel(self, silent=True) as model:
+        try:
+            to_float32 = not jax.config.jax_enable_x64  # type: ignore
+        except Exception:  # just to be really sure in case anything changes
+            # this is an implicit test of whether x64 flag is enabled
+            import jax.numpy as jnp
+
+            to_float32 = jnp.array(1.0).dtype == jnp.dtype("float32")
+        with TemporaryModel(self, silent=True, to_float32=to_float32) as model:
             drawn_samples = model.sample(
                 shape=shape,
                 seed=seed,

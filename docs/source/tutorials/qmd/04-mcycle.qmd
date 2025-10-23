@@ -147,7 +147,12 @@ be changed.
 We retrieve the nodes and vars using {meth}`.Model.pop_nodes_and_vars`,
 which renders the model empty.
 
+Note, RLiesel automatically populates the parameter variables with intormation
+how to conduct the MCMC inference. To trasform the variables, we can drop it.
+We setup the MCMC sampler in the next chunk.
+
 After transformation, there are two additional nodes in the new model graph.
+
 
 ```{python}
 #| label: transformed-graph
@@ -156,8 +161,8 @@ import tensorflow_probability.substrates.jax.bijectors as tfb
 
 nodes, _vars = model.pop_nodes_and_vars()
 
-_vars["loc_np0_tau2"].transform(tfb.Exp())
-_vars["scale_np0_tau2"].transform(tfb.Exp())
+_vars["loc_np0_tau2"].transform(tfb.Exp(), inference='drop')
+_vars["scale_np0_tau2"].transform(tfb.Exp(), inference='drop')
 
 gb = lsl.GraphBuilder().add(_vars["response"])
 
