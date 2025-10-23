@@ -176,8 +176,8 @@ class FlatBatchedLogProb:
         self,
         model: BatchedLieselInterface,
         model_state: ModelState,
-        batch_indices: BatchIndices,
         position_keys: Sequence[str],
+        batch_indices: BatchIndices,
         diff_mode: Literal["forward", "reverse"] = "forward",
     ):
         self.model = model
