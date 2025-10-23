@@ -8,7 +8,7 @@ from ..goose.types import Array
 from .model import Model
 
 
-class LogProb:
+class LieselLogProb:
     """
     Interface for evaluating the unnormalized log probability of a Liesel model.
 
@@ -68,7 +68,7 @@ class LogProb:
         return self._hessian_fn(position)
 
 
-class FlatLogProb:
+class FlatLieselLogProb:
     """
     Interface for evaluating the unnormalized log probability of a Liesel model.
 
