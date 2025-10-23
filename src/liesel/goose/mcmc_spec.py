@@ -31,20 +31,10 @@ class LieselMCMC:
     which
         A named inference configuration to use. If None, the default inference \
         attached to each variable is used.
-    kwargs_strategy
-        How keyword arguments are handled for kernels in a group. Can be one of:
-        ``"single_kwargs"``: Keyword arguments are defined on only one
-        :class:`.MCMCSpec` object (default).
-        ``"compare_keys"``: Kernel keyword arguments within a group can
-        be specified on multiple :class:`.MCMCSpec` instances, but must  have the same
-        keys. This option is dangerous, because it will not ensure that the *values*
-        associated with the keys are consistent. Silently, only the last seen value
-        will be used.
     """
 
     model: Model
     which: str | None = None
-    kwargs_strategy: Literal["single_kwargs", "compare_keys"] = "single_kwargs"
 
     def get_spec(self, var: Var) -> MCMCSpec | None:
         """
@@ -117,25 +107,23 @@ class LieselMCMC:
                         f" {group_name}."
                     )
 
-                if not group.kwargs:
+                if inference.kernel_kwargs is None:
+                    pass
+                elif not group.kwargs:
                     group.kwargs = inference.kernel_kwargs
-                elif inference.kernel_kwargs:
-                    if self.kwargs_strategy == "single_kwargs":
+                else:
+                    if group.kwargs is not inference.kernel_kwargs:
                         raise ValueError(
-                            "When using "
-                            f"{self.kwargs_strategy=}, "
-                            "only one spec within each group is allowed to "
-                            "define kernel keyword arguments, but we found multiple."
+                            "Found incoherent kernel keyword arguments for "
+                            f"kernel group {group_name}. "
+                            "When supplying kernel keyword arguments for multiple "
+                            "inference objects, they all have to point to the "
+                            "same object. "
+                            "Alternatively, if you pass the kernel keyword arguments "
+                            "to only "
+                            "one inference object in the group, they will be applied "
+                            "for the whole group."
                         )
-                    elif self.kwargs_strategy == "compare_keys":
-                        if not list(group.kwargs) == list(inference.kernel_kwargs):
-                            raise ValueError(
-                                "Found incoherent kernel keyword arguments for "
-                                f"kernel group {group_name}: {list(group.kwargs)} "
-                                f"!= {list(inference.kernel_kwargs)}"
-                            )
-                    else:
-                        raise ValueError(f"{self.kwargs_strategy=} not defined.")
 
                 group.position_keys.append(name)
 

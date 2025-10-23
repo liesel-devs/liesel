@@ -298,7 +298,11 @@ class TestLieselMCMC:
         assert len(kernels) == 1
         assert kernels[0].position_keys == ("sigma", "mu")
 
-    def test_kernel_group2(self):
+    def test_kernel_group_equal_kwargs(self):
+        """
+        Uses equal kernel kwargs for two MCMCSpecs.
+        Since they are not the same object, we get an error.
+        """
         spec1 = gs.MCMCSpec(
             gs.NUTSKernel,
             kernel_group="a",
@@ -329,13 +333,84 @@ class TestLieselMCMC:
 
         with pytest.raises(ValueError):
             mcmc = gs.LieselMCMC(model)
-            kernels = mcmc.get_kernel_list()
+            mcmc.get_kernel_list()
 
-        mcmc = gs.LieselMCMC(model, kwargs_strategy="compare_keys")
+    def test_kernel_group_kwargs_same_object(self):
+        """
+        Uses identical objects for the kernel kwargs.
+        """
+        kwargs = {"mm_diag": True, "da_target_accept": 0.8}
+        spec1 = gs.MCMCSpec(
+            gs.NUTSKernel,
+            kernel_group="a",
+            kernel_kwargs=kwargs,
+        )
+
+        spec2 = gs.MCMCSpec(
+            gs.NUTSKernel,
+            kernel_group="a",
+            kernel_kwargs=kwargs,
+        )
+
+        mu = lsl.Var.new_param(
+            0.0,
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            inference=spec1,
+            name="mu",
+        )
+
+        sigma = lsl.Var.new_param(
+            1.0,
+            lsl.Dist(tfd.InverseGamma, concentration=1.0, scale=0.5),
+            inference=spec2,
+            name="sigma",
+        )
+
+        model = lsl.Model([mu, sigma])
+
+        mcmc = gs.LieselMCMC(model)
         kernels = mcmc.get_kernel_list()
-
         assert len(kernels) == 1
         assert kernels[0].position_keys == ("sigma", "mu")
+
+    def test_kernel_group_kwargs_defined_once(self):
+        """
+        Only one spec defines the kernel kwargs, they get used.
+        """
+        kwargs = {"mm_diag": False, "da_target_accept": 0.5}
+        spec1 = gs.MCMCSpec(
+            gs.NUTSKernel,
+            kernel_group="a",
+            kernel_kwargs=kwargs,
+        )
+
+        spec2 = gs.MCMCSpec(
+            gs.NUTSKernel,
+            kernel_group="a",
+        )
+
+        mu = lsl.Var.new_param(
+            0.0,
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            inference=spec1,
+            name="mu",
+        )
+
+        sigma = lsl.Var.new_param(
+            1.0,
+            lsl.Dist(tfd.InverseGamma, concentration=1.0, scale=0.5),
+            inference=spec2,
+            name="sigma",
+        )
+
+        model = lsl.Model([mu, sigma])
+
+        mcmc = gs.LieselMCMC(model)
+        kernels = mcmc.get_kernel_list()
+        assert len(kernels) == 1
+        assert kernels[0].position_keys == ("sigma", "mu")
+        assert kernels[0].da_target_accept == pytest.approx(kwargs["da_target_accept"])
+        assert kernels[0].mm_diag == pytest.approx(kwargs["mm_diag"])
 
     def test_incoherent_kernel_group(self):
         mu = lsl.Var.new_param(
