@@ -31,24 +31,24 @@ class State:
 state_dataclass = State(mu.value, sigma.value, y.value)
 
 
-def log_prob(state) -> float:
+def log_prob_dict(state) -> float:
     mu = state["mu"]
     sigma = state["sigma"]
     y = state["y"]
     return tfd.Normal(loc=mu, scale=sigma).log_prob(y).sum()
 
 
-interface_dict = gs.DictInterface(log_prob)
+interface_dict = gs.DictInterface(log_prob_dict)
 
 
-def log_prob(state) -> float:
+def log_prob_dataclass(state) -> float:
     mu = state.mu
     sigma = state.sigma
     y = state.y
     return tfd.Normal(loc=mu, scale=sigma).log_prob(y).sum()
 
 
-interface_dataclass = gs.DataclassInterface(log_prob)
+interface_dataclass = gs.DataclassInterface(log_prob_dataclass)
 
 
 interfaces = [interface_liesel, interface_dict, interface_dataclass]
@@ -56,7 +56,7 @@ states = [state_liesel, state_dict, state_dataclass]
 
 
 class TestLogProb:
-    def test_log_prob(self) -> None:
+    def test_log_prob(self):
         vals = []
         for interface, state in zip(interfaces, states):
             lp = gs.LogProb(interface, state)
@@ -68,7 +68,7 @@ class TestLogProb:
             assert jnp.allclose(val, vals[0])
             assert not jnp.isnan(val)
 
-    def test_grad(self) -> None:
+    def test_grad(self):
         vals = []
         for interface, state in zip(interfaces, states):
             lp = gs.LogProb(interface, state)
@@ -81,7 +81,7 @@ class TestLogProb:
             assert not jnp.isnan(val["mu"])
 
     @pytest.mark.parametrize("diff_mode", ("forward", "reverse"))
-    def test_hessian(self, diff_mode) -> None:
+    def test_hessian(self, diff_mode):
         vals = []
         for interface, state in zip(interfaces, states):
             lp = gs.LogProb(interface, state, diff_mode=diff_mode)
@@ -95,7 +95,7 @@ class TestLogProb:
 
 
 class TestFlatLogProb:
-    def test_log_prob(self) -> None:
+    def test_log_prob(self):
         vals = []
         for interface, state in zip(interfaces, states):
             lp = gs.FlatLogProb(interface, state, ["mu"])
@@ -107,7 +107,7 @@ class TestFlatLogProb:
             assert jnp.allclose(val, vals[0])
             assert not jnp.isnan(val)
 
-    def test_grad(self) -> None:
+    def test_grad(self):
         vals = []
         for interface, state in zip(interfaces, states):
             lp = gs.FlatLogProb(interface, state, ["mu"])
@@ -120,7 +120,7 @@ class TestFlatLogProb:
             assert not jnp.isnan(val)
 
     @pytest.mark.parametrize("diff_mode", ("forward", "reverse"))
-    def test_hessian(self, diff_mode) -> None:
+    def test_hessian(self, diff_mode):
         vals = []
         for interface, state in zip(interfaces, states):
             lp = gs.FlatLogProb(interface, state, ["mu"], diff_mode=diff_mode)
