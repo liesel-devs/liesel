@@ -42,10 +42,10 @@ class OptimEngine:
         if isinstance(self.seed, int):
             self.seed = jax.random.key(self.seed)
 
-        if self.track_keys is not None:
+        if len(self.track_keys) > 0:
             raise NotImplementedError(
                 "The argument track_keys=True is currently not operational. "
-                "Please set to None."
+                "Please set to []."
             )
 
     @property
