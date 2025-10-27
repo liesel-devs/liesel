@@ -180,9 +180,19 @@ class OptimResult:
     best_it: int
     duration: float
 
-    def plot_loss(self, legend: bool = True, title: str | None = None):
+    def plot_loss(
+        self, legend: bool = True, title: str | None = None, window: int | None = None
+    ):
         history = self.history.loss_df()
+        n_iter = history.shape[0]
+        if window is None:
+            window = n_iter
+
+        i = n_iter - window
+        history = history.iloc[i:, :]
+
         plot_data = history[["loss_validation", "loss_train", "iteration"]]
+
         plot_data = plot_data.melt(
             id_vars="iteration", var_name="loss_type", value_name="loss"
         )
@@ -191,8 +201,10 @@ class OptimResult:
             p9.ggplot(plot_data)
             + p9.aes(x="iteration", y="loss", color="loss_type", linetype="loss_type")
             + p9.geom_line()
-            + p9.geom_vline(xintercept=self.best_it)
         )
+
+        if self.best_it >= i:
+            p = p + p9.geom_vline(xintercept=self.best_it)
 
         if title is not None:
             p += p9.ggtitle(title)
@@ -207,8 +219,15 @@ class OptimResult:
         legend: bool = True,
         title: str | None = None,
         subset: Sequence[str] | None = None,
+        window: int | None = None,
     ):
         history = self.history.position_df(subset)
+        n_iter = history.shape[0]
+        if window is None:
+            window = n_iter
+
+        i = n_iter - window
+        history = history.iloc[i:, :]
 
         plot_data = history.melt(id_vars="iteration")
 
