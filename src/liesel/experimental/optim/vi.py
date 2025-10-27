@@ -23,6 +23,7 @@ class Elbo(LossMixin):
         q: Model,
         split: StateSplit,
         nsamples: int = 5,
+        nsamples_validation: int = 50,
         q_to_p: Callable[[Position], Position] = lambda x: x,
         scale: bool = False,
     ):
@@ -30,6 +31,7 @@ class Elbo(LossMixin):
         self.q = q
         self.split = split
         self.nsamples = nsamples
+        self.nsamples_validation = nsamples_validation
         self._q_to_p = q_to_p
         self.scale = scale
         self.scalar = self.split.n_train if self.scale else 1.0
@@ -40,6 +42,7 @@ class Elbo(LossMixin):
         vi_dist: VDist | CompositeVDist,
         split: StateSplit,
         nsamples: int = 5,
+        nsamples_validation: int = 50,
         scale: bool = False,
     ) -> Elbo:
         return cls(
@@ -47,6 +50,7 @@ class Elbo(LossMixin):
             vi_dist.q,
             split=split,
             nsamples=nsamples,
+            nsamples_validation=nsamples_validation,
             scale=scale,
             q_to_p=vi_dist.q_to_p,
         )
@@ -72,12 +76,14 @@ class Elbo(LossMixin):
         p_state: ModelState | None = None,
         q_state: ModelState | None = None,
         scale_log_lik_p_by: float = 1.0,
+        nsamples: int | None = None,
     ):
         obs = Position({}) if obs is None else obs
         q_state = self.q.state if q_state is None else q_state
         p_state = self.split.train_state if p_state is None else p_state
 
-        samples = self.q.sample((self.nsamples,), seed=key, newdata=params)
+        nsamples = nsamples if nsamples is not None else self.nsamples
+        samples = self.q.sample((nsamples,), seed=key, newdata=params)
 
         def single_sample(sample):
             p_state_new = self.p.update_state(self.q_to_p(sample) | obs, p_state)
@@ -117,6 +123,7 @@ class Elbo(LossMixin):
             Position(carry.batch),
             self.split.train_state,
             self.q.state,
+            nsamples=self.nsamples,
         )
         return -elbo / self.scalar
 
@@ -128,6 +135,7 @@ class Elbo(LossMixin):
             self.split.train_state,
             self.q.state,
             self.scale_validation,
+            nsamples=self.nsamples_validation,
         )
         return -elbo / self.scalar
 
