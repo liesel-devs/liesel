@@ -265,21 +265,8 @@ class OptimEngine:
 
         return carry
 
-    def _fit(self) -> OptimCarry:
-        stopper = self.stopper
+    def _init_carry(self, niter: int) -> OptimCarry:
         key = self.seed
-
-        update_progress, close_progress_bar = self.get_tqdm_callback(stopper)
-
-        def while_body(carry: OptimCarry) -> OptimCarry:
-            carry = self.outer_loop_over_iterations(carry)
-
-            if self.show_progress:
-                update_progress(carry)
-            return carry
-
-        def cont(carry: OptimCarry) -> bool:
-            return stopper.continue_(carry.i_it, carry.history.loss_validation)
 
         initial_position = self.loss.position(self.position_keys)
         if self.track_keys:
@@ -292,12 +279,34 @@ class OptimEngine:
         carry = OptimCarry.new(
             batch_indices=self.batching_indices,
             key=key,
-            niter=stopper.max_iter,
+            niter=niter,
             position=initial_position,
             tracked=initial_tracked,
             optimizers=self.optimizers,
             model_state=self.initial_state,
         )
+        return carry
+
+    def _fit(self) -> OptimCarry:
+        stopper = self.stopper
+
+        update_progress, close_progress_bar = self.get_tqdm_callback(stopper)
+
+        def while_body(carry: OptimCarry) -> OptimCarry:
+            carry = self.outer_loop_over_iterations(carry)
+
+            if self.show_progress:
+                update_progress(carry)
+            return carry
+
+        def cont(carry: OptimCarry) -> bool:
+            loss_train_is_nan = jnp.isnan(carry.loss_train)
+            loss_validation_is_nan = jnp.isnan(carry.loss_validation)
+            no_nan_loss = ~jnp.logical_or(loss_train_is_nan, loss_validation_is_nan)
+            continue_ = stopper.continue_(carry.i_it, carry.history.loss_validation)
+            return jnp.logical_and(no_nan_loss, continue_)
+
+        carry = self._init_carry(stopper.max_iter)
 
         result = jax.lax.while_loop(
             cond_fun=cont,

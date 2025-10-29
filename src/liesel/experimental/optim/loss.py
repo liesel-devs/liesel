@@ -96,7 +96,7 @@ class NegLogProbLoss(LossMixin):
         position = Position(params | carry.batch | carry.fixed_position)
         new_state = self.model.update_state(position, carry.model_state)
 
-        scale_log_lik_by = self.split.n_train / carry.batch_indices.batch_size
+        scale_log_lik_by = carry.batch_indices.n / carry.batch_indices.batch_size
 
         log_lik = scale_log_lik_by * new_state["_model_log_lik"].value
         log_prior = new_state["_model_log_prior"].value
@@ -111,9 +111,8 @@ class NegLogProbLoss(LossMixin):
         return -(log_lik + log_prior) / self.scalar
 
     def loss_validation(self, params: Position, carry: OptimCarry):
-        position = Position(params | self.split.validation | carry.fixed_position)
+        position = Position(params | self.split.validate | carry.fixed_position)
         new_state = self.model.update_state(position, carry.model_state)
-
         loss = -self.scale_validation * new_state["_model_log_lik"].value
         if self.validation_strategy == "log_prob":
             loss -= new_state["_model_log_prior"].value
