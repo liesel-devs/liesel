@@ -11,9 +11,9 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 from ...model import Dist, Model, Var
 from ...model.model import TemporaryModel
 from .loss import LossMixin
-from .split import StateSplit
+from .split import PositionSplit
 from .state import OptimCarry
-from .types import ModelInterface, ModelState, Position
+from .types import ModelState, Position
 
 
 class Elbo(LossMixin):
@@ -21,7 +21,7 @@ class Elbo(LossMixin):
         self,
         p: Model,
         q: Model,
-        split: StateSplit,
+        split: PositionSplit,
         nsamples: int = 5,
         nsamples_validation: int = 50,
         q_to_p: Callable[[Position], Position] = lambda x: x,
@@ -40,7 +40,7 @@ class Elbo(LossMixin):
     def new(
         cls,
         vi_dist: VDist | CompositeVDist,
-        split: StateSplit,
+        split: PositionSplit,
         nsamples: int = 5,
         nsamples_validation: int = 50,
         scale: bool = False,
@@ -56,11 +56,11 @@ class Elbo(LossMixin):
         )
 
     @property
-    def model(self) -> Model | ModelInterface:
+    def model(self) -> Model:
         return self.p
 
-    def model_state(self) -> ModelState:
-        return self.p.state
+    def position(self, position_keys: Sequence[str]) -> Position:
+        return self.q.extract_position(position_keys)
 
     def q_to_p(self, q_position: Position) -> Position:
         """
@@ -72,15 +72,14 @@ class Elbo(LossMixin):
         self,
         params: Position,
         key: jax.Array,
-        obs: Position | None = None,
-        p_state: ModelState | None = None,
+        p_state: ModelState,
         q_state: ModelState | None = None,
+        obs: Position | None = None,
         scale_log_lik_p_by: float = 1.0,
         nsamples: int | None = None,
     ):
         obs = Position({}) if obs is None else obs
         q_state = self.q.state if q_state is None else q_state
-        p_state = self.split.train_state if p_state is None else p_state
 
         nsamples = nsamples if nsamples is not None else self.nsamples
         samples = self.q.sample((nsamples,), seed=key, newdata=params)
@@ -99,9 +98,6 @@ class Elbo(LossMixin):
         elbo_samples = jax.vmap(single_sample)(samples)
         return jnp.mean(elbo_samples)
 
-    def position(self, position_keys: Sequence[str]) -> Position:
-        return self.q.extract_position(position_keys, self.q.state)
-
     def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
         batch_size = carry.batch_indices.batch_size
 
@@ -109,10 +105,11 @@ class Elbo(LossMixin):
         elbo = self.evaluate(
             Position(params | carry.fixed_position),
             carry.key,
-            Position(carry.batch),
-            self.split.train_state,
-            self.q.state,
-            scale_log_lik_p_by,
+            obs=Position(carry.batch),
+            p_state=carry.model_state,
+            q_state=self.q.state,
+            scale_log_lik_p_by=scale_log_lik_p_by,
+            nsamples=self.nsamples,
         )
         return -elbo / self.scalar
 
@@ -120,9 +117,9 @@ class Elbo(LossMixin):
         elbo = self.evaluate(
             Position(params | carry.fixed_position),
             carry.key,
-            Position(carry.batch),
-            self.split.train_state,
-            self.q.state,
+            obs=Position(carry.batch),
+            p_state=carry.model_state,
+            q_state=self.q.state,
             nsamples=self.nsamples,
         )
         return -elbo / self.scalar
@@ -131,10 +128,10 @@ class Elbo(LossMixin):
         elbo = self.evaluate(
             Position(params | carry.fixed_position),
             carry.key,
-            Position(self.split.validation_position),
-            self.split.train_state,
-            self.q.state,
-            self.scale_validation,
+            obs=Position(self.split.validation),
+            p_state=carry.model_state,
+            q_state=self.q.state,
+            scale_log_lik_p_by=self.scale_validation,
             nsamples=self.nsamples_validation,
         )
         return -elbo / self.scalar

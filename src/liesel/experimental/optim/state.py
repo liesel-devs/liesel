@@ -10,6 +10,8 @@ import optax
 import pandas as pd
 import plotnine as p9
 
+from liesel.goose.types import ModelState
+
 from ...goose.pytree import register_dataclass_as_pytree
 from .batch import Batches
 from .optimizer import Optimizer
@@ -135,6 +137,7 @@ class OptimCarry:
     batch_indices: Batches
 
     optimizer_states: list[optax.OptState]
+    model_state: ModelState
 
     batch: Position = field(default_factory=lambda: Position({}))
     fixed_position: Position = field(default_factory=lambda: Position({}))
@@ -154,6 +157,7 @@ class OptimCarry:
         tracked: Position | None,
         batch_indices: Batches,
         optimizers: Sequence[Optimizer],
+        model_state: ModelState,
     ) -> OptimCarry:
         opt_states = {opt.identifier: opt.init(position) for opt in optimizers}
         inst = cls(
@@ -163,6 +167,7 @@ class OptimCarry:
             history=OptimHistory.new(niter, position, tracked),
             batch_indices=batch_indices,
             optimizer_states=opt_states,
+            model_state=model_state,
         )
         return inst
 

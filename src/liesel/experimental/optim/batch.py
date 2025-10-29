@@ -59,8 +59,8 @@ class Batches:
         batch_indices = jnp.reshape(idx, (self.n_full_batches, self.batch_size))
         return batch_indices
 
-    def get_batched_position(self, position: Position, batch_number: int) -> Position:
-        idx = self.batch_indices[batch_number]
+    def get_batched_position(self, position: Position, batch_index: int) -> Position:
+        idx = self.batch_indices[batch_index]
         batched_position = {}
         assert isinstance(self.axes, dict)
         for key in self.position_keys:

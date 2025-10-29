@@ -4,7 +4,7 @@ from typing import Literal, Protocol
 import jax
 
 from ...model import Model
-from .split import StateSplit
+from .split import PositionSplit, StateSplit
 from .state import OptimCarry
 from .types import ModelInterface, ModelState, Position
 
@@ -75,7 +75,7 @@ class NegLogProbLoss(LossMixin):
     def __init__(
         self,
         model: Model,
-        split: StateSplit,
+        split: PositionSplit,
         validation_strategy: Literal["log_lik", "log_prob"] = "log_lik",
         scale: bool = False,
     ):
@@ -86,15 +86,15 @@ class NegLogProbLoss(LossMixin):
         self.scalar = self.split.n_train if self.scale else 1.0
 
     @property
-    def model(self) -> Model | ModelInterface:
+    def model(self) -> Model:
         return self._model
 
     def position(self, position_keys: Sequence[str]) -> Position:
-        return self.model.extract_position(position_keys, self.split.train_state)
+        return self.model.extract_position(position_keys)
 
     def loss_train_batched(self, params: Position, carry: OptimCarry):
         position = Position(params | carry.batch | carry.fixed_position)
-        new_state = self.model.update_state(position, self.split.train_state)
+        new_state = self.model.update_state(position, carry.model_state)
 
         scale_log_lik_by = self.split.n_train / carry.batch_indices.batch_size
 
@@ -104,17 +104,15 @@ class NegLogProbLoss(LossMixin):
 
     def loss_train(self, params: Position, carry: OptimCarry):
         position = Position(params | carry.batch | carry.fixed_position)
-        new_state = self.model.update_state(position, self.split.train_state)
+        new_state = self.model.update_state(position, carry.model_state)
 
         log_lik = new_state["_model_log_lik"].value
         log_prior = new_state["_model_log_prior"].value
         return -(log_lik + log_prior) / self.scalar
 
     def loss_validation(self, params: Position, carry: OptimCarry):
-        position = Position(
-            params | self.split.validation_position | carry.fixed_position
-        )
-        new_state = self.model.update_state(position, self.split.train_state)
+        position = Position(params | self.split.validation | carry.fixed_position)
+        new_state = self.model.update_state(position, carry.model_state)
 
         loss = -self.scale_validation * new_state["_model_log_lik"].value
         if self.validation_strategy == "log_prob":

@@ -12,10 +12,10 @@ from tqdm import tqdm
 from .batch import Batches
 from .loss import Loss
 from .optimizer import Optimizer
-from .split import StateSplit
+from .split import PositionSplit
 from .state import OptimCarry, OptimHistory, OptimResult
 from .stop import Stopper
-from .types import Position
+from .types import ModelState, Position
 
 Array = Any
 
@@ -24,10 +24,11 @@ Array = Any
 class OptimEngine:
     loss: Loss
     batching_indices: Batches
-    data: StateSplit
+    data: PositionSplit
     optimizers: Sequence[Optimizer]
     stopper: Stopper
     seed: int | jax.Array
+    initial_state: ModelState
     restore_best_position: bool = True
     prune_history: bool = True
     show_progress: bool = True
@@ -200,9 +201,7 @@ class OptimEngine:
     def inner_loop_over_batches(self, j, carry: OptimCarry):
         Bi = carry.batch_indices
 
-        obs_batch = Bi.extract_batched_position(
-            self.loss.model, self.data.train_state, batch_number=j
-        )
+        obs_batch = Bi.get_batched_position(self.data.train, batch_index=j)
         carry.batch = obs_batch
 
         for opt in self.optimizers:
@@ -285,7 +284,7 @@ class OptimEngine:
         initial_position = self.loss.position(self.position_keys)
         if self.track_keys:
             initial_tracked = self.loss.model.extract_position(
-                self.track_keys, self.data.train_state
+                self.track_keys, self.initial_state
             )
         else:
             initial_tracked = Position({})
@@ -297,6 +296,7 @@ class OptimEngine:
             position=initial_position,
             tracked=initial_tracked,
             optimizers=self.optimizers,
+            model_state=self.initial_state,
         )
 
         result = jax.lax.while_loop(
