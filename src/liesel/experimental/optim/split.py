@@ -36,14 +36,14 @@ class StateSplit:
     pos_test: Position
 
     n_train: int
-    n_validation: int
+    n_validate: int
     n_test: int
 
     def __repr__(self) -> str:
         name = type(self).__name__
         out = (
             f"{name}(train={self.n_train}, "
-            f"validation={self.n_validation}, test={self.n_test})"
+            f"validation={self.n_validate}, test={self.n_test})"
         )
         return out
 
@@ -174,7 +174,7 @@ class Split:
             split.validate,
             split.test,
             n_train=self.n_train,
-            n_validation=self.n_validate,
+            n_validate=self.n_validate,
             n_test=self.n_test,
         )
 
