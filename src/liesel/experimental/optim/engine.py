@@ -252,8 +252,6 @@ class OptimEngine:
                 loss_i
             )
 
-        carry.i_it += 1
-
         if self.save_position_history:
             carry.history.position = carry.history.update_position_history(
                 carry.i_it, carry.history.position, carry.position
@@ -263,12 +261,15 @@ class OptimEngine:
                     carry.i_it, carry.history.tracked, carry.tracked
                 )
 
+        carry.i_it += 1
+
         return carry
 
     def _init_carry(self, niter: int) -> OptimCarry:
         key = self.seed
 
         initial_position = self.loss.position(self.position_keys)
+
         if self.track_keys:
             initial_tracked = self.loss.model.extract_position(
                 self.track_keys, self.initial_state
