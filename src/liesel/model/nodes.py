@@ -1427,7 +1427,7 @@ class Var:
         calc = Calc(
             function,
             *inputs,
-            _name=f"{name}_calc",
+            _name=f"{name}_calc" if name else "",
             _needs_seed=_needs_seed,
             _update_on_init=_update_on_init,
             **kwinputs,
