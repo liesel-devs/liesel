@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from functools import partial
 from typing import Self
 
 import jax
@@ -84,18 +85,23 @@ class Elbo(LossMixin):
         nsamples = nsamples if nsamples is not None else self.nsamples
         samples = self.q.sample((nsamples,), seed=key, newdata=params)
 
-        def single_sample(sample):
+        @partial(jax.vmap)
+        def log_prob_of_p(sample):
             p_state_new = self.p.update_state(self.q_to_p(sample) | obs, p_state)
-            q_state_new = self.q.update_state(sample | params, q_state)
-
             log_lik_p = p_state_new["_model_log_lik"].value
             log_prior_p = p_state_new["_model_log_prior"].value
             log_prob_p = scale_log_lik_p_by * log_lik_p + log_prior_p
 
-            log_prob_q = q_state_new["_model_log_prob"].value
-            return log_prob_p - log_prob_q
+            return log_prob_p
 
-        elbo_samples = jax.vmap(single_sample)(samples)
+        @partial(jax.vmap)
+        def log_prob_of_q(sample):
+            q_state_new = self.q.update_state(sample | params, q_state)
+            log_prob_q = q_state_new["_model_log_prob"].value
+            return log_prob_q
+
+        elbo_samples = log_prob_of_p(samples) - log_prob_of_q(samples)
+
         return jnp.mean(elbo_samples)
 
     def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
