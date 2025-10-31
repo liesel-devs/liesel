@@ -23,7 +23,7 @@ Array = Any
 @dataclass
 class OptimEngine:
     loss: Loss
-    batching_indices: Batches
+    batches: Batches
     data: PositionSplit
     optimizers: Sequence[Optimizer]
     stopper: Stopper
@@ -226,7 +226,7 @@ class OptimEngine:
         # run all full batches once
         carry = jax.lax.fori_loop(
             lower=0,
-            upper=self.batching_indices.n_full_batches,
+            upper=self.batches.n_full_batches,
             body_fun=self.inner_loop_over_batches,
             init_val=carry,
         )
@@ -277,7 +277,7 @@ class OptimEngine:
             initial_tracked = Position({})
 
         carry = OptimCarry.new(
-            batch_indices=self.batching_indices,
+            batch_indices=self.batches,
             key=key,
             niter=niter,
             position=initial_position,
