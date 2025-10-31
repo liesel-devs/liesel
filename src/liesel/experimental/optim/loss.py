@@ -19,7 +19,7 @@ class Loss(Protocol):
     def scale_validation(self) -> float: ...
 
     @property
-    def n_validation(self) -> int: ...
+    def n_validate(self) -> int: ...
 
     @property
     def model(self) -> Model | ModelInterface: ...
@@ -41,24 +41,24 @@ class Loss(Protocol):
 class LossMixin:
     @property
     def obs_validation(self) -> Position:
-        if self.split.n_validation == 0:
+        if self.split.n_validate == 0:
             return self.split.train
 
         return self.split.validation
 
     @property
     def scale_validation(self) -> float:
-        if self.split.n_validation == 0:
+        if self.split.n_validate == 0:
             return 1.0
 
-        return self.split.n_train / self.n_validation
+        return self.split.n_train / self.n_validate
 
     @property
-    def n_validation(self) -> int:
-        if self.split.n_validation == 0:
+    def n_validate(self) -> int:
+        if self.split.n_validate == 0:
             return self.split.n_train
 
-        return self.split.n_validation
+        return self.split.n_validate
 
     def value_and_grad(self, params: Position, carry: OptimCarry):
         grad_ = jax.value_and_grad(self.loss_train_batched, argnums=0)

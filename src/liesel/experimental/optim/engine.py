@@ -353,7 +353,7 @@ class OptimEngine:
         loss_i = carry.loss_train
         carry.history.loss_train = carry.history.loss_train.at[i].set(loss_i)
 
-        if self.split.n_validation > 0:
+        if self.split.n_validate > 0:
             key, subkey = jax.random.split(carry.key)
             carry.key = subkey
 
