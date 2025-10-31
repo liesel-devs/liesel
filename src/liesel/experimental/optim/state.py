@@ -62,6 +62,9 @@ class OptimHistory:
         for name, value in self.position.items():
             if subset and name not in subset:
                 continue
+            pdim = int(jnp.prod(jnp.array(value.shape[1:])))
+            hdim = value.shape[0]
+            value = jnp.reshape(value, (hdim, pdim))
             data |= array_to_dict(value.squeeze(), names_prefix=name)
 
         df = pd.DataFrame(data)
