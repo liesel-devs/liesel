@@ -24,7 +24,7 @@ Array = Any
 class OptimEngine:
     loss: Loss
     batches: Batches
-    data: PositionSplit
+    split: PositionSplit
     optimizers: Sequence[Optimizer]
     stopper: Stopper
     seed: int | jax.Array
@@ -201,7 +201,7 @@ class OptimEngine:
     def inner_loop_over_batches(self, j, carry: OptimCarry):
         Bi = carry.batch_indices
 
-        obs_batch = Bi.get_batched_position(self.data.train, batch_index=j)
+        obs_batch = Bi.get_batched_position(self.split.train, batch_index=j)
         carry.batch = obs_batch
 
         for opt in self.optimizers:
@@ -235,7 +235,7 @@ class OptimEngine:
         loss_i = carry.loss_train
         carry.history.loss_train = carry.history.loss_train.at[i].set(loss_i)
 
-        if self.data.n_validation > 0:
+        if self.split.n_validation > 0:
             key, subkey = jax.random.split(carry.key)
             carry.key = subkey
 
