@@ -1,5 +1,6 @@
 from .batch import Batches as Batches
 from .engine import OptimEngine as OptimEngine
+from .engine import QuickOptim as QuickOptim
 from .loss import NegLogProbLoss as NegLogProbLoss
 from .optimizer import LBFGS as LBFGS
 from .optimizer import Optimizer as Optimizer
