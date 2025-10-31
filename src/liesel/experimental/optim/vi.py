@@ -106,9 +106,9 @@ class Elbo(LossMixin):
         return jnp.mean(elbo_samples)
 
     def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
-        batch_size = carry.batch_indices.batch_size
+        batch_size = carry.batches.batch_size
 
-        scale_log_lik_p_by = carry.batch_indices.n / batch_size
+        scale_log_lik_p_by = carry.batches.n / batch_size
         elbo = self.evaluate(
             Position(params | carry.fixed_position),
             carry.key,

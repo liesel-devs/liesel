@@ -199,7 +199,7 @@ class OptimEngine:
         return carry
 
     def inner_loop_over_batches(self, j, carry: OptimCarry):
-        Bi = carry.batch_indices
+        Bi = carry.batches
 
         obs_batch = Bi.get_batched_position(self.split.train, batch_index=j)
         carry.batch = obs_batch
@@ -208,7 +208,7 @@ class OptimEngine:
             carry = self.inner_loop_over_optimizers(opt, carry)
 
         loss = self.loss.loss_train_batched(carry.position, carry)
-        carry.loss_train += loss / carry.batch_indices.n_full_batches
+        carry.loss_train += loss / carry.batches.n_full_batches
 
         carry.i_batch = j
         carry.batch = Position({})
@@ -220,7 +220,7 @@ class OptimEngine:
         key, subkey = jax.random.split(carry.key)
         carry.key = key
 
-        carry.batch_indices.indices = carry.batch_indices.permute_indices(subkey)
+        carry.batches.indices = carry.batches.permute_indices(subkey)
 
         carry.loss_train = 0.0
         # run all full batches once
@@ -277,7 +277,7 @@ class OptimEngine:
             initial_tracked = Position({})
 
         carry = OptimCarry.new(
-            batch_indices=self.batches,
+            batches=self.batches,
             key=key,
             niter=niter,
             position=initial_position,

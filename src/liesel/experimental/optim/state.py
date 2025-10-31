@@ -134,7 +134,7 @@ class OptimCarry:
     tracked: Position  # recorded position (for diagnosis)
 
     history: OptimHistory
-    batch_indices: Batches
+    batches: Batches
 
     optimizer_states: list[optax.OptState]
     model_state: ModelState
@@ -155,7 +155,7 @@ class OptimCarry:
         niter: int,
         position: Position,
         tracked: Position | None,
-        batch_indices: Batches,
+        batches: Batches,
         optimizers: Sequence[Optimizer],
         model_state: ModelState,
     ) -> OptimCarry:
@@ -165,7 +165,7 @@ class OptimCarry:
             position=position,
             tracked=tracked,
             history=OptimHistory.new(niter, position, tracked),
-            batch_indices=batch_indices,
+            batches=batches,
             optimizer_states=opt_states,
             model_state=model_state,
         )
