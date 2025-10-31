@@ -151,7 +151,7 @@ class OptimEngine:
     prune_history: bool = True
     show_progress: bool = True
     save_position_history: bool = True
-    progress_n_updates: int = 20
+    progress_n_updates: int = 100
     track_keys: Sequence[str] = field(default_factory=list)
 
     def __post_init__(self):
