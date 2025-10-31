@@ -252,8 +252,6 @@ class OptimEngine:
                 loss_i
             )
 
-        carry.i_it += 1
-
         if self.save_position_history:
             carry.history.position = carry.history.update_position_history(
                 carry.i_it, carry.history.position, carry.position
@@ -262,6 +260,8 @@ class OptimEngine:
                 carry.history.tracked = carry.history.update_position_history(
                     carry.i_it, carry.history.tracked, carry.tracked
                 )
+
+        carry.i_it += 1
 
         return carry
 
