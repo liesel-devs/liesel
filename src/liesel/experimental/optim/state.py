@@ -206,14 +206,22 @@ class OptimResult:
         history = history.iloc[i:, :]
 
         plot_data = history[["loss_validate", "loss_train", "epoch"]]
+        plot_data.rename(
+            columns={
+                "loss_validate": "Validation",
+                "loss_train": "Training",
+                "epoch": "Epoch",
+            },
+            inplace=True,
+        )
 
         plot_data = plot_data.melt(
-            id_vars="epoch", var_name="loss_type", value_name="loss"
+            id_vars="Epoch", var_name="Loss Type", value_name="Loss"
         )
 
         p = (
             p9.ggplot(plot_data)
-            + p9.aes(x="epoch", y="loss", color="loss_type", linetype="loss_type")
+            + p9.aes(x="Epoch", y="Loss", color="Loss Type", linetype="Loss Type")
             + p9.geom_line()
         )
 
@@ -225,8 +233,6 @@ class OptimResult:
 
         if not legend:
             p += p9.theme(legend_position="none")
-
-        p += p9.labs(x="Epoch", y="Loss")
 
         return p
 
@@ -247,15 +253,18 @@ class OptimResult:
         i = n_iter - window
         history = history.iloc[i:, :]
 
-        plot_data = history.melt(id_vars="epoch")
+        plot_data = history.melt(
+            id_vars="epoch", var_name="Parameter", value_name="Value"
+        )
+        plot_data.rename(columns={"epoch": "Epoch"}, inplace=True)
 
         p = (
             p9.ggplot(plot_data)
             + p9.aes(
-                x="epoch",
-                y="value",
-                color="variable",
-                group="variable",
+                x="Epoch",
+                y="Value",
+                color="Parameter",
+                group="Parameter",
             )
             + p9.geom_line()
             + p9.geom_vline(xintercept=self.best_epoch)
@@ -266,8 +275,6 @@ class OptimResult:
 
         if not legend:
             p += p9.theme(legend_position="none")
-
-        p += p9.labs(x="Epoch", y="Value")
 
         return p
 
