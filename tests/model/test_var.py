@@ -583,24 +583,24 @@ class TestVarPredictions:
 
         _ = lsl.Model([yvar])
 
-        samples = {"b": jax.random.uniform(jax.random.PRNGKey(3), (4, 7))}
+        samples = {"b": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1))}
 
         pred = loc.predict(samples)
-        assert jnp.allclose(pred, x * jnp.expand_dims(samples["b"], -1))
+        assert jnp.allclose(pred, x * samples["b"])
         assert pred.shape[-1] == x.shape[-1]
 
         # predict at new observations with same shape
         xnew = jax.random.uniform(jax.random.PRNGKey(5), (n,))
         pred = loc.predict(samples, newdata={"x": xnew})
 
-        assert jnp.allclose(pred, xnew * jnp.expand_dims(samples["b"], -1))
+        assert jnp.allclose(pred, xnew * samples["b"])
         assert pred.shape[-1] == x.shape[-1]
 
         # predict at new grid of observations
         xnew = jnp.linspace(0, 10)
         pred = loc.predict(samples, newdata={"x": xnew})
 
-        assert jnp.allclose(pred, xnew * jnp.expand_dims(samples["b"], -1))
+        assert jnp.allclose(pred, xnew * samples["b"])
         assert pred.shape[-1] != x.shape[-1]
         assert pred.shape[-1] == xnew.shape[-1]
 
