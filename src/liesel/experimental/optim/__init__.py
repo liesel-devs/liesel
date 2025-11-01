@@ -4,6 +4,7 @@ from .engine import QuickOptim as QuickOptim
 from .loss import NegLogProbLoss as NegLogProbLoss
 from .optimizer import LBFGS as LBFGS
 from .optimizer import Optimizer as Optimizer
+from .split import PositionSplit as PositionSplit
 from .split import Split as Split
 from .stop import Stopper as Stopper
 from .vi import CompositeVDist as CompositeVDist
