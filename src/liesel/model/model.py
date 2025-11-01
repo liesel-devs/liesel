@@ -1019,11 +1019,12 @@ class Model:
 
             nodes_to_include.add(node)
 
-        copy_of_nodes_to_include = deepcopy(nodes_to_include)
+        nodes, vars_ = self.copy_nodes_and_vars()
+        nodes_and_vars = nodes | vars_
 
-        return Model(
-            list(copy_of_nodes_to_include), to_float32=self._to_float32, copy=False
-        )
+        copy_of_nodes_to_include = [nodes_and_vars[n.name] for n in nodes_to_include]
+
+        return Model(copy_of_nodes_to_include, to_float32=self._to_float32, copy=False)
 
     @property
     def log_lik(self) -> Array:
