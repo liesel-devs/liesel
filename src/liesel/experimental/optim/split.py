@@ -8,6 +8,7 @@ import jax.numpy as jnp
 
 from ...model import Model
 from .types import ModelInterface, ModelState, Position
+from .util import guess_n
 
 
 @dataclass
@@ -27,6 +28,25 @@ class PositionSplit:
             f"validate={self.n_validate}, test={self.n_test})"
         )
         return out
+
+    @staticmethod
+    def from_model(
+        model: Model,
+        position_keys: Sequence[str] | None = None,
+        n: int | None = None,
+        share_validate: int = 0,
+        share_test: int = 0,
+        axes: dict[str, int] | None = None,
+        default_axis: int = 0,
+    ) -> PositionSplit:
+        pos_keys = position_keys or list(model.observed)
+        n = n or guess_n(model, axis=default_axis)
+        splitter = Split.from_share(
+            pos_keys, n, share_validate, share_test, axes, default_axis
+        )
+
+        pos = model.extract_position(pos_keys)
+        return splitter.split_position(pos)
 
 
 @dataclass
