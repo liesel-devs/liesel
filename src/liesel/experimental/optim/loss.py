@@ -19,7 +19,7 @@ class Loss(Protocol):
     def scale_validation(self) -> float: ...
 
     @property
-    def n_validation(self) -> int: ...
+    def n_validate(self) -> int: ...
 
     @property
     def model(self) -> Model | ModelInterface: ...
@@ -41,24 +41,24 @@ class Loss(Protocol):
 class LossMixin:
     @property
     def obs_validation(self) -> Position:
-        if self.split.n_validation == 0:
+        if self.split.n_validate == 0:
             return self.split.train
 
         return self.split.validation
 
     @property
     def scale_validation(self) -> float:
-        if self.split.n_validation == 0:
+        if self.split.n_validate == 0:
             return 1.0
 
-        return self.split.n_train / self.n_validation
+        return self.split.n_train / self.n_validate
 
     @property
-    def n_validation(self) -> int:
-        if self.split.n_validation == 0:
+    def n_validate(self) -> int:
+        if self.split.n_validate == 0:
             return self.split.n_train
 
-        return self.split.n_validation
+        return self.split.n_validate
 
     def value_and_grad(self, params: Position, carry: OptimCarry):
         grad_ = jax.value_and_grad(self.loss_train_batched, argnums=0)
@@ -96,7 +96,7 @@ class NegLogProbLoss(LossMixin):
         position = Position(params | carry.batch | carry.fixed_position)
         new_state = self.model.update_state(position, carry.model_state)
 
-        scale_log_lik_by = carry.batch_indices.n / carry.batch_indices.batch_size
+        scale_log_lik_by = carry.batches.n / carry.batches.batch_size
 
         log_lik = scale_log_lik_by * new_state["_model_log_lik"].value
         log_prior = new_state["_model_log_prior"].value

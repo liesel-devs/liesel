@@ -17,14 +17,14 @@ class PositionSplit:
     test: Position
 
     n_train: int
-    n_validation: int
+    n_validate: int
     n_test: int
 
     def __repr__(self) -> str:
         name = type(self).__name__
         out = (
             f"{name}(train={self.n_train}, "
-            f"validation={self.n_validation}, test={self.n_test})"
+            f"validate={self.n_validate}, test={self.n_test})"
         )
         return out
 
@@ -43,7 +43,7 @@ class StateSplit:
         name = type(self).__name__
         out = (
             f"{name}(train={self.n_train}, "
-            f"validation={self.n_validate}, test={self.n_test})"
+            f"validate={self.n_validate}, test={self.n_test})"
         )
         return out
 
@@ -80,14 +80,14 @@ class Split:
                 f"imply a total of {n=}, which is > the provided {self.n=}."
             )
 
-        if self.share_validation < 0.0 or self.share_test < 0.0:
+        if self.share_validate < 0.0 or self.share_test < 0.0:
             raise ValueError(
-                f"One of {self.share_validation=} or {self.share_test=} is negative, "
+                f"One of {self.share_validate=} or {self.share_test=} is negative, "
                 "which is not allowed."
             )
 
     @property
-    def share_validation(self) -> float:
+    def share_validate(self) -> float:
         return self.n_validate / self.n
 
     @property
@@ -124,7 +124,7 @@ class Split:
         return self.indices[: self.n_train]
 
     @property
-    def indices_validation(self) -> jax.Array:
+    def indices_validate(self) -> jax.Array:
         start = self.n_train
         end = self.n_train + self.n_validate
         return self.indices[start:end]
@@ -145,7 +145,7 @@ class Split:
             axis = self.axes.get(key, self.default_axis)
             train_values = jnp.take(position[key], self.indices_train, axis=axis)
             validation_values = jnp.take(
-                position[key], self.indices_validation, axis=axis
+                position[key], self.indices_validate, axis=axis
             )
             test_values = jnp.take(position[key], self.indices_test, axis=axis)
 
@@ -158,7 +158,7 @@ class Split:
             validate=Position(validation_position),
             test=Position(test_position),
             n_train=self.n_train,
-            n_validation=self.n_validate,
+            n_validate=self.n_validate,
             n_test=self.n_test,
         )
         return split
@@ -182,6 +182,6 @@ class Split:
         name = type(self).__name__
         out = (
             f"{name}(train={self.n_train}, "
-            f"validation={self.n_validate}, test={self.n_test})"
+            f"validate={self.n_validate}, test={self.n_test})"
         )
         return out

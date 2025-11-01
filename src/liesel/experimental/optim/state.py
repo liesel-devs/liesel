@@ -62,6 +62,9 @@ class OptimHistory:
         for name, value in self.position.items():
             if subset and name not in subset:
                 continue
+            pdim = int(jnp.prod(jnp.array(value.shape[1:])))
+            hdim = value.shape[0]
+            value = jnp.reshape(value, (hdim, pdim))
             data |= array_to_dict(value.squeeze(), names_prefix=name)
 
         df = pd.DataFrame(data)
@@ -134,7 +137,7 @@ class OptimCarry:
     tracked: Position  # recorded position (for diagnosis)
 
     history: OptimHistory
-    batch_indices: Batches
+    batches: Batches
 
     optimizer_states: list[optax.OptState]
     model_state: ModelState
@@ -155,7 +158,7 @@ class OptimCarry:
         niter: int,
         position: Position,
         tracked: Position | None,
-        batch_indices: Batches,
+        batches: Batches,
         optimizers: Sequence[Optimizer],
         model_state: ModelState,
     ) -> OptimCarry:
@@ -165,7 +168,7 @@ class OptimCarry:
             position=position,
             tracked=tracked,
             history=OptimHistory.new(niter, position, tracked),
-            batch_indices=batch_indices,
+            batches=batches,
             optimizer_states=opt_states,
             model_state=model_state,
         )

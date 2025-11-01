@@ -5,6 +5,7 @@ from functools import partial
 from typing import Self
 
 import jax
+import jax.flatten_util
 import jax.numpy as jnp
 import tensorflow_probability.substrates.jax.bijectors as tfb
 import tensorflow_probability.substrates.jax.distributions as tfd
@@ -105,9 +106,9 @@ class Elbo(LossMixin):
         return jnp.mean(elbo_samples)
 
     def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
-        batch_size = carry.batch_indices.batch_size
+        batch_size = carry.batches.batch_size
 
-        scale_log_lik_p_by = carry.batch_indices.n / batch_size
+        scale_log_lik_p_by = carry.batches.n / batch_size
         elbo = self.evaluate(
             Position(params | carry.fixed_position),
             carry.key,
@@ -162,6 +163,13 @@ class VDist:
 
     def q_to_p(self, pos: Position) -> Position:
         return self._unflatten(pos[self._flat_pos_name])
+
+    def p_to_q_array(self, pos: Position) -> jax.Array:
+        """Potentially useful for initializing with pre-fitted values."""
+        if not list(pos) == self.position_keys:
+            raise ValueError("list(pos) must be equal to self.position_keys.")
+
+        return jax.flatten_util.ravel_pytree(pos)[0]
 
     @property
     def parameters(self) -> list[str]:

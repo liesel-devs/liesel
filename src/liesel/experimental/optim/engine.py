@@ -3,28 +3,146 @@ from __future__ import annotations
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 import jax
 import jax.numpy as jnp
+import optax
 from tqdm import tqdm
 
+from ...model import Model
 from .batch import Batches
-from .loss import Loss
-from .optimizer import Optimizer
-from .split import PositionSplit
+from .loss import Loss, NegLogProbLoss
+from .optimizer import LBFGS, Optimizer
+from .split import PositionSplit, Split
 from .state import OptimCarry, OptimHistory, OptimResult
 from .stop import Stopper
 from .types import ModelState, Position
+from .vi import Elbo, VDist
 
 Array = Any
+
+
+class QuickOptim:
+    def __init__(
+        self,
+        model: Model,
+        n: int | None = None,
+        loss: Literal["neg_log_prob", "elbo_meanfield"] = "neg_log_prob",
+        max_iter: int = 1000,
+        patience: int = 10,
+        share_validate: float = 0.0,
+        batch_size: int | None = None,
+        shuffle_batches: bool = False,
+        seed: int | None = None,
+    ) -> None:
+        self.model = model
+        self._n = n
+        self._loss = loss
+        self.max_iter = max_iter
+        self.patience = patience
+        self.share_validate = share_validate
+        self.batch_size = batch_size
+        self.shuffle_batches = shuffle_batches
+        self.seed = int(time.time()) if seed is None else seed
+
+    @property
+    def n(self) -> int:
+        if self._n is not None:
+            return self._n
+
+        return self.guess_n()
+
+    def guess_n(self) -> int:
+        obs = list(self.model.observed.values())
+        obs_ndim = [jnp.asarray(o.value).ndim for o in obs]
+        min_ndim = min(obs_ndim)
+
+        obs_shapes = [jnp.shape(o.value) for o in obs]
+
+        dims = []
+        for dim in range(min_ndim):
+            dims.append([s[dim] for s in obs_shapes])
+
+        for i, dim in enumerate(dims):
+            if len(set(dim)) == 1:
+                n = dim[0]
+                return n
+
+            # currently only allow first dimension to be batching dimension
+            # by default
+            if i >= 1:
+                raise RuntimeError("Failed to guess sample size.")
+
+        raise RuntimeError("Failed to guess sample size.")
+
+    def batches(self) -> Batches:
+        b = Batches(
+            position_keys=list(self.model.observed),
+            n=self.n,
+            batch_size=self.batch_size,
+            axes=None,
+            default_axis=0,
+            shuffle=self.shuffle_batches,
+        )
+
+        return b
+
+    def split(self) -> PositionSplit:
+        splitter = Split.from_share(
+            list(self.model.observed), n=self.n, share_validate=self.share_validate
+        )
+        pos = self.model.extract_position(list(self.model.observed))
+        split = splitter.split_position(pos)
+        return split
+
+    def optimizers(self, loss: Loss) -> Sequence[Optimizer]:
+        match self._loss:
+            case "neg_log_prob":
+                return [LBFGS(list(self.model.parameters))]
+            case "elbo_meanfield":
+                assert isinstance(loss, Elbo)
+                opt = Optimizer(
+                    list(loss.q.parameters),
+                    optimizer=optax.adam(learning_rate=1e-3),
+                )
+                return [opt]
+
+    def neg_log_prob_loss(self, split: PositionSplit) -> NegLogProbLoss:
+        return NegLogProbLoss(self.model, split)
+
+    def elbo_loss(self, split: PositionSplit) -> Elbo:
+        vdist = VDist(list(self.model.parameters), self.model).mvn_diag().build()
+        return Elbo.new(vdist, split=split, nsamples=10)
+
+    def loss(self, split: PositionSplit) -> NegLogProbLoss | Elbo:
+        match self._loss:
+            case "neg_log_prob":
+                return self.neg_log_prob_loss(split)
+            case "elbo_meanfield":
+                return self.elbo_loss(split)
+
+    def build_engine(self) -> OptimEngine:
+        split = self.split()
+        loss = self.loss(split)
+
+        engine = OptimEngine(
+            loss=loss,
+            batches=self.batches(),
+            split=split,
+            optimizers=self.optimizers(loss),
+            stopper=Stopper(self.max_iter, patience=10, atol=0.0, rtol=1e-6),
+            initial_state=self.model.state,
+            seed=self.seed,
+        )
+        return engine
 
 
 @dataclass
 class OptimEngine:
     loss: Loss
-    batching_indices: Batches
-    data: PositionSplit
+    batches: Batches
+    split: PositionSplit
     optimizers: Sequence[Optimizer]
     stopper: Stopper
     seed: int | jax.Array
@@ -33,7 +151,7 @@ class OptimEngine:
     prune_history: bool = True
     show_progress: bool = True
     save_position_history: bool = True
-    progress_n_updates: int = 20
+    progress_n_updates: int = 100
     track_keys: Sequence[str] = field(default_factory=list)
 
     def __post_init__(self):
@@ -199,16 +317,16 @@ class OptimEngine:
         return carry
 
     def inner_loop_over_batches(self, j, carry: OptimCarry):
-        Bi = carry.batch_indices
+        Bi = carry.batches
 
-        obs_batch = Bi.get_batched_position(self.data.train, batch_index=j)
+        obs_batch = Bi.get_batched_position(self.split.train, batch_index=j)
         carry.batch = obs_batch
 
         for opt in self.optimizers:
             carry = self.inner_loop_over_optimizers(opt, carry)
 
         loss = self.loss.loss_train_batched(carry.position, carry)
-        carry.loss_train += loss / carry.batch_indices.n_full_batches
+        carry.loss_train += loss / carry.batches.n_full_batches
 
         carry.i_batch = j
         carry.batch = Position({})
@@ -220,13 +338,13 @@ class OptimEngine:
         key, subkey = jax.random.split(carry.key)
         carry.key = key
 
-        carry.batch_indices.indices = carry.batch_indices.permute_indices(subkey)
+        carry.batches.indices = carry.batches.permute_indices(subkey)
 
         carry.loss_train = 0.0
         # run all full batches once
         carry = jax.lax.fori_loop(
             lower=0,
-            upper=self.batching_indices.n_full_batches,
+            upper=self.batches.n_full_batches,
             body_fun=self.inner_loop_over_batches,
             init_val=carry,
         )
@@ -235,7 +353,7 @@ class OptimEngine:
         loss_i = carry.loss_train
         carry.history.loss_train = carry.history.loss_train.at[i].set(loss_i)
 
-        if self.data.n_validation > 0:
+        if self.split.n_validate > 0:
             key, subkey = jax.random.split(carry.key)
             carry.key = subkey
 
@@ -278,7 +396,7 @@ class OptimEngine:
             initial_tracked = Position({})
 
         carry = OptimCarry.new(
-            batch_indices=self.batching_indices,
+            batches=self.batches,
             key=key,
             niter=niter,
             position=initial_position,
