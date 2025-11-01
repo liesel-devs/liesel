@@ -1,5 +1,6 @@
 import os.path
 
+import jax
 import matplotlib
 import pytest
 
@@ -20,6 +21,24 @@ matplotlib.use("template")
 path_module_dir = os.path.dirname(__file__)
 path = os.path.join(path_module_dir, "files", "summary_viz_res.pkl")
 results = SamplingResults.pkl_load(path)
+
+
+def test_data_high_dim_params():
+    samples = {"a": jax.random.normal(key=jax.random.key(1), shape=(4, 30, 2, 2))}
+    df = _setup_plot_df(
+        samples, params=None, param_indices=None, chain_indices=None, max_chains=None
+    )
+
+    assert df.shape == (480, 6)
+
+
+def test_data_scalar_param():
+    samples = {"a": jax.random.normal(key=jax.random.key(1), shape=(4, 30))}
+    df = _setup_plot_df(
+        samples, params=None, param_indices=None, chain_indices=None, max_chains=None
+    )
+
+    assert df.shape == (120, 6)
 
 
 def test_data_complete():
