@@ -411,6 +411,30 @@ class TestModel:
 
 
 class TestPredictions:
+    def test_predict_no_batching_dim(self, model) -> None:
+        position = model.extract_position(["sigma_hat", "beta_hat"])
+
+        # predictions at current values for all vars
+        pred = model.predict(samples=position)
+        assert pred["mu"].shape == (500,)
+        assert len(pred) == len(model.vars)
+
+    def test_predict_one_batching_dim(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Uniform().sample((3), rnd.PRNGKey(6)),
+            "beta_hat": tfd.Uniform().sample((3, 2), rnd.PRNGKey(6)),
+        }
+
+        # manual prediction
+        manual_pred = jnp.einsum(
+            "nk,...k->...n", model.vars["X"].value, samples["beta_hat"]
+        )
+
+        pred = model.predict(samples=samples)
+        assert jnp.allclose(pred["mu"], manual_pred)
+        assert pred["mu"].shape == (3, 500)
+        assert len(pred) == len(model.vars)
+
     def test_predict_at_current_state(self, model) -> None:
         samples = {
             "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
