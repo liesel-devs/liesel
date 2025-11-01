@@ -212,9 +212,9 @@ class OptimEngine:
 
         result = OptimResult(
             history=history,
-            final_it=int(carry.epoch),
+            final_epoch=int(carry.epoch),
             best_position=final_position,
-            best_it=int(ibest),
+            best_epoch=int(ibest),
             duration=end - start,
         )
         return result

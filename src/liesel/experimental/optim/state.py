@@ -189,9 +189,9 @@ class OptimCarry:
 class OptimResult:
     history: OptimHistory
 
-    final_it: int
+    final_epoch: int
     best_position: Position
-    best_it: int
+    best_epoch: int
     duration: float
 
     def plot_loss(
@@ -217,8 +217,8 @@ class OptimResult:
             + p9.geom_line()
         )
 
-        if self.best_it >= i:
-            p = p + p9.geom_vline(xintercept=self.best_it)
+        if self.best_epoch >= i:
+            p = p + p9.geom_vline(xintercept=self.best_epoch)
 
         if title is not None:
             p += p9.ggtitle(title)
