@@ -1,4 +1,5 @@
 
+
 # Linear regression
 
 In this tutorial, we build a linear regression model with Liesel and
@@ -32,9 +33,9 @@ distribution and the parameter nodes would have some prior distribution
 (for example, a normal-inverse-gamma prior). The following table shows
 the different node types and some examples of their use cases.
 
-|                          | **Strong node**              | **Weak node**                                      |
-|--------------------------|------------------------------|----------------------------------------------------|
-| **With distribution**    | Response, parameter, …       | Copula, …                                          |
+|  | **Strong node** | **Weak node** |
+|----|----|----|
+| **With distribution** | Response, parameter, … | Copula, … |
 | **Without distribution** | Covariate, hyperparameter, … | Inverse link function, parameter transformation, … |
 
 A PGM is essentially a collection of connected nodes. Two nodes can be
@@ -250,7 +251,7 @@ the `log_prob` property.
 model.log_prob
 ```
 
-    Array(-1179.656, dtype=float32)
+    Array(-1179.6559, dtype=float32)
 
 The individual nodes also have a `log_prob` property. In fact, because
 of the conditional independence assumption of the model, the
@@ -265,7 +266,7 @@ we would get two log-probability values, and for `y` we would get 500.
 beta.log_prob.sum() + sigma_sq.log_prob + y.log_prob.sum()
 ```
 
-    Array(-1179.656, dtype=float32)
+    Array(-1179.6559, dtype=float32)
 
 Nodes without a probability distribution return a log-probability of
 zero.
@@ -300,7 +301,7 @@ print(f"Old log-prob of sigma_sq: {sigma_sq.log_prob}")
 print(f"Old log-prob of y: {y.log_prob.sum()}\n")
 ```
 
-    Old log-prob of y: -1161.6356201171875
+    Old log-prob of y: -1161.635498046875
 
 ``` python
 sigma_sq.value = 1.0
@@ -393,30 +394,30 @@ engine.sample_all_epochs()
 
 
       0%|                                                  | 0/3 [00:00<?, ?chunk/s]
-     33%|##############                            | 1/3 [00:01<00:03,  1.55s/chunk]
-    100%|##########################################| 3/3 [00:01<00:00,  1.94chunk/s]
+     33%|##############                            | 1/3 [00:03<00:06,  3.07s/chunk]
+    100%|##########################################| 3/3 [00:03<00:00,  1.03s/chunk]
 
       0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|########################################| 1/1 [00:00<00:00, 2549.73chunk/s]
+    100%|########################################| 1/1 [00:00<00:00, 1120.57chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 3546.98chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 1497.70chunk/s]
 
       0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|########################################| 4/4 [00:00<00:00, 3917.16chunk/s]
+    100%|########################################| 4/4 [00:00<00:00, 1831.97chunk/s]
 
       0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|########################################| 8/8 [00:00<00:00, 1410.62chunk/s]
+    100%|#########################################| 8/8 [00:00<00:00, 915.16chunk/s]
 
       0%|                                                 | 0/20 [00:00<?, ?chunk/s]
-    100%|#######################################| 20/20 [00:00<00:00, 383.53chunk/s]
+    100%|#######################################| 20/20 [00:00<00:00, 246.73chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 2239.95chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 1534.69chunk/s]
 
       0%|                                                 | 0/40 [00:00<?, ?chunk/s]
-     82%|################################1      | 33/40 [00:00<00:00, 322.40chunk/s]
-    100%|#######################################| 40/40 [00:00<00:00, 304.43chunk/s]
+     60%|#######################4               | 24/40 [00:00<00:00, 225.96chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 196.37chunk/s]
 
 ``` python
 results = engine.get_results()
@@ -425,224 +426,391 @@ summary
 ```
 
 <p>
+
 <strong>Parameter summary:</strong>
 </p>
+
 <table border="0" class="dataframe">
+
 <thead>
+
 <tr style="text-align: right;">
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 kernel
 </th>
+
 <th>
+
 mean
 </th>
+
 <th>
+
 sd
 </th>
+
 <th>
+
 q_0.05
 </th>
+
 <th>
+
 q_0.5
 </th>
+
 <th>
+
 q_0.95
 </th>
+
 <th>
+
 sample_size
 </th>
+
 <th>
+
 ess_bulk
 </th>
+
 <th>
+
 ess_tail
 </th>
+
 <th>
+
 rhat
 </th>
+
 </tr>
+
 <tr>
+
 <th>
+
 parameter
 </th>
+
 <th>
+
 index
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 </tr>
+
 </thead>
+
 <tbody>
+
 <tr>
+
 <th rowspan="2" valign="top">
+
 beta
 </th>
+
 <th>
+
 (0,)
 </th>
+
 <td>
+
 kernel_00
 </td>
+
 <td>
-0.980
+
+0.982
 </td>
+
 <td>
-0.089
+
+0.087
 </td>
+
 <td>
-0.833
+
+0.840
 </td>
+
 <td>
-0.981
+
+0.983
 </td>
+
 <td>
-1.127
+
+1.126
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
-1023.503
+
+831.271
 </td>
+
 <td>
-1223.167
+
+877.956
 </td>
+
 <td>
+
 1.001
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 (1,)
 </th>
+
 <td>
+
 kernel_00
 </td>
+
 <td>
-1.915
+
+1.911
 </td>
+
 <td>
+
 0.154
 </td>
+
 <td>
-1.660
+
+1.648
 </td>
+
 <td>
-1.914
+
+1.915
 </td>
+
 <td>
-2.170
+
+2.153
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
-996.507
+
+860.853
 </td>
+
 <td>
-1195.113
+
+1205.948
 </td>
+
 <td>
+
 1.001
 </td>
+
 </tr>
+
 </tbody>
+
 </table>
+
 <p>
+
 <strong>Error summary:</strong>
 </p>
+
 <table border="0" class="dataframe">
+
 <thead>
+
 <tr style="text-align: right;">
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 count
 </th>
+
 <th>
+
 relative
 </th>
+
 </tr>
+
 <tr>
+
 <th>
+
 kernel
 </th>
+
 <th>
+
 error_code
 </th>
+
 <th>
+
 error_msg
 </th>
+
 <th>
+
 phase
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 </tr>
+
 </thead>
+
 <tbody>
+
 <tr>
+
 <th rowspan="2" valign="top">
+
 kernel_00
 </th>
+
 <th rowspan="2" valign="top">
+
 1
 </th>
+
 <th rowspan="2" valign="top">
+
 divergent transition
 </th>
+
 <th>
+
 warmup
 </th>
+
 <td>
-61
+
+55
 </td>
+
 <td>
-0.015
+
+0.014
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 posterior
 </th>
+
 <td>
+
 0
 </td>
+
 <td>
+
 0.000
 </td>
+
 </tr>
+
 </tbody>
+
 </table>
 
 If we need more samples, we can append another epoch to the engine and
@@ -660,8 +828,8 @@ engine.sample_next_epoch()
 
 
       0%|                                                 | 0/40 [00:00<?, ?chunk/s]
-     82%|################################1      | 33/40 [00:00<00:00, 323.90chunk/s]
-    100%|#######################################| 40/40 [00:00<00:00, 309.92chunk/s]
+     60%|#######################4               | 24/40 [00:00<00:00, 234.71chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 200.36chunk/s]
 
 No compilation is required at this point, so this is pretty fast.
 
@@ -725,30 +893,30 @@ engine.sample_all_epochs()
 
 
       0%|                                                  | 0/3 [00:00<?, ?chunk/s]
-     33%|##############                            | 1/3 [00:01<00:03,  1.53s/chunk]
-    100%|##########################################| 3/3 [00:01<00:00,  1.96chunk/s]
+     33%|##############                            | 1/3 [00:03<00:07,  3.51s/chunk]
+    100%|##########################################| 3/3 [00:03<00:00,  1.17s/chunk]
 
       0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|########################################| 1/1 [00:00<00:00, 2681.78chunk/s]
+    100%|########################################| 1/1 [00:00<00:00, 1311.54chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 3288.36chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 1553.73chunk/s]
 
       0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|########################################| 4/4 [00:00<00:00, 3724.13chunk/s]
+    100%|########################################| 4/4 [00:00<00:00, 1807.89chunk/s]
 
       0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|########################################| 8/8 [00:00<00:00, 1187.60chunk/s]
+    100%|#########################################| 8/8 [00:00<00:00, 753.17chunk/s]
 
       0%|                                                 | 0/20 [00:00<?, ?chunk/s]
-    100%|#######################################| 20/20 [00:00<00:00, 377.76chunk/s]
+    100%|#######################################| 20/20 [00:00<00:00, 240.76chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 3371.63chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 1620.67chunk/s]
 
       0%|                                                 | 0/40 [00:00<?, ?chunk/s]
-     80%|###############################2       | 32/40 [00:00<00:00, 316.52chunk/s]
-    100%|#######################################| 40/40 [00:00<00:00, 299.90chunk/s]
+     57%|######################4                | 23/40 [00:00<00:00, 218.99chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 188.84chunk/s]
 
 Goose provides a couple of convenient numerical and graphical summary
 tools. The {class}`~.goose~.goose.Summary` class computes several
@@ -761,268 +929,457 @@ summary = gs.Summary(results)
 summary
 ```
 
-<div class="cell-output-display">
-
 <p>
+
 <strong>Parameter summary:</strong>
 </p>
+
 <table border="0" class="dataframe">
+
 <thead>
+
 <tr style="text-align: right;">
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 kernel
 </th>
+
 <th>
+
 mean
 </th>
+
 <th>
+
 sd
 </th>
+
 <th>
+
 q_0.05
 </th>
+
 <th>
+
 q_0.5
 </th>
+
 <th>
+
 q_0.95
 </th>
+
 <th>
+
 sample_size
 </th>
+
 <th>
+
 ess_bulk
 </th>
+
 <th>
+
 ess_tail
 </th>
+
 <th>
+
 rhat
 </th>
+
 </tr>
+
 <tr>
+
 <th>
+
 parameter
 </th>
+
 <th>
+
 index
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 </tr>
+
 </thead>
+
 <tbody>
+
 <tr>
+
 <th rowspan="2" valign="top">
+
 beta
 </th>
+
 <th>
+
 (0,)
 </th>
+
 <td>
+
 kernel_00
 </td>
+
 <td>
+
+0.981
+</td>
+
+<td>
+
+0.091
+</td>
+
+<td>
+
+0.829
+</td>
+
+<td>
+
 0.983
 </td>
+
 <td>
-0.089
-</td>
-<td>
-0.836
-</td>
-<td>
-0.983
-</td>
-<td>
+
 1.129
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
-1178.689
+
+1163.373
 </td>
+
 <td>
-1425.977
+
+1263.447
 </td>
+
 <td>
-1.003
+
+1.002
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 (1,)
 </th>
+
 <td>
+
 kernel_00
 </td>
+
 <td>
-1.911
+
+1.914
 </td>
+
 <td>
-0.157
+
+0.161
 </td>
+
 <td>
-1.655
+
+1.649
 </td>
+
 <td>
-1.911
+
+1.913
 </td>
+
 <td>
-2.177
+
+2.184
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
-1234.211
+
+1183.415
 </td>
+
 <td>
-1393.635
+
+1230.437
 </td>
+
 <td>
-1.004
+
+1.003
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 sigma_sq
 </th>
+
 <th>
+
 ()
 </th>
+
 <td>
+
 kernel_01
 </td>
+
 <td>
+
 1.044
 </td>
+
 <td>
+
 0.067
 </td>
+
 <td>
+
 0.939
 </td>
+
 <td>
+
 1.040
 </td>
+
 <td>
+
 1.161
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
-3857.532
+
+3891.854
 </td>
+
 <td>
-3510.714
+
+3769.584
 </td>
+
 <td>
+
 1.001
 </td>
+
 </tr>
+
 </tbody>
-</table>
-<p>
-<strong>Error summary:</strong>
-</p>
-<table border="0" class="dataframe">
-<thead>
-<tr style="text-align: right;">
-<th>
-</th>
-<th>
-</th>
-<th>
-</th>
-<th>
-</th>
-<th>
-count
-</th>
-<th>
-relative
-</th>
-</tr>
-<tr>
-<th>
-kernel
-</th>
-<th>
-error_code
-</th>
-<th>
-error_msg
-</th>
-<th>
-phase
-</th>
-<th>
-</th>
-<th>
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<th rowspan="2" valign="top">
-kernel_00
-</th>
-<th rowspan="2" valign="top">
-1
-</th>
-<th rowspan="2" valign="top">
-divergent transition
-</th>
-<th>
-warmup
-</th>
-<td>
-59
-</td>
-<td>
-0.015
-</td>
-</tr>
-<tr>
-<th>
-posterior
-</th>
-<td>
-0
-</td>
-<td>
-0.000
-</td>
-</tr>
-</tbody>
+
 </table>
 
-</div>
+<p>
+
+<strong>Error summary:</strong>
+</p>
+
+<table border="0" class="dataframe">
+
+<thead>
+
+<tr style="text-align: right;">
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+count
+</th>
+
+<th>
+
+relative
+</th>
+
+</tr>
+
+<tr>
+
+<th>
+
+kernel
+</th>
+
+<th>
+
+error_code
+</th>
+
+<th>
+
+error_msg
+</th>
+
+<th>
+
+phase
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<th rowspan="2" valign="top">
+
+kernel_00
+</th>
+
+<th rowspan="2" valign="top">
+
+1
+</th>
+
+<th rowspan="2" valign="top">
+
+divergent transition
+</th>
+
+<th>
+
+warmup
+</th>
+
+<td>
+
+52
+</td>
+
+<td>
+
+0.013
+</td>
+
+</tr>
+
+<tr>
+
+<th>
+
+posterior
+</th>
+
+<td>
+
+0
+</td>
+
+<td>
+
+0.000
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
 
 We can plot the trace plots of the chains with
 {func}`~.goose.plot_trace()`.
