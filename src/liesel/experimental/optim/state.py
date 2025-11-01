@@ -20,6 +20,24 @@ from .types import Position
 Array = Any
 
 
+def position_df(
+    position: Position, subset: Sequence[str] | None = None
+) -> pd.DataFrame:
+    data: dict[str, Array] = dict()
+    for name, value in position.items():
+        if subset and name not in subset:
+            continue
+        pdim = int(jnp.prod(jnp.array(value.shape[1:])))
+        hdim = value.shape[0]
+        value = jnp.reshape(value, (hdim, pdim))
+        data |= array_to_dict(value.squeeze(), names_prefix=name)
+
+    df = pd.DataFrame(data)
+    df = df.reset_index(names="iteration")
+
+    return df.astype(float)
+
+
 @register_dataclass_as_pytree
 @dataclass
 class OptimHistory:
@@ -58,19 +76,7 @@ class OptimHistory:
         return df.astype(float)
 
     def position_df(self, subset: Sequence[str] | None = None) -> pd.DataFrame:
-        data: dict[str, Array] = dict()
-        for name, value in self.position.items():
-            if subset and name not in subset:
-                continue
-            pdim = int(jnp.prod(jnp.array(value.shape[1:])))
-            hdim = value.shape[0]
-            value = jnp.reshape(value, (hdim, pdim))
-            data |= array_to_dict(value.squeeze(), names_prefix=name)
-
-        df = pd.DataFrame(data)
-        df = df.reset_index(names="iteration")
-
-        return df.astype(float)
+        return position_df(self.position, subset)
 
     def tracked_df(self, subset: Sequence[str] | None = None) -> pd.DataFrame:
         if self.tracked is None:
@@ -224,12 +230,14 @@ class OptimResult:
 
     def plot_param_history(
         self,
+        position: Position | None = None,
         legend: bool = True,
         title: str | None = None,
         subset: Sequence[str] | None = None,
         window: int | None = None,
     ):
-        history = self.history.position_df(subset)
+        position = position or self.history.position
+        history = position_df(position, subset)
         n_iter = history.shape[0]
         if window is None:
             window = n_iter
