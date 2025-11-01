@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -6,6 +8,7 @@ import jax.numpy as jnp
 
 from ...model import Model
 from .types import ModelInterface, ModelState, Position
+from .util import guess_n
 
 
 @dataclass
@@ -33,6 +36,31 @@ class Batches:
             self.axes = {}
 
         self.indices = jnp.arange(self.n)
+
+    @classmethod
+    def from_model(
+        cls,
+        model: Model,
+        batch_size: int | None,
+        position_keys: Sequence[str] | None = None,
+        n: int | None = None,
+        shuffle: bool = True,
+        axes: dict[str, int] | None = None,
+        default_axis: int = 0,
+    ) -> Batches:
+        pos_keys = position_keys or list(model.observed)
+        n = n or guess_n(model, axis=default_axis)
+
+        batches = cls(
+            pos_keys,
+            batch_size=batch_size,
+            n=n,
+            shuffle=shuffle,
+            axes=axes,
+            default_axis=default_axis,
+        )
+
+        return batches
 
     @property
     def batch_share(self) -> float:
