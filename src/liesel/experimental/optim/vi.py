@@ -25,7 +25,7 @@ class Elbo(LossMixin):
         q: Model,
         split: PositionSplit,
         nsamples: int = 5,
-        nsamples_validation: int = 50,
+        nsamples_validate: int = 50,
         q_to_p: Callable[[Position], Position] = lambda x: x,
         scale: bool = False,
     ):
@@ -33,7 +33,7 @@ class Elbo(LossMixin):
         self.q = q
         self.split = split
         self.nsamples = nsamples
-        self.nsamples_validation = nsamples_validation
+        self.nsamples_validate = nsamples_validate
         self._q_to_p = q_to_p
         self.scale = scale
         self.scalar = self.split.n_train if self.scale else 1.0
@@ -44,7 +44,7 @@ class Elbo(LossMixin):
         vi_dist: VDist | CompositeVDist,
         split: PositionSplit,
         nsamples: int = 5,
-        nsamples_validation: int = 50,
+        nsamples_validate: int = 50,
         scale: bool = False,
     ) -> Elbo:
         return cls(
@@ -52,7 +52,7 @@ class Elbo(LossMixin):
             vi_dist.q,
             split=split,
             nsamples=nsamples,
-            nsamples_validation=nsamples_validation,
+            nsamples_validate=nsamples_validate,
             scale=scale,
             q_to_p=vi_dist.q_to_p,
         )
@@ -131,15 +131,15 @@ class Elbo(LossMixin):
         )
         return -elbo / self.scalar
 
-    def loss_validation(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_validate(self, params: Position, carry: OptimCarry) -> jax.Array:
         elbo = self.evaluate(
             Position(params | carry.fixed_position),
             carry.key,
             obs=Position(self.split.validate),
             p_state=carry.model_state,
             q_state=self.q.state,
-            scale_log_lik_p_by=self.scale_validation,
-            nsamples=self.nsamples_validation,
+            scale_log_lik_p_by=self.scale_validate,
+            nsamples=self.nsamples_validate,
         )
         return -elbo / self.scalar
 

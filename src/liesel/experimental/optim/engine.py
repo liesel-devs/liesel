@@ -199,7 +199,7 @@ class OptimEngine:
         carry = self._fit()
         end = time.time()
         ibest = self.stopper.which_best_in_recent_history(
-            i=carry.i_it, loss_history=carry.history.loss_validation
+            i=carry.i_it, loss_history=carry.history.loss_validate
         )
         history = self.process_history(carry.i_it, carry.history)
 
@@ -222,7 +222,7 @@ class OptimEngine:
     def process_history(self, i: int, history: OptimHistory) -> OptimHistory:
         # Set unused values in history to nan
         history.loss_train = history.loss_train.at[i:].set(jnp.nan)
-        history.loss_validation = history.loss_validation.at[i:].set(jnp.nan)
+        history.loss_validate = history.loss_validate.at[i:].set(jnp.nan)
         if self.save_position_history:
             for name, value in history.position.items():
                 history.position[name] = value.at[i:, ...].set(jnp.nan)
@@ -235,7 +235,7 @@ class OptimEngine:
 
         # Remove unused values in history, if applicable
         history.loss_train = history.loss_train[:i]
-        history.loss_validation = history.loss_validation[:i]
+        history.loss_validate = history.loss_validate[:i]
         if self.save_position_history:
             for name, value in history.position.items():
                 history.position[name] = value[:i, ...]
@@ -266,14 +266,10 @@ class OptimEngine:
 
         def tqdm_update(losses, update=print_rate):
             loss_train = float(jnp.squeeze(losses[0]))
-            loss_validation = float(jnp.squeeze(losses[1]))
-            # if self.data.n_validation > 0:
+            loss_validate = float(jnp.squeeze(losses[1]))
             desc = (
-                f"Training loss: {loss_train:.3f}, "
-                f"Validation loss: {loss_validation:.3f}"
+                f"Training loss: {loss_train:.3f}, Validation loss: {loss_validate:.3f}"
             )
-            # else:
-            #     desc = f"Training loss: {loss_train:.3f}, Validation loss: n/a"
             progress_bar_inst.update(update)
             progress_bar_inst.set_description(desc)
             return losses
@@ -281,11 +277,10 @@ class OptimEngine:
         def tqdm_callback(carry: OptimCarry):
             iter_num = carry.i_it + 1
 
-            loss_train, loss_validation = carry.loss_train, carry.loss_validation
-            losses = (loss_train, loss_validation)
+            loss_train, loss_validate = carry.loss_train, carry.loss_validate
+            losses = (loss_train, loss_validate)
 
             _ = jax.lax.cond(
-                # update tqdm every multiple of `print_rate` except at the end
                 (iter_num % print_rate == 0),
                 lambda _: jax.experimental.io_callback(tqdm_update, losses, losses),
                 lambda _: losses,
@@ -294,8 +289,8 @@ class OptimEngine:
 
         def close_progress_bar(carry: OptimCarry):
             print_remainder = int((carry.i_it + 1) % print_rate)
-            loss_train, loss_validation = carry.loss_train, carry.loss_validation
-            losses = (loss_train, loss_validation)
+            loss_train, loss_validate = carry.loss_train, carry.loss_validate
+            losses = (loss_train, loss_validate)
             tqdm_update(losses, print_remainder)
             progress_bar_inst.close()
 
@@ -357,18 +352,16 @@ class OptimEngine:
             key, subkey = jax.random.split(carry.key)
             carry.key = subkey
 
-            loss_val_i = self.loss.loss_validation(carry.position, carry)
+            loss_val_i = self.loss.loss_validate(carry.position, carry)
             carry.key = key
 
-            carry.loss_validation = loss_val_i
-            carry.history.loss_validation = carry.history.loss_validation.at[i].set(
+            carry.loss_validate = loss_val_i
+            carry.history.loss_validate = carry.history.loss_validate.at[i].set(
                 loss_val_i
             )
         else:
-            carry.loss_validation = loss_i
-            carry.history.loss_validation = carry.history.loss_validation.at[i].set(
-                loss_i
-            )
+            carry.loss_validate = loss_i
+            carry.history.loss_validate = carry.history.loss_validate.at[i].set(loss_i)
 
         if self.save_position_history:
             carry.history.position = carry.history.update_position_history(
@@ -419,9 +412,9 @@ class OptimEngine:
 
         def cont(carry: OptimCarry) -> bool:
             loss_train_is_nan = jnp.isnan(carry.loss_train)
-            loss_validation_is_nan = jnp.isnan(carry.loss_validation)
-            no_nan_loss = ~jnp.logical_or(loss_train_is_nan, loss_validation_is_nan)
-            continue_ = stopper.continue_(carry.i_it, carry.history.loss_validation)
+            loss_validate_is_nan = jnp.isnan(carry.loss_validate)
+            no_nan_loss = ~jnp.logical_or(loss_train_is_nan, loss_validate_is_nan)
+            continue_ = stopper.continue_(carry.i_it, carry.history.loss_validate)
             return jnp.logical_and(no_nan_loss, continue_)
 
         carry = self._init_carry(stopper.max_iter)

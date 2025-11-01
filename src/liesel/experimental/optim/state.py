@@ -42,7 +42,7 @@ def position_df(
 @dataclass
 class OptimHistory:
     loss_train: jax.Array
-    loss_validation: jax.Array
+    loss_validate: jax.Array
     position: dict[str, jax.Array]
     tracked: dict[str, jax.Array] | None
 
@@ -56,7 +56,7 @@ class OptimHistory:
 
         inst = cls(
             loss_train=jnp.full((niter,), fill_value=jnp.inf),
-            loss_validation=jnp.full((niter,), fill_value=jnp.inf),
+            loss_validate=jnp.full((niter,), fill_value=jnp.inf),
             position=cls.init_position_history(position, niter),
             tracked=tracked_init,
         )
@@ -68,7 +68,7 @@ class OptimHistory:
         """
         data: dict[str, Array] = dict()
         data |= array_to_dict(self.loss_train, names_prefix="loss_train")
-        data |= array_to_dict(self.loss_validation, names_prefix="loss_validation")
+        data |= array_to_dict(self.loss_validate, names_prefix="loss_validate")
 
         df = pd.DataFrame(data)
         df = df.reset_index(names="iteration")
@@ -152,7 +152,7 @@ class OptimCarry:
     fixed_position: Position = field(default_factory=lambda: Position({}))
 
     loss_train: jax.Array | float = jnp.inf
-    loss_validation: jax.Array | float = jnp.inf
+    loss_validate: jax.Array | float = jnp.inf
 
     i_it: int = 0  # outer while loop index over iterations
     i_batch: int = 0  # inner for loop index over batches
@@ -205,7 +205,7 @@ class OptimResult:
         i = n_iter - window
         history = history.iloc[i:, :]
 
-        plot_data = history[["loss_validation", "loss_train", "iteration"]]
+        plot_data = history[["loss_validate", "loss_train", "iteration"]]
 
         plot_data = plot_data.melt(
             id_vars="iteration", var_name="loss_type", value_name="loss"

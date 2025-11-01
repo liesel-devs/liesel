@@ -13,10 +13,10 @@ class Loss(Protocol):
     split: StateSplit
 
     @property
-    def obs_validation(self) -> Position: ...
+    def obs_validate(self) -> Position: ...
 
     @property
-    def scale_validation(self) -> float: ...
+    def scale_validate(self) -> float: ...
 
     @property
     def n_validate(self) -> int: ...
@@ -31,7 +31,7 @@ class Loss(Protocol):
 
     def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array: ...
 
-    def loss_validation(self, params: Position, carry: OptimCarry) -> jax.Array: ...
+    def loss_validate(self, params: Position, carry: OptimCarry) -> jax.Array: ...
 
     def value_and_grad(self, params: Position, carry: OptimCarry): ...
 
@@ -40,14 +40,14 @@ class Loss(Protocol):
 
 class LossMixin:
     @property
-    def obs_validation(self) -> Position:
+    def obs_validate(self) -> Position:
         if self.split.n_validate == 0:
             return self.split.train
 
-        return self.split.validation
+        return self.split.validate
 
     @property
-    def scale_validation(self) -> float:
+    def scale_validate(self) -> float:
         if self.split.n_validate == 0:
             return 1.0
 
@@ -110,10 +110,10 @@ class NegLogProbLoss(LossMixin):
         log_prior = new_state["_model_log_prior"].value
         return -(log_lik + log_prior) / self.scalar
 
-    def loss_validation(self, params: Position, carry: OptimCarry):
+    def loss_validate(self, params: Position, carry: OptimCarry):
         position = Position(params | self.split.validate | carry.fixed_position)
         new_state = self.model.update_state(position, carry.model_state)
-        loss = -self.scale_validation * new_state["_model_log_lik"].value
+        loss = -self.scale_validate * new_state["_model_log_lik"].value
         if self.validation_strategy == "log_prob":
             loss -= new_state["_model_log_prior"].value
 
