@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -38,11 +39,20 @@ class PositionSplit:
         share_test: int = 0,
         axes: dict[str, int] | None = None,
         default_axis: int = 0,
+        shuffle: bool = False,
+        seed: jax.Array | int | None = None,
     ) -> PositionSplit:
         pos_keys = position_keys or list(model.observed)
         n = n or guess_n(model, axis=default_axis)
         splitter = Split.from_share(
-            pos_keys, n, share_validate, share_test, axes, default_axis
+            position_keys=pos_keys,
+            n=n,
+            share_validate=share_validate,
+            share_test=share_test,
+            axes=axes,
+            default_axis=default_axis,
+            shuffle=shuffle,
+            seed=seed,
         )
 
         pos = model.extract_position(pos_keys)
@@ -77,6 +87,8 @@ class Split:
     n_train: int = -1
     axes: dict[str, int] | None = None
     default_axis: int = 0
+    shuffle: bool = False
+    seed: jax.Array | int | None = None
 
     def __post_init__(self):
         if self.axes is None:
@@ -106,6 +118,14 @@ class Split:
                 "which is not allowed."
             )
 
+        if self.shuffle:
+            if isinstance(self.seed, jax.Array):
+                key = self.seed
+            else:
+                seed = int(time.time()) if self.seed is None else self.seed
+                key = jax.random.key(seed)
+            self.indices = self.permute_indices(key)
+
     @property
     def share_validate(self) -> float:
         return self.n_validate / self.n
@@ -123,6 +143,8 @@ class Split:
         share_test: float = 0.0,
         axes: dict[str, int] | None = None,
         default_axis: int = 0,
+        shuffle: bool = False,
+        seed: jax.Array | int | None = None,
     ) -> Split:
         n_validate = int(n * share_validate)
         n_test = int(n * share_test)
@@ -134,6 +156,8 @@ class Split:
             n_test=n_test,
             axes=axes,
             default_axis=default_axis,
+            shuffle=shuffle,
+            seed=seed,
         )
 
     def permute_indices(self, key: jax.Array) -> jax.Array:
