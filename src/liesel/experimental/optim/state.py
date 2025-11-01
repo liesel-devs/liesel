@@ -43,8 +43,8 @@ def position_df(
 class OptimHistory:
     loss_train: jax.Array
     loss_validate: jax.Array
-    position: dict[str, jax.Array]
-    tracked: dict[str, jax.Array] | None
+    position: Position
+    tracked: Position | None
 
     @classmethod
     def new(
@@ -94,7 +94,7 @@ class OptimHistory:
         return df.astype(float)
 
     @staticmethod
-    def init_position_history(position: Position, niter: int) -> dict[str, jax.Array]:
+    def init_position_history(position: Position, niter: int) -> Position:
         # initialize arrays of zeros
         pos = {
             name: jnp.zeros((niter,) + jnp.shape(value))
@@ -102,12 +102,12 @@ class OptimHistory:
         }
         # fill in initial values
         # pos = jax.tree.map(lambda d, pos: d.at[0].set(pos), pos, position)
-        return pos
+        return Position(pos)
 
     @staticmethod
     def update_position_history(
-        i: int, position_history: dict[str, jax.Array], position: Position
-    ) -> dict[str, jax.Array]:
+        i: int, position_history: Position, position: Position
+    ) -> Position:
         pos_history = jax.tree.map(
             lambda d, pos: d.at[i].set(pos), position_history, position
         )
@@ -140,12 +140,12 @@ class OptimCarry:
     key: jax.Array  # random number key
 
     position: Position  # parameter position (estimation targets)
-    tracked: Position  # recorded position (for diagnosis)
+    tracked: Position | None  # recorded position (for diagnosis)
 
     history: OptimHistory
     batches: Batches
 
-    optimizer_states: list[optax.OptState]
+    optimizer_states: dict[str, optax.OptState]
     model_state: ModelState
 
     batch: Position = field(default_factory=lambda: Position({}))

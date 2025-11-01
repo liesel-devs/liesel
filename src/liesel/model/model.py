@@ -19,6 +19,7 @@ import jax.numpy as jnp
 import jax.random
 import networkx as nx
 
+from ..goose.types import ModelState, Position
 from .nodes import Array, Calc, Dist, Group, Node, NodeState, Value, Var, VarValue
 from .viz import plot_nodes, plot_vars
 
@@ -1591,7 +1592,7 @@ class Model:
         self,
         position_keys: Sequence[str],
         model_state: dict[str, NodeState] | None = None,
-    ) -> dict[str, Array]:
+    ) -> Position:
         """
         Extracts a position from a model state.
 
@@ -1613,14 +1614,14 @@ class Model:
                 node_key = self.vars[key].value_node.name
                 position[key] = model_state[node_key].value
 
-        return position
+        return Position(position)
 
     def update_state(
         self,
         position: dict[str, Array],
         model_state: dict[str, NodeState] | None = None,
         inplace: bool = False,
-    ) -> dict[str, NodeState]:
+    ) -> ModelState:
         """
         Updates and returns a model state given a position.
 
@@ -1676,7 +1677,7 @@ class Model:
         samples: dict[str, Array],
         predict: Sequence[str] | None = None,
         newdata: dict[str, Array] | None = None,
-    ) -> dict[str, Array]:
+    ) -> Position:
         """
         Returns a dictionary of predictions.
 

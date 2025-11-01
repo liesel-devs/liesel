@@ -35,6 +35,11 @@ class Batches:
         self.indices = jnp.arange(self.n)
 
     @property
+    def batch_share(self) -> float:
+        assert self.batch_size is not None
+        return self.n / self.batch_size
+
+    @property
     def n_full_batches(self) -> int:
         assert self.batch_size is not None
         return int(self.n // self.batch_size)

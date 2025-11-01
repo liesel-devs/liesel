@@ -54,7 +54,7 @@ class Split:
     n: int
     n_validate: int = 0
     n_test: int = 0
-    n_train: int | None = None
+    n_train: int = -1
     axes: dict[str, int] | None = None
     default_axis: int = 0
 
@@ -62,7 +62,7 @@ class Split:
         if self.axes is None:
             self.axes = {}
 
-        if self.n_train is None:
+        if self.n_train == -1:
             self.n_train = self.n - self.n_validate - self.n_test
 
         self.indices = jnp.arange(self.n)

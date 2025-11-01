@@ -1,16 +1,16 @@
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Literal, Protocol
 
 import jax
 
 from ...model import Model
-from .split import PositionSplit, StateSplit
+from .split import PositionSplit
 from .state import OptimCarry
-from .types import ModelInterface, ModelState, Position
+from .types import ModelInterface, Position
 
 
 class Loss(Protocol):
-    split: StateSplit
+    split: PositionSplit
 
     @property
     def obs_validate(self) -> Position: ...
@@ -24,8 +24,7 @@ class Loss(Protocol):
     @property
     def model(self) -> Model | ModelInterface: ...
 
-    @property
-    def model_state(self) -> ModelState: ...
+    def position(self, position_keys: Sequence[str]) -> Position: ...
 
     def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array: ...
 
@@ -39,6 +38,9 @@ class Loss(Protocol):
 
 
 class LossMixin:
+    split: PositionSplit
+    loss_train_batched: Callable[[Position, OptimCarry], jax.Array]
+
     @property
     def obs_validate(self) -> Position:
         if self.split.n_validate == 0:
@@ -92,17 +94,17 @@ class NegLogProbLoss(LossMixin):
     def position(self, position_keys: Sequence[str]) -> Position:
         return self.model.extract_position(position_keys)
 
-    def loss_train_batched(self, params: Position, carry: OptimCarry):
+    def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
         position = Position(params | carry.batch | carry.fixed_position)
         new_state = self.model.update_state(position, carry.model_state)
 
-        scale_log_lik_by = carry.batches.n / carry.batches.batch_size
+        scale_log_lik_by = carry.batches.batch_share
 
         log_lik = scale_log_lik_by * new_state["_model_log_lik"].value
         log_prior = new_state["_model_log_prior"].value
         return -(log_lik + log_prior) / self.scalar
 
-    def loss_train(self, params: Position, carry: OptimCarry):
+    def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
         position = Position(params | carry.batch | carry.fixed_position)
         new_state = self.model.update_state(position, carry.model_state)
 
@@ -110,7 +112,7 @@ class NegLogProbLoss(LossMixin):
         log_prior = new_state["_model_log_prior"].value
         return -(log_lik + log_prior) / self.scalar
 
-    def loss_validate(self, params: Position, carry: OptimCarry):
+    def loss_validate(self, params: Position, carry: OptimCarry) -> jax.Array:
         position = Position(params | self.split.validate | carry.fixed_position)
         new_state = self.model.update_state(position, carry.model_state)
         loss = -self.scale_validate * new_state["_model_log_lik"].value

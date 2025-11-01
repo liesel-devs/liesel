@@ -47,6 +47,7 @@ class Elbo(LossMixin):
         nsamples_validate: int = 50,
         scale: bool = False,
     ) -> Elbo:
+        assert vi_dist.q is not None
         return cls(
             vi_dist.p,
             vi_dist.q,
@@ -106,9 +107,7 @@ class Elbo(LossMixin):
         return jnp.mean(elbo_samples)
 
     def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
-        batch_size = carry.batches.batch_size
-
-        scale_log_lik_p_by = carry.batches.n / batch_size
+        scale_log_lik_p_by = carry.batches.batch_share
         elbo = self.evaluate(
             Position(params | carry.fixed_position),
             carry.key,
@@ -158,8 +157,8 @@ class VDist:
         self._unflatten = unflatten
         self._flat_pos = flat_pos
         self._flat_pos_name = "(" + "|".join(self.position_keys) + ")"
-        self.var = None
-        self.q = None
+        self.var: Var | None = None
+        self.q: Model | None = None
 
     def q_to_p(self, pos: Position) -> Position:
         return self._unflatten(pos[self._flat_pos_name])
@@ -173,6 +172,9 @@ class VDist:
 
     @property
     def parameters(self) -> list[str]:
+        if self.var is None:
+            return []
+
         if self.var.model is not None:
             model = self.var.model.parental_submodel(self.var)
             params = list(model.parameters)
@@ -214,6 +216,8 @@ class VDist:
         return self.init(dist)
 
     def build(self) -> Self:
+        if self.var is None:
+            raise ValueError("The .var attribute must be set, but is currently None.")
         self.q = Model([self.var])
         return self
 
@@ -239,7 +243,10 @@ class VDist:
     def __repr__(self) -> str:
         name = type(self).__name__
         if self.var is not None:
-            dist = self.var.dist_node.distribution.__name__
+            if self.var.dist_node is not None:
+                dist = self.var.dist_node.distribution.__name__
+            else:
+                dist = None
         else:
             dist = None
         return f"{name}({self.position_keys}, dist={dist})"
@@ -248,10 +255,12 @@ class VDist:
 class CompositeVDist:
     def __init__(self, *vi_dists: VDist):
         self.vi_dists = vi_dists
-        self.q = None
+        self.q: Model | None = None
 
     @property
     def parameters(self) -> list[str]:
+        if self.q is None:
+            return []
         return list(self.q.parameters)
 
     @property
@@ -259,14 +268,18 @@ class CompositeVDist:
         return self.vi_dists[0].p
 
     def build(self) -> Self:
-        vars_ = [dist.var for dist in self.vi_dists]
+        vars_ = []
+        for dist in self.vi_dists:
+            if dist.var is None:
+                raise ValueError(f".var attribute of {dist} must be set, but is None.")
+            vars_.append(dist.var)
         q = Model(vars_)
         self.q = q
         return self
 
     def q_to_p(self, pos: Position) -> Position:
         positions = [dist.q_to_p(pos) for dist in self.vi_dists]
-        combined = {k: v for d in positions for k, v in d.items()}
+        combined = Position({k: v for d in positions for k, v in d.items()})
         return combined
 
     def sample_p(

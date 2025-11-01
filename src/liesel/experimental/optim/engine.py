@@ -61,8 +61,8 @@ class QuickOptim:
         obs_shapes = [jnp.shape(o.value) for o in obs]
 
         dims = []
-        for dim in range(min_ndim):
-            dims.append([s[dim] for s in obs_shapes])
+        for j in range(min_ndim):
+            dims.append([s[j] for s in obs_shapes])
 
         for i, dim in enumerate(dims):
             if len(set(dim)) == 1:
@@ -169,7 +169,7 @@ class OptimEngine:
 
     @property
     def position_keys(self) -> list[str]:
-        keys = []
+        keys: list[str] = []
         for optim in self.optimizers:
             keys += optim.position_keys
         return keys
@@ -227,8 +227,9 @@ class OptimEngine:
             for name, value in history.position.items():
                 history.position[name] = value.at[i:, ...].set(jnp.nan)
 
-            for name, value in history.tracked.items():
-                history.tracked[name] = value.at[i:, ...].set(jnp.nan)
+            if history.tracked is not None:
+                for name, value in history.tracked.items():
+                    history.tracked[name] = value.at[i:, ...].set(jnp.nan)
 
         if not self.prune_history:
             return history
@@ -239,22 +240,14 @@ class OptimEngine:
         if self.save_position_history:
             for name, value in history.position.items():
                 history.position[name] = value[:i, ...]
-            for name, value in history.tracked.items():
-                history.tracked[name] = value[:i, ...]
+
+            if history.tracked is not None:
+                for name, value in history.tracked.items():
+                    history.tracked[name] = value[:i, ...]
 
         return history
 
     def get_tqdm_callback(self, stopper: Stopper) -> tuple[Callable, Callable]:
-        if not self.show_progress:
-
-            def tqdm_callback(carry: OptimCarry):
-                return
-
-            def close_progress_bar(carry: OptimCarry):
-                return
-
-            return tqdm_callback, close_progress_bar
-
         if stopper.max_iter > self.progress_n_updates:
             print_rate = int(stopper.max_iter / self.progress_n_updates)
         else:
@@ -367,7 +360,7 @@ class OptimEngine:
             carry.history.position = carry.history.update_position_history(
                 carry.i_it, carry.history.position, carry.position
             )
-            if self.track_keys:
+            if carry.history.tracked is not None and carry.tracked is not None:
                 carry.history.tracked = carry.history.update_position_history(
                     carry.i_it, carry.history.tracked, carry.tracked
                 )
@@ -401,7 +394,8 @@ class OptimEngine:
     def _fit(self) -> OptimCarry:
         stopper = self.stopper
 
-        update_progress, close_progress_bar = self.get_tqdm_callback(stopper)
+        if self.show_progress:
+            update_progress, close_progress_bar = self.get_tqdm_callback(stopper)
 
         def while_body(carry: OptimCarry) -> OptimCarry:
             carry = self.outer_loop_over_iterations(carry)
@@ -425,7 +419,8 @@ class OptimEngine:
             init_val=carry,
         )
 
-        close_progress_bar(result)
+        if self.show_progress:
+            close_progress_bar(result)
 
         return result
 
