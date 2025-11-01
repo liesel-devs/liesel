@@ -18,120 +18,106 @@ from .split import PositionSplit, Split
 from .state import OptimCarry, OptimHistory, OptimResult
 from .stop import Stopper
 from .types import ModelState, Position
-from .vi import Elbo, VDist
+from .util import guess_n
 
 Array = Any
 
 
 class QuickOptim:
+    """
+    Enables quick optimizer setup by making providing strong defaults.
+
+    1. Default loss: Unnornalized negative log posterior
+    2. Default batching: None
+    3. Default stopping: ``Stopper(epochs=1000, patience=10, rtol=1e-6)``
+    4. Default Train/Validation/Test split: None (use all data for training)
+    5. Default optimizer: Adam(learning_rate=1e-3)
+    """
+
     def __init__(
         self,
         model: Model,
-        n: int | None = None,
-        loss: Literal["neg_log_prob", "elbo_meanfield"] = "neg_log_prob",
-        epochs: int = 1000,
-        patience: int = 10,
-        share_validate: float = 0.0,
-        batch_size: int | None = None,
-        shuffle_batches: bool = False,
+        loss: Loss | None = None,
+        batches: Batches | None = None,
+        split: PositionSplit | None = None,
+        optimizers: Sequence[Optimizer] | Literal["adam", "lbfgs"] = "adam",
+        stopper: Stopper = Stopper(epochs=1000, patience=10, rtol=1e-6),
         seed: int | None = None,
+        n: int | None = None,
     ) -> None:
         self.model = model
         self._n = n
         self._loss = loss
-        self.epochs = epochs
-        self.patience = patience
-        self.share_validate = share_validate
-        self.batch_size = batch_size
-        self.shuffle_batches = shuffle_batches
+        self.stopper = stopper
+        self._batches = batches
         self.seed = int(time.time()) if seed is None else seed
+        self._split = split
+        self._optimizers = optimizers
 
     @property
     def n(self) -> int:
         if self._n is not None:
             return self._n
 
-        return self.guess_n()
+        return guess_n(self.model)
 
-    def guess_n(self) -> int:
-        obs = list(self.model.observed.values())
-        obs_ndim = [jnp.asarray(o.value).ndim for o in obs]
-        min_ndim = min(obs_ndim)
-
-        obs_shapes = [jnp.shape(o.value) for o in obs]
-
-        dims = []
-        for j in range(min_ndim):
-            dims.append([s[j] for s in obs_shapes])
-
-        for i, dim in enumerate(dims):
-            if len(set(dim)) == 1:
-                n = dim[0]
-                return n
-
-            # currently only allow first dimension to be batching dimension
-            # by default
-            if i >= 1:
-                raise RuntimeError("Failed to guess sample size.")
-
-        raise RuntimeError("Failed to guess sample size.")
-
+    @property
     def batches(self) -> Batches:
+        if self._batches is not None:
+            self._batches.n = self.split.n_train
+            self._batches.indices = jnp.arange(self.split.n_train)
+            return self._batches
+
         b = Batches(
             position_keys=list(self.model.observed),
-            n=self.n,
-            batch_size=self.batch_size,
+            n=self.split.n_train,
+            batch_size=None,
             axes=None,
             default_axis=0,
-            shuffle=self.shuffle_batches,
+            shuffle=False,
         )
 
         return b
 
+    @property
     def split(self) -> PositionSplit:
-        splitter = Split.from_share(
-            list(self.model.observed), n=self.n, share_validate=self.share_validate
-        )
+        if self._split:
+            return self._split
+
+        splitter = Split(list(self.model.observed), n=self.n)
         pos = self.model.extract_position(list(self.model.observed))
         split = splitter.split_position(pos)
         return split
 
-    def optimizers(self, loss: Loss) -> Sequence[Optimizer]:
-        match self._loss:
-            case "neg_log_prob":
-                return [LBFGS(list(self.model.parameters))]
-            case "elbo_meanfield":
-                assert isinstance(loss, Elbo)
-                opt = Optimizer(
-                    list(loss.q.parameters),
-                    optimizer=optax.adam(learning_rate=1e-3),
-                )
-                return [opt]
+    @property
+    def optimizers(self) -> Sequence[Optimizer]:
+        if isinstance(self._optimizers, str):
+            match self._optimizers:
+                case "lbfgs":
+                    return [LBFGS(list(self.model.parameters))]
+                case "adam":
+                    opt = Optimizer(
+                        list(self.model.parameters),
+                        optimizer=optax.adam(learning_rate=1e-3),
+                    )
+                    return [opt]
 
-    def neg_log_prob_loss(self, split: PositionSplit) -> NegLogProbLoss:
-        return NegLogProbLoss(self.model, split)
+        return self._optimizers
 
-    def elbo_loss(self, split: PositionSplit) -> Elbo:
-        vdist = VDist(list(self.model.parameters), self.model).mvn_diag().build()
-        return Elbo.from_vdist(vdist, split=split, nsamples=10)
+    @property
+    def loss(self) -> Loss:
+        if self._loss is not None:
+            return self._loss
 
-    def loss(self, split: PositionSplit) -> NegLogProbLoss | Elbo:
-        match self._loss:
-            case "neg_log_prob":
-                return self.neg_log_prob_loss(split)
-            case "elbo_meanfield":
-                return self.elbo_loss(split)
+        return NegLogProbLoss(self.model, self.split)
 
     def build_engine(self) -> OptimEngine:
-        split = self.split()
-        loss = self.loss(split)
-
         engine = OptimEngine(
-            loss=loss,
-            batches=self.batches(),
-            split=split,
-            optimizers=self.optimizers(loss),
-            stopper=Stopper(self.epochs, patience=10, atol=0.0, rtol=1e-6),
+            loss=self.loss,
+            batches=self.batches,
+            split=self.split,
+            optimizers=self.optimizers,
+            stopper=self.stopper,
             initial_state=self.model.state,
             seed=self.seed,
         )
