@@ -29,7 +29,7 @@ class QuickOptim:
         model: Model,
         n: int | None = None,
         loss: Literal["neg_log_prob", "elbo_meanfield"] = "neg_log_prob",
-        max_iter: int = 1000,
+        epochs: int = 1000,
         patience: int = 10,
         share_validate: float = 0.0,
         batch_size: int | None = None,
@@ -39,7 +39,7 @@ class QuickOptim:
         self.model = model
         self._n = n
         self._loss = loss
-        self.max_iter = max_iter
+        self.epochs = epochs
         self.patience = patience
         self.share_validate = share_validate
         self.batch_size = batch_size
@@ -131,7 +131,7 @@ class QuickOptim:
             batches=self.batches(),
             split=split,
             optimizers=self.optimizers(loss),
-            stopper=Stopper(self.max_iter, patience=10, atol=0.0, rtol=1e-6),
+            stopper=Stopper(self.epochs, patience=10, atol=0.0, rtol=1e-6),
             initial_state=self.model.state,
             seed=self.seed,
         )
@@ -248,13 +248,13 @@ class OptimEngine:
         return history
 
     def get_tqdm_callback(self, stopper: Stopper) -> tuple[Callable, Callable]:
-        if stopper.max_iter > self.progress_n_updates:
-            print_rate = int(stopper.max_iter / self.progress_n_updates)
+        if stopper.epochs > self.progress_n_updates:
+            print_rate = int(stopper.epochs / self.progress_n_updates)
         else:
             print_rate = 1
 
         progress_bar_inst = tqdm(
-            total=stopper.max_iter, desc=("Initializing"), position=0, leave=True
+            total=stopper.epochs, desc=("Initializing"), position=0, leave=True
         )
 
         def tqdm_update(losses, update=print_rate):
@@ -321,7 +321,7 @@ class OptimEngine:
 
         return carry
 
-    def outer_loop_over_iterations(self, carry: OptimCarry):
+    def outer_loop_over_epochs(self, carry: OptimCarry):
         # permuting the batch indices for each outer iteration
         key, subkey = jax.random.split(carry.key)
         carry.key = key
@@ -398,7 +398,7 @@ class OptimEngine:
             update_progress, close_progress_bar = self.get_tqdm_callback(stopper)
 
         def while_body(carry: OptimCarry) -> OptimCarry:
-            carry = self.outer_loop_over_iterations(carry)
+            carry = self.outer_loop_over_epochs(carry)
 
             if self.show_progress:
                 update_progress(carry)
@@ -411,7 +411,7 @@ class OptimEngine:
             continue_ = stopper.continue_(carry.i_it, carry.history.loss_validate)
             return jnp.logical_and(no_nan_loss, continue_)
 
-        carry = self._init_carry(stopper.max_iter)
+        carry = self._init_carry(stopper.epochs)
 
         result = jax.lax.while_loop(
             cond_fun=cont,

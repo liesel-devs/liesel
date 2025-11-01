@@ -13,11 +13,11 @@ class Stopper:
 
     Parameters
     ----------
-    max_iter
-        The maximum number of optimization steps.
+    epochs
+        The maximum number of optimization epochs.
     patience
         Early stopping happens only, if there was no improvement for the number of\
-        patience iterations, and there were at least as many iterations as the length\
+        patience epochs, and there were at least as many epochs as the length\
         of the patience window.
     atol
         The absolute tolerance for early stopping.
@@ -65,9 +65,9 @@ class Stopper:
 
     """
 
-    max_iter: int
+    epochs: int
     patience: int
-    atol: float = 1e-3
+    atol: float = 0.0
     rtol: float = 0.0
 
     def stop_early(self, i: int | Array, loss_history: Array):
@@ -97,9 +97,9 @@ class Stopper:
     def stop_now(self, i: int | Array, loss_history: Array):
         """Whether optimization should stop now."""
         stop_early = self.stop_early(i=i, loss_history=loss_history)
-        stop_max_iter = i >= self.max_iter
+        stop_epochs = i >= self.epochs
 
-        return stop_early | stop_max_iter
+        return stop_early | stop_epochs
 
     def continue_(self, i: int | Array, loss_history: Array):
         """Whether optimization should continue (inverse of :meth:`.stop_now`)."""
@@ -109,7 +109,7 @@ class Stopper:
         """
         Identifies the index of the best observation in recent history.
 
-        Recent history includes the last ``p`` iterations looking backwards from the
+        Recent history includes the last ``p`` epochs looking backwards from the
         current iteration `ì``., where ``p`` is the patience.
         """
         p = self.patience

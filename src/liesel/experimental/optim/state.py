@@ -33,7 +33,7 @@ def position_df(
         data |= array_to_dict(value.squeeze(), names_prefix=name)
 
     df = pd.DataFrame(data)
-    df = df.reset_index(names="iteration")
+    df = df.reset_index(names="epoch")
 
     return df.astype(float)
 
@@ -71,7 +71,7 @@ class OptimHistory:
         data |= array_to_dict(self.loss_validate, names_prefix="loss_validate")
 
         df = pd.DataFrame(data)
-        df = df.reset_index(names="iteration")
+        df = df.reset_index(names="epoch")
 
         return df.astype(float)
 
@@ -89,7 +89,7 @@ class OptimHistory:
             data |= array_to_dict(value.squeeze(), names_prefix=name)
 
         df = pd.DataFrame(data)
-        df = df.reset_index(names="iteration")
+        df = df.reset_index(names="epoch")
 
         return df.astype(float)
 
@@ -205,15 +205,15 @@ class OptimResult:
         i = n_iter - window
         history = history.iloc[i:, :]
 
-        plot_data = history[["loss_validate", "loss_train", "iteration"]]
+        plot_data = history[["loss_validate", "loss_train", "epoch"]]
 
         plot_data = plot_data.melt(
-            id_vars="iteration", var_name="loss_type", value_name="loss"
+            id_vars="epoch", var_name="loss_type", value_name="loss"
         )
 
         p = (
             p9.ggplot(plot_data)
-            + p9.aes(x="iteration", y="loss", color="loss_type", linetype="loss_type")
+            + p9.aes(x="epoch", y="loss", color="loss_type", linetype="loss_type")
             + p9.geom_line()
         )
 
@@ -245,12 +245,12 @@ class OptimResult:
         i = n_iter - window
         history = history.iloc[i:, :]
 
-        plot_data = history.melt(id_vars="iteration")
+        plot_data = history.melt(id_vars="epoch")
 
         p = (
             p9.ggplot(plot_data)
             + p9.aes(
-                x="iteration",
+                x="epoch",
                 y="value",
                 color="variable",
                 group="variable",
