@@ -199,9 +199,9 @@ class OptimEngine:
         carry = self._fit()
         end = time.time()
         ibest = self.stopper.which_best_in_recent_history(
-            i=carry.i_it, loss_history=carry.history.loss_validate
+            i=carry.epoch, loss_history=carry.history.loss_validate
         )
-        history = self.process_history(carry.i_it, carry.history)
+        history = self.process_history(carry.epoch, carry.history)
 
         if self.restore_best_position:
             final_position: Position = Position(
@@ -212,7 +212,7 @@ class OptimEngine:
 
         result = OptimResult(
             history=history,
-            final_it=int(carry.i_it),
+            final_it=int(carry.epoch),
             best_position=final_position,
             best_it=int(ibest),
             duration=end - start,
@@ -268,7 +268,7 @@ class OptimEngine:
             return losses
 
         def tqdm_callback(carry: OptimCarry):
-            iter_num = carry.i_it + 1
+            iter_num = carry.epoch + 1
 
             loss_train, loss_validate = carry.loss_train, carry.loss_validate
             losses = (loss_train, loss_validate)
@@ -281,7 +281,7 @@ class OptimEngine:
             )
 
         def close_progress_bar(carry: OptimCarry):
-            print_remainder = int((carry.i_it + 1) % print_rate)
+            print_remainder = int((carry.epoch + 1) % print_rate)
             loss_train, loss_validate = carry.loss_train, carry.loss_validate
             losses = (loss_train, loss_validate)
             tqdm_update(losses, print_remainder)
@@ -337,7 +337,7 @@ class OptimEngine:
             init_val=carry,
         )
 
-        i = carry.i_it
+        i = carry.epoch
         loss_i = carry.loss_train
         carry.history.loss_train = carry.history.loss_train.at[i].set(loss_i)
 
@@ -358,18 +358,18 @@ class OptimEngine:
 
         if self.save_position_history:
             carry.history.position = carry.history.update_position_history(
-                carry.i_it, carry.history.position, carry.position
+                carry.epoch, carry.history.position, carry.position
             )
             if carry.history.tracked is not None and carry.tracked is not None:
                 carry.history.tracked = carry.history.update_position_history(
-                    carry.i_it, carry.history.tracked, carry.tracked
+                    carry.epoch, carry.history.tracked, carry.tracked
                 )
 
-        carry.i_it += 1
+        carry.epoch += 1
 
         return carry
 
-    def _init_carry(self, niter: int) -> OptimCarry:
+    def _init_carry(self, epochs: int) -> OptimCarry:
         key = self.seed
 
         initial_position = self.loss.position(self.position_keys)
@@ -383,7 +383,7 @@ class OptimEngine:
         carry = OptimCarry.new(
             batches=self.batches,
             key=key,
-            niter=niter,
+            epochs=epochs,
             position=initial_position,
             tracked=initial_tracked,
             optimizers=self.optimizers,
@@ -408,7 +408,7 @@ class OptimEngine:
             loss_train_is_nan = jnp.isnan(carry.loss_train)
             loss_validate_is_nan = jnp.isnan(carry.loss_validate)
             no_nan_loss = ~jnp.logical_or(loss_train_is_nan, loss_validate_is_nan)
-            continue_ = stopper.continue_(carry.i_it, carry.history.loss_validate)
+            continue_ = stopper.continue_(carry.epoch, carry.history.loss_validate)
             return jnp.logical_and(no_nan_loss, continue_)
 
         carry = self._init_carry(stopper.epochs)

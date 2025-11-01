@@ -47,17 +47,17 @@ class OptimHistory:
     tracked: Position | None
 
     @classmethod
-    def new(
-        cls, niter: int, position: Position, tracked: Position | None
+    def from_epochs(
+        cls, epochs: int, position: Position, tracked: Position | None
     ) -> OptimHistory:
         tracked_init = (
-            cls.init_position_history(tracked, niter) if tracked is not None else None
+            cls.init_position_history(tracked, epochs) if tracked is not None else None
         )
 
         inst = cls(
-            loss_train=jnp.full((niter,), fill_value=jnp.inf),
-            loss_validate=jnp.full((niter,), fill_value=jnp.inf),
-            position=cls.init_position_history(position, niter),
+            loss_train=jnp.full((epochs,), fill_value=jnp.inf),
+            loss_validate=jnp.full((epochs,), fill_value=jnp.inf),
+            position=cls.init_position_history(position, epochs),
             tracked=tracked_init,
         )
         return inst
@@ -94,10 +94,10 @@ class OptimHistory:
         return df.astype(float)
 
     @staticmethod
-    def init_position_history(position: Position, niter: int) -> Position:
+    def init_position_history(position: Position, epochs: int) -> Position:
         # initialize arrays of zeros
         pos = {
-            name: jnp.zeros((niter,) + jnp.shape(value))
+            name: jnp.zeros((epochs,) + jnp.shape(value))
             for name, value in position.items()
         }
         # fill in initial values
@@ -154,14 +154,14 @@ class OptimCarry:
     loss_train: jax.Array | float = jnp.inf
     loss_validate: jax.Array | float = jnp.inf
 
-    i_it: int = 0  # outer while loop index over iterations
-    i_batch: int = 0  # inner for loop index over batches
+    epoch: int = 0  # outer while-loop index over epochs
+    i_batch: int = 0  # inner for-loop index over batches
 
     @classmethod
     def new(
         cls,
         key: jax.Array,
-        niter: int,
+        epochs: int,
         position: Position,
         tracked: Position | None,
         batches: Batches,
@@ -173,7 +173,7 @@ class OptimCarry:
             key=key,
             position=position,
             tracked=tracked,
-            history=OptimHistory.new(niter, position, tracked),
+            history=OptimHistory.from_epochs(epochs, position, tracked),
             batches=batches,
             optimizer_states=opt_states,
             model_state=model_state,
@@ -182,7 +182,7 @@ class OptimCarry:
 
     def __repr__(self) -> str:
         name = type(self).__name__
-        return f"{name}(it={self.i_it}, batch={self.i_batch})"
+        return f"{name}(epoch={self.epoch}, batch={self.i_batch})"
 
 
 @dataclass
