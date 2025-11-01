@@ -24,7 +24,7 @@ class Elbo(LossMixin):
         p: Model,
         q: Model,
         split: PositionSplit,
-        nsamples: int = 5,
+        nsamples: int = 10,
         nsamples_validate: int = 50,
         q_to_p: Callable[[Position], Position] = lambda x: x,
         scale: bool = False,
@@ -43,7 +43,7 @@ class Elbo(LossMixin):
         cls,
         vi_dist: VDist | CompositeVDist,
         split: PositionSplit,
-        nsamples: int = 5,
+        nsamples: int = 10,
         nsamples_validate: int = 50,
         scale: bool = False,
     ) -> Elbo:
