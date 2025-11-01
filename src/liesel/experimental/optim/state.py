@@ -226,9 +226,11 @@ class OptimResult:
         if not legend:
             p += p9.theme(legend_position="none")
 
+        p += p9.labs(x="Epoch", y="Loss")
+
         return p
 
-    def plot_param_history(
+    def plot_params(
         self,
         position: Position | None = None,
         legend: bool = True,
@@ -256,7 +258,7 @@ class OptimResult:
                 group="variable",
             )
             + p9.geom_line()
-            + p9.geom_vline(xintercept=self.best_it)
+            + p9.geom_vline(xintercept=self.best_epoch)
         )
 
         if title is not None:
@@ -265,12 +267,14 @@ class OptimResult:
         if not legend:
             p += p9.theme(legend_position="none")
 
+        p += p9.labs(x="Epoch", y="Value")
+
         return p
 
     def __repr__(self) -> str:
         name = type(self).__name__
         out = (
-            f"{name}(final_it={self.final_it}, best_it={self.best_it}, "
+            f"{name}(final_epoch={self.final_epoch}, best_epoch={self.best_epoch}, "
             f"duration={self.duration:.1f}s)"
         )
         return out
