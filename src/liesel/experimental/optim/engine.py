@@ -113,7 +113,7 @@ class QuickOptim:
 
     def elbo_loss(self, split: PositionSplit) -> Elbo:
         vdist = VDist(list(self.model.parameters), self.model).mvn_diag().build()
-        return Elbo.new(vdist, split=split, nsamples=10)
+        return Elbo.from_vdist(vdist, split=split, nsamples=10)
 
     def loss(self, split: PositionSplit) -> NegLogProbLoss | Elbo:
         match self._loss:

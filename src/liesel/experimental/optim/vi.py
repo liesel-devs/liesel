@@ -39,7 +39,7 @@ class Elbo(LossMixin):
         self.scalar = self.split.n_train if self.scale else 1.0
 
     @classmethod
-    def new(
+    def from_vdist(
         cls,
         vi_dist: VDist | CompositeVDist,
         split: PositionSplit,
