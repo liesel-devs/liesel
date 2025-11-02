@@ -25,13 +25,14 @@ Array = Any
 
 class QuickOptim:
     """
-    Enables quick optimizer setup by making providing strong defaults.
+    Enables quick optimizer setup by providing strong defaults.
 
     1. Default loss: Unnornalized negative log posterior
     2. Default batching: None
     3. Default stopping: ``Stopper(epochs=1000, patience=10, rtol=1e-6)``
     4. Default Train/Validation/Test split: None (use all data for training)
-    5. Default optimizer: Adam(learning_rate=1e-3)
+    5. Default optimizer: Adam(learning_rate=1e-3), jointly optimizing all parameter
+       variables in the model.
     """
 
     def __init__(
