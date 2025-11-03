@@ -101,6 +101,25 @@ class ModelInterface(Protocol):
 
         raise NotImplementedError
 
+    def log_prob_vars(self, model_state: ModelState, var_names: Sequence[str]) -> float:
+        """
+        Computes the unnormalized log-probability for specified variables.
+
+        Parameters
+        ----------
+        model_state
+            Current model state
+        var_names
+            Variable/node names to include in the log-probability calculation
+
+        Returns
+        -------
+        Sum of log-probabilities for the specified variables
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support log_prob_vars queries."
+        )
+
 
 class Kernel(Protocol[TKernelState, TTransitionInfo, TTuningInfo]):
     """Protocol for a transition kernel."""
