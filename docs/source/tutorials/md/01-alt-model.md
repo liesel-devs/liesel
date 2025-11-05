@@ -1,0 +1,848 @@
+
+
+# Model building with Liesel
+
+In this tutorial, we go into more depth regarding the model building and
+functionality in Liesel.
+
+Liesel is based on the concept of probabilistic graphical models (PGMs)
+to represent (primarily Bayesian) statistical models, so let us start
+with a very brief look at what PGMs are and how they are implemented in
+Liesel.
+
+## Probabilistic graphical models
+
+In a PGM, each variable is represented as a node. There are two basic
+types of nodes in Liesel: strong and weak nodes. A strong node is a node
+whose value is defined “outside” of the model, for example, if the node
+represents some observed data or a parameter (parameters are usually set
+by an inference algorithm such as an optimizer or sampler). In contrast,
+a weak node is a node whose value is defined “within” the model, that
+is, it is a deterministic function of some other nodes. An
+exp-transformation mapping a real-valued parameter to a positive number,
+for example, would be a weak node.
+
+In addition, each node can have an optional probability distribution.
+The probability density or mass function of the distribution evaluated
+at the value of the node gives its log-probability. In a typical
+Bayesian regression model, the response node would have a normal
+distribution and the parameter nodes would have some prior distribution
+(for example, a normal-inverse-gamma prior). The following table shows
+the different node types and some examples of their use cases.
+
+|  | **Strong node** | **Weak node** |
+|----|----|----|
+| **With distribution** | Response, parameter, … | Copula, … |
+| **Without distribution** | Covariate, hyperparameter, … | Inverse link function, parameter transformation, … |
+
+A PGM is essentially a collection of connected nodes. Two nodes can be
+connected through a directed edge, meaning that the first node is an
+input for the value or the distribution of the second node. Nodes
+*without* an edge between them are assumed to be conditionally
+independent, allowing us to factorize the model log-probability as
+
+$$
+\log p(\text{Model}) = \sum_{\text{Node $\in$ Model}} \log p(\text{Node} \mid \text{Inputs}(\text{Node})).
+$$
+
+So let us consider the same model and data from the [linear regression
+tutorial](01-lin-reg.md#linear-regression), where we had the underelying
+model $y_i \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \;\sigma^2)$ with the
+true parameters $\boldsymbol{\beta} = (\beta_0, \beta_1)' = (1, 2)'$ and
+$\sigma = 1$.
+
+``` python
+import jax
+import jax.numpy as jnp
+import numpy as np
+import matplotlib.pyplot as plt
+
+# We use distributions and bijectors from tensorflow probability
+import tensorflow_probability.substrates.jax.distributions as tfd
+import tensorflow_probability.substrates.jax.bijectors as tfb
+
+import liesel.goose as gs
+import liesel.model as lsl
+
+rng = np.random.default_rng(42)
+
+
+# sample size and true parameters
+
+n = 500
+true_beta = np.array([1.0, 2.0])
+true_sigma = 1.0
+
+# data-generating process
+
+x0 = rng.uniform(size=n)
+X_mat = np.column_stack([np.ones(n), x0])
+eps = rng.normal(scale=true_sigma, size=n)
+y_vec = X_mat @ true_beta + eps
+
+# plot the simulated data
+
+plt.scatter(x0, y_vec)
+plt.title("Simulated data from the linear regression model")
+plt.xlabel("Covariate x")
+plt.ylabel("Response y")
+plt.show()
+```
+
+![](01-alt-model_files/figure-commonmark/unnamed-chunk-1-1.png)
+
+### Building the model graph
+
+The graph of a Bayesian linear regression model is a tree, where the
+hyperparameters of the prior are the leaves and the response is the
+root. To build this tree in Liesel, we need to start from the leaves and
+work our way down to the root.
+
+In the linear regression tutorial we assumed the weakly informative
+prior $\beta_0, \beta_1 \sim \mathcal{N}(0, 100^2)$, so we start from
+there and then work our way down. To do so, we need to define its
+initial value and its node distribution using the {class}`.Dist` class.
+
+``` python
+beta_prior = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
+```
+
+Note that you could also provide a {class}`.Node` or {class}`.Var`
+instance for the `loc` and `scale` argument - this fact allows you to
+build hierarchical models. If you provide floats like we do here, Liesel
+will turn them into {class}`.Value` nodes under the hood.
+
+With this distribution object, we can now create the node for our
+regression coefficient with the {meth}`.Var.new_param` constructor:
+
+``` python
+beta = lsl.Var.new_param(value=np.array([0.0, 0.0]), distribution=beta_prior, name="beta")
+```
+
+The second branch of the tree contains the residual standard deviation,
+which we again build using the weakly informative prior
+$\sigma^2 \sim \text{InverseGamma}(a, b)$ with $a = b = 0.01$ on the
+squared standard deviation. This time, we supply the hyperparameters as
+{class}`.Var` instances.
+
+``` python
+a = lsl.Var.new_param(0.01, name="a")
+b = lsl.Var.new_param(0.01, name="b")
+sigma_sq_prior = lsl.Dist(tfd.InverseGamma, concentration=a, scale=b)
+sigma_sq = lsl.Var.new_param(value=10.0, distribution=sigma_sq_prior, name="sigma_sq")
+```
+
+The variable constructor {meth}`.Var.new_calc` always takes a function
+as its first argument, and the nodes to be used as function inputs as
+the following arguments. We use it to compute the square root of our
+variance, since we again also need to work with the scale. This is the
+first weak node that we are setting up - all previous nodes have been
+strong.
+
+``` python
+sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma").update()
+```
+
+We do the same to compute the matrix-vector product after constructing
+the design matrix
+
+``` python
+X = lsl.Var.new_obs(X_mat, name="X")
+mu = lsl.Var.new_calc(jnp.dot, X, beta, name="mu")
+```
+
+Finally, we can connect the branches of the tree in a response node. The
+node values are our observed response values, and as before, we must
+specify the response distribution.
+
+``` python
+y_dist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
+y = lsl.Var.new_obs(y_vec, distribution=y_dist, name="y")
+```
+
+Now, to construct a full-fledged Liesel model from our individual node
+objects, we only add the response node.
+
+``` python
+model = lsl.Model([y])
+model
+```
+
+    Model(24 nodes, 8 vars)
+
+Since all other nodes are directly or indirectly connected to this node,
+the Model will add those nodes automatically when building the model.
+The model provides a couple of convenience features, for example, to
+evaluate the model log-probability, or to update the nodes in a
+topological order.
+
+To visualize the graph of a model we call the {func}`.plot_vars()`
+function. Strong nodes are shown in blue, weak nodes in red. Nodes with
+a probability distribution are highlighted with a star. In the figure
+below, we can see the tree-like structure of the graph and identify the
+two branches for the mean and the standard deviation of the response.
+
+``` python
+lsl.plot_vars(model)
+```
+
+![](01-alt-model_files/figure-commonmark/plot-vars-3.png)
+
+### Node and model log-probabilities
+
+The log-probability of the model, which can be interpreted as the
+(unnormalized) log-posterior in a Bayesian context, can be accessed with
+the `log_prob` property.
+
+``` python
+model.log_prob
+```
+
+    Array(-1179.656, dtype=float32)
+
+The individual nodes also have a `log_prob` property. In fact, because
+of the conditional independence assumption of the model, the
+log-probability of the model is given by the sum of the
+log-probabilities of the nodes with probability distributions. We take
+the sum for the `.log_prob` attributes of `beta` and `y` because, per
+default, the attributes return the individual log-probability
+contributions of each element in the values of the nodes. So for `beta`
+we would get two log-probability values, and for `y` we would get 500.
+
+``` python
+beta.log_prob.sum() + sigma_sq.log_prob + y.log_prob.sum()
+```
+
+    Array(-1179.656, dtype=float32)
+
+Nodes without a probability distribution return a log-probability of
+zero.
+
+``` python
+sigma.log_prob
+```
+
+    0.0
+
+The log-probability of a node depends on its value and its inputs. Thus,
+if we change the variance of the response from 10 to 1, the
+log-probability of the corresponding node, the log-probability of the
+response node, and the log-probability of the model change as well. Note
+that, since the actual input to the response distribution is the
+standard deviation $\sigma$, we have to update its value after changing
+the value of $\sigma^2$.
+
+``` python
+print(f"Old value of sigma_sq: {sigma_sq.value}")
+```
+
+    Old value of sigma_sq: 10.0
+
+``` python
+print(f"Old log-prob of sigma_sq: {sigma_sq.log_prob}")
+```
+
+    Old log-prob of sigma_sq: -6.972140312194824
+
+``` python
+print(f"Old log-prob of y: {y.log_prob.sum()}\n")
+```
+
+    Old log-prob of y: -1161.6356201171875
+
+``` python
+sigma_sq.value = 1.0
+sigma.update()
+```
+
+    Var(name="sigma")
+
+``` python
+print(f"New value of sigma_sq: {sigma_sq.value}")
+```
+
+    New value of sigma_sq: 1.0
+
+``` python
+print(f"New log-prob of sigma_sq: {sigma_sq.log_prob}")
+```
+
+    New log-prob of sigma_sq: -4.655529975891113
+
+``` python
+print(f"New log-prob of y: {y.log_prob.sum()}\n")
+```
+
+    New log-prob of y: -1724.6702880859375
+
+``` python
+print(f"New model log-prob: {model.log_prob}")
+```
+
+    New model log-prob: -1740.3740234375
+
+For most inference algorithms, we need the gradient of the model
+log-probability with respect to the parameters. Liesel uses [the JAX
+library for numerical computing and machine
+learning](https://github.com/google/jax) to compute gradients using
+automatic differentiation.
+
+## MCMC inference
+
+### Using a Gibbs kernel
+
+This time we want to sample `sigma_sq` with a Gibbs sampler. Using a
+Gibbs kernel is a bit more complicated, because Goose doesn’t
+automatically derive the full conditional from the model graph. Hence,
+the user needs to provide a function to sample from the full
+conditional. The function needs to accept a PRNG state and a model state
+as arguments, and it needs to return a dictionary with the node name as
+the key and the new node value as the value. We could also update
+multiple parameters with one Gibbs kernel if we returned a dictionary of
+length two or more.
+
+To retrieve the relevant values of our nodes from the `model_state`, we
+use the method
+{meth}`~.goose.interface.LieselInterface.extract_position` of the
+{class}`~.goose.interface.LieselInterface`.
+
+``` python
+def draw_sigma_sq(prng_key, model_state):
+
+    # extract relevant values from model state
+    pos = interface.extract_position(
+      position_keys=["y", "mu", "sigma_sq", "a", "b"],
+      model_state=model_state
+    )
+
+    # calculate relevant intermediate quantities
+    n = len(pos["y"])
+    resid = pos["y"] - pos["mu"]
+    a_gibbs = pos["a"] + n / 2
+    b_gibbs = pos["b"] + jnp.sum(resid**2) / 2
+
+    # draw new value from full conditional
+    draw = b_gibbs / jax.random.gamma(prng_key, a_gibbs)
+
+    # return key-value pair of variable name and new value
+    return {"sigma_sq": draw}
+```
+
+After constructing the Gibbs sampler, we can build our engine.
+
+``` python
+interface = gs.LieselInterface(model)
+builder = gs.EngineBuilder(seed=1338, num_chains=4)
+
+builder.set_model(gs.LieselInterface(model))
+builder.set_initial_values(model.state)
+
+builder.add_kernel(gs.NUTSKernel(["beta"]))
+builder.add_kernel(gs.GibbsKernel(["sigma_sq"], draw_sigma_sq))
+
+builder.set_duration(warmup_duration=1000, posterior_duration=1000)
+
+engine = builder.build()
+engine.sample_all_epochs()
+```
+
+
+      0%|                                                  | 0/3 [00:00<?, ?chunk/s]
+     33%|##############                            | 1/3 [00:02<00:04,  2.50s/chunk]
+    100%|##########################################| 3/3 [00:02<00:00,  1.20chunk/s]
+
+      0%|                                                  | 0/1 [00:00<?, ?chunk/s]
+    100%|########################################| 1/1 [00:00<00:00, 1526.31chunk/s]
+
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 1962.71chunk/s]
+
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
+    100%|########################################| 4/4 [00:00<00:00, 1816.50chunk/s]
+
+      0%|                                                  | 0/8 [00:00<?, ?chunk/s]
+    100%|#########################################| 8/8 [00:00<00:00, 819.16chunk/s]
+
+      0%|                                                 | 0/20 [00:00<?, ?chunk/s]
+    100%|#######################################| 20/20 [00:00<00:00, 271.20chunk/s]
+
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 1554.02chunk/s]
+
+      0%|                                                 | 0/40 [00:00<?, ?chunk/s]
+     62%|########################3              | 25/40 [00:00<00:00, 247.86chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 218.59chunk/s]
+
+Take a look at our results
+
+``` python
+results = engine.get_results()
+summary = gs.Summary(results)
+summary
+```
+
+<p>
+
+<strong>Parameter summary:</strong>
+</p>
+
+<table border="0" class="dataframe">
+
+<thead>
+
+<tr style="text-align: right;">
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+kernel
+</th>
+
+<th>
+
+mean
+</th>
+
+<th>
+
+sd
+</th>
+
+<th>
+
+q_0.05
+</th>
+
+<th>
+
+q_0.5
+</th>
+
+<th>
+
+q_0.95
+</th>
+
+<th>
+
+sample_size
+</th>
+
+<th>
+
+ess_bulk
+</th>
+
+<th>
+
+ess_tail
+</th>
+
+<th>
+
+rhat
+</th>
+
+</tr>
+
+<tr>
+
+<th>
+
+parameter
+</th>
+
+<th>
+
+index
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<th rowspan="2" valign="top">
+
+beta
+</th>
+
+<th>
+
+(0,)
+</th>
+
+<td>
+
+kernel_00
+</td>
+
+<td>
+
+0.983
+</td>
+
+<td>
+
+0.089
+</td>
+
+<td>
+
+0.836
+</td>
+
+<td>
+
+0.983
+</td>
+
+<td>
+
+1.129
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
+1178.689
+</td>
+
+<td>
+
+1425.977
+</td>
+
+<td>
+
+1.003
+</td>
+
+</tr>
+
+<tr>
+
+<th>
+
+(1,)
+</th>
+
+<td>
+
+kernel_00
+</td>
+
+<td>
+
+1.911
+</td>
+
+<td>
+
+0.157
+</td>
+
+<td>
+
+1.655
+</td>
+
+<td>
+
+1.911
+</td>
+
+<td>
+
+2.177
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
+1234.211
+</td>
+
+<td>
+
+1393.635
+</td>
+
+<td>
+
+1.004
+</td>
+
+</tr>
+
+<tr>
+
+<th>
+
+sigma_sq
+</th>
+
+<th>
+
+()
+</th>
+
+<td>
+
+kernel_01
+</td>
+
+<td>
+
+1.044
+</td>
+
+<td>
+
+0.067
+</td>
+
+<td>
+
+0.939
+</td>
+
+<td>
+
+1.040
+</td>
+
+<td>
+
+1.161
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
+3857.532
+</td>
+
+<td>
+
+3510.714
+</td>
+
+<td>
+
+1.001
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<p>
+
+<strong>Error summary:</strong>
+</p>
+
+<table border="0" class="dataframe">
+
+<thead>
+
+<tr style="text-align: right;">
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+count
+</th>
+
+<th>
+
+relative
+</th>
+
+</tr>
+
+<tr>
+
+<th>
+
+kernel
+</th>
+
+<th>
+
+error_code
+</th>
+
+<th>
+
+error_msg
+</th>
+
+<th>
+
+phase
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<th rowspan="2" valign="top">
+
+kernel_00
+</th>
+
+<th rowspan="2" valign="top">
+
+1
+</th>
+
+<th rowspan="2" valign="top">
+
+divergent transition
+</th>
+
+<th>
+
+warmup
+</th>
+
+<td>
+
+59
+</td>
+
+<td>
+
+0.015
+</td>
+
+</tr>
+
+<tr>
+
+<th>
+
+posterior
+</th>
+
+<td>
+
+0
+</td>
+
+<td>
+
+0.000
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+And plot these
+
+``` python
+g = gs.plot_trace(results)
+```
+
+![](01-alt-model_files/figure-commonmark/trace-plot-5.png)
+
+``` python
+gs.plot_param(results, param="beta", param_index=0)
+```
+
+![](01-alt-model_files/figure-commonmark/trace-plot-6.png)
