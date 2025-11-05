@@ -202,13 +202,23 @@ class VDist:
         self.var = flat_pos_var
         return self
 
-    def mvn_diag(self) -> Self:
-        locs = Var.new_param(
-            jnp.zeros_like(self._flat_pos), name=self._flat_pos_name + "_loc"
-        )
-        scales = Var.new_param(
-            jnp.ones_like(self._flat_pos), name=self._flat_pos_name + "_scale"
-        )
+    def mvn_diag(
+        self,
+        loc: jax.typing.ArrayLike | None = None,
+        scale_diag: jax.typing.ArrayLike | None = None,
+    ) -> Self:
+        if loc is None:
+            loc_value = jnp.asarray(self._flat_pos)
+        else:
+            loc_value = loc
+
+        if scale_diag is None:
+            scale_diag_value = 0.01 * jnp.ones_like(self._flat_pos)
+        else:
+            scale_diag_value = scale_diag
+
+        locs = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
+        scales = Var.new_param(scale_diag_value, name=self._flat_pos_name + "_scale")
         scales.transform(tfb.Softplus())
 
         dist = Dist(tfd.MultivariateNormalDiag, loc=locs, scale_diag=scales)
