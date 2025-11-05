@@ -929,6 +929,7 @@ class Dist(Node):
         self._at: Node | None = None
         self._distribution = distribution
         self._per_obs = True
+        self._auto_transform_params = False
 
     def all_input_nodes(self) -> tuple[Node, ...]:
         inputs = super().all_input_nodes()
@@ -937,6 +938,196 @@ class Dist(Node):
             inputs = _unique_tuple(inputs, [self.at])
 
         return inputs
+    
+    @property
+    def auto_transform_params(self) -> bool:
+        """
+        Whether to auto-transform parameters to unconstrained space.
+        
+        When True, all strong Var parameters of this distribution will be 
+        automatically transformed using TensorFlow Probability's parameter 
+        default constrained<->unconstrained bijectors when building a model. 
+        This is  done by calling the distribution class's 
+        parameter_properties() method to determine the appropriate default 
+        bijector for each parameter.
+        
+        Only parameters that:
+        - are Var instances with parameter=True
+        - are strong (not already calculated/transformed/weak)
+        - have a default bijector (e.g. Wishart's df parameter has none)
+        will be auto-transformed.
+
+        Notes
+        -----
+        These notes may be important for users which use custom TenforFlow
+        Probability Distributions and want to auto-transform the parameters!
+
+        A default bijector's forward is expected to map from unconstrained to 
+        constrained space. Consequently, its inverse is expected to map from 
+        constrained to unconstrained space.
+
+        It is necessary that parameter_properties() returns a dictionary.
+        Further, this dictionary has the parameter names as keys and their 
+        respective ParamterProperties instance as values. The order of the 
+        dict entries is important! It hold the parameters in the same order as 
+        they appear in the distribution's __init__ signature. That is the 
+        case for the offcial TensorFlow Probability distributions and thus
+        relied on for the auto-transform functionality.
+
+        If a para
+        
+        Examples
+        --------
+        >>> import tensorflow_probability.substrates.jax.distributions as tfd
+        >>> scale = lsl.Var.new_param(1.0, name="scale")
+        >>> dist = lsl.Dist(tfd.Normal, loc=0.0, scale=scale)
+        >>> dist.auto_transform_params = True  # Set via property
+        >>> y = lsl.Var.new_obs(1.0, dist, name="y")
+        >>> model = lsl.Model([y])
+        >>> # scale_transformed is created automatically, scale becomes weak
+        >>> model.vars["scale"].weak
+        True
+        >>> model.vars["scale_transformed"].weak
+        False
+        """
+        return self._auto_transform_params
+
+    @auto_transform_params.setter
+    @no_model_setter
+    def auto_transform_params(self, value: bool):
+        self._auto_transform_params = value
+
+    def get_transformable_params(self) -> dict[str, tuple[Var, jb.Bijector]]:
+        """
+        Returns parameters that should be auto-transformed.
+        
+        Uses the distribution class's parameter_properties() to determine which
+        parameters need transformation and what bijectors to use. Processes both
+        positional and keyword arguments.
+        
+        Returns
+        -------
+        dict
+            Mapping of parameter name to (Var, Bijector) tuples. Only includes
+            parameters where:
+            - The input is a VarValue node (from a Var)
+            - The Var has parameter=True
+            - The Var is strong (not already transformed/weak)
+            - The TFD class provides an implemented default bijector
+        
+        Raises
+        ------
+        RuntimeError
+            If a parameter name is not recognized by the distribution, if the 
+            distribution doesn't support parameter_properties(), or if a parameter 
+            property doesn't have a default_constraining_bijector_fn.
+        """
+        if not self._auto_transform_params:
+            return {}
+        
+        try:
+            param_props = self.distribution.parameter_properties()
+        except (AttributeError, TypeError) as e:
+            raise RuntimeError(
+                f"Distribution {self.distribution.__name__} does not provide a"
+                f"parameter_properties()method. Cannot auto-transform parameters. "
+                f"This may indicate an issue with the TFP distribution or version."
+                f"Either use a distribution that supports parameter_properties() or "
+                f"manually transform parameters with .transform()."
+            ) from e
+        
+        if not isinstance(param_props, dict):
+            raise RuntimeError(
+                f"Distribution {self.distribution.__name__}'s parameter_properties() "
+                f"must return a dictionary, but returned {type(param_props).__name__}. "
+                f"This may indicate an issue with the custom distribution implementation."
+        )
+    
+        transformable = {}
+        
+        # Get ordered list of parameter names from parameter_properties
+        param_names = list(param_props.keys())
+        
+        # Helper function to get and validate bijector for a parameter
+        def get_bijector(param_name: str) -> jb.Bijector | None:
+            """
+            Gets the constraining bijector for a parameter.
+            
+            Returns None if the parameter doesn't need transformation.
+            Raises RuntimeError if the parameter is invalid or bijector retrieval fails.
+            """
+            prop = param_props.get(param_name)
+            
+            if not hasattr(prop, 'default_constraining_bijector_fn'):
+                raise RuntimeError(
+                    f"Parameter property for '{param_name}' of {self.distribution.__name__} "
+                    f"does not have 'default_constraining_bijector_fn' attribute. "
+                    f"This may indicate an issue with the TFP distribution or version."
+                    f"Either use a distribution that supports parameter_properties() or "
+                    f"manually transform parameters with .transform()."
+                )
+            
+            try:
+                bijector = prop.default_constraining_bijector_fn()
+            except Exception as e:
+                raise RuntimeError(
+                    f"Error getting bijector for parameter '{param_name}' of "
+                    f"{self.distribution.__name__}: {e}"
+                ) from e
+            
+            if bijector is None:
+                raise RuntimeError(
+                    f"Expected a bijector or BIJECTOR_NOT_IMPLEMENTED for parameter "
+                    f"'{param_name}' of {self.distribution.__name__}, but got None. "
+                    f"If no default bijector should be provided for this parameter, "
+                    f"the return should be the BIJECTOR_NOT_IMPLEMENTED method instead."
+                )
+            
+            bijector_type_name = type(bijector).__name__
+            if bijector_type_name == 'BIJECTOR_NOT_IMPLEMENTED':
+                # TensorFlow Probability's way of indicating no default bijector exists
+                return None
+            
+            return bijector
+        
+        # Helper function to process a single parameter
+        def process_param(param_name: str, input_node: Node) -> None:
+            """
+            Processes a parameter input node and adds it to transformable if applicable.
+            """
+            # Only VarValue nodes (from Var inputs) can be auto-transformed
+            if not isinstance(input_node, VarValue):
+                return
+            
+            param_var = input_node.var
+            
+            if not param_var.parameter:
+                # Not a parameter variable, skip
+                return
+            
+            if param_var.weak:
+                # Weak variables are already computed/transformed, skip silently
+                return
+            
+            bijector = get_bijector(param_name)
+                        
+            transformable[param_name] = (param_var, bijector)
+        
+        # Process positional inputs first, matching them to parameter names in order
+        # Only process up to the number of parameter properties available
+        num_positional_to_check = min(len(self.inputs), len(param_names))
+        
+        for i in range(num_positional_to_check):
+            param_name = param_names[i]
+            input_node = self.inputs[i]
+            process_param(param_name, input_node)
+        
+        # Process keyword inputs for remaining parameters
+        # (or all keyword inputs if no positional args)
+        for kw_name, input_node in self.kwinputs.items():
+            process_param(kw_name, input_node)
+        
+        return transformable
 
     @property
     def at(self) -> Node | None:

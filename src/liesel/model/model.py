@@ -473,6 +473,20 @@ class GraphBuilder:
 
         nodes, _vars = gb._all_nodes_and_vars()
 
+        for node in nodes:
+            if isinstance(node, Dist) and node.auto_transform_params:
+                transformable = node.get_transformable_params()
+                
+                for param_name, (param_var, bijector) in transformable.items():
+                    tname = f"{param_var.name}_transformed"
+                    if tname in [n.name for n in nodes] or tname in [v.name for v in _vars]:
+                        raise RuntimeError(
+                            f"Auto-transform of parameter '{param_name}' in "
+                            f"{node.distribution.__name__} failed: a variable with the "
+                            f"name '{tname}' already exists."
+                        )                    
+                    param_var.transform(bijector=bijector)
+
         for var in _vars:
             if var.auto_transform:
                 if var.dist_node is None:
