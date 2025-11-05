@@ -225,6 +225,68 @@ class VDist:
 
         return self.init(dist)
 
+    def mvn_full_covariance(
+        self,
+        loc: jax.typing.ArrayLike | None = None,
+        covariance_matrix: jax.typing.ArrayLike | None = None,
+    ) -> Self:
+        if loc is None:
+            loc_value = jnp.asarray(self._flat_pos)
+        else:
+            loc_value = loc
+
+        if covariance_matrix is None:
+            n = jnp.size(loc_value)
+            covmat_value = 0.01 * jnp.eye(n)
+        else:
+            covmat_value = covariance_matrix
+
+        locs = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
+        covmat = Var.new_param(
+            covmat_value, name=self._flat_pos_name + "_covariance_matrix"
+        )
+
+        dist = Dist(
+            tfd.MultivariateNormalFullCovariance, loc=locs, covariance_matrix=covmat
+        )
+        dist_inst = dist.init_dist()
+        bijector = dist_inst.parameter_properties()[
+            "covariance_matrix"
+        ].default_constraining_bijector_fn()
+        covmat.transform(bijector)
+
+        return self.init(dist)
+
+    def mvn_tril(
+        self,
+        loc: jax.typing.ArrayLike | None = None,
+        scale_tril: jax.typing.ArrayLike | None = None,
+    ) -> Self:
+        if loc is None:
+            loc_value = jnp.asarray(self._flat_pos)
+        else:
+            loc_value = loc
+
+        if scale_tril is None:
+            n = jnp.size(loc_value)
+            scale_tril_value = 0.01 * jnp.eye(n)
+        else:
+            scale_tril_value = scale_tril
+
+        locs = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
+        scale_tril_var = Var.new_param(
+            scale_tril_value, name=self._flat_pos_name + "_scale_tril"
+        )
+
+        dist = Dist(tfd.MultivariateNormalTriL, loc=locs, scale_tril=scale_tril_var)
+        dist_inst = dist.init_dist()
+        bijector = dist_inst.parameter_properties()[
+            "scale_tril"
+        ].default_constraining_bijector_fn()
+        scale_tril_var.transform(bijector)
+
+        return self.init(dist)
+
     def build(self) -> Self:
         if self.var is None:
             raise ValueError("The .var attribute must be set, but is currently None.")
