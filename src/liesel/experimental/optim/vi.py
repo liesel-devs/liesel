@@ -245,6 +245,7 @@ class VDist:
                 lambda x: jnp.expand_dims(x, (0, 1)), at_position
             )
         q_samples = self.q.sample(shape=(n,), seed=seed, posterior_samples=at_position)
+        q_samples = jax.tree.map(lambda x: jnp.squeeze(x, (1, 2)), q_samples)
         p_samples = jax.vmap(self.q_to_p)(q_samples)
         if prepend_axis:
             p_samples = jax.tree.map(lambda x: jnp.expand_dims(x, 0), p_samples)
@@ -305,7 +306,10 @@ class CompositeVDist:
             at_position = jax.tree.map(
                 lambda x: jnp.expand_dims(x, (0, 1)), at_position
             )
+
         q_samples = self.q.sample(shape=(n,), seed=seed, posterior_samples=at_position)
+        q_samples = jax.tree.map(lambda x: jnp.squeeze(x, (1, 2)), q_samples)
+
         p_samples = jax.vmap(self.q_to_p)(q_samples)
         if prepend_axis:
             p_samples = jax.tree.map(lambda x: jnp.expand_dims(x, 0), p_samples)
