@@ -289,10 +289,7 @@ class VDist:
         )
 
         dist = Dist(tfd.MultivariateNormalTriL, loc=locs, scale_tril=scale_tril_var)
-        dist_inst = dist.init_dist()
-        bijector = dist_inst.parameter_properties()[
-            "scale_tril"
-        ].default_constraining_bijector_fn()
+        bijector = tfb.FillScaleTriL()
         scale_tril_var.transform(bijector)
 
         return self.init(dist)
