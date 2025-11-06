@@ -99,8 +99,18 @@ class Elbo(LossMixin):
         @partial(jax.vmap)
         def log_prob_of_q(sample):
             q_state_new = self.q.update_state(sample | params, q_state)
-            log_prob_q = q_state_new["_model_log_prob"].value
-            return log_prob_q
+            log_lik_q = q_state_new["_model_log_lik"].value
+            log_prior_q = q_state_new["_model_log_prior"].value
+            # Here, I subtract the prior from the likelihood, which may be somewhat
+            # surprising.
+            # The intention here is to allow priors in the variational distribution
+            # to be used for regularization.
+            # Since the Elbo is maximized, and the variational log prob is subtracted
+            # form the Elbo, the variational log prob is minimized. Adding the prior
+            # to the log lik of the variational dist would have the opposite of the
+            # intended effect, since it would also be minimized. You could say we are
+            # treating any priors in the variational model as parts of the main model
+            return log_lik_q - log_prior_q
 
         elbo_samples = log_prob_of_p(samples) - log_prob_of_q(samples)
 
