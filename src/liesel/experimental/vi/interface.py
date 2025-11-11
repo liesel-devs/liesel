@@ -77,7 +77,7 @@ class LieselInterface:
         """
         batch_indices = jnp.array(batch_indices)
         for var in model.vars.values():
-            if getattr(var, "observed", True):
+            if var.observed and not var.weak:
                 var.value = jnp.take(var.value, batch_indices, axis=0)
 
         return model

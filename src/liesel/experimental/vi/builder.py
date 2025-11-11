@@ -159,6 +159,7 @@ class OptimizerBuilder:
         patience_tol: float | None = None,
         window_size: int | None = None,
         batch_size: int | None = None,
+        to_float32: bool = True,
     ) -> None:
         self.seed = seed
         self.n_epochs = n_epochs
@@ -168,6 +169,8 @@ class OptimizerBuilder:
         self.S = S
         self._model_interface: LieselInterface | None = None
         self.latent_variables: list[dict[str, Any]] = []
+
+        self._dtype = jnp.float32 if to_float32 else jnp.float64
 
     def set_model(self, interface: LieselInterface) -> None:
         """Set the model interface for the optimizer.
@@ -210,7 +213,7 @@ class OptimizerBuilder:
             If duplicate keys are found or if a key is not a valid parameter
             of ``dist_class``.
         """
-        valid_keys = set(dist_class.parameter_properties().keys())
+        valid_keys = set(dist_class.parameter_properties(dtype=self._dtype).keys())
 
         def _check(name: str, mapping: dict[str, Any] | None) -> None:
             if mapping is not None:
@@ -239,7 +242,7 @@ class OptimizerBuilder:
             A mapping of parameter names to their default constraining bijectors,
             provided by ``dist_class.parameter_properties()``.
         """
-        parameter_properties = dist_class.parameter_properties()
+        parameter_properties = dist_class.parameter_properties(dtype=self._dtype)
         parameter_names = parameter_properties.keys()
         parameter_default_bijectors = {
             parameter_name: parameter_properties[
@@ -469,7 +472,7 @@ class OptimizerBuilder:
         )
 
         # Only obtain default bijectors for parameters not provided by the user
-        parameter_properties = dist_class.parameter_properties()
+        parameter_properties = dist_class.parameter_properties(dtype=self._dtype)
         parameter_bijectors = {}
 
         for param_name in parameter_properties.keys():

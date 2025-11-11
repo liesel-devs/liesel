@@ -11,9 +11,10 @@ from liesel.experimental.vi import LieselInterface
 
 # --- Dummy model & helper to create interface -------------------------------
 class DummyVar:
-    def __init__(self, value, observed=True):
+    def __init__(self, value, observed=True, weak=False):
         self.value = jnp.asarray(value)
         self.observed = observed
+        self.weak = weak
 
 
 class DummyModel:
