@@ -187,6 +187,14 @@ class Split:
         assert isinstance(self.axes, dict)
         for key in self.position_keys:
             axis = self.axes.get(key, self.default_axis)
+
+            n_this_key = jnp.shape(position[key])[axis]
+            if not jnp.shape(position[key])[axis] == self.n:
+                raise ValueError(
+                    f"{key} has n={n_this_key}, which is incompatible with the "
+                    f"given sample size of n={self.n}."
+                )
+
             train_values = jnp.take(position[key], self.indices_train, axis=axis)
             validation_values = jnp.take(
                 position[key], self.indices_validate, axis=axis

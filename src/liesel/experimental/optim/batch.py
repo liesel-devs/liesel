@@ -98,6 +98,14 @@ class Batches:
         assert isinstance(self.axes, dict)
         for key in self.position_keys:
             axis = self.axes.get(key, self.default_axis)
+
+            n_this_key = jnp.shape(position[key])[axis]
+            if not jnp.shape(position[key])[axis] == self.n:
+                raise ValueError(
+                    f"{key} has n={n_this_key}, which is incompatible with the "
+                    f"given sample size of n={self.n}."
+                )
+
             batched = jnp.take(position[key], idx, axis=axis)
             batched_position[key] = batched
 
