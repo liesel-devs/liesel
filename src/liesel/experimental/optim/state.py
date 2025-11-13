@@ -267,8 +267,9 @@ class OptimResult:
                 group="Parameter",
             )
             + p9.geom_line()
-            + p9.geom_vline(xintercept=self.best_epoch)
         )
+        if self.best_epoch >= i:
+            p = p + p9.geom_vline(xintercept=self.best_epoch)
 
         if title is not None:
             p += p9.ggtitle(title)
