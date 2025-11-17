@@ -1046,7 +1046,7 @@ class Dist(Node):
         param_names = list(param_props.keys())
 
         # Helper function to get and validate bijector for a parameter
-        def get_bijector(param_name: str) -> jb.Bijector | None:
+        def _get_bijector(param_name: str) -> jb.Bijector | None:
             """
             Gets the constraining bijector for a parameter.
 
@@ -1091,7 +1091,7 @@ class Dist(Node):
             return bijector
 
         # Helper function to process a single parameter
-        def process_param(param_name: str, input_node: Node) -> None:
+        def _process_param(param_name: str, input_node: Node) -> None:
             """
             Processes a parameter input node and adds it to transformable if applicable.
             """
