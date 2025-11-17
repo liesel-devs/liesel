@@ -1109,7 +1109,7 @@ class Dist(Node):
                 # Weak variables are already computed/transformed, skip silently
                 return
 
-            bijector = get_bijector(param_name)
+            bijector = _get_bijector(param_name)
 
             if bijector is not None:
                 transformable[param_name] = (param_var, bijector)
@@ -1121,12 +1121,12 @@ class Dist(Node):
         for i in range(num_positional_to_check):
             param_name = param_names[i]
             input_node = self.inputs[i]
-            process_param(param_name, input_node)
+            _process_param(param_name, input_node)
 
         # Process keyword inputs for remaining parameters
         # (or all keyword inputs if no positional args)
         for kw_name, input_node in self.kwinputs.items():
-            process_param(kw_name, input_node)
+            _process_param(kw_name, input_node)
 
         return transformable
 
