@@ -947,7 +947,7 @@ class Dist(Node):
         When True, all strong Var parameters of this distribution will be
         automatically transformed using TensorFlow Probability's parameter
         default constrained<->unconstrained bijectors when building a model.
-        This is  done by calling the distribution class's
+        This is done by calling the distribution class's
         parameter_properties() method to determine the appropriate default
         bijector for each parameter.
         Only parameters that:
@@ -968,10 +968,11 @@ class Dist(Node):
         It is necessary that parameter_properties() returns a dictionary.
         Further, this dictionary has the parameter names as keys and their
         respective ParamterProperties instance as values. The order of the
-        dict entries is important! It hold the parameters in the same order as
-        they appear in the distribution's __init__ signature. That is the
-        case for the offcial TensorFlow Probability distributions and thus
-        relied on for the auto-transform functionality.
+        dict entries is important! The dict holds the parameters in the same 
+        order as they appear in the distribution's __init__ signature. That 
+        is the case for the offcial TensorFlow Probability distributions and 
+        thus relied on for the auto-transform functionality.
+
         Examples
         --------
         >>> import tensorflow_probability.substrates.jax.distributions as tfd
@@ -1000,6 +1001,7 @@ class Dist(Node):
         Uses the distribution class's parameter_properties() to determine which
         parameters need transformation and what bijectors to use. Processes both
         positional and keyword arguments.
+
         Returns
         -------
         dict
@@ -1024,7 +1026,7 @@ class Dist(Node):
         except (AttributeError, TypeError) as e:
             raise RuntimeError(
                 f"Distribution {self.distribution.__name__} does not provide a"
-                f"parameter_properties()method. Cannot auto-transform parameters. "
+                f"parameter_properties() method. Cannot auto-transform parameters. "
                 f"This may indicate an issue with the TFP distribution or version."
                 f"Either use a distribution that supports parameter_properties() or "
                 f"manually transform parameters with .transform()."
@@ -1035,12 +1037,12 @@ class Dist(Node):
                 f"Distribution {self.distribution.__name__}'s "
                 f"parameter_properties() must return a dictionary, but returned "
                 f"{type(param_props).__name__}. This may indicate an issue with "
-                f"the custom distribution implementation."
+                f"a custom distribution implementation."
         )
 
         transformable: dict[str, tuple[Var, jb.Bijector]] = {}
 
-        # Get ordered list of parameter names from parameter_properties
+        # Get list of parameter names from parameter_properties
         param_names = list(param_props.keys())
 
         # Helper function to get and validate bijector for a parameter
@@ -1076,14 +1078,14 @@ class Dist(Node):
                 raise RuntimeError(
                     f"Expected a bijector or BIJECTOR_NOT_IMPLEMENTED for "
                     f"parameter '{param_name}' of {self.distribution.__name__}, "
-                    f"but got None. If no default bijector should be provided for "
-                    f"this parameter, the return should be the "
+                    f"but got None. If no default bijector is provided for "
+                    f"this parameter, the return value should be the "
                     f"BIJECTOR_NOT_IMPLEMENTED method instead."
                 )
 
             bijector_type_name = type(bijector).__name__
+            # TFP's way of indicating no default bijector exists
             if bijector_type_name == 'BIJECTOR_NOT_IMPLEMENTED':
-                # TFP's way of indicating no default bijector exists
                 return None
 
             return bijector
