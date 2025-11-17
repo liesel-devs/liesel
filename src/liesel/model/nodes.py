@@ -968,9 +968,9 @@ class Dist(Node):
         It is necessary that parameter_properties() returns a dictionary.
         Further, this dictionary has the parameter names as keys and their
         respective ParamterProperties instance as values. The order of the
-        dict entries is important! The dict holds the parameters in the same 
-        order as they appear in the distribution's __init__ signature. That 
-        is the case for the offcial TensorFlow Probability distributions and 
+        dict entries is important! The dict holds the parameters in the same
+        order as they appear in the distribution's __init__ signature. That
+        is the case for the offcial TensorFlow Probability distributions and
         thus relied on for the auto-transform functionality.
 
         Examples
@@ -1038,7 +1038,7 @@ class Dist(Node):
                 f"parameter_properties() must return a dictionary, but returned "
                 f"{type(param_props).__name__}. This may indicate an issue with "
                 f"a custom distribution implementation."
-        )
+            )
 
         transformable: dict[str, tuple[Var, jb.Bijector]] = {}
 
@@ -1055,7 +1055,7 @@ class Dist(Node):
             """
             prop = param_props.get(param_name)
 
-            if not hasattr(prop, 'default_constraining_bijector_fn'):
+            if not hasattr(prop, "default_constraining_bijector_fn"):
                 raise RuntimeError(
                     f"Parameter property for '{param_name}' of "
                     f"{self.distribution.__name__} does not have "
@@ -1085,7 +1085,7 @@ class Dist(Node):
 
             bijector_type_name = type(bijector).__name__
             # TFP's way of indicating no default bijector exists
-            if bijector_type_name == 'BIJECTOR_NOT_IMPLEMENTED':
+            if bijector_type_name == "BIJECTOR_NOT_IMPLEMENTED":
                 return None
 
             return bijector
