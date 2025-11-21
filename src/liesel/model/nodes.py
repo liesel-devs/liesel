@@ -933,7 +933,7 @@ class Dist(Node):
         self._at: Node | None = None
         self._distribution = distribution
         self._per_obs = True
-        
+
         # Apply bijectors eagerly if provided
         if bijectors is not None:
             self.biject_parameters(bijectors=bijectors)
@@ -1400,7 +1400,7 @@ class Var:
         """Additional meta-information about the variable as a dict."""
 
         self.inference = inference
-        
+
         # Apply bijector eagerly if provided
         if bijector is not None:
             self.biject(bijector=bijector, inference=inference)
@@ -1937,7 +1937,7 @@ class Var:
         Transforms the variable using a bijector, with eager evaluation.
 
         This method is similar to :meth:`.transform`, but with key differences:
-        
+
         - **Eager evaluation**: The transformation is applied immediately.
         - **Returns self**: Returns the original variable (now weakened) for chaining.
         - **Default "auto"**: Default uses the distribution's event space bijector.
