@@ -856,7 +856,7 @@ class Dist(Node):
     _needs_seed
         Whether the node needs a seed / PRNG key.
     bijectors
-        Optional parameter bijector specification for eager transformation of
+        Optional parameter bijector specification for transforming
         distribution parameters. See :meth:`.Dist.biject_parameters` for supported
         formats and behavior.
     **kwinputs
@@ -937,6 +937,7 @@ class Dist(Node):
         self._at: Node | None = None
         self._distribution = distribution
         self._per_obs = True
+        self._parameter_bijectors_cache: dict[str, Bijector | None] | None = None
 
         # Apply bijectors eagerly if provided
         if bijectors is not None:
@@ -986,6 +987,23 @@ class Dist(Node):
     def log_prob(self) -> Array:
         """The log-probability of the distribution."""
         return self.value
+
+    @property
+    def parameter_bijectors(self) -> dict[str, Bijector | None]:
+        """
+        Default parameter bijectors from the distribution's parameter_properties().
+
+        Returns a dict mapping parameter names to their default constraining
+        bijectors. Parameters without a default bijector have value None.
+
+        Returns
+        -------
+        dict
+            Mapping of parameter name to Bijector or None.
+        """
+        if self._parameter_bijectors_cache is None:
+            self._parameter_bijectors_cache = self._find_parameter_bijectors()
+        return self._parameter_bijectors_cache
 
     @property
     def per_obs(self) -> bool:
@@ -1045,7 +1063,7 @@ class Dist(Node):
 
         Returns
         -------
-        Self, for method chaining.
+        Self
 
         Raises
         ------
@@ -1131,47 +1149,32 @@ class Dist(Node):
         """Resolves bijector specs to parameter->(Var, Bijector) mappings."""
         result: dict[str, tuple[Var, Bijector | Literal["auto"]]] = {}
 
+        # Get default bijectors once (cached) - validates parameter_properties()
+        default_bijectors = self.parameter_bijectors
+        param_names = list(default_bijectors.keys())
+
+        # Resolve bijector specification to dict
         if bijectors == "auto":
-            bijector_dict = self._find_parameter_bijectors()
+            bijector_dict = default_bijectors
         elif isinstance(bijectors, dict):
             bijector_dict = {}
             for param_name, bijector in bijectors.items():
                 if bijector == "auto":
-                    default_bijectors = self._find_parameter_bijectors()
                     bijector_dict[param_name] = default_bijectors.get(param_name)
                 else:
                     bijector_dict[param_name] = bijector
         elif isinstance(bijectors, Sequence):
-            try:
-                param_props = self.distribution.parameter_properties()  # type: ignore
-                param_names = list(param_props.keys())
-            except (AttributeError, TypeError):
-                raise RuntimeError(
-                    f"Distribution {self.distribution.__name__} does not provide "
-                    f"parameter_properties()."
-                )
-
             bijector_dict = {}
             for i, bijector in enumerate(bijectors):
                 if i >= len(param_names):
                     break
                 param_name = param_names[i]
                 if bijector == "auto":
-                    default_bijectors = self._find_parameter_bijectors()
                     bijector_dict[param_name] = default_bijectors.get(param_name)
                 else:
                     bijector_dict[param_name] = bijector
         else:
             raise TypeError(f"Invalid bijectors type: {type(bijectors)}.")
-
-        try:
-            param_props = self.distribution.parameter_properties()  # type: ignore
-            param_names = list(param_props.keys())
-        except (AttributeError, TypeError):
-            raise RuntimeError(
-                f"Distribution {self.distribution.__name__} does not provide "
-                f"parameter_properties()."
-            )
 
         for i, input_node in enumerate(self.inputs):
             if i >= len(param_names):
@@ -2016,7 +2019,7 @@ class Var:
         **bijector_kwargs,
     ) -> Var:
         """
-        Transforms the variable using a bijector, with eager evaluation.
+        Transforms the variable using a bijector.
 
         This method is similar to :meth:`.transform`, but with key differences:
 
