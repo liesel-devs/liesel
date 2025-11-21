@@ -855,6 +855,10 @@ class Dist(Node):
         automatically generated upon initialization of a :class:`.Model`.
     _needs_seed
         Whether the node needs a seed / PRNG key.
+    bijectors
+        Optional parameter bijector specification for eager transformation of
+        distribution parameters. See :meth:`.Dist.biject_parameters` for supported
+        formats and behavior.
     **kwinputs
         Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
         will be converted to :class:`.Value` nodes. The values of these inputs will be
@@ -1016,21 +1020,76 @@ class Dist(Node):
         inference: InferenceTypes | Literal["drop"] = None,
     ) -> Dist:
         """
-        Transforms distribution parameters using bijectors.
+        Transforms distribution parameters using bijectors with eager evaluation.
 
-        Variable-level bijectors take precedence over distribution-level.
+        This method applies bijectors to the distribution's parameters immediately.
+        Only strong Var parameters (with parameter=True and not weak) will be
+        transformed. Variable-level bijectors always take precedence over
+        distribution-level bijectors.
 
         Parameters
         ----------
         bijectors
-            Bijector specification: "auto" for defaults, dict for explicit mapping,
-            or Sequence for positional parameters.
+            Bijector specification. Options:
+
+            - ``"auto"``: Use default parameter bijectors from the distribution's
+              parameter_properties(). Parameters without a default bijector
+              (e.g., Wishart's df parameter) are skipped.
+            - dict: Map parameter names to bijectors. Use ``"auto"`` for default,
+              ``None`` to skip, or provide an explicit bijector instance/class.
+            - Sequence: Bijectors for positional parameters in the order they
+              appear in the distribution's __init__ signature.
         inference
-            Inference information for transformed variables.
+            Inference information for transformed variables. If ``"drop"``,
+            inference information is removed from original parameters.
 
         Returns
         -------
         Self, for method chaining.
+
+        Raises
+        ------
+        RuntimeError
+            - If the distribution doesn't support parameter_properties()
+            - If a parameter is already weak and an explicit bijector is provided
+            - If a parameter has auto_transform=True and an explicit bijector is
+              provided
+
+        Notes
+        -----
+        A default bijector's forward is expected to map from unconstrained to
+        constrained space. Consequently, its inverse is expected to map from
+        constrained to unconstrained space.
+
+        For custom TensorFlow Probability distributions, parameter_properties()
+        must return a dictionary with parameter names as keys and
+        ParameterProperties instances as values. The dict order must match the
+        distribution's __init__ signature order.
+
+        See Also
+        --------
+        .Var.biject : Method for transforming individual variables.
+
+        Examples
+        --------
+        >>> import tensorflow_probability.substrates.jax.distributions as tfd
+        >>> scale = lsl.Var.new_param(1.0, name="scale")
+        >>> rate = lsl.Var.new_param(1.0, name="rate")
+
+        Auto-transform all parameters:
+
+        >>> dist = lsl.Dist(tfd.Gamma, concentration=scale, rate=rate, bijectors="auto")
+        >>> scale.weak  # Now weak, transformed
+        True
+
+        Transform only specific parameters:
+
+        >>> dist = lsl.Dist(
+        ...     tfd.Normal,
+        ...     loc=0.0,
+        ...     scale=scale,
+        ...     bijectors={"scale": "auto", "loc": None}
+        ... )
         """
         resolved = self._resolve_bijectors(bijectors)
 
@@ -1141,32 +1200,55 @@ class Dist(Node):
             param_props = self.distribution.parameter_properties()  # type: ignore
         except (AttributeError, TypeError) as e:
             raise RuntimeError(
-                f"Distribution {self.distribution.__name__} does not provide "
-                f"parameter_properties()."
+                f"Distribution {self.distribution.__name__} does not provide a "
+                f"parameter_properties() method. Cannot auto-transform parameters. "
+                f"This may indicate an issue with the TFP distribution or version. "
+                f"Either use a distribution that supports parameter_properties() or "
+                f"manually transform parameters with .transform()."
             ) from e
 
         if not isinstance(param_props, dict):
             raise RuntimeError(
                 f"Distribution {self.distribution.__name__}'s "
-                f"parameter_properties() must return a dictionary."
+                f"parameter_properties() must return a dictionary, but returned "
+                f"{type(param_props).__name__}. This may indicate an issue with "
+                f"a custom distribution implementation."
             )
 
         bijectors: dict[str, Bijector | None] = {}
 
         for param_name, prop in param_props.items():
             if not hasattr(prop, "default_constraining_bijector_fn"):
-                bijectors[param_name] = None
-                continue
+                raise RuntimeError(
+                    f"Parameter property for '{param_name}' of "
+                    f"{self.distribution.__name__} does not have "
+                    f"'default_constraining_bijector_fn' attribute. This may "
+                    f"indicate an issue with the TFP distribution or version. "
+                    f"Either use a distribution that supports "
+                    f"parameter_properties() or manually transform parameters "
+                    f"with .transform()."
+                )
 
             try:
-                bijector = prop.default_constraining_bijector_fn()
-            except Exception:
-                bijectors[param_name] = None
-                continue
+                bijector = prop.default_constraining_bijector_fn()  # type: ignore
+            except Exception as e:
+                raise RuntimeError(
+                    f"Error getting bijector for parameter '{param_name}' of "
+                    f"{self.distribution.__name__}: {e}"
+                ) from e
 
             if bijector is None:
-                bijectors[param_name] = None
-            elif type(bijector).__name__ == "BIJECTOR_NOT_IMPLEMENTED":
+                raise RuntimeError(
+                    f"Expected a bijector or BIJECTOR_NOT_IMPLEMENTED for "
+                    f"parameter '{param_name}' of {self.distribution.__name__}, "
+                    f"but got None. If no default bijector is provided for "
+                    f"this parameter, the return value should be the "
+                    f"BIJECTOR_NOT_IMPLEMENTED method instead."
+                )
+
+            bijector_type_name = type(bijector).__name__
+            # TFP's way of indicating no default bijector exists
+            if bijector_type_name == "BIJECTOR_NOT_IMPLEMENTED":
                 bijectors[param_name] = None
             else:
                 bijectors[param_name] = bijector
