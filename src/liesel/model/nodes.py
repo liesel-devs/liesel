@@ -1084,7 +1084,7 @@ class Dist(Node):
                     bijector_dict[param_name] = bijector
         elif isinstance(bijectors, Sequence):
             try:
-                param_props = self.distribution.parameter_properties()
+                param_props = self.distribution.parameter_properties()  # type: ignore
                 param_names = list(param_props.keys())
             except (AttributeError, TypeError):
                 raise RuntimeError(
@@ -1106,7 +1106,7 @@ class Dist(Node):
             raise TypeError(f"Invalid bijectors type: {type(bijectors)}.")
 
         try:
-            param_props = self.distribution.parameter_properties()
+            param_props = self.distribution.parameter_properties()  # type: ignore
             param_names = list(param_props.keys())
         except (AttributeError, TypeError):
             raise RuntimeError(
@@ -1138,7 +1138,7 @@ class Dist(Node):
     def _find_parameter_bijectors(self) -> dict[str, Bijector | None]:
         """Extracts default parameter bijectors from the distribution."""
         try:
-            param_props = self.distribution.parameter_properties()
+            param_props = self.distribution.parameter_properties()  # type: ignore
         except (AttributeError, TypeError) as e:
             raise RuntimeError(
                 f"Distribution {self.distribution.__name__} does not provide "
@@ -1976,7 +1976,7 @@ class Var:
         # Delegate to transform() which handles TransformedDistribution properly
         if bijector == "auto":
             tvar = self.transform(
-                bijector=None,
+                None,
                 *bijector_args,
                 inference=inference,
                 name=name,
@@ -1984,7 +1984,7 @@ class Var:
             )
         elif isinstance(bijector, jb.Bijector):
             tvar = self.transform(
-                bijector=bijector,
+                bijector,
                 *bijector_args,
                 inference=inference,
                 name=name,
@@ -1992,7 +1992,7 @@ class Var:
             )
         elif is_bijector_class(bijector):
             tvar = self.transform(
-                bijector=bijector,
+                bijector,
                 *bijector_args,
                 inference=inference,
                 name=name,
@@ -2574,9 +2574,10 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
     transformed_dist = Dist(
         transform_dist,
         *inputs,
-        **kwinputs,
         _name="",
         _needs_seed=var.dist_node.needs_seed,
+        bijectors=None,
+        **kwinputs,
     )
 
     transformed_dist.per_obs = var.dist_node.per_obs
@@ -2662,6 +2663,7 @@ def _transform_var_with_bijector_class(
         bijector_inputs,
         _name="",
         _needs_seed=var.dist_node.needs_seed,
+        bijectors=None,
     )
 
     dist_node_transformed.per_obs = var.dist_node.per_obs
