@@ -56,7 +56,7 @@ tfd = tfp.distributions
 We will start by simulating some data with replicates
 
 ``` python
-# Define the number of samples and replicates 
+# Define the number of samples and replicates
 seed = 123
 
 n = 500  # Number of data points
@@ -67,7 +67,7 @@ x = 10 + 5 * jax.random.normal(key, n) # create the true x
 sigma_u_true = 1 # variance of the replicates
 
 keys = jax.random.split(key, n)
-x_tilde = jnp.array([x[i] + sigma_u_true * jax.random.normal(keys[i], (M,)) for i in range(n)]) # observed x-values 
+x_tilde = jnp.array([x[i] + sigma_u_true * jax.random.normal(keys[i], (M,)) for i in range(n)]) # observed x-values
 ```
 
 ``` python
@@ -126,7 +126,7 @@ tau2_x_prior = lsl.Dist(tfd.InverseGamma, concentration = a_x, scale = b_x)
 tau2_x = lsl.Var.new_param(10.0, distribution = tau2_x_prior, name = "tau2_x")
 
 # Define the scales for mu_x (mean of x)
-tau2_mu = lsl.Var.new_param(1000.0, name= "tau2_mu") 
+tau2_mu = lsl.Var.new_param(1000.0, name= "tau2_mu")
 
 # Define prior for mu_x using a Normal distribution
 mu_x_prior = lsl.Dist(tfd.Normal, loc = 0.0, scale = tau2_mu)
@@ -149,7 +149,7 @@ sigma_u = lsl.Var.new_calc(jnp.sqrt, sigma_sq_u, name="sigma_u").update()
 log_sigma_u = sigma_sq_u.transform(tfb.Exp())
 
 
-# Measurement distribution location 
+# Measurement distribution location
 measurement_dist_loc = lsl.Calc(lambda x: jnp.expand_dims(x, -1), x_estimated)
 
 # Define likelihood model for measurement error
@@ -199,7 +199,7 @@ log-transformed to ensure positivity.
 mu_of_y = lsl.Var.new_calc( # compute the dot product
     jnp.dot,
     X_mat,
-    beta, 
+    beta,
     name="mu_of_y"
     )
 
@@ -327,7 +327,7 @@ eb_sample.add_kernel(gs.NUTSKernel(["x_estimated"]))
 eb_sample.add_kernel(gs.GibbsKernel(["mu_x"], transition_mu_x))
 eb_sample.add_kernel(gs.GibbsKernel(["tau2_x"], transition_tau2_x))
 
-eb_sample.add_kernel(gs.NUTSKernel(["beta"])) 
+eb_sample.add_kernel(gs.NUTSKernel(["beta"]))
 eb_sample.add_kernel(gs.NUTSKernel(["sigma_sq_y_transformed"]))
 eb_sample.add_kernel(gs.NUTSKernel(["sigma_sq_u_transformed"]))
 

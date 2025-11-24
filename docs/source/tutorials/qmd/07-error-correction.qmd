@@ -30,7 +30,7 @@ $$
 \tilde{x}_i^{(m)} = x_i + u_i^{(m)}, \quad m = 1, \ldots, M.
 $$
 
-The replicates are assumed to be independent with constant variance 
+The replicates are assumed to be independent with constant variance
 
 $$
 \mathbf{u}_i \sim N_M(\mathbf{0}, \mathbf{\sigma}^{2}_u\mathbf{I}_M).
@@ -71,7 +71,7 @@ We will start by simulating some data with replicates
 
 ```{python}
 #| label: Create data
-# Define the number of samples and replicates 
+# Define the number of samples and replicates
 seed = 123
 
 n = 500  # Number of data points
@@ -82,7 +82,7 @@ x = 10 + 5 * jax.random.normal(key, n) # create the true x
 sigma_u_true = 1 # variance of the replicates
 
 keys = jax.random.split(key, n)
-x_tilde = jnp.array([x[i] + sigma_u_true * jax.random.normal(keys[i], (M,)) for i in range(n)]) # observed x-values 
+x_tilde = jnp.array([x[i] + sigma_u_true * jax.random.normal(keys[i], (M,)) for i in range(n)]) # observed x-values
 ```
 
 ``` {python}
@@ -138,7 +138,7 @@ tau2_x_prior = lsl.Dist(tfd.InverseGamma, concentration = a_x, scale = b_x)
 tau2_x = lsl.Var.new_param(10.0, distribution = tau2_x_prior, name = "tau2_x")
 
 # Define the scales for mu_x (mean of x)
-tau2_mu = lsl.Var.new_param(1000.0, name= "tau2_mu") 
+tau2_mu = lsl.Var.new_param(1000.0, name= "tau2_mu")
 
 # Define prior for mu_x using a Normal distribution
 mu_x_prior = lsl.Dist(tfd.Normal, loc = 0.0, scale = tau2_mu)
@@ -161,7 +161,7 @@ sigma_u = lsl.Var.new_calc(jnp.sqrt, sigma_sq_u, name="sigma_u").update()
 log_sigma_u = sigma_sq_u.transform(tfb.Exp())
 
 
-# Measurement distribution location 
+# Measurement distribution location
 measurement_dist_loc = lsl.Calc(lambda x: jnp.expand_dims(x, -1), x_estimated)
 
 # Define likelihood model for measurement error
@@ -174,7 +174,7 @@ measurement_dist = lsl.Dist(
 x_tilde_var = lsl.Var(x_tilde, distribution = measurement_dist, name = "x_tilde")
 ```
 
-Afterwards we define $\boldsymbol{\beta}$, our design matrix and $\sigma^{2}_y$ (the variance of the response). Note that we have to create the design matrix using {meth}`.Var.new_calc` as we continuously update our x-values during the inference.  
+Afterwards we define $\boldsymbol{\beta}$, our design matrix and $\sigma^{2}_y$ (the variance of the response). Note that we have to create the design matrix using {meth}`.Var.new_calc` as we continuously update our x-values during the inference.
 
 ```{python}
 #| label: design matrix
@@ -195,7 +195,7 @@ sigma_y = lsl.Var.new_calc(jnp.sqrt, sigma_sq_y, name="sigma_y").update()
 log_sigma = sigma_sq_y.transform(tfb.Exp())
 ```
 
-We now can create the distribution for our response. Note that the response is assumed to be distributed as $y_i \sim \mathcal{N}(\beta_0 + \beta_1 \tilde{x_i}, \;\sigma^{2}_y)$ as we are estimating the x-values as well. Both $\sigma^{2}_y$ (variance of the response) and $\sigma^{2}_u$ (variance of the measurements) are assumed to follow an $\text{InverseGamma}(a, b)$ distribution and are log-transformed to ensure positivity. 
+We now can create the distribution for our response. Note that the response is assumed to be distributed as $y_i \sim \mathcal{N}(\beta_0 + \beta_1 \tilde{x_i}, \;\sigma^{2}_y)$ as we are estimating the x-values as well. Both $\sigma^{2}_y$ (variance of the response) and $\sigma^{2}_u$ (variance of the measurements) are assumed to follow an $\text{InverseGamma}(a, b)$ distribution and are log-transformed to ensure positivity.
 
 ```{python}
 #| label: joint model for x and y
@@ -204,7 +204,7 @@ We now can create the distribution for our response. Note that the response is a
 mu_of_y = lsl.Var.new_calc( # compute the dot product
     jnp.dot,
     X_mat,
-    beta, 
+    beta,
     name="mu_of_y"
     )
 
@@ -235,7 +235,7 @@ model.plot_vars()
 
 ## MCMC Inference
 
-We choose {class}`~.goose.NUTSKernel` kernels for generating posterior samples of $\sigma_y$, $\sigma_u$, $\boldsymbol{\beta}$ and to sample our x-values. 
+We choose {class}`~.goose.NUTSKernel` kernels for generating posterior samples of $\sigma_y$, $\sigma_u$, $\boldsymbol{\beta}$ and to sample our x-values.
 To draw from $\mu_x$ and $\tau^2_x$ we use Gibbs kernels ({class}`~.goose.GibbsKernel`), as this allows us to use custom transition functions for our parameters. The full conditionals are:
 
 $$
@@ -313,7 +313,7 @@ def transition_tau2_x(prng_key, model_state):
     return {"tau2_x" : tau2_x}
 
 ```
- 
+
  We set up our engine and draw 2000 posterior samples.
 
 ```{python}
@@ -330,7 +330,7 @@ eb_sample.add_kernel(gs.NUTSKernel(["x_estimated"]))
 eb_sample.add_kernel(gs.GibbsKernel(["mu_x"], transition_mu_x))
 eb_sample.add_kernel(gs.GibbsKernel(["tau2_x"], transition_tau2_x))
 
-eb_sample.add_kernel(gs.NUTSKernel(["beta"])) 
+eb_sample.add_kernel(gs.NUTSKernel(["beta"]))
 eb_sample.add_kernel(gs.NUTSKernel(["sigma_sq_y_transformed"]))
 eb_sample.add_kernel(gs.NUTSKernel(["sigma_sq_u_transformed"]))
 
@@ -367,7 +367,7 @@ fig = gs.plot_param(results, "sigma_sq_y_transformed")
 fig = gs.plot_param(results, "sigma_sq_u_transformed")
 ```
 
-We further can also have a look at our first ten sampled x values and the mean 
+We further can also have a look at our first ten sampled x values and the mean
 
 ```{python}
 #| label: plot-trace-x
