@@ -584,8 +584,8 @@ class TestVarPredictions:
         _ = lsl.Model([yvar])
 
         samples = {
-            "b": jax.random.uniform(jax.random.PRNGKey(3), (4, 7)),
-            "scale_transformed": jax.random.uniform(jax.random.PRNGKey(3), (4, 7)),
+            "b": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1)),
+            "scale_transformed": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1)),
         }
 
         pred = loc.predict(samples)
