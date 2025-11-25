@@ -5,6 +5,7 @@ import jax.numpy as jnp
 import pytest
 import tensorflow_probability.substrates.jax as tfp
 
+import liesel.goose as gs
 import liesel.model as lsl
 from liesel.distributions.nodist import NoDistribution
 
@@ -587,6 +588,60 @@ class TestVarPredictions:
             "b": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1)),
             "scale_transformed": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1)),
         }
+
+        pred = loc.predict(samples)
+        assert jnp.allclose(pred, x * samples["b"])
+        assert pred.shape[-1] == x.shape[-1]
+
+        # predict at new observations with same shape
+        xnew = jax.random.uniform(jax.random.PRNGKey(5), (n,))
+        pred = loc.predict(samples, newdata={"x": xnew})
+
+        assert jnp.allclose(pred, xnew * samples["b"])
+        assert pred.shape[-1] == x.shape[-1]
+
+        # predict at new grid of observations
+        xnew = jnp.linspace(0, 10)
+        pred = loc.predict(samples, newdata={"x": xnew})
+
+        assert jnp.allclose(pred, xnew * samples["b"])
+        assert pred.shape[-1] != x.shape[-1]
+        assert pred.shape[-1] == xnew.shape[-1]
+
+        # predict when irrelevant variables from the model are present
+        pred = scale.predict(samples, newdata={"x": xnew})
+
+        # predict when variables not in the model are present
+        with pytest.raises(KeyError):
+            scale.predict(samples, newdata={"w": xnew})
+
+    def test_predict_sample(self) -> None:
+        """
+        Actually drawing some real samples.
+        """
+        n = 10
+        x = jax.random.uniform(jax.random.PRNGKey(1), (n,))
+        b = 1.0
+        e = jax.random.normal(jax.random.PRNGKey(2), (n,))
+        y = x * b + e
+
+        xvar = lsl.Var.new_obs(x, name="x")
+        bvar = lsl.Var.new_param(jnp.array([b]), name="b")
+        loc = lsl.Var.new_calc(lambda x, b: x * b, x=xvar, b=bvar, name="loc")
+        scale = lsl.Var.new_param(jnp.array([1.0]), name="scale")
+        scale.transform(tfp.bijectors.Exp())
+        yvar = lsl.Var.new_obs(
+            y, lsl.Dist(tfp.distributions.Normal, loc=loc, scale=scale), name="y"
+        )
+
+        model = lsl.Model([yvar])
+
+        eb = gs.LieselMCMC(model).get_engine_builder(seed=42, num_chains=4)
+        eb.add_kernel(gs.HMCKernel(["b", "scale_transformed"]))
+        eb.set_duration(200, 7)
+        engine = eb.build()
+        engine.sample_all_epochs()
+        samples = engine.get_results().get_posterior_samples()
 
         pred = loc.predict(samples)
         assert jnp.allclose(pred, x * samples["b"])
