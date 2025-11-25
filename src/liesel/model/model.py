@@ -1698,6 +1698,21 @@ class Model:
             set to the given values before evaluating predictions. If ``None`` \
             (default), the current variable values are used.
         """
+        # deduce batching dimensions
+        shapes = []
+        for name, value in samples.items():
+            if name in self.vars:
+                model_ndim = jnp.asarray(self.vars[name].value).ndim
+            elif name in self.nodes:
+                model_ndim = jnp.asarray(self.nodes[name].value).ndim
+            else:
+                continue
+            n_batching_dim = jnp.ndim(value) - model_ndim
+            batch_shape = jnp.shape(value)[:n_batching_dim]
+            shapes.append(batch_shape)
+
+        if not len(set(shapes)) == 1:
+            raise RuntimeError("Found inconsistent batch shapes.")
 
         predict_names = predict
 
@@ -1747,13 +1762,21 @@ class Model:
             return submodel.extract_position(predict_names, updated_state)
 
         # map over iterations
-        predict_iter = jax.vmap(predict_one, in_axes=0, out_axes=0)
+        predict_batched = jax.vmap(predict_one, in_axes=0, out_axes=0)
 
-        # map over chains
-        predict_chains = jax.vmap(predict_iter, in_axes=0, out_axes=0)
+        def flatten_batch_dims(x):
+            new_shape = (-1,) + jnp.shape(x)[n_batching_dim:]
+            return jnp.reshape(x, new_shape)
 
-        # apply function
-        return predict_chains(filtered_samples)
+        flattened_samples = jax.tree.map(flatten_batch_dims, filtered_samples)
+
+        flat_predictions = predict_batched(flattened_samples)
+
+        def unflatten_batch_dims(x):
+            new_shape = batch_shape + jnp.shape(x)[1:]
+            return jnp.reshape(x, new_shape)
+
+        return jax.tree.map(unflatten_batch_dims, flat_predictions)
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
