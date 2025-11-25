@@ -4,7 +4,7 @@ Iteratively weighted least squares (IWLS) sampler
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import ClassVar
+from typing import ClassVar, Self
 
 import jax
 import jax.numpy.linalg as jnpla
@@ -70,6 +70,7 @@ class IWLSKernel(ModelMixin, TransitionMixin[IWLSKernelState, IWLSTransitionInfo
         position_keys: Sequence[str],
         chol_info_fn: Callable[[ModelState], Array] | None = None,
         initial_step_size: float = 0.01,
+        da_tune_step_size=True,
         da_target_accept: float = 0.8,
         da_gamma: float = 0.05,
         da_kappa: float = 0.75,
@@ -81,10 +82,29 @@ class IWLSKernel(ModelMixin, TransitionMixin[IWLSKernelState, IWLSTransitionInfo
 
         self.initial_step_size = initial_step_size
 
+        self.da_tune_step_size = da_tune_step_size
         self.da_target_accept = da_target_accept
         self.da_gamma = da_gamma
         self.da_kappa = da_kappa
         self.da_t0 = da_t0
+
+    @classmethod
+    def untuned(
+        cls,
+        position_keys: Sequence[str],
+        chol_info_fn: Callable[[ModelState], Array] | None = None,
+    ) -> Self:
+        """
+        Initializes an IWLS kernel that does not conduct step size tuning during warmup.
+        Instead, the step size is fixed to 1.
+        """
+        kernel = cls(
+            position_keys=position_keys,
+            chol_info_fn=chol_info_fn,
+            initial_step_size=1.0,
+            da_tune_step_size=False,
+        )
+        return kernel
 
     def _flat_log_prob_fn(
         self, model_state: ModelState, unravel_fn: Callable[[Array], Position]
@@ -197,15 +217,16 @@ class IWLSKernel(ModelMixin, TransitionMixin[IWLSKernelState, IWLSTransitionInfo
 
         outcome = self._standard_transition(prng_key, kernel_state, model_state, epoch)
 
-        da_step(
-            outcome.kernel_state,
-            outcome.info.acceptance_prob,
-            epoch.time_in_epoch,
-            self.da_target_accept,
-            self.da_gamma,
-            self.da_kappa,
-            self.da_t0,
-        )
+        if self.da_tune_step_size:
+            da_step(
+                outcome.kernel_state,
+                outcome.info.acceptance_prob,
+                epoch.time_in_epoch,
+                self.da_target_accept,
+                self.da_gamma,
+                self.da_kappa,
+                self.da_t0,
+            )
 
         return outcome
 
