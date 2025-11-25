@@ -2143,7 +2143,17 @@ class Var:
             set to the given values before evaluating predictions.
         """
 
-        submodel = self.model.parental_submodel(self)  # type: ignore
+        assert self.model is not None
+        submodel = self.model.parental_submodel(self)
+
+        newdata = newdata if newdata is not None else {}
+        newdata = newdata.copy()
+        for key in list(newdata.keys()):
+            if key not in self.model.vars or (key in self.model.nodes):
+                raise KeyError(f"{key} is not part of the model.")
+            if key not in submodel.vars or (key in submodel.nodes):
+                newdata.pop(key, None)
+
         pred = submodel.predict(samples=samples, predict=[self.name], newdata=newdata)
         return pred[self.name]
 
