@@ -12,6 +12,19 @@ def type_check() -> None:
 
 
 @pytest.mark.mcmc
-def test_nuts(mcmc_seed):
+def test_iwls(mcmc_seed):
     kernel = gs.IWLSKernel(["beta", "log_sigma"])
     run_kernel_test(mcmc_seed, [kernel])
+
+
+@pytest.mark.mcmc
+def test_iwls_scalar(mcmc_seed):
+    kernel1 = gs.IWLSKernel(["beta"])
+    kernel2 = gs.IWLSKernel(["log_sigma"])
+    run_kernel_test(mcmc_seed, [kernel1, kernel2])
+
+
+@pytest.mark.mcmc
+def test_iwls_untuned(mcmc_seed):
+    kernel = gs.IWLSKernel.untuned(["beta", "log_sigma"])
+    run_kernel_test(mcmc_seed, [kernel], test_da_target_accept=False)
