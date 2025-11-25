@@ -1732,8 +1732,17 @@ class Model:
             # construct submodel for target nodes
             submodel = self.parental_submodel(*predict_nodes_)
 
-        # update submodel with new data, if any were given
         newdata = newdata if newdata is not None else {}
+
+        # handle keys that are not needed
+        newdata = newdata.copy()
+        for key in list(newdata.keys()):
+            if key not in self.vars or (key in self.nodes):
+                raise KeyError(f"{key} is not part of the model.")
+            if key not in submodel.vars or (key in submodel.nodes):
+                newdata.pop(key, None)
+
+        # update submodel with new data, if any were given
         submodel.state = submodel.update_state(newdata)
 
         # filter samples to include only samples that belong to the submodel
@@ -1741,7 +1750,7 @@ class Model:
         filtered_samples = {k: v for k, v in samples.items() if k in vars_and_nodes}
         if not filtered_samples:
             raise ValueError(
-                "No samples provided for the variables or nodes in the submodel."
+                "No samples provided for the variables or nodes in the submodel. "
                 f"Nodes in submodel: {vars_and_nodes}"
             )
 

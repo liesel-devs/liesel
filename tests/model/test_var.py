@@ -583,7 +583,10 @@ class TestVarPredictions:
 
         _ = lsl.Model([yvar])
 
-        samples = {"b": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1))}
+        samples = {
+            "b": jax.random.uniform(jax.random.PRNGKey(3), (4, 7)),
+            "scale_transformed": jax.random.uniform(jax.random.PRNGKey(3), (4, 7)),
+        }
 
         pred = loc.predict(samples)
         assert jnp.allclose(pred, x * samples["b"])
@@ -603,6 +606,13 @@ class TestVarPredictions:
         assert jnp.allclose(pred, xnew * samples["b"])
         assert pred.shape[-1] != x.shape[-1]
         assert pred.shape[-1] == xnew.shape[-1]
+
+        # predict when irrelevant variables from the model are present
+        pred = scale.predict(samples, newdata={"x": xnew})
+
+        # predict when variables not in the model are present
+        with pytest.raises(KeyError):
+            scale.predict(samples, newdata={"w": xnew})
 
 
 class TestVarSample:
