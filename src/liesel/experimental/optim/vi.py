@@ -7,7 +7,6 @@ from typing import Self
 import jax
 import jax.flatten_util
 import jax.numpy as jnp
-import tensorflow_probability.substrates.jax.bijectors as tfb
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 from ...model import Dist, Model, Var
@@ -170,6 +169,8 @@ class VDist:
         self.var: Var | None = None
         self.q: Model | None = None
 
+        self._to_float32 = p._to_float32
+
     def q_to_p(self, pos: Position) -> Position:
         return self._unflatten(pos[self._flat_pos_name])
 
@@ -229,41 +230,15 @@ class VDist:
 
         locs = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
         scales = Var.new_param(scale_diag_value, name=self._flat_pos_name + "_scale")
-        scales.transform(tfb.Softplus())
 
         dist = Dist(tfd.MultivariateNormalDiag, loc=locs, scale_diag=scales)
 
-        return self.init(dist)
-
-    def mvn_full_covariance(
-        self,
-        loc: jax.typing.ArrayLike | None = None,
-        covariance_matrix: jax.typing.ArrayLike | None = None,
-    ) -> Self:
-        if loc is None:
-            loc_value = jnp.asarray(self._flat_pos)
-        else:
-            loc_value = loc
-
-        if covariance_matrix is None:
-            n = jnp.size(loc_value)
-            covmat_value = 0.01 * jnp.eye(n)
-        else:
-            covmat_value = covariance_matrix
-
-        locs = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
-        covmat = Var.new_param(
-            covmat_value, name=self._flat_pos_name + "_covariance_matrix"
-        )
-
-        dist = Dist(
-            tfd.MultivariateNormalFullCovariance, loc=locs, covariance_matrix=covmat
-        )
         dist_inst = dist.init_dist()
-        bijector = dist_inst.parameter_properties()[
-            "covariance_matrix"
+        bijector = dist_inst.parameter_properties(scale_diag.dtype)[  # type: ignore
+            "scale_diag"
         ].default_constraining_bijector_fn()
-        covmat.transform(bijector)
+
+        scales.transform(bijector)
 
         return self.init(dist)
 
@@ -289,7 +264,12 @@ class VDist:
         )
 
         dist = Dist(tfd.MultivariateNormalTriL, loc=locs, scale_tril=scale_tril_var)
-        bijector = tfb.FillScaleTriL()
+
+        dist_inst = dist.init_dist()
+        bijector = dist_inst.parameter_properties(scale_tril.dtype)[  # type: ignore
+            "scale_tril"
+        ].default_constraining_bijector_fn()
+
         scale_tril_var.transform(bijector)
 
         return self.init(dist)
@@ -297,7 +277,7 @@ class VDist:
     def build(self) -> Self:
         if self.var is None:
             raise ValueError("The .var attribute must be set, but is currently None.")
-        self.q = Model([self.var])
+        self.q = Model([self.var], to_float32=self._to_float32)
         return self
 
     def sample_p(
@@ -338,6 +318,7 @@ class CompositeVDist:
     def __init__(self, *vi_dists: VDist):
         self.vi_dists = vi_dists
         self.q: Model | None = None
+        self._to_float32 = vi_dists[0]._to_float32
 
     @property
     def parameters(self) -> list[str]:
@@ -355,7 +336,7 @@ class CompositeVDist:
             if dist.var is None:
                 raise ValueError(f".var attribute of {dist} must be set, but is None.")
             vars_.append(dist.var)
-        q = Model(vars_)
+        q = Model(vars_, to_float32=self._to_float32)
         self.q = q
         return self
 
