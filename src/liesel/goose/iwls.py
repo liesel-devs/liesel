@@ -149,7 +149,11 @@ class IWLSKernel(ModelMixin, TransitionMixin[IWLSKernelState, IWLSTransitionInfo
         if self.chol_info_fn is None:
             flat_position, _ = ravel_pytree(self.position(model_state))
             info_matrix = -flat_hessian_fn(flat_position)
-            info_matrix += 1e-6 * jnp.eye(jnp.shape(flat_position)[-1])
+            info_matrix += (
+                1e-6
+                * jnp.mean(jnp.diag(info_matrix))
+                * jnp.eye(jnp.shape(flat_position)[-1])
+            )
             return jnpla.cholesky(info_matrix)
 
         return self.chol_info_fn(model_state)
