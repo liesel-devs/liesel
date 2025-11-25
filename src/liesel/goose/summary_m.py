@@ -5,7 +5,7 @@ Posterior statistics and diagnostics.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, NamedTuple
+from typing import Any, Literal, NamedTuple
 
 import arviz as az
 import jax
@@ -91,6 +91,33 @@ def _make_error_summary(
         error_summary[kel.kernel_ident] = krnl_summary
 
     return error_summary
+
+
+SummaryQuantities = Literal[
+    "mean",
+    "sd",
+    "var",
+    "quantiles",
+    "hdi",
+    "ess_bulk",
+    "ess_tail",
+    "rhat",
+    "mcse_mean",
+    "mcse_sd",
+]
+
+summary_quantities: Sequence[SummaryQuantities] = (
+    "mean",
+    "sd",
+    "var",
+    "quantiles",
+    "hdi",
+    "ess_bulk",
+    "ess_tail",
+    "rhat",
+    "mcse_mean",
+    "mcse_sd",
+)
 
 
 class Summary:
@@ -194,7 +221,20 @@ class Summary:
         selected: list[str] | None = None,
         deselected: list[str] | None = None,
         per_chain: bool = False,
+        which: Sequence[SummaryQuantities] = summary_quantities,
     ):
+        if not which:
+            raise ValueError(
+                f"Argument 'which' must not be empty. "
+                f"Supported keys are: {summary_quantities}"
+            )
+        for _which_key in which:
+            if _which_key not in summary_quantities:
+                raise ValueError(
+                    f"Key {which} in 'which' is not supported. "
+                    f"Supported keys are: {summary_quantities}"
+                )
+
         posterior_chain = results.get_posterior_samples()
         if additional_chain:
             for k, v in additional_chain.items():
@@ -239,14 +279,16 @@ class Summary:
                     posterior_chain, jnp.s_[None, chain_idx, ...]
                 )
 
-                qdict = _create_quantity_dict(single_chain, quantiles, hdi_prob)
+                qdict = _create_quantity_dict(single_chain, quantiles, hdi_prob, which)
 
                 single_chain_summaries.append(qdict)
 
             quantities = stack_leaves(single_chain_summaries, axis=0)
 
         else:
-            quantities = _create_quantity_dict(posterior_chain, quantiles, hdi_prob)
+            quantities = _create_quantity_dict(
+                posterior_chain, quantiles, hdi_prob, which
+            )
 
         config = {
             "quantiles": quantiles,
@@ -258,6 +300,7 @@ class Summary:
             results.get_error_log(False).unwrap(), results.get_error_log(True)
         )
 
+        self._which = which
         self.per_chain = per_chain
         self.quantities = quantities
         self.config = config
@@ -274,28 +317,35 @@ class Summary:
 
         # make new entries for the quantiles
         if self.per_chain:
-            for i, q in enumerate(self.config["quantiles"]):
-                quants[f"q_{q}"] = {
-                    k: v[:, i, ...] for k, v in quants["quantile"].items()
-                }
-
-            quants["hdi_low"] = {k: v[:, 0, ...] for k, v in quants["hdi"].items()}
-            quants["hdi_high"] = {k: v[:, 1, ...] for k, v in quants["hdi"].items()}
+            if "quantiles" in self._which:
+                for i, q in enumerate(self.config["quantiles"]):
+                    quants[f"q_{q}"] = {
+                        k: v[:, i, ...] for k, v in quants["quantile"].items()
+                    }
+            if "hdi" in self._which:
+                quants["hdi_low"] = {k: v[:, 0, ...] for k, v in quants["hdi"].items()}
+                quants["hdi_high"] = {k: v[:, 1, ...] for k, v in quants["hdi"].items()}
         else:
-            for i, q in enumerate(self.config["quantiles"]):
-                quants[f"q_{q}"] = {k: v[i, ...] for k, v in quants["quantile"].items()}
-
-            quants["hdi_low"] = {k: v[0, ...] for k, v in quants["hdi"].items()}
-            quants["hdi_high"] = {k: v[1, ...] for k, v in quants["hdi"].items()}
+            if "quantiles" in self._which:
+                for i, q in enumerate(self.config["quantiles"]):
+                    quants[f"q_{q}"] = {
+                        k: v[i, ...] for k, v in quants["quantile"].items()
+                    }
+            if "hdi" in self._which:
+                quants["hdi_low"] = {k: v[0, ...] for k, v in quants["hdi"].items()}
+                quants["hdi_high"] = {k: v[1, ...] for k, v in quants["hdi"].items()}
 
         # remove the old entries
-        del quants["quantile"]
-        del quants["hdi"]
+        if "hdi" in self._which:
+            del quants["hdi"]
+        if "quantiles" in self._which:
+            del quants["quantile"]
 
         # create one row per entry
         df_dict = {}
-        for var in quants["mean"].keys():
-            it = np.nditer(quants["mean"][var], flags=["multi_index"])
+        first_quant = list(quants.values())[0]
+        for var in first_quant.keys():
+            it = np.nditer(first_quant[var], flags=["multi_index"])
             for _ in it:
                 var_fqn = (
                     var if len(it.multi_index) == 0 else f"{var}{list(it.multi_index)}"
@@ -467,40 +517,40 @@ class Summary:
 
 
 def _create_quantity_dict(
-    chain: Position, quantiles: Sequence[float], hdi_prob: float
+    chain: Position,
+    quantiles: Sequence[float],
+    hdi_prob: float,
+    which: Sequence[SummaryQuantities] = summary_quantities,
 ) -> dict[str, dict[str, np.ndarray]]:
     azchain = az.convert_to_inference_data(chain).posterior
 
+    quantities = {}
     # calculate quantities
-    mean = azchain.mean(dim=["chain", "draw"])
-    var = azchain.var(dim=["chain", "draw"])
-    sd = azchain.std(dim=["chain", "draw"])
-    quantile = azchain.quantile(q=quantiles, dim=["chain", "draw"])
-    hdi = az.hdi(azchain, hdi_prob=hdi_prob)
+    if "mean" in which:
+        quantities["mean"] = azchain.mean(dim=["chain", "draw"])
+    if "var" in which:
+        quantities["var"] = azchain.var(dim=["chain", "draw"])
+    if "sd" in which:
+        quantities["sd"] = azchain.std(dim=["chain", "draw"])
+    if "quantiles" in which:
+        quantities["quantile"] = azchain.quantile(q=quantiles, dim=["chain", "draw"])
+    if "hdi" in which:
+        quantities["hdi"] = az.hdi(azchain, hdi_prob=hdi_prob)
 
-    ess_bulk = az.ess(azchain, method="bulk")
-    ess_tail = az.ess(azchain, method="tail")
-    mcse_mean = az.mcse(azchain, method="mean")
-    mcse_sd = az.mcse(azchain, method="sd")
+    if "ess_bulk" in which:
+        quantities["ess_bulk"] = az.ess(azchain, method="bulk")
 
-    # place quantities in dict
-    quantities = {
-        "mean": mean,
-        "var": var,
-        "sd": sd,
-        "quantile": quantile,
-        "hdi": hdi,
-        "rhat": None,
-        "ess_bulk": ess_bulk,
-        "ess_tail": ess_tail,
-        "mcse_mean": mcse_mean,
-        "mcse_sd": mcse_sd,
-    }
+    if "ess_tail" in which:
+        quantities["ess_tail"] = az.ess(azchain, method="tail")
 
-    if azchain.chain.size > 1:
+    if "mcse_mean" in which:
+        quantities["mcse_mean"] = az.mcse(azchain, method="mean")
+
+    if "mcse_sd" in which:
+        quantities["mcse_sd"] = az.mcse(azchain, method="sd")
+
+    if "rhat" in which and azchain.chain.size > 1:
         quantities["rhat"] = az.rhat(azchain)
-    else:
-        del quantities["rhat"]
 
     # convert to simple dict[str, np.ndarray]
     for key, val in quantities.items():
@@ -511,8 +561,9 @@ def _create_quantity_dict(
 
     # special treatment for hdi since the function uses the last axis to refer
     # to the quantile
-    for k, v in quantities["hdi"].items():
-        quantities["hdi"][k] = np.moveaxis(v, -1, 0)
+    if "hdi" in quantities:
+        for k, v in quantities["hdi"].items():
+            quantities["hdi"][k] = np.moveaxis(v, -1, 0)
 
     # hdi shape AFTER
     # HDI --- VarIDX
@@ -560,7 +611,21 @@ class SamplesSummary:
         selected: list[str] | None = None,
         deselected: list[str] | None = None,
         per_chain: bool = False,
+        which: Sequence[SummaryQuantities] = summary_quantities,
     ):
+        if not which:
+            raise ValueError(
+                f"Argument 'which' must not be empty. "
+                f"Supported keys are: {summary_quantities}"
+            )
+
+        for _which_key in which:
+            if _which_key not in summary_quantities:
+                raise ValueError(
+                    f"Key {which} in 'which' is not supported. "
+                    f"Supported keys are: {summary_quantities}"
+                )
+
         posterior_chain = Position(samples)
 
         if selected:
@@ -596,14 +661,16 @@ class SamplesSummary:
                     posterior_chain, jnp.s_[None, chain_idx, ...]
                 )
 
-                qdict = _create_quantity_dict(single_chain, quantiles, hdi_prob)
+                qdict = _create_quantity_dict(single_chain, quantiles, hdi_prob, which)
 
                 single_chain_summaries.append(qdict)
 
             quantities = stack_leaves(single_chain_summaries, axis=0)
 
         else:
-            quantities = _create_quantity_dict(posterior_chain, quantiles, hdi_prob)
+            quantities = _create_quantity_dict(
+                posterior_chain, quantiles, hdi_prob, which
+            )
 
         config = {
             "quantiles": quantiles,
@@ -611,6 +678,7 @@ class SamplesSummary:
             "chains_merged": not per_chain,
         }
 
+        self._which = which
         self.per_chain = per_chain
         self.quantities = quantities
         self.config = config
@@ -626,6 +694,7 @@ class SamplesSummary:
         deselected: list[str] | None = None,
         per_chain: bool = False,
         name: str = "v",
+        which: Sequence[SummaryQuantities] = summary_quantities,
     ) -> SamplesSummary:
         """
         Initializes the summary from an array of samples.
@@ -645,7 +714,7 @@ class SamplesSummary:
             Variable name to use for labelling in :meth:`.to_dataframe`.
         """
         samples = {name: a}
-        return cls(samples, quantiles, hdi_prob, selected, deselected, per_chain)
+        return cls(samples, quantiles, hdi_prob, selected, deselected, per_chain, which)
 
     def to_dataframe(self) -> pd.DataFrame:
         """Turns Summary object into a :class:`~pandas.DataFrame` object."""
@@ -655,28 +724,35 @@ class SamplesSummary:
 
         # make new entries for the quantiles
         if self.per_chain:
-            for i, q in enumerate(self.config["quantiles"]):
-                quants[f"q_{q}"] = {
-                    k: v[:, i, ...] for k, v in quants["quantile"].items()
-                }
-
-            quants["hdi_low"] = {k: v[:, 0, ...] for k, v in quants["hdi"].items()}
-            quants["hdi_high"] = {k: v[:, 1, ...] for k, v in quants["hdi"].items()}
+            if "quantiles" in self._which:
+                for i, q in enumerate(self.config["quantiles"]):
+                    quants[f"q_{q}"] = {
+                        k: v[:, i, ...] for k, v in quants["quantile"].items()
+                    }
+            if "hdi" in self._which:
+                quants["hdi_low"] = {k: v[:, 0, ...] for k, v in quants["hdi"].items()}
+                quants["hdi_high"] = {k: v[:, 1, ...] for k, v in quants["hdi"].items()}
         else:
-            for i, q in enumerate(self.config["quantiles"]):
-                quants[f"q_{q}"] = {k: v[i, ...] for k, v in quants["quantile"].items()}
-
-            quants["hdi_low"] = {k: v[0, ...] for k, v in quants["hdi"].items()}
-            quants["hdi_high"] = {k: v[1, ...] for k, v in quants["hdi"].items()}
+            if "quantiles" in self._which:
+                for i, q in enumerate(self.config["quantiles"]):
+                    quants[f"q_{q}"] = {
+                        k: v[i, ...] for k, v in quants["quantile"].items()
+                    }
+            if "hdi" in self._which:
+                quants["hdi_low"] = {k: v[0, ...] for k, v in quants["hdi"].items()}
+                quants["hdi_high"] = {k: v[1, ...] for k, v in quants["hdi"].items()}
 
         # remove the old entries
-        del quants["quantile"]
-        del quants["hdi"]
+        if "hdi" in self._which:
+            del quants["hdi"]
+        if "quantiles" in self._which:
+            del quants["quantile"]
 
         # create one row per entry
         df_dict = {}
-        for var in quants["mean"].keys():
-            it = np.nditer(quants["mean"][var], flags=["multi_index"])
+        first_quant = list(quants.values())[0]
+        for var in first_quant.keys():
+            it = np.nditer(first_quant[var], flags=["multi_index"])
             for _ in it:
                 var_fqn = (
                     var if len(it.multi_index) == 0 else f"{var}{list(it.multi_index)}"
