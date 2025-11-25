@@ -1,5 +1,8 @@
+from itertools import product
+
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from liesel.__version__ import __version__
 from liesel.goose.engine import SamplingResults
@@ -230,6 +233,57 @@ def test_liesel_version(result: SamplingResults):
     assert summary.liesel_version == __version__
 
 
+@pytest.mark.parametrize(
+    ("per_chain", "which_"),
+    list(
+        product(
+            (True, False),
+            [
+                ("mean", "sd"),
+                ("hdi",),
+                ("mean", "ess_bulk"),
+                ("mean", "mcse_mean"),
+                ("mean", "mcse_sd"),
+                ("quantiles", "var"),
+                ("mean", "sd", "var", "quantiles"),
+                ("mean", "ess_bulk", "ess_tail"),
+                ("mean", "ess_bulk", "ess_tail", "rhat"),
+            ],
+        )
+    ),
+)
+def test_deselect_quantities(result: SamplingResults, per_chain, which_):
+    summary = Summary(result, which=which_, per_chain=per_chain)
+    df = summary.to_dataframe()
+    for key in which_:
+        if key == "rhat" and per_chain:
+            continue
+
+        if key not in ["quantiles", "hdi"]:
+            assert key in df.columns
+
+        if key == "hdi":
+            assert "hdi_low" in df.columns
+            assert "hdi_high" in df.columns
+        if key == "quantiles":
+            assert "q_0.05" in df.columns
+            assert "q_0.5" in df.columns
+            assert "q_0.95" in df.columns
+
+    n_quantity_columns = len(which_)
+    if "quantiles" in which_:
+        n_quantity_columns += len(summary.config["quantiles"]) - 1
+    if "hdi" in which_:
+        n_quantity_columns += 1
+    if per_chain:
+        n_quantity_columns += 1
+
+    if per_chain and "rhat" in which_:
+        n_quantity_columns -= 1
+
+    assert (len(df.columns) - n_quantity_columns) == 4
+
+
 class TestSamplesSummary:
     def test_shapes(self, result: SamplingResults):
         samples = result.get_posterior_samples()
@@ -379,3 +433,54 @@ class TestSamplesSummary:
         samples = result.get_posterior_samples()
         summary = SamplesSummary.from_array(samples["bar"], name="test")
         assert summary.to_dataframe().shape == (105, 16)
+
+    @pytest.mark.parametrize(
+        ("per_chain", "which_"),
+        list(
+            product(
+                (True, False),
+                [
+                    ("mean", "sd"),
+                    ("hdi",),
+                    ("mean", "ess_bulk"),
+                    ("mean", "mcse_mean"),
+                    ("mean", "mcse_sd"),
+                    ("quantiles", "var"),
+                    ("mean", "sd", "var", "quantiles"),
+                    ("mean", "ess_bulk", "ess_tail"),
+                    ("mean", "ess_bulk", "ess_tail", "rhat"),
+                ],
+            )
+        ),
+    )
+    def test_deselect_quantities(self, result: SamplingResults, per_chain, which_):
+        samples = result.get_posterior_samples()
+        summary = SamplesSummary(samples, which=which_, per_chain=per_chain)
+        df = summary.to_dataframe()
+        for key in which_:
+            if key == "rhat" and per_chain:
+                continue
+
+            if key not in ["quantiles", "hdi"]:
+                assert key in df.columns
+
+            if key == "hdi":
+                assert "hdi_low" in df.columns
+                assert "hdi_high" in df.columns
+            if key == "quantiles":
+                assert "q_0.05" in df.columns
+                assert "q_0.5" in df.columns
+                assert "q_0.95" in df.columns
+
+        n_quantity_columns = len(which_)
+        if "quantiles" in which_:
+            n_quantity_columns += len(summary.config["quantiles"]) - 1
+        if "hdi" in which_:
+            n_quantity_columns += 1
+        if per_chain:
+            n_quantity_columns += 1
+
+        if per_chain and "rhat" in which_:
+            n_quantity_columns -= 1
+
+        assert (len(df.columns) - n_quantity_columns) == 3
