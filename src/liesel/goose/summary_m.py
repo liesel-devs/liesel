@@ -470,6 +470,36 @@ class Summary:
 
         return df
 
+    def summarise_diagnostics(
+        self, summarise_by: Literal["worst_case", "mean", "median", "sd"] = "worst_case"
+    ) -> pd.DataFrame:
+        """
+        Gives a high-level summary of effective sample size and the rhat statistic.
+
+        Takes the minimum effective sample size and maximum rhat
+        (i.e. the worst cases) for each parameter. Also returns the medians of the
+        respective statistics.
+        This is useful for summarizing diagnostic performance of high-dimensional
+        parameters.
+        """
+
+        summarise_ess = "min" if summarise_by == "worst_case" else summarise_by
+        summarise_rhat = "max" if summarise_by == "worst_case" else summarise_by
+
+        diagnostics = (
+            self.to_dataframe()
+            .reset_index()
+            .loc[:, ["variable", "rhat", "ess_bulk", "ess_tail"]]
+            .groupby("variable", as_index=False)
+            .agg(
+                ess_bulk=("ess_bulk", summarise_ess),
+                ess_tail=("ess_tail", summarise_ess),
+                rhat=("rhat", summarise_rhat),
+            )
+        )
+
+        return diagnostics
+
     def __repr__(self):
         param_df = self._param_df()
         error_df = self._error_df()
