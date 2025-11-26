@@ -7,6 +7,7 @@ from typing import Self
 import jax
 import jax.flatten_util
 import jax.numpy as jnp
+import tensorflow_probability.substrates.jax.bijectors as tfb
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 from ...model import Dist, Model, Var
@@ -217,6 +218,7 @@ class VDist:
         self,
         loc: jax.typing.ArrayLike | None = None,
         scale_diag: jax.typing.ArrayLike | None = None,
+        scale_diag_bijector: tfb.Bijector | None = None,
     ) -> Self:
         if loc is None:
             loc_value = jnp.asarray(self._flat_pos)
@@ -228,17 +230,18 @@ class VDist:
         else:
             scale_diag_value = scale_diag
 
-        locs = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
-        scales = Var.new_param(scale_diag_value, name=self._flat_pos_name + "_scale")
+        loc_var = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
+        scale_var = Var.new_param(scale_diag_value, name=self._flat_pos_name + "_scale")
 
-        dist = Dist(tfd.MultivariateNormalDiag, loc=locs, scale_diag=scales)
+        dist = Dist(tfd.MultivariateNormalDiag, loc=loc_var, scale_diag=scale_var)
 
-        dist_inst = dist.init_dist()
-        bijector = dist_inst.parameter_properties(scale_diag.dtype)[  # type: ignore
-            "scale_diag"
-        ].default_constraining_bijector_fn()
+        if scale_diag_bijector is None:
+            dist_inst = dist.init_dist()
+            scale_diag_bijector = dist_inst.parameter_properties(scale_diag.dtype)[  # type: ignore
+                "scale_diag"
+            ].default_constraining_bijector_fn()
 
-        scales.transform(bijector)
+        scale_var.transform(scale_diag_bijector)
 
         return self.init(dist)
 
@@ -246,6 +249,7 @@ class VDist:
         self,
         loc: jax.typing.ArrayLike | None = None,
         scale_tril: jax.typing.ArrayLike | None = None,
+        scale_tril_bijector: tfb.Bijector | None = None,
     ) -> Self:
         if loc is None:
             loc_value = jnp.asarray(self._flat_pos)
@@ -258,19 +262,20 @@ class VDist:
         else:
             scale_tril_value = scale_tril
 
-        locs = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
+        loc_var = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
         scale_tril_var = Var.new_param(
             scale_tril_value, name=self._flat_pos_name + "_scale_tril"
         )
 
-        dist = Dist(tfd.MultivariateNormalTriL, loc=locs, scale_tril=scale_tril_var)
+        dist = Dist(tfd.MultivariateNormalTriL, loc=loc_var, scale_tril=scale_tril_var)
 
-        dist_inst = dist.init_dist()
-        bijector = dist_inst.parameter_properties(scale_tril.dtype)[  # type: ignore
-            "scale_tril"
-        ].default_constraining_bijector_fn()
+        if scale_tril_bijector is None:
+            dist_inst = dist.init_dist()
+            scale_tril_bijector = dist_inst.parameter_properties(scale_tril.dtype)[  # type: ignore
+                "scale_tril"
+            ].default_constraining_bijector_fn()
 
-        scale_tril_var.transform(bijector)
+        scale_tril_var.transform(scale_tril_bijector)
 
         return self.init(dist)
 

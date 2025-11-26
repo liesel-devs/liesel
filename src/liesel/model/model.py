@@ -497,7 +497,7 @@ class GraphBuilder:
         nodes, _vars = gb._all_nodes_and_vars()
         nodes_and_vars = nodes + _vars
 
-        model = Model(nodes_and_vars, grow=False, copy=copy)
+        model = Model(nodes_and_vars, grow=False, copy=copy, to_float32=self.to_float32)
 
         if not copy:
             self.nodes.clear()
