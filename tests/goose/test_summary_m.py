@@ -116,6 +116,11 @@ def test_sample_info(result: SamplingResults):
     assert summary.sample_info["sample_size_per_chain"] == 250
 
 
+def test_summarise_diagnostics(result: SamplingResults):
+    summary = Summary(result, selected=["baz"]).summarise_diagnostics()
+    assert False
+
+
 def test_df_sample_info(result: SamplingResults):
     summary = Summary(result, selected=["baz"]).to_dataframe()
     assert summary["sample_size"].iloc[0] == 3 * 250
