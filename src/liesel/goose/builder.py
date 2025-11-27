@@ -435,7 +435,7 @@ class EngineBuilder:
 
     def add_burnin(self, duration: int):
         """
-        Adds a burnin epoch.
+        Adds burnin epochs.
 
         Note that the order in which you add epochs matters.
         Adaptation epochs should usually come before all other epochs.
@@ -445,7 +445,7 @@ class EngineBuilder:
 
     def add_posterior(self, duration: int, thinning: int = 1):
         """
-        Adds a posterior epoch.
+        Adds posterior epochs.
 
         Note that the order in which you add epochs matters.
         Adaptation epochs should usually come before all other epochs.
