@@ -1106,7 +1106,7 @@ class Dist(Node):
         ...     tfd.Normal,
         ...     loc=0.0,
         ...     scale=scale,
-        ...     bijectors={"scale": "auto", "loc": None}
+        ...     bijectors={"scale": "auto", "loc": None},
         ... )
         """
         resolved = self._resolve_bijectors(bijectors)
@@ -1114,9 +1114,7 @@ class Dist(Node):
         for param_name, (param_var, bijector) in resolved.items():
             if param_var.weak:
                 if bijector == "auto":
-                    logger.debug(
-                        f"Parameter '{param_name}' already weak. Skipping."
-                    )
+                    logger.debug(f"Parameter '{param_name}' already weak. Skipping.")
                     continue
                 else:
                     raise RuntimeError(
