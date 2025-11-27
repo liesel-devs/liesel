@@ -1457,7 +1457,7 @@ class Var:
         See Also
         --------
         .Var.new_param : Initializes a strong variable that acts as a model parameter.
-        .Var.new_param : Initializes a strong variable that acts as a model parameter.
+        .Var.new_obs : Initializes a strong variable that acts as an observed variable.
         .Var.new_calc :
             Initializes a weak variable that is a function of other variables.
 
