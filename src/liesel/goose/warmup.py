@@ -62,7 +62,7 @@ def stan_epochs(
             "(< init_duration + term_duration + base_duration)"
         )
 
-    epochs = [_EpochConfig(EpochType.INITIAL_VALUES, duration=1, thinning=1)]
+    epochs = []
     epochs.append(
         _EpochConfig(EpochType.FAST_ADAPTATION, init_duration, thinning_warmup)
     )

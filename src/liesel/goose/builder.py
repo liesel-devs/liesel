@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import math
 from collections.abc import Iterable
+from functools import partial
 from typing import cast
 
 import jax
@@ -20,7 +21,7 @@ import jax.numpy as jnp
 from liesel.option import Option
 
 from .engine import Engine
-from .epoch import EpochConfig, EpochManager
+from .epoch import EpochConfig, EpochManager, EpochType
 from .kernel_sequence import KernelSequence
 from .pytree import stack_leaves
 from .types import (
@@ -32,6 +33,9 @@ from .types import (
     QuantityGenerator,
 )
 from .warmup import stan_epochs
+
+_EpochConfig = partial(EpochConfig, optional=None)
+
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +144,10 @@ class EngineBuilder:
                 "Provide either an int or a key from jax.random.PRNGKey as seed."
             )
 
+        initial_values = [
+            _EpochConfig(EpochType.INITIAL_VALUES, duration=1, thinning=1)
+        ]
+        self._epochs = EpochManager(configs=initial_values)
         self._prng_key: KeyArray = keys[0]
         self._engine_key: KeyArray = keys[1]
         self._jitter_key: KeyArray = keys[2]
@@ -339,7 +347,136 @@ class EngineBuilder:
 
     def set_epochs(self, epochs: Iterable[EpochConfig]):
         """Sets epochs."""
-        self._epochs = EpochManager(epochs)
+        initial_values = [
+            _EpochConfig(EpochType.INITIAL_VALUES, duration=1, thinning=1)
+        ]
+        self._epochs = EpochManager(initial_values + list(epochs))
+
+    def append_epochs(self, epochs: Iterable[EpochConfig]):
+        """Appends epochs."""
+        for epoch in epochs:
+            self._epochs.append(epoch)
+
+    def add_adaptation(
+        self,
+        duration: int,
+        init: float | int = 0.1,
+        term: float | int = 0.2,
+        base: int = 25,
+        thinning: int = 1,
+    ):
+        """
+        Adds adaptation epochs, for tuning kernel hyperparameters.
+
+        This follows the Stan Development Team (Stan Reference Manual 2021, Chapter 15.2
+        [#stanmanual]_).
+
+        Note that the order in which you add epochs matters.
+        Adaptation epochs should usually come before all other epochs.
+
+        Parameters
+        ----------
+        duration
+            The number of adaptation samples.
+        init
+            The share of samples in the *initial fast* adaptation epoch, relative to \
+            the total number of adaptation samples (if given as a float), or the total \
+            number of init samples (if given as an integer).
+        term
+            The share of samples in the *final fast* adaptation epoch, relative to the \
+            total number of adaptation samples (if given as a float), or the total \
+            number of term samples (if given as an integer).
+        base
+            The number of samples in the *first slow* adaptation epoch.
+        thinning
+            Thinning applied in each adaptation.
+
+        Warnings
+        --------
+        Kernels which rely on history tuning might not be able to deal with thinning \
+        during adaptation.
+
+        References
+        ----------
+
+        .. [#stanmanual] https://mc-stan.org/docs/2_28/reference-manual/hmc-algorithm-parameters.html
+        """
+        if duration < 20:
+            raise ValueError("duration too short (< 20)")
+
+        if isinstance(init, float):
+            init_samples = int(init * duration)
+        else:
+            init_samples = init
+
+        if isinstance(term, float):
+            term_samples = int(term * duration)
+        else:
+            term_samples = term
+
+        if duration < init_samples + term_samples + base:
+            raise ValueError(
+                "duration too short (< init_samples + term_samples + base)"
+            )
+        epochs = []
+        epochs.append(_EpochConfig(EpochType.FAST_ADAPTATION, init_samples, thinning))
+
+        time_left = duration - init_samples - term_samples
+        this_time = base
+
+        while 3 * this_time <= time_left:
+            epochs.append(_EpochConfig(EpochType.SLOW_ADAPTATION, this_time, thinning))
+            time_left -= this_time
+            this_time *= 2
+
+        epochs.append(_EpochConfig(EpochType.SLOW_ADAPTATION, time_left, thinning))
+        epochs.append(_EpochConfig(EpochType.FAST_ADAPTATION, term_samples, thinning))
+        self.append_epochs(epochs)
+
+    def add_burnin(self, duration: int):
+        """
+        Adds a burnin epoch.
+
+        Note that the order in which you add epochs matters.
+        Adaptation epochs should usually come before all other epochs.
+        """
+        epoch = _EpochConfig(EpochType.BURNIN, duration, 1)
+        self.append_epochs([epoch])
+
+    def add_posterior(self, duration: int, thinning: int = 1):
+        """
+        Adds a posterior epoch.
+
+        Note that the order in which you add epochs matters.
+        Adaptation epochs should usually come before all other epochs.
+        """
+        epoch = _EpochConfig(EpochType.POSTERIOR, duration, thinning)
+        self.append_epochs([epoch])
+
+    def set_duration_simple(
+        self,
+        burnin_duration: int = 10,
+        posterior_duration: int = 10,
+        thinning_posterior: int = 1,
+    ):
+        """
+        Defines a simple epoch configuration that does not include any adaptative
+        warmup. Includes only burnin and posterior samples.
+
+        The default values of samples to be drawn are extremely low and not intended
+        for practical use -- instead, they are intended for quickly checking whether
+        your model runs successfully.
+
+        In order to tune the
+        hyperparameters of your kernels during warmup, you should use
+        :meth:`.set_duration` instead.
+        """
+        epochs = []
+        epochs.append(_EpochConfig(EpochType.BURNIN, burnin_duration, 1))
+        epochs.append(
+            _EpochConfig(EpochType.POSTERIOR, posterior_duration, thinning_posterior)
+        )
+        self.set_epochs(epochs)
 
     def set_duration(
         self,
@@ -362,7 +499,7 @@ class EngineBuilder:
             thinning_posterior=thinning_posterior,
             thinning_warmup=thinning_warmup,
         )
-        self._epochs = EpochManager(epochs)
+        self.set_epochs(epochs)
 
     @property
     def epochs(self) -> tuple[EpochConfig, ...]:
