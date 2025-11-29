@@ -78,7 +78,7 @@ class TestVarTransform:
         log_tau_sqrt = tau_sqrt.transform(tfp.bijectors.Exp(), name=name)
 
         if name is None:
-            assert log_tau_sqrt.name == f"{tau_sqrt.name}_transformed"
+            assert log_tau_sqrt.name == ""
         else:
             assert log_tau_sqrt.name == name
 
@@ -104,7 +104,7 @@ class TestVarTransform:
         )
 
         if name is None:
-            assert scaled_tau_sqrt.name == f"{tau_sqrt.name}_transformed"
+            assert scaled_tau_sqrt.name == ""
         else:
             assert scaled_tau_sqrt.name == name
 
