@@ -1998,6 +1998,11 @@ class Var:
         tvar.parameter = self.parameter  # type: ignore
         self.parameter = False
 
+        if not self.name:
+            tvar.name = ""
+            tvar.value_node.name = ""
+            tvar.dist_node.name = ""
+
         if name is not None:
             tvar.name = name
 
