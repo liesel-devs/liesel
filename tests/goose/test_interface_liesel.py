@@ -1,9 +1,11 @@
+import jax.numpy as jnp
 import jax.random as rd
 import numpy as np
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.goose as gs
+import liesel.model as lsl
 from liesel.goose.types import Position
 from liesel.model.model import GraphBuilder, Model
 from liesel.model.nodes import Dist, Var
@@ -42,6 +44,46 @@ class TestLieselInterface:
 
         assert lp_before == pytest.approx(-719.46875)
         assert lp_after == pytest.approx(-25616.779296875)
+
+    def test_log_prob_subset(self) -> None:
+        # create model with subset calc
+        param1 = lsl.Var.new_param(
+            jnp.array([1.0, 2.0]),
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="param1",
+        )
+        param2 = lsl.Var.new_param(
+            jnp.array([1.0, 2.0]),
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="param2",
+        )
+
+        # create subset calc
+        subset_calc = lsl.create_subset_log_prob_calc([param1], "_subset_param1")
+
+        # build model
+        gb = lsl.GraphBuilder().add(param1).add(param2).add(subset_calc)
+        model = gb.build_model()
+
+        # create LieselInterface
+        interface = gs.LieselInterface(model)
+
+        # get initial model state
+        model_state = model.state
+
+        # test log_prob_subset
+        full_log_prob = interface.log_prob(model_state)
+        subset_log_prob = interface.log_prob_subset(model_state, "_subset_param1")
+
+        # since both params have same values/distributions, subset should be half
+        expected_half = full_log_prob / 2.0
+        assert jnp.allclose(subset_log_prob, expected_half), (
+            f"Expected {expected_half}, got {subset_log_prob}"
+        )
+
+        # test error handling for missing subset
+        with pytest.raises(KeyError):
+            interface.log_prob_subset(model_state, "_nonexistent_subset")
 
 
 @pytest.mark.mcmc
