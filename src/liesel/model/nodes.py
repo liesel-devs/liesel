@@ -2001,7 +2001,8 @@ class Var:
         if not self.name:
             tvar.name = ""
             tvar.value_node.name = ""
-            tvar.dist_node.name = ""
+            if tvar.dist_node is not None:
+                tvar.dist_node.name = ""
 
         if name is not None:
             tvar.name = name
