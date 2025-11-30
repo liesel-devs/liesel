@@ -170,6 +170,8 @@ class VDist:
         self.var: Var | None = None
         self.q: Model | None = None
 
+        self._to_float32 = p._to_float32
+
     def q_to_p(self, pos: Position) -> Position:
         return self._unflatten(pos[self._flat_pos_name])
 
@@ -216,6 +218,7 @@ class VDist:
         self,
         loc: jax.typing.ArrayLike | None = None,
         scale_diag: jax.typing.ArrayLike | None = None,
+        scale_diag_bijector: tfb.Bijector | None = None,
     ) -> Self:
         if loc is None:
             loc_value = jnp.asarray(self._flat_pos)
@@ -227,43 +230,20 @@ class VDist:
         else:
             scale_diag_value = scale_diag
 
-        locs = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
-        scales = Var.new_param(scale_diag_value, name=self._flat_pos_name + "_scale")
-        scales.transform(tfb.Softplus())
+        loc_var = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
+        scale_var = Var.new_param(scale_diag_value, name=self._flat_pos_name + "_scale")
 
-        dist = Dist(tfd.MultivariateNormalDiag, loc=locs, scale_diag=scales)
+        dist = Dist(tfd.MultivariateNormalDiag, loc=loc_var, scale_diag=scale_var)
 
-        return self.init(dist)
+        if scale_diag_bijector is None:
+            dist_inst = dist.init_dist()
+            scale_diag_bijector = dist_inst.parameter_properties(
+                scale_diag_value.dtype
+            )[  # type: ignore
+                "scale_diag"
+            ].default_constraining_bijector_fn()
 
-    def mvn_full_covariance(
-        self,
-        loc: jax.typing.ArrayLike | None = None,
-        covariance_matrix: jax.typing.ArrayLike | None = None,
-    ) -> Self:
-        if loc is None:
-            loc_value = jnp.asarray(self._flat_pos)
-        else:
-            loc_value = loc
-
-        if covariance_matrix is None:
-            n = jnp.size(loc_value)
-            covmat_value = 0.01 * jnp.eye(n)
-        else:
-            covmat_value = covariance_matrix
-
-        locs = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
-        covmat = Var.new_param(
-            covmat_value, name=self._flat_pos_name + "_covariance_matrix"
-        )
-
-        dist = Dist(
-            tfd.MultivariateNormalFullCovariance, loc=locs, covariance_matrix=covmat
-        )
-        dist_inst = dist.init_dist()
-        bijector = dist_inst.parameter_properties()[
-            "covariance_matrix"
-        ].default_constraining_bijector_fn()
-        covmat.transform(bijector)
+        scale_var.transform(scale_diag_bijector)
 
         return self.init(dist)
 
@@ -271,6 +251,7 @@ class VDist:
         self,
         loc: jax.typing.ArrayLike | None = None,
         scale_tril: jax.typing.ArrayLike | None = None,
+        scale_tril_bijector: tfb.Bijector | None = None,
     ) -> Self:
         if loc is None:
             loc_value = jnp.asarray(self._flat_pos)
@@ -283,21 +264,29 @@ class VDist:
         else:
             scale_tril_value = scale_tril
 
-        locs = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
+        loc_var = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
         scale_tril_var = Var.new_param(
             scale_tril_value, name=self._flat_pos_name + "_scale_tril"
         )
 
-        dist = Dist(tfd.MultivariateNormalTriL, loc=locs, scale_tril=scale_tril_var)
-        bijector = tfb.FillScaleTriL()
-        scale_tril_var.transform(bijector)
+        dist = Dist(tfd.MultivariateNormalTriL, loc=loc_var, scale_tril=scale_tril_var)
+
+        if scale_tril_bijector is None:
+            dist_inst = dist.init_dist()
+            scale_tril_bijector = dist_inst.parameter_properties(
+                scale_tril_value.dtype
+            )[  # type: ignore
+                "scale_tril"
+            ].default_constraining_bijector_fn()
+
+        scale_tril_var.transform(scale_tril_bijector)
 
         return self.init(dist)
 
     def build(self) -> Self:
         if self.var is None:
             raise ValueError("The .var attribute must be set, but is currently None.")
-        self.q = Model([self.var])
+        self.q = Model([self.var], to_float32=self._to_float32)
         return self
 
     def sample_p(
@@ -338,6 +327,7 @@ class CompositeVDist:
     def __init__(self, *vi_dists: VDist):
         self.vi_dists = vi_dists
         self.q: Model | None = None
+        self._to_float32 = vi_dists[0]._to_float32
 
     @property
     def parameters(self) -> list[str]:
@@ -355,7 +345,7 @@ class CompositeVDist:
             if dist.var is None:
                 raise ValueError(f".var attribute of {dist} must be set, but is None.")
             vars_.append(dist.var)
-        q = Model(vars_)
+        q = Model(vars_, to_float32=self._to_float32)
         self.q = q
         return self
 
