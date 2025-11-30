@@ -237,7 +237,9 @@ class VDist:
 
         if scale_diag_bijector is None:
             dist_inst = dist.init_dist()
-            scale_diag_bijector = dist_inst.parameter_properties(scale_diag.dtype)[  # type: ignore
+            scale_diag_bijector = dist_inst.parameter_properties(
+                scale_diag_value.dtype
+            )[  # type: ignore
                 "scale_diag"
             ].default_constraining_bijector_fn()
 
@@ -271,7 +273,9 @@ class VDist:
 
         if scale_tril_bijector is None:
             dist_inst = dist.init_dist()
-            scale_tril_bijector = dist_inst.parameter_properties(scale_tril.dtype)[  # type: ignore
+            scale_tril_bijector = dist_inst.parameter_properties(
+                scale_tril_value.dtype
+            )[  # type: ignore
                 "scale_tril"
             ].default_constraining_bijector_fn()
 
