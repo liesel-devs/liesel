@@ -2125,8 +2125,8 @@ class Var:
     @in_model_method
     def predict(
         self,
-        samples: dict[str, Array],
-        newdata: dict[str, Array] | None = None,
+        samples: dict[str, jax.typing.ArrayLike],
+        newdata: dict[str, jax.typing.ArrayLike] | None = None,
     ) -> Array:
         """
         Returns an array of predictions for this variable.
@@ -2161,9 +2161,9 @@ class Var:
         self,
         shape: Sequence[int],
         seed: jax.Array,
-        posterior_samples: dict[str, Array] | None = None,
+        posterior_samples: dict[str, jax.typing.ArrayLike] | None = None,
         fixed: Sequence[str] = (),
-        newdata: dict[str, Array] | None = None,
+        newdata: dict[str, jax.typing.ArrayLike] | None = None,
         dists: dict[str, Dist] | None = None,
     ) -> dict[str, Array]:
         """
