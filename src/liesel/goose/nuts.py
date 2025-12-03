@@ -19,6 +19,7 @@ from .kernel import (
     DefaultTransitionInfo,
     DefaultTuningInfo,
     ModelMixin,
+    ReprMixin,
     TransitionMixin,
     TransitionOutcome,
     TuningMixin,
@@ -98,6 +99,7 @@ class NUTSKernel(
     ModelMixin,
     TransitionMixin[NUTSKernelState, NUTSTransitionInfo],
     TuningMixin[NUTSKernelState, NUTSTuningInfo],
+    ReprMixin,
 ):
     """
     A NUTS kernel with dual averaging and an inverse mass matrix tuner, implementing the
@@ -130,6 +132,7 @@ class NUTSKernel(
         da_kappa: float = 0.75,
         da_t0: int = 10,
         mm_diag: bool = True,
+        identifier: str = "",
     ):
         self.position_keys = tuple(position_keys)
         self._model = None
@@ -144,6 +147,7 @@ class NUTSKernel(
         self.da_t0 = da_t0
 
         self.mm_diag = mm_diag
+        self.identifier = identifier
 
     def _blackjax_state(self, model_state: ModelState) -> hmc.HMCState:
         return nuts.init(self.position(model_state), self.log_prob_fn(model_state))

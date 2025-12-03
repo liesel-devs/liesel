@@ -13,5 +13,6 @@ def type_check() -> None:
 
 @pytest.mark.mcmc
 def test_hmc(mcmc_seed):
-    kernel = gs.HMCKernel(["beta", "log_sigma"])
-    run_kernel_test(mcmc_seed, [kernel])
+    kernel = gs.HMCKernel(["beta", "log_sigma"], identifier="test")
+    results = run_kernel_test(mcmc_seed, [kernel])
+    kernel.identifier in results.get_posterior_transition_infos()

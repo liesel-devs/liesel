@@ -14,6 +14,7 @@ from .kernel import (
     DefaultTransitionInfo,
     DefaultTuningInfo,
     ModelMixin,
+    ReprMixin,
     TransitionMixin,
     TransitionOutcome,
     TuningOutcome,
@@ -38,7 +39,7 @@ MHTuningInfo = DefaultTuningInfo
 MHProposalFn = Callable[[KeyArray, ModelState, float], MHProposal]
 
 
-class MHKernel(ModelMixin, TransitionMixin[RWKernelState, MHTransitionInfo]):
+class MHKernel(ModelMixin, TransitionMixin[RWKernelState, MHTransitionInfo], ReprMixin):
     """
     A Metropolis-Hastings kernel implementing the :class:`.Kernel` protocol.
 
@@ -69,6 +70,7 @@ class MHKernel(ModelMixin, TransitionMixin[RWKernelState, MHTransitionInfo]):
         da_gamma: float = 0.05,
         da_kappa: float = 0.75,
         da_t0: int = 10,
+        identifier: str = "",
     ):
         self._model = None
         self.position_keys = tuple(position_keys)
@@ -79,6 +81,7 @@ class MHKernel(ModelMixin, TransitionMixin[RWKernelState, MHTransitionInfo]):
         self.da_gamma = da_gamma
         self.da_kappa = da_kappa
         self.da_t0 = da_t0
+        self.identifier = identifier
 
     def init_state(self, prng_key, model_state):
         """Initializes the kernel state."""

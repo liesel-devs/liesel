@@ -10,6 +10,7 @@ from .kernel import (
     DefaultTransitionInfo,
     DefaultTuningInfo,
     ModelMixin,
+    ReprMixin,
     TransitionOutcome,
     TuningOutcome,
     WarmupOutcome,
@@ -22,7 +23,9 @@ GibbsTuningInfo = DefaultTuningInfo
 
 
 class GibbsKernel(
-    ModelMixin, Kernel[GibbsKernelState, GibbsTransitionInfo, GibbsTuningInfo]
+    ModelMixin,
+    Kernel[GibbsKernelState, GibbsTransitionInfo, GibbsTuningInfo],
+    ReprMixin,
 ):
     """
     A Gibbs kernel implementing the :class:`.Kernel` protocol.
@@ -37,10 +40,12 @@ class GibbsKernel(
         self,
         position_keys: Sequence[str],
         transition_fn: Callable[[KeyArray, ModelState], Position],
+        identifier: str = "",
     ):
         self._model = None
         self.position_keys = tuple(position_keys)
         self._transition_fn = transition_fn
+        self.identifier = identifier
 
     def init_state(self, prng_key, model_state):
         """

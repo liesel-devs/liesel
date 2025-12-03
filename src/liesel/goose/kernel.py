@@ -273,3 +273,11 @@ class TuningMixin(Generic[TKernelState, TTuningInfo]):
         """
 
         raise NotImplementedError
+
+
+class ReprMixin:
+    def __repr__(self):
+        return (
+            f"{type(self).__name__}({list(self.position_keys)}, "
+            f"identifier='{self.identifier}')"
+        )

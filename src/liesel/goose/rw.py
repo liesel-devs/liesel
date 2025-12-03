@@ -15,6 +15,7 @@ from .kernel import (
     DefaultTransitionInfo,
     DefaultTuningInfo,
     ModelMixin,
+    ReprMixin,
     TransitionMixin,
     TransitionOutcome,
     TuningOutcome,
@@ -46,7 +47,7 @@ RWTransitionInfo = DefaultTransitionInfo
 RWTuningInfo = DefaultTuningInfo
 
 
-class RWKernel(ModelMixin, TransitionMixin[RWKernelState, RWTransitionInfo]):
+class RWKernel(ModelMixin, TransitionMixin[RWKernelState, RWTransitionInfo], ReprMixin):
     """
     A random walk kernel.
 
@@ -76,6 +77,7 @@ class RWKernel(ModelMixin, TransitionMixin[RWKernelState, RWTransitionInfo]):
         da_gamma: float = 0.05,
         da_kappa: float = 0.75,
         da_t0: int = 10,
+        identifier: str = "",
     ):
         self._model = None
         self.position_keys = tuple(position_keys)
@@ -84,6 +86,7 @@ class RWKernel(ModelMixin, TransitionMixin[RWKernelState, RWTransitionInfo]):
         self.da_gamma = da_gamma
         self.da_kappa = da_kappa
         self.da_t0 = da_t0
+        self.identifier = identifier
 
     def init_state(self, prng_key, model_state):
         """
