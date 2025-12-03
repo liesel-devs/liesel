@@ -15,6 +15,7 @@ import pandas as pd
 
 from liesel.__version__ import __version__
 from liesel.goose.engine import ErrorLog, SamplingResults
+from liesel.goose.epoch import EpochType
 from liesel.goose.pytree import slice_leaves, stack_leaves
 from liesel.goose.types import Array, Position
 from liesel.option import Option
@@ -258,13 +259,27 @@ class Summary:
         epochs = results.positions.get_epochs()
 
         warmup_size = np.sum(
-            [epoch.duration for epoch in epochs if epoch.type.is_warmup(epoch.type)]
+            [
+                int(epoch.duration / epoch.thinning)
+                for epoch in epochs
+                if epoch.type.is_warmup(epoch.type)
+            ]
+        )
+
+        thinning_warmup = np.unique(
+            [epoch.thinning for epoch in epochs if epoch.type.is_warmup(epoch.type)]
+        )
+
+        thinning_posterior = np.unique(
+            [epoch.thinning for epoch in epochs if epoch.type is EpochType.POSTERIOR]
         )
 
         sample_info = {
             "num_chains": param_chain.shape[0],
             "sample_size_per_chain": param_chain.shape[1],
             "warmup_size_per_chain": warmup_size,
+            "thinning_warmup": thinning_warmup.squeeze(),
+            "thinning_posterior": thinning_posterior.squeeze(),
         }
 
         # convert everything to numpy array
@@ -460,15 +475,35 @@ class Summary:
         posterior_size = self.sample_info["sample_size_per_chain"]
         df.loc[pd.IndexSlice[:, :, :, "warmup"], "sample_size"] = warmup_size
         df.loc[pd.IndexSlice[:, :, :, "posterior"], "sample_size"] = posterior_size
-        df["relative"] = df["count"] / df["sample_size"]
-        df = df.drop(columns="sample_size")
+
+        df["thinning"] = None
+        warmup_thinning = self.sample_info["thinning_warmup"]
+        posterior_thinning = self.sample_info["thinning_posterior"]
+        df.loc[pd.IndexSlice[:, :, :, "warmup"], "thinning"] = warmup_thinning
+        df.loc[pd.IndexSlice[:, :, :, "posterior"], "thinning"] = posterior_thinning
+
+        df["sample_size_total"] = df["sample_size"] * df["thinning"]
+
+        df["relative"] = df["count"] / df["sample_size_total"]
+
+        # df = df.drop(columns="sample_size")
 
         if not per_chain:
             df = df.groupby(level=[0, 1, 2, 3], observed=True)
-            df = df.aggregate({"count": "sum", "relative": "mean"})
+            df = df.aggregate(
+                {
+                    "count": "sum",
+                    "relative": "mean",
+                    "sample_size": "sum",
+                    "sample_size_total": "sum",
+                }
+            )
             df = df.sort_index()
 
-        return df
+        # re-order columns
+        cols = ["count", "sample_size", "sample_size_total", "relative"]
+
+        return df[cols]
 
     def __repr__(self):
         param_df = self._param_df()

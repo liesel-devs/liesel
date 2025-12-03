@@ -157,6 +157,10 @@ def test_error_summary(result: SamplingResults):
     summary = Summary(result, selected=["baz"])
     es = summary.error_summary["kernel_00"]
 
+    es_df = summary.error_df()
+    assert "sample_size" in es_df.columns
+    assert "sample_size_total" in es_df.columns
+
     # check error_code correspond
     assert es[1].error_code == 1
     assert es[2].error_code == 2
@@ -176,6 +180,61 @@ def test_error_summary(result: SamplingResults):
     # check that counts are correct - only in the posterior
     assert np.all(es[1].count_per_chain_posterior == np.array([2, 1, 1]))
     assert np.all(es[2].count_per_chain_posterior == np.array([0, 5, 0]))
+
+
+def test_error_summary_thinned(result_thinned: SamplingResults):
+    # add some error codes to the chain
+
+    result = result_thinned
+
+    # epoch 1 - warmup
+    ecs = np.array(
+        result.transition_infos.get_specific_chain(1)
+        ._chunks_list[0]["kernel_00"]
+        .error_code
+    )
+    ecs[0, 0] = 1
+    ecs[:, 3] = 1
+    ecs[2, 3:5] = 2
+    result.transition_infos.get_specific_chain(1)._chunks_list[0][
+        "kernel_00"
+    ].error_code = ecs
+
+    # posterior
+    ecs = np.array(
+        result.transition_infos.get_current_chain()
+        ._chunks_list[0]["kernel_00"]
+        .error_code
+    )
+    ecs[0, 0] = 1
+    ecs[:, 230] = 1
+    ecs[1, 220:225] = 2
+    result.transition_infos.get_current_chain()._chunks_list[0][
+        "kernel_00"
+    ].error_code = ecs
+
+    # create the summary object
+    summary = Summary(result, selected=["baz"])
+    es_df = summary.error_df()
+    assert "sample_size" in es_df.columns
+    assert "sample_size_total" in es_df.columns
+
+    assert es_df.iloc[0]["sample_size"] == 75
+    assert es_df.iloc[1]["sample_size"] == 375
+    assert es_df.iloc[2]["sample_size"] == 75
+    assert es_df.iloc[3]["sample_size"] == 375
+
+    assert es_df.iloc[0]["sample_size_total"] == 2 * 75
+    assert es_df.iloc[1]["sample_size_total"] == 2 * 375
+    assert es_df.iloc[2]["sample_size_total"] == 2 * 75
+    assert es_df.iloc[3]["sample_size_total"] == 2 * 375
+
+    for i in range(es_df.shape[0]):
+        in_df = es_df.iloc[i]["relative"]
+        manual1 = float(es_df.iloc[i]["count"] / es_df.iloc[i]["sample_size_total"])
+        manual2 = float(es_df.iloc[i]["count"] / es_df.iloc[i]["sample_size"])
+        assert in_df == pytest.approx(manual1)
+        assert in_df != pytest.approx(manual2)
 
 
 def test_single_chain_repr_fs_return(single_chain_result: SamplingResults):
