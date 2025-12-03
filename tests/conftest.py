@@ -118,7 +118,6 @@ def result() -> SamplingResults:
     builder.set_initial_values(state)
     builder.set_epochs(
         [
-            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
             EpochConfig(EpochType.BURNIN, 50, 1, None),
             EpochConfig(EpochType.POSTERIOR, 250, 1, None),
         ]
@@ -142,7 +141,6 @@ def result_for_quants() -> SamplingResults:
     builder.set_initial_values(state)
     builder.set_epochs(
         [
-            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
             EpochConfig(EpochType.BURNIN, 50, 1, None),
             EpochConfig(EpochType.POSTERIOR, 250, 1, None),
         ]
@@ -166,7 +164,6 @@ def single_chain_result() -> SamplingResults:
     builder.set_initial_values(state)
     builder.set_epochs(
         [
-            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
             EpochConfig(EpochType.BURNIN, 50, 1, None),
             EpochConfig(EpochType.POSTERIOR, 250, 1, None),
         ]

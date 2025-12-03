@@ -167,6 +167,26 @@ class SamplingResults:
         opt: Option[Position] = self.positions.combine_all()
         return opt.expect(f"No samples in {repr(self)}")
 
+    def get_warmup_samples(self) -> Position:
+        """
+        Returns a dictionary of adaptation samples for all parameters included in the
+        position.
+        """
+        opt = self.positions.combine_filtered(
+            lambda config: EpochType.is_warmup(config.type)
+        )
+        return opt.expect(f"No warmup samples in {repr(self)}")
+
+    def get_adaptation_samples(self) -> Position:
+        """
+        Returns a dictionary of adaptation samples for all parameters included in the
+        position.
+        """
+        opt = self.positions.combine_filtered(
+            lambda config: EpochType.is_adaptation(config.type)
+        )
+        return opt.expect(f"No adaptation samples in {repr(self)}")
+
     def get_posterior_samples(self) -> Position:
         """
         Returns a dictionary of posterior samples for all parameters included in the
