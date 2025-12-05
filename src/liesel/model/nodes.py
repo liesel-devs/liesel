@@ -1112,7 +1112,7 @@ class Dist(Node):
         ... )
         """
         # Validate no mixing of positional and keyword inputs for auto bijectors
-        if bijectors == "auto" and self.inputs and self.kwinputs:
+        if bijectors == "auto" and (self.inputs and self.kwinputs):
             raise ValueError(
                 "Cannot use auto bijectors with mixed positional and keyword inputs. "
                 "Please use either all positional or all keyword arguments for the "
