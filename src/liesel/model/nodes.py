@@ -1201,7 +1201,10 @@ class Dist(Node):
             param_name = param_names[i]
             bijector = bijector_dict.get(param_name)
 
-            if bijector is not None and isinstance(input_node, VarValue):
+            if bijector is None:
+                continue
+
+            if isinstance(input_node, VarValue):
                 param_var = input_node.var
                 if param_var:
                     if not param_var.parameter:
@@ -1210,11 +1213,21 @@ class Dist(Node):
                             "but a bijector is being applied.",
                         )
                     result[param_name] = (param_var, bijector)
+            else:
+                raise ValueError(
+                    f"Got bijector {bijector} for parameter '{param_name}', given by "
+                    f"{input_node}, but only lsl.Var "
+                    "objects can be bijected. You can supply 'None' for this parameter "
+                    "if you do not want to biject, or supply a lsl.Var object."
+                )
 
         for param_name, input_node in self.kwinputs.items():
             bijector = bijector_dict.get(param_name)
 
-            if bijector is not None and isinstance(input_node, VarValue):
+            if bijector is None:
+                continue
+
+            if isinstance(input_node, VarValue):
                 param_var = input_node.var
                 if param_var:
                     if not param_var.parameter:
@@ -1223,6 +1236,13 @@ class Dist(Node):
                             "but a bijector is being applied.",
                         )
                     result[param_name] = (param_var, bijector)
+            else:
+                raise ValueError(
+                    f"Got bijector {bijector} for parameter '{param_name}', given by "
+                    f"{input_node}, but only lsl.Var "
+                    "objects can be bijected. You can supply 'None' for this parameter "
+                    "if you do not want to biject, or supply a lsl.Var object."
+                )
 
         return result
 
