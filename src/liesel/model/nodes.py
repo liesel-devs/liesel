@@ -1030,15 +1030,15 @@ class Dist(Node):
         Parameters
         ----------
         bijectors
-            Bijector specification. Options:
+            Bijector specification. Options: \
 
-            - ``"auto"``: Use default parameter bijectors from the distribution's
-              parameter_properties(). Parameters without a default bijector
-              (e.g., Wishart's df parameter) are skipped.
-            - dict: Map parameter names to bijectors. Use ``"auto"`` for default,
-              ``None`` to skip, or provide an explicit bijector instance/class.
-            - Sequence: Bijectors for positional parameters in the order they
-              appear in the distribution's __init__ signature.
+            - ``"auto"``: Use default parameter bijectors from the distribution's \
+              parameter_properties(). Parameters without a default bijector \
+              (e.g., Wishart's df parameter) are skipped. \
+            - dict: Map parameter names to bijectors. Use ``"auto"`` for default, \
+              ``None`` to skip, or provide an explicit bijector instance/class. \
+            - Sequence: Bijectors for positional parameters in the order they \
+              appear in the distribution's __init__ signature. \
         inference
             Inference information for transformed variables. If ``"drop"``,
             inference information is removed from original parameters.
