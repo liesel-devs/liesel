@@ -2,6 +2,7 @@
 
 import logging
 
+import jax
 import jax.numpy as jnp
 import pytest
 import tensorflow_probability.substrates.jax.bijectors as tfb
@@ -353,6 +354,17 @@ class TestBijectParametersSuccess:
 
         assert concentration.strong
         assert scale.strong
+
+    def test_dtype(self):
+        jax.config.update("jax_enable_x64", True)
+        concentration = lsl.Var.new_param(2.0, name="concentration")
+        scale = lsl.Var.new_param(1.0, name="scale")
+
+        dist = lsl.Dist(tfd.Gamma, concentration, scale)
+        assert dist._dtype == jnp.dtype("float64")
+        dist.biject_parameters()
+        assert concentration.bijected_var.value.dtype == jnp.dtype("float64")
+        jax.config.update("jax_enable_x64", False)
 
 
 class TestVarBiject:

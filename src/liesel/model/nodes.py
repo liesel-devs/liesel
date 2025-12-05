@@ -14,6 +14,7 @@ from types import MappingProxyType
 from typing import IO, TYPE_CHECKING, Any, Literal, NamedTuple, Self, TypeGuard, TypeVar
 
 import jax
+import jax.numpy as jnp
 import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as jd
 import tensorflow_probability.substrates.numpy.bijectors as nb
@@ -1260,15 +1261,26 @@ class Dist(Node):
 
         return result
 
+    @property
+    def _dtype(self):
+        dtypes_input = [jnp.asarray(v.value).dtype for v in self.inputs]
+        dtypes_kwinput = [jnp.asarray(v.value).dtype for v in self.kwinputs.values()]
+        dtypes = dtypes_input + dtypes_kwinput
+        if len(set(dtypes)) > 1:
+            raise TypeError(f"Found more than one dtype in inputs: {dtypes}")
+
+        return dtypes[0]
+
     def find_default_parameter_bijectors(self) -> dict[str, Bijector | None]:
         """Extracts default parameter bijectors from the wrapped distribution."""
         try:
-            param_props = self.init_dist().parameter_properties()
+            param_props = self.init_dist().parameter_properties(dtype=self._dtype)
         except (AttributeError, TypeError) as e:
             # raise the same error type
             raise type(e)(
-                f"Distribution {self.distribution.__name__} does not provide a "
-                "parameter_properties() method. Cannot auto-transform parameters. "
+                "Error when accessing "
+                f"parameter_properties() method on {self.distribution.__name__}. "
+                "Cannot auto-transform parameters. "
                 "This may indicate an issue with the TFP distribution or version. "
                 "Either use a distribution that supports parameter_properties() or "
                 "manually transform parameters with .transform()."
