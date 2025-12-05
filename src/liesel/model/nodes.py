@@ -1263,7 +1263,7 @@ class Dist(Node):
     def find_default_parameter_bijectors(self) -> dict[str, Bijector | None]:
         """Extracts default parameter bijectors from the wrapped distribution."""
         try:
-            param_props = self.distribution.parameter_properties()  # type: ignore
+            param_props = self.init_dist().parameter_properties()
         except (AttributeError, TypeError) as e:
             # raise the same error type
             raise type(e)(
