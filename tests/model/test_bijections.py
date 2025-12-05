@@ -7,6 +7,7 @@ import pytest
 import tensorflow_probability.substrates.jax.bijectors as tfb
 import tensorflow_probability.substrates.jax.distributions as tfd
 
+import liesel.goose as gs
 import liesel.model as lsl
 
 
@@ -140,6 +141,23 @@ class TestBijectParametersValidation:
         dist = lsl.Dist(tfd.InverseGamma, scale=scale, concentration=concentration)
         with pytest.raises(TypeError, match="bijector class"):
             dist.biject_parameters(bijectors=[tfb.Identity])
+
+    def test_inference(self):
+        scale = lsl.Var.new_param(
+            1.0, name="scale_var", inference=gs.MCMCSpec(gs.HMCKernel)
+        )
+        concentration = lsl.Var.new_param(1.0, name="concentration_var")
+
+        dist = lsl.Dist(tfd.InverseGamma, scale=scale, concentration=concentration)
+        with pytest.raises(ValueError, match="inference information"):
+            dist.biject_parameters()
+
+        with pytest.raises(ValueError, match="not supported"):
+            dist.biject_parameters(inference=gs.MCMCSpec(gs.HMCKernel))
+
+        dist.biject_parameters(inference="drop")
+        assert scale.weak
+        assert concentration.weak
 
 
 class TestBijectParametersSuccess:

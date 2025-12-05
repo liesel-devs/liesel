@@ -1017,7 +1017,7 @@ class Dist(Node):
         bijectors: Literal["auto"]
         | dict[str, Bijector | Literal["auto"] | None]
         | Sequence[Bijector | Literal["auto"] | None] = "auto",
-        inference: InferenceTypes | Literal["drop"] = None,
+        inference: Literal["drop"] = None,
     ) -> Self:
         """
         Transforms distribution parameters using bijectors with eager evaluation.
@@ -1040,8 +1040,10 @@ class Dist(Node):
             - Sequence: Bijectors for positional parameters in the order they \
               appear in the distribution's __init__ signature. \
         inference
-            Inference information for transformed variables. If ``"drop"``,
-            inference information is removed from original parameters.
+            Inference information for transformed variables. If ``"drop"``, \
+            inference information is removed from original parameters. If ``None``, \
+            an error will be raised if inference is present for any parameter that \
+            is selected for bijection.
 
         Returns
         -------
@@ -1084,6 +1086,9 @@ class Dist(Node):
         ...     bijectors={"scale": "auto", "loc": None},
         ... )
         """
+        if inference is not None and inference != "drop":
+            raise ValueError(f"Value {inference=} is not supported.")
+
         # Validate no mixing of positional and keyword inputs for auto bijectors
         if bijectors == "auto" and (self.inputs and self.kwinputs):
             raise ValueError(
