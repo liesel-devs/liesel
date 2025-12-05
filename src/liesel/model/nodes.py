@@ -1206,10 +1206,8 @@ class Dist(Node):
                 if param_var:
                     if not param_var.parameter:
                         logger.warning(
-                            "Var '%s' for parameter '%s' is not marked as a parameter "
-                            "(parameter=False), but a bijector is being applied.",
-                            param_var.name or "<unnamed>",
-                            param_name,
+                            f"{param_var} has parameter=False "
+                            "but a bijector is being applied.",
                         )
                     result[param_name] = (param_var, bijector)
 
@@ -1221,10 +1219,8 @@ class Dist(Node):
                 if param_var:
                     if not param_var.parameter:
                         logger.warning(
-                            "Var '%s' for parameter '%s' is not marked as a parameter "
-                            "(parameter=False), but a bijector is being applied.",
-                            param_var.name or "<unnamed>",
-                            param_name,
+                            f"{param_var} has parameter=False "
+                            "but a bijector is being applied.",
                         )
                     result[param_name] = (param_var, bijector)
 
