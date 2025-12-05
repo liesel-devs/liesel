@@ -1144,6 +1144,13 @@ class Dist(Node):
                         f"explicit bijector provided. Resolve the conflict."
                     )
 
+            if is_bijector_class(bijector):
+                raise TypeError(
+                    f" For parameter {param_name} of {self},  you passed a bijector "
+                    f"class ({bijector}) instead of an instance."
+                    "This is currently not supported by Dist.biject_parameters."
+                )
+
             param_var.biject(bijector=bijector, inference=inference)
 
         return self
