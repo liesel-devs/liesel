@@ -1075,6 +1075,7 @@ class Dist(Node):
         ValueError
             - If auto bijectors are used with mixed positional and keyword inputs
             - If too many bijectors are provided in a Sequence
+            - If invalid parameter names are provided in a dict bijector spec
 
         Notes
         -----
@@ -1166,6 +1167,13 @@ class Dist(Node):
         if bijectors == "auto":
             bijector_dict = default_bijectors
         elif isinstance(bijectors, dict):
+            # Validate that all keys are valid parameter names
+            invalid_keys = set(bijectors.keys()) - set(param_names)
+            if invalid_keys:
+                raise ValueError(
+                    f"Invalid parameter name(s) in bijectors dict: {invalid_keys}. "
+                    f"Valid parameter names are: {', '.join(param_names)}."
+                )
             bijector_dict = {}
             for param_name, bijector in bijectors.items():
                 if bijector == "auto":
@@ -1173,7 +1181,6 @@ class Dist(Node):
                 else:
                     bijector_dict[param_name] = bijector
         elif isinstance(bijectors, Sequence):
-            # Validate that the user hasn't supplied too many bijectors
             if len(bijectors) > len(param_names):
                 raise ValueError(
                     f"Too many bijectors provided: got {len(bijectors)} bijectors "
