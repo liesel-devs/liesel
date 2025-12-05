@@ -1127,9 +1127,9 @@ class Dist(Node):
                     logger.debug(f"Parameter '{param_name}' already weak. Skipping.")
                     continue
                 else:
-                    raise RuntimeError(
-                        f"Parameter '{param_name}' already weak, but explicit "
-                        f"bijector provided. Remove one of the conflicting bijectors."
+                    raise ValueError(
+                        f"Parameter '{param_name}' is weak, but explicit "
+                        f"bijector {bijector} provided."
                     )
 
             if param_var.auto_transform:
@@ -1139,9 +1139,9 @@ class Dist(Node):
                     )
                     continue
                 else:
-                    raise RuntimeError(
+                    raise ValueError(
                         f"Parameter '{param_name}' has auto_transform=True, but "
-                        f"explicit bijector provided. Resolve the conflict."
+                        f"explicit bijector provided. Please resolve the conflict."
                     )
 
             if is_bijector_class(bijector):
