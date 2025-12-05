@@ -1062,18 +1062,6 @@ class Dist(Node):
         -------
         Self
 
-        Raises
-        ------
-        RuntimeError
-            - If the distribution doesn't support parameter_properties()
-            - If a parameter is already weak and an explicit bijector is provided
-            - If a parameter has auto_transform=True and an explicit bijector is
-              provided
-        ValueError
-            - If auto bijectors are used with mixed positional and keyword inputs
-            - If too many bijectors are provided in a Sequence
-            - If invalid parameter names are provided in a dict bijector spec
-
         Notes
         -----
         A default bijector's forward is expected to map from unconstrained to
