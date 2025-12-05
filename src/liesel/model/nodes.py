@@ -1164,7 +1164,15 @@ class Dist(Node):
         # Resolve bijector specification to dict
         if bijectors == "auto":
             bijector_dict = default_bijectors
+
         elif isinstance(bijectors, dict):
+            if self.inputs:
+                raise ValueError(
+                    "When dist inputs are supplied as positional arguments, "
+                    "bijectors have to be supplied positionally, too. Got inputs "
+                    f"{self.inputs} and bijectors {bijectors} for dist {self}."
+                )
+
             # Validate that all keys are valid parameter names
             invalid_keys = set(bijectors.keys()) - set(param_names)
             if invalid_keys:
