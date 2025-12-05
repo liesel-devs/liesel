@@ -1017,7 +1017,7 @@ class Dist(Node):
         bijectors: Literal["auto"]
         | dict[str, Bijector | Literal["auto"] | None]
         | Sequence[Bijector | Literal["auto"] | None] = "auto",
-        inference: Literal["drop"] = None,
+        inference: Literal["drop"] | None = None,
     ) -> Self:
         """
         Transforms distribution parameters using bijectors with eager evaluation.
