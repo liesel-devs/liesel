@@ -1828,6 +1828,9 @@ class Var:
         TFP's bijector classes; see the `TFP bijectors documentation \
         <https://www.tensorflow.org/probability/api_docs/python/tfp/bijectors>`_.
 
+        - **Stored transformed variable**: After the transformation, you can
+            access the transformed variable via :attr:`.bijected_var`.
+
 
         Parameters
         ----------
@@ -1869,6 +1872,11 @@ class Var:
             not have a default event space bijector. Also, if in the arguments to
             :meth:`.transform` is ``inference=None`` but the variable
             attribute :attr:`.inference` is not ``None``.
+
+        See Also
+        --------
+        .biject : Similar method, but with a slightly different API and returns self \
+            instead of the transformed variable.
 
 
         Notes
@@ -2062,13 +2070,14 @@ class Var:
         """
         Transforms the variable using a bijector.
 
+        - **Eager evaluation**: The transformation is applied immediately.
+        - **Stored transformed variable**: Access via :attr:`.bijected_var`.
+
         This method is similar to :meth:`.transform`, but with key differences:
 
-        - **Eager evaluation**: The transformation is applied immediately.
         - **Returns self**: Returns the original variable (now weakened) for chaining.
         - **Default "auto"**: Default uses the distribution's event space bijector.
         - **None means no transformation**: ``bijector=None`` means skip transformation.
-        - **Stored transformed variable**: Access via :attr:`.bijected_var`.
 
         Parameters
         ----------
