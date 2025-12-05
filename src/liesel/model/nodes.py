@@ -937,7 +937,6 @@ class Dist(Node):
         self._at: Node | None = None
         self._distribution = distribution
         self._per_obs = True
-        self._parameter_bijectors_cache: dict[str, Bijector | None] | None = None
 
         # Apply bijectors eagerly if provided
         if bijectors is not None:
@@ -1001,9 +1000,7 @@ class Dist(Node):
         dict
             Mapping of parameter name to Bijector or None.
         """
-        if self._parameter_bijectors_cache is None:
-            self._parameter_bijectors_cache = self._find_parameter_bijectors()
-        return self._parameter_bijectors_cache
+        return self._find_parameter_bijectors()
 
     @property
     def per_obs(self) -> bool:
