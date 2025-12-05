@@ -1072,6 +1072,8 @@ class Dist(Node):
             - If a parameter is already weak and an explicit bijector is provided
             - If a parameter has auto_transform=True and an explicit bijector is
               provided
+        ValueError
+            - If auto bijectors are used with mixed positional and keyword inputs
 
         Notes
         -----
@@ -1109,6 +1111,14 @@ class Dist(Node):
         ...     bijectors={"scale": "auto", "loc": None},
         ... )
         """
+        # Validate no mixing of positional and keyword inputs for auto bijectors
+        if bijectors == "auto" and self.inputs and self.kwinputs:
+            raise ValueError(
+                "Cannot use auto bijectors with mixed positional and keyword inputs. "
+                "Please use either all positional or all keyword arguments for the "
+                "distribution parameters."
+            )
+
         resolved = self._resolve_bijectors(bijectors)
 
         for param_name, (param_var, bijector) in resolved.items():
