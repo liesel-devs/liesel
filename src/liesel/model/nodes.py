@@ -988,21 +988,6 @@ class Dist(Node):
         return self.value
 
     @property
-    def parameter_bijectors(self) -> dict[str, Bijector | None]:
-        """
-        Default parameter bijectors from the distribution's parameter_properties().
-
-        Returns a dict mapping parameter names to their default constraining
-        bijectors. Parameters without a default bijector have value None.
-
-        Returns
-        -------
-        dict
-            Mapping of parameter name to Bijector or None.
-        """
-        return self._find_parameter_bijectors()
-
-    @property
     def per_obs(self) -> bool:
         """Whether the log-probability is stored per observation or summed up."""
         return self._per_obs
@@ -1152,9 +1137,9 @@ class Dist(Node):
         """Resolves bijector specs to parameter->(Var, Bijector) mappings."""
         result: dict[str, tuple[Var, Bijector | Literal["auto"]]] = {}
 
-        # Get default bijectors once (cached) - validates parameter_properties()
-        default_bijectors = self.parameter_bijectors
-        param_names = list(default_bijectors.keys())
+        # Get default bijectors once - validates parameter_properties()
+        default_bijectors = self.find_default_parameter_bijectors()
+        param_names = list(default_bijectors)
 
         if self.inputs:
             if not len(self.inputs) <= len(param_names):
@@ -1195,6 +1180,7 @@ class Dist(Node):
                     bijector_dict[param_name] = default_bijectors.get(param_name)
                 else:
                     bijector_dict[param_name] = bijector
+
         elif isinstance(bijectors, Sequence):
             if len(bijectors) > len(param_names):
                 raise ValueError(
@@ -1271,8 +1257,8 @@ class Dist(Node):
 
         return result
 
-    def _find_parameter_bijectors(self) -> dict[str, Bijector | None]:
-        """Extracts default parameter bijectors from the distribution."""
+    def find_default_parameter_bijectors(self) -> dict[str, Bijector | None]:
+        """Extracts default parameter bijectors from the wrapped distribution."""
         try:
             param_props = self.distribution.parameter_properties()  # type: ignore
         except (AttributeError, TypeError) as e:
