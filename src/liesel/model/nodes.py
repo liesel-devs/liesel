@@ -2047,6 +2047,8 @@ class Var:
         else:
             self.inference = None
             tvar.inference = inference
+
+        self.bijected_var = tvar
         return tvar
 
     def biject(
@@ -2110,7 +2112,7 @@ class Var:
 
         # Delegate to transform(), which handles class vs instance uniformly
         target_bijector = None if bijector == "auto" else bijector
-        tvar = self.transform(
+        self.transform(
             target_bijector,
             *bijector_args,
             inference=inference,
@@ -2118,7 +2120,6 @@ class Var:
             **bijector_kwargs,
         )
 
-        self._bijected_var = tvar
         return self
 
     @property
