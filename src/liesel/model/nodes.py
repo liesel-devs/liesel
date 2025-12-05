@@ -2124,11 +2124,22 @@ class Var:
     @property
     def bijected_var(self) -> Var | None:
         """
-        The transformed variable created by :meth:`.biject`.
-
-        Returns ``None`` if :meth:`.biject` has not been called.
+        Transformed variable.
+        Either supplied manually or automatically created by :meth:`.biject`.
         """
         return self._bijected_var
+
+    @bijected_var.setter
+    def bijected_var(self, value: Var):
+        if not isinstance(value, Var):
+            raise TypeError(f"Bijected var must be a lsl.Var, got type {type(value)}.")
+
+        in_inputs = value.var_value_node in self.value_node.inputs
+        in_kwinputs = value.var_value_node in list(self.value_node.kwinputs.values())
+        if not (in_inputs or in_kwinputs):
+            raise ValueError(f"{value} is on in the inputs or kwinputs of {self}")
+
+        self._bijected_var = value
 
     @in_model_method
     def all_output_nodes(self) -> tuple[Node, ...]:
