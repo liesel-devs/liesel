@@ -11,7 +11,7 @@ from collections.abc import Callable, Hashable, Iterable, Sequence
 from functools import wraps
 from itertools import chain
 from types import MappingProxyType
-from typing import IO, TYPE_CHECKING, Any, Literal, NamedTuple, TypeGuard, TypeVar
+from typing import IO, TYPE_CHECKING, Any, Literal, NamedTuple, Self, TypeGuard, TypeVar
 
 import jax
 import tensorflow_probability.substrates.jax.bijectors as jb
@@ -1033,7 +1033,7 @@ class Dist(Node):
         | dict[str, Bijector | Literal["auto"] | None]
         | Sequence[Bijector | Literal["auto"] | None] = "auto",
         inference: InferenceTypes | Literal["drop"] = None,
-    ) -> Dist:
+    ) -> Self:
         """
         Transforms distribution parameters using bijectors with eager evaluation.
 
