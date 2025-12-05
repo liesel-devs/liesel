@@ -193,6 +193,22 @@ class TestBijectParametersSuccess:
         assert scale.weak
         assert concentration.strong
 
+    def test_dict_with_none_when_var_is_weak(self):
+        """Dict bijectors with None should skip that parameter."""
+
+        # post-test: should biject only scale
+        scale = lsl.Var.new_param(1.0, name="scale")
+        concentration = lsl.Var.new_param(0.0, name="concentration")
+        concentration.biject(tfb.Exp())
+        assert concentration.weak
+
+        dist = lsl.Dist(tfd.Weibull, concentration=concentration, scale=scale)
+        dist.biject_parameters(bijectors={"scale": "auto", "concentration": None})
+
+        # Only scale should be weak
+        assert scale.weak
+        assert concentration.weak
+
     def test_sequence_bijectors(self):
         """Sequence bijectors work correctly."""
         concentration = lsl.Var.new_param(2.0, name="concentration")
