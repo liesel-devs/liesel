@@ -1091,7 +1091,6 @@ class Dist(Node):
 
         Examples
         --------
-        >>> import tensorflow_probability.substrates.jax.distributions as tfd
         >>> scale = lsl.Var.new_param(1.0, name="scale")
         >>> rate = lsl.Var.new_param(1.0, name="rate")
 
@@ -1103,6 +1102,8 @@ class Dist(Node):
 
         Transform only specific parameters:
 
+        >>> scale = lsl.Var.new_param(1.0, name="scale")
+        >>> rate = lsl.Var.new_param(1.0, name="rate")
         >>> dist = lsl.Dist(
         ...     tfd.Normal,
         ...     loc=0.0,
