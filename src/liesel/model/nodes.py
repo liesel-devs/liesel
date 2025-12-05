@@ -1207,8 +1207,6 @@ class Dist(Node):
             raise TypeError(f"Invalid bijectors type: {type(bijectors)}.")
 
         for i, input_node in enumerate(self.inputs):
-            if i >= len(param_names):
-                break
             param_name = param_names[i]
             bijector = bijector_dict.get(param_name)
 
