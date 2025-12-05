@@ -1161,6 +1161,20 @@ class Dist(Node):
         default_bijectors = self.parameter_bijectors
         param_names = list(default_bijectors.keys())
 
+        if self.inputs:
+            if not len(self.inputs) <= len(param_names):
+                raise ValueError(
+                    f"{self.distribution} has the parameters {param_names}, but got "
+                    f"{len(self.inputs)} inputs: {self.inputs}."
+                )
+
+        if self.kwinputs:
+            if not set(self.kwinputs) <= set(param_names):
+                raise ValueError(
+                    f"{self.distribution} has the parameters {param_names}, but got "
+                    f"inputs: {list(self.kwinputs)} with values {self.kwinputs}."
+                )
+
         # Resolve bijector specification to dict
         if bijectors == "auto":
             bijector_dict = default_bijectors
