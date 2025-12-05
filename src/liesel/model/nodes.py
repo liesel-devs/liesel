@@ -1185,9 +1185,17 @@ class Dist(Node):
                     f"but distribution has only {len(param_names)} parameters "
                     f"({', '.join(param_names)})."
                 )
+
+            # now the mapping of bijectors to dist parameters is being resolved
             bijector_dict = {}
+
+            # this makes sure that positional bijectors refer to the order of
+            # kwinputs given by the user, not the order of kwinputs as expected
+            # by the distribution
+            kwinput_names = list(self.kwinputs) if self.kwinputs else param_names
+
             for i, bijector in enumerate(bijectors):
-                param_name = param_names[i]
+                param_name = kwinput_names[i]
                 if bijector == "auto":
                     bijector_dict[param_name] = default_bijectors.get(param_name)
                 else:
