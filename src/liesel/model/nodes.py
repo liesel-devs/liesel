@@ -1202,7 +1202,14 @@ class Dist(Node):
 
             if bijector is not None and isinstance(input_node, VarValue):
                 param_var = input_node.var
-                if param_var and param_var.parameter:
+                if param_var:
+                    if not param_var.parameter:
+                        logger.warning(
+                            "Var '%s' for parameter '%s' is not marked as a parameter "
+                            "(parameter=False), but a bijector is being applied.",
+                            param_var.name or "<unnamed>",
+                            param_name,
+                        )
                     result[param_name] = (param_var, bijector)
 
         for param_name, input_node in self.kwinputs.items():
@@ -1210,7 +1217,14 @@ class Dist(Node):
 
             if bijector is not None and isinstance(input_node, VarValue):
                 param_var = input_node.var
-                if param_var and param_var.parameter:
+                if param_var:
+                    if not param_var.parameter:
+                        logger.warning(
+                            "Var '%s' for parameter '%s' is not marked as a parameter "
+                            "(parameter=False), but a bijector is being applied.",
+                            param_var.name or "<unnamed>",
+                            param_name,
+                        )
                     result[param_name] = (param_var, bijector)
 
         return result
