@@ -1074,6 +1074,7 @@ class Dist(Node):
               provided
         ValueError
             - If auto bijectors are used with mixed positional and keyword inputs
+            - If too many bijectors are provided in a Sequence
 
         Notes
         -----
@@ -1172,10 +1173,15 @@ class Dist(Node):
                 else:
                     bijector_dict[param_name] = bijector
         elif isinstance(bijectors, Sequence):
+            # Validate that the user hasn't supplied too many bijectors
+            if len(bijectors) > len(param_names):
+                raise ValueError(
+                    f"Too many bijectors provided: got {len(bijectors)} bijectors "
+                    f"but distribution has only {len(param_names)} parameters "
+                    f"({', '.join(param_names)})."
+                )
             bijector_dict = {}
             for i, bijector in enumerate(bijectors):
-                if i >= len(param_names):
-                    break
                 param_name = param_names[i]
                 if bijector == "auto":
                     bijector_dict[param_name] = default_bijectors.get(param_name)
