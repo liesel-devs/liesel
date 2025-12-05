@@ -2081,7 +2081,7 @@ class Var:
         inference
             Inference information for the transformed variable.
         name
-            Name for transformed variable. Default: ``<old_name>_transformed``.
+            Name for transformed variable. Default: ``h(<old_name>)``.
         bijector_kwargs
             Keyword arguments for bijector init if a class is provided.
 
@@ -2116,7 +2116,7 @@ class Var:
             target_bijector,
             *bijector_args,
             inference=inference,
-            name=name,
+            name=name if name is not None else f"h({self.name})",
             **bijector_kwargs,
         )
 
