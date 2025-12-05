@@ -1235,46 +1235,47 @@ class Dist(Node):
         try:
             param_props = self.distribution.parameter_properties()  # type: ignore
         except (AttributeError, TypeError) as e:
-            raise RuntimeError(
+            # raise the same error type
+            raise type(e)(
                 f"Distribution {self.distribution.__name__} does not provide a "
-                f"parameter_properties() method. Cannot auto-transform parameters. "
-                f"This may indicate an issue with the TFP distribution or version. "
-                f"Either use a distribution that supports parameter_properties() or "
-                f"manually transform parameters with .transform()."
+                "parameter_properties() method. Cannot auto-transform parameters. "
+                "This may indicate an issue with the TFP distribution or version. "
+                "Either use a distribution that supports parameter_properties() or "
+                "manually transform parameters with .transform()."
             ) from e
 
         if not isinstance(param_props, dict):
-            raise RuntimeError(
+            raise TypeError(
                 f"Distribution {self.distribution.__name__}'s "
-                f"parameter_properties() must return a dictionary, but returned "
+                "parameter_properties() must return a dictionary, but returned "
                 f"{type(param_props).__name__}. This may indicate an issue with "
-                f"a custom distribution implementation."
+                "a custom distribution implementation."
             )
 
         bijectors: dict[str, Bijector | None] = {}
 
         for param_name, prop in param_props.items():
             if not hasattr(prop, "default_constraining_bijector_fn"):
-                raise RuntimeError(
+                raise AttributeError(
                     f"Parameter property for '{param_name}' of "
                     f"{self.distribution.__name__} does not have "
-                    f"'default_constraining_bijector_fn' attribute. This may "
-                    f"indicate an issue with the TFP distribution or version. "
-                    f"Either use a distribution that supports "
-                    f"parameter_properties() or manually transform parameters "
-                    f"with .transform()."
+                    "'default_constraining_bijector_fn' attribute. This may "
+                    "indicate an issue with the TFP distribution or version. "
+                    "Either use a distribution that supports "
+                    "parameter_properties() or manually transform parameters "
+                    "with .transform()."
                 )
 
             try:
                 bijector = prop.default_constraining_bijector_fn()  # type: ignore
             except Exception as e:
-                raise RuntimeError(
+                raise type(e)(
                     f"Error getting bijector for parameter '{param_name}' of "
                     f"{self.distribution.__name__}: {e}"
                 ) from e
 
             if bijector is None:
-                raise RuntimeError(
+                raise ValueError(
                     f"Expected a bijector or BIJECTOR_NOT_IMPLEMENTED for "
                     f"parameter '{param_name}' of {self.distribution.__name__}, "
                     f"but got None. If no default bijector is provided for "
