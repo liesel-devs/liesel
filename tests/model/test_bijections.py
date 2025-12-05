@@ -193,6 +193,28 @@ class TestBijectParametersSuccess:
         assert scale.weak
         assert concentration.strong
 
+    def test_not_in_dict_means_skipping(self):
+        # pre-test: should biject both parameters
+        scale = lsl.Var.new_param(1.0, name="scale")
+        concentration = lsl.Var.new_param(0.0, name="concentration")
+
+        dist = lsl.Dist(tfd.Weibull, concentration=concentration, scale=scale)
+        dist.biject_parameters(bijectors="auto")
+
+        assert scale.weak
+        assert concentration.weak
+
+        # post-test: should biject only scale
+        scale = lsl.Var.new_param(1.0, name="scale")
+        concentration = lsl.Var.new_param(0.0, name="concentration")
+
+        dist = lsl.Dist(tfd.Weibull, concentration=concentration, scale=scale)
+        dist.biject_parameters(bijectors={"scale": "auto"})
+
+        # Only scale should be weak
+        assert scale.weak
+        assert concentration.strong
+
     def test_dict_with_none_when_var_is_weak(self):
         """Dict bijectors with None should skip that parameter."""
 
