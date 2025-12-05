@@ -2096,36 +2096,26 @@ class Var:
         if bijector is None:
             return self
 
-        # Delegate to transform() which handles TransformedDistribution properly
-        if bijector == "auto":
-            tvar = self.transform(
-                None,
-                *bijector_args,
-                inference=inference,
-                name=name,
-                **bijector_kwargs,
-            )
-        elif isinstance(bijector, jb.Bijector):
-            tvar = self.transform(
-                bijector,
-                *bijector_args,
-                inference=inference,
-                name=name,
-                **bijector_kwargs,
-            )
-        elif is_bijector_class(bijector):
-            tvar = self.transform(
-                bijector,
-                *bijector_args,
-                inference=inference,
-                name=name,
-                **bijector_kwargs,
-            )
-        else:
+        # Validate bijector type
+        if not (
+            bijector == "auto"
+            or isinstance(bijector, jb.Bijector)
+            or is_bijector_class(bijector)
+        ):
             raise TypeError(
                 f"Argument {bijector=} is of invalid type {type(bijector)}. "
                 f"Expected Bijector, type[Bijector], 'auto', or None."
             )
+
+        # Delegate to transform(), which handles class vs instance uniformly
+        target_bijector = None if bijector == "auto" else bijector
+        tvar = self.transform(
+            target_bijector,
+            *bijector_args,
+            inference=inference,
+            name=name,
+            **bijector_kwargs,
+        )
 
         self._bijected_var = tvar
         return self
