@@ -1486,6 +1486,11 @@ class Var:
         automatically generated upon initialization of a :class:`.Model`.
     inference
         Additional information that can be used to set up inference algorithms.
+    bijector
+        Bijector for variable transformation. If ``"auto"``, uses the default event \
+        space bijector defined by the variable's distribution. \
+        If ``None``, no transformation takes place. If not ``None``, the variable will \
+        call :meth:`.biject` with this bijector upon initialization.
 
     See Also
     --------
@@ -1593,6 +1598,11 @@ class Var:
             be automatically generated upon initialization of a :class:`.Model`.
         inference
             Additional information that can be used to set up inference algorithms.
+        bijector
+            Bijector for variable transformation. If ``"auto"``, uses the default \
+            event space bijector defined by the variable's distribution. \
+            If ``None``, no transformation takes place. If not ``None``, the variable \
+            will call :meth:`.biject` with this bijector upon initialization.
 
         See Also
         --------
