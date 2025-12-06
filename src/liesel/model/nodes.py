@@ -2785,7 +2785,7 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
         value_kwinputs = var.value_node.kwinputs
         value_node_needs_seed = var.value_node.needs_seed
         try:
-            value_node_upadte_on_init = var.value_node._update_on_init  # type: ignore
+            value_node_update_on_init = var.value_node._update_on_init  # type: ignore
         except AttributeError as e:
             raise e
 
@@ -2795,7 +2795,7 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
                 *value_inputs,
                 _name="",
                 _needs_seed=value_node_needs_seed,
-                _update_on_init=value_node_upadte_on_init,
+                _update_on_init=value_node_update_on_init,
                 **value_kwinputs,
             ),
             transformed_dist,
