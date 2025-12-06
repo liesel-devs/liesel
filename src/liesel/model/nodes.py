@@ -1490,7 +1490,9 @@ class Var:
         Bijector for variable transformation. If ``"auto"``, uses the default event \
         space bijector defined by the variable's distribution. \
         If ``None``, no transformation takes place. If not ``None``, the variable will \
-        call :meth:`.biject` with this bijector upon initialization.
+        call :meth:`.biject` with this bijector upon initialization. \
+        Any supplied inference information will be passed to the bijected \
+        variable.
 
     See Also
     --------
@@ -1602,7 +1604,9 @@ class Var:
             Bijector for variable transformation. If ``"auto"``, uses the default \
             event space bijector defined by the variable's distribution. \
             If ``None``, no transformation takes place. If not ``None``, the variable \
-            will call :meth:`.biject` with this bijector upon initialization.
+            will call :meth:`.biject` with this bijector upon initialization. \
+            Any supplied inference information will be passed to the bijected \
+            variable.
 
         See Also
         --------
