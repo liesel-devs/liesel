@@ -398,3 +398,9 @@ class TestVarBiject:
         scale.transform(tfb.Exp())
 
         assert scale.bijected_var.name == "scale_transformed"
+
+    def test_unnamed_bijected_var(self):
+        scale = lsl.Var.new_param(1.0)
+        scale.transform(tfb.Exp())
+
+        assert scale.bijected_var.name == ""
