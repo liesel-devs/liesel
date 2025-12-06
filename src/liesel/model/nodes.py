@@ -1573,6 +1573,7 @@ class Var:
         distribution: Dist | None = None,
         name: str = "",
         inference: InferenceTypes = None,
+        bijector: None | Bijector | Literal["auto"] = None,
     ) -> Var:
         """
         Initializes a strong variable that acts as a model parameter.
@@ -1617,7 +1618,7 @@ class Var:
         Var(name="")
 
         """
-        var = cls(value, distribution, name, inference=inference)
+        var = cls(value, distribution, name, inference=inference, bijector=bijector)
         var.value_node.monitor = True
         var.parameter = True
         return var
