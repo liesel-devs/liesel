@@ -7,6 +7,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+import tensorflow_probability.substrates.jax as tfp
+import tensorflow_probability.substrates.jax.bijectors as tfb
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.goose as gs
@@ -21,3 +23,5 @@ def add_doctest_imports(doctest_namespace):
     doctest_namespace["gs"] = gs
     doctest_namespace["lsl"] = lsl
     doctest_namespace["tfd"] = tfd
+    doctest_namespace["tfp"] = tfp
+    doctest_namespace["tfb"] = tfb
