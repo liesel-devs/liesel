@@ -106,6 +106,7 @@ class HMCKernel(
         da_kappa: float = 0.75,
         da_t0: int = 10,
         mm_diag: bool = True,
+        subset_logp_name: str | None = None,
     ):
         self.position_keys = tuple(position_keys)
         self._model = None
@@ -120,6 +121,7 @@ class HMCKernel(
         self.da_t0 = da_t0
 
         self.mm_diag = mm_diag
+        self.subset_logp_name = subset_logp_name
 
     def _blackjax_state(self, model_state: ModelState) -> hmc.HMCState:
         return hmc.init(self.position(model_state), self.log_prob_fn(model_state))

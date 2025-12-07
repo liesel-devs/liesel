@@ -18,7 +18,13 @@ from .legacy import (
     Smooth,
     SmoothingParam,
 )
-from .model import GraphBuilder, Model, load_model, save_model
+from .model import (
+    GraphBuilder,
+    Model,
+    create_subset_log_prob_calc,
+    load_model,
+    save_model,
+)
 from .nodes import (
     Array,
     Calc,
@@ -58,6 +64,7 @@ __all__ = [
     "SmoothingParam",
     "GraphBuilder",
     "Model",
+    "create_subset_log_prob_calc",
     "load_model",
     "save_model",
     "Array",
