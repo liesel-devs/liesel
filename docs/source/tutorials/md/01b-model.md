@@ -1,8 +1,7 @@
 
-
 # Model building with Liesel
 
-In this tutorial, we go into more depth regarding the model building and
+In this tutorial, we go into more depth regarding the model building
 functionality in Liesel.
 
 Liesel is based on the concept of probabilistic graphical models (PGMs)
@@ -30,23 +29,23 @@ distribution and the parameter nodes would have some prior distribution
 (for example, a normal-inverse-gamma prior). The following table shows
 the different node types and some examples of their use cases.
 
-|  | **Strong node** | **Weak node** |
-|----|----|----|
-| **With distribution** | Response, parameter, … | Copula, … |
+|                          | **Strong node**              | **Weak node**                                      |
+|--------------------------|------------------------------|----------------------------------------------------|
+| **With distribution**    | Response, parameter, …       | Copula, …                                          |
 | **Without distribution** | Covariate, hyperparameter, … | Inverse link function, parameter transformation, … |
 
-A PGM is essentially a collection of connected nodes. Two nodes can be
-connected through a directed edge, meaning that the first node is an
-input for the value or the distribution of the second node. Nodes
-*without* an edge between them are assumed to be conditionally
-independent, allowing us to factorize the model log-probability as
+A PGM is a collection of connected nodes. Two nodes can be connected
+through a directed edge, meaning that the first node is an input for the
+value or the distribution of the second node. Nodes *without* an edge
+between them are assumed to be conditionally independent, allowing us to
+factorize the model log-probability as
 
 $$
 \log p(\text{Model}) = \sum_{\text{Node $\in$ Model}} \log p(\text{Node} \mid \text{Inputs}(\text{Node})).
 $$
 
 So let us consider the same model and data from the [linear regression
-tutorial](01-lin-reg.md#linear-regression), where we had the underelying
+tutorial](01-lin-reg.md#linear-regression), where we had the underlying
 model $y_i \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \;\sigma^2)$ with the
 true parameters $\boldsymbol{\beta} = (\beta_0, \beta_1)' = (1, 2)'$ and
 $\sigma = 1$.
@@ -89,7 +88,7 @@ plt.ylabel("Response y")
 plt.show()
 ```
 
-![](01-alt-model_files/figure-commonmark/unnamed-chunk-1-1.png)
+![](01b-model_files/figure-commonmark/unnamed-chunk-1-1.png)
 
 ### Building the model graph
 
@@ -98,7 +97,7 @@ hyperparameters of the prior are the leaves and the response is the
 root. To build this tree in Liesel, we need to start from the leaves and
 work our way down to the root.
 
-In the linear regression tutorial we assumed the weakly informative
+In the linear regression tutorial, we assumed the weakly informative
 prior $\beta_0, \beta_1 \sim \mathcal{N}(0, 100^2)$, so we start from
 there and then work our way down. To do so, we need to define its
 initial value and its node distribution using the {class}`.Dist` class.
@@ -107,10 +106,10 @@ initial value and its node distribution using the {class}`.Dist` class.
 beta_prior = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
 ```
 
-Note that you could also provide a {class}`.Node` or {class}`.Var`
-instance for the `loc` and `scale` argument - this fact allows you to
-build hierarchical models. If you provide floats like we do here, Liesel
-will turn them into {class}`.Value` nodes under the hood.
+Note that you could also provide a {class}`.Var` instance for the `loc`
+and `scale` argument - this fact allows you to build hierarchical
+models. If you provide floats like we do here, Liesel will turn them
+into {class}`.Value` nodes under the hood.
 
 With this distribution object, we can now create the node for our
 regression coefficient with the {meth}`.Var.new_param` constructor:
@@ -171,34 +170,32 @@ model
     Model(24 nodes, 8 vars)
 
 Since all other nodes are directly or indirectly connected to this node,
-the Model will add those nodes automatically when building the model.
-The model provides a couple of convenience features, for example, to
-evaluate the model log-probability, or to update the nodes in a
-topological order.
+the Model has collected those nodes automatically.
 
-To visualize the graph of a model we call the {func}`.plot_vars()`
-function. Strong nodes are shown in blue, weak nodes in red. Nodes with
-a probability distribution are highlighted with a star. In the figure
-below, we can see the tree-like structure of the graph and identify the
-two branches for the mean and the standard deviation of the response.
+To visualize the statistical graph of a model we call the
+{func}`.plot_vars()` function. Strong nodes are shown in blue, weak
+nodes in red. Nodes with a probability distribution are highlighted with
+a star. In the figure below, we can see the tree-like structure of the
+graph and identify the two branches for the mean and the standard
+deviation of the response.
 
 ``` python
 lsl.plot_vars(model)
 ```
 
-![](01-alt-model_files/figure-commonmark/plot-vars-3.png)
+![](01b-model_files/figure-commonmark/plot-vars-3.png)
 
 ### Node and model log-probabilities
 
 The log-probability of the model, which can be interpreted as the
-(unnormalized) log-posterior in a Bayesian context, can be accessed with
+unnormalized log-posterior in a Bayesian context, can be accessed with
 the `log_prob` property.
 
 ``` python
 model.log_prob
 ```
 
-    Array(-1179.656, dtype=float32)
+    Array(-1179.6559, dtype=float32)
 
 The individual nodes also have a `log_prob` property. In fact, because
 of the conditional independence assumption of the model, the
@@ -213,7 +210,7 @@ we would get two log-probability values, and for `y` we would get 500.
 beta.log_prob.sum() + sigma_sq.log_prob + y.log_prob.sum()
 ```
 
-    Array(-1179.656, dtype=float32)
+    Array(-1179.6559, dtype=float32)
 
 Nodes without a probability distribution return a log-probability of
 zero.
@@ -227,12 +224,10 @@ sigma.log_prob
 The log-probability of a node depends on its value and its inputs. Thus,
 if we change the variance of the response from 10 to 1, the
 log-probability of the corresponding node, the log-probability of the
-response node, and the log-probability of the model change as well. Note
-that, since the actual input to the response distribution is the
-standard deviation $\sigma$, we have to update its value after changing
-the value of $\sigma^2$.
+response node, and the log-probability of the model change as well.
 
 ``` python
+# | label: log-prob-updating-demo
 print(f"Old value of sigma_sq: {sigma_sq.value}")
 ```
 
@@ -248,16 +243,11 @@ print(f"Old log-prob of sigma_sq: {sigma_sq.log_prob}")
 print(f"Old log-prob of y: {y.log_prob.sum()}\n")
 ```
 
-    Old log-prob of y: -1161.6356201171875
+    Old log-prob of y: -1161.635498046875
 
 ``` python
 sigma_sq.value = 1.0
-sigma.update()
-```
 
-    Var(name="sigma")
-
-``` python
 print(f"New value of sigma_sq: {sigma_sq.value}")
 ```
 
@@ -348,30 +338,30 @@ engine.sample_all_epochs()
 
 
       0%|                                                  | 0/3 [00:00<?, ?chunk/s]
-     33%|##############                            | 1/3 [00:02<00:04,  2.50s/chunk]
-    100%|##########################################| 3/3 [00:02<00:00,  1.20chunk/s]
+     33%|##############                            | 1/3 [00:01<00:02,  1.41s/chunk]
+    100%|##########################################| 3/3 [00:01<00:00,  2.13chunk/s]
 
       0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|########################################| 1/1 [00:00<00:00, 1526.31chunk/s]
+    100%|########################################| 1/1 [00:00<00:00, 2983.15chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 1962.71chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 3389.34chunk/s]
 
       0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|########################################| 4/4 [00:00<00:00, 1816.50chunk/s]
+    100%|########################################| 4/4 [00:00<00:00, 4091.01chunk/s]
 
       0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|#########################################| 8/8 [00:00<00:00, 819.16chunk/s]
+    100%|########################################| 8/8 [00:00<00:00, 1308.32chunk/s]
 
       0%|                                                 | 0/20 [00:00<?, ?chunk/s]
-    100%|#######################################| 20/20 [00:00<00:00, 271.20chunk/s]
+    100%|#######################################| 20/20 [00:00<00:00, 377.92chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 1554.02chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 3811.27chunk/s]
 
       0%|                                                 | 0/40 [00:00<?, ?chunk/s]
-     62%|########################3              | 25/40 [00:00<00:00, 247.86chunk/s]
-    100%|#######################################| 40/40 [00:00<00:00, 218.59chunk/s]
+     82%|################################1      | 33/40 [00:00<00:00, 318.73chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 305.58chunk/s]
 
 Take a look at our results
 
@@ -382,455 +372,262 @@ summary
 ```
 
 <p>
-
 <strong>Parameter summary:</strong>
 </p>
-
 <table border="0" class="dataframe">
-
 <thead>
-
 <tr style="text-align: right;">
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 kernel
 </th>
-
 <th>
-
 mean
 </th>
-
 <th>
-
 sd
 </th>
-
 <th>
-
 q_0.05
 </th>
-
 <th>
-
 q_0.5
 </th>
-
 <th>
-
 q_0.95
 </th>
-
 <th>
-
 sample_size
 </th>
-
 <th>
-
 ess_bulk
 </th>
-
 <th>
-
 ess_tail
 </th>
-
 <th>
-
 rhat
 </th>
-
 </tr>
-
 <tr>
-
 <th>
-
 parameter
 </th>
-
 <th>
-
 index
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 </tr>
-
 </thead>
-
 <tbody>
-
 <tr>
-
 <th rowspan="2" valign="top">
-
 beta
 </th>
-
 <th>
-
 (0,)
 </th>
-
 <td>
-
 kernel_00
 </td>
-
 <td>
-
-0.983
+0.984
 </td>
-
 <td>
-
-0.089
+0.091
 </td>
-
 <td>
-
-0.836
+0.837
 </td>
-
 <td>
-
-0.983
+0.984
 </td>
-
 <td>
-
-1.129
+1.135
 </td>
-
 <td>
-
 4000
 </td>
-
 <td>
-
-1178.689
+1101.340
 </td>
-
 <td>
-
-1425.977
+1252.702
 </td>
-
 <td>
-
-1.003
+1.005
 </td>
-
 </tr>
-
 <tr>
-
 <th>
-
 (1,)
 </th>
-
 <td>
-
 kernel_00
 </td>
-
 <td>
-
 1.911
 </td>
-
 <td>
-
-0.157
+0.161
 </td>
-
 <td>
-
-1.655
+1.649
 </td>
-
 <td>
-
-1.911
+1.912
 </td>
-
 <td>
-
-2.177
+2.171
 </td>
-
 <td>
-
 4000
 </td>
-
 <td>
-
-1234.211
+1130.029
 </td>
-
 <td>
-
-1393.635
+1237.464
 </td>
-
 <td>
-
-1.004
+1.006
 </td>
-
 </tr>
-
 <tr>
-
 <th>
-
 sigma_sq
 </th>
-
 <th>
-
 ()
 </th>
-
 <td>
-
 kernel_01
 </td>
-
 <td>
-
 1.044
 </td>
-
 <td>
-
 0.067
 </td>
-
 <td>
-
 0.939
 </td>
-
 <td>
-
 1.040
 </td>
-
 <td>
-
 1.161
 </td>
-
 <td>
-
 4000
 </td>
-
 <td>
-
-3857.532
+3859.015
 </td>
-
 <td>
-
-3510.714
+3732.136
 </td>
-
 <td>
-
-1.001
+1.000
 </td>
-
 </tr>
-
 </tbody>
-
 </table>
-
 <p>
-
 <strong>Error summary:</strong>
 </p>
-
 <table border="0" class="dataframe">
-
 <thead>
-
 <tr style="text-align: right;">
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 count
 </th>
-
 <th>
-
 relative
 </th>
-
 </tr>
-
 <tr>
-
 <th>
-
 kernel
 </th>
-
 <th>
-
 error_code
 </th>
-
 <th>
-
 error_msg
 </th>
-
 <th>
-
 phase
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 </tr>
-
 </thead>
-
 <tbody>
-
 <tr>
-
 <th rowspan="2" valign="top">
-
 kernel_00
 </th>
-
 <th rowspan="2" valign="top">
-
 1
 </th>
-
 <th rowspan="2" valign="top">
-
 divergent transition
 </th>
-
 <th>
-
 warmup
 </th>
-
 <td>
-
-59
+62
 </td>
-
 <td>
-
-0.015
+0.016
 </td>
-
 </tr>
-
 <tr>
-
 <th>
-
 posterior
 </th>
-
 <td>
-
 0
 </td>
-
 <td>
-
 0.000
 </td>
-
 </tr>
-
 </tbody>
-
 </table>
 
 And plot these
@@ -839,10 +636,10 @@ And plot these
 g = gs.plot_trace(results)
 ```
 
-![](01-alt-model_files/figure-commonmark/trace-plot-5.png)
+![](01b-model_files/figure-commonmark/trace-plot-5.png)
 
 ``` python
 gs.plot_param(results, param="beta", param_index=0)
 ```
 
-![](01-alt-model_files/figure-commonmark/trace-plot-6.png)
+![](01b-model_files/figure-commonmark/trace-plot-6.png)
