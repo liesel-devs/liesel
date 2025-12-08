@@ -121,6 +121,9 @@ initialize the scale using {meth}`.Var.new_calc`, to compute the square root.
 sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma")
 ```
 
+The variable constructor {meth}`.Var.new_calc` always takes a
+function as its first argument, and the nodes to be used as function inputs as the
+following arguments.
 
 #### Design matrix, fitted values, and response
 
