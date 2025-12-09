@@ -19,6 +19,7 @@ from .kernel import (
     DefaultTransitionInfo,
     DefaultTuningInfo,
     ModelMixin,
+    ReprMixin,
     TransitionMixin,
     TransitionOutcome,
     TuningOutcome,
@@ -50,7 +51,9 @@ IWLSTransitionInfo = DefaultTransitionInfo
 IWLSTuningInfo = DefaultTuningInfo
 
 
-class IWLSKernel(ModelMixin, TransitionMixin[IWLSKernelState, IWLSTransitionInfo]):
+class IWLSKernel(
+    ModelMixin, TransitionMixin[IWLSKernelState, IWLSTransitionInfo], ReprMixin
+):
     """
     An IWLS kernel with dual averaging and an (optional) user-defined function
     for computing the Cholesky decomposition of the Fisher information matrix,
@@ -76,6 +79,7 @@ class IWLSKernel(ModelMixin, TransitionMixin[IWLSKernelState, IWLSTransitionInfo
         da_gamma: float = 0.05,
         da_kappa: float = 0.75,
         da_t0: int = 10,
+        identifier: str = "",
     ):
         self._model = None
         self.position_keys = tuple(position_keys)
@@ -88,6 +92,7 @@ class IWLSKernel(ModelMixin, TransitionMixin[IWLSKernelState, IWLSTransitionInfo
         self.da_gamma = da_gamma
         self.da_kappa = da_kappa
         self.da_t0 = da_t0
+        self.identifier = identifier
 
     @classmethod
     def untuned(
