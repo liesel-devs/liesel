@@ -1184,9 +1184,9 @@ class Model:
         self,
         shape: Sequence[int],
         seed: jax.Array,
-        posterior_samples: dict[str, Array] | None = None,
+        posterior_samples: dict[str, jax.typing.ArrayLike] | None = None,
         fixed: Sequence[str] = (),
-        newdata: dict[str, Array] | None = None,
+        newdata: dict[str, jax.typing.ArrayLike] | None = None,
         dists: dict[str, Dist] | None = None,
     ) -> dict[str, Array]:
         """
@@ -1242,6 +1242,11 @@ class Model:
                 "Any key should be present in only one of these arguments."
             )
 
+        if posterior_samples is not None:
+            posterior_samples = jax.tree.map(jnp.asarray, posterior_samples)
+
+        if newdata is not None:
+            newdata = jax.tree.map(jnp.asarray, newdata)
         # Pre-processing
         # ------------------------------------------------------------------------------
         state_for_sampling = (
@@ -1686,9 +1691,9 @@ class Model:
 
     def predict(
         self,
-        samples: dict[str, Array],
+        samples: dict[str, jax.typing.ArrayLike],
         predict: Sequence[str] | None = None,
-        newdata: dict[str, Array] | None = None,
+        newdata: dict[str, jax.typing.ArrayLike] | None = None,
     ) -> dict[str, Array]:
         """
         Returns a dictionary of predictions.
@@ -1720,6 +1725,9 @@ class Model:
                 "Any key should be present in only one of these arguments."
             )
 
+        samples = jax.tree.map(jnp.asarray, samples)
+        if newdata is not None:
+            newdata = jax.tree.map(jnp.asarray, newdata)
         # deduce batching dimensions
         shapes = []
         for name, value in samples.items():
