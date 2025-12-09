@@ -1229,6 +1229,19 @@ class Model:
         A dictionary of variable and node names and their sampled values. Includes
         only sampled variables.
         """
+
+        posterior_samples = posterior_samples if posterior_samples is not None else {}
+
+        unique_sample_keys = set(list(posterior_samples))
+        unique_newdata_keys = set(list(newdata)) if newdata is not None else set()
+        intersection = unique_sample_keys & unique_newdata_keys
+        if len(intersection) > 0:
+            raise RuntimeError(
+                "The following keys are present in both 'samples' and 'newdata': "
+                f"{list(intersection)} "
+                "Any key should be present in only one of these arguments."
+            )
+
         if posterior_samples is not None:
             posterior_samples = jax.tree.map(jnp.asarray, posterior_samples)
 
@@ -1236,7 +1249,6 @@ class Model:
             newdata = jax.tree.map(jnp.asarray, newdata)
         # Pre-processing
         # ------------------------------------------------------------------------------
-        posterior_samples = posterior_samples if posterior_samples is not None else {}
         state_for_sampling = (
             self.update_state(newdata) if newdata is not None else self.state
         )
@@ -1703,6 +1715,16 @@ class Model:
             set to the given values before evaluating predictions. If ``None`` \
             (default), the current variable values are used.
         """
+        unique_sample_keys = set(list(samples))
+        unique_newdata_keys = set(list(newdata)) if newdata is not None else set()
+        intersection = unique_sample_keys & unique_newdata_keys
+        if len(intersection) > 0:
+            raise RuntimeError(
+                "The following keys are present in both 'samples' and 'newdata': "
+                f"{list(intersection)} "
+                "Any key should be present in only one of these arguments."
+            )
+
         samples = jax.tree.map(jnp.asarray, samples)
         if newdata is not None:
             newdata = jax.tree.map(jnp.asarray, newdata)
