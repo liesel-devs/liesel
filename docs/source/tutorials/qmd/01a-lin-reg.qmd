@@ -243,13 +243,13 @@ So far, we have not sampled our variance parameter `sigma_sq`; we simply fixed i
 the true value of one.
 Now we also want to use a NUTS sampler for `sigma_sq`. Since the variance is restrictive
 to the positive domain and NUTS works best for parameters on the whole real line, we
-now log-transform `sigma_sq` using the {meth}`.Var.transform()` method. This method 
+now log-transform `sigma_sq` using the {meth}`.Var.transform()` method. This method
 takes a tensorflow bijector instance ([(`tfb.bijectors`)](https://www.tensorflow.org/probability/api_docs/python/tfp/substrates/jax/bijectors/Bijector))
-and automatically conducts an appropriate transformation of the transformed 
+and automatically conducts an appropriate transformation of the transformed
 parameter's distribution according to the change of variables theorem.
-Tensorflow bijectors are always named after the *forward* transformation, so we need 
+Tensorflow bijectors are always named after the *forward* transformation, so we need
 to use the `tfb.Exp()` bijector.
-More on that in the [Parameter transformations tutorial](01a-transform.md#parameter-transformation) 
+More on that in the [Parameter transformations tutorial](01a-transform.md#parameter-transformation)
 and {meth}`.Var.transform()`.
 
 ```{python}
@@ -259,7 +259,7 @@ log_sigma = sigma_sq.transform(tfb.Exp())
 model2 = lsl.Model([y]) #create new model
 ```
 
-Because we don't just want samples of our transformed paramter, we also 
+Because we don't just want samples of our transformed paramter, we also
 tell the engine builder to save samples of `sigma_sq`.
 
 ```{python}
@@ -276,7 +276,7 @@ engine = builder.build()
 engine.sample_all_epochs()
 ```
 
-Note that it would also be possible to 
+Note that it would also be possible to
 sample both paramters using the same {class}`~.goose.NUTSKernel` Kernel.
 Goose provides a couple of convenient numerical and graphical summary tools.
 The {class}`~.goose~.goose.Summary` class computes several summary statistics

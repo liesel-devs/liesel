@@ -30,7 +30,7 @@ Liesel: strong and weak nodes. A strong node is a node whose value is defined "o
 of the model, for example, if the node represents some observed data or a parameter
 (parameters are usually set by an inference algorithm such as an optimizer or sampler).
 In contrast, a weak node is a node whose value is defined "within" the model, that is,
-it is a deterministic function of some other nodes. 
+it is a deterministic function of some other nodes.
 An exp-transformation mapping a
 real-valued parameter to a positive number, for example, would be a weak node.
 
