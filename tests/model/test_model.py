@@ -507,6 +507,26 @@ class TestPredictions:
         assert jnp.allclose(pred["mu"], manual_pred)
         assert pred["mu"].shape == (4, 3, 500)
 
+    def test_predict_when_newdata_and_samples_overlap(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+        }
+
+        # predictions at new values for X
+        xnew = tfd.Normal(loc=0.0, scale=1.0).sample(
+            sample_shape=model.vars["X"].value.shape, seed=rnd.PRNGKey(7)
+        )
+
+        assert not jnp.allclose(xnew, model.vars["X"].value)
+
+        with pytest.raises(RuntimeError):
+            model.predict(
+                samples=samples,
+                predict=["mu"],
+                newdata={"X": xnew, "beta_hat": samples["beta_hat"][0, 0, :]},
+            )
+
     def test_predict_at_newdata_not_in_the_model(self, model) -> None:
         samples = {
             "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
@@ -982,7 +1002,7 @@ class TestSample:
         # to the elements of the sample shape for sample1
         assert samples2["y"].shape == (11, 2, 8, 100)
 
-    def test_sample_posterior_at_newdata(self, linreg: Model):
+    def test_sample_at_newdata(self, linreg: Model):
         model = linreg
 
         samples1 = model.sample(
@@ -999,6 +1019,24 @@ class TestSample:
         )
 
         assert not jnp.allclose(samples1["y"], samples2["y"])
+
+    def test_sample_posterior_keys_overlap_with_posterior_samples(self, linreg: Model):
+        model = linreg
+
+        samples1 = model.sample(
+            shape=(2, 8),
+            seed=rnd.key(7),
+        )
+
+        x_shape = model.vars["X"].value.shape
+        x_new = tfd.Uniform(low=10.0, high=11.0).sample(x_shape, seed=rnd.key(9))
+        with pytest.raises(RuntimeError):
+            model.sample(
+                shape=(2, 8),
+                seed=rnd.key(8),
+                posterior_samples=samples1,
+                newdata={"X": x_new, "b": samples1["b"][0, 0, :]},
+            )
 
     def test_sample_posterior_shape_of_posterior_samples(self, linreg: Model):
         model = linreg
