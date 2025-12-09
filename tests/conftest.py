@@ -141,7 +141,6 @@ def result_thinned() -> SamplingResults:
     builder.set_initial_values(state)
     builder.set_epochs(
         [
-            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
             EpochConfig(EpochType.BURNIN, 50, 2, None),
             EpochConfig(EpochType.POSTERIOR, 250, 2, None),
         ]
