@@ -18,6 +18,7 @@ from .kernel import (
     DefaultTransitionInfo,
     DefaultTuningInfo,
     ModelMixin,
+    ReprMixin,
     TransitionMixin,
     TransitionOutcome,
     TuningMixin,
@@ -80,6 +81,7 @@ class HMCKernel(
     ModelMixin,
     TransitionMixin[HMCKernelState, HMCTransitionInfo],
     TuningMixin[HMCKernelState, HMCTuningInfo],
+    ReprMixin,
 ):
     """
     A HMC kernel with dual averaging and an inverse mass matrix tuner,
@@ -106,6 +108,7 @@ class HMCKernel(
         da_kappa: float = 0.75,
         da_t0: int = 10,
         mm_diag: bool = True,
+        identifier: str = "",
     ):
         self.position_keys = tuple(position_keys)
         self._model = None
@@ -120,6 +123,7 @@ class HMCKernel(
         self.da_t0 = da_t0
 
         self.mm_diag = mm_diag
+        self.identifier = identifier
 
     def _blackjax_state(self, model_state: ModelState) -> hmc.HMCState:
         return hmc.init(self.position(model_state), self.log_prob_fn(model_state))

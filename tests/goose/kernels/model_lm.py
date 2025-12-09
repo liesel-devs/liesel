@@ -11,6 +11,7 @@ import scipy
 from pytest import approx
 
 import liesel.goose as gs
+from liesel.goose.engine import SamplingResults
 from liesel.goose.types import Kernel
 
 rng = np.random.default_rng(1337)
@@ -42,7 +43,7 @@ def log_prob(model_state):
 
 def run_kernel_test(
     mcmc_seed: int, kernels: Sequence[Kernel], test_da_target_accept: bool = True
-) -> None:
+) -> SamplingResults:
     builder = gs.EngineBuilder(mcmc_seed, num_chains=1)
 
     for kernel in kernels:
@@ -81,3 +82,5 @@ def run_kernel_test(
                 # of da_target_accept
                 target_accept = kernel.da_target_accept  # type: ignore
                 assert avg_acceptance_prob == approx(target_accept, abs=0.05)
+
+    return results
