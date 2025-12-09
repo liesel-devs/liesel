@@ -1184,9 +1184,9 @@ class Model:
         self,
         shape: Sequence[int],
         seed: jax.Array,
-        posterior_samples: dict[str, Array] | None = None,
+        posterior_samples: dict[str, jax.typing.ArrayLike] | None = None,
         fixed: Sequence[str] = (),
-        newdata: dict[str, Array] | None = None,
+        newdata: dict[str, jax.typing.ArrayLike] | None = None,
         dists: dict[str, Dist] | None = None,
     ) -> dict[str, Array]:
         """
@@ -1229,6 +1229,11 @@ class Model:
         A dictionary of variable and node names and their sampled values. Includes
         only sampled variables.
         """
+        if posterior_samples is not None:
+            posterior_samples = jax.tree.map(jnp.asarray, posterior_samples)
+
+        if newdata is not None:
+            newdata = jax.tree.map(jnp.asarray, newdata)
         # Pre-processing
         # ------------------------------------------------------------------------------
         posterior_samples = posterior_samples if posterior_samples is not None else {}
@@ -1674,9 +1679,9 @@ class Model:
 
     def predict(
         self,
-        samples: dict[str, Array],
+        samples: dict[str, jax.typing.ArrayLike],
         predict: Sequence[str] | None = None,
-        newdata: dict[str, Array] | None = None,
+        newdata: dict[str, jax.typing.ArrayLike] | None = None,
     ) -> dict[str, Array]:
         """
         Returns a dictionary of predictions.
@@ -1698,6 +1703,9 @@ class Model:
             set to the given values before evaluating predictions. If ``None`` \
             (default), the current variable values are used.
         """
+        samples = jax.tree.map(jnp.asarray, samples)
+        if newdata is not None:
+            newdata = jax.tree.map(jnp.asarray, newdata)
         # deduce batching dimensions
         shapes = []
         for name, value in samples.items():
