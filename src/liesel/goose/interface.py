@@ -11,6 +11,7 @@ from .types import ModelInterface, ModelState, Position
 
 if TYPE_CHECKING:
     from ..model.model import Model
+from typing import cast
 
 LogProbFunction = Callable[[ModelState], float]
 
@@ -111,6 +112,17 @@ class DictInterface:
         """
         return self._log_prob_fn(model_state)
 
+    def log_prob_vars(self, model_state: ModelState, var_names: Sequence[str]) -> float:
+        """
+        Computes the unnormalized log-probability for specified variables.
+
+        Raises NotImplementedError as DictInterface does not support variable-specific
+        log probability queries.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support log_prob_vars queries."
+        )
+
 
 @usedocs(ModelInterface)
 class DataclassInterface:
@@ -203,6 +215,17 @@ class DataclassInterface:
             An instance of the dataclass representing the model state.
         """
         return self._log_prob_fn(model_state)
+
+    def log_prob_vars(self, model_state: ModelState, var_names: Sequence[str]) -> float:
+        """
+        Computes the unnormalized log-probability for specified variables.
+
+        Raises NotImplementedError as DataclassInterface does not support
+        variable-specific log probability queries.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support log_prob_vars queries."
+        )
 
     def update_state(self, position: Position, model_state: ModelState) -> ModelState:
         """
@@ -311,6 +334,54 @@ class LieselInterface:
             A dictionary of node names and their corresponding :class:`.NodeState`.
         """
         return model_state["_model_log_prob"].value
+
+    def log_prob_vars(self, model_state: ModelState, var_names: Sequence[str]) -> float:
+        """
+        Computes the unnormalized log-probability for specified variables.
+
+        Parameters
+        ----------
+        model_state
+            A dictionary of node names and their corresponding :class:`.NodeState`.
+        var_names
+            Variable/node names to include in the log-probability calculation
+
+        Returns
+        -------
+        Sum of log-probabilities for the specified variables
+
+        Raises
+        ------
+        KeyError
+            If any of the specified variables do not have distributions or don't exist.
+        """
+        # import here because of circular import issues
+        from ..model.nodes import Dist
+
+        total_log_prob = 0.0
+
+        for var_name in var_names:
+            var = self._model.vars.get(var_name, None)
+            if var is not None:
+                dist_node = var.dist_node
+            else:
+                node = self._model.nodes.get(var_name, None)
+                dist_node = cast(Dist | None, node)
+
+            if dist_node is None:
+                raise ValueError(
+                    f"Distribution node for name '{var_name}' not found."
+                    f"Available nodes in model state: {list(model_state.keys())}"
+                )
+
+            log_prob_value = model_state[dist_node.name].value
+            # Sum if it's an array
+            if hasattr(log_prob_value, "sum"):
+                total_log_prob += log_prob_value.sum()
+            else:
+                total_log_prob += log_prob_value
+
+        return total_log_prob
 
 
 class NamedTupleInterface:
@@ -423,3 +494,14 @@ class NamedTupleInterface:
             A dictionary of node names and their corresponding :class:`.NodeState`.
         """
         return self._log_prob_fn(model_state)
+
+    def log_prob_vars(self, model_state: ModelState, var_names: Sequence[str]) -> float:
+        """
+        Computes the unnormalized log-probability for specified variables.
+
+        Raises NotImplementedError as NamedTupleInterface does not support
+        variable-specific log probability queries.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support log_prob_vars queries."
+        )
