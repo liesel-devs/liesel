@@ -119,7 +119,7 @@ class IWLSKernel(
 
     @fallback_chol_info.setter
     def fallback_chol_info(self, value: CholInfoFallbackOptions | None):
-        if value not in get_args(CholInfoFallbackOptions):
+        if value is not None and value not in get_args(CholInfoFallbackOptions):
             raise ValueError(
                 f"Allowed values for fallback_chol_info: {CholInfoFallbackOptions} "
                 "and 'None', "
