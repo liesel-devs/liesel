@@ -497,7 +497,7 @@ class GraphBuilder:
         nodes, _vars = gb._all_nodes_and_vars()
         nodes_and_vars = nodes + _vars
 
-        model = Model(nodes_and_vars, grow=False, copy=copy)
+        model = Model(nodes_and_vars, grow=False, copy=copy, to_float32=self.to_float32)
 
         if not copy:
             self.nodes.clear()
@@ -1064,6 +1064,12 @@ class Model:
     def nodes(self) -> MappingProxyType[str, Node]:
         """A mapping of the model nodes with their names as keys."""
         return MappingProxyType(self._nodes)
+
+    @property
+    def to_float32(self) -> bool:
+        """Whether the values of the added nodes will be converted\
+        from float64 to float32."""
+        return self._to_float32
 
     def pop_nodes_and_vars(self) -> tuple[dict[str, Node], dict[str, Var]]:
         """
