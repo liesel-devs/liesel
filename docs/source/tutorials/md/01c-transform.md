@@ -74,7 +74,7 @@ model = gb.build_model()
 lsl.plot_vars(model)
 ```
 
-![](01a-transform_files/figure-commonmark/graph-and-transformation-1.png)
+![](01c-transform_files/figure-commonmark/graph-and-transformation-1.png)
 
 The response distribution still requires the standard deviation on the
 original scale. The model graph shows that the back-transformation from
@@ -106,30 +106,30 @@ engine.sample_all_epochs()
 
 
       0%|                                                  | 0/3 [00:00<?, ?chunk/s]
-     33%|##############                            | 1/3 [00:01<00:03,  1.89s/chunk]
-    100%|##########################################| 3/3 [00:01<00:00,  1.59chunk/s]
+     33%|##############                            | 1/3 [00:01<00:03,  1.52s/chunk]
+    100%|##########################################| 3/3 [00:01<00:00,  1.98chunk/s]
 
       0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|########################################| 1/1 [00:00<00:00, 2501.08chunk/s]
+    100%|########################################| 1/1 [00:00<00:00, 2709.50chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 3076.13chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 3390.71chunk/s]
 
       0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|########################################| 4/4 [00:00<00:00, 3347.41chunk/s]
+    100%|########################################| 4/4 [00:00<00:00, 3766.78chunk/s]
 
       0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|#########################################| 8/8 [00:00<00:00, 922.28chunk/s]
+    100%|#########################################| 8/8 [00:00<00:00, 830.21chunk/s]
 
       0%|                                                 | 0/20 [00:00<?, ?chunk/s]
-    100%|#######################################| 20/20 [00:00<00:00, 257.90chunk/s]
+    100%|#######################################| 20/20 [00:00<00:00, 262.70chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 3049.29chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 3690.54chunk/s]
 
       0%|                                                 | 0/40 [00:00<?, ?chunk/s]
-     60%|#######################4               | 24/40 [00:00<00:00, 229.93chunk/s]
-    100%|#######################################| 40/40 [00:00<00:00, 200.47chunk/s]
+     60%|#######################4               | 24/40 [00:00<00:00, 236.26chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 205.87chunk/s]
 
 Judging from the trace plots, it seems that all chains have converged.
 
@@ -138,7 +138,7 @@ results = engine.get_results()
 g = gs.plot_trace(results)
 ```
 
-![](01a-transform_files/figure-commonmark/traceplots-3.png)
+![](01c-transform_files/figure-commonmark/traceplots-3.png)
 
 We can also take a look at the summary table, which includes the
 original $\sigma^2$ and the transformed $\log(\sigma^2)$.
@@ -231,28 +231,28 @@ beta
 kernel_00
 </td>
 <td>
-0.989
+0.988
 </td>
 <td>
-0.092
+0.093
 </td>
 <td>
-0.841
+0.834
 </td>
 <td>
 0.987
 </td>
 <td>
-1.138
+1.140
 </td>
 <td>
 4000
 </td>
 <td>
-1386.502
+1380.566
 </td>
 <td>
-1433.462
+1659.059
 </td>
 <td>
 1.003
@@ -266,31 +266,31 @@ kernel_00
 kernel_00
 </td>
 <td>
-1.900
+1.904
 </td>
 <td>
-0.161
+0.162
 </td>
 <td>
-1.638
+1.637
 </td>
 <td>
-1.903
+1.907
 </td>
 <td>
-2.159
+2.165
 </td>
 <td>
 4000
 </td>
 <td>
-1370.704
+1515.441
 </td>
 <td>
-1355.871
+1646.966
 </td>
 <td>
-1.002
+1.003
 </td>
 </tr>
 <tr>
@@ -304,31 +304,31 @@ sigma_sq
 \-
 </td>
 <td>
-1.044
+1.042
 </td>
 <td>
 0.066
 </td>
 <td>
-0.941
+0.936
 </td>
 <td>
-1.042
+1.039
 </td>
 <td>
-1.156
+1.154
 </td>
 <td>
 4000
 </td>
 <td>
-2468.921
+2330.582
 </td>
 <td>
-2080.546
+2044.393
 </td>
 <td>
-1.001
+1.002
 </td>
 </tr>
 <tr>
@@ -342,31 +342,31 @@ sigma_sq_transformed
 kernel_00
 </td>
 <td>
-0.041
+0.039
 </td>
 <td>
 0.063
 </td>
 <td>
--0.061
+-0.066
 </td>
 <td>
-0.041
+0.039
 </td>
 <td>
-0.145
+0.143
 </td>
 <td>
 4000
 </td>
 <td>
-2468.921
+2330.584
 </td>
 <td>
-2080.546
+2044.393
 </td>
 <td>
-1.001
+1.002
 </td>
 </tr>
 </tbody>
@@ -426,10 +426,10 @@ divergent transition
 warmup
 </th>
 <td>
-62
+57
 </td>
 <td>
-0.015
+0.014
 </td>
 </tr>
 <tr>
@@ -454,4 +454,4 @@ Finally, let’s check the autocorrelation of the samples.
 g = gs.plot_cor(results)
 ```
 
-![](01a-transform_files/figure-commonmark/correlation-plots-5.png)
+![](01c-transform_files/figure-commonmark/correlation-plots-5.png)
