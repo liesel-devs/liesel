@@ -170,7 +170,7 @@ class VDist:
         self.var: Var | None = None
         self.q: Model | None = None
 
-        self._to_float32 = p._to_float32
+        self._to_float32 = p.to_float32
 
     def q_to_p(self, pos: Position) -> Position:
         return self._unflatten(pos[self._flat_pos_name])
@@ -196,6 +196,12 @@ class VDist:
             params = list(model.parameters)
 
         return params
+
+    @property
+    def to_float32(self) -> bool:
+        """Whether the values of the distribution's nodes will be converted\
+        from float64 to float32."""
+        return self._to_float32
 
     def _validate(self, dist: Dist): ...
 
@@ -286,7 +292,7 @@ class VDist:
     def build(self) -> Self:
         if self.var is None:
             raise ValueError("The .var attribute must be set, but is currently None.")
-        self.q = Model([self.var], to_float32=self._to_float32)
+        self.q = Model([self.var], to_float32=self.to_float32)
         return self
 
     def sample_p(
@@ -327,7 +333,7 @@ class CompositeVDist:
     def __init__(self, *vi_dists: VDist):
         self.vi_dists = vi_dists
         self.q: Model | None = None
-        self._to_float32 = vi_dists[0]._to_float32
+        self._to_float32 = vi_dists[0].to_float32
 
     @property
     def parameters(self) -> list[str]:
@@ -338,6 +344,12 @@ class CompositeVDist:
     @property
     def p(self) -> Model:
         return self.vi_dists[0].p
+
+    @property
+    def to_float32(self) -> bool:
+        """Whether the values of the distributions' nodes will be converted\
+        from float64 to float32."""
+        return self._to_float32
 
     def build(self) -> Self:
         vars_ = []
