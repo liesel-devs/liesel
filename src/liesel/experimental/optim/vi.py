@@ -220,6 +220,38 @@ class VDist:
         self.var = flat_pos_var
         return self
 
+    def normal(
+        self,
+        loc: jax.typing.ArrayLike | None = None,
+        scale: jax.typing.ArrayLike | None = None,
+        scale_bijector: tfb.Bijector | None = None,
+    ) -> Self:
+        if loc is None:
+            loc_value = jnp.asarray(self._flat_pos)
+        else:
+            loc_value = jnp.asarray(loc)
+
+        if scale is None:
+            n = jnp.size(loc_value)
+            scale_value = 0.01 * jnp.ones(n)
+        else:
+            scale_value = jnp.asarray(scale)
+
+        loc_var = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
+        scale_var = Var.new_param(scale_value, name=self._flat_pos_name + "_scale")
+
+        dist = Dist(tfd.Normal, loc=loc_var, scale=scale_var)
+
+        if scale_bijector is None:
+            dist_inst = dist.init_dist()
+            scale_bijector = dist_inst.parameter_properties(scale_value.dtype)[  # type: ignore
+                "scale"
+            ].default_constraining_bijector_fn()
+
+        scale_var.transform(scale_bijector)
+
+        return self.init(dist)
+
     def mvn_diag(
         self,
         loc: jax.typing.ArrayLike | None = None,
