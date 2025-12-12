@@ -389,7 +389,7 @@ class CompositeVDist:
             if dist.var is None:
                 raise ValueError(f".var attribute of {dist} must be set, but is None.")
             vars_.append(dist.var)
-        q = Model(vars_, to_float32=self._to_float32)
+        q = Model(vars_, to_float32=self.to_float32)
         self.q = q
         return self
 
