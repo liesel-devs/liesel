@@ -61,6 +61,7 @@ if on_rtd:
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3/", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
+    "pandas": ("https://pandas.pydata.org/docs/", None),
     "scipy": ("https://docs.scipy.org/doc/scipy-1.8.1/", None),
     "jax": ("https://jax.readthedocs.io/en/latest/", None),
     "tensorflow_probability": (  # we can use "tfp" as a prefix, too
