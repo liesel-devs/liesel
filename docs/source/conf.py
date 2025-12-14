@@ -83,7 +83,7 @@ napoleon_preprocess_types = False
 napoleon_use_rtype = False
 
 # sphinx_autodoc_typehints options
-typehints_defaults = "braces-after"
+typehints_defaults = "comma"
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
