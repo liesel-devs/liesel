@@ -51,6 +51,10 @@ extensions = [
     "myst_nb",
 ]
 
+# for making copying code from doctests more convenient
+copybutton_prompt_text = r">>> |\.\.\. "
+copybutton_prompt_is_regexp = True
+
 if on_rtd:
     extensions.append("rtds_action")
 
