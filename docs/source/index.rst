@@ -17,7 +17,8 @@ API Reference
 
 This is an overview of the central classes in Liesel.
 
-.. rubric:: Model Basics
+Model Basics
+************
 
 The fundamental building blocks of your model graph are given by just three classes.
 Both are documented with examples, so make sure to check them out.
@@ -37,7 +38,8 @@ The model building workflow in Liesel consists of the following steps:
     ~liesel.model.Var
     ~liesel.model.Dist
 
-.. rubric:: MCMC Setup
+MCMC Setup
+************
 
 To set up an MCMC engine, goose provides the :class:`~.goose.EngineBuilder`. Please refer to
 the linked EngineBuilder documentation to learn how to use it.
@@ -60,7 +62,8 @@ conveniently initialize your :class:`~.goose.EngineBuilder`.
     ~liesel.goose.Engine
     ~liesel.goose.EpochConfig
 
-.. rubric:: MCMC Kernels
+MCMC Kernels
+*************
 
 
 Goose makes it easy for you to combine different MCMC kernels for different blocks of
@@ -87,7 +90,8 @@ instance.
     ~liesel.goose.GibbsKernel
     ~liesel.goose.Kernel
 
-.. rubric:: Summary & Plots
+Summary & Plots
+****************************
 
 The central classes for handling your sampling results are:
 
@@ -122,7 +126,8 @@ acccess to important diagnostics.
     ~liesel.goose.plot_density
     ~liesel.goose.plot_param
 
-.. rubric:: Optimization
+Optimization
+*************
 
 It can often be beneficial to find good starting values to get your MCMC sampling scheme
 going. Goose provides the function :func:`.optim_flat` for this purpose, which allows you
@@ -139,7 +144,8 @@ to run stochastic gradient descent on a liesel model.
     ~liesel.goose.history_to_df
     ~liesel.goose.OptimResult
 
-.. rubric:: Model (Advanced)
+Model (Advanced)
+************************
 
 .. autosummary::
     :toctree: generated
@@ -158,7 +164,8 @@ to run stochastic gradient descent on a liesel model.
     ~liesel.model.InputGroup
     ~liesel.model.GraphBuilder
 
-.. rubric:: Model Interfaces
+Model Interfaces
+************************
 
 A natural option for setting up your model is the use of ``liesel.model``.
 However, you are not locked
@@ -175,7 +182,8 @@ in to using :class:`.Model`. Goose currently includes the following interfaces:
     ~liesel.goose.DataclasslInterface
     ~liesel.goose.NamedTupleInterface
 
-.. rubric:: P-Splines
+P-Splines
+************
 
 .. autosummary::
     :toctree: generated
@@ -188,7 +196,8 @@ in to using :class:`.Model`. Goose currently includes the following interfaces:
     ~liesel.contrib.splines.pspline_penalty
     ~liesel.distributions.MultivariateNormalDegenerate
 
-.. rubric:: Experimental API
+Experimental API
+************************
 
 .. autosummary::
     :toctree: generated
