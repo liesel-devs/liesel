@@ -23,6 +23,7 @@ API Reference
     :toctree: generated
     :caption: Model Basics
     :recursive:
+    :nosignatures:
 
     ~liesel.model.Model
     ~liesel.model.Var
@@ -34,6 +35,7 @@ API Reference
     :toctree: generated
     :caption: MCMC Setup
     :recursive:
+    :nosignatures:
 
     ~liesel.goose.LieselMCMC
     ~liesel.goose.MCMCSpec
@@ -47,6 +49,7 @@ API Reference
     :toctree: generated
     :caption: MCMC Kernels
     :recursive:
+    :nosignatures:
 
     ~liesel.goose.IWLSKernel
     ~liesel.goose.NUTSKernel
@@ -62,6 +65,7 @@ API Reference
     :toctree: generated
     :caption: Summary & Plots
     :recursive:
+    :nosignatures:
 
     ~liesel.goose.SamplingResults
     ~liesel.goose.Summary
@@ -79,6 +83,7 @@ API Reference
     :toctree: generated
     :caption: Optimization
     :recursive:
+    :nosignatures:
 
     ~liesel.goose.optim_flat
     ~liesel.goose.Stopper
@@ -91,6 +96,7 @@ API Reference
     :toctree: generated
     :caption: Model (Advanced)
     :recursive:
+    :nosignatures:
 
     ~liesel.model.Calc
     ~liesel.model.Node
@@ -109,6 +115,7 @@ API Reference
     :toctree: generated
     :caption: Model Interfaces
     :recursive:
+    :nosignatures:
 
     ~liesel.goose.LieselInterface
     ~liesel.goose.DictInterface
@@ -121,6 +128,7 @@ API Reference
     :toctree: generated
     :caption: P-Splines
     :recursive:
+    :nosignatures:
 
     ~liesel.contrib.splines.basis_matrix
     ~liesel.contrib.splines.equidistant_knots
@@ -133,6 +141,7 @@ API Reference
     :toctree: generated
     :caption: Experimental API
     :recursive:
+    :nosignatures:
 
     ~liesel.experimental
 
