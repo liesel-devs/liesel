@@ -167,10 +167,6 @@ class Node(ABC):
         :class:`~tfp.distributions.Distribution`.
     .Var : A variable in a statistical model, typically with a probability
         distribution.
-    .param :
-        A helper function to initialize a :class:`.Var` as a model parameter.
-    .obs :
-        A helper function to initialize a :class:`.Var` as an observed variable.
 
 
     .. _pytrees: https://jax.readthedocs.io/en/latest/pytrees.html
@@ -864,10 +860,6 @@ class Dist(Node):
     --------
     .Var : A variable in a statistical model, typically with a probability
         distribution.
-    .param :
-        A helper function to initialize a :class:`.Var` as a model parameter.
-    .obs :
-        A helper function to initialize a :class:`.Var` as an observed variable.
     .MultivariateNormalDegenerate : A custom distribution class that implements
         a degenerate multivariate normal distribution in the ``tensorflow_probability``
         :class:`~tfp.distributions.Distribution` interface.
@@ -1115,7 +1107,7 @@ class Var:
             b.dist_node["loc"]
 
         Here, we retrieve the variable ``a`` with the name ``"a"``. But for the
-        indexing, we use the *argument name* ``"loc"`` from the call to ``lsl.Dist`.
+        indexing, we use the *argument name* ``"loc"`` from the call to ``lsl.Dist``.
 
     .. rubric:: Swapping out inputs
 
