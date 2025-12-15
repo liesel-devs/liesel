@@ -89,6 +89,7 @@ API Reference
     ~liesel.model.TransientDist
     ~liesel.model.TransientIdentity
     ~liesel.model.TransientNode
+    ~liesel.model.InputGroup
     ~liesel.model.GraphBuilder
 
 
