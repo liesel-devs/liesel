@@ -9,15 +9,35 @@ Liesel: A Probabilistic Programming Framework
    :hidden:
    :maxdepth: 1
 
-   model
-   goose
    tutorials_overview
 
 
 API Reference
 -------------
 
+This is an overview of the central classes in Liesel.
+
+We usually import ``liesel.model`` and ``liesel.goose`` as follows::
+
+    import liesel.model as lsl
+    import liesel.goose as gs
+
+Additionnaly, it often makes sense to import ``jax.numpy`` and tensorflow probability::
+
+    import jax.numpy as jnp
+    import tensorflow_probability.substrates.jax.distributions as tfd
+    import tensorflow_probability.substrates.jax.bijectors as tfb
+
+
 .. rubric:: Model Basics
+
+The fundamental building blocks of your model graph are given by just three classes.
+Both are documented with examples, so make sure to check them out.
+
+The model building workflow in Liesel consists of the following steps:
+
+1. Set up the nodes and variables that make up your model.
+2. Initialize a :class:`.Model` with your root variable(s).
 
 .. autosummary::
     :toctree: generated
@@ -30,6 +50,15 @@ API Reference
     ~liesel.model.Dist
 
 .. rubric:: MCMC Setup
+
+To set up an MCMC engine, goose provides the :class:`~.goose.EngineBuilder`. Please refer to
+the linked EngineBuilder documentation to learn how to use it.
+
+A recent addition is the :class:`~.goose.MCMCSpec`, which can be passed to the
+``inference`` argument of a :class:`.model.Var` upon initialization to tell the variable
+directly how it should be sampled. You can then use the method
+:meth:`~.goose.LieselMCMC.get_engine_builder` of :meth:`~.goose.LieselMCMC` to
+conveniently initialize your :class:`~.goose.EngineBuilder`.
 
 .. autosummary::
     :toctree: generated
@@ -45,6 +74,16 @@ API Reference
 
 .. rubric:: MCMC Kernels
 
+
+Goose makes it easy for you to combine different MCMC kernels for different blocks of
+model parameters. You can also define your own kernel by implementing
+the :class:`.Kernel` protocol.
+
+To draw samples from your posterior, you will want to call
+:meth:`~.goose.Engine.sample_all_epochs`. Once sampling is done, you can obtain the results
+with :meth:`~.goose.Engine.get_results`, which will return a :class:`~.goose.SamplingResults`
+instance.
+
 .. autosummary::
     :toctree: generated
     :caption: MCMC Kernels
@@ -58,18 +97,36 @@ API Reference
     ~liesel.goose.MHKernel
     ~liesel.goose.MHProposal
     ~liesel.goose.GibbsKernel
+    ~liesel.goose.Kernel
 
 .. rubric:: Summary & Plots
 
+The central classes for handling your sampling results are:
+
 .. autosummary::
     :toctree: generated
-    :caption: Summary & Plots
+    :caption: MCMC Results & Summary
     :recursive:
     :nosignatures:
 
     ~liesel.goose.SamplingResults
     ~liesel.goose.Summary
     ~liesel.goose.SamplesSummary
+
+You can obtain your posterior samples as a dictionary via
+:meth:`~.goose.SamplingResults.get_posterior_samples`. There is also experimental support
+for turning your samples into an ``arviz.InferenceData`` object via
+:func:`.to_arviz_inference_data`.
+
+Goose also comes with a number of plotting functions that give you quick
+acccess to important diagnostics.
+
+.. autosummary::
+    :toctree: generated
+    :caption: Plots
+    :recursive:
+    :nosignatures:
+
     ~liesel.goose.plot_trace
     ~liesel.goose.plot_cor
     ~liesel.goose.plot_pairs
@@ -78,6 +135,10 @@ API Reference
     ~liesel.goose.plot_param
 
 .. rubric:: Optimization
+
+It can often be beneficial to find good starting values to get your MCMC sampling scheme
+going. Goose provides the function :func:`.optim_flat` for this purpose, which allows you
+to run stochastic gradient descent on a liesel model.
 
 .. autosummary::
     :toctree: generated
@@ -110,6 +171,10 @@ API Reference
     ~liesel.model.GraphBuilder
 
 .. rubric:: Model Interfaces
+
+A natural option for setting up your model is the use of ``liesel.model``.
+However, you are not locked
+in to using :class:`.Model`. Goose currently includes the following interfaces:
 
 .. autosummary::
     :toctree: generated
