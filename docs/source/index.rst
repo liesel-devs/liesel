@@ -17,6 +17,8 @@ Liesel: A Probabilistic Programming Framework
 API Reference
 -------------
 
+.. rubric:: Model Basics
+
 .. autosummary::
     :toctree: generated
     :caption: Model Basics
@@ -25,6 +27,8 @@ API Reference
     ~liesel.model.Model
     ~liesel.model.Var
     ~liesel.model.Dist
+
+.. rubric:: MCMC Setup
 
 .. autosummary::
     :toctree: generated
@@ -37,6 +41,7 @@ API Reference
     ~liesel.goose.Engine
     ~liesel.goose.EpochConfig
 
+.. rubric:: MCMC Kernels
 
 .. autosummary::
     :toctree: generated
@@ -50,6 +55,8 @@ API Reference
     ~liesel.goose.MHKernel
     ~liesel.goose.MHProposal
     ~liesel.goose.GibbsKernel
+
+.. rubric:: Summary & Plots
 
 .. autosummary::
     :toctree: generated
@@ -66,6 +73,8 @@ API Reference
     ~liesel.goose.plot_density
     ~liesel.goose.plot_param
 
+.. rubric:: Optimization
+
 .. autosummary::
     :toctree: generated
     :caption: Optimization
@@ -75,6 +84,8 @@ API Reference
     ~liesel.goose.Stopper
     ~liesel.goose.history_to_df
     ~liesel.goose.OptimResult
+
+.. rubric:: Model (Advanced)
 
 .. autosummary::
     :toctree: generated
@@ -92,6 +103,7 @@ API Reference
     ~liesel.model.InputGroup
     ~liesel.model.GraphBuilder
 
+.. rubric:: Model Interfaces
 
 .. autosummary::
     :toctree: generated
@@ -103,6 +115,7 @@ API Reference
     ~liesel.goose.DataclasslInterface
     ~liesel.goose.NamedTupleInterface
 
+.. rubric:: P-Splines
 
 .. autosummary::
     :toctree: generated
@@ -113,6 +126,8 @@ API Reference
     ~liesel.contrib.splines.equidistant_knots
     ~liesel.contrib.splines.pspline_penalty
     ~liesel.distributions.MultivariateNormalDegenerate
+
+.. rubric:: Experimental API
 
 .. autosummary::
     :toctree: generated
