@@ -19,14 +19,99 @@ API Reference
 
 .. autosummary::
     :toctree: generated
-    :caption: API Reference
+    :caption: Model Basics
     :recursive:
 
-    ~liesel.model
-    ~liesel.goose
-    ~liesel.contrib
-    ~liesel.distributions
-    ~liesel.bijectors
+    ~liesel.model.Model
+    ~liesel.model.Var
+    ~liesel.model.Dist
+
+.. autosummary::
+    :toctree: generated
+    :caption: MCMC Setup
+    :recursive:
+
+    ~liesel.goose.LieselMCMC
+    ~liesel.goose.MCMCSpec
+    ~liesel.goose.EngineBuilder
+    ~liesel.goose.Engine
+    ~liesel.goose.EpochConfig
+
+
+.. autosummary::
+    :toctree: generated
+    :caption: MCMC Kernels
+    :recursive:
+
+    ~liesel.goose.IWLSKernel
+    ~liesel.goose.NUTSKernel
+    ~liesel.goose.HMCKernel
+    ~liesel.goose.RWKernel
+    ~liesel.goose.MHKernel
+    ~liesel.goose.MHProposal
+    ~liesel.goose.GibbsKernel
+
+.. autosummary::
+    :toctree: generated
+    :caption: Summary & Plots
+    :recursive:
+
+    ~liesel.goose.SamplingResults
+    ~liesel.goose.Summary
+    ~liesel.goose.SamplesSummary
+    ~liesel.goose.plot_trace
+    ~liesel.goose.plot_cor
+    ~liesel.goose.plot_pairs
+    ~liesel.goose.plot_scatter
+    ~liesel.goose.plot_density
+    ~liesel.goose.plot_param
+
+.. autosummary::
+    :toctree: generated
+    :caption: Optimization
+    :recursive:
+
+    ~liesel.goose.optim_flat
+    ~liesel.goose.Stopper
+    ~liesel.goose.history_to_df
+    ~liesel.goose.OptimResult
+
+.. autosummary::
+    :toctree: generated
+    :caption: Model (Advanced)
+    :recursive:
+
+    ~liesel.model.Calc
+    ~liesel.model.Node
+    ~liesel.model.Value
+    ~liesel.model.PIT
+    ~liesel.model.TransientCalc
+    ~liesel.model.TransientDist
+    ~liesel.model.TransientIdentity
+    ~liesel.model.TransientNode
+    ~liesel.model.GraphBuilder
+
+
+.. autosummary::
+    :toctree: generated
+    :caption: Model Interfaces
+    :recursive:
+
+    ~liesel.goose.LieselInterface
+    ~liesel.goose.DictInterface
+    ~liesel.goose.DataclasslInterface
+    ~liesel.goose.NamedTupleInterface
+
+
+.. autosummary::
+    :toctree: generated
+    :caption: P-Splines
+    :recursive:
+
+    ~liesel.contrib.splines.basis_matrix
+    ~liesel.contrib.splines.equidistant_knots
+    ~liesel.contrib.splines.pspline_penalty
+    ~liesel.distributions.MultivariateNormalDegenerate
 
 .. autosummary::
     :toctree: generated
