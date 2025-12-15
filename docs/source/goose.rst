@@ -44,7 +44,7 @@ Find good starting values
 -------------------------
 
 It can often be beneficial to find good starting values to get your MCMC sampling scheme
-going. Goose provides the function :func:`.optim` for this purpose, which allows you
+going. Goose provides the function :func:`.optim_flat` for this purpose, which allows you
 to run stochastic gradient descent on a liesel model.
 
 .. autosummary::
@@ -52,7 +52,7 @@ to run stochastic gradient descent on a liesel model.
     :recursive:
     :nosignatures:
 
-    ~liesel.goose.optim.optim
+    ~liesel.goose.optim.optim_flat
     ~liesel.goose.optim.OptimResult
 
 
@@ -107,6 +107,7 @@ The two central classes for handling your sampling results are:
 
     ~liesel.goose.engine.SamplingResults
     ~liesel.goose.summary_m.Summary
+    ~liesel.goose.summary_m.SamplesSummary
 
 You can obtain your posterior samples as a dictionary via
 :meth:`~.goose.SamplingResults.get_posterior_samples`. There is also experimental support
