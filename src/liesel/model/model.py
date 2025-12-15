@@ -1020,11 +1020,12 @@ class Model:
 
             nodes_to_include.add(node)
 
-        copy_of_nodes_to_include = deepcopy(nodes_to_include)
+        nodes, vars_ = self.copy_nodes_and_vars()
+        nodes_and_vars = nodes | vars_
 
-        return Model(
-            list(copy_of_nodes_to_include), to_float32=self._to_float32, copy=False
-        )
+        copy_of_nodes_to_include = [nodes_and_vars[n.name] for n in nodes_to_include]
+
+        return Model(copy_of_nodes_to_include, to_float32=self._to_float32, copy=False)
 
     @property
     def log_lik(self) -> Array:
@@ -1191,9 +1192,9 @@ class Model:
         self,
         shape: Sequence[int],
         seed: jax.Array,
-        posterior_samples: dict[str, Array] | None = None,
+        posterior_samples: dict[str, jax.typing.ArrayLike] | None = None,
         fixed: Sequence[str] = (),
-        newdata: dict[str, Array] | None = None,
+        newdata: dict[str, jax.typing.ArrayLike] | None = None,
         dists: dict[str, Dist] | None = None,
     ) -> dict[str, Array]:
         """
@@ -1236,9 +1237,26 @@ class Model:
         A dictionary of variable and node names and their sampled values. Includes
         only sampled variables.
         """
+
+        posterior_samples = posterior_samples if posterior_samples is not None else {}
+
+        unique_sample_keys = set(list(posterior_samples))
+        unique_newdata_keys = set(list(newdata)) if newdata is not None else set()
+        intersection = unique_sample_keys & unique_newdata_keys
+        if len(intersection) > 0:
+            raise RuntimeError(
+                "The following keys are present in both 'samples' and 'newdata': "
+                f"{list(intersection)} "
+                "Any key should be present in only one of these arguments."
+            )
+
+        if posterior_samples is not None:
+            posterior_samples = jax.tree.map(jnp.asarray, posterior_samples)
+
+        if newdata is not None:
+            newdata = jax.tree.map(jnp.asarray, newdata)
         # Pre-processing
         # ------------------------------------------------------------------------------
-        posterior_samples = posterior_samples if posterior_samples is not None else {}
         state_for_sampling = (
             self.update_state(newdata) if newdata is not None else self.state
         )
@@ -1681,10 +1699,10 @@ class Model:
 
     def predict(
         self,
-        samples: dict[str, Array],
+        samples: dict[str, jax.typing.ArrayLike],
         predict: Sequence[str] | None = None,
-        newdata: dict[str, Array] | None = None,
-    ) -> Position:
+        newdata: dict[str, jax.typing.ArrayLike] | None = None,
+    ) -> dict[str, Array]:
         """
         Returns a dictionary of predictions.
 
@@ -1705,6 +1723,19 @@ class Model:
             set to the given values before evaluating predictions. If ``None`` \
             (default), the current variable values are used.
         """
+        unique_sample_keys = set(list(samples))
+        unique_newdata_keys = set(list(newdata)) if newdata is not None else set()
+        intersection = unique_sample_keys & unique_newdata_keys
+        if len(intersection) > 0:
+            raise RuntimeError(
+                "The following keys are present in both 'samples' and 'newdata': "
+                f"{list(intersection)} "
+                "Any key should be present in only one of these arguments."
+            )
+
+        samples = jax.tree.map(jnp.asarray, samples)
+        if newdata is not None:
+            newdata = jax.tree.map(jnp.asarray, newdata)
         # deduce batching dimensions
         shapes = []
         for name, value in samples.items():
@@ -1739,8 +1770,17 @@ class Model:
             # construct submodel for target nodes
             submodel = self.parental_submodel(*predict_nodes_)
 
-        # update submodel with new data, if any were given
         newdata = newdata if newdata is not None else {}
+
+        # handle keys that are not needed
+        newdata = newdata.copy()
+        for key in list(newdata.keys()):
+            if key not in self.vars or (key in self.nodes):
+                raise KeyError(f"{key} is not part of the model.")
+            if key not in submodel.vars or (key in submodel.nodes):
+                newdata.pop(key, None)
+
+        # update submodel with new data, if any were given
         submodel.state = submodel.update_state(newdata)
 
         # filter samples to include only samples that belong to the submodel
@@ -1748,7 +1788,7 @@ class Model:
         filtered_samples = {k: v for k, v in samples.items() if k in vars_and_nodes}
         if not filtered_samples:
             raise ValueError(
-                "No samples provided for the variables or nodes in the submodel."
+                "No samples provided for the variables or nodes in the submodel. "
                 f"Nodes in submodel: {vars_and_nodes}"
             )
 

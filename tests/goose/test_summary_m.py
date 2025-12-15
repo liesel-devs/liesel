@@ -1,5 +1,8 @@
+from itertools import product
+
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from liesel.__version__ import __version__
 from liesel.goose.engine import SamplingResults
@@ -154,6 +157,10 @@ def test_error_summary(result: SamplingResults):
     summary = Summary(result, selected=["baz"])
     es = summary.error_summary["kernel_00"]
 
+    es_df = summary.error_df()
+    assert "sample_size" in es_df.columns
+    assert "sample_size_total" in es_df.columns
+
     # check error_code correspond
     assert es[1].error_code == 1
     assert es[2].error_code == 2
@@ -173,6 +180,61 @@ def test_error_summary(result: SamplingResults):
     # check that counts are correct - only in the posterior
     assert np.all(es[1].count_per_chain_posterior == np.array([2, 1, 1]))
     assert np.all(es[2].count_per_chain_posterior == np.array([0, 5, 0]))
+
+
+def test_error_summary_thinned(result_thinned: SamplingResults):
+    # add some error codes to the chain
+
+    result = result_thinned
+
+    # epoch 1 - warmup
+    ecs = np.array(
+        result.transition_infos.get_specific_chain(1)
+        ._chunks_list[0]["kernel_00"]
+        .error_code
+    )
+    ecs[0, 0] = 1
+    ecs[:, 3] = 1
+    ecs[2, 3:5] = 2
+    result.transition_infos.get_specific_chain(1)._chunks_list[0][
+        "kernel_00"
+    ].error_code = ecs
+
+    # posterior
+    ecs = np.array(
+        result.transition_infos.get_current_chain()
+        ._chunks_list[0]["kernel_00"]
+        .error_code
+    )
+    ecs[0, 0] = 1
+    ecs[:, 230] = 1
+    ecs[1, 220:225] = 2
+    result.transition_infos.get_current_chain()._chunks_list[0][
+        "kernel_00"
+    ].error_code = ecs
+
+    # create the summary object
+    summary = Summary(result, selected=["baz"])
+    es_df = summary.error_df()
+    assert "sample_size" in es_df.columns
+    assert "sample_size_total" in es_df.columns
+
+    assert es_df.iloc[0]["sample_size"] == 75
+    assert es_df.iloc[1]["sample_size"] == 375
+    assert es_df.iloc[2]["sample_size"] == 75
+    assert es_df.iloc[3]["sample_size"] == 375
+
+    assert es_df.iloc[0]["sample_size_total"] == 2 * 75
+    assert es_df.iloc[1]["sample_size_total"] == 2 * 375
+    assert es_df.iloc[2]["sample_size_total"] == 2 * 75
+    assert es_df.iloc[3]["sample_size_total"] == 2 * 375
+
+    for i in range(es_df.shape[0]):
+        in_df = es_df.iloc[i]["relative"]
+        manual1 = float(es_df.iloc[i]["count"] / es_df.iloc[i]["sample_size_total"])
+        manual2 = float(es_df.iloc[i]["count"] / es_df.iloc[i]["sample_size"])
+        assert in_df == pytest.approx(manual1)
+        assert in_df != pytest.approx(manual2)
 
 
 def test_single_chain_repr_fs_return(single_chain_result: SamplingResults):
@@ -228,6 +290,57 @@ def test_liesel_version(result: SamplingResults):
     summary = Summary(result, per_chain=True)
 
     assert summary.liesel_version == __version__
+
+
+@pytest.mark.parametrize(
+    ("per_chain", "which_"),
+    list(
+        product(
+            (True, False),
+            [
+                ("mean", "sd"),
+                ("hdi",),
+                ("mean", "ess_bulk"),
+                ("mean", "mcse_mean"),
+                ("mean", "mcse_sd"),
+                ("quantiles", "var"),
+                ("mean", "sd", "var", "quantiles"),
+                ("mean", "ess_bulk", "ess_tail"),
+                ("mean", "ess_bulk", "ess_tail", "rhat"),
+            ],
+        )
+    ),
+)
+def test_deselect_quantities(result: SamplingResults, per_chain, which_):
+    summary = Summary(result, which=which_, per_chain=per_chain)
+    df = summary.to_dataframe()
+    for key in which_:
+        if key == "rhat" and per_chain:
+            continue
+
+        if key not in ["quantiles", "hdi"]:
+            assert key in df.columns
+
+        if key == "hdi":
+            assert "hdi_low" in df.columns
+            assert "hdi_high" in df.columns
+        if key == "quantiles":
+            assert "q_0.05" in df.columns
+            assert "q_0.5" in df.columns
+            assert "q_0.95" in df.columns
+
+    n_quantity_columns = len(which_)
+    if "quantiles" in which_:
+        n_quantity_columns += len(summary.config["quantiles"]) - 1
+    if "hdi" in which_:
+        n_quantity_columns += 1
+    if per_chain:
+        n_quantity_columns += 1
+
+    if per_chain and "rhat" in which_:
+        n_quantity_columns -= 1
+
+    assert (len(df.columns) - n_quantity_columns) == 4
 
 
 class TestSamplesSummary:
@@ -379,3 +492,54 @@ class TestSamplesSummary:
         samples = result.get_posterior_samples()
         summary = SamplesSummary.from_array(samples["bar"], name="test")
         assert summary.to_dataframe().shape == (105, 16)
+
+    @pytest.mark.parametrize(
+        ("per_chain", "which_"),
+        list(
+            product(
+                (True, False),
+                [
+                    ("mean", "sd"),
+                    ("hdi",),
+                    ("mean", "ess_bulk"),
+                    ("mean", "mcse_mean"),
+                    ("mean", "mcse_sd"),
+                    ("quantiles", "var"),
+                    ("mean", "sd", "var", "quantiles"),
+                    ("mean", "ess_bulk", "ess_tail"),
+                    ("mean", "ess_bulk", "ess_tail", "rhat"),
+                ],
+            )
+        ),
+    )
+    def test_deselect_quantities(self, result: SamplingResults, per_chain, which_):
+        samples = result.get_posterior_samples()
+        summary = SamplesSummary(samples, which=which_, per_chain=per_chain)
+        df = summary.to_dataframe()
+        for key in which_:
+            if key == "rhat" and per_chain:
+                continue
+
+            if key not in ["quantiles", "hdi"]:
+                assert key in df.columns
+
+            if key == "hdi":
+                assert "hdi_low" in df.columns
+                assert "hdi_high" in df.columns
+            if key == "quantiles":
+                assert "q_0.05" in df.columns
+                assert "q_0.5" in df.columns
+                assert "q_0.95" in df.columns
+
+        n_quantity_columns = len(which_)
+        if "quantiles" in which_:
+            n_quantity_columns += len(summary.config["quantiles"]) - 1
+        if "hdi" in which_:
+            n_quantity_columns += 1
+        if per_chain:
+            n_quantity_columns += 1
+
+        if per_chain and "rhat" in which_:
+            n_quantity_columns -= 1
+
+        assert (len(df.columns) - n_quantity_columns) == 3
