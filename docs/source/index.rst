@@ -17,18 +17,6 @@ API Reference
 
 This is an overview of the central classes in Liesel.
 
-We usually import ``liesel.model`` and ``liesel.goose`` as follows::
-
-    import liesel.model as lsl
-    import liesel.goose as gs
-
-Additionnaly, it often makes sense to import ``jax.numpy`` and tensorflow probability::
-
-    import jax.numpy as jnp
-    import tensorflow_probability.substrates.jax.distributions as tfd
-    import tensorflow_probability.substrates.jax.bijectors as tfb
-
-
 .. rubric:: Model Basics
 
 The fundamental building blocks of your model graph are given by just three classes.
