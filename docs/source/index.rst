@@ -47,7 +47,7 @@ the linked EngineBuilder documentation to learn how to use it.
 A recent addition is the :class:`~.goose.MCMCSpec`, which can be passed to the
 ``inference`` argument of a :class:`.model.Var` upon initialization to tell the variable
 directly how it should be sampled. You can then use the method
-:meth:`~.goose.LieselMCMC.get_engine_builder` of :meth:`~.goose.LieselMCMC` to
+:meth:`~.goose.LieselMCMC.get_engine_builder` of :class:`~.goose.LieselMCMC` to
 conveniently initialize your :class:`~.goose.EngineBuilder`.
 
 .. autosummary::
