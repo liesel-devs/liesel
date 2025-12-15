@@ -42,8 +42,8 @@ Liesel’s birth city
   repo](https://github.com/liesel-devs/liesel)
 - :girl::swan::book: [Liesel & Goose API
   docs](https://docs.liesel-project.org)
-- :registered::computer: [RLiesel
-  repo](https://github.com/liesel-devs/rliesel)
+- :computer: [Liesel-GAM
+  repo](https://github.com/liesel-devs/liesel_gam)
 - :book:
   [Tutorials](https://docs.liesel-project.org/en/latest/tutorials_overview.html)
 
