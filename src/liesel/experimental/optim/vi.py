@@ -197,12 +197,6 @@ class VDist:
 
         return params
 
-    @property
-    def to_float32(self) -> bool:
-        """Whether the values of the distribution's nodes will be converted\
-        from float64 to float32."""
-        return self._to_float32
-
     def _validate(self, dist: Dist): ...
 
     def _reparameterize(self, dist: Dist): ...
@@ -324,7 +318,7 @@ class VDist:
     def build(self) -> Self:
         if self.var is None:
             raise ValueError("The .var attribute must be set, but is currently None.")
-        self.q = Model([self.var], to_float32=self.to_float32)
+        self.q = Model([self.var], to_float32=self.p.to_float32)
         return self
 
     def sample_p(
@@ -365,7 +359,6 @@ class CompositeVDist:
     def __init__(self, *vi_dists: VDist):
         self.vi_dists = vi_dists
         self.q: Model | None = None
-        self._to_float32 = vi_dists[0].to_float32
 
     @property
     def parameters(self) -> list[str]:
@@ -377,11 +370,18 @@ class CompositeVDist:
     def p(self) -> Model:
         return self.vi_dists[0].p
 
-    @property
-    def to_float32(self) -> bool:
-        """Whether the values of the distributions' nodes will be converted\
-        from float64 to float32."""
-        return self._to_float32
+    def _to_float32(self) -> bool:
+        """
+        Whether the values of the distributions' nodes will be converted from float64 to
+        float32.
+        """
+        f32 = [dist.p.to_float32 for dist in self.vi_dists]
+        if len(set(f32)) > 1:
+            raise ValueError(
+                "Some variational distributions seem to have to_float32=True, "
+                "others have to_float32=False. The setting must be consistent."
+            )
+        return f32[0]
 
     def build(self) -> Self:
         vars_ = []
@@ -389,7 +389,7 @@ class CompositeVDist:
             if dist.var is None:
                 raise ValueError(f".var attribute of {dist} must be set, but is None.")
             vars_.append(dist.var)
-        q = Model(vars_, to_float32=self.to_float32)
+        q = Model(vars_, to_float32=self._to_float32())
         self.q = q
         return self
 
