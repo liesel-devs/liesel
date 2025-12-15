@@ -8,7 +8,7 @@ a focus on semi-parametric regression. It includes:
   and MCMC kernels such as the No U-Turn Sampler (NUTS), the Iteratively Weighted Least
   Squares (IWLS) sampler, or different Gibbs samplers. Goose also takes care of the
   MCMC bookkeeping and the chain post-processing.
-- [**RLiesel**][2], an R interface for Liesel which assists the user with the
+- [**Liesel-GAM**][2], a modeling library built on Liesel which assists the user with the
   configuration of semi-parametric regression models such as Generalized Additive
   Models for Location, Scale and Shape (GAMLSS) with different response distributions,
   spline-based smooth terms and shrinkage priors.
@@ -16,13 +16,12 @@ a focus on semi-parametric regression. It includes:
 The name "Liesel" is an homage to the [Gänseliesel fountain][3], landmark of Liesel's
 birth city [Göttingen][4].
 
-
 # Installation
 
 You can install Liesel via pip:
 
 ```
-$ pip install liesel
+pip install liesel
 ```
 
 If you want to work with the latest development version of Liesel or use PyGraphviz for
@@ -53,11 +52,9 @@ and `liesel.goose` in [Model Building (liesel.model)](model_overview) and
 To start working with Liesel, our tutorials might come in handy, starting with
 a tutorial on [linear regression](tutorials/md/01-lin-reg.md#linear-regression). An overview of our tutorials can be found here: [Liesel tutorials](tutorials_overview.rst).
 
-
 # Further Reading
 
 For a scientific discussion of the software, see our [paper][6] on arXiv.
-
 
 # Acknowledgements
 
@@ -71,7 +68,7 @@ through grant 443179956.
 <img src="https://raw.githubusercontent.com/liesel-devs/liesel/main/docs/source/_static/funded-by-dfg.svg" alt="Funded by DFG">
 
 [1]: https://github.com/liesel-devs/liesel
-[2]: https://github.com/liesel-devs/rliesel
+[2]: https://github.com/liesel-devs/liesel_gam
 [3]: https://en.wikipedia.org/wiki/G%C3%A4nseliesel
 [4]: https://en.wikipedia.org/wiki/G%C3%B6ttingen
 [5]: https://github.com/liesel-devs/liesel#installation

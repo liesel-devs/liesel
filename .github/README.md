@@ -23,11 +23,12 @@ semi-parametric regression. It includes:
   (NUTS), the Iteratively Weighted Least Squares (IWLS) sampler, or
   different Gibbs samplers. Goose also takes care of the MCMC
   bookkeeping and the chain post-processing.
-- [**RLiesel**](https://github.com/liesel-devs/rliesel), an R interface
-  for Liesel which assists the user with the configuration of
-  semi-parametric regression models such as Generalized Additive Models
-  for Location, Scale and Shape (GAMLSS) with different response
-  distributions, spline-based smooth terms and shrinkage priors.
+- [**Liesel-GAM**](https://github.com/liesel-devs/liesel_gam), a
+  modeling library built on Liesel which assists the user with the
+  configuration of semi-parametric regression models such as Generalized
+  Additive Models for Location, Scale and Shape (GAMLSS) with different
+  response distributions, spline-based smooth terms and shrinkage
+  priors.
 
 The name “Liesel” is an homage to the [Gänseliesel
 fountain](https://en.wikipedia.org/wiki/G%C3%A4nseliesel), landmark of
@@ -57,7 +58,7 @@ import jax.numpy as jnp
 import tensorflow_probability.substrates.jax.distributions as tfd
 import liesel.model as lsl
 
-loc = lsl.Var.new_param(0.0, name="loc")
+loc = lsl.Var.new_param(0.0, name="loc", inference=gs.MCMCSpec(gs.NUTSKernel))
 scale = lsl.Var.new_param(1.0, name="scale")
 
 y = lsl.Var.new_obs(
@@ -95,16 +96,13 @@ we can run the sampler.
 ``` python
 import liesel.goose as gs
 
-builder = gs.EngineBuilder(seed=42, num_chains=4)
-
-builder.add_kernel(gs.NUTSKernel(["loc"]))
-builder.set_model(gs.LieselInterface(model))
-builder.set_initial_values(model.state)
+builder = gs.LieselMCMC(model).get_engine_builder(seed=42, num_chains=4)
 
  # we disable the progress bar for a nicer display here in the readme
 builder.show_progress = False
 
-builder.set_duration(warmup_duration=1000, posterior_duration=1000)
+builder.add_adaptation(1000)
+builder.add_posterior(1000)
 
 engine = builder.build()
 engine.sample_all_epochs()
@@ -199,31 +197,31 @@ loc
 kernel_00
 </td>
 <td>
--0.109
+-0.116
 </td>
 <td>
-0.448
+0.444
 </td>
 <td>
--0.829
+-0.828
 </td>
 <td>
--0.119
+-0.137
 </td>
 <td>
-0.645
+0.634
 </td>
 <td>
 4000
 </td>
 <td>
-1416.594
+1272.391
 </td>
 <td>
-2268.975
+2643.513
 </td>
 <td>
-1.006
+1.002
 </td>
 </tr>
 </tbody>
@@ -246,6 +244,12 @@ kernel_00
 count
 </th>
 <th>
+sample_size
+</th>
+<th>
+sample_size_total
+</th>
+<th>
 relative
 </th>
 </tr>
@@ -261,6 +265,10 @@ error_msg
 </th>
 <th>
 phase
+</th>
+<th>
+</th>
+<th>
 </th>
 <th>
 </th>
@@ -283,10 +291,16 @@ divergent transition
 warmup
 </th>
 <td>
-53
+45
 </td>
 <td>
-0.013
+4000
+</td>
+<td>
+4000
+</td>
+<td>
+0.011
 </td>
 </tr>
 <tr>
@@ -295,6 +309,12 @@ posterior
 </th>
 <td>
 0
+</td>
+<td>
+4000
+</td>
+<td>
+4000
 </td>
 <td>
 0.000
