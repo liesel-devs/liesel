@@ -41,6 +41,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import tensorflow_probability.substrates.jax.distributions as tfd
+import tensorflow_probability.substrates.jax.bijectors as tfb
 ```
 
 We provide overviews of the most important building blocks provided by `liesel.model`
