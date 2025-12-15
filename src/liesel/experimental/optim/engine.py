@@ -294,7 +294,10 @@ class OptimEngine:
     def inner_loop_over_batches(self, j, carry: OptimCarry):
         Bi = carry.batches
 
-        obs_batch = Bi.get_batched_position(self.split.train, batch_index=j)
+        if Bi.n != Bi.batch_size:
+            obs_batch = Bi.get_batched_position(self.split.train, batch_index=j)
+        else:
+            obs_batch = {}
         carry.batch = obs_batch
 
         for opt in self.optimizers:
