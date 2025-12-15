@@ -2126,9 +2126,7 @@ class Var:
         Parameters
         ----------
         samples
-            Dictionary of samples at which to evaluate predictions. All values of the \
-            dictionary are assumed to have two leading dimensions corresponding to \
-            ``(nchains, niteration)``.
+            Dictionary of samples at which to evaluate predictions.
         newdata
             Dictionary of new data at which to evaluate predictions. The keys should \
             correspond to variable or node names in the model whose values should be \

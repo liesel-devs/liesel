@@ -1701,9 +1701,7 @@ class Model:
         Parameters
         ----------
         samples
-            Dictionary of samples at which to evaluate predictions. All values of the \
-            dictionary are assumed to have two leading dimensions corresponding to \
-            ``(nchains, niteration)``.
+            Dictionary of samples at which to evaluate predictions.
         predict
             Sequence of strings, which are the names of nodes or variables. \
             Predictions will be returned only for the nodes or variables inlcuded \
