@@ -1,0 +1,181 @@
+---
+engine: knitr
+---
+
+```{python}
+#| label: setup
+#| include: false
+import liesel.goose as gs
+import pandas as pd
+gs.Summary.__repr__ = gs.Summary._repr_html_
+gs.Summary._repr_markdown_ = gs.Summary._repr_html_
+pd.options.display.float_format = "{:.3f}".format
+pd.options.display.html.border = 0
+```
+
+# Linear Regression
+In this Tutorial we will go into Gibbs sampling with liesel.
+
+## Data and imports
+
+```{python}
+# | label: imports
+import jax
+import jax.numpy as jnp
+import numpy as np
+
+# We use distributions and bijectors from tensorflow probability
+import tensorflow_probability.substrates.jax.distributions as tfd
+import tensorflow_probability.substrates.jax.bijectors as tfb
+
+import liesel.goose as gs
+import liesel.model as lsl
+
+import matplotlib.pyplot as plt
+```
+
+This tutorial is a continouation of the Linear regression Tutorial (link), so we will use the same model and data assumed there.
+The model assumed was ......
+
+```{python}
+# | label: generate-data
+
+rng = np.random.default_rng(42)
+
+# sample size and true parameters
+n = 500
+true_beta = np.array([1.0, 2.0])
+true_sigma = 1.0
+
+# data-generating process
+x0 = rng.uniform(size=n)
+X_mat = np.column_stack([np.ones(n), x0])
+eps = rng.normal(scale=true_sigma, size=n)
+y_vec = X_mat @ true_beta + eps
+
+# plot the simulated data
+plt.scatter(x0, y_vec)
+plt.title("Simulated data from the linear regression model")
+plt.xlabel("Covariate x")
+plt.ylabel("Response y")
+plt.show()
+```
+ 
+ 
+ Create the betas
+```{python}
+#| label: beta-distribution
+beta_prior = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
+
+beta = lsl.Var.new_param(
+    value=jnp.array([0.0, 0.0]), distribution=beta_prior, name="beta"
+)
+```
+
+Creat ethe standard deviation 
+
+We define the standard deviation using the weakly informative prior
+$\sigma^2 \sim \text{InverseGamma}(a, b)$ with $a = b = 0.01$.
+
+```{python}
+# | label: standard-deviation-node
+sigma_sq_prior = lsl.Dist(tfd.InverseGamma, concentration=0.01, scale=0.01)
+sigma_sq = lsl.Var.new_param(value=1.0, distribution=sigma_sq_prior, name="sigma_sq")
+sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma")
+```
+
+Build X 
+```{python}
+#| label: calculator-setup
+X = lsl.Var.new_obs(X_mat, name="X")
+mu = lsl.Var.new_calc(jnp.dot, X, beta, name="mu")
+```
+
+Build response 
+
+$y_i \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \;\sigma^2)$,
+
+
+```{python}
+#| label: response-var
+y_dist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
+y = lsl.Var.new_obs(y_vec, distribution=y_dist, name="y")
+```
+
+Take a look at the model 
+```{python}
+#| label: model-init
+model = lsl.Model([y])
+lsl.plot_vars(model)
+```
+
+
+### MCMC Inference with sigma 
+
+So far, we have not sampled our variance parameter `sigma_sq`; we simply fixed it to
+the true value of one.
+Now we also want to use a NUTS sampler for `sigma_sq`. Since the variance is restrictive
+to the positive domain and NUTS works best for parameters on the whole real line, we
+now log-transform `sigma_sq` using the {meth}`.Var.transform()` method. This method
+takes a tensorflow bijector instance ([(`tfb.bijectors`)](https://www.tensorflow.org/probability/api_docs/python/tfp/substrates/jax/bijectors/Bijector))
+and automatically conducts an appropriate transformation of the transformed
+parameter's distribution according to the change of variables theorem.
+Tensorflow bijectors are always named after the *forward* transformation, so we need
+to use the `tfb.Exp()` bijector.
+More on that in the [Parameter transformations tutorial](01a-transform.md#parameter-transformation)
+and {meth}`.Var.transform()`.
+
+```{python}
+#| label: transform-sigma
+nodes_, vars_ = model.pop_nodes_and_vars() #this allows us to manipulate the model
+log_sigma = sigma_sq.transform(tfb.Exp())
+model2 = lsl.Model([y]) #create new model
+```
+
+Because we don't just want samples of our transformed paramter, we also
+tell the engine builder to save samples of `sigma_sq`.
+
+```{python}
+# | label: engine-setup-with-transformed-parameter
+builder = gs.LieselMCMC(model2).get_engine_builder(seed=1338, num_chains=4)
+
+builder.add_kernel(gs.NUTSKernel(["beta"]))
+builder.add_kernel(gs.NUTSKernel(["sigma_sq_transformed"]))
+
+builder.set_duration(warmup_duration=1000, posterior_duration=1000)
+builder.positions_included = ["sigma_sq"]
+
+engine = builder.build()
+engine.sample_all_epochs()
+```
+
+Note that it would also be possible to
+sample both paramters using the same {class}`~.goose.NUTSKernel` Kernel.
+Goose provides a couple of convenient numerical and graphical summary tools.
+The {class}`~.goose~.goose.Summary` class computes several summary statistics
+that can be either accessed programmatically or displayed as a summary table.
+
+```{python results="asis"}
+#| label: results-fo-sampling-with-gibbs-sampler
+results = engine.get_results()
+summary = gs.Summary(results)
+summary
+```
+
+We can plot the trace plots of the chains with {func}`~.goose.plot_trace()`.
+
+```{python}
+#| label: trace-plot
+g = gs.plot_trace(results)
+```
+
+We could also take a look at a kernel density estimator
+with {func}`~.goose.plot_density()` and the estimated
+autocorrelation with {func}`~.goose.plot_cor()`.
+Alternatively, we can output all three diagnostic plots together
+with {func}`~.goose.plot_param()`. The following plot shows the parameter $\beta_0$.
+
+```{python}
+#| label: parameter-summary-plot
+gs.plot_param(results, param="beta", param_index=0)
+```
