@@ -29,7 +29,7 @@ from .summary_viz import (
     plot_scatter,
     plot_trace,
 )
-from .types import ModelInterface, Position
+from .types import Kernel, ModelInterface, Position
 from .warmup import stan_epochs
 
 __all__ = [
@@ -47,6 +47,7 @@ __all__ = [
     "GibbsKernel",
     "HMCKernel",
     "IWLSKernel",
+    "Kernel",
     "MHKernel",
     "MHProposal",
     "ModelInterface",

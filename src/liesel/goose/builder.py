@@ -57,12 +57,26 @@ class EngineBuilder:
     """
     The :class:`.EngineBuilder` is used to construct an MCMC Engine.
 
-    .. rubric:: Workflow
+    .. rubric:: Liesel Workflow
+
+    The Liesel workflow usually looks something like this:
+
+    #. You intialize your :class:`~liesel.model.nodes.Var` objects with
+        :class:`~liesel.goose.MCMCSpec` that specify how each variable should be
+        sampled.
+    #. You initilize an EngineBuilder using the method
+        :meth:`~.goose.LieselMCMC.get_engine_builder` of :meth:`~.goose.LieselMCMC`.
+    #. Set the desired number of warmup and posterior samples with
+        :meth:`.add_burnin`, :meth:`.add_adaptation`, and :meth:`.add_posterior`.
+    #. Build an :class:`~.goose.Engine` with :meth:`.build`.
+
+    .. rubric:: General Workflow
 
     The general workflow usually looks something like this:
 
     #. Create a builder with :class:`.EngineBuilder`.
-    #. Set the desired number of warmup and posterior samples :meth:`.set_duration`.
+    #. Set the desired number of warmup and posterior samples with
+        :meth:`.add_burnin`, :meth:`.add_adaptation`, and :meth:`.add_posterior`.
     #. Set the model interface with :meth:`.set_model`.
     #. Set the initial values with :meth:`.set_initial_values`.
     #. Add MCMC kernels with :meth:`.add_kernel`.
@@ -99,6 +113,35 @@ class EngineBuilder:
 
     Examples
     --------
+
+    .. rubric:: Liesel Workflow
+
+    For this example, we import ``tensorflow_probability`` as follows:
+
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+
+    First, we set up a minimal model:
+
+    >>> mu = lsl.Var.new_param(0.0, name="mu", inference=gs.MCMCSpec(gs.NUTSKernel))
+    >>> dist = lsl.Dist(tfd.Normal, loc=mu, scale=1.0)
+    >>> y = lsl.Var.new_obs(jnp.array([1.0, 2.0, 3.0]), dist, name="y")
+    >>> model = lsl.Model([y])
+
+    Now we initialize the EngineBuilder and set the desired number of warmup and
+    posterior samples:
+
+    >>> builder = gs.LieselMCMC(model).get_engine_builder(seed=1, num_chains=4)
+    >>> builder.add_adaptation(1000)
+    >>> builder.add_posterior(1000)
+
+    Finally, we build the engine:
+
+    >>> engine = builder.build()
+
+    From here, you can continue with :meth:`~.goose.Engine.sample_all_epochs` to draw
+    samples from your posterior distribution.
+
+    .. rubric:: General Workflow
 
     For this example, we import ``tensorflow_probability`` as follows:
 
