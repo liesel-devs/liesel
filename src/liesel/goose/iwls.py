@@ -58,9 +58,41 @@ class IWLSKernel(
     ModelMixin, TransitionMixin[IWLSKernelState, IWLSTransitionInfo], ReprMixin
 ):
     """
-    An IWLS kernel with dual averaging and an (optional) user-defined function
-    for computing the Cholesky decomposition of the Fisher information matrix,
-    implementing the :class:`.liesel.goose.types.Kernel` protocol.
+    An IWLS kernel with dual averaging and an (optional) user-defined function for
+    computing the Cholesky decomposition of the Fisher information matrix, implementing
+    the :class:`.liesel.goose.types.Kernel` protocol.
+
+    Parameters
+    ----------
+    position_keys
+        Sequence of position keys (variable names) handled by this kernel.
+    chol_info_fn
+        A custom function that takes a model state and returns the Cholesky
+        decomposition of the information matrix to produce the IWLS proposal. By
+        default, this will be the Cholesky decomposition of the observed negative
+        hessian at the current values, i.e. the current observed information.
+    initial_step_size
+        Value at which to start step size tuning.
+    da_tune_step_step_size
+        Whether to tune the step size suing dual averaging.
+    da_target_accept
+        Target acceptance probability for dual averaging algorithm.
+    da_gamma
+        The adaptation regularization scale.
+    da_kappa
+        The adaptation relaxation exponent.
+    da_t0
+        The adaptation iteration offset.
+    identifier
+        An string acting as a unique identifier for this kernel.
+    fallback_chol_info
+        What do do if the Cholesky decomposition of the observed information matrix
+        fails. If ``"identity"``, uses an identity matrix as the Cholesky factor. If
+        ``"chol_of_modified_info"``, performs an eigendecomposition of the negative
+        Hessian and clips the eigenvalues to ``1e-5``. This can be interpreted as
+        replacing the observed negative Hessian with a very similar positive definite
+        matrix. This is slow, because it performs an eigendecomposition and two cholesky
+        factorizations. If ``None``, does nothing.
     """
 
     error_book: ClassVar[dict[int, str]] = {
