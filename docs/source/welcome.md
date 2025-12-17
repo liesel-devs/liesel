@@ -44,10 +44,6 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 import tensorflow_probability.substrates.jax.bijectors as tfb
 ```
 
-We provide overviews of the most important building blocks provided by `liesel.model`
-and `liesel.goose` in [Model Building (liesel.model)](model_overview) and
-[MCMC Sampling (liesel.goose)](goose_overview), respectively.
-
 # Tutorials
 
 To start working with Liesel, our tutorials might come in handy, starting with
