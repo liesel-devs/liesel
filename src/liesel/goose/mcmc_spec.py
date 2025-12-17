@@ -263,6 +263,9 @@ class MCMCSpec:
     jitter_dist: tfd.Distribution | None = None
     jitter_method: Literal["additive", "multiplicative", "replacement"] = "additive"
 
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.kernel}, {self.kernel_group=})"
+
     def apply_jitter(self, seed: KeyArray, value: Array) -> Array:
         """
         Apply random jitter to a given value using the specified jitter distribution.
