@@ -13,6 +13,7 @@ location-scale models:
 
    tutorials/md/01a-lin-reg
    tutorials/md/01b-model
+   tutorials/md/01d-gibbs-sampling
    tutorials/md/01c-transform
    tutorials/md/02-ls-reg
 
