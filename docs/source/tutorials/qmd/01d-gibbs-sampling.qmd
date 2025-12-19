@@ -72,7 +72,7 @@ sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma")
 X = lsl.Var.new_obs(X_mat, name="X")
 mu = lsl.Var.new_calc(jnp.dot, X, beta, name="mu")
 
-# Build response 
+# Build response
 y_dist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
 y = lsl.Var.new_obs(y_vec, distribution=y_dist, name="y")
 
