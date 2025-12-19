@@ -225,7 +225,7 @@ the corresponding node, the log-probability of the response node, and the
 log-probability of the model change as well.
 
 ```{python}
-# | label: log-prob-updating-demo
+#| label: log-prob-updating-demo
 print(f"Old value of sigma_sq: {sigma_sq.value}")
 print(f"Old log-prob of sigma_sq: {sigma_sq.log_prob}")
 print(f"Old log-prob of y: {y.log_prob.sum()}\n")
@@ -243,4 +243,3 @@ For most inference algorithms, we need the gradient of the model log-probability
 respect to the parameters. Liesel uses [the JAX library for numerical computing and
 machine learning](https://github.com/google/jax) to compute gradients using automatic
 differentiation.
-

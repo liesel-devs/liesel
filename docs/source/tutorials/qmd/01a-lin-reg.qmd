@@ -15,14 +15,14 @@ pd.options.display.html.border = 0
 
 # Linear Regression
 
-In this tutorial, we build a linear regression model with Liesel and estimate it with Goose. Our goal is to illustrate the most fundamtenal features of the software in a straightforward context.
+In this tutorial, we build a linear regression model with Liesel and estimate it with Goose. Our goal is to illustrate the most fundamental features of the software in a straight-forward context.
 
 # Imports
 
 Before we can generate the data and build the model, we need to load Liesel and a number of other packages. We usually import the model building library `liesel.model` as `lsl`, and the MCMC library `liesel.goose` as `gs`.
 
 ```{python}
-# | label: imports
+#| label: imports
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -42,7 +42,7 @@ import matplotlib.pyplot as plt
 Now we can simulate 500 observations from the linear regression model $y_i \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \;\sigma^2)$ with the true parameters $\boldsymbol{\beta} = (\beta_0, \beta_1)' = (1, 2)'$ and $\sigma = 1$. The relationship between the response $y_i$ and the covariate $x_i$ is visualized in the following scatterplot.
 
 ```{python}
-# | label: generate-data
+#| label: generate-data
 
 rng = np.random.default_rng(42)
 
@@ -96,7 +96,7 @@ Now we can create our regression
 coefficient with the {meth}`.Var.new_param` constructor:
 
 ```{python}
-# | label: beta-parameter
+#| label: beta-parameter
 beta = lsl.Var.new_param(
     value=jnp.array([0.0, 0.0]), distribution=beta_prior, name="beta"
 )
@@ -108,7 +108,7 @@ We define the standard deviation using the weakly informative prior
 $\sigma^2 \sim \text{InverseGamma}(a, b)$ with $a = b = 0.01$.
 
 ```{python}
-# | label: standard-deviation-node
+#| label: standard-deviation-node
 sigma_sq_prior = lsl.Dist(tfd.InverseGamma, concentration=0.01, scale=0.01)
 sigma_sq = lsl.Var.new_param(value=1.0, distribution=sigma_sq_prior, name="sigma_sq")
 ```
@@ -120,10 +120,6 @@ initialize the scale using {meth}`.Var.new_calc`, to compute the square root.
 ```{python}
 sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma")
 ```
-
-The variable constructor {meth}`.Var.new_calc` always takes a
-function as its first argument, and the nodes to be used as function inputs as the
-following arguments.
 
 #### Design matrix, fitted values, and response
 
@@ -160,7 +156,7 @@ model = lsl.Model([y])
 ```
 
 The {func}`.plot_vars()` function visualizes the model.
-More on that in the [Model building with Liesel tutorial](01-alt-model.md#model-building-with-liesel)
+More on that in the [Model building with Liesel tutorial](01b-model.md#model-building)
 If the layout of the graph looks messy for you,
 please make sure you have the `pygraphviz` package installed.
 
@@ -184,7 +180,8 @@ Refer to [MCMC Sampling (liesel.goose)](goose_overview) for an overview of
 important Goose functionality.
 
 We start with a very simple sampling scheme, keeping $\sigma^2$ fixed at the true value
-and using a NUTS sampler for $\boldsymbol{\beta}$.
+and using a NUTS sampler for $\boldsymbol{\beta}$. More on sampling $\sigma^2$ can be found in the [Parameter transformations tutorial](01c-transform.md#parameter-transformation) and the
+[Gibbs sampling tutorial](01d-gibbs-sampling.md#gibbs-sampling).
 The kernels are added to a {class}`~.goose.Engine`, which coordinates the sampling,
 including the kernel tuning during the warmup, and the MCMC bookkeeping.
 The engine can be configured step by step with a {class}`.EngineBuilder`. Starting from
@@ -194,7 +191,7 @@ sampling duration. Finally, we can call the {meth}`.EngineBuilder.build` method,
 returns a fully configured MCMC engine.
 
 ```{python}
-# | label: goose-MCMC-engine-setup
+#| label: goose-MCMC-engine-setup
 builder = gs.LieselMCMC(model).get_engine_builder(seed=1337, num_chains=4)
 
 builder.add_kernel(gs.NUTSKernel(["beta"]))
