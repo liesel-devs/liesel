@@ -60,8 +60,8 @@ plt.xlabel("Covariate x")
 plt.ylabel("Response y")
 plt.show()
 ```
- 
- 
+
+
  Create the betas
 ```{python}
 #| label: beta-distribution
@@ -72,7 +72,7 @@ beta = lsl.Var.new_param(
 )
 ```
 
-Creat ethe standard deviation 
+Creat ethe standard deviation
 
 We define the standard deviation using the weakly informative prior
 $\sigma^2 \sim \text{InverseGamma}(a, b)$ with $a = b = 0.01$.
@@ -84,14 +84,14 @@ sigma_sq = lsl.Var.new_param(value=1.0, distribution=sigma_sq_prior, name="sigma
 sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma")
 ```
 
-Build X 
+Build X
 ```{python}
 #| label: calculator-setup
 X = lsl.Var.new_obs(X_mat, name="X")
 mu = lsl.Var.new_calc(jnp.dot, X, beta, name="mu")
 ```
 
-Build response 
+Build response
 
 $y_i \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \;\sigma^2)$,
 
@@ -102,7 +102,7 @@ y_dist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
 y = lsl.Var.new_obs(y_vec, distribution=y_dist, name="y")
 ```
 
-Take a look at the model 
+Take a look at the model
 ```{python}
 #| label: model-init
 model = lsl.Model([y])
@@ -110,7 +110,7 @@ lsl.plot_vars(model)
 ```
 
 
-### MCMC Inference with sigma 
+### MCMC Inference with sigma
 
 So far, we have not sampled our variance parameter `sigma_sq`; we simply fixed it to
 the true value of one.
