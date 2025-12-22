@@ -157,6 +157,10 @@ def PIT(_input: Var | Dist, distribution: Dist | None = None, name: str = "") ->
     """
     A weak variable evaluating a probability integral transform (PIT).
 
+    See Also
+    --------
+    .liesel.distribution.GaussianCopula : A bivariate Gaussian copula distribution.
+
     Examples
     --------
     >>> import liesel.model as lsl

@@ -30,6 +30,10 @@ class GaussianCopula(tfd.TransformedDistribution):
     name
         Python ``str``, name prefixed to ``Ops`` created by this class.
 
+    See Also
+    --------
+    .liesel.model.PIT : A Liesel variable for the probability integral transformation.
+
     Examples
     --------
 
