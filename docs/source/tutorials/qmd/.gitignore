@@ -4,3 +4,5 @@
 /*.rmarkdown
 /*_cache/
 /*_files/
+
+**/*.quarto_ipynb
