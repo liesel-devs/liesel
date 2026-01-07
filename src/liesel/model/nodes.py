@@ -84,26 +84,24 @@ def in_model_getter(fn):
     return wrapped
 
 
-def no_model_method(fn):
+def changes_model_graph(fn):
     @wraps(fn)
     def wrapped(self, *args, **kwargs):
-        if self.model:
+        if self.model and self.model.locked:
             raise RuntimeError(
-                f"{repr(self)} is part of a model, cannot call {fn.__name__}()"
+                f"{repr(self)} is part of a locked model, cannot call {fn.__name__}(). "
+                "To allow for changes to the model, you can set the Model.locked flag "
+                "to False. "
+                "ATTENTION: Note that, from v0.5, the default state for models will "
+                "be Model.locked = False, so do not rely on this error if you are "
+                "using the default."
             )
-        return fn(self, *args, **kwargs)
-
-    return wrapped
-
-
-def no_model_setter(fn):
-    @wraps(fn)
-    def wrapped(self, *args, **kwargs):
+        out = fn(self, *args, **kwargs)
         if self.model:
-            raise RuntimeError(
-                f"{repr(self)} is part of a model, cannot set '{fn.__name__}'"
-            )
-        return fn(self, *args, **kwargs)
+            self.model.outdated = True
+            if not self.model.update_graph_lazily:
+                self.model.update_graph()
+        return out
 
     return wrapped
 
@@ -235,7 +233,7 @@ class Node(ABC):
         self._var = None
         return self
 
-    @no_model_method
+    @changes_model_graph
     def add_inputs(self, *inputs: Any, **kwinputs: Any) -> Node:
         """Adds non-keyword and keyword input nodes to the existing ones."""
         inputs = self.inputs + inputs
@@ -293,7 +291,7 @@ class Node(ABC):
         return self._name
 
     @name.setter
-    @no_model_setter
+    @changes_model_graph
     def name(self, name: str):
         self._name = name
 
@@ -303,7 +301,7 @@ class Node(ABC):
         return self._needs_seed
 
     @needs_seed.setter
-    @no_model_setter
+    @changes_model_graph
     def needs_seed(self, needs_seed: bool):
         self._needs_seed = needs_seed
 
@@ -322,7 +320,7 @@ class Node(ABC):
         """The output nodes."""
         return self._outputs
 
-    @no_model_method
+    @changes_model_graph
     def set_inputs(self, *inputs: Any, **kwinputs: Any) -> Node:
         """Sets the non-keyword and keyword input nodes."""
         self._inputs = tuple(self._to_node(_input) for _input in inputs)
@@ -444,6 +442,7 @@ class Node(ABC):
         kwinputs[key] = self._to_node(value)
         return self.set_inputs(*self.inputs, **kwinputs)
 
+    @changes_model_graph
     def __setitem__(self, key: int | str, value: Node | Var | Any) -> None:
         if isinstance(key, int):
             all_inputs = self.all_input_nodes()
@@ -776,7 +775,7 @@ class Calc(Node):
         return self._function
 
     @function.setter
-    @no_model_setter
+    @changes_model_graph
     def function(self, function: Callable[..., Any]):
         self._function = function
 
@@ -949,7 +948,7 @@ class Dist(Node):
         return self._at
 
     @at.setter
-    @no_model_setter
+    @changes_model_graph
     def at(self, at: Node | None):
         if self.var and at is not self.var.var_value_node:
             raise RuntimeError(
@@ -964,7 +963,7 @@ class Dist(Node):
         return self._distribution
 
     @distribution.setter
-    @no_model_setter
+    @changes_model_graph
     def distribution(self, distribution: Callable[..., Distribution]):
         self._distribution = distribution
 
@@ -986,7 +985,7 @@ class Dist(Node):
         return self._per_obs
 
     @per_obs.setter
-    @no_model_setter
+    @changes_model_graph
     def per_obs(self, per_obs: bool):
         self._per_obs = per_obs
 
@@ -2253,20 +2252,42 @@ class Var:
         return self._dist_node if self.has_dist else None
 
     @dist_node.setter
-    @no_model_setter
+    @changes_model_graph
     def dist_node(self, dist_node: Dist | None):
         if not dist_node:
             dist_node = NoDist()
 
-        if dist_node.model:
-            raise RuntimeError(
-                f"{repr(dist_node)} is part of a model, cannot be set as dist node"
-            )
-
         if self.name and not dist_node.name:
             dist_node.name = f"{self.name}_log_prob"  # type: ignore  # unfrozen
 
-        self._dist_node._unset_var()
+        if self._dist_node.model:
+            auto_update_before = self.dist_node.model.auto_update
+            self.dist_node.model.auto_update = False
+
+            lazy_before = self._dist_node.model.update_graph_lazily
+            self._dist_node.model.update_graph_lazily = True
+            inputs = self._dist_node.inputs
+            kwinputs = self._dist_node.kwinputs
+            inputs = inputs + tuple(kwinputs.values())
+            self._dist_node._unset_var()
+            self._dist_node.set_inputs()
+            self._dist_node.model._nodes = {
+                n.name: n
+                for n in self._dist_node.model._nodes.values()
+                if n is not self._dist_node
+            }
+
+            self._dist_node.at = None
+            for nv in inputs:
+                self._dist_node.model._remove_disconnected_parental_submodel(nv)
+                if isinstance(nv, VarValue):
+                    self._dist_node.model._remove_disconnected_parental_submodel(nv.var)
+
+            self._dist_node.model.update_graph_lazily = lazy_before
+            self.dist_node.model.auto_update = auto_update_before
+        else:
+            self._dist_node._unset_var()
+            self._dist_node.at = None
 
         dist_node._set_var(self)
         dist_node.at = self.var_value_node  # type: ignore  # unfrozen
@@ -2302,7 +2323,7 @@ class Var:
         return self._name
 
     @name.setter
-    @no_model_setter
+    @changes_model_graph
     def name(self, name: str):
         if name and self.value_node.name in ("", f"{self.name}_value"):
             self.value_node.name = f"{name}_value"  # type: ignore  # unfrozen
@@ -2348,7 +2369,7 @@ class Var:
         return self._observed
 
     @observed.setter
-    @no_model_setter
+    @changes_model_graph
     def observed(self, observed: bool):
         self._observed = observed
 
@@ -2378,7 +2399,7 @@ class Var:
         return self._parameter
 
     @parameter.setter
-    @no_model_setter
+    @changes_model_graph
     def parameter(self, parameter: bool):
         self._parameter = parameter
 
@@ -2442,7 +2463,7 @@ class Var:
         return self._value_node
 
     @value_node.setter
-    @no_model_setter
+    @changes_model_graph
     def value_node(self, value_node: Any):
         if isinstance(value_node, Var):
             value_node = Calc(lambda x: x, value_node)
@@ -2451,14 +2472,22 @@ class Var:
             value_node = Value(value_node)
 
         if value_node.model:
-            raise RuntimeError(
-                f"{repr(value_node)} is part of a model, cannot be set as value node"
-            )
+            if value_node.model is not self.model:
+                raise RuntimeError(
+                    f"{repr(value_node)} and {self} must be part of no "
+                    "model, or the same model."
+                )
 
         if self.name and not value_node.name:
             value_node.name = f"{self.name}_value"
 
         self.value_node._unset_var()
+        if self.model:
+            self.model._nodes = {
+                n.name: n
+                for n in self.model._nodes.values()
+                if n is not self.value_node
+            }
 
         value_node._set_var(self)
         self._value_node = value_node
@@ -2519,6 +2548,64 @@ class Var:
                     filtered_nodes = [nd for nd in self_nodes if nd is not None]
                     subgraph = model.node_parental_subgraph(*filtered_nodes)
                     plot_nodes(subgraph, **kwargs)
+
+    def plot(
+        self,
+        show: bool = True,
+        save_path: str | None | IO = None,
+        width: int = 14,
+        height: int = 10,
+        prog: Literal[
+            "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
+        ] = "dot",
+        verbose: bool = False,
+    ) -> None:
+        """
+        Plots the variables of the Liesel sub-model that terminates in this variable.
+
+        Wraps :func:`~.viz.plot_vars`.
+
+        Parameters
+        ----------
+        verbose
+            If ``True``, logs a message if unnamed variables or nodes are temporarily \
+            named for plotting.
+        show
+            Whether to show the plot in a new window.
+        save_path
+            Path to save the plot. If not provided, the plot will not be saved.
+        width
+            Width of the plot in inches.
+        height
+            Height of the plot in inches.
+        prog
+            Layout parameter. Available layouts: circo, dot (the default), fdp, neato, \
+            osage, patchwork, sfdp, twopi.
+        verbose
+            If ``True``, the message that will be logged if unnamed nodes are \
+            automatically named for plotting contains a list of the automatically \
+            assigned names.
+
+        See Also
+        --------
+        .Var.plot_vars : Plots the variables of the Liesel sub-model that terminates in
+            this variable.
+        .Var.plot_nodes : Plots the nodes of the Liesel sub-model that terminates in
+            this variable.
+        .Model.plot_vars : Plots the variables of a Liesel model.
+        .Model.plot_nodes : Plots the nodes of a Liesel model.
+        .viz.plot_vars : Plots the variables of a Liesel model.
+        .viz.plot_nodes : Plots the nodes of a Liesel model.
+        """
+        return self._plot(
+            which="vars",
+            verbose=verbose,
+            show=show,
+            save_path=save_path,
+            width=width,
+            height=height,
+            prog=prog,
+        )
 
     def plot_vars(
         self,
