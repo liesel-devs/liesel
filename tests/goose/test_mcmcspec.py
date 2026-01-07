@@ -652,7 +652,7 @@ class TestLieselMCMC:
         assert position_keys[1][0] == "layer2_loc"
         assert position_keys[0][0] == "layer3"
 
-    @pytest.mark.mcmc
+    # @pytest.mark.mcmc
     def test_run_mcmc(self):
         loc = lsl.Var.new_param(1.0, name="loc", inference=gs.MCMCSpec(gs.NUTSKernel))
         scale = lsl.Var.new_param(

@@ -50,16 +50,22 @@ class LieselMCMC:
     >>> y = lsl.Var.new_obs(jnp.array([1.0, 2.0, 3.0]), dist, name="y")
     >>> model = lsl.Model([y])
 
-    Now we initialize the EngineBuilder and set the desired number of warmup and
-    posterior samples:
+    Now we run MCMC:
+
+    >>> results = gs.LieselMCMC(model).run_mcmc( # doctest: +SKIP
+    ...     seed=1, num_chains=4, adaptation=250, posterior=100 # doctest: +SKIP
+    ... ) # doctest: +SKIP
+
+    The function returns a :class:`.SamplingResults` object.
+
+    .. rubric:: More control
+
+    For additional control, we initialize an :class:`.EngineBuilder` and continue
+    from there.
 
     >>> builder = gs.LieselMCMC(model).get_engine_builder(seed=1, num_chains=4)
     >>> builder.add_adaptation(1000)
     >>> builder.add_posterior(1000)
-
-    Finally, we build the engine:
-
-    >>> engine = builder.build()
     """
 
     model: Model
