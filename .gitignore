@@ -181,3 +181,6 @@ cython_debug/
 # MacOS
 .DS_Store
 /tests/notebooks
+plan.md
+tests/model/test_mutable_model.ipynb
+tests/model/test_replace.ipynb
