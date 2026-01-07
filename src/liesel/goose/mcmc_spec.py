@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any, Literal, ParamSpec, Protocol, assert_neve
 
 import tensorflow_probability.substrates.jax.distributions as tfd
 
+from liesel.goose.engine import SamplingResults
+
 from .builder import EngineBuilder
 from .interface import LieselInterface
 from .types import Array, JitterFunctions, Kernel, KeyArray
@@ -216,7 +218,9 @@ class LieselMCMC:
         num_chains
             Number of MCMC chains.
         apply_jitter
-            Whether to apply jitter to the initial states, by default True.
+            Whether to apply jitter to the initial states, by default True. Note that
+            initial values for a variable will only jittered if the
+            :class:`.MCMCSpec` for this variable was supplied with a ``jitter_dist``.
 
         Returns
         -------
@@ -234,6 +238,81 @@ class LieselMCMC:
             eb.set_jitter_fns(self.get_jitter_functions())
 
         return eb
+
+    def run_mcmc(
+        self,
+        *,
+        seed: int,
+        num_chains: int,
+        adaptation: int,
+        posterior: int,
+        burnin: int = 0,
+        adaptation_thinning: int = 1,
+        burnin_thinning: int = 1,
+        posterior_thinning: int = 1,
+        apply_jitter: bool = True,
+    ) -> SamplingResults:
+        """
+        Shorthand method for quickly running MCMC, if no custom configuration is
+        desired.
+
+        Parameters
+        ----------
+        seed
+            Random seed for reproducibility.
+        num_chains
+            Number of MCMC chains.
+        adaptation, burnin, posterior
+            Number of samples to be drawn in the respective epoch.
+        adaptation_thinning, burnin_thinning, posterior_thinning
+            Thinning to be applied in the respective epoch.
+        apply_jitter
+            Whether to apply jitter to the initial states, by default True. Note that
+            initial values for a variable will only jittered if the
+            :class:`.MCMCSpec` for this variable was supplied with a ``jitter_dist``.
+
+        Warnings
+        ---------
+
+        This method is *only* appropriate, if your MCMC algorithm is fully specified via
+        :class:`.MCMCSpec` objects in the :attr:`.Var.inference` attributes of the
+        variables in your model.
+
+        See Also
+        ---------
+        .get_engine_builder : Method to obtian an :class:`.EngineBuilder` from the
+            LieselMCMC object. The :class:`.EngineBuilder` allows for more detailed
+            custom configuration; for example you can add MCMC kernels via
+            :meth:`.EngineBuilder.add_kernel`.
+
+        Notes
+        ------
+        The method is euqivalent to the following code::
+
+            eb = LieselMCMC(model).get_engine_builder(
+                seed=seed, num_chains=num_chains, apply_jitter=apply_jitter
+            )
+            if adaptation > 0:
+                eb.add_adaptation(adaptation, adaptation_thinning)
+            if burnin > 0:
+                eb.add_burnin(burnin, burnin_thinning)
+            eb.add_posterior(posterior, posterior_thinning)
+            engine = eb.build()
+            engine.sample_all_epochs()
+            return engine.get_results()
+
+        """
+        eb = self.get_engine_builder(
+            seed=seed, num_chains=num_chains, apply_jitter=apply_jitter
+        )
+        if adaptation > 0:
+            eb.add_adaptation(adaptation, adaptation_thinning)
+        if burnin > 0:
+            eb.add_burnin(burnin, burnin_thinning)
+        eb.add_posterior(posterior, posterior_thinning)
+        engine = eb.build()
+        engine.sample_all_epochs()
+        return engine.get_results()
 
 
 @dataclass

@@ -651,3 +651,24 @@ class TestLieselMCMC:
         assert position_keys[2][0] == "h(layer2_scale)"
         assert position_keys[1][0] == "layer2_loc"
         assert position_keys[0][0] == "layer3"
+
+    @pytest.mark.mcmc
+    def test_run_mcmc(self):
+        loc = lsl.Var.new_param(1.0, name="loc", inference=gs.MCMCSpec(gs.NUTSKernel))
+        scale = lsl.Var.new_param(
+            1.0,
+            name="scale",
+            bijector=tfb.Exp(),
+            inference=gs.MCMCSpec(gs.NUTSKernel),
+        )
+        y = lsl.Var.new_param(
+            jnp.linspace(-2, 2, 50),
+            distribution=lsl.Dist(tfd.Normal, loc=loc, scale=scale),
+            name="layer1",
+            inference=gs.MCMCSpec(gs.NUTSKernel),
+        )
+        model = lsl.Model([y])
+        result = gs.LieselMCMC(model).run_mcmc(
+            seed=1, num_chains=4, adaptation=250, posterior=250
+        )
+        assert isinstance(result, gs.SamplingResults)
