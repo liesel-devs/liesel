@@ -509,7 +509,7 @@ class EngineBuilder:
         epochs.append(_EpochConfig(EpochType.FAST_ADAPTATION, term_samples, thinning))
         self.append_epochs(epochs)
 
-    def add_burnin(self, duration: int):
+    def add_burnin(self, duration: int, thinning: int = 1):
         """
         Adds burnin epochs.
 
@@ -560,7 +560,7 @@ class EngineBuilder:
           samples increases, while it remains constant if :meth:`.set_duration` is
           used.
         """
-        epoch = _EpochConfig(EpochType.BURNIN, duration, 1)
+        epoch = _EpochConfig(EpochType.BURNIN, duration, thinning)
         self.append_epochs([epoch])
 
     def add_posterior(self, duration: int, thinning: int = 1):
