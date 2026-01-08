@@ -196,6 +196,18 @@ P-Splines
     ~liesel.contrib.splines.pspline_penalty
     ~liesel.distributions.MultivariateNormalDegenerate
 
+
+Advanced MCMC functionality
+*****************************
+
+.. autosummary::
+    :toctree: generated
+    :caption: MCMC (Advanced)
+
+    ~liesel.goose.da
+    ~liesel.goose.mm
+
+
 Experimental API
 ************************
 

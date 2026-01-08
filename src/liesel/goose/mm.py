@@ -23,7 +23,7 @@ def tune_inv_mm_diag(history: Position) -> Array:
     Parameters
     ----------
     history
-            Holds the history of the position. It is to be understand as in
+            Holds the history of the position. It is to be understood as in
             :meth:`liesel.goose.types.Kernel.tune`.
     """
 
@@ -43,7 +43,7 @@ def tune_inv_mm_full(history: Position) -> Array:
     Parameters
     ----------
     history
-            Holds the history of the position. It is to be understand as in
+            Holds the history of the position. It is to be understood as in
             :meth:`liesel.goose.types.Kernel.tune`.
 
     """
