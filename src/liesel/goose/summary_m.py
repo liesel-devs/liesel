@@ -467,7 +467,10 @@ class Summary:
                     rhat=("rhat", by_rhat),
                 )
             )
-        diagnostics["aggregated_by"] = by
+        if by == "min/max":
+            diagnostics["aggregated_by"] = "min (ess); max (rhat)"
+        else:
+            diagnostics["aggregated_by"] = by
         return diagnostics
 
     def _param_df(self):
@@ -977,5 +980,9 @@ class SamplesSummary:
                     rhat=("rhat", by_rhat),
                 )
             )
-        diagnostics["aggregated_by"] = by
+
+        if by == "min/max":
+            diagnostics["aggregated_by"] = "min (ess); max (rhat)"
+        else:
+            diagnostics["aggregated_by"] = by
         return diagnostics
