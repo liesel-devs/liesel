@@ -60,7 +60,6 @@ conveniently initialize your :class:`~.goose.EngineBuilder`.
     ~liesel.goose.MCMCSpec
     ~liesel.goose.EngineBuilder
     ~liesel.goose.Engine
-    ~liesel.goose.EpochConfig
 
 MCMC Kernels
 *************
@@ -206,6 +205,7 @@ Advanced MCMC functionality
 
     ~liesel.goose.da
     ~liesel.goose.mm
+    ~liesel.goose.EpochConfig
 
 
 Experimental API
