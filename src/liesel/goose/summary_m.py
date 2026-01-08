@@ -404,6 +404,72 @@ class Summary:
 
         return df
 
+    def aggregate_diagnostics(
+        self,
+        by: Literal[
+            "min/max", "mean", "median", "std", "var", "min", "max"
+        ] = "min/max",
+    ) -> pd.DataFrame:
+        """
+        Aggregates effective sample sizes (ESS) and rhat.
+
+        Parameters
+        ----------
+        by
+            How to aggregate. The three current options are:
+
+            - ``"min/max"``: Aggregate ESS by taking the minimum ESS per parameter
+              block, and the rhat by taking the maximum rhat per parameter block. This
+              corresponds to a worst-case summary.
+            - ``"mean"``: Aggregate ESS and rhat by averaging inside parameter blocks.
+            - ``"median"``: Aggregate ESS and rhat by taking the median inside parameter
+              blocks.
+            - ``"std"``: Aggregate ESS and rhat by taking the standard deviation inside
+              parameter blocks.
+            - ``"var"``: Aggregate ESS and rhat by taking the variance inside parameter
+              blocks.
+            - ``"min"``: Aggregate ESS and rhat by taking the minimum inside parameter
+              blocks.
+            - ``"max"``: Aggregate ESS and rhat by taking the maximum inside parameter
+              blocks.
+
+        Notes
+        ------
+        If :attr:`.per_chain` is ``True``, rhat cannot be computed and there is not
+        present in the output dataframe.
+        """
+        df = self.to_dataframe()
+        df.index.name = "parameter"
+
+        if by == "min/max":
+            by_ess = "min"
+            by_rhat = "max"
+        else:
+            by_ess = by
+            by_rhat = by
+
+        if self.per_chain:
+            diagnostics = (
+                df.loc[:, ["chain_index", "ess_bulk", "ess_tail"]]
+                .groupby(["parameter", "chain_index"])
+                .agg(
+                    ess_bulk=("ess_bulk", by_ess),
+                    ess_tail=("ess_tail", by_ess),
+                )
+            )
+        else:
+            diagnostics = (
+                df.loc[:, ["rhat", "ess_bulk", "ess_tail"]]
+                .groupby("parameter")
+                .agg(
+                    ess_bulk=("ess_bulk", by_ess),
+                    ess_tail=("ess_tail", by_ess),
+                    rhat=("rhat", by_rhat),
+                )
+            )
+        diagnostics["aggregated_by"] = by
+        return diagnostics
+
     def _param_df(self):
         df = self.to_dataframe()
 
@@ -847,3 +913,69 @@ class SamplesSummary:
         df = df[cols]
 
         return df
+
+    def aggregate_diagnostics(
+        self,
+        by: Literal[
+            "min/max", "mean", "median", "std", "var", "min", "max"
+        ] = "min/max",
+    ) -> pd.DataFrame:
+        """
+        Aggregates effective sample sizes (ESS) and rhat.
+
+        Parameters
+        ----------
+        by
+            How to aggregate. The three current options are:
+
+            - ``"min/max"``: Aggregate ESS by taking the minimum ESS per parameter
+              block, and the rhat by taking the maximum rhat per parameter block. This
+              corresponds to a worst-case summary.
+            - ``"mean"``: Aggregate ESS and rhat by averaging inside parameter blocks.
+            - ``"median"``: Aggregate ESS and rhat by taking the median inside parameter
+              blocks.
+            - ``"std"``: Aggregate ESS and rhat by taking the standard deviation inside
+              parameter blocks.
+            - ``"var"``: Aggregate ESS and rhat by taking the variance inside parameter
+              blocks.
+            - ``"min"``: Aggregate ESS and rhat by taking the minimum inside parameter
+              blocks.
+            - ``"max"``: Aggregate ESS and rhat by taking the maximum inside parameter
+              blocks.
+
+        Notes
+        ------
+        If :attr:`.per_chain` is ``True``, rhat cannot be computed and there is not
+        present in the output dataframe.
+        """
+        df = self.to_dataframe()
+        df.index.name = "parameter"
+
+        if by == "min/max":
+            by_ess = "min"
+            by_rhat = "max"
+        else:
+            by_ess = by
+            by_rhat = by
+
+        if self.per_chain:
+            diagnostics = (
+                df.loc[:, ["chain_index", "ess_bulk", "ess_tail"]]
+                .groupby(["parameter", "chain_index"])
+                .agg(
+                    ess_bulk=("ess_bulk", by_ess),
+                    ess_tail=("ess_tail", by_ess),
+                )
+            )
+        else:
+            diagnostics = (
+                df.loc[:, ["rhat", "ess_bulk", "ess_tail"]]
+                .groupby("parameter")
+                .agg(
+                    ess_bulk=("ess_bulk", by_ess),
+                    ess_tail=("ess_tail", by_ess),
+                    rhat=("rhat", by_rhat),
+                )
+            )
+        diagnostics["aggregated_by"] = by
+        return diagnostics

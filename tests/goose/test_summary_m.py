@@ -286,6 +286,15 @@ def test_quantity_shape(result_for_quants: SamplingResults):
     assert summary.quantities["hdi"]["baz"].shape == (4, 2)
 
 
+@pytest.mark.parametrize(
+    "by", ("min/max", "mean", "median", "std", "var", "min", "max")
+)
+@pytest.mark.parametrize("per_chain", (True, False))
+def test_aggregate_diagnostics(result_for_quants: SamplingResults, by, per_chain):
+    summary = Summary(result_for_quants, per_chain=per_chain)
+    summary.aggregate_diagnostics(by)
+
+
 def test_liesel_version(result: SamplingResults):
     summary = Summary(result, per_chain=True)
 
@@ -543,3 +552,12 @@ class TestSamplesSummary:
             n_quantity_columns -= 1
 
         assert (len(df.columns) - n_quantity_columns) == 3
+
+    @pytest.mark.parametrize(
+        "by", ("min/max", "mean", "median", "std", "var", "min", "max")
+    )
+    @pytest.mark.parametrize("per_chain", (True, False))
+    def test_aggregate_diagnostics(self, result: SamplingResults, by, per_chain):
+        samples = result.get_posterior_samples()
+        summary = SamplesSummary(samples, per_chain=per_chain)
+        summary.aggregate_diagnostics(by)
