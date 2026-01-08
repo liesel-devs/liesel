@@ -99,8 +99,6 @@ class HMCKernel(
     num_integration_steps
         Number of integration steps used in the leapfrog algorithm. Corresponds to
         ``L`` in the Stan reference manual [#stan]_.
-    da_tune_step_step_size
-        Whether to tune the step size using dual averaging.
     da_target_accept
         Target acceptance probability for dual averaging algorithm.
     da_gamma

@@ -118,8 +118,6 @@ class NUTSKernel(
         The maximum number of times that the length of the trajectory is doubled before
         returning if no U-turn has been obserbed or no divergence has occured.
         See the Stan reference manual [#stan]_ for more details.
-    da_tune_step_step_size
-        Whether to tune the step size using dual averaging.
     da_target_accept
         Target acceptance probability for dual averaging algorithm.
     da_gamma
