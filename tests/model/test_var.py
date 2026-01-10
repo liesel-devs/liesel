@@ -621,6 +621,39 @@ class TestVarPredictions:
         with pytest.raises(KeyError):
             scale.predict(samples, newdata={"w": xnew})
 
+    def test_predict_with_ignored_entries(self) -> None:
+        n = 10
+        x = jax.random.uniform(jax.random.PRNGKey(1), (n,))
+        b = 1.0
+        e = jax.random.normal(jax.random.PRNGKey(2), (n,))
+        y = x * b + e
+
+        xvar = lsl.Var.new_obs(x, name="x")
+        bvar = lsl.Var.new_param(jnp.array([b]), name="b")
+        loc = lsl.Var.new_calc(lambda x, b: x * b, x=xvar, b=bvar, name="loc")
+        scale = lsl.Var.new_param(jnp.array([1.0]), name="scale")
+        scale.transform(tfp.bijectors.Exp())
+        yvar = lsl.Var.new_obs(
+            y, lsl.Dist(tfp.distributions.Normal, loc=loc, scale=scale), name="y"
+        )
+
+        _ = lsl.Model([yvar])
+
+        samples = {
+            "b": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1)),
+            "scale_transformed": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1)),
+            "scale": tfp.distributions.Uniform().sample(
+                (4, 7, 1), jax.random.PRNGKey(6)
+            ),
+            "_model_log_lik": tfp.distributions.Uniform().sample(
+                (4, 7), jax.random.PRNGKey(6)
+            ),
+        }
+
+        pred = loc.predict(samples)
+        assert jnp.allclose(pred, x * samples["b"])
+        assert pred.shape[-1] == x.shape[-1]
+
     def test_predict_sample(self) -> None:
         """
         Actually drawing some real samples.

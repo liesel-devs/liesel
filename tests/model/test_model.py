@@ -452,6 +452,49 @@ class TestPredictions:
         assert pred["mu"].shape == (4, 3, 500)
         assert len(pred) == len(model.vars)
 
+    def test_predict_with_ignored_entries(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+            "_model_log_lik": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+            "mu": tfd.Uniform().sample((4, 3, 500), rnd.PRNGKey(6)),
+        }
+
+        model.predict(samples=samples)
+
+    def test_predict_model_nodes(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+        }
+
+        pred = model.predict(
+            samples=samples,
+            predict=["_model_log_lik", "_model_log_prob", "_model_log_prior"],
+        )
+
+        assert len(pred) == 3
+
+        for name in ["_model_log_lik", "_model_log_prob", "_model_log_prior"]:
+            assert name in pred
+            assert pred[name].shape == (4, 3)
+
+    def test_predict_log_lik_contributions(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+        }
+
+        pred = model.predict(
+            samples=samples,
+            predict=[model.vars["y_var"].dist_node.name],
+        )
+
+        assert len(pred) == 1
+
+        assert model.vars["y_var"].dist_node.name in pred
+        assert pred[model.vars["y_var"].dist_node.name].shape == (4, 3, 500)
+
     def test_predict_with_unused_samples(self, model) -> None:
         samples = {
             "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
