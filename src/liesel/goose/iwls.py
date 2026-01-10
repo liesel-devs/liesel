@@ -74,7 +74,7 @@ class IWLSKernel(
     initial_step_size
         Value at which to start step size tuning.
     da_tune_step_step_size
-        Whether to tune the step size suing dual averaging.
+        Whether to tune the step size using dual averaging.
     da_target_accept
         Target acceptance probability for dual averaging algorithm.
     da_gamma
@@ -93,6 +93,11 @@ class IWLSKernel(
         replacing the observed negative Hessian with a very similar positive definite
         matrix. This is slow, because it performs an eigendecomposition and two cholesky
         factorizations. If ``None``, does nothing.
+
+    Notes
+    -----
+    For more information on step size tuning via dual averaging,
+    see :func:`.da_step` and :class:`.DAKernelState`.
     """
 
     error_book: ClassVar[dict[int, str]] = {
