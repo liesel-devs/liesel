@@ -370,7 +370,7 @@ class MCMCSpec:
         bottom up; i.e. the kernels for sampling parameters closest to the graph's leaf
         nodes/responses come first), which is often a sensible default. After that,
         blocks will be ordered based on the integer provided here. The kernel with the
-        smallest ``order``integer will be used first.
+        smallest ``order`` integer will be used first.
 
 
     Examples
