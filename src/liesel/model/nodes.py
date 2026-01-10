@@ -11,9 +11,10 @@ from collections.abc import Callable, Hashable, Iterable, Sequence
 from functools import wraps
 from itertools import chain
 from types import MappingProxyType
-from typing import IO, TYPE_CHECKING, Any, Literal, NamedTuple, TypeGuard, TypeVar
+from typing import IO, TYPE_CHECKING, Any, Literal, NamedTuple, Self, TypeGuard, TypeVar
 
 import jax
+import jax.numpy as jnp
 import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as jd
 import tensorflow_probability.substrates.numpy.bijectors as nb
@@ -167,10 +168,6 @@ class Node(ABC):
         :class:`~tfp.distributions.Distribution`.
     .Var : A variable in a statistical model, typically with a probability
         distribution.
-    .param :
-        A helper function to initialize a :class:`.Var` as a model parameter.
-    .obs :
-        A helper function to initialize a :class:`.Var` as an observed variable.
 
 
     .. _pytrees: https://jax.readthedocs.io/en/latest/pytrees.html
@@ -855,6 +852,10 @@ class Dist(Node):
         automatically generated upon initialization of a :class:`.Model`.
     _needs_seed
         Whether the node needs a seed / PRNG key.
+    bijectors
+        Optional parameter bijector specification for transforming
+        distribution parameters. See :meth:`.Dist.biject_parameters` for supported
+        formats and behavior.
     **kwinputs
         Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
         will be converted to :class:`.Value` nodes. The values of these inputs will be
@@ -864,10 +865,6 @@ class Dist(Node):
     --------
     .Var : A variable in a statistical model, typically with a probability
         distribution.
-    .param :
-        A helper function to initialize a :class:`.Var` as a model parameter.
-    .obs :
-        A helper function to initialize a :class:`.Var` as an observed variable.
     .MultivariateNormalDegenerate : A custom distribution class that implements
         a degenerate multivariate normal distribution in the ``tensorflow_probability``
         :class:`~tfp.distributions.Distribution` interface.
@@ -922,6 +919,10 @@ class Dist(Node):
         *inputs: Any,
         _name: str = "",
         _needs_seed: bool = False,
+        bijectors: None
+        | Literal["auto"]
+        | dict[str, Bijector | Literal["auto"] | None]
+        | Sequence[Bijector | Literal["auto"] | None] = None,
         **kwinputs: Any,
     ):
         super().__init__(*inputs, **kwinputs, _name=_name, _needs_seed=_needs_seed)
@@ -929,6 +930,10 @@ class Dist(Node):
         self._at: Node | None = None
         self._distribution = distribution
         self._per_obs = True
+
+        # Apply bijectors eagerly if provided
+        if bijectors is not None:
+            self.biject_parameters(bijectors=bijectors)
 
     def all_input_nodes(self) -> tuple[Node, ...]:
         inputs = super().all_input_nodes()
@@ -999,6 +1004,327 @@ class Dist(Node):
         self._value = log_prob
         self._outdated = False
         return self
+
+    def biject_parameters(
+        self,
+        bijectors: Literal["auto"]
+        | dict[str, Bijector | Literal["auto"] | None]
+        | Sequence[Bijector | Literal["auto"] | None] = "auto",
+        inference: Literal["drop"] | None = None,
+    ) -> Self:
+        """
+        Transforms distribution parameters using bijectors with eager evaluation.
+
+        This method applies bijectors to the distribution's parameters immediately.
+        Only strong Var parameters (with parameter=True and not weak) will be
+        transformed. Variable-level bijectors always take precedence over
+        distribution-level bijectors.
+
+        Parameters
+        ----------
+        bijectors
+            Bijector specification. Options: \
+
+            - ``"auto"``: Use default parameter bijectors from the distribution's \
+              parameter_properties(). Parameters without a default bijector \
+              (e.g., Wishart's df parameter) are skipped. \
+            - dict: Map parameter names to bijectors. Use ``"auto"`` for default, \
+              ``None`` to skip, or provide an explicit bijector instance/class. \
+            - Sequence: Bijectors for positional parameters in the order they \
+              appear in the distribution's __init__ signature. \
+        inference
+            Inference information for transformed variables. If ``"drop"``, \
+            inference information is removed from original parameters. If ``None``, \
+            an error will be raised if inference is present for any parameter that \
+            is selected for bijection.
+
+        Returns
+        -------
+        Self
+
+        Notes
+        -----
+        A default bijector's forward is expected to map from unconstrained to
+        constrained space. Consequently, its inverse is expected to map from
+        constrained to unconstrained space.
+
+        For custom TensorFlow Probability distributions, parameter_properties()
+        must return a dictionary with parameter names as keys and
+        ParameterProperties instances as values. The dict order must match the
+        distribution's __init__ signature order.
+
+        See Also
+        --------
+        .Var.biject : Method for transforming individual variables.
+
+        Examples
+        --------
+        >>> scale = lsl.Var.new_param(1.0, name="scale")
+        >>> rate = lsl.Var.new_param(1.0, name="rate")
+
+        Auto-transform all parameters:
+
+        >>> dist = lsl.Dist(tfd.Gamma, concentration=scale, rate=rate, bijectors="auto")
+        >>> scale.weak  # Now weak, transformed
+        True
+
+        Transform only specific parameters:
+
+        >>> scale = lsl.Var.new_param(1.0, name="scale")
+        >>> rate = lsl.Var.new_param(1.0, name="rate")
+        >>> dist = lsl.Dist(
+        ...     tfd.Normal,
+        ...     loc=0.0,
+        ...     scale=scale,
+        ...     bijectors={"scale": "auto", "loc": None},
+        ... )
+        """
+        if inference is not None and inference != "drop":
+            raise ValueError(f"Value {inference=} is not supported.")
+
+        # Validate no mixing of positional and keyword inputs for auto bijectors
+        if bijectors == "auto" and (self.inputs and self.kwinputs):
+            raise ValueError(
+                "Cannot use auto bijectors with mixed positional and keyword inputs. "
+                "Please use either all positional or all keyword arguments for the "
+                "distribution parameters."
+            )
+
+        resolved = self._resolve_bijectors(bijectors)
+
+        for param_name, (param_var, bijector) in resolved.items():
+            if param_var.weak:
+                if bijector == "auto":
+                    logger.debug(f"Parameter '{param_name}' already weak. Skipping.")
+                    continue
+                else:
+                    raise ValueError(
+                        f"Parameter '{param_name}' is weak, but explicit "
+                        f"bijector {bijector} provided."
+                    )
+
+            if param_var.auto_transform:
+                if bijector == "auto":
+                    logger.debug(
+                        f"Parameter '{param_name}' has auto_transform=True. Skipping."
+                    )
+                    continue
+                else:
+                    raise ValueError(
+                        f"Parameter '{param_name}' has auto_transform=True, but "
+                        f"explicit bijector provided. Please resolve the conflict."
+                    )
+
+            if is_bijector_class(bijector):
+                raise TypeError(
+                    f" For parameter {param_name} of {self},  you passed a bijector "
+                    f"class ({bijector}) instead of an instance."
+                    "This is currently not supported by Dist.biject_parameters."
+                )
+
+            param_var.biject(bijector=bijector, inference=inference)
+
+        return self
+
+    def _resolve_bijectors(
+        self,
+        bijectors: Literal["auto"]
+        | dict[str, Bijector | Literal["auto"] | None]
+        | Sequence[Bijector | Literal["auto"] | None],
+    ) -> dict[str, tuple[Var, Bijector | Literal["auto"]]]:
+        """Resolves bijector specs to parameter->(Var, Bijector) mappings."""
+        result: dict[str, tuple[Var, Bijector | Literal["auto"]]] = {}
+
+        # Get default bijectors once - validates parameter_properties()
+        default_bijectors = self.find_default_parameter_bijectors()
+        param_names = list(default_bijectors)
+
+        if self.inputs:
+            if not len(self.inputs) <= len(param_names):
+                raise ValueError(
+                    f"{self.distribution} has the parameters {param_names}, but got "
+                    f"{len(self.inputs)} inputs: {self.inputs}."
+                )
+
+        if self.kwinputs:
+            if not set(self.kwinputs) <= set(param_names):
+                raise ValueError(
+                    f"{self.distribution} has the parameters {param_names}, but got "
+                    f"inputs: {list(self.kwinputs)} with values {self.kwinputs}."
+                )
+
+        # Resolve bijector specification to dict
+        if bijectors == "auto":
+            bijector_dict = default_bijectors
+
+        elif isinstance(bijectors, dict):
+            if self.inputs:
+                raise ValueError(
+                    "When dist inputs are supplied as positional arguments, "
+                    "bijectors have to be supplied positionally, too. Got inputs "
+                    f"{self.inputs} and bijectors {bijectors} for dist {self}."
+                )
+
+            # Validate that all keys are valid parameter names
+            invalid_keys = set(bijectors.keys()) - set(param_names)
+            if invalid_keys:
+                raise ValueError(
+                    f"Invalid parameter name(s) in bijectors dict: {invalid_keys}. "
+                    f"Valid parameter names are: {', '.join(param_names)}."
+                )
+            bijector_dict = {}
+            for param_name, bijector in bijectors.items():
+                if bijector == "auto":
+                    bijector_dict[param_name] = default_bijectors.get(param_name)
+                else:
+                    bijector_dict[param_name] = bijector
+
+        elif isinstance(bijectors, Sequence):
+            if len(bijectors) > len(param_names):
+                raise ValueError(
+                    f"Too many bijectors provided: got {len(bijectors)} bijectors "
+                    f"but distribution has only {len(param_names)} parameters "
+                    f"({', '.join(param_names)})."
+                )
+
+            # now the mapping of bijectors to dist parameters is being resolved
+            bijector_dict = {}
+
+            # this makes sure that positional bijectors refer to the order of
+            # kwinputs given by the user, not the order of kwinputs as expected
+            # by the distribution
+            kwinput_names = list(self.kwinputs) if self.kwinputs else param_names
+
+            for i, bijector in enumerate(bijectors):
+                param_name = kwinput_names[i]
+                if bijector == "auto":
+                    bijector_dict[param_name] = default_bijectors.get(param_name)
+                else:
+                    bijector_dict[param_name] = bijector
+        else:
+            raise TypeError(f"Invalid bijectors type: {type(bijectors)}.")
+
+        for i, input_node in enumerate(self.inputs):
+            param_name = param_names[i]
+            bijector = bijector_dict.get(param_name)
+
+            if bijector is None:
+                continue
+
+            if isinstance(input_node, VarValue):
+                param_var = input_node.var
+                if param_var:
+                    if not param_var.parameter:
+                        logger.warning(
+                            f"{param_var} has parameter=False "
+                            "but a bijector is being applied.",
+                        )
+                    result[param_name] = (param_var, bijector)
+            else:
+                raise ValueError(
+                    f"Got bijector {bijector} for parameter '{param_name}', given by "
+                    f"{input_node}, but only lsl.Var "
+                    "objects can be bijected. You can supply 'None' for this parameter "
+                    "if you do not want to biject, or supply a lsl.Var object."
+                )
+
+        for param_name, input_node in self.kwinputs.items():
+            bijector = bijector_dict.get(param_name)
+
+            if bijector is None:
+                continue
+
+            if isinstance(input_node, VarValue):
+                param_var = input_node.var
+                if param_var:
+                    if not param_var.parameter:
+                        logger.warning(
+                            f"{param_var} has parameter=False "
+                            "but a bijector is being applied.",
+                        )
+                    result[param_name] = (param_var, bijector)
+            else:
+                raise ValueError(
+                    f"Got bijector {bijector} for parameter '{param_name}', given by "
+                    f"{input_node}, but only lsl.Var "
+                    "objects can be bijected. You can supply 'None' for this parameter "
+                    "if you do not want to biject, or supply a lsl.Var object."
+                )
+
+        return result
+
+    @property
+    def _dtype(self):
+        dtypes_input = [jnp.asarray(v.value).dtype for v in self.inputs]
+        dtypes_kwinput = [jnp.asarray(v.value).dtype for v in self.kwinputs.values()]
+        dtypes = dtypes_input + dtypes_kwinput
+        if len(set(dtypes)) > 1:
+            raise TypeError(f"Found more than one dtype in inputs: {dtypes}")
+
+        return dtypes[0]
+
+    def find_default_parameter_bijectors(self) -> dict[str, Bijector | None]:
+        """Extracts default parameter bijectors from the wrapped distribution."""
+        try:
+            param_props = self.init_dist().parameter_properties(dtype=self._dtype)
+        except (AttributeError, TypeError) as e:
+            # raise the same error type
+            raise type(e)(
+                "Error when accessing "
+                f"parameter_properties() method on {self.distribution.__name__}. "
+                "Cannot auto-transform parameters. "
+                "This may indicate an issue with the TFP distribution or version. "
+                "Either use a distribution that supports parameter_properties() or "
+                "manually transform parameters with .transform()."
+            ) from e
+
+        if not isinstance(param_props, dict):
+            raise TypeError(
+                f"Distribution {self.distribution.__name__}'s "
+                "parameter_properties() must return a dictionary, but returned "
+                f"{type(param_props).__name__}. This may indicate an issue with "
+                "a custom distribution implementation."
+            )
+
+        bijectors: dict[str, Bijector | None] = {}
+
+        for param_name, prop in param_props.items():
+            if not hasattr(prop, "default_constraining_bijector_fn"):
+                raise AttributeError(
+                    f"Parameter property for '{param_name}' of "
+                    f"{self.distribution.__name__} does not have "
+                    "'default_constraining_bijector_fn' attribute. This may "
+                    "indicate an issue with the TFP distribution or version. "
+                    "Either use a distribution that supports "
+                    "parameter_properties() or manually transform parameters "
+                    "with .transform()."
+                )
+
+            try:
+                bijector = prop.default_constraining_bijector_fn()  # type: ignore
+            except Exception as e:
+                raise type(e)(
+                    f"Error getting bijector for parameter '{param_name}' of "
+                    f"{self.distribution.__name__}: {e}"
+                ) from e
+
+            if bijector is None:
+                raise ValueError(
+                    f"Expected a bijector or BIJECTOR_NOT_IMPLEMENTED for "
+                    f"parameter '{param_name}' of {self.distribution.__name__}, "
+                    f"but got None. If no default bijector is provided for "
+                    f"this parameter, the return value should be the "
+                    f"BIJECTOR_NOT_IMPLEMENTED method instead."
+                )
+
+            bijector_type_name = type(bijector).__name__
+            # TFP's way of indicating no default bijector exists
+            if bijector_type_name == "BIJECTOR_NOT_IMPLEMENTED":
+                bijectors[param_name] = None
+            else:
+                bijectors[param_name] = bijector
+
+        return bijectors
 
 
 class TransientDist(TransientNode, Dist):
@@ -1115,7 +1441,7 @@ class Var:
             b.dist_node["loc"]
 
         Here, we retrieve the variable ``a`` with the name ``"a"``. But for the
-        indexing, we use the *argument name* ``"loc"`` from the call to ``lsl.Dist`.
+        indexing, we use the *argument name* ``"loc"`` from the call to ``lsl.Dist``.
 
     .. rubric:: Swapping out inputs
 
@@ -1152,6 +1478,13 @@ class Var:
         automatically generated upon initialization of a :class:`.Model`.
     inference
         Additional information that can be used to set up inference algorithms.
+    bijector
+        Bijector for variable transformation. If ``"auto"``, uses the default event \
+        space bijector defined by the variable's distribution. \
+        If ``None``, no transformation takes place. If not ``None``, the variable will \
+        call :meth:`.biject` with this bijector upon initialization. \
+        Any supplied inference information will be passed to the bijected \
+        variable.
 
     See Also
     --------
@@ -1183,6 +1516,7 @@ class Var:
         "info",
         "inference",
         "_auto_transform",
+        "_bijected_var",
         "_dist_node",
         "_groups",
         "_name",
@@ -1199,6 +1533,7 @@ class Var:
         distribution: Dist | None = None,
         name: str = "",
         inference: InferenceTypes = None,
+        bijector: None | Bijector | Literal["auto"] = None,
     ):
         self._name = name
         self._value_node: Node = Value(None)
@@ -1215,6 +1550,7 @@ class Var:
         self.dist_node = distribution  # type: ignore  # unfrozen
 
         self._auto_transform = False
+        self._bijected_var: Var | None = None
         self._groups: dict[str, Group] = {}
         self._observed = False
         self._parameter = False
@@ -1225,6 +1561,10 @@ class Var:
 
         self.inference = inference
 
+        # Apply bijector eagerly if provided
+        if bijector is not None:
+            self.biject(bijector=bijector, inference=inference)
+
     @classmethod
     def new_param(
         cls,
@@ -1232,6 +1572,7 @@ class Var:
         distribution: Dist | None = None,
         name: str = "",
         inference: InferenceTypes = None,
+        bijector: None | Bijector | Literal["auto"] = None,
     ) -> Var:
         """
         Initializes a strong variable that acts as a model parameter.
@@ -1251,6 +1592,13 @@ class Var:
             be automatically generated upon initialization of a :class:`.Model`.
         inference
             Additional information that can be used to set up inference algorithms.
+        bijector
+            Bijector for variable transformation. If ``"auto"``, uses the default \
+            event space bijector defined by the variable's distribution. \
+            If ``None``, no transformation takes place. If not ``None``, the variable \
+            will call :meth:`.biject` with this bijector upon initialization. \
+            Any supplied inference information will be passed to the bijected \
+            variable.
 
         See Also
         --------
@@ -1276,7 +1624,7 @@ class Var:
         Var(name="")
 
         """
-        var = cls(value, distribution, name, inference=inference)
+        var = cls(value, distribution, name, inference=inference, bijector=bijector)
         var.value_node.monitor = True
         var.parameter = True
         return var
@@ -1530,6 +1878,9 @@ class Var:
         TFP's bijector classes; see the `TFP bijectors documentation \
         <https://www.tensorflow.org/probability/api_docs/python/tfp/bijectors>`_.
 
+        - **Stored transformed variable**: After the transformation, you can
+            access the transformed variable via :attr:`.bijected_var`.
+
 
         Parameters
         ----------
@@ -1571,6 +1922,11 @@ class Var:
             not have a default event space bijector. Also, if in the arguments to
             :meth:`.transform` is ``inference=None`` but the variable
             attribute :attr:`.inference` is not ``None``.
+
+        See Also
+        --------
+        .biject : Similar method, but with a slightly different API and returns self \
+            instead of the transformed variable.
 
 
         Notes
@@ -1735,6 +2091,12 @@ class Var:
         tvar.parameter = self.parameter  # type: ignore
         self.parameter = False
 
+        if not self.name:
+            tvar.name = ""
+            tvar.value_node.name = ""
+            if tvar.dist_node is not None:
+                tvar.dist_node.name = ""
+
         if name is not None:
             tvar.name = name
 
@@ -1743,7 +2105,101 @@ class Var:
         else:
             self.inference = None
             tvar.inference = inference
+
+        self.bijected_var = tvar
         return tvar
+
+    def biject(
+        self,
+        bijector: Bijector | Literal["auto"] = "auto",
+        *bijector_args,
+        inference: InferenceTypes | Literal["drop"] = None,
+        name: str | None = None,
+        **bijector_kwargs,
+    ) -> Var:
+        """
+        Transforms the variable using a bijector.
+
+        - **Eager evaluation**: The transformation is applied immediately.
+        - **Stored transformed variable**: Access via :attr:`.bijected_var`.
+
+        This method is similar to :meth:`.transform`, but with key differences:
+
+        - **Returns self**: Returns the original variable (now weakened) for chaining.
+        - **Default "auto"**: Default uses the distribution's event space bijector.
+        - **None means no transformation**: ``bijector=None`` means skip transformation.
+
+        Parameters
+        ----------
+        bijector
+            The bijector for transformation. If ``"auto"``, uses the default event
+            space bijector. If ``None``, no transformation. If a bijector class,
+            instantiated with args/kwargs. If instance, used directly.
+        bijector_args
+            Arguments for bijector init if a class is provided.
+        inference
+            Inference information for the transformed variable.
+        name
+            Name for transformed variable. Default: ``h(<old_name>)``.
+        bijector_kwargs
+            Keyword arguments for bijector init if a class is provided.
+
+        Returns
+        -------
+        The original variable (self), now weak and depending on the transformed
+        variable. Access the transformed variable via :attr:`.bijected_var`.
+
+        See Also
+        --------
+        .transform : Similar method with lazy evaluation and different return.
+        .bijected_var : Property to access the transformed variable.
+        """
+        # If bijector is None, no transformation is applied
+        if bijector is None:
+            return self
+
+        # Validate bijector type
+        if not (
+            bijector == "auto"
+            or isinstance(bijector, jb.Bijector)
+            or is_bijector_class(bijector)
+        ):
+            raise TypeError(
+                f"Argument {bijector=} is of invalid type {type(bijector)}. "
+                f"Expected Bijector, type[Bijector], 'auto', or None."
+            )
+
+        # Delegate to transform(), which handles class vs instance uniformly
+        target_bijector = None if bijector == "auto" else bijector
+        self.transform(
+            target_bijector,
+            *bijector_args,
+            inference=inference,
+            name=name if name is not None else f"h({self.name})",
+            **bijector_kwargs,
+        )
+
+        return self
+
+    @property
+    def bijected_var(self) -> Var | None:
+        """
+        Transformed variable.
+        Either supplied manually or automatically created by :meth:`.biject`.
+        """
+        return self._bijected_var
+
+    @bijected_var.setter
+    def bijected_var(self, value: Var):
+        if not isinstance(value, Var):
+            raise TypeError(f"Bijected var must be a lsl.Var, got type {type(value)}.")
+
+        in_inputs = value.var_value_node in self.value_node.inputs
+        in_kwinputs = value.var_value_node in list(self.value_node.kwinputs.values())
+        if not (in_inputs or in_kwinputs):
+            raise ValueError(f"{value} is on in the inputs or kwinputs of {self}")
+
+        self._bijected_var = value
 
     @in_model_method
     def all_output_nodes(self) -> tuple[Node, ...]:
@@ -2122,7 +2578,6 @@ class Var:
             prog=prog,
         )
 
-    @in_model_method
     def predict(
         self,
         samples: dict[str, jax.typing.ArrayLike],
@@ -2134,23 +2589,46 @@ class Var:
         Parameters
         ----------
         samples
-            Dictionary of samples at which to evaluate predictions. All values of the \
-            dictionary are assumed to have two leading dimensions corresponding to \
-            ``(nchains, niteration)``.
+            Dictionary of samples at which to evaluate predictions.
         newdata
             Dictionary of new data at which to evaluate predictions. The keys should \
             correspond to variable or node names in the model whose values should be \
             set to the given values before evaluating predictions.
         """
+        if self.model is not None:
+            submodel = self.model.parental_submodel(self)
+        else:
+            from liesel.model.model import TemporaryModel
 
-        assert self.model is not None
-        submodel = self.model.parental_submodel(self)
+            try:
+                to_float32 = not jax.config.jax_enable_x64  # type: ignore
+            except Exception:  # just to be really sure in case anything changes
+                # this is an implicit test of whether x64 flag is enabled
+                import jax.numpy as jnp
+
+                to_float32 = jnp.array(1.0).dtype == jnp.dtype("float32")
+
+            with TemporaryModel(self, silent=True, to_float32=to_float32) as model:
+                submodel = model.parental_submodel(self)
+
+        if self.model is None:
+            model = submodel
+        else:
+            model = self.model
 
         newdata = newdata if newdata is not None else {}
         newdata = newdata.copy()
         for key in list(newdata.keys()):
-            if key not in self.model.vars or (key in self.model.nodes):
-                raise KeyError(f"{key} is not part of the model.")
+            if key not in model.vars or (key in model.nodes):
+                msg = f"{key} is not part of the model."
+                if self.model is None:
+                    msg += (
+                        f" Note that {self} is not part of a model, so this check "
+                        f"can only use the inputs to {self}, which is more strict."
+                    )
+
+                raise KeyError(msg)
+
             if key not in submodel.vars or (key in submodel.nodes):
                 newdata.pop(key, None)
 
@@ -2313,9 +2791,10 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
     transformed_dist = Dist(
         transform_dist,
         *inputs,
-        **kwinputs,
         _name="",
         _needs_seed=var.dist_node.needs_seed,
+        bijectors=None,
+        **kwinputs,
     )
 
     transformed_dist.per_obs = var.dist_node.per_obs
@@ -2335,7 +2814,7 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
         value_kwinputs = var.value_node.kwinputs
         value_node_needs_seed = var.value_node.needs_seed
         try:
-            value_node_upadte_on_init = var.value_node._update_on_init  # type: ignore
+            value_node_update_on_init = var.value_node._update_on_init  # type: ignore
         except AttributeError as e:
             raise e
 
@@ -2345,7 +2824,7 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
                 *value_inputs,
                 _name="",
                 _needs_seed=value_node_needs_seed,
-                _update_on_init=value_node_upadte_on_init,
+                _update_on_init=value_node_update_on_init,
                 **value_kwinputs,
             ),
             transformed_dist,
@@ -2401,6 +2880,7 @@ def _transform_var_with_bijector_class(
         bijector_inputs,
         _name="",
         _needs_seed=var.dist_node.needs_seed,
+        bijectors=None,
     )
 
     dist_node_transformed.per_obs = var.dist_node.per_obs

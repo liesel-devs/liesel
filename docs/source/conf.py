@@ -51,12 +51,17 @@ extensions = [
     "myst_nb",
 ]
 
+# for making copying code from doctests more convenient
+copybutton_prompt_text = r">>> |\.\.\. "
+copybutton_prompt_is_regexp = True
+
 if on_rtd:
     extensions.append("rtds_action")
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3/", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
+    "pandas": ("https://pandas.pydata.org/docs/", None),
     "scipy": ("https://docs.scipy.org/doc/scipy-1.8.1/", None),
     "jax": ("https://jax.readthedocs.io/en/latest/", None),
     "tensorflow_probability": (  # we can use "tfp" as a prefix, too
@@ -78,7 +83,8 @@ napoleon_preprocess_types = False
 napoleon_use_rtype = False
 
 # sphinx_autodoc_typehints options
-typehints_defaults = "braces-after"
+typehints_defaults = "comma"
+always_use_bars_union = True
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]

@@ -949,6 +949,19 @@ class Model:
         return visited
 
     @property
+    def model_nodes(self) -> dict[str, Node]:
+        """
+        Dictionary of nodes with the ``"_model"`` prefix in their name.
+
+        Typically, this includes the nodes ``"_model_log_prob"``, ``"_model_log_lik"``,
+        and ``"_model_log_prior"``.
+        """
+        model_nodes_ = {
+            name: node for name, node in self.nodes.items() if name.startswith("_model")
+        }
+        return model_nodes_
+
+    @property
     def auto_update(self) -> bool:
         """
         Whether to update the model automatically if the value of a node is modified.
@@ -1702,9 +1715,9 @@ class Model:
         Parameters
         ----------
         samples
-            Dictionary of samples at which to evaluate predictions. All values of the \
-            dictionary are assumed to have two leading dimensions corresponding to \
-            ``(nchains, niteration)``.
+            Dictionary of samples at which to evaluate predictions. If ``samples``
+            contains entries for weak variables or for nodes in :attr:`.model_nodes`
+            they are ignored.
         predict
             Sequence of strings, which are the names of nodes or variables. \
             Predictions will be returned only for the nodes or variables inlcuded \
@@ -1715,7 +1728,21 @@ class Model:
             correspond to variable or node names in the model whose values should be \
             set to the given values before evaluating predictions. If ``None`` \
             (default), the current variable values are used.
+
         """
+        samples = samples.copy()
+        for name in self.model_nodes:
+            samples.pop(name, None)
+
+        for name, var in self.vars.items():
+            if var.weak:
+                if name in samples:
+                    logger.debug(
+                        f"Key '{name}' belongs to a weak var. "
+                        "Removing it from samples dictionary."
+                    )
+                    samples.pop(name, None)
+
         unique_sample_keys = set(list(samples))
         unique_newdata_keys = set(list(newdata)) if newdata is not None else set()
         intersection = unique_sample_keys & unique_newdata_keys
@@ -1745,16 +1772,27 @@ class Model:
         if not len(set(shapes)) == 1:
             raise RuntimeError("Found inconsistent batch shapes.")
 
-        predict_names = predict
+        predict_names = predict if predict is not None else []
+        predicted_model_nodes = [
+            name for name in self.model_nodes if name in predict_names
+        ]
+        predict_names_no_model_nodes = [
+            name for name in predict_names if name not in predicted_model_nodes
+        ]
 
         # extract nodes and vars for target nodes
-        if predict_names is None:
+        if predicted_model_nodes or not predict_names:
             # use full model without copying
+            # we want to always use the full model if a model node is among the ones
+            # to predict values for
             submodel = self
-            predict_names = list(self.vars)  # output only vars
+            if not predicted_model_nodes:
+                predict_names = list(self.vars)  # output only vars
+            else:
+                predict_names = predicted_model_nodes
         else:
             predict_nodes_: list[Var | Node] = []
-            for name in predict_names:
+            for name in predict_names_no_model_nodes:
                 try:
                     predict_nodes_.append(self.vars[name])
                 except KeyError:
