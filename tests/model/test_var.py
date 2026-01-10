@@ -566,7 +566,8 @@ class TestVarConstructors:
 
 
 class TestVarPredictions:
-    def test_predict(self) -> None:
+    @pytest.mark.parametrize("in_model", (True, False))
+    def test_predict(self, in_model) -> None:
         n = 10
         x = jax.random.uniform(jax.random.PRNGKey(1), (n,))
         b = 1.0
@@ -582,7 +583,8 @@ class TestVarPredictions:
             y, lsl.Dist(tfp.distributions.Normal, loc=loc, scale=scale), name="y"
         )
 
-        _ = lsl.Model([yvar])
+        if in_model:
+            _ = lsl.Model([yvar])
 
         samples = {
             "b": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1)),
@@ -609,7 +611,11 @@ class TestVarPredictions:
         assert pred.shape[-1] == xnew.shape[-1]
 
         # predict when irrelevant variables from the model are present
-        pred = scale.predict(samples, newdata={"x": xnew})
+        if in_model:
+            pred = scale.predict(samples, newdata={"x": xnew})
+        if not in_model:
+            with pytest.raises(KeyError, match="more strict"):
+                scale.predict(samples, newdata={"x": xnew})
 
         # predict when variables not in the model are present
         with pytest.raises(KeyError):
