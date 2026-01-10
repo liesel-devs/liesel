@@ -2578,7 +2578,6 @@ class Var:
             prog=prog,
         )
 
-    @in_model_method
     def predict(
         self,
         samples: dict[str, jax.typing.ArrayLike],
@@ -2596,15 +2595,40 @@ class Var:
             correspond to variable or node names in the model whose values should be \
             set to the given values before evaluating predictions.
         """
+        if self.model is not None:
+            submodel = self.model.parental_submodel(self)
+        else:
+            from liesel.model.model import TemporaryModel
 
-        assert self.model is not None
-        submodel = self.model.parental_submodel(self)
+            try:
+                to_float32 = not jax.config.jax_enable_x64  # type: ignore
+            except Exception:  # just to be really sure in case anything changes
+                # this is an implicit test of whether x64 flag is enabled
+                import jax.numpy as jnp
+
+                to_float32 = jnp.array(1.0).dtype == jnp.dtype("float32")
+
+            with TemporaryModel(self, silent=True, to_float32=to_float32) as model:
+                submodel = model.parental_submodel(self)
+
+        if self.model is None:
+            model = submodel
+        else:
+            model = self.model
 
         newdata = newdata if newdata is not None else {}
         newdata = newdata.copy()
         for key in list(newdata.keys()):
-            if key not in self.model.vars or (key in self.model.nodes):
-                raise KeyError(f"{key} is not part of the model.")
+            if key not in model.vars or (key in model.nodes):
+                msg = f"{key} is not part of the model."
+                if self.model is None:
+                    msg += (
+                        f" Note that {self} is not part of a model, so this check "
+                        f"can only use the inputs to {self}, which is more strict."
+                    )
+
+                raise KeyError(msg)
+
             if key not in submodel.vars or (key in submodel.nodes):
                 newdata.pop(key, None)
 
