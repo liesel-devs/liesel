@@ -264,10 +264,44 @@ class IWLSKernel(
             return self._safe_chol(chol, info_matrix)
 
         chol = self.chol_info_fn(model_state)
+        chol, error_code = self._safe_custom_chol(chol)
+        return chol, error_code
+
+    def _safe_custom_chol(self, chol) -> tuple[Array, int]:
+        """
+        Makes sure that the cholesky decomposition does not contain any nan values, if
+        the argument ``fallback_chol_info`` was not set to "none".
+        """
+
+        def true_branch():
+            if self.fallback_chol_info is None:
+                return chol, 1
+
+            elif self.fallback_chol_info == "identity":
+                # sometimes all you need, always fast.
+                return jnp.eye(chol.shape[-1]), 2
+
+            elif self.fallback_chol_info == "chol_of_modified_info":
+                raise ValueError(
+                    "When using a custom 'chol_info_fn', "
+                    "fallback_chol_info='chol_of_modified_info' "
+                    "is not supported."
+                )
+
+            else:
+                raise ValueError(
+                    "Allowed values for fallback_chol_info: "
+                    f"{CholInfoFallbackOptions}, "
+                    f"got {self.fallback_chol_info}"
+                )
+
+        def false_branch():
+            return chol, 0
+
         chol, error_code = jax.lax.cond(
             jnp.any(jnp.isnan(chol)),
-            lambda: (chol, 1),
-            lambda: (chol, 0),
+            true_branch,
+            false_branch,
         )
         return chol, error_code
 
