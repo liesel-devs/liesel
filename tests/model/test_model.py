@@ -411,6 +411,30 @@ class TestModel:
 
 
 class TestPredictions:
+    def test_predict_no_batching_dim(self, model) -> None:
+        position = model.extract_position(["sigma_hat", "beta_hat"])
+
+        # predictions at current values for all vars
+        pred = model.predict(samples=position)
+        assert pred["mu"].shape == (500,)
+        assert len(pred) == len(model.vars)
+
+    def test_predict_one_batching_dim(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Uniform().sample((3), rnd.PRNGKey(6)),
+            "beta_hat": tfd.Uniform().sample((3, 2), rnd.PRNGKey(6)),
+        }
+
+        # manual prediction
+        manual_pred = jnp.einsum(
+            "nk,...k->...n", model.vars["X"].value, samples["beta_hat"]
+        )
+
+        pred = model.predict(samples=samples)
+        assert jnp.allclose(pred["mu"], manual_pred)
+        assert pred["mu"].shape == (3, 500)
+        assert len(pred) == len(model.vars)
+
     def test_predict_at_current_state(self, model) -> None:
         samples = {
             "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
@@ -427,6 +451,49 @@ class TestPredictions:
         assert jnp.allclose(pred["mu"], manual_pred)
         assert pred["mu"].shape == (4, 3, 500)
         assert len(pred) == len(model.vars)
+
+    def test_predict_with_ignored_entries(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+            "_model_log_lik": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+            "mu": tfd.Uniform().sample((4, 3, 500), rnd.PRNGKey(6)),
+        }
+
+        model.predict(samples=samples)
+
+    def test_predict_model_nodes(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+        }
+
+        pred = model.predict(
+            samples=samples,
+            predict=["_model_log_lik", "_model_log_prob", "_model_log_prior"],
+        )
+
+        assert len(pred) == 3
+
+        for name in ["_model_log_lik", "_model_log_prob", "_model_log_prior"]:
+            assert name in pred
+            assert pred[name].shape == (4, 3)
+
+    def test_predict_log_lik_contributions(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+        }
+
+        pred = model.predict(
+            samples=samples,
+            predict=[model.vars["y_var"].dist_node.name],
+        )
+
+        assert len(pred) == 1
+
+        assert model.vars["y_var"].dist_node.name in pred
+        assert pred[model.vars["y_var"].dist_node.name].shape == (4, 3, 500)
 
     def test_predict_with_unused_samples(self, model) -> None:
         samples = {
@@ -482,6 +549,53 @@ class TestPredictions:
         pred = model.predict(samples=samples, predict=["mu"], newdata={"X": xnew})
         assert jnp.allclose(pred["mu"], manual_pred)
         assert pred["mu"].shape == (4, 3, 500)
+
+    def test_predict_when_newdata_and_samples_overlap(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+        }
+
+        # predictions at new values for X
+        xnew = tfd.Normal(loc=0.0, scale=1.0).sample(
+            sample_shape=model.vars["X"].value.shape, seed=rnd.PRNGKey(7)
+        )
+
+        assert not jnp.allclose(xnew, model.vars["X"].value)
+
+        with pytest.raises(RuntimeError):
+            model.predict(
+                samples=samples,
+                predict=["mu"],
+                newdata={"X": xnew, "beta_hat": samples["beta_hat"][0, 0, :]},
+            )
+
+    def test_predict_at_newdata_not_in_the_model(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+        }
+
+        # predictions at new values for X
+        xnew = tfd.Normal(loc=0.0, scale=1.0).sample(
+            sample_shape=model.vars["X"].value.shape, seed=rnd.PRNGKey(7)
+        )
+
+        with pytest.raises(KeyError):
+            model.predict(samples=samples, predict=["mu"], newdata={"Z": xnew})
+
+    def test_predict_at_newdata_not_needed(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+        }
+
+        # predictions at new values for X
+        xnew = tfd.Normal(loc=0.0, scale=1.0).sample(
+            sample_shape=model.vars["X"].value.shape, seed=rnd.PRNGKey(7)
+        )
+
+        model.predict(samples=samples, predict=["sigma_hat"], newdata={"X": xnew})
 
     def test_predict_at_newdata_with_new_shape(self, model) -> None:
         samples = {
@@ -931,7 +1045,7 @@ class TestSample:
         # to the elements of the sample shape for sample1
         assert samples2["y"].shape == (11, 2, 8, 100)
 
-    def test_sample_posterior_at_newdata(self, linreg: Model):
+    def test_sample_at_newdata(self, linreg: Model):
         model = linreg
 
         samples1 = model.sample(
@@ -948,6 +1062,24 @@ class TestSample:
         )
 
         assert not jnp.allclose(samples1["y"], samples2["y"])
+
+    def test_sample_posterior_keys_overlap_with_posterior_samples(self, linreg: Model):
+        model = linreg
+
+        samples1 = model.sample(
+            shape=(2, 8),
+            seed=rnd.key(7),
+        )
+
+        x_shape = model.vars["X"].value.shape
+        x_new = tfd.Uniform(low=10.0, high=11.0).sample(x_shape, seed=rnd.key(9))
+        with pytest.raises(RuntimeError):
+            model.sample(
+                shape=(2, 8),
+                seed=rnd.key(8),
+                posterior_samples=samples1,
+                newdata={"X": x_new, "b": samples1["b"][0, 0, :]},
+            )
 
     def test_sample_posterior_shape_of_posterior_samples(self, linreg: Model):
         model = linreg

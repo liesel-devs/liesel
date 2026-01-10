@@ -24,7 +24,9 @@ def type_check() -> None:
 
 @pytest.mark.mcmc
 def test_gibbs(mcmc_seed):
-    kernel0 = gs.GibbsKernel(["beta"], transition_fn)
-    kernel1 = gs.NUTSKernel(["log_sigma"])
+    kernel0 = gs.GibbsKernel(["beta"], transition_fn, identifier="k0")
+    kernel1 = gs.NUTSKernel(["log_sigma"], identifier="k1")
 
-    run_kernel_test(mcmc_seed, [kernel0, kernel1])
+    results = run_kernel_test(mcmc_seed, [kernel0, kernel1])
+    kernel0.identifier in results.get_posterior_transition_infos()
+    kernel1.identifier in results.get_posterior_transition_infos()
