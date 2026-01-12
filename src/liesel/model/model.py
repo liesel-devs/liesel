@@ -1079,6 +1079,13 @@ class Model:
         """A mapping of the model nodes with their names as keys."""
         return MappingProxyType(self._nodes)
 
+    @property
+    def to_float32(self) -> bool:
+        """
+        Whether the values of the added nodes will be converted from float64 to float32.
+        """
+        return self._to_float32
+
     def pop_nodes_and_vars(self) -> tuple[dict[str, Node], dict[str, Var]]:
         """
         Pops the nodes and variables out of this model.
