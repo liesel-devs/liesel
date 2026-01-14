@@ -73,18 +73,18 @@ class GibbsKernel(
     We define a function to sample from the full conditional for the parameter ``"mu"``:
 
     >>> def sample_mu(prng_key, model_state):
-    >>>     # extract relevant values from model state
+    >>> # extract relevant values from model state
     >>>     pos = interface.extract_position(
     >>>     position_keys=["y", "mu"],
     >>>     model_state=model_state
     >>>     )
-    >>>     # calculate relevant intermediate quantities
+    >>> # calculate relevant intermediate quantities
     >>>     n = len(pos["y"])
     >>>     y_mean = pos["y"].mean()
     >>>     mu_new = (n*y_mean + pos["mu"]) / (n + 1)
-    >>>     # draw new value from full conditional
+    >>> # draw new value from full conditional
     >>>     draw = mu_new + jax.random.normal(prng_key)
-    >>>     # return key-value pair of variable name and new value
+    >>> # return key-value pair of variable name and new value
     >>>     return {"mu": draw}
 
     >>> builder.add_kernel(gs.GibbsKernel(["mu"], sample_mu))
