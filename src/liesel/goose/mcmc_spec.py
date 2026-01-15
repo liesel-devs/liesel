@@ -305,7 +305,7 @@ class LieselMCMC:
             eb.add_posterior(posterior, posterior_thinning)
             engine = eb.build()
             engine.sample_all_epochs()
-            return engine.get_results()
+            engine.get_results()
 
         """
         eb = self.get_engine_builder(
