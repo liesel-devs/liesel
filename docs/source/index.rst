@@ -179,7 +179,7 @@ in to using :class:`.Model`. Goose currently includes the following interfaces:
 
     ~liesel.goose.LieselInterface
     ~liesel.goose.DictInterface
-    ~liesel.goose.DataclasslInterface
+    ~liesel.goose.DataclassInterface
     ~liesel.goose.NamedTupleInterface
 
 P-Splines

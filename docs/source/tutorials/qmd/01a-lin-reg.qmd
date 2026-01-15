@@ -17,7 +17,7 @@ pd.options.display.html.border = 0
 
 In this tutorial, we build a linear regression model with Liesel and estimate it with Goose. Our goal is to illustrate the most fundamental features of the software in a straight-forward context.
 
-# Imports
+## Imports
 
 Before we can generate the data and build the model, we need to load Liesel and a number of other packages. We usually import the model building library `liesel.model` as `lsl`, and the MCMC library `liesel.goose` as `gs`.
 
@@ -37,7 +37,7 @@ import liesel.model as lsl
 import matplotlib.pyplot as plt
 ```
 
-### Generating the data
+## Generating the data
 
 Now we can simulate 500 observations from the linear regression model $y_i \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \;\sigma^2)$ with the true parameters $\boldsymbol{\beta} = (\beta_0, \beta_1)' = (1, 2)'$ and $\sigma = 1$. The relationship between the response $y_i$ and the covariate $x_i$ is visualized in the following scatterplot.
 
@@ -65,7 +65,7 @@ plt.ylabel("Response y")
 plt.show()
 ```
 
-### Building the Model
+## Building the Model
 
 As the most basic building blocks of a model, Liesel provides the
 {class}`.Var` class for instantiating variables and the
@@ -73,9 +73,9 @@ As the most basic building blocks of a model, Liesel provides the
 comes with four constructors, namely {meth}`.Var.new_param` for parameters,
 {meth}`.Var.new_obs` for observed data, {meth}`.Var.new_calc` for variables that are
 deterministic functions of other variables in the model, and {meth}`.Var.new_value` for
-fixed values. See also [Model Building (liesel.model)](model_overview).
+fixed values.
 
-#### The regression coefficients
+### The regression coefficients
 
 Let's assume the weakly informative prior $\beta_0, \beta_1 \sim \mathcal{N}(0, 100^2)$
 for the regression coefficients.
@@ -102,7 +102,7 @@ beta = lsl.Var.new_param(
 )
 ```
 
-#### The standard deviation
+### The standard deviation
 
 We define the standard deviation using the weakly informative prior
 $\sigma^2 \sim \text{InverseGamma}(a, b)$ with $a = b = 0.01$.
@@ -121,7 +121,7 @@ initialize the scale using {meth}`.Var.new_calc`, to compute the square root.
 sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma")
 ```
 
-#### Design matrix, fitted values, and response
+### Design matrix, fitted values, and response
 
 To compute the matrix-vector product $\mathbf{X}\boldsymbol{\beta}$, we use another
 variable instantiated via {meth}`.Var.new_calc`. We can view our model as
@@ -146,7 +146,7 @@ y_dist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
 y = lsl.Var.new_obs(y_vec, distribution=y_dist, name="y")
 ```
 
-#### Bringing the model together
+### Bringing the model together
 
 Now, we can set up the {class}`.Model`. Here, we will only add the response.
 
@@ -156,7 +156,7 @@ model = lsl.Model([y])
 ```
 
 The {func}`.plot_vars()` function visualizes the model.
-More on that in the [Model building with Liesel tutorial](01b-model.md#model-building)
+More on that in the [Model building with Liesel tutorial](01b-model.md)
 If the layout of the graph looks messy for you,
 please make sure you have the `pygraphviz` package installed.
 
@@ -176,12 +176,10 @@ and assigned to different parameters, and the user can implement their own
 problem-specific kernels, as long as they are compatible with the {class}`.Kernel`
 protocol. In any case, the user is responsible for constructing a
 mathematically valid algorithm.
-Refer to [MCMC Sampling (liesel.goose)](goose_overview) for an overview of
-important Goose functionality.
 
 We start with a very simple sampling scheme, keeping $\sigma^2$ fixed at the true value
-and using a NUTS sampler for $\boldsymbol{\beta}$. More on sampling $\sigma^2$ can be found in the [Parameter transformations tutorial](01c-transform.md#parameter-transformation) and the
-[Gibbs sampling tutorial](01d-gibbs-sampling.md#gibbs-sampling).
+and using a NUTS sampler for $\boldsymbol{\beta}$. More on sampling $\sigma^2$ can be found in the [Parameter transformations tutorial](01c-transform.md) and the
+[Gibbs sampling tutorial](01d-gibbs-sampling.md).
 The kernels are added to a {class}`~.goose.Engine`, which coordinates the sampling,
 including the kernel tuning during the warmup, and the MCMC bookkeeping.
 The engine can be configured step by step with a {class}`.EngineBuilder`. Starting from
