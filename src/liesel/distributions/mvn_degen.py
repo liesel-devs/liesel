@@ -102,7 +102,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
     * If they are not provided as arguments, ``rank`` and ``log_pdet`` are computed
       based on the eigenvalues of the precision matrix ``prec``. This is an expensive
       operation and can be avoided by specifying the corresponding arguments.
-    * When you draw samples from the distribution via 
+    * When you draw samples from the distribution via
       :meth:`.MultivariateNormalDegenerate.sample`, it is always
       necessary to compute the eigendecomposition of the distribution's precision
       matrices once and cache it, because sampling requires both the eigenvalues and
