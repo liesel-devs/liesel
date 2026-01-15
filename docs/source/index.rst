@@ -156,6 +156,7 @@ Model (Advanced)
     ~liesel.model.Node
     ~liesel.model.Value
     ~liesel.model.PIT
+    ~liesel.distributions.GaussianCopula
     ~liesel.model.TransientCalc
     ~liesel.model.TransientDist
     ~liesel.model.TransientIdentity
