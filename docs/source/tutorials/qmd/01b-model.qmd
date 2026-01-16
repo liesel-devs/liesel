@@ -56,7 +56,7 @@ $$
 $$
 
 
-So let us consider the same model and data from the [linear regression tutorial](01-lin-reg.md#linear-regression), where we had
+So let us consider the same model and data from the [linear regression tutorial](01a-lin-reg.md), where we had
 the underlying model $y_i \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \;\sigma^2)$ with the true parameters $\boldsymbol{\beta} = (\beta_0, \beta_1)' = (1, 2)'$ and $\sigma = 1$.
 
 ``` {python}
