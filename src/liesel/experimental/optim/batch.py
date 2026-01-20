@@ -51,6 +51,9 @@ class Batches:
         pos_keys = position_keys or list(model.observed)
         n = n or guess_n(model, axis=default_axis)
 
+        if batch_size is None:
+            shuffle = False
+
         batches = cls(
             pos_keys,
             batch_size=batch_size,
