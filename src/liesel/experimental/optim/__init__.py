@@ -1,4 +1,5 @@
 from .batch import Batches as Batches
+from .engine import LieselVI as LieselVI
 from .engine import OptimEngine as OptimEngine
 from .engine import QuickOptim as QuickOptim
 from .loss import NegLogProbLoss as NegLogProbLoss
