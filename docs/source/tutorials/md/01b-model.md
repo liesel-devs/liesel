@@ -1,5 +1,4 @@
 
-
 # Model building with Liesel
 
 In this tutorial, we go into more depth regarding the model building
@@ -30,9 +29,9 @@ distribution and the parameter nodes would have some prior distribution
 (for example, a normal-inverse-gamma prior). The following table shows
 the different node types and some examples of their use cases.
 
-|  | **Strong node** | **Weak node** |
-|----|----|----|
-| **With distribution** | Response, parameter, … | Copula, … |
+|                          | **Strong node**              | **Weak node**                                      |
+|--------------------------|------------------------------|----------------------------------------------------|
+| **With distribution**    | Response, parameter, …       | Copula, …                                          |
 | **Without distribution** | Covariate, hyperparameter, … | Inverse link function, parameter transformation, … |
 
 A PGM is a collection of connected nodes. Two nodes can be connected
@@ -46,9 +45,9 @@ $$
 $$
 
 So let us consider the same model and data from the [linear regression
-tutorial](01-lin-reg.md#linear-regression), where we had the underlying
-model $y_i \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \;\sigma^2)$ with the
-true parameters $\boldsymbol{\beta} = (\beta_0, \beta_1)' = (1, 2)'$ and
+tutorial](01a-lin-reg.md), where we had the underlying model
+$y_i \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \;\sigma^2)$ with the true
+parameters $\boldsymbol{\beta} = (\beta_0, \beta_1)' = (1, 2)'$ and
 $\sigma = 1$.
 
 ``` python
@@ -89,7 +88,7 @@ plt.ylabel("Response y")
 plt.show()
 ```
 
-![](01b-model_files/figure-commonmark/unnamed-chunk-2-1.png)
+![](01b-model_files/figure-commonmark/unnamed-chunk-1-1.png)
 
 ### Building the model graph
 

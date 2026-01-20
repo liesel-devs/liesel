@@ -37,7 +37,7 @@ import matplotlib.pyplot as plt
 ```
 
 ```{python}
-#| label: build model
+#| label: build-model
 # Generate data
 rng = np.random.default_rng(42)
 

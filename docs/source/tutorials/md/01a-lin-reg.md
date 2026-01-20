@@ -1,12 +1,11 @@
 
-
 # Linear Regression
 
 In this tutorial, we build a linear regression model with Liesel and
 estimate it with Goose. Our goal is to illustrate the most fundamental
 features of the software in a straight-forward context.
 
-# Imports
+## Imports
 
 Before we can generate the data and build the model, we need to load
 Liesel and a number of other packages. We usually import the model
@@ -28,7 +27,7 @@ import liesel.model as lsl
 import matplotlib.pyplot as plt
 ```
 
-### Generating the data
+## Generating the data
 
 Now we can simulate 500 observations from the linear regression model
 $y_i \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \;\sigma^2)$ with the true
@@ -60,7 +59,7 @@ plt.show()
 
 ![](01a-lin-reg_files/figure-commonmark/generate-data-1.png)
 
-### Building the Model
+## Building the Model
 
 As the most basic building blocks of a model, Liesel provides the
 {class}`.Var` class for instantiating variables and the {class}`.Dist`
@@ -69,9 +68,9 @@ comes with four constructors, namely {meth}`.Var.new_param` for
 parameters, {meth}`.Var.new_obs` for observed data,
 {meth}`.Var.new_calc` for variables that are deterministic functions of
 other variables in the model, and {meth}`.Var.new_value` for fixed
-values. See also [Model Building (liesel.model)](model_overview).
+values.
 
-#### The regression coefficients
+### The regression coefficients
 
 Let’s assume the weakly informative prior
 $\beta_0, \beta_1 \sim \mathcal{N}(0, 100^2)$ for the regression
@@ -99,7 +98,7 @@ beta = lsl.Var.new_param(
 )
 ```
 
-#### The standard deviation
+### The standard deviation
 
 We define the standard deviation using the weakly informative prior
 $\sigma^2 \sim \text{InverseGamma}(a, b)$ with $a = b = 0.01$.
@@ -117,7 +116,7 @@ root.
 sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma")
 ```
 
-#### Design matrix, fitted values, and response
+### Design matrix, fitted values, and response
 
 To compute the matrix-vector product $\mathbf{X}\boldsymbol{\beta}$, we
 use another variable instantiated via {meth}`.Var.new_calc`. We can view
@@ -141,7 +140,7 @@ y_dist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
 y = lsl.Var.new_obs(y_vec, distribution=y_dist, name="y")
 ```
 
-#### Bringing the model together
+### Bringing the model together
 
 Now, we can set up the {class}`.Model`. Here, we will only add the
 response.
@@ -151,9 +150,9 @@ model = lsl.Model([y])
 ```
 
 The {func}`.plot_vars()` function visualizes the model. More on that in
-the [Model building with Liesel tutorial](01b-model.md#model-building)
-If the layout of the graph looks messy for you, please make sure you
-have the `pygraphviz` package installed.
+the [Model building with Liesel tutorial](01b-model.md) If the layout of
+the graph looks messy for you, please make sure you have the
+`pygraphviz` package installed.
 
 ``` python
 lsl.plot_vars(model)
@@ -172,23 +171,21 @@ a number of standard kernels such as Hamiltonian Monte Carlo
 sampling scheme and assigned to different parameters, and the user can
 implement their own problem-specific kernels, as long as they are
 compatible with the {class}`.Kernel` protocol. In any case, the user is
-responsible for constructing a mathematically valid algorithm. Refer to
-[MCMC Sampling (liesel.goose)](goose_overview) for an overview of
-important Goose functionality.
+responsible for constructing a mathematically valid algorithm.
 
 We start with a very simple sampling scheme, keeping $\sigma^2$ fixed at
 the true value and using a NUTS sampler for $\boldsymbol{\beta}$. More
 on sampling $\sigma^2$ can be found in the [Parameter transformations
-tutorial](01c-transform.md#parameter-transformation) and the [Gibbs
-sampling tutorial](01d-gibbs-sampling.md#gibbs-sampling). The kernels
-are added to a {class}`~.goose.Engine`, which coordinates the sampling,
-including the kernel tuning during the warmup, and the MCMC bookkeeping.
-The engine can be configured step by step with a
-{class}`.EngineBuilder`. Starting from a Liesel model, it is
-straight-forward to obtain an engine builder using the
-{class}`.LieselMCMC` helper. We then need to define the kernels, and the
-sampling duration. Finally, we can call the {meth}`.EngineBuilder.build`
-method, which returns a fully configured MCMC engine.
+tutorial](01c-transform.md) and the [Gibbs sampling
+tutorial](01d-gibbs-sampling.md). The kernels are added to a
+{class}`~.goose.Engine`, which coordinates the sampling, including the
+kernel tuning during the warmup, and the MCMC bookkeeping. The engine
+can be configured step by step with a {class}`.EngineBuilder`. Starting
+from a Liesel model, it is straight-forward to obtain an engine builder
+using the {class}`.LieselMCMC` helper. We then need to define the
+kernels, and the sampling duration. Finally, we can call the
+{meth}`.EngineBuilder.build` method, which returns a fully configured
+MCMC engine.
 
 ``` python
 builder = gs.LieselMCMC(model).get_engine_builder(seed=1337, num_chains=4)
@@ -211,30 +208,30 @@ engine.sample_all_epochs()
 
 
       0%|                                                  | 0/3 [00:00<?, ?chunk/s]
-     33%|##############                            | 1/3 [00:02<00:05,  2.55s/chunk]
-    100%|##########################################| 3/3 [00:02<00:00,  1.18chunk/s]
+     33%|##############                            | 1/3 [00:01<00:02,  1.35s/chunk]
+    100%|##########################################| 3/3 [00:01<00:00,  2.22chunk/s]
 
       0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|########################################| 1/1 [00:00<00:00, 1388.84chunk/s]
+    100%|########################################| 1/1 [00:00<00:00, 2212.19chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 1847.71chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 3883.61chunk/s]
 
       0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|########################################| 4/4 [00:00<00:00, 1991.60chunk/s]
+    100%|########################################| 4/4 [00:00<00:00, 4106.02chunk/s]
 
       0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|#########################################| 8/8 [00:00<00:00, 925.59chunk/s]
+    100%|########################################| 8/8 [00:00<00:00, 1306.54chunk/s]
 
       0%|                                                 | 0/20 [00:00<?, ?chunk/s]
-    100%|#######################################| 20/20 [00:00<00:00, 263.85chunk/s]
+    100%|#######################################| 20/20 [00:00<00:00, 391.76chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 1450.06chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 2500.33chunk/s]
 
       0%|                                                 | 0/40 [00:00<?, ?chunk/s]
-     65%|#########################3             | 26/40 [00:00<00:00, 255.61chunk/s]
-    100%|#######################################| 40/40 [00:00<00:00, 225.96chunk/s]
+     82%|################################1      | 33/40 [00:00<00:00, 318.94chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 303.65chunk/s]
 
 Finally, we can extract the results and print a summary table.
 
@@ -245,391 +242,246 @@ summary
 ```
 
 <p>
-
 <strong>Parameter summary:</strong>
 </p>
-
 <table border="0" class="dataframe">
-
 <thead>
-
 <tr style="text-align: right;">
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 kernel
 </th>
-
 <th>
-
 mean
 </th>
-
 <th>
-
 sd
 </th>
-
 <th>
-
 q_0.05
 </th>
-
 <th>
-
 q_0.5
 </th>
-
 <th>
-
 q_0.95
 </th>
-
 <th>
-
 sample_size
 </th>
-
 <th>
-
 ess_bulk
 </th>
-
 <th>
-
 ess_tail
 </th>
-
 <th>
-
 rhat
 </th>
-
 </tr>
-
 <tr>
-
 <th>
-
 parameter
 </th>
-
 <th>
-
 index
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 </tr>
-
 </thead>
-
 <tbody>
-
 <tr>
-
 <th rowspan="2" valign="top">
-
 beta
 </th>
-
 <th>
-
 (0,)
 </th>
-
 <td>
-
 kernel_00
 </td>
-
 <td>
-
-0.982
+0.981
 </td>
-
 <td>
-
 0.087
 </td>
-
 <td>
-
-0.840
+0.842
 </td>
-
 <td>
-
-0.983
+0.980
 </td>
-
 <td>
-
-1.126
+1.127
 </td>
-
 <td>
-
 4000
 </td>
-
 <td>
-
-831.271
+887.081
 </td>
-
 <td>
-
-877.956
+1154.253
 </td>
-
 <td>
-
-1.001
+1.003
 </td>
-
 </tr>
-
 <tr>
-
 <th>
-
 (1,)
 </th>
-
 <td>
-
 kernel_00
 </td>
-
 <td>
-
-1.911
+1.914
 </td>
-
 <td>
-
-0.154
+0.152
 </td>
-
 <td>
-
-1.648
+1.658
 </td>
-
 <td>
-
 1.915
 </td>
-
 <td>
-
-2.153
+2.163
 </td>
-
 <td>
-
 4000
 </td>
-
 <td>
-
-860.853
+883.961
 </td>
-
 <td>
-
-1205.948
+1324.823
 </td>
-
 <td>
-
 1.001
 </td>
-
 </tr>
-
 </tbody>
-
 </table>
-
 <p>
-
 <strong>Error summary:</strong>
 </p>
-
 <table border="0" class="dataframe">
-
 <thead>
-
 <tr style="text-align: right;">
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 count
 </th>
-
 <th>
-
+sample_size
+</th>
+<th>
+sample_size_total
+</th>
+<th>
 relative
 </th>
-
 </tr>
-
 <tr>
-
 <th>
-
 kernel
 </th>
-
 <th>
-
 error_code
 </th>
-
 <th>
-
 error_msg
 </th>
-
 <th>
-
 phase
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
+<th>
+</th>
+<th>
+</th>
 </tr>
-
 </thead>
-
 <tbody>
-
 <tr>
-
 <th rowspan="2" valign="top">
-
 kernel_00
 </th>
-
 <th rowspan="2" valign="top">
-
 1
 </th>
-
 <th rowspan="2" valign="top">
-
 divergent transition
 </th>
-
 <th>
-
 warmup
 </th>
-
 <td>
-
-55
+52
 </td>
-
 <td>
-
-0.014
+4000
 </td>
-
+<td>
+4000
+</td>
+<td>
+0.013
+</td>
 </tr>
-
 <tr>
-
 <th>
-
 posterior
 </th>
-
 <td>
-
 0
 </td>
-
 <td>
-
+4000
+</td>
+<td>
+4000
+</td>
+<td>
 0.000
 </td>
-
 </tr>
-
 </tbody>
-
 </table>
 
 If we need more samples, we can append another epoch to the engine and
@@ -646,8 +498,8 @@ engine.sample_next_epoch()
 
 
       0%|                                                 | 0/40 [00:00<?, ?chunk/s]
-     62%|########################3              | 25/40 [00:00<00:00, 244.19chunk/s]
-    100%|#######################################| 40/40 [00:00<00:00, 214.92chunk/s]
+     80%|###############################2       | 32/40 [00:00<00:00, 311.91chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 298.62chunk/s]
 
 No compilation is required at this point, so this is pretty fast.
 
