@@ -19,8 +19,78 @@ from .state import OptimCarry, OptimHistory, OptimResult
 from .stop import Stopper
 from .types import ModelState, Position
 from .util import guess_n
+from .vi import Elbo
 
 Array = Any
+
+
+class LieselVI:
+    """
+    Enables quick optimizer setup by providing strong defaults.
+    """
+
+    def __init__(
+        self,
+        model: Model,
+        elbo: Literal["mvn_diag", "mvn_tril", "mvn_blocked"] | Elbo = "mvn_diag",
+        batches: Batches | None = None,
+        split: PositionSplit | None = None,
+        optimizers: Sequence[Optimizer] | Literal["adam", "lbfgs"] = "adam",
+        stopper: Stopper = Stopper(epochs=1000, patience=10, rtol=1e-6),
+        seed: int | None = None,
+        n: int | None = None,
+    ) -> None:
+        self.model = model
+        self._n = n
+        self.stopper = stopper
+        self.batches = batches or Batches.from_model(model, batch_size=None)
+        self.seed = int(time.time()) if seed is None else seed
+        self.split = split or PositionSplit.from_model(model)
+        self._optimizers = optimizers
+        if isinstance(elbo, str):
+            match elbo:
+                case "mvn_diag":
+                    self.elbo = Elbo.mvn_diag(model, self.split)
+                case "mvn_tril":
+                    self.elbo = Elbo.mvn_tril(model, self.split)
+                case "mvn_blocked":
+                    self.elbo = Elbo.mvn_blocked(model, self.split)
+        else:
+            self.elbo = elbo
+
+    @property
+    def n(self) -> int:
+        if self._n is not None:
+            return self._n
+
+        return guess_n(self.model)
+
+    @property
+    def optimizers(self) -> Sequence[Optimizer]:
+        if isinstance(self._optimizers, str):
+            match self._optimizers:
+                case "lbfgs":
+                    return [LBFGS(list(self.elbo.q.parameters))]
+                case "adam":
+                    opt = Optimizer(
+                        list(self.elbo.q.parameters),
+                        optimizer=optax.adam(learning_rate=1e-3),
+                    )
+                    return [opt]
+
+        return self._optimizers
+
+    def build_engine(self) -> OptimEngine:
+        engine = OptimEngine(
+            loss=self.elbo,
+            batches=self.batches,
+            split=self.split,
+            optimizers=self.optimizers,
+            stopper=self.stopper,
+            initial_state=self.model.state,
+            seed=self.seed,
+        )
+        return engine
 
 
 class QuickOptim:
