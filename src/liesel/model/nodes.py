@@ -1626,7 +1626,7 @@ class Var:
         """
         var = cls(value, distribution, name, inference=inference, bijector=bijector)
         var.value_node.monitor = True
-        if bijector is not None:
+        if var.bijected_var is not None:
             var.bijected_var.parameter = True
         else:
             var.parameter = True
