@@ -164,3 +164,14 @@ class PyMCInterface:
         """Computes the unnormalized log-probability given the model state."""
         rv_values = [model_state[rv] for rv in self._rv_names]
         return self._log_prob(rv_values)
+
+    def log_prob_vars(self, model_state: ModelState, var_names: Sequence[str]) -> float:
+        """
+        Computes the unnormalized log-probability for specified variables.
+
+        Raises NotImplementedError as NamedTupleInterface does not support
+        variable-specific log probability queries.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support log_prob_vars queries."
+        )
