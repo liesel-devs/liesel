@@ -10,6 +10,7 @@ import jax.numpy as jnp
 import tensorflow_probability.substrates.jax.bijectors as tfb
 import tensorflow_probability.substrates.jax.distributions as tfd
 
+from ...docs import usedocs
 from ...model import Dist, Model, Var
 from ...model.model import TemporaryModel
 from .loss import LossMixin
@@ -23,31 +24,54 @@ class Elbo(LossMixin):
         self,
         p: Model,
         q: Model,
-        split: PositionSplit,
+        split: PositionSplit | None = None,
         nsamples: int = 10,
         nsamples_validate: int = 50,
         q_to_p: Callable[[Position], Position] = lambda x: x,
         scale: bool = False,
+        vdist: VDist | CompositeVDist | None = None,
     ):
         self.p = p
         self.q = q
-        self.split = split
+        self.split = split or PositionSplit.from_model(self.p)
         self.nsamples = nsamples
         self.nsamples_validate = nsamples_validate
         self._q_to_p = q_to_p
         self.scale = scale
         self.scalar = self.split.n_train if self.scale else 1.0
+        self.vdist = vdist
 
     @classmethod
     def from_vdist(
         cls,
-        vi_dist: VDist | CompositeVDist,
+        vdist: VDist | CompositeVDist,
         split: PositionSplit,
         nsamples: int = 10,
         nsamples_validate: int = 50,
         scale: bool = False,
     ) -> Elbo:
-        assert vi_dist.q is not None
+        assert vdist.q is not None
+        return cls(
+            vdist.p,
+            vdist.q,
+            split=split,
+            nsamples=nsamples,
+            nsamples_validate=nsamples_validate,
+            scale=scale,
+            q_to_p=vdist.q_to_p,
+            vdist=vdist,
+        )
+
+    @classmethod
+    def mvn_diag(
+        cls,
+        p: Model,
+        split: PositionSplit | None = None,
+        nsamples: int = 10,
+        nsamples_validate: int = 50,
+        scale: bool = False,
+    ) -> Self:
+        vi_dist = VDist(list(p.parameters), p).mvn_diag().build()
         return cls(
             vi_dist.p,
             vi_dist.q,
@@ -56,6 +80,54 @@ class Elbo(LossMixin):
             nsamples_validate=nsamples_validate,
             scale=scale,
             q_to_p=vi_dist.q_to_p,
+            vdist=vi_dist,
+        )
+
+    @classmethod
+    def mvn_tril(
+        cls,
+        p: Model,
+        split: PositionSplit | None = None,
+        nsamples: int = 10,
+        nsamples_validate: int = 50,
+        scale: bool = False,
+    ) -> Self:
+        vi_dist = VDist(list(p.parameters), p).mvn_tril().build()
+        return cls(
+            vi_dist.p,
+            vi_dist.q,
+            split=split,
+            nsamples=nsamples,
+            nsamples_validate=nsamples_validate,
+            scale=scale,
+            q_to_p=vi_dist.q_to_p,
+            vdist=vi_dist,
+        )
+
+    @classmethod
+    def mvn_blocked(
+        cls,
+        p: Model,
+        split: PositionSplit | None = None,
+        nsamples: int = 10,
+        nsamples_validate: int = 50,
+        scale: bool = False,
+    ) -> Self:
+        vi_dists = []
+        for param_name in p.parameters:
+            vi_dist = VDist([param_name], p).mvn_tril()
+            vi_dists.append(vi_dist)
+
+        vi_dist = CompositeVDist(*vi_dists).build()
+        return cls(
+            vi_dist.p,
+            vi_dist.q,
+            split=split,
+            nsamples=nsamples,
+            nsamples_validate=nsamples_validate,
+            scale=scale,
+            q_to_p=vi_dist.q_to_p,
+            vdist=vi_dist,
         )
 
     @property
@@ -158,9 +230,94 @@ class Elbo(LossMixin):
 
 
 class VDist:
+    r"""
+    Represents a variational distribution.
+
+    Parameters
+    -----------
+    position_keys
+        Sequence / list of strings, giving the names of the parameters in the model
+        ``p`` whose posterior is to be approximated by this :class:`.VDist`.
+    p
+        The :class:`.Model` whose posterior is to be approximated by this
+        :class:`.VDist`.
+
+    See Also
+    --------
+
+    .VDist : Represents a single variational distribution.
+    .CompositeVDist : Represents a composite variational distribution constructed
+        from independent blocks, where each block is given by a :class:`.VDist`.
+
+    Examples
+    --------
+    Take the model :math:`y \sim N(\mu, \sigma^2)`, where the posterior distribution
+    of :math:`(\mu, \ln(\sigma))^\top` is modeled by a two independent Gaussian 
+    distributions, i.e. we define the following variational distributions:
+
+    .. math::
+        \mu & \sim N(\phi_1, \phi_2^2) \\
+        \ln(\sigma) & \sim N(\phi_3, \phi_4^2)
+    
+    This variational distribution can be defined by a single 
+    :class:`.VDist` using the :meth:`.VDist.mvn_diag` method like this:
+    
+    >>> import jax.numpy as jnp
+    >>> import liesel.model as lsl
+    >>> import liesel.experimental.optim as opt
+    >>> import tensorflow_probability.substrates.jax as tfp
+
+    >>> loc = lsl.Var.new_param(jnp.array(0.0), name="mu")
+    >>> scale = lsl.Var.new_param(1.0, name="sigma", bijector=tfp.bijectors.Exp())
+    >>> y = lsl.Var.new_obs(
+    ...     jnp.linspace(-2, 2, 50),
+    ...     lsl.Dist(tfp.distributions.Normal, loc=loc, scale=scale),
+    ...     name="y",
+    ... )
+    >>> p = lsl.Model([y])
+    
+    >>> vdist = opt.VDist(["mu", "h(sigma)"], p).mvn_diag().build()
+
+    
+    If the variational distribution is intended to capture correlation between the 
+    parameters, the correlated parameters should be governed jointly by a single
+    :class:`.VDist`. For example, to use a multivariate Gaussian with a dense
+    covariance matrix in this case, you can use :meth:`.VDist.mvn_tril`:
+
+    >>> vdist = opt.VDist(["mu", "h(sigma)"], p).mvn_tril().build()
+
+    This would lead to the variational distribution
+
+    .. math::
+
+        \begin{bmatrix}
+        \mu \\ \ln(\sigma)
+        \end{bmatrix}
+        \sim N(\boldsymbol{\phi}, \boldsymbol{\Lambda}),
+    
+    where :math:`\boldsymbol{\Lambda}` is a :math:`2 \times 2` covariance matrix.
+
+    ..rubric:: Custom variational distributions
+
+    You can use any fully reparameterized tensorflow distribution of fitting 
+    event shape, wrapped in a :class:`.Dist`. For example, you can define the
+    model with diagonal covariance matrix from above like this:
+
+    >>> q_loc = lsl.Var.new_param(jnp.zeros(2), name="q_loc")
+    >>> q_scale = lsl.Var.new_param(jnp.ones(2), name="q_scale")
+    >>> dist = lsl.Dist(tfd.MultivariateNormalDiag, loc=q_loc, scale_diag=q_scale)
+    >>> vdist = opt.VDist(["mu", "h(sigma)"], p).init(dist).build()
+
+    .. note::
+        If you use :meth:`.VDist.init`, make sure that the parameters of your
+        variational distribution are :class:`.Var` objects with :attr:`.Var.parameter`
+        set to ``True``.
+
+    """
+
     def __init__(self, position_keys: Sequence[str], p: Model):
         self.position_keys = position_keys
-        self.p = p
+        self._p = p
 
         pos = self.p.extract_position(self.position_keys)
         flat_pos, unflatten = jax.flatten_util.ravel_pytree(pos)
@@ -170,11 +327,30 @@ class VDist:
         self.var: Var | None = None
         self.q: Model | None = None
 
+    @property
+    def p(self) -> Model:
+        """
+        The :class:`.Model` whose posterior is approximated by this :class:`.VDist`.
+        """
+        return self._p
+
     def q_to_p(self, pos: Position) -> Position:
+        """
+        Turns flat q representation of parameters back into a position dictionary for p.
+
+        In more words: Turns the flat representation of the parameters of p that are
+        used as pseudo- observed variables in the variational approximation q into a
+        position dictionary that fits the original representation in p.
+        """
         return self._unflatten(pos[self._flat_pos_name])
 
     def p_to_q_array(self, pos: Position) -> jax.Array:
-        """Potentially useful for initializing with pre-fitted values."""
+        """
+        Turns the values of a position dictionary in p-representation into a flat
+        q-representation array.
+
+        Potentially useful for initializing with pre-fitted values.
+        """
         if not list(pos) == self.position_keys:
             raise ValueError("list(pos) must be equal to self.position_keys.")
 
@@ -182,6 +358,9 @@ class VDist:
 
     @property
     def parameters(self) -> list[str]:
+        """
+        List of the names of the variational parameters in q.
+        """
         if self.var is None:
             return []
 
@@ -200,6 +379,22 @@ class VDist:
     def _reparameterize(self, dist: Dist): ...
 
     def init(self, dist: Dist) -> Self:
+        """
+        Initializies the pseudo-response variable with a variational distribution.
+
+        Populates the :attr:`.var` attribute with an observed :class:`.Var`. This
+        variable represents the flattened position governed by this :class:`.VDist`.
+
+        Parameters
+        ----------
+        dist
+            A :class:`.Dist`, representing the joint variational distribution for
+            the flattened position governed by this :class:`.VDist`.
+
+        Notes
+        -----
+        The docstring of :class:`.VDist` includes an example using this method.
+        """
         self._validate(dist)
         self._reparameterize(dist)
 
@@ -217,6 +412,26 @@ class VDist:
         loc: jax.typing.ArrayLike | None = None,
         scale_diag: jax.typing.ArrayLike | None = None,
     ) -> Self:
+        """
+        Initializes a multivariate normal distribution with diagonal covariance matrix
+        as the variational distribution q.
+
+        Internally calls :meth:`.init`.
+
+        Parameters
+        ----------
+        loc
+            Initial value for the location of the variational distribution. If None,
+            initialized to zero.
+        scale_diag
+            Initial value for the square roots of the diagonal elements of the
+            variational distribution's covariance matrix. In other words: The marginal
+            standard deviations/scales. If None, gets initialized to ``0.01``.
+
+        Notes
+        -----
+        The docstring of :class:`.VDist` includes an example using this method.
+        """
         if loc is None:
             loc_value = jnp.asarray(self._flat_pos)
         else:
@@ -272,6 +487,29 @@ class VDist:
         loc: jax.typing.ArrayLike | None = None,
         scale_tril: jax.typing.ArrayLike | None = None,
     ) -> Self:
+        """
+        Initializes a multivariate normal distribution with dense covariance matrix
+        as the variational distribution q.
+
+        The covariance matrix is parameterized by a lower Cholesky factor, where
+        the covariance matrix is given by ``S = scale_tril @ scale_tril.T``.
+
+        Parameters
+        ----------
+        loc
+            Initial value for the location of the variational distribution. If None,
+            initialized to zero.
+        scale_tril
+            Initial value for the lower Cholesky factor, must have non-zero diagonal
+            elements.
+
+        Notes
+        -----
+        The bijector :class:`tfp.bijectors.FillScaleTril` will be automatically applied
+        to ``scale_tril`` to map its elements to the real line.
+
+        The docstring of :class:`.VDist` includes an example using this method.
+        """
         if loc is None:
             loc_value = jnp.asarray(self._flat_pos)
         else:
@@ -295,32 +533,66 @@ class VDist:
         return self.init(dist)
 
     def build(self) -> Self:
+        """
+        Builds the :class:`.Model` for the variational distribution, populates
+        :attr:`.q`.
+
+        Raises
+        ------
+        ValueError
+            If :attr:`.var` has not been populated yet. See :meth:`.init` to populate
+            :attr:`.var`.
+        """
         if self.var is None:
             raise ValueError("The .var attribute must be set, but is currently None.")
         self.q = Model([self.var])
         return self
 
-    def sample_p(
+    def sample(
         self,
-        n: int,
         seed: jax.Array,
-        prepend_axis: bool = True,
+        sample_shape: Sequence[int] = (),
         at_position: Position | None = None,
     ) -> Position:
+        """
+        Draws samples from the variational approximation to the posterior.
+
+        Parameters
+        ----------
+        seed
+            A jax key array, the seed for pseudo-random number generation.
+        sample_shape
+            Desired sample shape.
+        at_position
+            Position dictionary holding parameter values (position) of the variational
+            distribution q to use for sampling. No leading batching dimensions are
+            supported for this position.
+
+        Returns
+        -------
+        A position dictionary holding samples for the parameters governed by this
+        :class:`.VDist` in the representation of p.
+        """
         if self.q is None:
-            raise ValueError("The object has no built model.")
+            raise ValueError("The object has no model.")
+
         if at_position is not None:
             at_position = jax.tree.map(
                 lambda x: jnp.expand_dims(x, (0, 1)), at_position
             )
 
-        q_samples = self.q.sample(shape=(n,), seed=seed, posterior_samples=at_position)
-        q_samples = jax.tree.map(lambda x: jnp.squeeze(x, (1, 2)), q_samples)
+        q_samples = self.q.sample(
+            shape=sample_shape, seed=seed, posterior_samples=at_position
+        )
+        if at_position is not None:
+            q_samples = jax.tree.map(
+                lambda x: jnp.squeeze(
+                    x, (len(sample_shape) + 0, len(sample_shape) + 1)
+                ),
+                q_samples,
+            )
 
-        p_samples = jax.vmap(self.q_to_p)(q_samples)
-        if prepend_axis:
-            p_samples = jax.tree.map(lambda x: jnp.expand_dims(x, 0), p_samples)
-        return p_samples
+        return vmap_batched(q_samples, self.q_to_p, batch_shape=sample_shape)
 
     def __repr__(self) -> str:
         name = type(self).__name__
@@ -334,21 +606,140 @@ class VDist:
         return f"{name}({self.position_keys}, dist={dist})"
 
 
+def flatten_leading_batch(pytree, batch_ndim: int):
+    """Flattens the first `batch_ndim` leading dims of every leaf into one dim."""
+
+    def _f(x):
+        x = jnp.asarray(x)
+        b = int(jnp.prod(jnp.array(x.shape[:batch_ndim])))
+        return x.reshape((b,) + x.shape[batch_ndim:])
+
+    return jax.tree.map(_f, pytree)
+
+
+def unflatten_leading_batch(pytree, batch_shape):
+    """Inverse of flatten_leading_batch given the original batch_shape."""
+    batch_shape = tuple(batch_shape)
+
+    def _f(x):
+        x = jnp.asarray(x)
+        return x.reshape(batch_shape + x.shape[1:])
+
+    return jax.tree.map(_f, pytree)
+
+
+def vmap_batched(
+    pos: Position, fun: Callable[[Position], Position], batch_shape: Sequence[int]
+):
+    batch_ndim = len(batch_shape)
+    if batch_ndim == 0:
+        return fun(pos)
+
+    flat_pos = flatten_leading_batch(pos, batch_ndim=batch_ndim)
+    flat_out_pos = jax.vmap(fun)(flat_pos)
+    out_pos = unflatten_leading_batch(flat_out_pos, batch_shape)
+    return out_pos
+
+
 class CompositeVDist:
-    def __init__(self, *vi_dists: VDist):
-        self.vi_dists = vi_dists
+    r"""
+    Composes several :class:`.VDist` instances into a :class:`.Model` that
+    represents a variational distribution.
+
+    Parameters
+    ----------
+    *vdists
+        Variable numbers of :class:`.VDist` objects.
+
+    See Also
+    --------
+
+    .VDist : Represents a single variational distribution.
+    .CompositeVDist : Represents a composite variational distribution constructed
+        from independent blocks, where each block is given by a :class:`.VDist`.
+
+    Notes
+    -----
+    The :class:`.CompositeVDist` class assumes that each individual parameter in the
+    underlying model p is governed by not more than one :class:`.VDist`.
+
+    The :class:`.CompositeVDist` assumes independence between the parameters 
+    governed by its individual :class:`.VDist`s.
+
+    Examples
+    --------
+    Take the model :math:`y \sim N(\mu, \sigma^2)`, where the posterior distribution
+    of :math:`(\mu, \ln(\sigma))^\top` is modeled by a two independent Gaussian 
+    distributions, i.e. we define the following variational distributions:
+
+    .. math::
+        \mu & \sim N(\phi_1, \phi_2^2) \\
+        \ln(\sigma) & \sim N(\phi_3, \phi_4^2)
+    
+    This variational distribution can be composed by defining separate :class:`.Vdist`
+    objects for :math:`\mu` and :math:`\ln(\sigma)`, and combining them in a
+    :class:`.CompositeVDist`:
+
+    >>> import jax.numpy as jnp
+    >>> import liesel.model as lsl
+    >>> import liesel.experimental.optim as opt
+    >>> import tensorflow_probability.substrates.jax as tfp
+
+    >>> loc = lsl.Var.new_param(jnp.array(0.0), name="mu")
+    >>> scale = lsl.Var.new_param(1.0, name="sigma", bijector=tfp.bijectors.Exp())
+    >>> y = lsl.Var.new_obs(
+    ...     jnp.linspace(-2, 2, 50),
+    ...     lsl.Dist(tfp.distributions.Normal, loc=loc, scale=scale),
+    ...     name="y",
+    ... )
+    >>> p = lsl.Model([y])
+    
+    >>> q1 = opt.VDist(["mu"], p).mvn_diag()
+    >>> q2 = opt.VDist(["h(sigma)"], p).mvn_diag()
+    >>> vdist = opt.CompositeVDist(q1, q2).build()
+
+    In this case, the variational model is equivalent to defining a single 
+    :class:`.VDist` using the :meth:`.VDist.mvn_diag` method like this:
+
+    >>> vdist = opt.VDist(["mu", "h(sigma)"], p).mvn_diag()
+
+    If the variational distribution is intended to capture correlation between the 
+    parameters, the correlated parameters should be governed jointly by a single
+    :class:`.VDist`. For example, to use a multivariate Gaussian with a dense
+    covariance matrix in this case, you can use :meth:`.VDist.mvn_tril`:
+
+    >>> vdist = opt.VDist(["mu", "h(sigma)"], p).mvn_tril()
+
+    This would lead to the variational distribution
+
+    .. math::
+
+        \begin{bmatrix}
+        \mu \\ \ln(\sigma)
+        \end{bmatrix}
+        \sim N(\boldsymbol{\phi}, \boldsymbol{\Lambda}),
+    
+    where :math:`\boldsymbol{\Lambda}` is a :math:`2 \times 2` covariance matrix.
+        
+    """
+
+    def __init__(self, *vdists: VDist):
+        self.vi_dists = vdists
         self.q: Model | None = None
 
     @property
+    @usedocs(VDist.parameters)
     def parameters(self) -> list[str]:
         if self.q is None:
             return []
         return list(self.q.parameters)
 
     @property
+    @usedocs(VDist.p)
     def p(self) -> Model:
         return self.vi_dists[0].p
 
+    @usedocs(VDist.build)
     def build(self) -> Self:
         vars_ = []
         for dist in self.vi_dists:
@@ -359,30 +750,39 @@ class CompositeVDist:
         self.q = q
         return self
 
+    @usedocs(VDist.q_to_p)
     def q_to_p(self, pos: Position) -> Position:
         positions = [dist.q_to_p(pos) for dist in self.vi_dists]
         combined = Position({k: v for d in positions for k, v in d.items()})
         return combined
 
-    def sample_p(
+    @usedocs(VDist.sample)
+    def sample(
         self,
-        n: int,
         seed: jax.Array,
-        prepend_axis: bool = True,
+        sample_shape: Sequence[int] = (),
         at_position: Position | None = None,
     ) -> Position:
         if self.q is None:
-            raise ValueError("The object has no built model.")
+            raise ValueError("The object has no model.")
+
         if at_position is not None:
             at_position = jax.tree.map(
                 lambda x: jnp.expand_dims(x, (0, 1)), at_position
             )
-        q_samples = self.q.sample(shape=(n,), seed=seed, posterior_samples=at_position)
-        q_samples = jax.tree.map(lambda x: jnp.squeeze(x, (1, 2)), q_samples)
-        p_samples = jax.vmap(self.q_to_p)(q_samples)
-        if prepend_axis:
-            p_samples = jax.tree.map(lambda x: jnp.expand_dims(x, 0), p_samples)
-        return p_samples
+
+        q_samples = self.q.sample(
+            shape=sample_shape, seed=seed, posterior_samples=at_position
+        )
+        if at_position is not None:
+            q_samples = jax.tree.map(
+                lambda x: jnp.squeeze(
+                    x, (len(sample_shape) + 0, len(sample_shape) + 1)
+                ),
+                q_samples,
+            )
+
+        return vmap_batched(q_samples, self.q_to_p, batch_shape=sample_shape)
 
     def __repr__(self) -> str:
         name = type(self).__name__
