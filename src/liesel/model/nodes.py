@@ -1626,7 +1626,10 @@ class Var:
         """
         var = cls(value, distribution, name, inference=inference, bijector=bijector)
         var.value_node.monitor = True
-        var.parameter = True
+        if bijector is not None:
+            var.bijected_var.parameter = True
+        else:
+            var.parameter = True
         return var
 
     @classmethod
