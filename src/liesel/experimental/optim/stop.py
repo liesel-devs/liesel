@@ -45,8 +45,8 @@ class Stopper:
     the absolute *or* relative difference between the oldest loss within patience and
     the best loss within patience is so small that it can be neglected.
     To be clear: If either of the two conditions is met, then early stopping happens.
-    The relative magnitude of the difference is calculaterd with respect to the best
-    lost within patience. A simplified pseudo-implementation is:
+    The relative magnitude of the difference is calculated with respect to the best
+    loss within patience. A simplified pseudo-implementation is:
 
     .. code-block:: python
 
