@@ -2,16 +2,19 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from functools import partial
-from typing import Self
+from typing import Literal, Self
 
 import jax
 import jax.flatten_util
 import jax.numpy as jnp
 import tensorflow_probability.substrates.jax.bijectors as tfb
 import tensorflow_probability.substrates.jax.distributions as tfd
+from tensorflow_probability.python.internal.backend.jax.compat import v2 as tf
+from tensorflow_probability.substrates.jax.experimental import distributions as tfde
 
 from ...docs import usedocs
 from ...model import Dist, Model, Var
+from ...model.logprob import FlatLieselLogProb
 from ...model.model import TemporaryModel
 from .loss import LossMixin
 from .split import PositionSplit
@@ -70,8 +73,9 @@ class Elbo(LossMixin):
         nsamples: int = 10,
         nsamples_validate: int = 50,
         scale: bool = False,
+        **params,
     ) -> Self:
-        vi_dist = VDist(list(p.parameters), p).mvn_diag().build()
+        vi_dist = VDist(list(p.parameters), p).mvn_diag(**params).build()
         return cls(
             vi_dist.p,
             vi_dist.q,
@@ -91,8 +95,14 @@ class Elbo(LossMixin):
         nsamples: int = 10,
         nsamples_validate: int = 50,
         scale: bool = False,
+        parameterization: Literal["covariance", "precision"] = "covariance",
+        **params,
     ) -> Self:
-        vi_dist = VDist(list(p.parameters), p).mvn_tril().build()
+        match parameterization:
+            case "covariance":
+                vi_dist = VDist(list(p.parameters), p).mvn_tril(**params).build()
+            case "precision":
+                vi_dist = VDist(list(p.parameters), p).mvn_prec_tril(**params).build()
         return cls(
             vi_dist.p,
             vi_dist.q,
@@ -112,10 +122,16 @@ class Elbo(LossMixin):
         nsamples: int = 10,
         nsamples_validate: int = 50,
         scale: bool = False,
+        parameterization: Literal["covariance", "precision"] = "covariance",
+        **params,
     ) -> Self:
         vi_dists = []
         for param_name in p.parameters:
-            vi_dist = VDist([param_name], p).mvn_tril()
+            match parameterization:
+                case "covariance":
+                    vi_dist = VDist([param_name], p).mvn_tril(**params)
+                case "precision":
+                    vi_dist = VDist([param_name], p).mvn_prec_tril(**params)
             vi_dists.append(vi_dist)
 
         vi_dist = CompositeVDist(*vi_dists).build()
@@ -485,7 +501,7 @@ class VDist:
     def mvn_tril(
         self,
         loc: jax.typing.ArrayLike | None = None,
-        scale_tril: jax.typing.ArrayLike | None = None,
+        scale_tril: Literal["laplace"] | jax.typing.ArrayLike | None = None,
     ) -> Self:
         """
         Initializes a multivariate normal distribution with dense covariance matrix
@@ -518,6 +534,21 @@ class VDist:
         if scale_tril is None:
             n = jnp.size(loc_value)
             scale_tril_value = 0.01 * jnp.eye(n)
+        elif scale_tril == "laplace":
+            info_matrix = -FlatLieselLogProb(self.p, self.position_keys).hessian(
+                loc_value
+            )
+            info_matrix += (
+                1e-6
+                * jnp.mean(jnp.diag(info_matrix))
+                * jnp.eye(jnp.shape(info_matrix)[-1])
+            )
+            eigvals, eigvecs = jnp.linalg.eigh(info_matrix)
+
+            # ensure eigenvalue positivity
+            inv_eigvals_clipped = 1 / jnp.clip(eigvals, min=1e-5)
+            cov_matrix = eigvecs @ (inv_eigvals_clipped[..., None, :] * eigvecs.T)
+            scale_tril_value = jnp.linalg.cholesky(cov_matrix)
         else:
             scale_tril_value = scale_tril
 
@@ -529,6 +560,87 @@ class VDist:
         dist = Dist(tfd.MultivariateNormalTriL, loc=locs, scale_tril=scale_tril_var)
         bijector = tfb.FillScaleTriL()
         scale_tril_var.transform(bijector)
+
+        return self.init(dist)
+
+    def mvn_prec_tril(
+        self,
+        loc: jax.typing.ArrayLike | None = None,
+        precision_factor: Literal["laplace"] | jax.typing.ArrayLike | None = None,
+    ) -> Self:
+        """
+        Initializes a multivariate normal distribution with dense covariance matrix
+        as the variational distribution q.
+
+        The covariance matrix is parameterized by the lower Cholesky factor
+        of the precision matrix, where
+        the covariance matrix is given by
+        ``S = inv(precision_factor @ precision_factor.T)``.
+
+        Parameters
+        ----------
+        loc
+            Initial value for the location of the variational distribution. If None,
+            initialized to zero.
+        precision_factor
+            Initial value for the lower Cholesky factor, must have non-zero diagonal
+            elements.
+
+        Notes
+        -----
+        The bijector :class:`tfp.bijectors.FillScaleTril` will be automatically applied
+        to ``precision_factor`` to map its elements to the real line.
+        """
+
+        def init_mvn_precision_factor(loc, precision_factor):
+            precision_factor_op = tf.linalg.LinearOperatorLowerTriangular(
+                tril=precision_factor,
+                is_non_singular=True,
+                is_positive_definite=True,
+                is_self_adjoint=False,
+                is_square=True,
+            )
+
+            dst = tfde.MultivariateNormalPrecisionFactorLinearOperator
+
+            return dst(loc=loc, precision_factor=precision_factor_op)
+
+        if loc is None:
+            loc_value = jnp.asarray(self._flat_pos)
+        else:
+            loc_value = loc
+
+        if precision_factor is None:
+            n = jnp.size(loc_value)
+            precision_factor_value = 100.0 * jnp.eye(n)
+        elif precision_factor == "laplace":
+            info_matrix = -FlatLieselLogProb(self.p, self.position_keys).hessian(
+                loc_value
+            )
+            info_matrix += (
+                1e-6
+                * jnp.mean(jnp.diag(info_matrix))
+                * jnp.eye(jnp.shape(info_matrix)[-1])
+            )
+            eigvals, eigvecs = jnp.linalg.eigh(info_matrix)
+
+            # ensure eigenvalue positivity
+            eigvals_clipped = jnp.clip(eigvals, min=1e-5)
+            info_matrix = eigvecs @ (eigvals_clipped[..., None, :] * eigvecs.T)
+            precision_factor_value = jnp.linalg.cholesky(info_matrix)
+        else:
+            precision_factor_value = precision_factor
+
+        locs = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
+        precision_factor_var = Var.new_param(
+            precision_factor_value, name=self._flat_pos_name + "_precision_factor"
+        )
+
+        dist = Dist(
+            init_mvn_precision_factor, loc=locs, precision_factor=precision_factor_var
+        )
+        bijector = tfb.FillScaleTriL()
+        precision_factor_var.transform(bijector)
 
         return self.init(dist)
 
