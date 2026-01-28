@@ -19,6 +19,7 @@ from .kernel import (
     DefaultTransitionInfo,
     DefaultTuningInfo,
     ModelMixin,
+    ReprMixin,
     TransitionMixin,
     TransitionOutcome,
     TuningMixin,
@@ -98,10 +99,48 @@ class NUTSKernel(
     ModelMixin,
     TransitionMixin[NUTSKernelState, NUTSTransitionInfo],
     TuningMixin[NUTSKernelState, NUTSTuningInfo],
+    ReprMixin,
 ):
     """
     A NUTS kernel with dual averaging and an inverse mass matrix tuner, implementing the
     :class:`.Kernel` protocol.
+
+    Parameters
+    ----------
+    position_keys
+        Sequence of position keys (variable names) handled by this kernel.
+    initial_step_size
+        Value at which to start step size tuning.
+    initial_inverse_mass_matrix
+        Starting value for the inverse mass matrix (the precision matrix of the
+        momentum). If ``None``, an identity matrix will be used here.
+    max_treedepth
+        The maximum number of times that the length of the trajectory is doubled before
+        returning if no U-turn has been obserbed or no divergence has occured.
+        See the Stan reference manual [#stan]_ for more details.
+    da_target_accept
+        Target acceptance probability for dual averaging algorithm.
+    da_gamma
+        The adaptation regularization scale.
+    da_kappa
+        The adaptation relaxation exponent.
+    da_t0
+        The adaptation iteration offset.
+    mm_diag
+        Whether to use a diagonal mass matrix for drawing the momentum vector.
+        If True, the inverse mass matrix will be tuned during adaptation using
+        :func:`.tune_inv_mm_diag`. If set to False, the mass matrix will be tuned
+        using :func:`.tune_inv_mm_full` instead.
+    identifier
+        An string acting as a unique identifier for this kernel.
+
+    Notes
+    -----
+    For more information on step size tuning via dual averaging,
+    see :func:`.da_step` and :class:`.DAKernelState`.
+
+    .. [#stan] `Stan Development Team, Stan Reference Manual (2021), Chapter 15.2
+       <https://mc-stan.org/docs/2_28/reference-manual/hmc-algorithm-parameters.html>`_.
     """
 
     error_book: ClassVar[dict[int, str]] = {
@@ -130,6 +169,7 @@ class NUTSKernel(
         da_kappa: float = 0.75,
         da_t0: int = 10,
         mm_diag: bool = True,
+        identifier: str = "",
     ):
         self.position_keys = tuple(position_keys)
         self._model = None
@@ -144,6 +184,7 @@ class NUTSKernel(
         self.da_t0 = da_t0
 
         self.mm_diag = mm_diag
+        self.identifier = identifier
 
     def _blackjax_state(self, model_state: ModelState) -> hmc.HMCState:
         return nuts.init(self.position(model_state), self.log_prob_fn(model_state))

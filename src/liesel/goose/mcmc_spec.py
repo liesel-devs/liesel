@@ -31,6 +31,33 @@ class LieselMCMC:
     which
         A named inference configuration to use. If None, the default inference \
         attached to each variable is used.
+
+    Examples
+    --------
+
+    .. rubric:: Liesel Workflow
+
+    For this example, we import ``tensorflow_probability`` as follows:
+
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+
+    First, we set up a minimal model:
+
+    >>> mu = lsl.Var.new_param(0.0, name="mu", inference=gs.MCMCSpec(gs.NUTSKernel))
+    >>> dist = lsl.Dist(tfd.Normal, loc=mu, scale=1.0)
+    >>> y = lsl.Var.new_obs(jnp.array([1.0, 2.0, 3.0]), dist, name="y")
+    >>> model = lsl.Model([y])
+
+    Now we initialize the EngineBuilder and set the desired number of warmup and
+    posterior samples:
+
+    >>> builder = gs.LieselMCMC(model).get_engine_builder(seed=1, num_chains=4)
+    >>> builder.add_adaptation(1000)
+    >>> builder.add_posterior(1000)
+
+    Finally, we build the engine:
+
+    >>> engine = builder.build()
     """
 
     model: Model
@@ -96,6 +123,7 @@ class LieselMCMC:
                     kernel=inference.kernel,
                     kwargs=inference.kernel_kwargs,
                     position_keys=[name],
+                    order=inference.order,
                 )
 
             elif group_name in kernel_groups:
@@ -107,11 +135,24 @@ class LieselMCMC:
                         f" {group_name}."
                     )
 
-                same_kwargs = group.kwargs == inference.kernel_kwargs
-                if not same_kwargs:
-                    raise ValueError(
-                        f"Found incoherent kwargs for kernel group {group_name}."
-                    )
+                if inference.kernel_kwargs is None:
+                    pass
+                elif not group.kwargs:
+                    group.kwargs = inference.kernel_kwargs
+                else:
+                    if group.kwargs is not inference.kernel_kwargs:
+                        raise ValueError(
+                            "Found incoherent kernel keyword arguments for "
+                            f"kernel group {group_name}. "
+                            "When supplying kernel keyword arguments for multiple "
+                            "inference objects, they all have to point to the "
+                            "same object. "
+                            "Alternatively, if you pass the kernel keyword arguments "
+                            "to only "
+                            "one inference object in the group, they will be applied "
+                            "for the whole group."
+                        )
+
                 group.position_keys.append(name)
 
             else:
@@ -119,7 +160,12 @@ class LieselMCMC:
                     kernel=inference.kernel,
                     kwargs=inference.kernel_kwargs,
                     position_keys=[name],
+                    order=inference.order,
                 )
+
+        kernel_groups = dict(
+            sorted(kernel_groups.items(), key=lambda item: item[1].order)
+        )
 
         return kernel_groups
 
@@ -195,6 +241,7 @@ class _KernelGroup:
     kernel: Callable[..., Kernel]
     kwargs: dict[str, Any] = field(default_factory=dict)
     position_keys: list[str] = field(default_factory=list)
+    order: int = 99
 
 
 P = ParamSpec("P")
@@ -228,11 +275,46 @@ class MCMCSpec:
         A TensorFlow Probability distribution used to apply random jitter to the \
         initial value of the variable.
     jitter_method
-        The type of jitter to be applied. This can be one of the following:
-        - `none`: No jitter is applied.
-        - `additive`: Additive jitter is applied.
-        - `multiplicative`: Multiplicative jitter is applied.
-        - `replacement`: Value is replaced when jitter is applied.
+        The type of jitter to be applied. This can be one of the following: - `none`: No
+        jitter is applied. - `additive`: Additive jitter is applied. - `multiplicative`:
+        Multiplicative jitter is applied. - `replacement`: Value is replaced when jitter
+        is applied.
+    order
+        If you want to change the order in which parameter blocks are sampled. Blocks
+        will be ordered by default based on the topological order of the graph (from the
+        bottom up; i.e. the kernels for sampling parameters closest to the graph's leaf
+        nodes/responses come first), which is often a sensible default. After that,
+        blocks will be ordered based on the integer provided here. The kernel with the
+        smallest ``order`` integer will be used first.
+
+
+    Examples
+    --------
+
+    .. rubric:: Liesel Workflow
+
+    For this example, we import ``tensorflow_probability`` as follows:
+
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+
+    First, we set up a minimal model:
+
+    >>> mu = lsl.Var.new_param(0.0, name="mu", inference=gs.MCMCSpec(gs.NUTSKernel))
+    >>> dist = lsl.Dist(tfd.Normal, loc=mu, scale=1.0)
+    >>> y = lsl.Var.new_obs(jnp.array([1.0, 2.0, 3.0]), dist, name="y")
+    >>> model = lsl.Model([y])
+
+    Now we initialize the EngineBuilder and set the desired number of warmup and
+    posterior samples:
+
+    >>> builder = gs.LieselMCMC(model).get_engine_builder(seed=1, num_chains=4)
+    >>> builder.add_adaptation(1000)
+    >>> builder.add_posterior(1000)
+
+    Finally, we build the engine:
+
+    >>> engine = builder.build()
+
     """
 
     def __post_init__(self) -> None:
@@ -249,6 +331,10 @@ class MCMCSpec:
     kernel_group: str | None = None
     jitter_dist: tfd.Distribution | None = None
     jitter_method: Literal["additive", "multiplicative", "replacement"] = "additive"
+    order: int = 99
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.kernel}, {self.kernel_group=})"
 
     def apply_jitter(self, seed: KeyArray, value: Array) -> Array:
         """

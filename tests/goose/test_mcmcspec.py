@@ -298,6 +298,120 @@ class TestLieselMCMC:
         assert len(kernels) == 1
         assert kernels[0].position_keys == ("sigma", "mu")
 
+    def test_kernel_group_equal_kwargs(self):
+        """
+        Uses equal kernel kwargs for two MCMCSpecs.
+        Since they are not the same object, we get an error.
+        """
+        spec1 = gs.MCMCSpec(
+            gs.NUTSKernel,
+            kernel_group="a",
+            kernel_kwargs={"mm_diag": True, "da_target_accept": 0.8},
+        )
+
+        spec2 = gs.MCMCSpec(
+            gs.NUTSKernel,
+            kernel_group="a",
+            kernel_kwargs={"mm_diag": True, "da_target_accept": 0.8},
+        )
+
+        mu = lsl.Var.new_param(
+            0.0,
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            inference=spec1,
+            name="mu",
+        )
+
+        sigma = lsl.Var.new_param(
+            1.0,
+            lsl.Dist(tfd.InverseGamma, concentration=1.0, scale=0.5),
+            inference=spec2,
+            name="sigma",
+        )
+
+        model = lsl.Model([mu, sigma])
+
+        with pytest.raises(ValueError):
+            mcmc = gs.LieselMCMC(model)
+            mcmc.get_kernel_list()
+
+    def test_kernel_group_kwargs_same_object(self):
+        """
+        Uses identical objects for the kernel kwargs.
+        """
+        kwargs = {"mm_diag": True, "da_target_accept": 0.8}
+        spec1 = gs.MCMCSpec(
+            gs.NUTSKernel,
+            kernel_group="a",
+            kernel_kwargs=kwargs,
+        )
+
+        spec2 = gs.MCMCSpec(
+            gs.NUTSKernel,
+            kernel_group="a",
+            kernel_kwargs=kwargs,
+        )
+
+        mu = lsl.Var.new_param(
+            0.0,
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            inference=spec1,
+            name="mu",
+        )
+
+        sigma = lsl.Var.new_param(
+            1.0,
+            lsl.Dist(tfd.InverseGamma, concentration=1.0, scale=0.5),
+            inference=spec2,
+            name="sigma",
+        )
+
+        model = lsl.Model([mu, sigma])
+
+        mcmc = gs.LieselMCMC(model)
+        kernels = mcmc.get_kernel_list()
+        assert len(kernels) == 1
+        assert kernels[0].position_keys == ("sigma", "mu")
+
+    def test_kernel_group_kwargs_defined_once(self):
+        """
+        Only one spec defines the kernel kwargs, they get used.
+        """
+        kwargs = {"mm_diag": False, "da_target_accept": 0.5}
+        spec1 = gs.MCMCSpec(
+            gs.NUTSKernel,
+            kernel_group="a",
+            kernel_kwargs=kwargs,
+        )
+
+        spec2 = gs.MCMCSpec(
+            gs.NUTSKernel,
+            kernel_group="a",
+        )
+
+        mu = lsl.Var.new_param(
+            0.0,
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            inference=spec1,
+            name="mu",
+        )
+
+        sigma = lsl.Var.new_param(
+            1.0,
+            lsl.Dist(tfd.InverseGamma, concentration=1.0, scale=0.5),
+            inference=spec2,
+            name="sigma",
+        )
+
+        model = lsl.Model([mu, sigma])
+
+        mcmc = gs.LieselMCMC(model)
+        kernels = mcmc.get_kernel_list()
+        assert len(kernels) == 1
+        assert kernels[0].position_keys == ("sigma", "mu")
+        assert kernels[0].da_target_accept == pytest.approx(kwargs["da_target_accept"])
+        assert kernels[0].mm_diag == pytest.approx(kwargs["mm_diag"])
+
     def test_incoherent_kernel_group(self):
         mu = lsl.Var.new_param(
             0.0,
@@ -477,3 +591,63 @@ class TestLieselMCMC:
         assert log_sigma.inference is None
         assert sigma.inference is None
         assert log_sigma.inference is None
+
+    def test_default_order_of_kernels(self):
+        layer3 = lsl.Var.new_param(
+            1.0, name="layer3", inference=gs.MCMCSpec(gs.NUTSKernel)
+        )
+        layer2_loc = lsl.Var.new_param(
+            1.0,
+            distribution=lsl.Dist(tfd.Normal, loc=layer3, scale=1.0),
+            name="layer2_loc",
+            inference=gs.MCMCSpec(gs.NUTSKernel),
+        )
+        layer2_scale = lsl.Var.new_param(
+            1.0,
+            name="layer2_scale",
+            bijector=tfb.Exp(),
+            inference=gs.MCMCSpec(gs.NUTSKernel),
+        )
+        layer1 = lsl.Var.new_param(
+            1.0,
+            distribution=lsl.Dist(tfd.Normal, loc=layer2_loc, scale=layer2_scale),
+            name="layer1",
+            inference=gs.MCMCSpec(gs.NUTSKernel),
+        )
+        model = lsl.Model([layer1])
+        klist = gs.LieselMCMC(model).get_kernel_list()
+        position_keys = [k.position_keys for k in klist]
+        assert position_keys[0][0] == "layer1"
+        assert position_keys[1][0] == "h(layer2_scale)"
+        assert position_keys[2][0] == "layer2_loc"
+        assert position_keys[3][0] == "layer3"
+
+    def test_custom_order_of_kernels(self):
+        layer3 = lsl.Var.new_param(
+            1.0, name="layer3", inference=gs.MCMCSpec(gs.NUTSKernel, order=1)
+        )
+        layer2_loc = lsl.Var.new_param(
+            1.0,
+            distribution=lsl.Dist(tfd.Normal, loc=layer3, scale=1.0),
+            name="layer2_loc",
+            inference=gs.MCMCSpec(gs.NUTSKernel, order=2),
+        )
+        layer2_scale = lsl.Var.new_param(
+            1.0,
+            name="layer2_scale",
+            bijector=tfb.Exp(),
+            inference=gs.MCMCSpec(gs.NUTSKernel, order=3),
+        )
+        layer1 = lsl.Var.new_param(
+            1.0,
+            distribution=lsl.Dist(tfd.Normal, loc=layer2_loc, scale=layer2_scale),
+            name="layer1",
+            inference=gs.MCMCSpec(gs.NUTSKernel),
+        )
+        model = lsl.Model([layer1])
+        klist = gs.LieselMCMC(model).get_kernel_list()
+        position_keys = [k.position_keys for k in klist]
+        assert position_keys[3][0] == "layer1"
+        assert position_keys[2][0] == "h(layer2_scale)"
+        assert position_keys[1][0] == "layer2_loc"
+        assert position_keys[0][0] == "layer3"
