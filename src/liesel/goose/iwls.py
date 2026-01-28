@@ -234,7 +234,7 @@ class IWLSKernel(
             * jnp.eye(jnp.shape(flat_position)[-1])
         )
         eigvals, eigvecs = jnpla.eigh(info_matrix)  # A = U Λ U^T
-        eigvals_clipped = jnp.clip(eigvals, min=1e5)  # ensure positivity
+        eigvals_clipped = jnp.clip(eigvals, min=1e-5)  # ensure positivity
 
         info_matrix = eigvecs @ (eigvals_clipped[..., None, :] * eigvecs.T)
 
@@ -292,7 +292,7 @@ class IWLSKernel(
                 eigvals, eigvecs = jnpla.eigh(info_matrix)
 
                 # ensure eigenvalue positivity
-                eigvals_clipped = jnp.clip(eigvals, min=1e5)
+                eigvals_clipped = jnp.clip(eigvals, min=1e-5)
                 info_matrix = eigvecs @ (eigvals_clipped[..., None, :] * eigvecs.T)
                 return jnpla.cholesky(info_matrix), 3
 
