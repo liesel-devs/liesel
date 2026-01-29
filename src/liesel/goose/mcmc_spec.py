@@ -233,6 +233,8 @@ class LieselMCMC:
         EngineBuilder
             A configured ``EngineBuilder`` instance.
         """
+        self.validate_inference_specs()
+
         eb = EngineBuilder(seed=seed, num_chains=num_chains)
         eb.set_model(LieselInterface(self.model))
         eb.set_initial_values(self.model.state)
@@ -245,7 +247,38 @@ class LieselMCMC:
 
         return eb
 
-    def run_mcmc(
+    def validate_inference_specs(self) -> None:
+        """
+        Logs a warning, if there are any parameters in the model that have no inference
+        specification for MCMC.
+        """
+        no_inference: list[str] = []
+        for name, var in self.model.parameters.items():
+            if isinstance(var.inference, MCMCSpec):
+                continue
+            elif var.inference is None:
+                no_inference.append(name)
+            elif hasattr(var.inference, "values"):
+                specs = list(var.inference.values())
+                for spec in specs:
+                    if isinstance(spec, MCMCSpec):
+                        continue
+
+                # triggers only if None of the specs in the inference dict was an
+                # MCMCSpec
+                no_inference.append(name)
+            else:
+                no_inference.append(name)
+
+        for name in no_inference:
+            logger.warning(
+                f"No inference specification defined for {self.model.vars[name]}. "
+                "If you do not add a kernel for this parameter manually to an "
+                "EngineBuilder, it will not be"
+                " sampled."
+            )
+
+    def run_for_epochs(
         self,
         *,
         seed: int,
@@ -259,8 +292,7 @@ class LieselMCMC:
         apply_jitter: bool = True,
     ) -> SamplingResults:
         """
-        Shorthand method for quickly running MCMC, if no custom configuration is
-        desired.
+        Shorthand method for quickly running MCMC for a set number of epochs.
 
         Parameters
         ----------
