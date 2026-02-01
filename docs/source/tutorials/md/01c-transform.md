@@ -1,4 +1,5 @@
 
+
 # Parameter transformations
 
 This tutorial builds on the [linear regression
@@ -106,30 +107,32 @@ engine.sample_all_epochs()
 
 
       0%|                                                  | 0/3 [00:00<?, ?chunk/s]
-     33%|##############                            | 1/3 [00:01<00:03,  1.52s/chunk]
-    100%|##########################################| 3/3 [00:01<00:00,  1.98chunk/s]
+     33%|##############                            | 1/3 [00:03<00:07,  3.81s/chunk]
+    100%|##########################################| 3/3 [00:03<00:00,  1.27s/chunk]
 
       0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|########################################| 1/1 [00:00<00:00, 2709.50chunk/s]
+    100%|########################################| 1/1 [00:00<00:00, 1266.78chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 3390.71chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 1275.06chunk/s]
 
       0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|########################################| 4/4 [00:00<00:00, 3766.78chunk/s]
+    100%|########################################| 4/4 [00:00<00:00, 1823.81chunk/s]
 
       0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|#########################################| 8/8 [00:00<00:00, 830.21chunk/s]
+    100%|#########################################| 8/8 [00:00<00:00, 604.27chunk/s]
 
       0%|                                                 | 0/20 [00:00<?, ?chunk/s]
-    100%|#######################################| 20/20 [00:00<00:00, 262.70chunk/s]
+    100%|#######################################| 20/20 [00:00<00:00, 190.86chunk/s]
+    100%|#######################################| 20/20 [00:00<00:00, 190.53chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 3690.54chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 1627.59chunk/s]
 
       0%|                                                 | 0/40 [00:00<?, ?chunk/s]
-     60%|#######################4               | 24/40 [00:00<00:00, 236.26chunk/s]
-    100%|#######################################| 40/40 [00:00<00:00, 205.87chunk/s]
+     50%|###################5                   | 20/40 [00:00<00:00, 189.36chunk/s]
+     98%|###################################### | 39/40 [00:00<00:00, 145.30chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 149.92chunk/s]
 
 Judging from the trace plots, it seems that all chains have converged.
 
@@ -147,306 +150,559 @@ original $\sigma^2$ and the transformed $\log(\sigma^2)$.
 gs.Summary(results)
 ```
 
-<div class="cell-output-display">
-
 <p>
+
 <strong>Parameter summary:</strong>
 </p>
+
 <table border="0" class="dataframe">
+
 <thead>
+
 <tr style="text-align: right;">
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 kernel
 </th>
+
 <th>
+
 mean
 </th>
+
 <th>
+
 sd
 </th>
+
 <th>
+
 q_0.05
 </th>
+
 <th>
+
 q_0.5
 </th>
+
 <th>
+
 q_0.95
 </th>
+
 <th>
+
 sample_size
 </th>
+
 <th>
+
 ess_bulk
 </th>
+
 <th>
+
 ess_tail
 </th>
+
 <th>
+
 rhat
 </th>
+
 </tr>
+
 <tr>
+
 <th>
+
 parameter
 </th>
+
 <th>
+
 index
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 </tr>
+
 </thead>
+
 <tbody>
+
 <tr>
+
 <th rowspan="2" valign="top">
+
 beta
 </th>
+
 <th>
+
 (0,)
 </th>
+
 <td>
+
 kernel_00
 </td>
+
 <td>
-0.988
+
+0.989
 </td>
+
 <td>
-0.093
+
+0.095
 </td>
+
 <td>
-0.834
+
+0.832
 </td>
+
 <td>
-0.987
+
+0.990
 </td>
+
 <td>
-1.140
+
+1.144
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
-1380.566
+
+1339.347
 </td>
+
 <td>
-1659.059
+
+1393.170
 </td>
+
 <td>
-1.003
+
+1.001
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 (1,)
 </th>
+
 <td>
+
 kernel_00
 </td>
+
 <td>
-1.904
+
+1.901
 </td>
+
 <td>
-0.162
+
+0.165
 </td>
+
 <td>
-1.637
+
+1.633
 </td>
+
 <td>
-1.907
+
+1.900
 </td>
+
 <td>
-2.165
+
+2.171
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
-1515.441
+
+1287.856
 </td>
+
 <td>
-1646.966
+
+1519.847
 </td>
+
 <td>
-1.003
+
+1.001
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 sigma_sq
 </th>
+
 <th>
+
 ()
 </th>
+
 <td>
+
 \-
 </td>
+
 <td>
-1.042
+
+1.045
 </td>
+
 <td>
-0.066
+
+0.065
 </td>
+
 <td>
-0.936
+
+0.942
 </td>
+
 <td>
-1.039
+
+1.041
 </td>
+
 <td>
-1.154
+
+1.156
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
-2330.582
+
+2430.661
 </td>
+
 <td>
-2044.393
+
+2180.445
 </td>
+
 <td>
-1.002
+
+1.003
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 sigma_sq_transformed
 </th>
+
 <th>
+
 ()
 </th>
+
 <td>
+
 kernel_00
 </td>
+
 <td>
-0.039
+
+0.042
 </td>
+
 <td>
-0.063
+
+0.062
 </td>
+
 <td>
--0.066
+
+-0.060
 </td>
+
 <td>
-0.039
+
+0.040
 </td>
+
 <td>
-0.143
+
+0.145
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
-2330.584
+
+2430.661
 </td>
+
 <td>
-2044.393
+
+2180.445
 </td>
+
 <td>
-1.002
+
+1.003
 </td>
+
 </tr>
+
 </tbody>
-</table>
-<p>
-<strong>Error summary:</strong>
-</p>
-<table border="0" class="dataframe">
-<thead>
-<tr style="text-align: right;">
-<th>
-</th>
-<th>
-</th>
-<th>
-</th>
-<th>
-</th>
-<th>
-count
-</th>
-<th>
-relative
-</th>
-</tr>
-<tr>
-<th>
-kernel
-</th>
-<th>
-error_code
-</th>
-<th>
-error_msg
-</th>
-<th>
-phase
-</th>
-<th>
-</th>
-<th>
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<th rowspan="2" valign="top">
-kernel_00
-</th>
-<th rowspan="2" valign="top">
-1
-</th>
-<th rowspan="2" valign="top">
-divergent transition
-</th>
-<th>
-warmup
-</th>
-<td>
-57
-</td>
-<td>
-0.014
-</td>
-</tr>
-<tr>
-<th>
-posterior
-</th>
-<td>
-0
-</td>
-<td>
-0.000
-</td>
-</tr>
-</tbody>
+
 </table>
 
-</div>
+<p>
+
+<strong>Error summary:</strong>
+</p>
+
+<table border="0" class="dataframe">
+
+<thead>
+
+<tr style="text-align: right;">
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+count
+</th>
+
+<th>
+
+sample_size
+</th>
+
+<th>
+
+sample_size_total
+</th>
+
+<th>
+
+relative
+</th>
+
+</tr>
+
+<tr>
+
+<th>
+
+kernel
+</th>
+
+<th>
+
+error_code
+</th>
+
+<th>
+
+error_msg
+</th>
+
+<th>
+
+phase
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<th rowspan="2" valign="top">
+
+kernel_00
+</th>
+
+<th rowspan="2" valign="top">
+
+1
+</th>
+
+<th rowspan="2" valign="top">
+
+divergent transition
+</th>
+
+<th>
+
+warmup
+</th>
+
+<td>
+
+58
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
+0.014
+</td>
+
+</tr>
+
+<tr>
+
+<th>
+
+posterior
+</th>
+
+<td>
+
+0
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
+0.000
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
 
 Finally, let’s check the autocorrelation of the samples.
 

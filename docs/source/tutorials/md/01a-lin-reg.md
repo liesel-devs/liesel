@@ -1,4 +1,5 @@
 
+
 # Linear Regression
 
 In this tutorial, we build a linear regression model with Liesel and
@@ -208,30 +209,30 @@ engine.sample_all_epochs()
 
 
       0%|                                                  | 0/3 [00:00<?, ?chunk/s]
-     33%|##############                            | 1/3 [00:01<00:02,  1.35s/chunk]
-    100%|##########################################| 3/3 [00:01<00:00,  2.22chunk/s]
+     33%|##############                            | 1/3 [00:03<00:06,  3.08s/chunk]
+    100%|##########################################| 3/3 [00:03<00:00,  1.03s/chunk]
 
       0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|########################################| 1/1 [00:00<00:00, 2212.19chunk/s]
+    100%|########################################| 1/1 [00:00<00:00, 1211.18chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 3883.61chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 1515.56chunk/s]
 
       0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|########################################| 4/4 [00:00<00:00, 4106.02chunk/s]
+    100%|########################################| 4/4 [00:00<00:00, 1331.21chunk/s]
 
       0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|########################################| 8/8 [00:00<00:00, 1306.54chunk/s]
+    100%|#########################################| 8/8 [00:00<00:00, 895.24chunk/s]
 
       0%|                                                 | 0/20 [00:00<?, ?chunk/s]
-    100%|#######################################| 20/20 [00:00<00:00, 391.76chunk/s]
+    100%|#######################################| 20/20 [00:00<00:00, 240.41chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 2500.33chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 1279.53chunk/s]
 
       0%|                                                 | 0/40 [00:00<?, ?chunk/s]
-     82%|################################1      | 33/40 [00:00<00:00, 318.94chunk/s]
-    100%|#######################################| 40/40 [00:00<00:00, 303.65chunk/s]
+     60%|#######################4               | 24/40 [00:00<00:00, 228.33chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 196.56chunk/s]
 
 Finally, we can extract the results and print a summary table.
 
@@ -242,246 +243,429 @@ summary
 ```
 
 <p>
+
 <strong>Parameter summary:</strong>
 </p>
+
 <table border="0" class="dataframe">
+
 <thead>
+
 <tr style="text-align: right;">
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 kernel
 </th>
+
 <th>
+
 mean
 </th>
+
 <th>
+
 sd
 </th>
+
 <th>
+
 q_0.05
 </th>
+
 <th>
+
 q_0.5
 </th>
+
 <th>
+
 q_0.95
 </th>
+
 <th>
+
 sample_size
 </th>
+
 <th>
+
 ess_bulk
 </th>
+
 <th>
+
 ess_tail
 </th>
+
 <th>
+
 rhat
 </th>
+
 </tr>
+
 <tr>
+
 <th>
+
 parameter
 </th>
+
 <th>
+
 index
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 </tr>
+
 </thead>
+
 <tbody>
+
 <tr>
+
 <th rowspan="2" valign="top">
+
 beta
 </th>
+
 <th>
+
 (0,)
 </th>
+
 <td>
+
 kernel_00
 </td>
+
 <td>
-0.981
+
+0.982
 </td>
+
 <td>
+
 0.087
 </td>
+
 <td>
-0.842
+
+0.840
 </td>
+
 <td>
-0.980
+
+0.983
 </td>
+
 <td>
-1.127
+
+1.126
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
-887.081
+
+831.271
 </td>
+
 <td>
-1154.253
+
+877.956
 </td>
+
 <td>
-1.003
-</td>
-</tr>
-<tr>
-<th>
-(1,)
-</th>
-<td>
-kernel_00
-</td>
-<td>
-1.914
-</td>
-<td>
-0.152
-</td>
-<td>
-1.658
-</td>
-<td>
-1.915
-</td>
-<td>
-2.163
-</td>
-<td>
-4000
-</td>
-<td>
-883.961
-</td>
-<td>
-1324.823
-</td>
-<td>
+
 1.001
 </td>
+
 </tr>
+
+<tr>
+
+<th>
+
+(1,)
+</th>
+
+<td>
+
+kernel_00
+</td>
+
+<td>
+
+1.911
+</td>
+
+<td>
+
+0.154
+</td>
+
+<td>
+
+1.648
+</td>
+
+<td>
+
+1.915
+</td>
+
+<td>
+
+2.153
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
+860.853
+</td>
+
+<td>
+
+1205.948
+</td>
+
+<td>
+
+1.001
+</td>
+
+</tr>
+
 </tbody>
+
 </table>
+
 <p>
+
 <strong>Error summary:</strong>
 </p>
+
 <table border="0" class="dataframe">
+
 <thead>
+
 <tr style="text-align: right;">
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 count
 </th>
+
 <th>
+
 sample_size
 </th>
+
 <th>
+
 sample_size_total
 </th>
+
 <th>
+
 relative
 </th>
+
 </tr>
+
 <tr>
+
 <th>
+
 kernel
 </th>
+
 <th>
+
 error_code
 </th>
+
 <th>
+
 error_msg
 </th>
+
 <th>
+
 phase
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 </tr>
+
 </thead>
+
 <tbody>
+
 <tr>
+
 <th rowspan="2" valign="top">
+
 kernel_00
 </th>
+
 <th rowspan="2" valign="top">
+
 1
 </th>
+
 <th rowspan="2" valign="top">
+
 divergent transition
 </th>
+
 <th>
+
 warmup
 </th>
+
 <td>
-52
+
+55
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
-0.013
+
+0.014
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 posterior
 </th>
+
 <td>
+
 0
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
+
 0.000
 </td>
+
 </tr>
+
 </tbody>
+
 </table>
 
 If we need more samples, we can append another epoch to the engine and
@@ -498,8 +682,8 @@ engine.sample_next_epoch()
 
 
       0%|                                                 | 0/40 [00:00<?, ?chunk/s]
-     80%|###############################2       | 32/40 [00:00<00:00, 311.91chunk/s]
-    100%|#######################################| 40/40 [00:00<00:00, 298.62chunk/s]
+     60%|#######################4               | 24/40 [00:00<00:00, 233.10chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 200.87chunk/s]
 
 No compilation is required at this point, so this is pretty fast.
 
