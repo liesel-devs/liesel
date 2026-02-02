@@ -154,7 +154,23 @@ class PITCalc(Node):
 
 
 def PIT(_input: Var | Dist, distribution: Dist | None = None, name: str = "") -> Var:
-    """A weak variable evaluating a probability integral transform (PIT)."""
+    """
+    A weak variable evaluating a probability integral transform (PIT).
+
+    See Also
+    --------
+    .liesel.distribution.GaussianCopula : A bivariate Gaussian copula distribution.
+
+    Examples
+    --------
+    >>> import liesel.model as lsl
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+    >>> dist = lsl.Dist(tfd.Normal, loc=0.0, scale=1.0)
+    >>> x = lsl.Var.new_obs(1.0, dist)
+    >>> x_pit = lsl.PIT(x, name="PIT(x)").update()
+    >>> x_pit.value.round(2)
+    Array(0.84, dtype=float32)
+    """
     dist = _input.dist_node if isinstance(_input, Var) else _input
 
     if not dist:

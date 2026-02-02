@@ -58,6 +58,24 @@ class RWKernel(ModelMixin, TransitionMixin[RWKernelState, RWTransitionInfo], Rep
     0.234, which is optimal for a random walk sampler (in a certain sense). See Gelman
     et al. (1997) Weak convergence and optimal scaling of random walk Metropolis
     algorithms: https://doi.org/10.1214/aoap/1034625254.
+
+    Parameters
+    ----------
+    position_keys
+        Sequence of position keys (variable names) handled by this kernel.
+    initial_step_size
+        Value at which to start step size tuning.
+    da_target_accept
+        Target acceptance probability for dual averaging algorithm.
+    da_gamma
+        The adaptation regularization scale.
+    da_kappa
+        The adaptation relaxation exponent.
+    da_t0
+        The adaptation iteration offset.
+    identifier
+        An string acting as a unique identifier for this kernel.
+
     """
 
     error_book: ClassVar[dict[int, str]] = {0: "no errors", 90: "nan acceptance prob"}

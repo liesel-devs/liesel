@@ -57,12 +57,26 @@ class EngineBuilder:
     """
     The :class:`.EngineBuilder` is used to construct an MCMC Engine.
 
-    .. rubric:: Workflow
+    .. rubric:: Liesel Workflow
+
+    The Liesel workflow usually looks something like this:
+
+    #. You intialize your :class:`~liesel.model.nodes.Var` objects with
+        :class:`~liesel.goose.MCMCSpec` that specify how each variable should be
+        sampled.
+    #. You initilize an EngineBuilder using the method
+        :meth:`~.goose.LieselMCMC.get_engine_builder` of :class:`~.goose.LieselMCMC`.
+    #. Set the desired number of warmup and posterior samples with
+        :meth:`.add_burnin`, :meth:`.add_adaptation`, and :meth:`.add_posterior`.
+    #. Build an :class:`~.goose.Engine` with :meth:`.build`.
+
+    .. rubric:: General Workflow
 
     The general workflow usually looks something like this:
 
     #. Create a builder with :class:`.EngineBuilder`.
-    #. Set the desired number of warmup and posterior samples :meth:`.set_duration`.
+    #. Set the desired number of warmup and posterior samples with
+        :meth:`.add_burnin`, :meth:`.add_adaptation`, and :meth:`.add_posterior`.
     #. Set the model interface with :meth:`.set_model`.
     #. Set the initial values with :meth:`.set_initial_values`.
     #. Add MCMC kernels with :meth:`.add_kernel`.
@@ -99,6 +113,35 @@ class EngineBuilder:
 
     Examples
     --------
+
+    .. rubric:: Liesel Workflow
+
+    For this example, we import ``tensorflow_probability`` as follows:
+
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+
+    First, we set up a minimal model:
+
+    >>> mu = lsl.Var.new_param(0.0, name="mu", inference=gs.MCMCSpec(gs.NUTSKernel))
+    >>> dist = lsl.Dist(tfd.Normal, loc=mu, scale=1.0)
+    >>> y = lsl.Var.new_obs(jnp.array([1.0, 2.0, 3.0]), dist, name="y")
+    >>> model = lsl.Model([y])
+
+    Now we initialize the EngineBuilder and set the desired number of warmup and
+    posterior samples:
+
+    >>> builder = gs.LieselMCMC(model).get_engine_builder(seed=1, num_chains=4)
+    >>> builder.add_adaptation(1000)
+    >>> builder.add_posterior(1000)
+
+    Finally, we build the engine:
+
+    >>> engine = builder.build()
+
+    From here, you can continue with :meth:`~.goose.Engine.sample_all_epochs` to draw
+    samples from your posterior distribution.
+
+    .. rubric:: General Workflow
 
     For this example, we import ``tensorflow_probability`` as follows:
 
@@ -396,6 +439,39 @@ class EngineBuilder:
         Kernels which rely on history tuning might not be able to deal with thinning \
         during adaptation.
 
+        See Also
+        --------
+        .add_posterior : For adding posterior epochs.
+        .add_burnin : For adding burnin epochs.
+        .add_adaptation : For adding adaptation epochs.
+        .set_duration : An alternative method to specify adaptation and posterior
+            epochs, see notes for details.
+
+        Notes
+        -----
+
+        There are some differences in the details between the methods
+        :meth:`.add_posterior`, :meth:`.add_adaptation`, :meth:`.add_burnin` and
+        :meth:`.set_duration`.
+
+        - :meth:`.set_duration` overwrites all existing epochs with the epochs defined
+          in this method. In contrast, the ``add_`` methods only add additional epochs
+          that are appended to the potentially existing ones.
+        - :meth:`.set_duration` sets both adaptation and posterior epochs, while each
+          ``add_`` method only adds epochs of one type.
+        - :meth:`.set_duration` has an argument ``term_duration`` that defines the
+          number of samples drawn in the *final fast* adaptation epoch, and it defaults
+          to a fixed value of 50 samples. In contrast, :meth:`.add_adaptation` defines
+          the number of samples drawn in the *final fast* adaptation epoch as a fraction
+          of the total number of adaptation samples, and allows users to change this
+          fraction via the argument ``term``. As a result, if :meth:`.add_adaptation`
+          is used, the length of the final fast
+          adaptation phase increases automatically, if the total number of warmup
+          samples increases, while it remains constant if :meth:`.set_duration` is
+          used.
+
+
+
         References
         ----------
 
@@ -433,14 +509,58 @@ class EngineBuilder:
         epochs.append(_EpochConfig(EpochType.FAST_ADAPTATION, term_samples, thinning))
         self.append_epochs(epochs)
 
-    def add_burnin(self, duration: int):
+    def add_burnin(self, duration: int, thinning: int = 1):
         """
         Adds burnin epochs.
 
         Note that the order in which you add epochs matters.
         Adaptation epochs should usually come before all other epochs.
+
+        Warnings
+        --------
+
+        If you use any MCMC kernel that expects hyperparameter tuning an adaptation
+        phase, like :class:`.NUTSKernel`, :class:`.HMCKernel` or
+        our default implementation of :class:`.IWLSKernel`, you *must* add
+        an adaptation phase via :meth:`.add_adaptation`. Pure burnin
+        epochs like the ones added with :meth:`.add_burnin` do not perform any
+        adaptation during warmup. They are only applicable if you *exclusively* use
+        MCMC kernels that do not require adaptation, such as :class:`.GibbsKernel`
+        or classic, untuned IWLS kernels via :meth:`.IWLSKernel.untuned`.
+
+
+        See Also
+        --------
+        .add_posterior : For adding posterior epochs.
+        .add_burnin : For adding burnin epochs.
+        .add_adaptation : For adding adaptation epochs.
+        .set_duration : An alternative method to specify adaptation and posterior
+            epochs, see notes for details.
+
+        Notes
+        -----
+
+        There are some differences in the details between the methods
+        :meth:`.add_posterior`, :meth:`.add_adaptation`, :meth:`.add_burnin` and
+        :meth:`.set_duration`.
+
+        - :meth:`.set_duration` overwrites all existing epochs with the epochs defined
+          in this method. In contrast, the ``add_`` methods only add additional epochs
+          that are appended to the potentially existing ones.
+        - :meth:`.set_duration` sets both adaptation and posterior epochs, while each
+          ``add_`` method only adds epochs of one type.
+        - :meth:`.set_duration` has an argument ``term_duration`` that defines the
+          number of samples drawn in the *final fast* adaptation epoch, and it defaults
+          to a fixed value of 50 samples. In contrast, :meth:`.add_adaptation` defines
+          the number of samples drawn in the *final fast* adaptation epoch as a fraction
+          of the total number of adaptation samples, and allows users to change this
+          fraction via the argument ``term``. As a result, if :meth:`.add_adaptation`
+          is used, the length of the final fast
+          adaptation phase increases automatically, if the total number of warmup
+          samples increases, while it remains constant if :meth:`.set_duration` is
+          used.
         """
-        epoch = _EpochConfig(EpochType.BURNIN, duration, 1)
+        epoch = _EpochConfig(EpochType.BURNIN, duration, thinning)
         self.append_epochs([epoch])
 
     def add_posterior(self, duration: int, thinning: int = 1):
@@ -449,6 +569,37 @@ class EngineBuilder:
 
         Note that the order in which you add epochs matters.
         Adaptation epochs should usually come before all other epochs.
+
+        See Also
+        --------
+        .add_posterior : For adding posterior epochs.
+        .add_burnin : For adding burnin epochs.
+        .add_adaptation : For adding adaptation epochs.
+        .set_duration : An alternative method to specify adaptation and posterior
+            epochs, see notes for details.
+
+        Notes
+        -----
+
+        There are some differences in the details between the methods
+        :meth:`.add_posterior`, :meth:`.add_adaptation`, :meth:`.add_burnin` and
+        :meth:`.set_duration`.
+
+        - :meth:`.set_duration` overwrites all existing epochs with the epochs defined
+          in this method. In contrast, the ``add_`` methods only add additional epochs
+          that are appended to the potentially existing ones.
+        - :meth:`.set_duration` sets both adaptation and posterior epochs, while each
+          ``add_`` method only adds epochs of one type.
+        - :meth:`.set_duration` has an argument ``term_duration`` that defines the
+          number of samples drawn in the *final fast* adaptation epoch, and it defaults
+          to a fixed value of 50 samples. In contrast, :meth:`.add_adaptation` defines
+          the number of samples drawn in the *final fast* adaptation epoch as a fraction
+          of the total number of adaptation samples, and allows users to change this
+          fraction via the argument ``term``. As a result, if :meth:`.add_adaptation`
+          is used, the length of the final fast
+          adaptation phase increases automatically, if the total number of warmup
+          samples increases, while it remains constant if :meth:`.set_duration` is
+          used.
         """
         epoch = _EpochConfig(EpochType.POSTERIOR, duration, thinning)
         self.append_epochs([epoch])
@@ -463,13 +614,52 @@ class EngineBuilder:
         Defines a simple epoch configuration that does not include any adaptative
         warmup. Includes only burnin and posterior samples.
 
+        Warnings
+        --------
+
         The default values of samples to be drawn are extremely low and not intended
         for practical use -- instead, they are intended for quickly checking whether
         your model runs successfully.
 
-        In order to tune the
-        hyperparameters of your kernels during warmup, you should use
-        :meth:`.set_duration` instead.
+        If you use any MCMC kernel that expects hyperparameter tuning an adaptation
+        phase, like :class:`.NUTSKernel`, :class:`.HMCKernel` or
+        our default implementation of :class:`.IWLSKernel`, you *must* add
+        an adaptation phase via :meth:`.add_adaptation`. Pure burnin
+        epochs like the ones added with :meth:`.add_burnin` do not perform any
+        adaptation during warmup. They are only applicable if you *exclusively* use
+        MCMC kernels that do not require adaptation, such as :class:`.GibbsKernel`
+        or classic, untuned IWLS kernels via :meth:`.IWLSKernel.untuned`.
+
+        See Also
+        --------
+        .add_posterior : For adding posterior epochs.
+        .add_burnin : For adding burnin epochs.
+        .add_adaptation : For adding adaptation epochs.
+        .set_duration : An alternative method to specify adaptation and posterior
+            epochs, see notes for details.
+
+        Notes
+        -----
+
+        There are some differences in the details between the methods
+        :meth:`.add_posterior`, :meth:`.add_adaptation`, :meth:`.add_burnin` and
+        :meth:`.set_duration`.
+
+        - :meth:`.set_duration` overwrites all existing epochs with the epochs defined
+          in this method. In contrast, the ``add_`` methods only add additional epochs
+          that are appended to the potentially existing ones.
+        - :meth:`.set_duration` sets both adaptation and posterior epochs, while each
+          ``add_`` method only adds epochs of one type.
+        - :meth:`.set_duration` has an argument ``term_duration`` that defines the
+          number of samples drawn in the *final fast* adaptation epoch, and it defaults
+          to a fixed value of 50 samples. In contrast, :meth:`.add_adaptation` defines
+          the number of samples drawn in the *final fast* adaptation epoch as a fraction
+          of the total number of adaptation samples, and allows users to change this
+          fraction via the argument ``term``. As a result, if :meth:`.add_adaptation`
+          is used, the length of the final fast
+          adaptation phase increases automatically, if the total number of warmup
+          samples increases, while it remains constant if :meth:`.set_duration` is
+          used.
         """
         epochs = []
         epochs.append(_EpochConfig(EpochType.BURNIN, burnin_duration, 1))
@@ -491,6 +681,37 @@ class EngineBuilder:
 
         Note that :attr:`.term_duration` needs to be long enough that tuning algorithms
         like dual averaging can converge.
+
+        See Also
+        --------
+        .add_posterior : For adding posterior epochs.
+        .add_burnin : For adding burnin epochs.
+        .add_adaptation : For adding adaptation epochs.
+        .set_duration : An alternative method to specify adaptation and posterior
+            epochs, see notes for details.
+
+        Notes
+        -----
+
+        There are some differences in the details between the methods
+        :meth:`.add_posterior`, :meth:`.add_adaptation`, :meth:`.add_burnin` and
+        :meth:`.set_duration`.
+
+        - :meth:`.set_duration` overwrites all existing epochs with the epochs defined
+          in this method. In contrast, the ``add_`` methods only add additional epochs
+          that are appended to the potentially existing ones.
+        - :meth:`.set_duration` sets both adaptation and posterior epochs, while each
+          ``add_`` method only adds epochs of one type.
+        - :meth:`.set_duration` has an argument ``term_duration`` that defines the
+          number of samples drawn in the *final fast* adaptation epoch, and it defaults
+          to a fixed value of 50 samples. In contrast, :meth:`.add_adaptation` defines
+          the number of samples drawn in the *final fast* adaptation epoch as a fraction
+          of the total number of adaptation samples, and allows users to change this
+          fraction via the argument ``term``. As a result, if :meth:`.add_adaptation`
+          is used, the length of the final fast
+          adaptation phase increases automatically, if the total number of warmup
+          samples increases, while it remains constant if :meth:`.set_duration` is
+          used.
         """
         epochs = stan_epochs(
             warmup_duration,

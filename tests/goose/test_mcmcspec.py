@@ -591,3 +591,63 @@ class TestLieselMCMC:
         assert log_sigma.inference is None
         assert sigma.inference is None
         assert log_sigma.inference is None
+
+    def test_default_order_of_kernels(self):
+        layer3 = lsl.Var.new_param(
+            1.0, name="layer3", inference=gs.MCMCSpec(gs.NUTSKernel)
+        )
+        layer2_loc = lsl.Var.new_param(
+            1.0,
+            distribution=lsl.Dist(tfd.Normal, loc=layer3, scale=1.0),
+            name="layer2_loc",
+            inference=gs.MCMCSpec(gs.NUTSKernel),
+        )
+        layer2_scale = lsl.Var.new_param(
+            1.0,
+            name="layer2_scale",
+            bijector=tfb.Exp(),
+            inference=gs.MCMCSpec(gs.NUTSKernel),
+        )
+        layer1 = lsl.Var.new_param(
+            1.0,
+            distribution=lsl.Dist(tfd.Normal, loc=layer2_loc, scale=layer2_scale),
+            name="layer1",
+            inference=gs.MCMCSpec(gs.NUTSKernel),
+        )
+        model = lsl.Model([layer1])
+        klist = gs.LieselMCMC(model).get_kernel_list()
+        position_keys = [k.position_keys for k in klist]
+        assert position_keys[0][0] == "layer1"
+        assert position_keys[1][0] == "h(layer2_scale)"
+        assert position_keys[2][0] == "layer2_loc"
+        assert position_keys[3][0] == "layer3"
+
+    def test_custom_order_of_kernels(self):
+        layer3 = lsl.Var.new_param(
+            1.0, name="layer3", inference=gs.MCMCSpec(gs.NUTSKernel, order=1)
+        )
+        layer2_loc = lsl.Var.new_param(
+            1.0,
+            distribution=lsl.Dist(tfd.Normal, loc=layer3, scale=1.0),
+            name="layer2_loc",
+            inference=gs.MCMCSpec(gs.NUTSKernel, order=2),
+        )
+        layer2_scale = lsl.Var.new_param(
+            1.0,
+            name="layer2_scale",
+            bijector=tfb.Exp(),
+            inference=gs.MCMCSpec(gs.NUTSKernel, order=3),
+        )
+        layer1 = lsl.Var.new_param(
+            1.0,
+            distribution=lsl.Dist(tfd.Normal, loc=layer2_loc, scale=layer2_scale),
+            name="layer1",
+            inference=gs.MCMCSpec(gs.NUTSKernel),
+        )
+        model = lsl.Model([layer1])
+        klist = gs.LieselMCMC(model).get_kernel_list()
+        position_keys = [k.position_keys for k in klist]
+        assert position_keys[3][0] == "layer1"
+        assert position_keys[2][0] == "h(layer2_scale)"
+        assert position_keys[1][0] == "layer2_loc"
+        assert position_keys[0][0] == "layer3"
