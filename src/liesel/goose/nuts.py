@@ -132,7 +132,7 @@ class NUTSKernel(
         :func:`.tune_inv_mm_diag`. If set to False, the mass matrix will be tuned
         using :func:`.tune_inv_mm_full` instead.
     identifier
-        An string acting as a unique identifier for this kernel.
+        A string acting as a unique identifier for this kernel.
 
     Notes
     -----
