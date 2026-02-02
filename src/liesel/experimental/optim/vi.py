@@ -7,7 +7,7 @@ from typing import Self
 import jax
 import jax.flatten_util
 import jax.numpy as jnp
-import tensorflow_probability.substrates.jax.bijectors as tfb
+import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 from ...model import Dist, Model, Var
@@ -218,7 +218,9 @@ class VDist:
         self,
         loc: jax.typing.ArrayLike | None = None,
         scale: jax.typing.ArrayLike | None = None,
-        scale_bijector: tfb.Bijector | None = None,
+        scale_bijector: type[jb.Bijector] | jb.Bijector | None = None,
+        *bijector_args,
+        **bijector_kwargs,
     ) -> Self:
         if loc is None:
             loc_value = jnp.asarray(self._flat_pos)
@@ -237,12 +239,9 @@ class VDist:
         dist = Dist(tfd.Normal, loc=loc_var, scale=scale_var)
 
         if scale_bijector is None:
-            dist_inst = dist.init_dist()
-            scale_bijector = dist_inst.parameter_properties(scale_value.dtype)[  # type: ignore
-                "scale"
-            ].default_constraining_bijector_fn()
-
-        scale_var.transform(scale_bijector)
+            dist.biject_parameters("auto")
+        else:
+            scale_var.transform(scale_bijector, *bijector_args, **bijector_kwargs)
 
         return self.init(dist)
 
@@ -250,7 +249,9 @@ class VDist:
         self,
         loc: jax.typing.ArrayLike | None = None,
         scale_diag: jax.typing.ArrayLike | None = None,
-        scale_diag_bijector: tfb.Bijector | None = None,
+        scale_diag_bijector: type[jb.Bijector] | jb.Bijector | None = None,
+        *bijector_args,
+        **bijector_kwargs,
     ) -> Self:
         if loc is None:
             loc_value = jnp.asarray(self._flat_pos)
@@ -263,19 +264,18 @@ class VDist:
             scale_diag_value = scale_diag
 
         loc_var = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
-        scale_var = Var.new_param(scale_diag_value, name=self._flat_pos_name + "_scale")
+        scale_diag_var = Var.new_param(
+            scale_diag_value, name=self._flat_pos_name + "_scale"
+        )
 
-        dist = Dist(tfd.MultivariateNormalDiag, loc=loc_var, scale_diag=scale_var)
+        dist = Dist(tfd.MultivariateNormalDiag, loc=loc_var, scale_diag=scale_diag_var)
 
         if scale_diag_bijector is None:
-            dist_inst = dist.init_dist()
-            scale_diag_bijector = dist_inst.parameter_properties(
-                scale_diag_value.dtype
-            )[  # type: ignore
-                "scale_diag"
-            ].default_constraining_bijector_fn()
-
-        scale_var.transform(scale_diag_bijector)
+            dist.biject_parameters("auto")
+        else:
+            scale_diag_var.transform(
+                scale_diag_bijector, *bijector_args, **bijector_kwargs
+            )
 
         return self.init(dist)
 
@@ -283,7 +283,9 @@ class VDist:
         self,
         loc: jax.typing.ArrayLike | None = None,
         scale_tril: jax.typing.ArrayLike | None = None,
-        scale_tril_bijector: tfb.Bijector | None = None,
+        scale_tril_bijector: type[jb.Bijector] | jb.Bijector | None = None,
+        *bijector_args,
+        **bijector_kwargs,
     ) -> Self:
         if loc is None:
             loc_value = jnp.asarray(self._flat_pos)
@@ -304,14 +306,11 @@ class VDist:
         dist = Dist(tfd.MultivariateNormalTriL, loc=loc_var, scale_tril=scale_tril_var)
 
         if scale_tril_bijector is None:
-            dist_inst = dist.init_dist()
-            scale_tril_bijector = dist_inst.parameter_properties(
-                scale_tril_value.dtype
-            )[  # type: ignore
-                "scale_tril"
-            ].default_constraining_bijector_fn()
+            dist.biject_parameters("auto")
+        else:
+            scale_tril_var.transform(scale_tril_bijector)
 
-        scale_tril_var.transform(scale_tril_bijector)
+        scale_tril_var.transform(scale_tril_bijector, *bijector_args, **bijector_kwargs)
 
         return self.init(dist)
 

@@ -2958,7 +2958,7 @@ def _transform_var_without_dist_with_bijector_instance(
 
 
 def _transform_var_without_dist_with_bijector_class(
-    var: Var, bijector_cls: type[jb.Bijector] | None, *args, **kwargs
+    var: Var, bijector_cls: type[jb.Bijector], *args, **kwargs
 ) -> Var:
     def bijection_inverse(x, *bjargs, **bjkwargs):
         # this somewhat over-complicated functionality accounts for bijector
