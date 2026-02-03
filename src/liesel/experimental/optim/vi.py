@@ -558,7 +558,7 @@ class VDist:
         )
 
         dist = Dist(tfd.MultivariateNormalTriL, loc=locs, scale_tril=scale_tril_var)
-        bijector = tfb.FillScaleTriL()
+        bijector = tfb.FillScaleTriL(diag_bijector=tfb.Exp())
         scale_tril_var.transform(bijector)
 
         return self.init(dist)
@@ -639,7 +639,7 @@ class VDist:
         dist = Dist(
             init_mvn_precision_factor, loc=locs, precision_factor=precision_factor_var
         )
-        bijector = tfb.FillScaleTriL()
+        bijector = tfb.FillScaleTriL(diag_bijector=tfb.Exp())
         precision_factor_var.transform(bijector)
 
         return self.init(dist)
