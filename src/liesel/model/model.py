@@ -496,7 +496,7 @@ class GraphBuilder:
         nodes, _vars = gb._all_nodes_and_vars()
         nodes_and_vars = nodes + _vars
 
-        model = Model(nodes_and_vars, grow=False, copy=copy)
+        model = Model(nodes_and_vars, grow=False, copy=copy, to_float32=self.to_float32)
 
         if not copy:
             self.nodes.clear()
@@ -948,6 +948,19 @@ class Model:
         return visited
 
     @property
+    def model_nodes(self) -> dict[str, Node]:
+        """
+        Dictionary of nodes with the ``"_model"`` prefix in their name.
+
+        Typically, this includes the nodes ``"_model_log_prob"``, ``"_model_log_lik"``,
+        and ``"_model_log_prior"``.
+        """
+        model_nodes_ = {
+            name: node for name, node in self.nodes.items() if name.startswith("_model")
+        }
+        return model_nodes_
+
+    @property
     def auto_update(self) -> bool:
         """
         Whether to update the model automatically if the value of a node is modified.
@@ -1007,22 +1020,24 @@ class Model:
         their parent variables and nodes. The new model contains copies of these \
         variables and nodes.
         """
+
         nodes_to_include = set()
 
         for node in of:
             if isinstance(node, Var):
                 nodes_to_include.update(nx.ancestors(self.var_graph, node))
+
             else:
                 nodes_to_include.update(nx.ancestors(self.node_graph, node))
+
             nodes_to_include.add(node)
 
-        copy_of_nodes_to_include = deepcopy(nodes_to_include)
+        nodes, vars_ = self.copy_nodes_and_vars()
+        nodes_and_vars = nodes | vars_
 
-        for node in copy_of_nodes_to_include:
-            if hasattr(node, "_unset_model"):
-                node._unset_model()
+        copy_of_nodes_to_include = [nodes_and_vars[n.name] for n in nodes_to_include]
 
-        return Model(list(copy_of_nodes_to_include), to_float32=self._to_float32)
+        return Model(copy_of_nodes_to_include, to_float32=self._to_float32, copy=False)
 
     @property
     def log_lik(self) -> Array:
@@ -1182,9 +1197,9 @@ class Model:
         self,
         shape: Sequence[int],
         seed: jax.Array,
-        posterior_samples: dict[str, Array] | None = None,
+        posterior_samples: dict[str, jax.typing.ArrayLike] | None = None,
         fixed: Sequence[str] = (),
-        newdata: dict[str, Array] | None = None,
+        newdata: dict[str, jax.typing.ArrayLike] | None = None,
         dists: dict[str, Dist] | None = None,
     ) -> dict[str, Array]:
         """
@@ -1227,9 +1242,26 @@ class Model:
         A dictionary of variable and node names and their sampled values. Includes
         only sampled variables.
         """
+
+        posterior_samples = posterior_samples if posterior_samples is not None else {}
+
+        unique_sample_keys = set(list(posterior_samples))
+        unique_newdata_keys = set(list(newdata)) if newdata is not None else set()
+        intersection = unique_sample_keys & unique_newdata_keys
+        if len(intersection) > 0:
+            raise RuntimeError(
+                "The following keys are present in both 'samples' and 'newdata': "
+                f"{list(intersection)} "
+                "Any key should be present in only one of these arguments."
+            )
+
+        if posterior_samples is not None:
+            posterior_samples = jax.tree.map(jnp.asarray, posterior_samples)
+
+        if newdata is not None:
+            newdata = jax.tree.map(jnp.asarray, newdata)
         # Pre-processing
         # ------------------------------------------------------------------------------
-        posterior_samples = posterior_samples if posterior_samples is not None else {}
         state_for_sampling = (
             self.update_state(newdata) if newdata is not None else self.state
         )
@@ -1652,20 +1684,29 @@ class Model:
         for node in model.nodes.values():
             node._outdated = False
 
-        for key, value in position.items():
-            try:
-                model.nodes[key].value = value  # type: ignore  # data node
-            except KeyError:
-                model.vars[key].value = value
+        # temporarily disable auto_update to avoid shape incompatibilities
+        # when updating variables sequentially with new shapes
+        original_auto_update = model.auto_update
+        model.auto_update = False
+
+        try:
+            for key, value in position.items():
+                try:
+                    model.nodes[key].value = value  # type: ignore  # data node
+                except KeyError:
+                    model.vars[key].value = value
+        finally:
+            # restore original auto_update setting
+            model.auto_update = original_auto_update
 
         model.update()
         return model.state
 
     def predict(
         self,
-        samples: dict[str, Array],
+        samples: dict[str, jax.typing.ArrayLike],
         predict: Sequence[str] | None = None,
-        newdata: dict[str, Array] | None = None,
+        newdata: dict[str, jax.typing.ArrayLike] | None = None,
     ) -> dict[str, Array]:
         """
         Returns a dictionary of predictions.
@@ -1673,9 +1714,9 @@ class Model:
         Parameters
         ----------
         samples
-            Dictionary of samples at which to evaluate predictions. All values of the \
-            dictionary are assumed to have two leading dimensions corresponding to \
-            ``(nchains, niteration)``.
+            Dictionary of samples at which to evaluate predictions. If ``samples``
+            contains entries for weak variables or for nodes in :attr:`.model_nodes`
+            they are ignored.
         predict
             Sequence of strings, which are the names of nodes or variables. \
             Predictions will be returned only for the nodes or variables inlcuded \
@@ -1686,18 +1727,71 @@ class Model:
             correspond to variable or node names in the model whose values should be \
             set to the given values before evaluating predictions. If ``None`` \
             (default), the current variable values are used.
-        """
 
-        predict_names = predict
+        """
+        samples = samples.copy()
+        for name in self.model_nodes:
+            samples.pop(name, None)
+
+        for name, var in self.vars.items():
+            if var.weak:
+                if name in samples:
+                    logger.debug(
+                        f"Key '{name}' belongs to a weak var. "
+                        "Removing it from samples dictionary."
+                    )
+                    samples.pop(name, None)
+
+        unique_sample_keys = set(list(samples))
+        unique_newdata_keys = set(list(newdata)) if newdata is not None else set()
+        intersection = unique_sample_keys & unique_newdata_keys
+        if len(intersection) > 0:
+            raise RuntimeError(
+                "The following keys are present in both 'samples' and 'newdata': "
+                f"{list(intersection)} "
+                "Any key should be present in only one of these arguments."
+            )
+
+        samples = jax.tree.map(jnp.asarray, samples)
+        if newdata is not None:
+            newdata = jax.tree.map(jnp.asarray, newdata)
+        # deduce batching dimensions
+        shapes = []
+        for name, value in samples.items():
+            if name in self.vars:
+                model_ndim = jnp.asarray(self.vars[name].value).ndim
+            elif name in self.nodes:
+                model_ndim = jnp.asarray(self.nodes[name].value).ndim
+            else:
+                continue
+            n_batching_dim = jnp.ndim(value) - model_ndim
+            batch_shape = jnp.shape(value)[:n_batching_dim]
+            shapes.append(batch_shape)
+
+        if not len(set(shapes)) == 1:
+            raise RuntimeError("Found inconsistent batch shapes.")
+
+        predict_names = predict if predict is not None else []
+        predicted_model_nodes = [
+            name for name in self.model_nodes if name in predict_names
+        ]
+        predict_names_no_model_nodes = [
+            name for name in predict_names if name not in predicted_model_nodes
+        ]
 
         # extract nodes and vars for target nodes
-        if predict_names is None:
+        if predicted_model_nodes or not predict_names:
             # use full model without copying
+            # we want to always use the full model if a model node is among the ones
+            # to predict values for
             submodel = self
-            predict_names = list(self.vars)  # output only vars
+            if not predicted_model_nodes:
+                predict_names = list(self.vars)  # output only vars
+            else:
+                predict_names = predicted_model_nodes
         else:
             predict_nodes_: list[Var | Node] = []
-            for name in predict_names:
+            for name in predict_names_no_model_nodes:
                 try:
                     predict_nodes_.append(self.vars[name])
                 except KeyError:
@@ -1706,13 +1800,27 @@ class Model:
             # construct submodel for target nodes
             submodel = self.parental_submodel(*predict_nodes_)
 
-        # update submodel with new data, if any were given
         newdata = newdata if newdata is not None else {}
+
+        # handle keys that are not needed
+        newdata = newdata.copy()
+        for key in list(newdata.keys()):
+            if key not in self.vars or (key in self.nodes):
+                raise KeyError(f"{key} is not part of the model.")
+            if key not in submodel.vars or (key in submodel.nodes):
+                newdata.pop(key, None)
+
+        # update submodel with new data, if any were given
         submodel.state = submodel.update_state(newdata)
 
         # filter samples to include only samples that belong to the submodel
         vars_and_nodes = list(submodel.vars) + list(submodel.nodes)
         filtered_samples = {k: v for k, v in samples.items() if k in vars_and_nodes}
+        if not filtered_samples:
+            raise ValueError(
+                "No samples provided for the variables or nodes in the submodel. "
+                f"Nodes in submodel: {vars_and_nodes}"
+            )
 
         # single prediction function
         def predict_one(samples):
@@ -1722,13 +1830,21 @@ class Model:
             return submodel.extract_position(predict_names, updated_state)
 
         # map over iterations
-        predict_iter = jax.vmap(predict_one, in_axes=0, out_axes=0)
+        predict_batched = jax.vmap(predict_one, in_axes=0, out_axes=0)
 
-        # map over chains
-        predict_chains = jax.vmap(predict_iter, in_axes=0, out_axes=0)
+        def flatten_batch_dims(x):
+            new_shape = (-1,) + jnp.shape(x)[n_batching_dim:]
+            return jnp.reshape(x, new_shape)
 
-        # apply function
-        return predict_chains(filtered_samples)
+        flattened_samples = jax.tree.map(flatten_batch_dims, filtered_samples)
+
+        flat_predictions = predict_batched(flattened_samples)
+
+        def unflatten_batch_dims(x):
+            new_shape = batch_shape + jnp.shape(x)[1:]
+            return jnp.reshape(x, new_shape)
+
+        return jax.tree.map(unflatten_batch_dims, flat_predictions)
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

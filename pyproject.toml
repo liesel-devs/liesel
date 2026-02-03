@@ -1,6 +1,6 @@
 [project]
 name = "liesel"
-version = "0.4.0-dev"
+dynamic = ["version"]
 description = "A probabilistic programming framework with a focus on semi-parametric regression"
 readme = "README.md"
 authors = [
@@ -20,7 +20,7 @@ classifiers = [
 ]
 
 
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "arviz>=0.15",
     "blackjax>=1.0",
@@ -35,7 +35,7 @@ dependencies = [
     "pydot>=3.0",
     "scipy>=1.8.0",
     "seaborn>=0.13",
-    "tensorflow-probability>=0.17",
+    "tfp-nightly>=0.26.0.dev20250811",
     "tqdm>=4.62",
 ]
 
@@ -85,6 +85,7 @@ testpaths = "tests"
 # turn warnings into errors and filter out specific warnings
 filterwarnings = [
     "error",
+    "ignore::FutureWarning:arviz",
     # "ignore::DeprecationWarning:tensorflow_probability",
     "ignore:jax.interpreters.xla.pytype_aval_mappings is deprecated:DeprecationWarning:tensorflow_probability.python.internal.backend.jax.ops",
     "ignore:shape requires ndarray or scalar arguments, got <class 'NoneType'> at position 0. In a future JAX release this will be an error.:DeprecationWarning:tensorflow_probability.python.internal.backend.jax.random_generators",
@@ -104,6 +105,9 @@ extend-select = [
 ]
 
 extend-ignore = []
+
+[tool.hatch.version]
+path = "src/liesel/__version__.py"
 
 [tool.ruff.format]
 docstring-code-format = true

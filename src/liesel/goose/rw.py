@@ -15,6 +15,7 @@ from .kernel import (
     DefaultTransitionInfo,
     DefaultTuningInfo,
     ModelMixin,
+    ReprMixin,
     TransitionMixin,
     TransitionOutcome,
     TuningOutcome,
@@ -46,7 +47,7 @@ RWTransitionInfo = DefaultTransitionInfo
 RWTuningInfo = DefaultTuningInfo
 
 
-class RWKernel(ModelMixin, TransitionMixin[RWKernelState, RWTransitionInfo]):
+class RWKernel(ModelMixin, TransitionMixin[RWKernelState, RWTransitionInfo], ReprMixin):
     """
     A random walk kernel.
 
@@ -57,6 +58,24 @@ class RWKernel(ModelMixin, TransitionMixin[RWKernelState, RWTransitionInfo]):
     0.234, which is optimal for a random walk sampler (in a certain sense). See Gelman
     et al. (1997) Weak convergence and optimal scaling of random walk Metropolis
     algorithms: https://doi.org/10.1214/aoap/1034625254.
+
+    Parameters
+    ----------
+    position_keys
+        Sequence of position keys (variable names) handled by this kernel.
+    initial_step_size
+        Value at which to start step size tuning.
+    da_target_accept
+        Target acceptance probability for dual averaging algorithm.
+    da_gamma
+        The adaptation regularization scale.
+    da_kappa
+        The adaptation relaxation exponent.
+    da_t0
+        The adaptation iteration offset.
+    identifier
+        An string acting as a unique identifier for this kernel.
+
     """
 
     error_book: ClassVar[dict[int, str]] = {0: "no errors", 90: "nan acceptance prob"}
@@ -76,6 +95,7 @@ class RWKernel(ModelMixin, TransitionMixin[RWKernelState, RWTransitionInfo]):
         da_gamma: float = 0.05,
         da_kappa: float = 0.75,
         da_t0: int = 10,
+        identifier: str = "",
     ):
         self._model = None
         self.position_keys = tuple(position_keys)
@@ -84,6 +104,7 @@ class RWKernel(ModelMixin, TransitionMixin[RWKernelState, RWTransitionInfo]):
         self.da_gamma = da_gamma
         self.da_kappa = da_kappa
         self.da_t0 = da_t0
+        self.identifier = identifier
 
     def init_state(self, prng_key, model_state):
         """

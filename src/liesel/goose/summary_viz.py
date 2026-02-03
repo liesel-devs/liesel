@@ -149,10 +149,11 @@ def _preprocess_param_chains(
     """Convert array of posteror samples for each parameter to equal dimensions."""
 
     param_chains = np.array(posterior_samples[param])
-    num_dim = param_chains.ndim
+    nchains, nsamples = param_chains.shape[:2]
+    param_shape = param_chains.shape[2:]
+    param_dim = max(int(np.prod(np.array(param_shape))), 1)
+    param_chains = np.reshape(param_chains, (nchains, nsamples, param_dim))
 
-    _raise_dimension_error(param, num_dim)
-    param_chains = _adjust_dimensions(param_chains, num_dim)
     return param_chains
 
 
