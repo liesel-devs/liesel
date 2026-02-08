@@ -308,9 +308,9 @@ class VDist:
         if scale_tril_bijector is None:
             dist.biject_parameters("auto")
         else:
-            scale_tril_var.transform(scale_tril_bijector)
-
-        scale_tril_var.transform(scale_tril_bijector, *bijector_args, **bijector_kwargs)
+            scale_tril_var.transform(
+                scale_tril_bijector, *bijector_args, **bijector_kwargs
+            )
 
         return self.init(dist)
 
