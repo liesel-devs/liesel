@@ -367,7 +367,7 @@ class OptimEngine:
         if Bi.n != Bi.batch_size:
             obs_batch = Bi.get_batched_position(self.split.train, batch_index=j)
         else:
-            obs_batch = {}
+            obs_batch = Position({})
         carry.batch = obs_batch
 
         for opt in self.optimizers:

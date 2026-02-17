@@ -72,6 +72,9 @@ class Elbo(LossMixin):
         scale: bool = False,
     ) -> Self:
         vi_dist = VDist(list(p.parameters), p).mvn_diag().build()
+        if vi_dist.q is None:
+            raise ValueError
+
         return cls(
             vi_dist.p,
             vi_dist.q,
@@ -93,6 +96,8 @@ class Elbo(LossMixin):
         scale: bool = False,
     ) -> Self:
         vi_dist = VDist(list(p.parameters), p).mvn_tril().build()
+        if vi_dist.q is None:
+            raise ValueError
         return cls(
             vi_dist.p,
             vi_dist.q,
@@ -119,6 +124,8 @@ class Elbo(LossMixin):
             vi_dists.append(vi_dist)
 
         vi_dist = CompositeVDist(*vi_dists).build()
+        if vi_dist.q is None:
+            raise ValueError
         return cls(
             vi_dist.p,
             vi_dist.q,
@@ -252,16 +259,16 @@ class VDist:
     Examples
     --------
     Take the model :math:`y \sim N(\mu, \sigma^2)`, where the posterior distribution
-    of :math:`(\mu, \ln(\sigma))^\top` is modeled by a two independent Gaussian 
+    of :math:`(\mu, \ln(\sigma))^\top` is modeled by a two independent Gaussian
     distributions, i.e. we define the following variational distributions:
 
     .. math::
         \mu & \sim N(\phi_1, \phi_2^2) \\
         \ln(\sigma) & \sim N(\phi_3, \phi_4^2)
-    
-    This variational distribution can be defined by a single 
+
+    This variational distribution can be defined by a single
     :class:`.VDist` using the :meth:`.VDist.mvn_diag` method like this:
-    
+
     >>> import jax.numpy as jnp
     >>> import liesel.model as lsl
     >>> import liesel.experimental.optim as opt
@@ -275,11 +282,11 @@ class VDist:
     ...     name="y",
     ... )
     >>> p = lsl.Model([y])
-    
+
     >>> vdist = opt.VDist(["mu", "h(sigma)"], p).mvn_diag().build()
 
-    
-    If the variational distribution is intended to capture correlation between the 
+
+    If the variational distribution is intended to capture correlation between the
     parameters, the correlated parameters should be governed jointly by a single
     :class:`.VDist`. For example, to use a multivariate Gaussian with a dense
     covariance matrix in this case, you can use :meth:`.VDist.mvn_tril`:
@@ -294,12 +301,12 @@ class VDist:
         \mu \\ \ln(\sigma)
         \end{bmatrix}
         \sim N(\boldsymbol{\phi}, \boldsymbol{\Lambda}),
-    
+
     where :math:`\boldsymbol{\Lambda}` is a :math:`2 \times 2` covariance matrix.
 
     ..rubric:: Custom variational distributions
 
-    You can use any fully reparameterized tensorflow distribution of fitting 
+    You can use any fully reparameterized tensorflow distribution of fitting
     event shape, wrapped in a :class:`.Dist`. For example, you can define the
     model with diagonal covariance matrix from above like this:
 
@@ -612,7 +619,7 @@ class VDist:
                 q_samples,
             )
 
-        return vmap_batched(q_samples, self.q_to_p, batch_shape=sample_shape)
+        return vmap_batched(Position(q_samples), self.q_to_p, batch_shape=sample_shape)
 
     def __repr__(self) -> str:
         name = type(self).__name__
@@ -683,19 +690,19 @@ class CompositeVDist:
     The :class:`.CompositeVDist` class assumes that each individual parameter in the
     underlying model p is governed by not more than one :class:`.VDist`.
 
-    The :class:`.CompositeVDist` assumes independence between the parameters 
+    The :class:`.CompositeVDist` assumes independence between the parameters
     governed by its individual :class:`.VDist`s.
 
     Examples
     --------
     Take the model :math:`y \sim N(\mu, \sigma^2)`, where the posterior distribution
-    of :math:`(\mu, \ln(\sigma))^\top` is modeled by a two independent Gaussian 
+    of :math:`(\mu, \ln(\sigma))^\top` is modeled by a two independent Gaussian
     distributions, i.e. we define the following variational distributions:
 
     .. math::
         \mu & \sim N(\phi_1, \phi_2^2) \\
         \ln(\sigma) & \sim N(\phi_3, \phi_4^2)
-    
+
     This variational distribution can be composed by defining separate :class:`.Vdist`
     objects for :math:`\mu` and :math:`\ln(\sigma)`, and combining them in a
     :class:`.CompositeVDist`:
@@ -713,17 +720,17 @@ class CompositeVDist:
     ...     name="y",
     ... )
     >>> p = lsl.Model([y])
-    
+
     >>> q1 = opt.VDist(["mu"], p).mvn_diag()
     >>> q2 = opt.VDist(["h(sigma)"], p).mvn_diag()
     >>> vdist = opt.CompositeVDist(q1, q2).build()
 
-    In this case, the variational model is equivalent to defining a single 
+    In this case, the variational model is equivalent to defining a single
     :class:`.VDist` using the :meth:`.VDist.mvn_diag` method like this:
 
     >>> vdist = opt.VDist(["mu", "h(sigma)"], p).mvn_diag()
 
-    If the variational distribution is intended to capture correlation between the 
+    If the variational distribution is intended to capture correlation between the
     parameters, the correlated parameters should be governed jointly by a single
     :class:`.VDist`. For example, to use a multivariate Gaussian with a dense
     covariance matrix in this case, you can use :meth:`.VDist.mvn_tril`:
@@ -738,9 +745,9 @@ class CompositeVDist:
         \mu \\ \ln(\sigma)
         \end{bmatrix}
         \sim N(\boldsymbol{\phi}, \boldsymbol{\Lambda}),
-    
+
     where :math:`\boldsymbol{\Lambda}` is a :math:`2 \times 2` covariance matrix.
-        
+
     """
 
     def __init__(self, *vdists: VDist):
@@ -815,7 +822,7 @@ class CompositeVDist:
                 q_samples,
             )
 
-        return vmap_batched(q_samples, self.q_to_p, batch_shape=sample_shape)
+        return vmap_batched(Position(q_samples), self.q_to_p, batch_shape=sample_shape)
 
     def __repr__(self) -> str:
         name = type(self).__name__

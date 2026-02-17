@@ -1,3 +1,6 @@
+import jax
+import jax.numpy as jnp
+import tensorflow_probability.substrates.jax as tfp
 import tensorflow_probability.substrates.jax.bijectors as tfb
 
 import liesel.experimental.optim as opt
@@ -50,12 +53,6 @@ def test_compositevdist_exp_bijector_float64():
     vi_dist = opt.CompositeVDist(q).build()
 
     assert not vi_dist._to_float32()
-import jax
-import jax.numpy as jnp
-import tensorflow_probability.substrates.jax as tfp
-
-import liesel.experimental.optim as opt
-import liesel.model as lsl
 
 
 class TestVDist:
