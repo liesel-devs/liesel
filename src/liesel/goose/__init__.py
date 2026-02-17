@@ -14,6 +14,7 @@ from .interface import (
     LieselInterface,
     NamedTupleInterface,
 )
+from .interface_log_prob import FlatInterfaceLogProb, InterfaceLogProb
 from .iwls import IWLSKernel
 from .mcmc_spec import LieselMCMC, MCMCSpec
 from .mh_kernel import MHKernel, MHProposal
@@ -29,7 +30,7 @@ from .summary_viz import (
     plot_scatter,
     plot_trace,
 )
-from .types import ModelInterface, Position
+from .types import Kernel, ModelInterface, Position
 from .warmup import stan_epochs
 
 __all__ = [
@@ -47,6 +48,7 @@ __all__ = [
     "GibbsKernel",
     "HMCKernel",
     "IWLSKernel",
+    "Kernel",
     "MHKernel",
     "MHProposal",
     "ModelInterface",
@@ -68,4 +70,6 @@ __all__ = [
     "stan_epochs",
     "optim_flat",
     "OptimResult",
+    "InterfaceLogProb",
+    "FlatInterfaceLogProb",
 ]

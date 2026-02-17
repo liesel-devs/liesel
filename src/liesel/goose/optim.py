@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import jax
+import jax.experimental
 import jax.numpy as jnp
 import numpy as np
 import optax
@@ -236,6 +237,7 @@ def optim_flat(
     prune_history: bool = True,
     validate_log_prob_decomposition: bool = True,
     progress_bar: bool = True,
+    progress_n_updates: int = 20,
     track_keys: list[str] | None = None,
 ) -> OptimResult:
     """
@@ -288,6 +290,8 @@ def optim_flat(
         to ``jax.numpy.nan`` if optimization stops early.
     progress_bar
         Whether to use a progress bar.
+    progress_n_updates
+        How many times to update the progress bar in total.
     track_keys
         List of position keys to track and include in the history.
 
@@ -376,9 +380,17 @@ def optim_flat(
 
     n_train = _find_sample_size(model_train)
     n_validation = _find_sample_size(model_validation)
-    observed = _find_observed(model_train)
 
-    shuffle_batch_indices = batch_size is not None
+    do_batching = batch_size is not None
+    if do_batching:
+        shuffle_batch_indices = True
+        observed = _find_observed(model_train)
+    else:
+        shuffle_batch_indices = False
+        # not because there are no observed, but because we don't need to update
+        # observed with their batches
+        observed = {}
+
     batch_size = batch_size if batch_size is not None else n_train
 
     interface_train = LieselInterface(model_train)
@@ -486,6 +498,13 @@ def optim_flat(
     # Initialize while loop carry dictionary
 
     if progress_bar:
+        if stopper.max_iter > progress_n_updates:
+            print_rate = int(stopper.max_iter / progress_n_updates)
+        else:
+            print_rate = 1
+
+        print_remainder = stopper.max_iter % print_rate
+
         progress_bar_inst = tqdm(
             total=stopper.max_iter,
             desc=(
@@ -493,24 +512,33 @@ def optim_flat(
                 f" {loss_validation_start:.3f}"
             ),
             position=0,
-            leave=True,
         )
 
-        def tqdm_callback(val):
+        def tqdm_update(val, update=print_rate):
             loss_train = val["current_loss_train"]
             loss_validation = val["current_loss_validation"]
             desc = (
                 f"Training loss: {loss_train:.3f}, Validation loss:"
                 f" {loss_validation:.3f}"
             )
-            progress_bar_inst.update(1)
+            progress_bar_inst.update(update)
             progress_bar_inst.set_description(desc)
+            return val
 
-        tqdm_callback(init_val)
+        def tqdm_callback(val):
+            iter_num = val["while_i"] + 1
+
+            _ = jax.lax.cond(
+                # update tqdm every multiple of `print_rate` except at the end
+                (iter_num % print_rate == 0),
+                lambda _: jax.experimental.io_callback(tqdm_update, val, val),
+                lambda _: val,
+                operand=None,
+            )
 
     else:
 
-        def tqdm_callbacl(val):
+        def tqdm_callback(val):
             return None
 
     # ---------------------------------------------------------------------------------
@@ -583,7 +611,7 @@ def optim_flat(
             )
 
         if progress_bar:
-            jax.debug.callback(tqdm_callback, val)
+            tqdm_callback(val)
 
         return val
 
@@ -597,6 +625,11 @@ def optim_flat(
         body_fun=body_fun,
         init_val=init_val,
     )
+
+    if progress_bar:
+        print_remainder = int((val["while_i"] + 1) % print_rate)
+        tqdm_update(val, print_remainder)
+        progress_bar_inst.close()
 
     max_iter = val["while_i"]
 

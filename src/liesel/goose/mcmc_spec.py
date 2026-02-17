@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any, Literal, ParamSpec, Protocol, assert_neve
 
 import tensorflow_probability.substrates.jax.distributions as tfd
 
+from liesel.goose.engine import SamplingResults
+
 from .builder import EngineBuilder
 from .interface import LieselInterface
 from .types import Array, JitterFunctions, Kernel, KeyArray
@@ -31,6 +33,39 @@ class LieselMCMC:
     which
         A named inference configuration to use. If None, the default inference \
         attached to each variable is used.
+
+    Examples
+    --------
+
+    .. rubric:: Liesel Workflow
+
+    For this example, we import ``tensorflow_probability`` as follows:
+
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+
+    First, we set up a minimal model:
+
+    >>> mu = lsl.Var.new_param(0.0, name="mu", inference=gs.MCMCSpec(gs.NUTSKernel))
+    >>> dist = lsl.Dist(tfd.Normal, loc=mu, scale=1.0)
+    >>> y = lsl.Var.new_obs(jnp.array([1.0, 2.0, 3.0]), dist, name="y")
+    >>> model = lsl.Model([y])
+
+    Now we run MCMC:
+
+    >>> results = gs.LieselMCMC(model).run_mcmc( # doctest: +SKIP
+    ...     seed=1, num_chains=4, adaptation=250, posterior=100 # doctest: +SKIP
+    ... ) # doctest: +SKIP
+
+    The function returns a :class:`.SamplingResults` object.
+
+    .. rubric:: More control
+
+    For additional control, we initialize an :class:`.EngineBuilder` and continue
+    from there.
+
+    >>> builder = gs.LieselMCMC(model).get_engine_builder(seed=1, num_chains=4)
+    >>> builder.add_adaptation(1000)
+    >>> builder.add_posterior(1000)
     """
 
     model: Model
@@ -96,6 +131,7 @@ class LieselMCMC:
                     kernel=inference.kernel,
                     kwargs=inference.kernel_kwargs,
                     position_keys=[name],
+                    order=inference.order,
                 )
 
             elif group_name in kernel_groups:
@@ -107,11 +143,24 @@ class LieselMCMC:
                         f" {group_name}."
                     )
 
-                same_kwargs = group.kwargs == inference.kernel_kwargs
-                if not same_kwargs:
-                    raise ValueError(
-                        f"Found incoherent kwargs for kernel group {group_name}."
-                    )
+                if inference.kernel_kwargs is None:
+                    pass
+                elif not group.kwargs:
+                    group.kwargs = inference.kernel_kwargs
+                else:
+                    if group.kwargs is not inference.kernel_kwargs:
+                        raise ValueError(
+                            "Found incoherent kernel keyword arguments for "
+                            f"kernel group {group_name}. "
+                            "When supplying kernel keyword arguments for multiple "
+                            "inference objects, they all have to point to the "
+                            "same object. "
+                            "Alternatively, if you pass the kernel keyword arguments "
+                            "to only "
+                            "one inference object in the group, they will be applied "
+                            "for the whole group."
+                        )
+
                 group.position_keys.append(name)
 
             else:
@@ -119,7 +168,12 @@ class LieselMCMC:
                     kernel=inference.kernel,
                     kwargs=inference.kernel_kwargs,
                     position_keys=[name],
+                    order=inference.order,
                 )
+
+        kernel_groups = dict(
+            sorted(kernel_groups.items(), key=lambda item: item[1].order)
+        )
 
         return kernel_groups
 
@@ -170,13 +224,17 @@ class LieselMCMC:
         num_chains
             Number of MCMC chains.
         apply_jitter
-            Whether to apply jitter to the initial states, by default True.
+            Whether to apply jitter to the initial states, by default True. Note that
+            initial values for a variable will only jittered if the
+            :class:`.MCMCSpec` for this variable was supplied with a ``jitter_dist``.
 
         Returns
         -------
         EngineBuilder
             A configured ``EngineBuilder`` instance.
         """
+        self.validate_inference_specs()
+
         eb = EngineBuilder(seed=seed, num_chains=num_chains)
         eb.set_model(LieselInterface(self.model))
         eb.set_initial_values(self.model.state)
@@ -189,12 +247,119 @@ class LieselMCMC:
 
         return eb
 
+    def validate_inference_specs(self) -> None:
+        """
+        Logs a warning if there are any parameters in the model that have no inference
+        specification for MCMC.
+        """
+        no_inference: list[str] = []
+        for name, var in self.model.parameters.items():
+            if isinstance(var.inference, MCMCSpec):
+                continue
+            elif var.inference is None:
+                no_inference.append(name)
+            elif hasattr(var.inference, "values"):
+                specs = list(var.inference.values())
+                for spec in specs:
+                    if isinstance(spec, MCMCSpec):
+                        continue
+
+                # triggers only if None of the specs in the inference dict was an
+                # MCMCSpec
+                no_inference.append(name)
+            else:
+                no_inference.append(name)
+
+        for name in no_inference:
+            logger.warning(
+                f"No inference specification defined for {self.model.vars[name]}. "
+                "If you do not add a kernel for this parameter manually to an "
+                "EngineBuilder, it will not be"
+                " sampled."
+            )
+
+    def run_for_epochs(
+        self,
+        *,
+        seed: int,
+        num_chains: int,
+        adaptation: int,
+        posterior: int,
+        burnin: int = 0,
+        adaptation_thinning: int = 1,
+        burnin_thinning: int = 1,
+        posterior_thinning: int = 1,
+        apply_jitter: bool = True,
+    ) -> SamplingResults:
+        """
+        Shorthand method for quickly running MCMC for a set number of epochs.
+
+        Parameters
+        ----------
+        seed
+            Random seed for reproducibility.
+        num_chains
+            Number of MCMC chains.
+        adaptation, burnin, posterior
+            Number of samples to be drawn in the respective epoch.
+        adaptation_thinning, burnin_thinning, posterior_thinning
+            Thinning to be applied in the respective epoch.
+        apply_jitter
+            Whether to apply jitter to the initial states, by default True. Note that
+            initial values for a variable will only jittered if the
+            :class:`.MCMCSpec` for this variable was supplied with a ``jitter_dist``.
+            Think of this argument rather as an off-switch of existing jittering.
+
+        Warnings
+        ---------
+
+        This method is *only* appropriate, if your MCMC algorithm is fully specified via
+        :class:`.MCMCSpec` objects in the :attr:`.Var.inference` attributes of the
+        variables in your model.
+
+        See Also
+        ---------
+        .get_engine_builder : Method to obtian an :class:`.EngineBuilder` from the
+            LieselMCMC object. The :class:`.EngineBuilder` allows for more detailed
+            custom configuration; for example you can add MCMC kernels via
+            :meth:`.EngineBuilder.add_kernel`.
+
+        Notes
+        ------
+        The method is euqivalent to the following code::
+
+            eb = LieselMCMC(model).get_engine_builder(
+                seed=seed, num_chains=num_chains, apply_jitter=apply_jitter
+            )
+            if adaptation > 0:
+                eb.add_adaptation(adaptation, adaptation_thinning)
+            if burnin > 0:
+                eb.add_burnin(burnin, burnin_thinning)
+            eb.add_posterior(posterior, posterior_thinning)
+            engine = eb.build()
+            engine.sample_all_epochs()
+            engine.get_results()
+
+        """
+        eb = self.get_engine_builder(
+            seed=seed, num_chains=num_chains, apply_jitter=apply_jitter
+        )
+        if adaptation > 0:
+            eb.add_adaptation(adaptation, adaptation_thinning)
+        if burnin > 0:
+            eb.add_burnin(burnin, burnin_thinning)
+        eb.add_posterior(posterior, posterior_thinning)
+        engine = eb.build()
+        engine.sample_all_epochs()
+        return engine.get_results()
+
 
 @dataclass
 class _KernelGroup:
     kernel: Callable[..., Kernel]
     kwargs: dict[str, Any] = field(default_factory=dict)
     position_keys: list[str] = field(default_factory=list)
+    order: int = 99
 
 
 P = ParamSpec("P")
@@ -228,11 +393,46 @@ class MCMCSpec:
         A TensorFlow Probability distribution used to apply random jitter to the \
         initial value of the variable.
     jitter_method
-        The type of jitter to be applied. This can be one of the following:
-        - `none`: No jitter is applied.
-        - `additive`: Additive jitter is applied.
-        - `multiplicative`: Multiplicative jitter is applied.
-        - `replacement`: Value is replaced when jitter is applied.
+        The type of jitter to be applied. This can be one of the following: - `none`: No
+        jitter is applied. - `additive`: Additive jitter is applied. - `multiplicative`:
+        Multiplicative jitter is applied. - `replacement`: Value is replaced when jitter
+        is applied.
+    order
+        If you want to change the order in which parameter blocks are sampled. Blocks
+        will be ordered by default based on the topological order of the graph (from the
+        bottom up; i.e. the kernels for sampling parameters closest to the graph's leaf
+        nodes/responses come first), which is often a sensible default. After that,
+        blocks will be ordered based on the integer provided here. The kernel with the
+        smallest ``order`` integer will be used first.
+
+
+    Examples
+    --------
+
+    .. rubric:: Liesel Workflow
+
+    For this example, we import ``tensorflow_probability`` as follows:
+
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+
+    First, we set up a minimal model:
+
+    >>> mu = lsl.Var.new_param(0.0, name="mu", inference=gs.MCMCSpec(gs.NUTSKernel))
+    >>> dist = lsl.Dist(tfd.Normal, loc=mu, scale=1.0)
+    >>> y = lsl.Var.new_obs(jnp.array([1.0, 2.0, 3.0]), dist, name="y")
+    >>> model = lsl.Model([y])
+
+    Now we initialize the EngineBuilder and set the desired number of warmup and
+    posterior samples:
+
+    >>> builder = gs.LieselMCMC(model).get_engine_builder(seed=1, num_chains=4)
+    >>> builder.add_adaptation(1000)
+    >>> builder.add_posterior(1000)
+
+    Finally, we build the engine:
+
+    >>> engine = builder.build()
+
     """
 
     def __post_init__(self) -> None:
@@ -249,6 +449,10 @@ class MCMCSpec:
     kernel_group: str | None = None
     jitter_dist: tfd.Distribution | None = None
     jitter_method: Literal["additive", "multiplicative", "replacement"] = "additive"
+    order: int = 99
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.kernel}, {self.kernel_group=})"
 
     def apply_jitter(self, seed: KeyArray, value: Array) -> Array:
         """

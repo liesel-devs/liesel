@@ -11,6 +11,7 @@ import scipy
 from pytest import approx
 
 import liesel.goose as gs
+from liesel.goose.engine import SamplingResults
 from liesel.goose.types import Kernel
 
 rng = np.random.default_rng(1337)
@@ -40,7 +41,9 @@ def log_prob(model_state):
     return jnp.sum(log_probs)
 
 
-def run_kernel_test(mcmc_seed: int, kernels: Sequence[Kernel]) -> None:
+def run_kernel_test(
+    mcmc_seed: int, kernels: Sequence[Kernel], test_da_target_accept: bool = True
+) -> SamplingResults:
     builder = gs.EngineBuilder(mcmc_seed, num_chains=1)
 
     for kernel in kernels:
@@ -70,11 +73,14 @@ def run_kernel_test(mcmc_seed: int, kernels: Sequence[Kernel]) -> None:
     avg_log_sigma = np.mean(samples["log_sigma"])
     assert avg_log_sigma == approx(np.log(sigma_ols), rel=0.05)
 
-    for kernel in kernels:
-        if hasattr(kernel, "da_target_accept"):
-            avg_acceptance_prob = np.mean(infos[kernel.identifier].acceptance_prob)
+    if test_da_target_accept:
+        for kernel in kernels:
+            if hasattr(kernel, "da_target_accept"):
+                avg_acceptance_prob = np.mean(infos[kernel.identifier].acceptance_prob)
 
-            # the next line is safe since this if block checks for the existance
-            # of da_target_accept
-            target_accept = kernel.da_target_accept  # type: ignore
-            assert avg_acceptance_prob == approx(target_accept, abs=0.05)
+                # the next line is safe since this if block checks for the existance
+                # of da_target_accept
+                target_accept = kernel.da_target_accept  # type: ignore
+                assert avg_acceptance_prob == approx(target_accept, abs=0.05)
+
+    return results

@@ -118,9 +118,31 @@ def result() -> SamplingResults:
     builder.set_initial_values(state)
     builder.set_epochs(
         [
-            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
             EpochConfig(EpochType.BURNIN, 50, 1, None),
             EpochConfig(EpochType.POSTERIOR, 250, 1, None),
+        ]
+    )
+    engine = builder.build()
+    engine.sample_all_epochs()
+    return engine.get_results()
+
+
+@pytest.fixture(scope="module")
+def result_thinned() -> SamplingResults:
+    builder = EngineBuilder(0, 3)
+    state = {
+        "foo": jnp.arange(3, dtype=jnp.float32),
+        "bar": jnp.zeros((3, 5, 7)),
+        "baz": jnp.array(1.0),
+    }
+
+    builder.add_kernel(MockKernel(list(state.keys())))
+    builder.set_model(DictInterface(log_prob_fn=lambda state: 0.0))
+    builder.set_initial_values(state)
+    builder.set_epochs(
+        [
+            EpochConfig(EpochType.BURNIN, 50, 2, None),
+            EpochConfig(EpochType.POSTERIOR, 250, 2, None),
         ]
     )
     engine = builder.build()
@@ -142,7 +164,6 @@ def result_for_quants() -> SamplingResults:
     builder.set_initial_values(state)
     builder.set_epochs(
         [
-            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
             EpochConfig(EpochType.BURNIN, 50, 1, None),
             EpochConfig(EpochType.POSTERIOR, 250, 1, None),
         ]
@@ -166,7 +187,6 @@ def single_chain_result() -> SamplingResults:
     builder.set_initial_values(state)
     builder.set_epochs(
         [
-            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
             EpochConfig(EpochType.BURNIN, 50, 1, None),
             EpochConfig(EpochType.POSTERIOR, 250, 1, None),
         ]
