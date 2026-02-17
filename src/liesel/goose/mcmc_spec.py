@@ -249,7 +249,7 @@ class LieselMCMC:
 
     def validate_inference_specs(self) -> None:
         """
-        Logs a warning, if there are any parameters in the model that have no inference
+        Logs a warning if there are any parameters in the model that have no inference
         specification for MCMC.
         """
         no_inference: list[str] = []
@@ -308,6 +308,7 @@ class LieselMCMC:
             Whether to apply jitter to the initial states, by default True. Note that
             initial values for a variable will only jittered if the
             :class:`.MCMCSpec` for this variable was supplied with a ``jitter_dist``.
+            Think of this argument rather as an off-switch of existing jittering.
 
         Warnings
         ---------
