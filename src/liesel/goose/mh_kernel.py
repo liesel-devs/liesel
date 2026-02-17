@@ -26,11 +26,31 @@ from .types import KeyArray, ModelState, Position, TuningInfo
 
 
 class MHProposal(NamedTuple):
+    """
+    Encapsulates a proposed state and the log-correction for a
+    Metropolis-Hastings transition.
+
+    Parameters
+    ----------
+    position
+        A dictionary mapping parameter names to their newly proposed values.
+    log_correction
+        The Metropolis-Hastings correction in the case of an asymmetric proposal
+        distribution. Let :math:`q(x' | x)` be the density of the proposal ``x'`` given
+        the current state ``x``, then the ``log_correction`` is defined as
+        :math:`log[q(x | x') / q(x' | x)]`.
+
+    See Also
+    --------
+    :class:`.MHKernel`
+
+    """
+
     position: Position
     log_correction: float
     """
-    Let :math:`q(x' | x)` be the prosal density, then :math:`log(q(x'|x) / q(x | x'))`
-    is the log_mh_correction.
+    Let :math:`q(x' | x)` be the proposal density, then
+    :math:`log(q(x | x') / q(x' | x))` is the log_mh_correction.
     """
 
 
@@ -43,12 +63,88 @@ class MHKernel(ModelMixin, TransitionMixin[RWKernelState, MHTransitionInfo], Rep
     """
     A Metropolis-Hastings kernel implementing the :class:`.Kernel` protocol.
 
-    The user needs to provide a proposal function that proposes a new state and the
-    log_correction.
+    Parameters
+    ----------
+    position_keys
+        Sequence of position keys (variable names) handled by this kernel.
+    proposal_fn
+        Custom proposal function that proposes a new state.
+        Needs to be provided by the user.
+    initial_step_size
+        Value at which to start step size tuning.
+    da_tune_step_size
+        If ``True``, the step size passed as an argument to the
+        proposal function is tuned using the dual averaging algorithm.
+        Step size is tuned on the fly during all adaptive epochs.
+    da_target_accept
+        Target acceptance probability for dual averaging algorithm.
+    da_gamma
+        The adaptation regularization scale.
+    da_kappa
+        The adaptation relaxation exponent.
+    da_t0
+        The adaptation iteration offset.
+    identifier
+        A string acting as a unique identifier for this kernel.
 
-    If ``da_tune_step_size`` is ``True`` the stepsize passed as an argument to the
-    proposal function is tuned using the dual averging algorithm. Step size is tuned on
-    the fly during all adaptive epochs.
+    Examples
+    --------
+
+    To begin, we import ``tensorflow_probability``, ``jax`` and ``jax.numpy``
+    as follows:
+
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+    >>> import jax
+    >>> import jax.numpy as jnp
+
+
+    Then, we set up a minimal model:
+
+    >>> mu = lsl.Var.new_param(0.0, name="mu")
+    >>> dist = lsl.Dist(tfd.Normal, loc=mu, scale=1.0)
+    >>> y = lsl.Var.new_obs(jnp.array([1.0, 2.0, 3.0]), dist, name="y")
+    >>> model = lsl.Model([y])
+
+    Now we initialize the EngineBuilder and set the desired number of warmup and
+    posterior samples:
+
+    >>> builder = gs.EngineBuilder(seed=1, num_chains=4)
+    >>> builder.set_duration(warmup_duration=1000, posterior_duration=1000)
+
+    Next, we set the model interface and initial values:
+
+    >>> interface = gs.LieselInterface(model)
+    >>> builder.set_model(interface)
+    >>> builder.set_initial_values(model.state)
+
+    We define a function to propose new values for the parameter ``"mu"``:
+
+    >>> def mu_proposal(key, model_state, step_size):
+    ...     # extract relevant values from model state
+    ...     pos = interface.extract_position(
+    ...         position_keys=["mu"], model_state=model_state
+    ...     )
+    ...     mu_current = pos["mu"]
+    ...     # draw epsilon
+    ...     epsilon = jax.random.uniform(key, minval=-0.5, maxval=0.5)
+    ...     mu_proposed = mu_current + epsilon
+    ...     pos = {"mu": mu_proposed}
+    ...     return gs.MHProposal(pos, log_correction=0.0)
+
+
+    >>> builder.add_kernel(gs.MHKernel(["mu"], mu_proposal))
+
+    Finally, we build the engine:
+
+    >>> engine = builder.build()
+
+    From here, you can continue with :meth:`~.goose.Engine.sample_all_epochs` to draw
+    samples from your posterior distribution.
+
+    See Also
+    --------
+    :class:`.MHProposal`
+
     """
 
     error_book: ClassVar[dict[int, str]] = {0: "no errors", 90: "nan acceptance prob"}
