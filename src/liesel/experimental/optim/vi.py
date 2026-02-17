@@ -550,7 +550,8 @@ class VDist:
             cov_matrix = eigvecs @ (inv_eigvals_clipped[..., None, :] * eigvecs.T)
             scale_tril_value = jnp.linalg.cholesky(cov_matrix)
         else:
-            scale_tril_value = scale_tril
+            n = jnp.size(loc_value)
+            scale_tril_value = scale_tril * jnp.eye(n)
 
         locs = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
         scale_tril_var = Var.new_param(
