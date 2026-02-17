@@ -421,7 +421,10 @@ class VDist:
         self,
         loc: jax.typing.ArrayLike | None = None,
         scale: Literal["laplace"] | jax.typing.ArrayLike = 0.01,
-        scale_bijector: type[jb.Bijector] | jb.Bijector | None = None,
+        scale_bijector: type[jb.Bijector]
+        | jb.Bijector
+        | None
+        | Literal["auto"] = "auto",
         *bijector_args,
         **bijector_kwargs,
     ) -> Self:
@@ -456,7 +459,9 @@ class VDist:
         dist = Dist(tfd.Normal, loc=loc_var, scale=scale_var)
 
         if scale_bijector is None:
-            dist.biject_parameters("auto")
+            pass
+        elif scale_bijector == "auto":
+            dist.biject_parameters({"scale": "auto"})
         else:
             scale_var.transform(scale_bijector, *bijector_args, **bijector_kwargs)
 
@@ -466,7 +471,10 @@ class VDist:
         self,
         loc: jax.typing.ArrayLike | None = None,
         scale_diag: Literal["laplace"] | jax.typing.ArrayLike = 0.01,
-        scale_diag_bijector: type[jb.Bijector] | jb.Bijector | None = None,
+        scale_diag_bijector: type[jb.Bijector]
+        | jb.Bijector
+        | None
+        | Literal["auto"] = "auto",
         *bijector_args,
         **bijector_kwargs,
     ) -> Self:
@@ -523,7 +531,9 @@ class VDist:
         dist = Dist(tfd.MultivariateNormalDiag, loc=loc_var, scale_diag=scale_diag_var)
 
         if scale_diag_bijector is None:
-            dist.biject_parameters("auto")
+            pass
+        elif scale_diag_bijector == "auto":
+            dist.biject_parameters({"scale_diag": "auto"})
         else:
             scale_diag_var.transform(
                 scale_diag_bijector, *bijector_args, **bijector_kwargs
@@ -535,7 +545,10 @@ class VDist:
         self,
         loc: jax.typing.ArrayLike | None = None,
         scale_tril: Literal["laplace"] | jax.typing.ArrayLike = 0.01,
-        scale_tril_bijector: type[jb.Bijector] | jb.Bijector | None = None,
+        scale_tril_bijector: type[jb.Bijector]
+        | jb.Bijector
+        | None
+        | Literal["auto"] = "auto",
         *bijector_args,
         **bijector_kwargs,
     ) -> Self:
@@ -596,7 +609,9 @@ class VDist:
         dist = Dist(tfd.MultivariateNormalTriL, loc=loc_var, scale_tril=scale_tril_var)
 
         if scale_tril_bijector is None:
-            dist.biject_parameters("auto")
+            pass
+        elif scale_tril_bijector == "auto":
+            dist.biject_parameters({"scale_tril": "auto"})
         else:
             scale_tril_var.transform(
                 scale_tril_bijector, *bijector_args, **bijector_kwargs
