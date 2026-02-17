@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from functools import partial
-from typing import Self
+from typing import Literal, Self
 
 import jax
 import jax.flatten_util
@@ -12,6 +12,7 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 
 from ...docs import usedocs
 from ...model import Dist, Model, Var
+from ...model.logprob import FlatLogProb
 from ...model.model import TemporaryModel
 from .loss import LossMixin
 from .split import PositionSplit
@@ -450,7 +451,7 @@ class VDist:
     def mvn_diag(
         self,
         loc: jax.typing.ArrayLike | None = None,
-        scale_diag: jax.typing.ArrayLike | None = None,
+        scale_diag: Literal["laplace"] | jax.typing.ArrayLike | None = None,
         scale_diag_bijector: type[jb.Bijector] | jb.Bijector | None = None,
         *bijector_args,
         **bijector_kwargs,
@@ -482,6 +483,19 @@ class VDist:
 
         if scale_diag is None:
             scale_diag_value = 0.01 * jnp.ones_like(self._flat_pos)
+        elif scale_diag == "laplace":
+            info_matrix = -FlatLogProb(self.p, self.position_keys).hessian(loc_value)
+            info_matrix += (
+                1e-6
+                * jnp.mean(jnp.diag(info_matrix))
+                * jnp.eye(jnp.shape(info_matrix)[-1])
+            )
+            eigvals, eigvecs = jnp.linalg.eigh(info_matrix)
+
+            # ensure eigenvalue positivity
+            inv_eigvals_clipped = 1 / jnp.clip(eigvals, min=1e-5)
+            cov_matrix = eigvecs @ (inv_eigvals_clipped[..., None, :] * eigvecs.T)
+            scale_diag_value = jnp.diag(cov_matrix)
         else:
             scale_diag_value = scale_diag
 
@@ -504,7 +518,7 @@ class VDist:
     def mvn_tril(
         self,
         loc: jax.typing.ArrayLike | None = None,
-        scale_tril: jax.typing.ArrayLike | None = None,
+        scale_tril: Literal["laplace"] | jax.typing.ArrayLike | None = None,
         scale_tril_bijector: type[jb.Bijector] | jb.Bijector | None = None,
         *bijector_args,
         **bijector_kwargs,
@@ -540,6 +554,19 @@ class VDist:
         if scale_tril is None:
             n = jnp.size(loc_value)
             scale_tril_value = 0.01 * jnp.eye(n)
+        elif scale_tril == "laplace":
+            info_matrix = -FlatLogProb(self.p, self.position_keys).hessian(loc_value)
+            info_matrix += (
+                1e-6
+                * jnp.mean(jnp.diag(info_matrix))
+                * jnp.eye(jnp.shape(info_matrix)[-1])
+            )
+            eigvals, eigvecs = jnp.linalg.eigh(info_matrix)
+
+            # ensure eigenvalue positivity
+            inv_eigvals_clipped = 1 / jnp.clip(eigvals, min=1e-5)
+            cov_matrix = eigvecs @ (inv_eigvals_clipped[..., None, :] * eigvecs.T)
+            scale_tril_value = jnp.linalg.cholesky(cov_matrix)
         else:
             scale_tril_value = scale_tril
 
