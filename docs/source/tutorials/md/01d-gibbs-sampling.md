@@ -1,5 +1,4 @@
 
-
 # Gibbs Sampling
 
 This tutorial extends the [linear regression
@@ -70,7 +69,7 @@ model = lsl.Model([y])
 lsl.plot_vars(model)
 ```
 
-![](01d-gibbs-sampling_files/figure-commonmark/build%20model-1.png)
+![](01d-gibbs-sampling_files/figure-commonmark/build-model-1.png)
 
 ## MCMC inference
 
@@ -123,30 +122,30 @@ engine.sample_all_epochs()
 
 
       0%|                                                  | 0/3 [00:00<?, ?chunk/s]
-     33%|##############                            | 1/3 [00:02<00:04,  2.27s/chunk]
-    100%|##########################################| 3/3 [00:02<00:00,  1.32chunk/s]
+     33%|##############                            | 1/3 [00:01<00:03,  1.60s/chunk]
+    100%|##########################################| 3/3 [00:01<00:00,  1.87chunk/s]
 
       0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|########################################| 1/1 [00:00<00:00, 1387.01chunk/s]
+    100%|########################################| 1/1 [00:00<00:00, 2066.16chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 1912.15chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 3623.59chunk/s]
 
       0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|########################################| 4/4 [00:00<00:00, 1724.10chunk/s]
+    100%|########################################| 4/4 [00:00<00:00, 3964.37chunk/s]
 
       0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|#########################################| 8/8 [00:00<00:00, 925.72chunk/s]
+    100%|########################################| 8/8 [00:00<00:00, 1318.19chunk/s]
 
       0%|                                                 | 0/20 [00:00<?, ?chunk/s]
-    100%|#######################################| 20/20 [00:00<00:00, 285.42chunk/s]
+    100%|#######################################| 20/20 [00:00<00:00, 379.48chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 2176.60chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 3546.98chunk/s]
 
       0%|                                                 | 0/40 [00:00<?, ?chunk/s]
-     62%|########################3              | 25/40 [00:00<00:00, 242.98chunk/s]
-    100%|#######################################| 40/40 [00:00<00:00, 207.48chunk/s]
+     82%|################################1      | 33/40 [00:00<00:00, 317.62chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 304.37chunk/s]
 
 Finally, we can take a look at our results
 
@@ -157,455 +156,284 @@ summary
 ```
 
 <p>
-
 <strong>Parameter summary:</strong>
 </p>
-
 <table border="0" class="dataframe">
-
 <thead>
-
 <tr style="text-align: right;">
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 kernel
 </th>
-
 <th>
-
 mean
 </th>
-
 <th>
-
 sd
 </th>
-
 <th>
-
 q_0.05
 </th>
-
 <th>
-
 q_0.5
 </th>
-
 <th>
-
 q_0.95
 </th>
-
 <th>
-
 sample_size
 </th>
-
 <th>
-
 ess_bulk
 </th>
-
 <th>
-
 ess_tail
 </th>
-
 <th>
-
 rhat
 </th>
-
 </tr>
-
 <tr>
-
 <th>
-
 parameter
 </th>
-
 <th>
-
 index
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 </tr>
-
 </thead>
-
 <tbody>
-
 <tr>
-
 <th rowspan="2" valign="top">
-
 beta
 </th>
-
 <th>
-
 (0,)
 </th>
-
 <td>
-
 kernel_00
 </td>
-
 <td>
-
-0.981
+0.984
 </td>
-
 <td>
-
 0.091
 </td>
-
 <td>
-
-0.829
+0.837
 </td>
-
 <td>
-
-0.983
+0.984
 </td>
-
 <td>
-
-1.129
+1.135
 </td>
-
 <td>
-
 4000
 </td>
-
 <td>
-
-1163.373
+1101.340
 </td>
-
 <td>
-
-1263.447
+1252.702
 </td>
-
 <td>
-
-1.002
+1.005
 </td>
-
 </tr>
-
 <tr>
-
 <th>
-
 (1,)
 </th>
-
 <td>
-
 kernel_00
 </td>
-
 <td>
-
-1.914
+1.911
 </td>
-
 <td>
-
 0.161
 </td>
-
 <td>
-
 1.649
 </td>
-
 <td>
-
-1.913
+1.912
 </td>
-
 <td>
-
-2.184
+2.171
 </td>
-
 <td>
-
 4000
 </td>
-
 <td>
-
-1183.415
+1130.029
 </td>
-
 <td>
-
-1230.437
+1237.464
 </td>
-
 <td>
-
-1.003
+1.006
 </td>
-
 </tr>
-
 <tr>
-
 <th>
-
 sigma_sq
 </th>
-
 <th>
-
 ()
 </th>
-
 <td>
-
 kernel_01
 </td>
-
 <td>
-
 1.044
 </td>
-
 <td>
-
 0.067
 </td>
-
 <td>
-
 0.939
 </td>
-
 <td>
-
 1.040
 </td>
-
 <td>
-
 1.161
 </td>
-
 <td>
-
 4000
 </td>
-
 <td>
-
-3891.854
+3859.015
 </td>
-
 <td>
-
-3769.584
+3732.136
 </td>
-
 <td>
-
-1.001
+1.000
 </td>
-
 </tr>
-
 </tbody>
-
 </table>
-
 <p>
-
 <strong>Error summary:</strong>
 </p>
-
 <table border="0" class="dataframe">
-
 <thead>
-
 <tr style="text-align: right;">
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 count
 </th>
-
 <th>
-
+sample_size
+</th>
+<th>
+sample_size_total
+</th>
+<th>
 relative
 </th>
-
 </tr>
-
 <tr>
-
 <th>
-
 kernel
 </th>
-
 <th>
-
 error_code
 </th>
-
 <th>
-
 error_msg
 </th>
-
 <th>
-
 phase
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
+<th>
+</th>
+<th>
+</th>
 </tr>
-
 </thead>
-
 <tbody>
-
 <tr>
-
 <th rowspan="2" valign="top">
-
 kernel_00
 </th>
-
 <th rowspan="2" valign="top">
-
 1
 </th>
-
 <th rowspan="2" valign="top">
-
 divergent transition
 </th>
-
 <th>
-
 warmup
 </th>
-
 <td>
-
-52
+62
 </td>
-
 <td>
-
-0.013
+4000
 </td>
-
+<td>
+4000
+</td>
+<td>
+0.016
+</td>
 </tr>
-
 <tr>
-
 <th>
-
 posterior
 </th>
-
 <td>
-
 0
 </td>
-
 <td>
-
+4000
+</td>
+<td>
+4000
+</td>
+<td>
 0.000
 </td>
-
 </tr>
-
 </tbody>
-
 </table>
 
 And plot these

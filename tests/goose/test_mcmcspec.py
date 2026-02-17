@@ -1,3 +1,5 @@
+import logging
+
 import jax
 import jax.numpy as jnp
 import jax.random as random
@@ -199,6 +201,54 @@ class TestMCMCSpec:
 
 
 class TestLieselMCMC:
+    def test_engine_validation(self, local_caplog):
+        mu = lsl.Var.new_param(
+            0.0,
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="mu",
+        )
+
+        model = lsl.Model([mu])
+
+        mcmc = gs.LieselMCMC(model)
+        with local_caplog() as caplog:
+            mcmc.get_engine_builder(seed=1, num_chains=4)
+            caplog.records[0].levelno == logging.WARNING
+            "No inference specification" in caplog.records[0].msg
+
+        mu = lsl.Var.new_param(
+            0.0,
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="mu",
+            inference=gs.MCMCSpec(gs.NUTSKernel),
+        )
+
+        model = lsl.Model([mu])
+
+        mcmc = gs.LieselMCMC(model)
+        with local_caplog() as caplog:
+            mcmc.get_engine_builder(seed=1, num_chains=4)
+            len(caplog.records) == 0
+
+        mu = lsl.Var.new_param(
+            0.0,
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="mu",
+        )
+
+        mu2 = lsl.Var.new_param(
+            0.0,
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="mu2",
+        )
+
+        model = lsl.Model([mu, mu2])
+
+        mcmc = gs.LieselMCMC(model)
+        with local_caplog() as caplog:
+            mcmc.get_engine_builder(seed=1, num_chains=4)
+            len(caplog.records) == 2
+
     def test_engine(self):
         mu = lsl.Var.new_param(
             0.0,
@@ -651,3 +701,24 @@ class TestLieselMCMC:
         assert position_keys[2][0] == "h(layer2_scale)"
         assert position_keys[1][0] == "layer2_loc"
         assert position_keys[0][0] == "layer3"
+
+    # @pytest.mark.mcmc
+    def test_run_mcmc(self):
+        loc = lsl.Var.new_param(1.0, name="loc", inference=gs.MCMCSpec(gs.NUTSKernel))
+        scale = lsl.Var.new_param(
+            1.0,
+            name="scale",
+            bijector=tfb.Exp(),
+            inference=gs.MCMCSpec(gs.NUTSKernel),
+        )
+        y = lsl.Var.new_param(
+            jnp.linspace(-2, 2, 50),
+            distribution=lsl.Dist(tfd.Normal, loc=loc, scale=scale),
+            name="layer1",
+            inference=gs.MCMCSpec(gs.NUTSKernel),
+        )
+        model = lsl.Model([y])
+        result = gs.LieselMCMC(model).run_for_epochs(
+            seed=1, num_chains=4, adaptation=250, posterior=250
+        )
+        assert isinstance(result, gs.SamplingResults)

@@ -156,6 +156,7 @@ Model (Advanced)
     ~liesel.model.Node
     ~liesel.model.Value
     ~liesel.model.PIT
+    ~liesel.distributions.GaussianCopula
     ~liesel.model.TransientCalc
     ~liesel.model.TransientDist
     ~liesel.model.TransientIdentity
@@ -178,7 +179,7 @@ in to using :class:`.Model`. Goose currently includes the following interfaces:
 
     ~liesel.goose.LieselInterface
     ~liesel.goose.DictInterface
-    ~liesel.goose.DataclasslInterface
+    ~liesel.goose.DataclassInterface
     ~liesel.goose.NamedTupleInterface
 
 P-Splines

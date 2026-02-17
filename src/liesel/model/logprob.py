@@ -8,7 +8,7 @@ from ..goose.types import Array
 from .model import Model
 
 
-class LieselLogProb:
+class LogProb:
     """
     Interface for evaluating the unnormalized log probability of a Liesel model.
 
@@ -25,7 +25,7 @@ class LieselLogProb:
 
     See Also
     ---------
-    .FlatLieselLogProb: A similar class that returns gradients and hessians as arrays.
+    .FlatLogProb: A similar class that returns gradients and hessians as arrays.
 
     Examples
     --------
@@ -40,7 +40,7 @@ class LieselLogProb:
 
     Now we initialize the log prob object:
 
-    >>> lp = lsl.LieselLogProb(model)
+    >>> lp = lsl.LogProb(model)
 
     And evaluate the log prob (the unnormalized log posterior) at a new position:
 
@@ -107,13 +107,13 @@ class LieselLogProb:
         return self._hessian_fn(position)
 
 
-class FlatLieselLogProb:
+class FlatLogProb:
     """
     Interface for evaluating the unnormalized log probability of a Liesel model.
 
     Also provides access to the first and second derivatives.
-    The methods :meth:`.FlatLieselLogProb.grad` and
-    :meth:`.FlatLieselLogProb.hessian` are
+    The methods :meth:`.FlatLogProb.grad` and
+    :meth:`.FlatLogProb.hessian` are
     flattened, which means the expect arrays as inputs and return arrays.
 
     Parameters
@@ -130,7 +130,7 @@ class FlatLieselLogProb:
 
     See Also
     --------
-    .LieselLogProb: A similar class that returns gradients and hessians as dictionaries.
+    .LogProb: A similar class that returns gradients and hessians as dictionaries.
 
 
     Examples
@@ -146,7 +146,7 @@ class FlatLieselLogProb:
 
     Now we initialize the log prob object:
 
-    >>> lp = lsl.FlatLieselLogProb(model, ["x"])
+    >>> lp = lsl.FlatLogProb(model, ["x"])
 
     And an array of new values to evaluate the log probability at:
 
