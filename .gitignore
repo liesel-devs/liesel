@@ -181,3 +181,4 @@ cython_debug/
 # MacOS
 .DS_Store
 /tests/notebooks
+docs/source/tutorials/qmd/.Rprofile
