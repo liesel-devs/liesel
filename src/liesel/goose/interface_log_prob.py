@@ -9,10 +9,10 @@ from .types import ModelInterface, ModelState, Position
 Array = Any
 
 
-class LogProb:
+class InterfaceLogProb:
     """
-    Interface for evaluating the unnormalized log probability represented by a
-    model interface.
+    Interface for evaluating the unnormalized log probability represented by a model
+    interface.
 
     Also provides access to the first and second derivatives.
 
@@ -27,9 +27,9 @@ class LogProb:
 
     See Also
     --------
-    .FlatLogProb : A similar class that returns gradients and hessians as arrays.
-    liesel.model.LieselLogProb : Similar class, specialized for liesel models.
-    liesel.model.FlatLieselLogProb : Similar class, specialized for liesel models.
+    .FlatInterfaceLogProb : A similar class that returns gradients and hessians as
+        arrays. liesel.model.LogProb : Similar class, specialized for liesel models.
+    liesel.model.FlatLogProb : Similar class, specialized for liesel models.
     """
 
     def __init__(
@@ -73,14 +73,14 @@ class LogProb:
         return self._hessian_fn(position)
 
 
-class FlatLogProb:
+class FlatInterfaceLogProb:
     """
-    Interface for evaluating the unnormalized log probability
-    represented by a model interface.
+    Interface for evaluating the unnormalized log probability represented by a model
+    interface.
 
-    Also provides access to the first and second derivatives.
-    The methods :meth:`.FlatLogProb.grad` and :meth:`.FlatLogProb.hessian` are
-    flattened, which means they expect arrays as inputs and return arrays.
+    Also provides access to the first and second derivatives. The methods
+    :meth:`.FlatLogProb.grad` and :meth:`.FlatLogProb.hessian` are flattened, which
+    means they expect arrays as inputs and return arrays.
 
     Parameters
     ----------
@@ -96,9 +96,10 @@ class FlatLogProb:
 
     See Also
     --------
-    .LogProb : A similar class that returns gradients and hessians as dictionaries.
-    liesel.model.LieselLogProb : Similar class, specialized for liesel models.
-    liesel.model.FlatLieselLogProb : Similar class, specialized for liesel models.
+    .InterfaceLogProb : A similar class that returns gradients and hessians as
+        dictionaries. liesel.model.LogProb : Similar class, specialized for liesel
+        models.
+    liesel.model.FlatLogProb : Similar class, specialized for liesel models.
 
     """
 

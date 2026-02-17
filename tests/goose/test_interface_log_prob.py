@@ -59,7 +59,7 @@ class TestLogProb:
     def test_log_prob(self):
         vals = []
         for interface, state in zip(interfaces, states):
-            lp = gs.LogProb(interface, state)
+            lp = gs.InterfaceLogProb(interface, state)
 
             pos = {"mu": 2.0}
             val = lp.log_prob(pos)
@@ -71,7 +71,7 @@ class TestLogProb:
     def test_grad(self):
         vals = []
         for interface, state in zip(interfaces, states):
-            lp = gs.LogProb(interface, state)
+            lp = gs.InterfaceLogProb(interface, state)
 
             pos = {"mu": 2.0}
             val = lp.grad(pos)
@@ -84,7 +84,7 @@ class TestLogProb:
     def test_hessian(self, diff_mode):
         vals = []
         for interface, state in zip(interfaces, states):
-            lp = gs.LogProb(interface, state, diff_mode=diff_mode)
+            lp = gs.InterfaceLogProb(interface, state, diff_mode=diff_mode)
 
             pos = {"mu": 2.0}
             val = lp.hessian(pos)
@@ -98,7 +98,7 @@ class TestFlatLogProb:
     def test_log_prob(self):
         vals = []
         for interface, state in zip(interfaces, states):
-            lp = gs.FlatLogProb(interface, state, ["mu"])
+            lp = gs.FlatInterfaceLogProb(interface, state, ["mu"])
 
             pos = jnp.array([2.0])
             val = lp.log_prob(pos)
@@ -110,7 +110,7 @@ class TestFlatLogProb:
     def test_grad(self):
         vals = []
         for interface, state in zip(interfaces, states):
-            lp = gs.FlatLogProb(interface, state, ["mu"])
+            lp = gs.FlatInterfaceLogProb(interface, state, ["mu"])
 
             pos = jnp.array([2.0])
             val = lp.grad(pos)
@@ -123,7 +123,7 @@ class TestFlatLogProb:
     def test_hessian(self, diff_mode):
         vals = []
         for interface, state in zip(interfaces, states):
-            lp = gs.FlatLogProb(interface, state, ["mu"], diff_mode=diff_mode)
+            lp = gs.FlatInterfaceLogProb(interface, state, ["mu"], diff_mode=diff_mode)
 
             pos = jnp.array([2.0])
             val = lp.hessian(pos)

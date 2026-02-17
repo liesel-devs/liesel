@@ -14,7 +14,7 @@ from .interface import (
     LieselInterface,
     NamedTupleInterface,
 )
-from .interface_log_prob import FlatLogProb, LogProb
+from .interface_log_prob import FlatInterfaceLogProb, InterfaceLogProb
 from .iwls import IWLSKernel
 from .mcmc_spec import LieselMCMC, MCMCSpec
 from .mh_kernel import MHKernel, MHProposal
@@ -70,6 +70,6 @@ __all__ = [
     "stan_epochs",
     "optim_flat",
     "OptimResult",
-    "LogProb",
-    "FlatLogProb",
+    "InterfaceLogProb",
+    "FlatInterfaceLogProb",
 ]

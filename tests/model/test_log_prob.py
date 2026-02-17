@@ -27,13 +27,13 @@ model = lsl.Model([yvar])
 class TestLogProb:
     @pytest.mark.parametrize("component", ("log_prob", "log_lik", "log_prior"))
     def test_log_prob(self, component) -> None:
-        logprob_fn = lsl.LieselLogProb(model, component=component)
+        logprob_fn = lsl.LogProb(model, component=component)
         logprob = jax.jit(logprob_fn)({"beta": jnp.array([1.0, 2.0, 3.0])})
         assert not jnp.isnan(logprob)
 
     @pytest.mark.parametrize("component", ("log_prob", "log_lik", "log_prior"))
     def test_grad(self, component) -> None:
-        logprob_fn = lsl.LieselLogProb(model, component=component)
+        logprob_fn = lsl.LogProb(model, component=component)
         result = jax.jit(logprob_fn.grad)({"beta": jnp.array([1.0, 2.0, 3.0])})
 
         assert not jnp.any(jnp.isnan(result["beta"]))
@@ -42,7 +42,7 @@ class TestLogProb:
     @pytest.mark.parametrize("diff_mode", ("forward", "reverse"))
     @pytest.mark.parametrize("component", ("log_prob", "log_lik", "log_prior"))
     def test_hessian(self, diff_mode, component) -> None:
-        logprob_fn = lsl.LieselLogProb(model, component=component, diff_mode=diff_mode)
+        logprob_fn = lsl.LogProb(model, component=component, diff_mode=diff_mode)
         result = jax.jit(logprob_fn.hessian)({"beta": jnp.array([1.0, 2.0, 3.0])})
 
         assert not jnp.any(jnp.isnan(result["beta"]["beta"]))
@@ -52,9 +52,7 @@ class TestLogProb:
 class TestFlatLogProb:
     @pytest.mark.parametrize("component", ("log_prob", "log_lik", "log_prior"))
     def test_log_prob(self, component) -> None:
-        logprob_fn = lsl.FlatLieselLogProb(
-            model, list(model.parameters), component=component
-        )
+        logprob_fn = lsl.FlatLogProb(model, list(model.parameters), component=component)
         logprob = jax.jit(logprob_fn)(jnp.array([1.0, 2.0, 3.0]))
         assert not jnp.isnan(logprob)
 
@@ -65,13 +63,11 @@ class TestFlatLogProb:
         y = lsl.Var.new_obs(1.0, lsl.Dist(tfd.Normal, loc=mu, scale=sigma), name="y")
         model = lsl.Model([y])
 
-        logprob_fn = lsl.FlatLieselLogProb(
-            model, position_keys=["mu"], component=component
-        )
+        logprob_fn = lsl.FlatLogProb(model, position_keys=["mu"], component=component)
         logprob = jax.jit(logprob_fn)(jnp.array([1.0]))
         assert not jnp.isnan(logprob)
 
-        logprob_fn = lsl.FlatLieselLogProb(
+        logprob_fn = lsl.FlatLogProb(
             model, position_keys=["mu", "sigma"], component=component
         )
         logprob = jax.jit(logprob_fn)(jnp.array([1.0, 2.0]))
@@ -79,9 +75,7 @@ class TestFlatLogProb:
 
     @pytest.mark.parametrize("component", ("log_prob", "log_lik", "log_prior"))
     def test_grad(self, component) -> None:
-        logprob_fn = lsl.FlatLieselLogProb(
-            model, list(model.parameters), component=component
-        )
+        logprob_fn = lsl.FlatLogProb(model, list(model.parameters), component=component)
         result = jax.jit(logprob_fn.grad)(jnp.array([1.0, 2.0, 3.0]))
 
         assert not jnp.any(jnp.isnan(result))
@@ -90,7 +84,7 @@ class TestFlatLogProb:
     @pytest.mark.parametrize("diff_mode", ("forward", "reverse"))
     @pytest.mark.parametrize("component", ("log_prob", "log_lik", "log_prior"))
     def test_hessian(self, diff_mode, component) -> None:
-        logprob_fn = lsl.FlatLieselLogProb(
+        logprob_fn = lsl.FlatLogProb(
             model, list(model.parameters), component=component, diff_mode=diff_mode
         )
         result = jax.jit(logprob_fn.hessian)(jnp.array([1.0, 2.0, 3.0]))
