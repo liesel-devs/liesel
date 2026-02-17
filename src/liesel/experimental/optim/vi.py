@@ -420,7 +420,7 @@ class VDist:
     def normal(
         self,
         loc: jax.typing.ArrayLike | None = None,
-        scale: jax.typing.ArrayLike | None = None,
+        scale: Literal["laplace"] | jax.typing.ArrayLike = 0.01,
         scale_bijector: type[jb.Bijector] | jb.Bijector | None = None,
         *bijector_args,
         **bijector_kwargs,
@@ -430,11 +430,25 @@ class VDist:
         else:
             loc_value = jnp.asarray(loc)
 
-        if scale is None:
-            n = jnp.size(loc_value)
-            scale_value = 0.01 * jnp.ones(n)
+        if scale == "laplace":
+            info_matrix = -FlatLogProb(self.p, self.position_keys).hessian(loc_value)
+            info_matrix += (
+                1e-6
+                * jnp.mean(jnp.diag(info_matrix))
+                * jnp.eye(jnp.shape(info_matrix)[-1])
+            )
+            eigvals, eigvecs = jnp.linalg.eigh(info_matrix)
+
+            # ensure eigenvalue positivity
+            inv_eigvals_clipped = 1 / jnp.clip(eigvals, min=1e-5)
+            cov_matrix = eigvecs @ (inv_eigvals_clipped[..., None, :] * eigvecs.T)
+            scale = jnp.diag(cov_matrix)
         else:
-            scale_value = jnp.asarray(scale)
+            scale_arr = jnp.asarray(scale)
+            if scale_arr.size == 1:
+                scale_value = scale_arr * jnp.ones_like(self._flat_pos)
+            else:
+                scale_value = scale_arr
 
         loc_var = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
         scale_var = Var.new_param(scale_value, name=self._flat_pos_name + "_scale")
@@ -451,7 +465,7 @@ class VDist:
     def mvn_diag(
         self,
         loc: jax.typing.ArrayLike | None = None,
-        scale_diag: Literal["laplace"] | jax.typing.ArrayLike | None = None,
+        scale_diag: Literal["laplace"] | jax.typing.ArrayLike = 0.01,
         scale_diag_bijector: type[jb.Bijector] | jb.Bijector | None = None,
         *bijector_args,
         **bijector_kwargs,
@@ -481,9 +495,7 @@ class VDist:
         else:
             loc_value = loc
 
-        if scale_diag is None:
-            scale_diag_value = 0.01 * jnp.ones_like(self._flat_pos)
-        elif scale_diag == "laplace":
+        if scale_diag == "laplace":
             info_matrix = -FlatLogProb(self.p, self.position_keys).hessian(loc_value)
             info_matrix += (
                 1e-6
@@ -497,7 +509,11 @@ class VDist:
             cov_matrix = eigvecs @ (inv_eigvals_clipped[..., None, :] * eigvecs.T)
             scale_diag_value = jnp.diag(cov_matrix)
         else:
-            scale_diag_value = scale_diag
+            scale_diag_arr = jnp.asarray(scale_diag)
+            if scale_diag_arr.size == 1:
+                scale_diag_value = scale_diag_arr * jnp.ones_like(self._flat_pos)
+            else:
+                scale_diag_value = scale_diag_arr
 
         loc_var = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
         scale_diag_var = Var.new_param(
@@ -518,7 +534,7 @@ class VDist:
     def mvn_tril(
         self,
         loc: jax.typing.ArrayLike | None = None,
-        scale_tril: Literal["laplace"] | jax.typing.ArrayLike | None = None,
+        scale_tril: Literal["laplace"] | jax.typing.ArrayLike = 0.01,
         scale_tril_bijector: type[jb.Bijector] | jb.Bijector | None = None,
         *bijector_args,
         **bijector_kwargs,
@@ -551,10 +567,7 @@ class VDist:
         else:
             loc_value = loc
 
-        if scale_tril is None:
-            n = jnp.size(loc_value)
-            scale_tril_value = 0.01 * jnp.eye(n)
-        elif scale_tril == "laplace":
+        if scale_tril == "laplace":
             info_matrix = -FlatLogProb(self.p, self.position_keys).hessian(loc_value)
             info_matrix += (
                 1e-6
@@ -568,7 +581,12 @@ class VDist:
             cov_matrix = eigvecs @ (inv_eigvals_clipped[..., None, :] * eigvecs.T)
             scale_tril_value = jnp.linalg.cholesky(cov_matrix)
         else:
-            scale_tril_value = scale_tril
+            scale_tril_value_arr = jnp.asarray(scale_tril)
+            if scale_tril_value_arr.size == 1:
+                n = self._flat_pos.size
+                scale_tril_value = scale_tril_value_arr * jnp.eye(n)
+            else:
+                scale_tril_value = scale_tril_value_arr
 
         loc_var = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
         scale_tril_var = Var.new_param(
