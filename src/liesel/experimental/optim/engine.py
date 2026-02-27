@@ -261,9 +261,13 @@ class OptimEngine:
         history = self.process_history(carry.epoch, carry.history)
 
         if self.restore_best_position:
-            final_position: Position = Position(
-                {name: pos[ibest] for name, pos in carry.history.position.items()}
-            )
+            if self.save_position_history:
+                assert carry.history.position is not None
+                final_position: Position = Position(
+                    {name: pos[ibest] for name, pos in carry.history.position.items()}
+                )
+            else:
+                final_position = carry.best_position
         else:
             final_position = carry.position
 
@@ -281,6 +285,7 @@ class OptimEngine:
         history.loss_train = history.loss_train.at[i:].set(jnp.nan)
         history.loss_validate = history.loss_validate.at[i:].set(jnp.nan)
         if self.save_position_history:
+            assert history.position is not None
             for name, value in history.position.items():
                 history.position[name] = value.at[i:, ...].set(jnp.nan)
 
@@ -295,6 +300,7 @@ class OptimEngine:
         history.loss_train = history.loss_train[:i]
         history.loss_validate = history.loss_validate[:i]
         if self.save_position_history:
+            assert history.position is not None
             for name, value in history.position.items():
                 history.position[name] = value[:i, ...]
 
@@ -417,6 +423,7 @@ class OptimEngine:
             carry.history.loss_validate = carry.history.loss_validate.at[i].set(loss_i)
 
         if self.save_position_history:
+            assert carry.history.position is not None
             carry.history.position = carry.history.update_position_history(
                 carry.epoch, carry.history.position, carry.position
             )
@@ -424,6 +431,20 @@ class OptimEngine:
                 carry.history.tracked = carry.history.update_position_history(
                     carry.epoch, carry.history.tracked, carry.tracked
                 )
+
+        else:
+
+            def update_carry(carry: OptimCarry):
+                carry.best_loss = carry.loss_validate
+                carry.best_position = carry.position
+                return carry
+
+            carry = jax.lax.cond(
+                carry.loss_validate < carry.best_loss,
+                update_carry,
+                lambda carry: carry,
+                carry,
+            )
 
         carry.epoch += 1
 
@@ -448,6 +469,7 @@ class OptimEngine:
             tracked=initial_tracked,
             optimizers=self.optimizers,
             model_state=self.initial_state,
+            save_position_history=self.save_position_history,
         )
         return carry
 

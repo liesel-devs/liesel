@@ -43,21 +43,27 @@ def position_df(
 class OptimHistory:
     loss_train: jax.Array
     loss_validate: jax.Array
-    position: Position
+    position: Position | None
     tracked: Position | None
 
     @classmethod
     def from_epochs(
-        cls, epochs: int, position: Position, tracked: Position | None
+        cls, epochs: int, position: Position | None, tracked: Position | None
     ) -> OptimHistory:
         tracked_init = (
             cls.init_position_history(tracked, epochs) if tracked is not None else None
         )
 
+        position_init = (
+            cls.init_position_history(position, epochs)
+            if position is not None
+            else None
+        )
+
         inst = cls(
             loss_train=jnp.full((epochs,), fill_value=jnp.inf),
             loss_validate=jnp.full((epochs,), fill_value=jnp.inf),
-            position=cls.init_position_history(position, epochs),
+            position=position_init,
             tracked=tracked_init,
         )
         return inst
@@ -76,6 +82,10 @@ class OptimHistory:
         return df.astype(float)
 
     def position_df(self, subset: Sequence[str] | None = None) -> pd.DataFrame:
+        if self.position is None:
+            raise TypeError(
+                "'position' is None. Probably the position history was not saved."
+            )
         return position_df(self.position, subset)
 
     def tracked_df(self, subset: Sequence[str] | None = None) -> pd.DataFrame:
@@ -150,6 +160,8 @@ class OptimCarry:
 
     batch: Position = field(default_factory=lambda: Position({}))
     fixed_position: Position = field(default_factory=lambda: Position({}))
+    best_position: Position = field(default_factory=lambda: Position({}))
+    best_loss: jax.Array | float = jnp.inf
 
     loss_train: jax.Array | float = jnp.inf
     loss_validate: jax.Array | float = jnp.inf
@@ -167,16 +179,23 @@ class OptimCarry:
         batches: Batches,
         optimizers: Sequence[Optimizer],
         model_state: ModelState,
+        save_position_history: bool,
     ) -> OptimCarry:
         opt_states = {opt.identifier: opt.init(position) for opt in optimizers}
+        if save_position_history:
+            history = OptimHistory.from_epochs(epochs, position, tracked)
+        else:
+            history = OptimHistory.from_epochs(epochs, None, tracked)
+
         inst = cls(
             key=key,
             position=position,
             tracked=tracked,
-            history=OptimHistory.from_epochs(epochs, position, tracked),
+            history=history,
             batches=batches,
             optimizer_states=opt_states,
             model_state=model_state,
+            best_position=position,
         )
         return inst
 
@@ -245,6 +264,11 @@ class OptimResult:
         window: int | None = None,
     ):
         position = position or self.history.position
+        if position is None:
+            raise TypeError(
+                "'position' is None and cannot be plotted. "
+                "Probably the position history was not saved."
+            )
         history = position_df(position, subset)
         n_iter = history.shape[0]
         if window is None:
