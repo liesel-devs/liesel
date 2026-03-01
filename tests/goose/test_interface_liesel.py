@@ -1,3 +1,4 @@
+import jax.numpy as jnp
 import jax.random as rd
 import numpy as np
 import pytest
@@ -42,6 +43,43 @@ class TestLieselInterface:
 
         assert lp_before == pytest.approx(-719.46875)
         assert lp_after == pytest.approx(-25616.779296875)
+
+    def test_log_prob_vars(self):
+        # Create simple model with two parameters
+        param1 = Var.new_param(1.0, Dist(tfd.Normal, loc=0.0, scale=1.0), name="param1")
+        param2 = Var.new_param(2.0, Dist(tfd.Normal, loc=0.0, scale=1.0), name="param2")
+
+        # Likelihood: y ~ Normal(param1 + param2, 0.1)
+        y_mean = Var.new_calc(lambda p1, p2: p1 + p2, param1, param2, name="y_mean")
+
+        # Observed data
+        y_data = jnp.array([1.5, 2.5, 3.5])
+        y = Var.new_obs(y_data, Dist(tfd.Normal, loc=y_mean, scale=0.1), name="y")
+
+        # Build model
+        model = GraphBuilder().add(param1, param2, y).build_model()
+        interface = gs.LieselInterface(model)
+
+        model_state = model.state
+
+        # Test individual parameter log-probs
+        param1_log_prob = interface.log_prob_vars(model_state, ["param1"])
+        param2_log_prob = interface.log_prob_vars(model_state, ["param2"])
+
+        # Test multiple parameters
+        both_params_log_prob = interface.log_prob_vars(
+            model_state, ["param1", "param2"]
+        )
+        assert jnp.allclose(both_params_log_prob, param1_log_prob + param2_log_prob)
+
+        # Test likelihood
+        likelihood_log_prob = interface.log_prob_vars(model_state, ["y"])
+
+        # Verify that sum of parts equals total
+        total_log_prob = interface.log_prob(model_state)
+        expected_total = param1_log_prob + param2_log_prob + likelihood_log_prob
+
+        assert jnp.allclose(total_log_prob, expected_total)
 
 
 @pytest.mark.mcmc
