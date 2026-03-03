@@ -328,7 +328,6 @@ class OptimEngine:
             )
             progress_bar_inst.update(update)
             progress_bar_inst.set_description(desc)
-            return losses
 
         def tqdm_callback(carry: OptimCarry):
             iter_num = carry.epoch + 1
@@ -336,9 +335,13 @@ class OptimEngine:
             loss_train, loss_validate = carry.loss_train, carry.loss_validate
             losses = (loss_train, loss_validate)
 
+            def true_fn(_):
+                jax.debug.callback(tqdm_update, losses, ordered=True)
+                return losses
+
             _ = jax.lax.cond(
                 (iter_num % print_rate == 0),
-                lambda _: jax.experimental.io_callback(tqdm_update, losses, losses),
+                true_fn,
                 lambda _: losses,
                 operand=None,
             )
