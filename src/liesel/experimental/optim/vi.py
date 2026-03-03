@@ -379,7 +379,7 @@ class VDist:
             params = list(model.parameters)
             return params
 
-        with TemporaryModel(self.var) as model:
+        with TemporaryModel(self.var, to_float32=self._to_float32) as model:
             params = list(model.parameters)
 
         return params
