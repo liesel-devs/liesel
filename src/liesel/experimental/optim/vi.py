@@ -331,7 +331,7 @@ class VDist:
         flat_pos, unflatten = jax.flatten_util.ravel_pytree(pos)
         self._unflatten = unflatten
         self._flat_pos = flat_pos
-        self._flat_pos_name = "(" + "|".join(self.position_keys) + ")"
+        self._flat_pos_name = "(" + "|".join(sorted(self.position_keys)) + ")"
         self.var: Var | None = None
         self.q: Model | None = None
 
