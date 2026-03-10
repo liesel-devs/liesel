@@ -157,7 +157,7 @@ wheels = [
 
 [[package]]
 name = "blackjax"
-version = "1.3"
+version = "1.2.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastprogress" },
@@ -167,9 +167,9 @@ dependencies = [
     { name = "optax" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b2/0b/77adb3a3580890a99a93f1953c1b5307669dedcf4f08427c56085d4e74bd/blackjax-1.3.tar.gz", hash = "sha256:6814d09aa963b821c961844a61ac5b9925f21d19ad2ebc741320ceae0d4dbcb5", size = 4655707, upload-time = "2025-11-18T12:30:33.987Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cd/7f/2bc7ed9f831e93f670d95e1d4c6c0005fe57fe68cfce5a254d9dcf3bfa6b/blackjax-1.2.5.tar.gz", hash = "sha256:8fedfc8de2ad33e4c170de4648d8301374e386fd68d8db91bf03f1bd2d0f5e97", size = 4636520, upload-time = "2025-02-07T12:41:17.28Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/28/c9/5a1143b5e525f0813c0c8e64812796f520775b675c85a59463e46ed4905a/blackjax-1.3-py3-none-any.whl", hash = "sha256:afcc41ae41fae98cc1b20eefdeae438f53a0a5ab91f083eea1226d62dfe58abc", size = 4661575, upload-time = "2025-11-18T12:30:32.118Z" },
+    { url = "https://files.pythonhosted.org/packages/be/fe/b7528d1fc33879862559f0d5207a5750ac85592a100bd012d8536090e22f/blackjax-1.2.5-py3-none-any.whl", hash = "sha256:b46c31857ee9ff47027aa915c2c8d7eca3fec757f5054c6979ae0f2ee83cc773", size = 4648930, upload-time = "2025-02-07T12:41:14.67Z" },
 ]
 
 [[package]]
@@ -1016,7 +1016,7 @@ pymc = [
 [package.metadata]
 requires-dist = [
     { name = "arviz", specifier = ">=0.15,<1.0" },
-    { name = "blackjax", specifier = ">=1.0" },
+    { name = "blackjax", specifier = ">=1.0,<1.3" },
     { name = "dill", specifier = ">=0.3" },
     { name = "jax", specifier = ">=0.5.0" },
     { name = "jaxlib", specifier = ">=0.5.0" },
