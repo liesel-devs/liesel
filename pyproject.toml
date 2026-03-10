@@ -22,7 +22,7 @@ classifiers = [
 
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "arviz>=0.15",
+    "arviz>=0.15,<1.0",
     "blackjax>=1.0",
     "dill>=0.3",
     "jax>=0.5.0",
@@ -93,6 +93,7 @@ filterwarnings = [
 
     # Caused by the use in blackjax
     "ignore:JAXopt is no longer maintained:DeprecationWarning",
+    "ignore:Setting `jax_pmap_shmap_merge` is deprecated:DeprecationWarning"
 ]
 
 [tool.ruff.lint]
