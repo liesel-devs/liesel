@@ -3,6 +3,7 @@ import logging
 import jax
 import numpy as np
 import pytest
+import tensorflow_probability.substrates.jax.distributions as jtfd
 import tensorflow_probability.substrates.numpy.distributions as tfd
 
 from liesel.model.model import Model
@@ -86,6 +87,22 @@ def test_frozen_data_needs_seed_manipulation() -> None:
     with pytest.raises(RuntimeError):
         _ = Model([x])
         x.needs_seed = True
+
+
+def test_float64():
+    jax.config.update("jax_enable_x64", True)
+
+    x = Value(2.0, _name="x")
+    assert x.value.dtype == "float64"
+
+    x = Var(1.0, Dist(jtfd.Normal, loc=0.0, scale=1.0))
+    x.update()
+
+    assert x.value.dtype == "float64"
+    assert x.dist_node["loc"].value.dtype == "float64"
+    assert x.dist_node["scale"].value.dtype == "float64"
+
+    jax.config.update("jax_enable_x64", False)
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
