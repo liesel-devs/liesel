@@ -2,6 +2,7 @@ import logging
 
 import jax
 import numpy as np
+import pandas as pd
 import pytest
 import tensorflow_probability.substrates.jax.distributions as jtfd
 import tensorflow_probability.substrates.numpy.distributions as tfd
@@ -103,6 +104,17 @@ def test_float64():
     assert x.dist_node["scale"].value.dtype == "float64"
 
     jax.config.update("jax_enable_x64", False)
+
+
+def test_value_pandas_series():
+    series = pd.Series(np.array([1.0, 2.0]))
+    x = Value(series)
+    assert isinstance(x.value, jax.Array)
+
+
+def test_value_list():
+    x = Value([1.0, 2.0])
+    assert isinstance(x.value, jax.Array)
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
