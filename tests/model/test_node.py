@@ -1,5 +1,6 @@
 import logging
 
+import jax
 import numpy as np
 import pytest
 import tensorflow_probability.substrates.numpy.distributions as tfd
@@ -32,7 +33,7 @@ def test_data_init() -> None:
 
     assert x.value == pytest.approx(0.0)
     assert x.name == "node"
-    assert isinstance(x.value, float)
+    assert isinstance(x.value, jax.Array)
     assert not x.model
     assert x.state.value == pytest.approx(0.0)
     assert not x.state.outdated
@@ -310,10 +311,6 @@ def test_calculator_error_in_update() -> None:
     with pytest.raises(RuntimeError):
         calc.update()
 
-    calc = Calc(lambda x: x / 0, x=x)
-    with pytest.raises(RuntimeError):
-        calc.update()
-
 
 def test_transient_calculator_error_in_update() -> None:
     x = Value(2.0, _name="x")
@@ -322,10 +319,6 @@ def test_transient_calculator_error_in_update() -> None:
         raise ValueError("Testing error message.")
 
     calc = TransientCalc(update_fn, x=x)
-    with pytest.raises(RuntimeError):
-        calc.value
-
-    calc = TransientCalc(lambda x: x / 0, x=x)
     with pytest.raises(RuntimeError):
         calc.value
 
@@ -822,16 +815,14 @@ class TestDistSetitem:
         with pytest.raises(AttributeError):
             del x.dist_node[0]
 
-    def test_assign_none_works(self):
+    def test_assign_none_raises_valuerror(self):
         x = Var(
             0.0,
             Dist(tfd.Normal, loc=Var(0.0, name="loc"), scale=Var(1.0, name="scale")),
         ).update()
 
-        x.dist_node["loc"] = None
-
-        assert isinstance(x.dist_node["loc"], Value)
-        assert x.dist_node["loc"].value is None
+        with pytest.raises(ValueError):
+            x.dist_node["loc"] = None
 
 
 class TestCalcGetitem:
