@@ -128,7 +128,7 @@ class GraphBuilder:
     the graph will be updated. So the value of ``c`` is now available:
 
     >>> c.value
-    3.0
+    Array(3., dtype=float32, weak_type=True)
 
     The graph builder is now empty:
 
@@ -452,7 +452,7 @@ class GraphBuilder:
         in the graph will be updated. So the value of ``c`` is now available:
 
         >>> c.value
-        3.0
+        Array(3., dtype=float32, weak_type=True)
 
         The graph builder is now empty:
 
