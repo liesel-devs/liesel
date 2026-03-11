@@ -128,7 +128,7 @@ class GraphBuilder:
     the graph will be updated. So the value of ``c`` is now available:
 
     >>> c.value
-    3.0
+    Array(3., dtype=float32, weak_type=True)
 
     The graph builder is now empty:
 
@@ -136,7 +136,7 @@ class GraphBuilder:
     []
     """
 
-    def __init__(self, to_float32: bool = True):
+    def __init__(self, to_float32: bool = False):
         self.nodes: list[Node] = []
         """The nodes that were explicitly added to the graph."""
 
@@ -452,7 +452,7 @@ class GraphBuilder:
         in the graph will be updated. So the value of ``c`` is now available:
 
         >>> c.value
-        3.0
+        Array(3., dtype=float32, weak_type=True)
 
         The graph builder is now empty:
 
@@ -814,7 +814,7 @@ class Model:
         nodes_and_vars: Iterable[Node | Var],
         grow: bool = True,
         copy: bool = False,
-        to_float32: bool = True,
+        to_float32: bool = False,
     ):
         self._to_float32 = to_float32
         if grow:
@@ -1920,7 +1920,7 @@ class TemporaryModel:
         *vars_and_nodes,
         verbose: bool = False,
         silent: bool = False,
-        to_float32: bool = True,
+        to_float32: bool = False,
     ):
         self.vars_and_nodes = vars_and_nodes
         self.verbose = verbose

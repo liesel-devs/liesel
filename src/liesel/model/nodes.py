@@ -179,8 +179,10 @@ class Node(ABC):
         *inputs: Any,
         _name: str = "",
         _needs_seed: bool = False,
+        convert: Callable[[Any], Any] = jnp.asarray,
         **kwinputs: Any,
     ):
+        self._convert = convert
         self._groups: dict[str, Group] = {}
         self._inputs = tuple(self._to_node(_input) for _input in inputs)
         self._kwinputs = {kw: self._to_node(_input) for kw, _input in kwinputs.items()}
@@ -217,13 +219,12 @@ class Node(ABC):
         self._var = var
         return self
 
-    @staticmethod
-    def _to_node(x: Any) -> Node:
+    def _to_node(self, x: Any) -> Node:
         if isinstance(x, Var):
             return x.var_value_node
 
         if not isinstance(x, Node):
-            return Value(x)
+            return Value(x, convert=self._convert)
 
         return x
 
@@ -607,9 +608,12 @@ class Value(Node):
     Value(name="my_name")
     """
 
-    def __init__(self, value: Any, _name: str = ""):
+    def __init__(
+        self, value: Any, _name: str = "", convert: Callable[[Any], Any] = jnp.asarray
+    ):
         super().__init__(_name=_name)
-        self._value = value
+        self._convert = convert
+        self.value = value
 
     def flag_outdated(self) -> Value:
         """Stops the recursion setting outdated flags."""
@@ -629,7 +633,7 @@ class Value(Node):
 
     @value.setter
     def value(self, value: Any):
-        self._value = value
+        self._value = self._convert(value)
 
         if self.model:
             for node in self.outputs:
@@ -749,9 +753,16 @@ class Calc(Node):
         _name: str = "",
         _needs_seed: bool = False,
         _update_on_init: bool = True,
+        convert_inputs: Callable[[Any], Any] = jnp.asarray,
         **kwinputs: Any,
     ):
-        super().__init__(*inputs, **kwinputs, _name=_name, _needs_seed=_needs_seed)
+        super().__init__(
+            *inputs,
+            **kwinputs,
+            _name=_name,
+            _needs_seed=_needs_seed,
+            convert=convert_inputs,
+        )
         self._function = function
         self._update_on_init = _update_on_init
 
@@ -923,9 +934,16 @@ class Dist(Node):
         | Literal["auto"]
         | dict[str, Bijector | Literal["auto"] | None]
         | Sequence[Bijector | Literal["auto"] | None] = None,
+        convert_inputs: Callable[[Any], Any] = jnp.asarray,
         **kwinputs: Any,
     ):
-        super().__init__(*inputs, **kwinputs, _name=_name, _needs_seed=_needs_seed)
+        super().__init__(
+            *inputs,
+            **kwinputs,
+            _name=_name,
+            _needs_seed=_needs_seed,
+            convert=convert_inputs,
+        )
 
         self._at: Node | None = None
         self._distribution = distribution
@@ -1525,6 +1543,7 @@ class Var:
         "_role",
         "_value_node",
         "_var_value_node",
+        "_convert",
     )
 
     def __init__(
@@ -1534,9 +1553,11 @@ class Var:
         name: str = "",
         inference: InferenceTypes = None,
         bijector: None | Bijector | Literal["auto"] = None,
+        convert: Callable[[Any], Any] = jnp.asarray,
     ):
         self._name = name
-        self._value_node: Node = Value(None)
+        self._convert = convert
+        self._value_node: Node = Value(None, convert=lambda x: x)
         self._dist_node: Dist = NoDist()
 
         self._var_value_node: VarValue = VarValue(
@@ -1573,6 +1594,7 @@ class Var:
         name: str = "",
         inference: InferenceTypes = None,
         bijector: None | Bijector | Literal["auto"] = None,
+        convert: Callable[[Any], Any] = jnp.asarray,
     ) -> Var:
         """
         Initializes a strong variable that acts as a model parameter.
@@ -1624,7 +1646,14 @@ class Var:
         Var(name="")
 
         """
-        var = cls(value, distribution, name, inference=inference, bijector=bijector)
+        var = cls(
+            value,
+            distribution,
+            name,
+            inference=inference,
+            bijector=bijector,
+            convert=convert,
+        )
         var.value_node.monitor = True
         if var.bijected_var is not None:
             var.bijected_var.parameter = True
@@ -1634,7 +1663,11 @@ class Var:
 
     @classmethod
     def new_obs(
-        cls, value: Any, distribution: Dist | None = None, name: str = ""
+        cls,
+        value: Any,
+        distribution: Dist | None = None,
+        name: str = "",
+        convert: Callable[[Any], Any] = jnp.asarray,
     ) -> Var:
         """
         Initializes a strong variable that holds observed data.
@@ -1677,7 +1710,7 @@ class Var:
         Var(name="")
 
         """
-        var = cls(value, distribution, name)
+        var = cls(value, distribution, name, convert=convert)
         var.observed = True
         return var
 
@@ -1690,6 +1723,7 @@ class Var:
         name: str = "",
         _needs_seed: bool = False,
         _update_on_init: bool = True,
+        convert: Callable[[Any], Any] = jnp.asarray,
         **kwinputs: Any,
     ) -> Var:
         """
@@ -1781,14 +1815,19 @@ class Var:
             _name=f"{name}_calc",
             _needs_seed=_needs_seed,
             _update_on_init=_update_on_init,
+            convert_inputs=convert,
             **kwinputs,
         )
-        var = cls(calc, distribution=distribution, name=name)
+        var = cls(calc, distribution=distribution, name=name, convert=convert)
         return var
 
     @classmethod
     def new_value(
-        cls, value: Any, name: str = "", inference: InferenceTypes = None
+        cls,
+        value: Any,
+        name: str = "",
+        inference: InferenceTypes = None,
+        convert: Callable[[Any], Any] = jnp.asarray,
     ) -> Var:
         """
         Initializes a strong variable without a distribution.
@@ -1822,7 +1861,7 @@ class Var:
         Var(name="")
 
         """
-        var = cls(value, name=name, inference=inference)
+        var = cls(value, name=name, inference=inference, convert=convert)
         return var
 
     def get_inference(self, key: str | None) -> InferenceTypes:
@@ -2448,10 +2487,10 @@ class Var:
     @no_model_setter
     def value_node(self, value_node: Any):
         if isinstance(value_node, Var):
-            value_node = Calc(lambda x: x, value_node)
+            value_node = Calc(lambda x: x, value_node, convert_inputs=self._convert)
 
         if not isinstance(value_node, Node):
-            value_node = Value(value_node)
+            value_node = Value(value_node, convert=self._convert)
 
         if value_node.model:
             raise RuntimeError(
@@ -2797,6 +2836,7 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
         _name="",
         _needs_seed=var.dist_node.needs_seed,
         bijectors=None,
+        convert_inputs=jnp.asarray,
         **kwinputs,
     )
 
@@ -2828,6 +2868,7 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
                 _name="",
                 _needs_seed=value_node_needs_seed,
                 _update_on_init=value_node_update_on_init,
+                convert_inputs=jnp.asarray,
                 **value_kwinputs,
             ),
             transformed_dist,
@@ -2916,6 +2957,7 @@ def _transform_var_with_bijector_class(
                 _name="",
                 _needs_seed=value_node_needs_seed,
                 _update_on_init=value_node_upadte_on_init,
+                convert_inputs=jnp.asarray,
                 **value_kwinputs,
             ),
             dist_node_transformed,

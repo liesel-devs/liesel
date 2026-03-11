@@ -436,13 +436,13 @@ def test_all_input_vars_weak_w_dist_2():
 
 
 def test_all_output_vars():
-    x = lsl.Var(1, name="x")
+    x = lsl.Var(1.0, name="x")
 
     def dist_mk():
         return lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=x)
 
-    y = lsl.Var(1, name="y")
-    var0 = lsl.Var(lsl.Calc(lambda x: x + 1, x), dist_mk(), name="var0")
+    y = lsl.Var(1.0, name="y")
+    var0 = lsl.Var(lsl.Calc(lambda x: x + 1.0, x), dist_mk(), name="var0")
     mod0 = lsl.Model([var0] + [x, y], copy=True)
     assert len(mod0.vars["x"].all_output_vars()) == 1
     assert len(mod0.vars["y"].all_output_vars()) == 0
@@ -462,14 +462,15 @@ def test_all_output_vars():
 
 
 def test_all_output_nodes():
-    x = lsl.Var(1, name="x")
+    x = lsl.Var(1.0, name="x")
 
     def dist_mk():
         return lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=x)
 
-    y = lsl.Var(1, name="y")
-    var0 = lsl.Var(lsl.Calc(lambda x: x + 1, x), dist_mk(), name="var0")
+    y = lsl.Var(1.0, name="y")
+    var0 = lsl.Var(lsl.Calc(lambda x: x + 1.0, x), dist_mk(), name="var0")
     mod0 = lsl.Model([var0] + [x, y], copy=True)
+
     assert len(mod0.vars["x"].all_output_nodes()) == 2
     assert len(mod0.vars["y"].all_output_nodes()) == 0
     assert (
