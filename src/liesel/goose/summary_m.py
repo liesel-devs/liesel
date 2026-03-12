@@ -20,6 +20,9 @@ from liesel.goose.pytree import slice_leaves, stack_leaves
 from liesel.goose.types import Array, Position
 from liesel.option import Option
 
+# can be removed once arviz has been upgrade to v1.0
+az.Numba.disable_numba()
+
 
 class ErrorSummaryForOneCode(NamedTuple):
     error_code: int

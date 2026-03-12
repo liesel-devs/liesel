@@ -1,5 +1,4 @@
 
-
 # Bayesian Measurement Error Correction
 
 In this tutorial, we implement a regression model with Bayesian
@@ -95,7 +94,7 @@ ax1.grid(True, alpha=0.3)
 ![](07-error-correction_files/figure-commonmark/plot-data-1.png)
 
 We simulate the response as done in the [linear regression
-tutorial](01-lin-reg.md#linear-regression) from the model
+tutorial](01a-lin-reg.md#linear-regression) from the model
 $y_i | x_i \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \;\sigma^{2}_y)$
 given our true covariate.
 
@@ -170,7 +169,6 @@ sigma_u_prior = lsl.Dist(tfd.InverseGamma, concentration=0.01, scale=0.01)
 sigma_sq_u = lsl.Var.new_param(value=10.0, distribution=sigma_u_prior, name="sigma_sq_u")
 sigma_u = lsl.Var.new_calc(jnp.sqrt, sigma_sq_u, name="sigma_u").update()
 log_sigma_u = sigma_sq_u.transform(tfb.Exp())
-
 
 # Measurement distribution location
 measurement_dist_loc = lsl.Calc(lambda x: jnp.expand_dims(x, -1), x_estimated)
@@ -304,7 +302,6 @@ def transition_mu_x(prng_key, model_state):
 
     return {"mu_x": mu_x}
 
-
 def transition_tau2_x(prng_key, model_state):
     """
     Sample tau2_x from its posterior distribution using the inverse gamma distribution.
@@ -346,7 +343,6 @@ eb_sample = gs.EngineBuilder(seed = 2 , num_chains=4)
 eb_sample.set_model(gs.LieselInterface(model))
 eb_sample.set_initial_values(model.state)
 
-
 eb_sample.add_kernel(gs.NUTSKernel(["x_estimated"]))
 
 eb_sample.add_kernel(gs.GibbsKernel(["mu_x"], transition_mu_x))
@@ -361,7 +357,6 @@ eb_sample.set_duration(warmup_duration = 1000, posterior_duration = 2000, thinni
 engine = eb_sample.build()
 engine.sample_all_epochs()
 ```
-
 
       0%|                                                  | 0/3 [00:00<?, ?chunk/s]
      33%|##############                            | 1/3 [00:09<00:18,  9.26s/chunk]

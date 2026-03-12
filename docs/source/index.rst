@@ -152,6 +152,8 @@ Model (Advanced)
     :recursive:
     :nosignatures:
 
+    ~liesel.model.LogProb
+    ~liesel.model.FlatLogProb
     ~liesel.model.Calc
     ~liesel.model.Node
     ~liesel.model.Value

@@ -211,35 +211,6 @@ class IWLSKernel(
         flat_position, _ = ravel_pytree(self.position(model_state))
         return flat_score_fn(flat_position)
 
-    def _default_chol_info(
-        self, model_state: ModelState, flat_hessian_fn: Callable[[Array], Array]
-    ) -> Array:
-        flat_position, _ = ravel_pytree(self.position(model_state))
-        info_matrix = -flat_hessian_fn(flat_position)
-        info_matrix += (
-            1e-6
-            * jnp.mean(jnp.diag(info_matrix))
-            * jnp.eye(jnp.shape(flat_position)[-1])
-        )
-        return jnpla.cholesky(info_matrix)
-
-    def _robust_default_chol_info(
-        self, model_state: ModelState, flat_hessian_fn: Callable[[Array], Array]
-    ) -> Array:
-        flat_position, _ = ravel_pytree(self.position(model_state))
-        info_matrix = -flat_hessian_fn(flat_position)
-        info_matrix += (
-            1e-6
-            * jnp.mean(jnp.diag(info_matrix))
-            * jnp.eye(jnp.shape(flat_position)[-1])
-        )
-        eigvals, eigvecs = jnpla.eigh(info_matrix)  # A = U Λ U^T
-        eigvals_clipped = jnp.clip(eigvals, min=1e-5)  # ensure positivity
-
-        info_matrix = eigvecs @ (eigvals_clipped[..., None, :] * eigvecs.T)
-
-        return jnpla.cholesky(info_matrix)
-
     def _chol_info(
         self, model_state: ModelState, flat_hessian_fn: Callable[[Array], Array]
     ) -> tuple[Array, int]:

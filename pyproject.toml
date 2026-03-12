@@ -22,8 +22,10 @@ classifiers = [
 
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "arviz>=0.15",
-    "blackjax>=1.0",
+    "arviz>=0.15,<1.0", # requires refactor on our side
+    # a warning is emitted during import with v1.3 because of jaxopt <=0.8.3 being
+    # required
+    "blackjax>=1.0,<1.3",
     "dill>=0.3",
     "jax>=0.5.0",
     "jaxlib>=0.5.0",
@@ -94,6 +96,10 @@ filterwarnings = [
 
     # Caused by the use in blackjax
     "ignore:JAXopt is no longer maintained:DeprecationWarning",
+    "ignore:Setting `jax_pmap_shmap_merge` is deprecated:DeprecationWarning",
+
+    # can be removed once blackjax allows jaxopt >=0.8.5 again
+    "ignore:invalid escape sequence:SyntaxWarning:jaxopt"
 ]
 
 [tool.ruff.lint]

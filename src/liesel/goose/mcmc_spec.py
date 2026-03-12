@@ -326,7 +326,7 @@ class LieselMCMC:
 
         Notes
         ------
-        The method is euqivalent to the following code::
+        The method is equivalent to the following code::
 
             eb = LieselMCMC(model).get_engine_builder(
                 seed=seed, num_chains=num_chains, apply_jitter=apply_jitter
