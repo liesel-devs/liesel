@@ -348,7 +348,7 @@ class EngineBuilder:
 
         >>> mu = lsl.Var.new_param(1.0, name="mu")
         >>> x_dist = lsl.Dist(tfd.Normal, loc=true_mu, scale=true_sigma)
-        >>> x = lsl.Var(x_vec, distribution=x_dist, name="x")
+        >>> x = lsl.Var(x_vec, dist=x_dist, name="x")
 
         Now, we can create the model.
 

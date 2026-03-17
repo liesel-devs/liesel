@@ -1471,7 +1471,7 @@ class Var:
     ----------
     value
         The value of the variable.
-    distribution
+    dist
         The probability distribution of the variable.
     name
         The name of the variable. If you do not specify a name, a unique name will be \
@@ -1485,6 +1485,10 @@ class Var:
         call :meth:`.biject` with this bijector upon initialization. \
         Any supplied inference information will be passed to the bijected \
         variable.
+    distribution
+        Deprecated argument name for the probability distribution of the variable,
+        kept for backwards-compatibility.
+        Please use the new name ``dist``.
 
     See Also
     --------
@@ -1530,11 +1534,21 @@ class Var:
     def __init__(
         self,
         value: Any,
-        distribution: Dist | None = None,
+        dist: Dist | None = None,
         name: str = "",
         inference: InferenceTypes = None,
         bijector: None | Bijector | Literal["auto"] = None,
+        distribution: Dist | None = None,
     ):
+        if dist is not None and distribution is not None:
+            raise ValueError(
+                "Values for 'dist' and 'distribution' provided. "
+                "Please provide the distribution only via 'dist'; the name "
+                "'distribution' is deprecated."
+            )
+        if dist is None:
+            dist = distribution
+
         self._name = name
         self._value_node: Node = Value(None)
         self._dist_node: Dist = NoDist()
@@ -1547,7 +1561,7 @@ class Var:
 
         # use setters
         self.value_node = value  # type: ignore  # unfrozen
-        self.dist_node = distribution  # type: ignore  # unfrozen
+        self.dist_node = dist  # type: ignore  # unfrozen
 
         self._auto_transform = False
         self._bijected_var: Var | None = None
@@ -1569,10 +1583,11 @@ class Var:
     def new_param(
         cls,
         value: Any,
-        distribution: Dist | None = None,
+        dist: Dist | None = None,
         name: str = "",
         inference: InferenceTypes = None,
         bijector: None | Bijector | Literal["auto"] = None,
+        distribution: Dist | None = None,
     ) -> Var:
         """
         Initializes a strong variable that acts as a model parameter.
@@ -1585,7 +1600,7 @@ class Var:
         ----------
         value
             The value of the variable.
-        distribution
+        dist
             The probability distribution of the variable.
         name
             The name of the variable. If you do not specify a name, a unique name will \
@@ -1599,6 +1614,10 @@ class Var:
             will call :meth:`.biject` with this bijector upon initialization. \
             Any supplied inference information will be passed to the bijected \
             variable.
+        distribution
+            Deprecated argument name for the probability distribution of the variable,
+            kept for backwards-compatibility.
+            Please use the new name ``dist``.
 
         See Also
         --------
@@ -1619,12 +1638,19 @@ class Var:
         A simple parameter with a normal prior:
 
         >>> prior = lsl.Dist(tfd.Normal, loc=0.0, scale=1.0)
-        >>> x = lsl.Var.new_param(1.0, distribution=prior)
+        >>> x = lsl.Var.new_param(1.0, dist=prior)
         >>> x
         Var(name="")
 
         """
-        var = cls(value, distribution, name, inference=inference, bijector=bijector)
+        var = cls(
+            value,
+            dist,
+            name,
+            inference=inference,
+            bijector=bijector,
+            distribution=distribution,
+        )
         var.value_node.monitor = True
         if var.bijected_var is not None:
             var.bijected_var.parameter = True
@@ -1634,7 +1660,11 @@ class Var:
 
     @classmethod
     def new_obs(
-        cls, value: Any, distribution: Dist | None = None, name: str = ""
+        cls,
+        value: Any,
+        dist: Dist | None = None,
+        name: str = "",
+        distribution: Dist | None = None,
     ) -> Var:
         """
         Initializes a strong variable that holds observed data.
@@ -1647,11 +1677,15 @@ class Var:
         ----------
         value
             The value of the variable.
-        distribution
+        dist
             The probability distribution of the variable.
         name
             The name of the variable. If you do not specify a name, a unique name will \
             be automatically generated upon initialization of a :class:`.Model`.
+        distribution
+            Deprecated argument name for the probability distribution of the variable,
+            kept for backwards-compatibility.
+            Please use the new name ``dist``.
 
         See Also
         --------
@@ -1672,12 +1706,12 @@ class Var:
         A simple observed variable with a normal distribution:
 
         >>> prior = lsl.Dist(tfd.Normal, loc=0.0, scale=1.0)
-        >>> x = lsl.Var.new_param(1.0, distribution=prior)
+        >>> x = lsl.Var.new_param(1.0, dist=prior)
         >>> x
         Var(name="")
 
         """
-        var = cls(value, distribution, name)
+        var = cls(value, dist, name, distribution=distribution)
         var.observed = True
         return var
 
@@ -1686,10 +1720,11 @@ class Var:
         cls,
         function: Callable[..., Any],
         *inputs: Any,
-        distribution: Dist | None = None,
+        dist: Dist | None = None,
         name: str = "",
         _needs_seed: bool = False,
         _update_on_init: bool = True,
+        distribution: Dist | None = None,
         **kwinputs: Any,
     ) -> Var:
         """
@@ -1714,7 +1749,7 @@ class Var:
             will be converted to :class:`.Value` nodes. The values of these inputs \
             will be passed to the wrapped function in the same order they are entered \
             here.
-        distribution
+        dist
             The probability distribution of the variable.
         name
             The name of the node. If you do not specify a name, a unique name will be \
@@ -1724,6 +1759,10 @@ class Var:
         _update_on_init
             If ``True``, the calculator will try to evaluate its function upon \
             initialization.
+        distribution
+            Deprecated argument name for the probability distribution of the variable,
+            kept for backwards-compatibility.
+            Please use the new name ``dist``.
         **kwinputs
             Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
             will be converted to :class:`.Data` nodes. The values of these inputs will \
@@ -1783,7 +1822,7 @@ class Var:
             _update_on_init=_update_on_init,
             **kwinputs,
         )
-        var = cls(calc, distribution=distribution, name=name)
+        var = cls(calc, dist=dist, distribution=distribution, name=name)
         return var
 
     @classmethod
