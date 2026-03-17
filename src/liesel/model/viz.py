@@ -215,6 +215,7 @@ def _draw_edges(graph, axis, pos, is_var):
     """Adds edges to the figure."""
 
     edges = list(graph.edges)
+    edges_in_both = set()
 
     if is_var:
         dist_edges = []
