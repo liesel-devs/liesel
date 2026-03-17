@@ -909,8 +909,8 @@ class Model:
                 if var.dist_node is not None:
                     if not var.parameter and not var.observed:
                         logger.warning(
-                            f"{var} has a distribution, but is not marked as "
-                            "parameter or observed."
+                            f"{var} has a distribution but "
+                            "Var.parameter=False and Var.observed=False."
                         )
 
     @staticmethod
