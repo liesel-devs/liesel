@@ -2523,6 +2523,63 @@ class Var:
                     subgraph = model.node_parental_subgraph(*filtered_nodes)
                     plot_nodes(subgraph, **kwargs)
 
+    def plot(
+        self,
+        show: bool = True,
+        save_path: str | None | IO = None,
+        width: int = 14,
+        height: int = 10,
+        prog: Literal[
+            "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
+        ] = "dot",
+        verbose: bool = False,
+    ) -> None:
+        """
+        Plots the variables of the Liesel sub-model that terminates in this variable.
+
+        Wraps :func:`~.viz.plot_vars`. Alias for :meth:`.Var.plot_vars`.
+
+        Parameters
+        ----------
+        verbose
+            If ``True``, logs a message if unnamed variables or nodes are temporarily \
+            named for plotting.
+        show
+            Whether to show the plot in a new window.
+        save_path
+            Path to save the plot. If not provided, the plot will not be saved.
+        width
+            Width of the plot in inches.
+        height
+            Height of the plot in inches.
+        prog
+            Layout parameter. Available layouts: circo, dot (the default), fdp, neato, \
+            osage, patchwork, sfdp, twopi.
+        verbose
+            If ``True``, the message that will be logged if unnamed nodes are \
+            automatically named for plotting contains a list of the automatically \
+            assigned names.
+
+        See Also
+        --------
+        .Var.plot_vars : Plots the variables of the Liesel sub-model that terminates in
+            this variable.
+        .Var.plot_nodes : Plots the nodes of the Liesel sub-model that terminates in
+            this variable.
+        .Model.plot_vars : Plots the variables of a Liesel model.
+        .Model.plot_nodes : Plots the nodes of a Liesel model.
+        .viz.plot_vars : Plots the variables of a Liesel model.
+        .viz.plot_nodes : Plots the nodes of a Liesel model.
+        """
+        return self.plot_vars(
+            verbose=verbose,
+            show=show,
+            save_path=save_path,
+            width=width,
+            height=height,
+            prog=prog,
+        )
+
     def plot_vars(
         self,
         show: bool = True,
