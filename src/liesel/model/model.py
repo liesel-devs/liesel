@@ -980,6 +980,10 @@ class Model:
         g2 = {g.name: g for v in self._vars.values() for g in v.groups.values()}
         return g1 | g2
 
+    def copy_vars(self) -> dict[str, Var]:
+        """Returns an unfrozen deep copy of the model variables."""
+        return self.copy_nodes_and_vars()[1]
+
     def copy_nodes_and_vars(self) -> tuple[dict[str, Node], dict[str, Var]]:
         """Returns an unfrozen deep copy of the model nodes and variables."""
         nodes, _vars = deepcopy((self._nodes, self._vars))
@@ -1077,6 +1081,15 @@ class Model:
     def nodes(self) -> MappingProxyType[str, Node]:
         """A mapping of the model nodes with their names as keys."""
         return MappingProxyType(self._nodes)
+
+    def pop_vars(self) -> dict[str, Var]:
+        """
+        Pops the variables out of this model.
+
+        All nodes and variables are unfrozen and their reference to this model
+        is removed. This model becomes invalid and cannot be used anymore.
+        """
+        return self.pop_nodes_and_vars()[1]
 
     def pop_nodes_and_vars(self) -> tuple[dict[str, Node], dict[str, Var]]:
         """
