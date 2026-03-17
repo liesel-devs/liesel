@@ -399,7 +399,9 @@ class GraphBuilder:
 
         return self
 
-    def build_model(self, copy: bool = False) -> Model:
+    def build_model(
+        self, copy: bool = False, validate_log_prob_decomposition: bool = True
+    ) -> Model:
         """
         Builds a model from the graph.
 
@@ -496,7 +498,15 @@ class GraphBuilder:
         nodes, _vars = gb._all_nodes_and_vars()
         nodes_and_vars = nodes + _vars
 
-        model = Model(nodes_and_vars, grow=False, copy=copy, to_float32=self.to_float32)
+        model = Model(
+            nodes_and_vars,
+            grow=False,
+            copy=copy,
+            to_float32=self.to_float32,
+            validate_log_prob_decomposition=False,
+        )
+        if validate_log_prob_decomposition:
+            model._validate_log_prob_decomposition()
 
         if not copy:
             self.nodes.clear()
@@ -815,11 +825,14 @@ class Model:
         grow: bool = True,
         copy: bool = False,
         to_float32: bool = True,
+        validate_log_prob_decomposition: bool = True,
     ):
         self._to_float32 = to_float32
         if grow:
             model = (
-                GraphBuilder(to_float32=to_float32).add(*nodes_and_vars).build_model()
+                GraphBuilder(to_float32=to_float32)
+                .add(*nodes_and_vars)
+                .build_model(validate_log_prob_decomposition=False)
             )
             nodes_and_vars = [*model.nodes.values(), *model.vars.values()]
             model.pop_nodes_and_vars()
@@ -878,6 +891,27 @@ class Model:
                 self._seed_nodes.append(node)
 
             node.update()
+
+        if validate_log_prob_decomposition:
+            self._validate_log_prob_decomposition()
+
+    def _validate_log_prob_decomposition(self):
+        consistent = jnp.allclose(self.log_prob, self.log_prior + self.log_lik)
+        if not consistent:
+            logger.warning(
+                "Inconsistent log prob decomposition: "
+                f"Model.log_prob={self.log_prob:.2f} ≠ "
+                f"(Model.log_lik={self.log_lik:.2f} + "
+                f"Model.log_prior={self.log_prior:.2f}). "
+            )
+
+            for var in self.vars.values():
+                if var.dist_node is not None:
+                    if not var.parameter and not var.observed:
+                        logger.warning(
+                            f"{var} has a distribution, but is not marked as "
+                            "parameter or observed."
+                        )
 
     @staticmethod
     def _build_node_graph(nodes: Iterable[Node]) -> nx.DiGraph:
