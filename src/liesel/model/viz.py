@@ -120,8 +120,9 @@ def plot_vars(
     _add_nodes_with_distribution_to_plot(graph, axis, pos)
     _add_nodes_without_distribution_to_plot(graph, axis, pos)
     _add_labels(graph, axis, pos)
-    _draw_edges(graph, axis, pos, True)
-    _add_legend(axis)
+    edges_in_both = _draw_edges(graph, axis, pos, True)
+
+    _add_legend(axis, draw_legend_for_both=bool(edges_in_both))
 
     if save_path:
         plt.savefig(save_path)
@@ -249,6 +250,7 @@ def _draw_edges(graph, axis, pos, is_var):
             pos,
             edgelist=edges_in_both,
             edge_color="#FF0000",
+            style="dashed",
             arrows=True,
             ax=axis,
             node_size=500,
@@ -258,7 +260,8 @@ def _draw_edges(graph, axis, pos, is_var):
             graph,
             pos,
             edgelist=dist_edges,
-            edge_color="#aaaaaa",
+            edge_color="#111111",
+            style="dotted",
             arrows=True,
             ax=axis,
             node_size=500,
@@ -273,9 +276,10 @@ def _draw_edges(graph, axis, pos, is_var):
         ax=axis,
         node_size=500,
     )
+    return edges_in_both
 
 
-def _add_legend(axis):
+def _add_legend(axis, draw_legend_for_both):
     """Adds a legend to the figure."""
 
     legend_elements = [
@@ -302,33 +306,30 @@ def _add_legend(axis):
         Line2D(
             [0],
             [0],
-            marker=r"$\rightarrow$",
             color="#111111",
+            linewidth=1.5,
             label="Deterministic",
-            markerfacecolor="k",
-            markersize=12,
-            lw=0,
         ),
         Line2D(
             [0],
             [0],
-            marker=r"$\rightarrow$",
-            color="#AAAAAA",
+            color="#111111",
+            linestyle=":",
+            linewidth=1.5,
             label="Stochastic",
-            markerfacecolor="k",
-            markersize=12,
-            lw=0,
-        ),
-        Line2D(
-            [0],
-            [0],
-            marker=r"$\rightarrow$",
-            color="#FF0000",
-            label="Deterministic and stochastic",
-            markerfacecolor="k",
-            markersize=12,
-            lw=0,
         ),
     ]
+
+    if draw_legend_for_both:
+        legend_elements.append(
+            Line2D(
+                [0],
+                [0],
+                color="#FF0000",
+                linestyle="--",
+                label="Deterministic and stochastic",
+                linewidth=1.5,
+            ),
+        )
 
     axis.legend(handles=legend_elements, loc="best")
