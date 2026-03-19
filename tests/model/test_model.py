@@ -479,6 +479,18 @@ class TestPredictions:
             assert name in pred
             assert pred[name].shape == (4, 3)
 
+    def test_loo(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Normal(loc=1.0, scale=0.01).sample(
+                (4, 100), rnd.PRNGKey(6)
+            ),
+            "beta_hat": tfd.Normal(loc=jnp.array([1.0, 2.0]), scale=0.5).sample(
+                (4, 100), rnd.PRNGKey(6)
+            ),
+        }
+
+        model.loo(samples)
+
     def test_predict_log_lik_contributions(self, model) -> None:
         samples = {
             "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
@@ -1103,3 +1115,18 @@ class TestSample:
             model.sample(
                 shape=(11,), seed=rnd.key(8), posterior_samples=samples1, fixed=["b"]
             )
+
+
+class TestPointwiseLogLik:
+    def test_pointwise_ll(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Normal(loc=1.0, scale=0.01).sample(
+                (4, 100), rnd.PRNGKey(6)
+            ),
+            "beta_hat": tfd.Normal(loc=jnp.array([1.0, 2.0]), scale=0.5).sample(
+                (4, 100), rnd.PRNGKey(6)
+            ),
+        }
+
+        pll = model.log_lik_pointwise(samples)
+        assert pll.shape == (4, 100, 500)
