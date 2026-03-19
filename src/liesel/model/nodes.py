@@ -1725,6 +1725,7 @@ class Var:
         _needs_seed: bool = False,
         _update_on_init: bool = True,
         distribution: Dist | None = None,
+        cache: bool = True,
         **kwinputs: Any,
     ) -> Var:
         """
@@ -1763,6 +1764,14 @@ class Var:
             Deprecated argument name for the probability distribution of the variable,
             kept for backwards-compatibility.
             Please use the new name ``dist``.
+        cache
+            If ``False``, this variable will not store a cache of its value. This means,
+            the ``function`` is evaluated every single time that the value of this
+            variable is requested. This can save memory, if the computations are
+            trivial (such as prepending an axis to an array), but it can greatly slow
+            down computations otherwise (such as when the function performs a
+            matrix inversion). Internally, if ``cache=True``, this variable wraps a
+            :class:`.Calc`, and if ``cache=False``, it wraps a :class:`.TransientCalc`.
         **kwinputs
             Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
             will be converted to :class:`.Data` nodes. The values of these inputs will \
@@ -1814,7 +1823,12 @@ class Var:
         .. _docs: https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html
         """  # noqa: E501
 
-        calc = Calc(
+        if cache:
+            calc_class = Calc
+        else:
+            calc_class = TransientCalc
+
+        calc = calc_class(
             function,
             *inputs,
             _name=f"{name}_calc",
