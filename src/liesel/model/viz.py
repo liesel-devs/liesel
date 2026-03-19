@@ -280,8 +280,24 @@ def _add_legend(axis, draw_legend_for_both):
     """Adds a legend to the figure."""
 
     legend_elements = [
-        Line2D([0], [0], color="#8da0cb", lw=4, label="Strong"),
-        Line2D([0], [0], color="#fc8d62", lw=4, label="Weak"),
+        Line2D(
+            [0],
+            [0],
+            color="#8da0cb",
+            label="Strong",
+            marker="o",
+            markersize=12,
+            linewidth=0,
+        ),
+        Line2D(
+            [0],
+            [0],
+            color="#fc8d62",
+            label="Weak",
+            marker="o",
+            markersize=12,
+            linewidth=0,
+        ),
         Line2D(
             [0],
             [0],
