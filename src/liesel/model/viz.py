@@ -168,7 +168,7 @@ def _add_nodes_with_distribution_to_plot(graph, axis, pos):
     nx.draw_networkx_nodes(
         graph,
         pos,
-        node_size=1200,
+        node_size=1300,
         node_color=nodes_with_distribution.values(),
         nodelist=nodes_with_distribution,
         node_shape="*",
@@ -188,7 +188,7 @@ def _add_nodes_without_distribution_to_plot(graph, axis, pos):
     nx.draw_networkx_nodes(
         graph,
         pos,
-        node_size=500,
+        node_size=700,
         node_color=nodes_without_distribution.values(),
         nodelist=nodes_without_distribution,
         node_shape="o",
