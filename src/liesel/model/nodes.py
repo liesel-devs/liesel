@@ -1888,20 +1888,30 @@ class Var:
             return self.inference[key]
         return self.inference
 
-    def all_input_nodes(self) -> tuple[Node, ...]:
+    def all_input_nodes(
+        self, to: Literal["value_node", "dist_node", "both"] = "both"
+    ) -> tuple[Node, ...]:
         """Returns all input *nodes* as a unique tuple."""
         inputs1 = self.value_node.all_input_nodes()
         inputs2 = self._dist_node.all_input_nodes()
-        return _unique_tuple(inputs1, inputs2)
+        match to:
+            case "value_node":
+                return inputs1
+            case "dist_node":
+                return inputs2
+            case "both":
+                return _unique_tuple(inputs1, inputs2)
 
-    def all_input_vars(self) -> tuple[Var, ...]:
+    def all_input_vars(
+        self, to: Literal["value_node", "dist_node", "both"] = "both"
+    ) -> tuple[Var, ...]:
         """
         Returns all input *variables* as a unique tuple.
 
         The returned tuple also contains input variables that are indirect inputs
         of this variable through nodes without variables.
         """
-        nodes = list(self.all_input_nodes())
+        nodes = list(self.all_input_nodes(to=to))
         visited = []
         _vars = []
 
@@ -2259,23 +2269,34 @@ class Var:
         self._bijected_var = value
 
     @in_model_method
-    def all_output_nodes(self) -> tuple[Node, ...]:
+    def all_output_nodes(
+        self, of: Literal["value_node", "dist_node", "both"] = "both"
+    ) -> tuple[Node, ...]:
         """Returns all output *nodes* as a unique tuple."""
-        nodes = list(self.value_node.all_output_nodes())
-        nodes.extend(self.var_value_node.all_output_nodes())
-        nodes.extend(self._dist_node.all_output_nodes())
+        match of:
+            case "value_node":
+                nodes = list(self.value_node.all_output_nodes())
+                nodes.extend(self.var_value_node.all_output_nodes())
+            case "dist_node":
+                nodes = list(self._dist_node.all_output_nodes())
+            case "both":
+                nodes = list(self.value_node.all_output_nodes())
+                nodes.extend(self.var_value_node.all_output_nodes())
+                nodes.extend(self._dist_node.all_output_nodes())
         nodes = [node for node in nodes if node is not self.var_value_node]
         return _unique_tuple(nodes)
 
     @in_model_method
-    def all_output_vars(self) -> tuple[Var, ...]:
+    def all_output_vars(
+        self, of: Literal["value_node", "dist_node", "both"] = "both"
+    ) -> tuple[Var, ...]:
         """
         Returns all output *variables* as a unique tuple.
 
         The returned tuple also contains output variables that are indirect outputs
         of this variable through nodes without variables.
         """
-        nodes = list(self.all_output_nodes())
+        nodes = list(self.all_output_nodes(of=of))
         visited = []
         _vars = []
 
