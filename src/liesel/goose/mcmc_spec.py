@@ -337,9 +337,9 @@ class LieselMCMC:
 
         See Also
         ---------
-        .get_engine_builder : Method to obtian an :class:`.EngineBuilder` from the
+        .get_engine_builder : Method to obtain an :class:`.EngineBuilder` from the
             LieselMCMC object. The :class:`.EngineBuilder` allows for more detailed
-            custom configuration; for example you can add MCMC kernels via
+            custom configuration; for example you can add additional MCMC kernels via
             :meth:`.EngineBuilder.add_kernel`.
 
         Notes
@@ -349,6 +349,12 @@ class LieselMCMC:
             eb = LieselMCMC(model).get_engine_builder(
                 seed=seed, num_chains=num_chains, apply_jitter=apply_jitter
             )
+
+            eb.store_kernel_states = store_kernel_states
+            eb.positions_included = positions_included or []
+            eb.positions_excluded = positions_excluded or []
+            eb.show_progress = show_progress
+
             if adaptation > 0:
                 eb.add_adaptation(adaptation, adaptation_thinning)
             if burnin > 0:
