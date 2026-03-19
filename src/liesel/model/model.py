@@ -946,18 +946,16 @@ class Model:
         Replaces the ``old`` with the ``new`` node or variable.
         Both must be of the same type.
         """
+
         if isinstance(old, str):
             if old in self.nodes:
-                raise TypeError(f"{old=} must be of type Var, got type Node.")
+                raise TypeError(f"{old=} must be of type Var, got a Node.")
             elif old in self.vars:
                 old_nv = self.vars[old]
             else:
                 raise KeyError(f"{old=} not found in the model.")
         else:
             old_nv = old
-
-        if old_nv.name not in self._vars:
-            raise KeyError(f"Variable with name '{old_nv.name}' not found in model.")
 
         if isinstance(old_nv, Var):
             if isinstance(new, Var):
@@ -1027,7 +1025,7 @@ class Model:
         self, nodes: dict[str, Node], graph: nx.DiGraph
     ) -> dict[str, Node]:
         """
-        Removes all singleton variables from the provided GraphBuilder.
+        Removes all singleton nodes from the provided GraphBuilder.
         """
         G = graph
         singletons1 = [n for n, d in G.degree() if d == 0]
@@ -1062,6 +1060,14 @@ class Model:
         return vars_
 
     def update_graph(self) -> Self:
+        """
+        Updates the model graph by re-discovering the outputs of all nodes and variables
+        in the graph.
+
+        If the updated graph contains singleton nodes, i.e. nodes without inputs or
+        outputs, these nodes are dropped from the graph. Singleton variables are not
+        dropped, by can be dropped manually by calling :meth:`.drop_singletons`.
+        """
         if self.locked:
             raise RuntimeError(
                 f"{self} is locked, cannot rebuild graph."
@@ -1085,6 +1091,10 @@ class Model:
         return self
 
     def drop_singletons(self) -> Self:
+        """
+        Drops any singleton nodes and variables, i.e. nodes or variables that have
+        neither outputs nor inputs.
+        """
         self._vars = self._drop_singleton_vars(self._vars, self._var_graph)
         for name, nd in self._nodes.copy().items():
             if isinstance(nd, VarValue):
