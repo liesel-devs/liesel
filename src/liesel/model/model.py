@@ -880,6 +880,9 @@ class Model:
         self._var_graph = self._build_var_graph(self._vars.values())
 
         self._sorted_nodes = list(nx.topological_sort(self._node_graph))
+        self._sorted_vars = list(nx.topological_sort(self._var_graph))
+        self._nodes = {n.name: n for n in self._sorted_nodes}
+        self._vars = {n.name: n for n in self._sorted_vars}
 
         self._simulation_graph = self._build_simulation_graph(self._nodes.values())
         self._simulation_nodes = list(nx.topological_sort(self._simulation_graph))

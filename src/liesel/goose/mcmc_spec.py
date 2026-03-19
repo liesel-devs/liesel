@@ -115,7 +115,10 @@ class LieselMCMC:
             If variables in the same kernel group have inconsistent kernels or kernel \
             arguments.
         """
-        vars_ = self.model.vars
+        vars_ = {}
+        for k in reversed(list(self.model.vars.keys())):
+            vars_[k] = self.model.vars[k]
+
         kernel_groups: dict[str, _KernelGroup] = {}
 
         for name, var in vars_.items():
@@ -143,7 +146,7 @@ class LieselMCMC:
                         f" {group_name}."
                     )
 
-                if inference.kernel_kwargs is None:
+                if not inference.kernel_kwargs:
                     pass
                 elif not group.kwargs:
                     group.kwargs = inference.kernel_kwargs
