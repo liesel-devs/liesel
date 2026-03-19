@@ -293,6 +293,10 @@ class LieselMCMC:
         burnin_thinning: int = 1,
         posterior_thinning: int = 1,
         apply_jitter: bool = True,
+        store_kernel_states: bool = False,
+        show_progress: bool = True,
+        positions_included: list[str] | None = None,
+        positions_excluded: list[str] | None = None,
     ) -> SamplingResults:
         """
         Shorthand method for quickly running MCMC for a set number of epochs.
@@ -312,6 +316,17 @@ class LieselMCMC:
             initial values for a variable will only jittered if the
             :class:`.MCMCSpec` for this variable was supplied with a ``jitter_dist``.
             Think of this argument rather as an off-switch of existing jittering.
+        store_kernel_states
+            Whether to store kernel states in sampling results, which may be useful
+            for debugging.
+        show_progress
+            Whether to show progress bars during sampling.
+        positions_included
+            List of additional position keys that should be tracked, see
+            :attr:`.EngineBuilder.positions_included`.
+        positions_excluded
+            List of position keys that should not be tracked. Excluded keys override
+            additional keys see :attr:`.EngineBuilder.positions_excluded`.
 
         Warnings
         ---------
@@ -347,6 +362,12 @@ class LieselMCMC:
         eb = self.get_engine_builder(
             seed=seed, num_chains=num_chains, apply_jitter=apply_jitter
         )
+
+        eb.store_kernel_states = store_kernel_states
+        eb.positions_included = positions_included or []
+        eb.positions_excluded = positions_excluded or []
+        eb.show_progress = show_progress
+
         if adaptation > 0:
             eb.add_adaptation(adaptation, adaptation_thinning)
         if burnin > 0:
