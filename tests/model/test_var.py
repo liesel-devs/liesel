@@ -765,3 +765,20 @@ class TestVarSample:
         assert "y" in samples
         assert "sigma" in samples
         assert "b" in samples
+
+
+class TestVarDiagnose:
+    def test_diagnose_without_model(self):
+        v0 = lsl.Var(1.0, name="v0")
+        n1 = lsl.Calc(lambda x: 2.0 * x, v0, _name="n1")
+        v2 = lsl.Var(lsl.Calc(lambda x: 2.0 * x, n1), name="v2")
+        v3 = lsl.Var(lsl.Calc(lambda x: 2.0 * x, v2), name="v3")
+        assert v3.diagnose().shape[0] == 3
+
+    def test_diagnose_with_model(self):
+        v0 = lsl.Var(1.0, name="v0")
+        n1 = lsl.Calc(lambda x: 2.0 * x, v0, _name="n1")
+        v2 = lsl.Var(lsl.Calc(lambda x: 2.0 * x, n1), name="v2")
+        v3 = lsl.Var(lsl.Calc(lambda x: 2.0 * x, v2), name="v3")
+        _ = lsl.Model([v3])
+        assert v3.diagnose().shape[0] == 3

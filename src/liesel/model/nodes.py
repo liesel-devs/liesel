@@ -15,6 +15,7 @@ from typing import IO, TYPE_CHECKING, Any, Literal, NamedTuple, Self, TypeGuard,
 
 import jax
 import jax.numpy as jnp
+import pandas as pd
 import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as jd
 import tensorflow_probability.substrates.numpy.bijectors as nb
@@ -2747,6 +2748,33 @@ class Var:
 
         pred = submodel.predict(samples=samples, predict=[self.name], newdata=newdata)
         return pred[self.name]
+
+    def diagnose(self) -> pd.DataFrame:
+        """
+        Provides a dataframe with diagnostic information about this variable's submodel.
+        """
+        if self.model is not None:
+            submodel = self.model.parental_submodel(self)
+        else:
+            from liesel.model.model import TemporaryModel
+
+            try:
+                to_float32 = not jax.config.jax_enable_x64  # type: ignore
+            except Exception:  # just to be really sure in case anything changes
+                # this is an implicit test of whether x64 flag is enabled
+                import jax.numpy as jnp
+
+                to_float32 = jnp.array(1.0).dtype == jnp.dtype("float32")
+
+            with TemporaryModel(self, silent=True, to_float32=to_float32) as model:
+                submodel = model.parental_submodel(self)
+
+        if self.model is None:
+            model = submodel
+        else:
+            model = self.model
+
+        return model.diagnose()
 
     def sample(
         self,

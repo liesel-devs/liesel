@@ -409,6 +409,11 @@ class TestModel:
         )
         assert model.nodes["z"].value == pytest.approx(3.0)
 
+    def test_diagnose(self, model) -> None:
+        df = model.diagnose()
+
+        assert df.shape[0] == len(model.vars)
+
 
 class TestPredictions:
     def test_predict_no_batching_dim(self, model) -> None:
