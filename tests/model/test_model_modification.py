@@ -7,7 +7,7 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 import liesel.model as lsl
 
 
-class TestModifyModel:
+class TestBasicModifyModel:
     def test_biject_variable(self):
         x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
         scale = lsl.Var.new_param(1.0, name="scale")
@@ -278,6 +278,8 @@ class TestModifyModel:
         assert x2.name in model.vars
         assert x1.name in model.vars  # now singleton node, not dropped
 
+
+class TestBracketReplace:
     def test_bracket_replace_value_input_var_with_var(self):
         x1 = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x1")
         x2 = lsl.Var.new_obs(jrd.normal(jrd.key(2), (10,)), name="x2")
@@ -575,6 +577,8 @@ class TestModifyModel:
         assert x2.name in model.vars
         assert x1.name in model.vars  # now singleton node, not dropped
 
+
+class TestReplace:
     def test_replace_var_with_var(self):
         x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
         scale = lsl.Var.new_param(
@@ -876,6 +880,8 @@ class TestModifyModel:
         assert "a" in model.vars
         assert "b" not in model.vars
 
+
+class TestDropSingletons:
     def test_singleton_var_is_not_dropped(self):
         x1 = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x1")
         x2 = lsl.Var.new_obs(jrd.normal(jrd.key(2), (10,)), name="x2")
