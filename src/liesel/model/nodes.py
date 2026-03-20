@@ -96,6 +96,9 @@ def changes_model_graph(fn):
                 "be Model.locked = False, so do not rely on this error if you are "
                 "using the default."
             )
+        # pull out model here, because it may not be available on self below
+        # in all cases, e.g. if a node's name is changed in fn (because Node.model
+        # uses the name to check whether the node is still part of the model).
         model = self.model
         out = fn(self, *args, **kwargs)
         if model:
