@@ -2274,31 +2274,30 @@ class Var:
             dist_node.name = f"{self.name}_log_prob"  # type: ignore  # unfrozen
 
         if self._dist_node.model:
-            auto_update_before = self._dist_node.model.auto_update
-            self._dist_node.model.auto_update = False
+            model = self._dist_node.model
+            auto_update_before = model.auto_update
+            model.auto_update = False
 
-            lazy_before = self._dist_node.model.update_graph_lazily
-            self._dist_node.model.update_graph_lazily = True
+            lazy_before = model.update_graph_lazily
+            model.update_graph_lazily = True
             inputs = self._dist_node.inputs
             kwinputs = self._dist_node.kwinputs
             inputs = inputs + tuple(kwinputs.values())
             self._dist_node._unset_var()
             self._dist_node.set_inputs()
-            self._dist_node.model._nodes = {
-                n.name: n
-                for n in self._dist_node.model._nodes.values()
-                if n is not self._dist_node
+            model._nodes = {
+                n.name: n for n in model._nodes.values() if n is not self._dist_node
             }
 
             self._dist_node.at = None
             for nv in inputs:
-                self._dist_node.model._remove_disconnected_parental_submodel(nv)
+                model._remove_disconnected_parental_submodel(nv)
                 if isinstance(nv, VarValue):
                     assert nv.var
-                    self._dist_node.model._remove_disconnected_parental_submodel(nv.var)
+                    model._remove_disconnected_parental_submodel(nv.var)
 
-            self._dist_node.model.update_graph_lazily = lazy_before
-            self._dist_node.model.auto_update = auto_update_before
+            model.update_graph_lazily = lazy_before
+            model.auto_update = auto_update_before
         else:
             self._dist_node._unset_var()
             self._dist_node.at = None

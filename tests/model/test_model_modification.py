@@ -112,6 +112,29 @@ class TestModifyModel:
         assert "renamed_value" not in model.nodes
         assert "scale_log_prob" not in model.nodes
 
+    def test_remove_dist(self):
+        x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
+        scale = lsl.Var.new_param(
+            1.0,
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="scale",
+        )
+
+        y = lsl.Var.new_obs(
+            jrd.normal(jrd.key(2), (10,)),
+            lsl.Dist(tfd.Normal, loc=x, scale=scale),
+            name="y",
+        )
+
+        model = lsl.Model([y])
+        model.locked = False
+
+        dist_node = scale.dist_node
+
+        scale.dist_node = None
+
+        assert dist_node.name not in model.nodes
+
     def test_change_per_obs_of_a_dist(self):
         x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
         scale = lsl.Var.new_param(
