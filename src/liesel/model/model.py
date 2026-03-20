@@ -10,7 +10,6 @@ import re
 from collections import Counter
 from collections.abc import Iterable, Sequence
 from copy import deepcopy
-from mimetypes import init
 from types import MappingProxyType
 from typing import IO, Any, Literal, TypeVar
 
