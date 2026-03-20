@@ -484,12 +484,15 @@ class TestPredictions:
             "sigma_hat": tfd.Normal(loc=1.0, scale=0.01).sample(
                 (4, 100), rnd.PRNGKey(6)
             ),
-            "beta_hat": tfd.Normal(loc=jnp.array([1.0, 2.0]), scale=0.5).sample(
+            "beta_hat": tfd.Normal(loc=jnp.array([1.0, 2.0]), scale=0.1).sample(
                 (4, 100), rnd.PRNGKey(6)
             ),
         }
 
-        model.loo(samples)
+        loo = model.loo(samples)
+        assert loo.elpd_loo == pytest.approx(-727.999, abs=0.01)
+        assert loo.p_loo == pytest.approx(5.829144, abs=0.01)
+        assert loo.se == pytest.approx(15.777, abs=0.01)
 
     def test_predict_log_lik_contributions(self, model) -> None:
         samples = {
