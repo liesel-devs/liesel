@@ -1067,15 +1067,7 @@ class Model:
             vars_.pop(nv.name, None)
         return vars_
 
-    def update_graph(self) -> Self:
-        """
-        Updates the model graph by re-discovering the outputs of all nodes and variables
-        in the graph.
-
-        If the updated graph contains singleton nodes, i.e. nodes without inputs or
-        outputs, these nodes are dropped from the graph. Singleton variables are not
-        dropped, by can be dropped manually by calling :meth:`.drop_singletons`.
-        """
+    def _ensure_unlocked(self):
         if self.locked:
             raise RuntimeError(
                 f"{self} is locked, cannot rebuild graph."
@@ -1085,13 +1077,79 @@ class Model:
                 "be Model.locked = False, so do not rely on this error if you are "
                 "using the default."
             )
+
+    def update_graph(self) -> Self:
+        """
+        Updates the model graph by re-discovering the outputs of all nodes and variables
+        in the graph.
+
+        If the updated graph contains singleton nodes, i.e. nodes without inputs or
+        outputs, these nodes are dropped from the graph. Singleton variables are not
+        dropped, by can be dropped manually by calling :meth:`.drop_singletons`.
+        """
+        return self.add()  # adding with empty list means simply updating
+
+    def add(self, *vars_and_nodes: Var | Node) -> Self:
+        """
+        Adds a variable number of :class:`.Var`s and/or :class:`.Node`s to the model.
+        """
+        self._ensure_unlocked()
+
         nodes = [nd for nd in self.nodes.values() if not nd.name.startswith("_model")]
         vars_ = [nd for nd in self.vars.values() if not nd.name.startswith("_model")]
-        nodes_and_vars = nodes + vars_
-        self._update_graph(nodes_and_vars)
+        existing_nodes_and_vars = nodes + vars_
 
+        existing_nodes_and_vars += list(vars_and_nodes)
+        self._update_graph(existing_nodes_and_vars)
         self.outdated = False
         return self
+
+    def join(self, *models: Model, copy: bool = False) -> Self:
+        """
+        Adds all variables and nodes from the supplied models to this model.
+
+        If ``copy=False``, the variables and nodes are removed from their original
+        models, leaving them empty. If ``copy=True``, variables and nodes are copied
+        instead.
+        """
+        # Check for duplicate names first to error without side effects
+        _vars_and_nodes: list[Var | Node] = []
+        for _model in models:
+            # remove model nodes
+            _nodes_list = [
+                nd for nd in _model.nodes.values() if not nd.name.startswith("_model")
+            ]
+            _vars_list = [
+                nd for nd in _model.vars.values() if not nd.name.startswith("_model")
+            ]
+
+            _vars_and_nodes += _nodes_list
+            _vars_and_nodes += _vars_list
+
+        self._check_for_duplicates(_vars_and_nodes)
+
+        # now do the actual joining
+
+        vars_and_nodes: list[Var | Node] = []
+
+        for model in models:
+            if copy:
+                nodes, vars_ = model.copy_nodes_and_vars()
+            else:
+                nodes, vars_ = model.pop_nodes_and_vars()
+
+            # remove model nodes
+            nodes_list = [
+                nd for nd in nodes.values() if not nd.name.startswith("_model")
+            ]
+            vars_list = [
+                nd for nd in vars_.values() if not nd.name.startswith("_model")
+            ]
+
+            vars_and_nodes += nodes_list
+            vars_and_nodes += vars_list
+
+        return self.add(*vars_and_nodes)
 
     def drop_singletons(self) -> Self:
         """

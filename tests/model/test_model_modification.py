@@ -940,3 +940,243 @@ class TestDropSingletons:
 
         model.drop_singletons()
         assert x1.name not in model.vars  # now singleton node, dropped explicitly
+
+
+class TestModelAdd:
+    def test_add_one_var(self):
+        x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
+        scale = lsl.Var.new_param(1.0, name="scale")
+
+        y = lsl.Var.new_obs(
+            jrd.normal(jrd.key(2), (10,)),
+            lsl.Dist(tfd.Normal, loc=x, scale=scale),
+            name="y",
+        )
+
+        model = lsl.Model([y])
+        model.locked = False
+
+        x2 = lsl.Var.new_obs(
+            jrd.normal(jrd.key(1), (10,)),
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="x2",
+        )
+        model.add(x2)
+
+        assert x2.name in model.vars
+        assert x2.name in model.observed
+        assert x2.log_prob is not None
+        assert model.log_lik == pytest.approx((y.log_prob + x2.log_prob).sum())
+
+    def test_add_multiple_vars(self):
+        x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
+        scale = lsl.Var.new_param(1.0, name="scale")
+
+        y = lsl.Var.new_obs(
+            jrd.normal(jrd.key(2), (10,)),
+            lsl.Dist(tfd.Normal, loc=x, scale=scale),
+            name="y",
+        )
+
+        model = lsl.Model([y])
+        model.locked = False
+
+        x2 = lsl.Var.new_obs(
+            jrd.normal(jrd.key(2), (10,)),
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="x2",
+        )
+
+        x3 = lsl.Var.new_obs(
+            jrd.normal(jrd.key(3), (10,)),
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="x3",
+        )
+        model.add(x2, x3)
+
+        assert x2.name in model.vars
+        assert x2.name in model.observed
+        assert x2.log_prob is not None
+
+        assert x3.name in model.vars
+        assert x3.name in model.observed
+        assert x3.log_prob is not None
+
+        assert model.log_lik == pytest.approx(
+            (y.log_prob + x2.log_prob + x3.log_prob).sum()
+        )
+
+    def test_add_one_node(self):
+        x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
+        scale = lsl.Var.new_param(1.0, name="scale")
+
+        y = lsl.Var.new_obs(
+            jrd.normal(jrd.key(2), (10,)),
+            lsl.Dist(tfd.Normal, loc=x, scale=scale),
+            name="y",
+        )
+
+        model = lsl.Model([y])
+        model.locked = False
+
+        x2 = lsl.Value(
+            jrd.normal(jrd.key(1), (10,)),
+            _name="x2",
+        )
+        model.add(x2)
+
+        assert x2.name in model.nodes
+
+    def test_join_two_models(self):
+        x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
+        scale = lsl.Var.new_param(1.0, name="scale")
+
+        y = lsl.Var.new_obs(
+            jrd.normal(jrd.key(2), (10,)),
+            lsl.Dist(tfd.Normal, loc=x, scale=scale),
+            name="y",
+        )
+
+        model = lsl.Model([y])
+        model.locked = False
+
+        x2 = lsl.Var.new_obs(
+            jrd.normal(jrd.key(2), (10,)),
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="x2",
+        )
+
+        x3 = lsl.Var.new_obs(
+            jrd.normal(jrd.key(3), (10,)),
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="x3",
+        )
+        model2 = lsl.Model([x2, x3])
+
+        model.join(model2)
+
+        assert not model2.vars
+        assert x2.name not in model2.vars
+        assert x3.name not in model2.vars
+
+        assert model.vars["x2"] is x2
+        assert model.vars["x3"] is x3
+
+        assert x2.name in model.vars
+        assert x2.name in model.observed
+        assert x2.log_prob is not None
+
+        assert x3.name in model.vars
+        assert x3.name in model.observed
+        assert x3.log_prob is not None
+
+        assert model.log_lik == pytest.approx(
+            (y.log_prob + x2.log_prob + x3.log_prob).sum()
+        )
+
+    def test_join_two_models_with_copy(self):
+        x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
+        scale = lsl.Var.new_param(1.0, name="scale")
+
+        y = lsl.Var.new_obs(
+            jrd.normal(jrd.key(2), (10,)),
+            lsl.Dist(tfd.Normal, loc=x, scale=scale),
+            name="y",
+        )
+
+        model = lsl.Model([y])
+        model.locked = False
+
+        x2 = lsl.Var.new_obs(
+            jrd.normal(jrd.key(2), (10,)),
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="x2",
+        )
+
+        x3 = lsl.Var.new_obs(
+            jrd.normal(jrd.key(3), (10,)),
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="x3",
+        )
+        model2 = lsl.Model([x2, x3])
+
+        model.join(model2, copy=True)
+
+        assert model2.vars
+        assert x2.name in model2.vars
+        assert x3.name in model2.vars
+
+        assert model2.vars["x2"] is x2
+        assert model2.vars["x3"] is x3
+
+        assert model.vars["x2"] is not x2
+        assert model.vars["x3"] is not x3
+
+        assert x2.name in model.vars
+        assert x2.name in model.observed
+        assert x2.log_prob is not None
+
+        assert x3.name in model.vars
+        assert x3.name in model.observed
+        assert x3.log_prob is not None
+
+        assert model.log_lik == pytest.approx(
+            (y.log_prob + x2.log_prob + x3.log_prob).sum()
+        )
+
+    def test_join_three_models(self):
+        x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
+        scale = lsl.Var.new_param(1.0, name="scale")
+
+        y = lsl.Var.new_obs(
+            jrd.normal(jrd.key(2), (10,)),
+            lsl.Dist(tfd.Normal, loc=x, scale=scale),
+            name="y",
+        )
+
+        model = lsl.Model([y])
+        model.locked = False
+
+        x2 = lsl.Var.new_obs(
+            jrd.normal(jrd.key(2), (10,)),
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="x2",
+        )
+
+        x3 = lsl.Var.new_obs(
+            jrd.normal(jrd.key(3), (10,)),
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="x3",
+        )
+        model2 = lsl.Model([x2])
+        model3 = lsl.Model([x3])
+
+        with pytest.raises(RuntimeError, match="Duplicate node names"):
+            model.join(model2, model3)
+
+        model3.locked = False  # to allow renaming
+        x3.dist_node["loc"].name = x3.dist_node["loc"].name + "_x3"
+        x3.dist_node["scale"].name = x3.dist_node["scale"].name + "_x3"
+
+        model.join(model2, model3)
+
+        assert not model2.vars
+        assert x2.name not in model2.vars
+
+        assert not model3.vars
+        assert x3.name not in model3.vars
+
+        assert model.vars["x2"] is x2
+        assert model.vars["x3"] is x3
+
+        assert x2.name in model.vars
+        assert x2.name in model.observed
+        assert x2.log_prob is not None
+
+        assert x3.name in model.vars
+        assert x3.name in model.observed
+        assert x3.log_prob is not None
+
+        assert model.log_lik == pytest.approx(
+            (y.log_prob + x2.log_prob + x3.log_prob).sum()
+        )
