@@ -959,8 +959,13 @@ class Model:
 
         if isinstance(old_nv, Var):
             if isinstance(new, Var):
+                if new.model and new.model is not self:
+                    raise RuntimeError(f"{new} can only be part of one model")
+
                 self._replace_var_with_var(old_nv, new)
             elif isinstance(new, Node):
+                if new.model and new.model is not self:
+                    raise RuntimeError(f"{new} can only be part of one model")
                 self._replace_var_with_node(old_nv, new)
             else:
                 self._replace_var_with_node(old_nv, Node._to_node(new))
@@ -979,7 +984,7 @@ class Model:
     def _remove_disconnected_parental_submodel(self, of: str | Node | Var) -> Self:
         if isinstance(of, str):
             if of in self.nodes:
-                of: Node | Var = self.nodes[of]
+                of = self.nodes[of]
             elif of in self.vars:
                 of = self.vars[of]
             else:
@@ -1021,18 +1026,26 @@ class Model:
 
         return self
 
-    def _drop_singleton_nodes(
-        self, nodes: dict[str, Node], graph: nx.DiGraph
-    ) -> dict[str, Node]:
-        """
-        Removes all singleton nodes from the provided GraphBuilder.
-        """
+    def _get_singletons(self, graph: nx.DiGraph):
         G = graph
         singletons1 = [n for n, d in G.degree() if d == 0]
         singletons2 = [
             n for n in G.nodes() if G.in_degree(n) == 0 and G.out_degree(n) == 0
         ]
         singletons = set(singletons1 + singletons2)
+        return [
+            nd
+            for nd in singletons
+            if isinstance(nd, Var) or not nd.name.startswith("_model")
+        ]
+
+    def _drop_singleton_nodes(
+        self, nodes: dict[str, Node], graph: nx.DiGraph
+    ) -> dict[str, Node]:
+        """
+        Removes all singleton nodes from the provided GraphBuilder.
+        """
+        singletons = self._get_singletons(graph)
 
         for nv in singletons:
             if nv.name.startswith("_model"):
@@ -1046,12 +1059,7 @@ class Model:
         """
         Removes all singleton variables from the provided GraphBuilder.
         """
-        G = graph
-        singletons1 = [n for n, d in G.degree() if d == 0]
-        singletons2 = [
-            n for n in G.nodes() if G.in_degree(n) == 0 and G.out_degree(n) == 0
-        ]
-        singletons = set(singletons1 + singletons2)
+        singletons = self._get_singletons(graph)
 
         for nv in singletons:
             if nv.name.startswith("_model"):
@@ -1082,11 +1090,6 @@ class Model:
         nodes_and_vars = nodes + vars_
         self._update_graph(nodes_and_vars)
 
-        self._nodes = self._drop_singleton_nodes(self._nodes, self._node_graph)
-        nodes = [nd for nd in self.nodes.values() if not nd.name.startswith("_model")]
-        nodes_and_vars = nodes + vars_
-        self._update_graph(nodes_and_vars)
-
         self.outdated = False
         return self
 
@@ -1098,6 +1101,7 @@ class Model:
         self._vars = self._drop_singleton_vars(self._vars, self._var_graph)
         for name, nd in self._nodes.copy().items():
             if isinstance(nd, VarValue):
+                assert nd.var
                 if nd.var.name not in self._vars:
                     self._nodes.pop(name, None)
 

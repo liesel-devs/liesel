@@ -2264,8 +2264,8 @@ class Var:
             dist_node.name = f"{self.name}_log_prob"  # type: ignore  # unfrozen
 
         if self._dist_node.model:
-            auto_update_before = self.dist_node.model.auto_update
-            self.dist_node.model.auto_update = False
+            auto_update_before = self._dist_node.model.auto_update
+            self._dist_node.model.auto_update = False
 
             lazy_before = self._dist_node.model.update_graph_lazily
             self._dist_node.model.update_graph_lazily = True
@@ -2284,10 +2284,11 @@ class Var:
             for nv in inputs:
                 self._dist_node.model._remove_disconnected_parental_submodel(nv)
                 if isinstance(nv, VarValue):
+                    assert nv.var
                     self._dist_node.model._remove_disconnected_parental_submodel(nv.var)
 
             self._dist_node.model.update_graph_lazily = lazy_before
-            self.dist_node.model.auto_update = auto_update_before
+            self._dist_node.model.auto_update = auto_update_before
         else:
             self._dist_node._unset_var()
             self._dist_node.at = None
@@ -2374,6 +2375,8 @@ class Var:
     @observed.setter
     @changes_model_graph
     def observed(self, observed: bool):
+        if self.parameter and observed is True:
+            raise ValueError("Cannot set observed flag to True if parameter=True")
         self._observed = observed
 
     @property
@@ -2404,6 +2407,8 @@ class Var:
     @parameter.setter
     @changes_model_graph
     def parameter(self, parameter: bool):
+        if self.observed and parameter is True:
+            raise ValueError("Cannot set parameter flag to True if observed=True")
         self._parameter = parameter
 
     @property
