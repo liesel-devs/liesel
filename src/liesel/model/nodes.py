@@ -96,11 +96,12 @@ def changes_model_graph(fn):
                 "be Model.locked = False, so do not rely on this error if you are "
                 "using the default."
             )
+        model = self.model
         out = fn(self, *args, **kwargs)
-        if self.model:
-            self.model.outdated = True
-            if not self.model.update_graph_lazily:
-                self.model.update_graph()
+        if model:
+            model.outdated = True
+            if not model.update_graph_lazily:
+                model.update_graph()
         return out
 
     return wrapped
@@ -255,13 +256,13 @@ class Node(ABC):
         self.state = NodeState(None, True)
         return self
 
-    @in_model_method
     def flag_outdated(self) -> Node:
         """Flags the node and its recursive outputs as outdated."""
         self._outdated = True
 
-        for node in self._outputs:
-            node.flag_outdated()
+        if self.model:
+            for node in self._outputs:
+                node.flag_outdated()
 
         return self
 
@@ -283,7 +284,15 @@ class Node(ABC):
     @property
     def model(self) -> Model | None:
         """The model the node is part of."""
-        return self._model()
+        model = self._model()
+        if model is None:
+            return None
+
+        if self.name in model.nodes:
+            return model
+
+        self._unset_model()
+        return None
 
     @property
     def name(self) -> str:
@@ -1863,6 +1872,7 @@ class Var:
 
         return _unique_tuple(_vars)
 
+    @changes_model_graph
     def transform(
         self,
         bijector: type[jb.Bijector] | jb.Bijector | None = None,

@@ -591,6 +591,8 @@ class TestModifyModel:
         assert "scale_log_prob" not in model.nodes
         assert "scale_var_value" not in model.nodes
 
+        assert not scale.model
+
     def test_replace_var_with_var_by_name(self):
         x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
         scale = lsl.Var.new_param(
