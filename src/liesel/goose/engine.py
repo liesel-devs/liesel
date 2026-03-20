@@ -232,6 +232,16 @@ class SamplingResults:
         )
         return opt.expect(f"No posterior transition infos in {repr(self)}")
 
+    def get_warmup_transition_infos(self) -> dict[str, TransitionInfo]:
+        """
+        Returns a dictionary of posterior transition information for all parameters
+        included in the position.
+        """
+        opt = self.transition_infos.combine_filtered(
+            lambda config: EpochType.is_warmup(config.type)
+        )
+        return opt.expect(f"No warmup transition infos in {repr(self)}")
+
     def get_tuning_times(self) -> Option[Array]:
         """
         Returns array of tuning times.
