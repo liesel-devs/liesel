@@ -2770,7 +2770,7 @@ class Var:
         pred = submodel.predict(samples=samples, predict=[self.name], newdata=newdata)
         return pred[self.name]
 
-    def diagnose(self) -> pd.DataFrame:
+    def diagnose(self, verbose: bool = False) -> pd.DataFrame:
         """
         Provides a dataframe with diagnostic information about this variable's submodel.
         """
@@ -2795,7 +2795,7 @@ class Var:
         else:
             model = self.model
 
-        return model.diagnose()
+        return model.diagnose(verbose=verbose)
 
     def sample(
         self,

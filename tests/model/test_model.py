@@ -427,6 +427,11 @@ class TestModel:
 
         assert df.shape[0] == len(model.vars)
 
+        df2 = model.diagnose(verbose=True)
+
+        assert df.shape[0] == df2.shape[0]
+        assert df.shape[1] < df2.shape[1]
+
 
 class TestPredictions:
     def test_predict_no_batching_dim(self, model) -> None:

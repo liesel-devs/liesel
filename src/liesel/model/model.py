@@ -1945,7 +1945,7 @@ class Model:
 
         return jax.tree.map(unflatten_batch_dims, flat_predictions)
 
-    def diagnose(self) -> pd.DataFrame:
+    def diagnose(self, verbose: bool = False) -> pd.DataFrame:
         """
         Provides a dataframe with diagnostic information about the model.
         """
@@ -1955,26 +1955,33 @@ class Model:
             v.update()
             row: dict[str, Any] = {}
             row["name"] = k
-            row["n_input_vars"] = len(v.all_input_vars())
-            row["n_output_vars"] = len(v.all_output_vars())
+            row["has_dist"] = v.has_dist
+            if verbose:
+                row["n_input_vars"] = len(v.all_input_vars())
+                row["n_output_vars"] = len(v.all_output_vars())
+                row["parameter"] = v.parameter
+                row["observerd"] = v.observed
+                row["strong"] = v.strong
 
             for name, target in (("value", v.value_node), ("log_prob", v.dist_node)):
                 if target is None:
                     continue
                 row[f"{name}_n_nan"] = jnp.isnan(target.value).sum()
                 row[f"{name}_n_inf"] = jnp.isinf(target.value).sum()
-                row[f"{name}_mean"] = jnp.mean(target.value)
-                row[f"{name}_sd"] = jnp.std(target.value)
-                row[f"{name}_min"] = jnp.min(target.value)
-                row[f"{name}_max"] = jnp.max(target.value)
                 row[f"{name}_size"] = jnp.max(jnp.size(target.value))
                 row[f"{name}_dtype"] = jnp.asarray(target.value).dtype
-                row[f"{name}_n_input_nodes"] = len(target.all_input_nodes())
-                row[f"{name}_n_output_nodes"] = len(target.all_output_nodes())
+                if verbose:
+                    row[f"{name}_mean"] = jnp.mean(target.value)
+                    row[f"{name}_sd"] = jnp.std(target.value)
+                    row[f"{name}_min"] = jnp.min(target.value)
+                    row[f"{name}_max"] = jnp.max(target.value)
+                    row[f"{name}_n_input_nodes"] = len(target.all_input_nodes())
+                    row[f"{name}_n_output_nodes"] = len(target.all_output_nodes())
 
-            row["value_node_name"] = v.value_node.name
-            if v.dist_node is not None:
-                row["dist_node_name"] = v.dist_node.name
+            if verbose:
+                row["value_node_name"] = v.value_node.name
+                if v.dist_node is not None:
+                    row["dist_node_name"] = v.dist_node.name
 
             rows.append(row)
 
