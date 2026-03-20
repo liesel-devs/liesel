@@ -77,8 +77,9 @@ class DAKernel(ModelMixin, TransitionMixin[DAKernelState, DATransitionInfo], Rep
     def __init__(
         self,
         position_keys: Sequence[str],
-        initial_step_size: float,
-        da_target_accept: float,
+        initial_step_size: float = 1.0,
+        da_target_accept: float | None = None,
+        da_tune_step_size: bool = False,
         da_gamma: float = 0.05,
         da_kappa: float = 0.75,
         da_t0: int = 10,
@@ -87,7 +88,16 @@ class DAKernel(ModelMixin, TransitionMixin[DAKernelState, DATransitionInfo], Rep
         self._model = None
         self.position_keys = tuple(position_keys)
         self.initial_step_size = initial_step_size
-        self.da_target_accept = da_target_accept
+        self.da_tune_step_size = da_tune_step_size
+        if self.da_tune_step_size:
+            if da_target_accept is None:
+                raise ValueError(
+                    "If da_tune_step_size=False, da_target_accept must not be None."
+                )
+            self.da_target_accept = da_target_accept
+        else:
+            self.da_target_accept = 1.0  # arbitrary, unused
+
         self.da_gamma = da_gamma
         self.da_kappa = da_kappa
         self.da_t0 = da_t0
@@ -125,15 +135,16 @@ class DAKernel(ModelMixin, TransitionMixin[DAKernelState, DATransitionInfo], Rep
 
         outcome = self._standard_transition(prng_key, kernel_state, model_state, epoch)
 
-        da_step(
-            outcome.kernel_state,
-            outcome.info.acceptance_prob,
-            epoch.time_in_epoch,
-            self.da_target_accept,
-            self.da_gamma,
-            self.da_kappa,
-            self.da_t0,
-        )
+        if self.da_tune_step_size:
+            da_step(
+                outcome.kernel_state,
+                outcome.info.acceptance_prob,
+                epoch.time_in_epoch,
+                self.da_target_accept,
+                self.da_gamma,
+                self.da_kappa,
+                self.da_t0,
+            )
 
         return outcome
 
