@@ -479,21 +479,6 @@ class TestPredictions:
             assert name in pred
             assert pred[name].shape == (4, 3)
 
-    def test_loo(self, model) -> None:
-        samples = {
-            "sigma_hat": tfd.Normal(loc=1.0, scale=0.01).sample(
-                (4, 100), rnd.PRNGKey(6)
-            ),
-            "beta_hat": tfd.Normal(loc=jnp.array([1.0, 2.0]), scale=0.1).sample(
-                (4, 100), rnd.PRNGKey(6)
-            ),
-        }
-
-        loo = model.loo(samples)
-        assert loo.elpd_loo == pytest.approx(-727.999, abs=0.01)
-        assert loo.p_loo == pytest.approx(5.829144, abs=0.01)
-        assert loo.se == pytest.approx(15.777, abs=0.01)
-
     def test_predict_log_lik_contributions(self, model) -> None:
         samples = {
             "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
@@ -1126,10 +1111,25 @@ class TestPointwiseLogLik:
             "sigma_hat": tfd.Normal(loc=1.0, scale=0.01).sample(
                 (4, 100), rnd.PRNGKey(6)
             ),
-            "beta_hat": tfd.Normal(loc=jnp.array([1.0, 2.0]), scale=0.5).sample(
+            "beta_hat": tfd.Normal(loc=jnp.array([1.0, 2.0]), scale=0.1).sample(
                 (4, 100), rnd.PRNGKey(6)
             ),
         }
 
         pll = model.log_lik_pointwise(samples)
         assert pll.shape == (4, 100, 500)
+
+    def test_loo(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Normal(loc=1.0, scale=0.01).sample(
+                (4, 100), rnd.PRNGKey(6)
+            ),
+            "beta_hat": tfd.Normal(loc=jnp.array([1.0, 2.0]), scale=0.1).sample(
+                (4, 100), rnd.PRNGKey(6)
+            ),
+        }
+
+        loo = model.loo(samples)
+        assert loo.elpd_loo == pytest.approx(-727.999, abs=0.01)
+        assert loo.p_loo == pytest.approx(5.829, abs=0.01)
+        assert loo.se == pytest.approx(15.777, abs=0.01)
