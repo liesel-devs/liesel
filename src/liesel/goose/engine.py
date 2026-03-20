@@ -207,6 +207,21 @@ class SamplingResults:
             f"No position-kernel associations in {repr(self)}"
         )
 
+    def get_pos_keys_by_kernels(self) -> dict[str, list[str]]:
+        """
+        Returns a dict, identifying the position keys governed by each kernel.
+
+        The dict has the format
+        ``{"kernel identifier": ["position key 1", "position key 2"]}``.
+        """
+        pos_key_by_kernels = {}
+        for posname, kernelname in self.get_kernels_by_pos_key().items():
+            if kernelname not in pos_key_by_kernels:
+                pos_key_by_kernels[kernelname] = [posname]
+            else:
+                pos_key_by_kernels[kernelname].append(posname)
+        return pos_key_by_kernels
+
     def get_posterior_transition_infos(self) -> dict[str, TransitionInfo]:
         """
         Returns a dictionary of posterior transition information for all parameters

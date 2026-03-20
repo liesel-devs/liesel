@@ -318,12 +318,23 @@ class Summary:
             results.get_error_log(False).unwrap(), results.get_error_log(True)
         )
 
+        pos_keys_by_kernels = []
+        for k, v in results.get_pos_keys_by_kernels().items():
+            pos_keys_by_kernels.append({"kernel": k, "positions": ", ".join(v)})
+
+        if len(pos_keys_by_kernels) == 1:
+            posdf = pd.DataFrame(pos_keys_by_kernels, index=pd.Index([0]))
+        else:
+            posdf = pd.DataFrame(pos_keys_by_kernels)
+        posdf = posdf.set_index(["kernel"])
+
         self._which = which
         self.per_chain = per_chain
         self.quantities = quantities
         self.config = config
         self.sample_info = sample_info
         self.error_summary = error_summary
+        self.pos_keys_by_kernels_df = posdf
         self.kernels_by_pos_key = results.get_kernels_by_pos_key()
         self.liesel_version = __version__
 
@@ -558,10 +569,16 @@ class Summary:
 
         df["relative"] = df["count"] / df["sample_size_total"]
 
+        df = (
+            df.join(self.pos_keys_by_kernels_df, on="kernel")
+            .reset_index()
+            .set_index(["kernel", "positions", "error_code", "error_msg", "phase"])
+        )
+
         # df = df.drop(columns="sample_size")
 
         if not per_chain:
-            df = df.groupby(level=[0, 1, 2, 3], observed=True)
+            df = df.groupby(level=[0, 1, 2, 3, 4], observed=True)
             df = df.aggregate(
                 {
                     "count": "sum",
