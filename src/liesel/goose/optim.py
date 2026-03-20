@@ -380,9 +380,17 @@ def optim_flat(
 
     n_train = _find_sample_size(model_train)
     n_validation = _find_sample_size(model_validation)
-    observed = _find_observed(model_train)
 
-    shuffle_batch_indices = batch_size is not None
+    do_batching = batch_size is not None
+    if do_batching:
+        shuffle_batch_indices = True
+        observed = _find_observed(model_train)
+    else:
+        shuffle_batch_indices = False
+        # not because there are no observed, but because we don't need to update
+        # observed with their batches
+        observed = {}
+
     batch_size = batch_size if batch_size is not None else n_train
 
     interface_train = LieselInterface(model_train)

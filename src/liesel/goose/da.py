@@ -16,7 +16,7 @@ class DAKernelState(Protocol):
     Reference Manual [#stan]_.
 
     .. [#carroll] `Colin Carroll, Step Size Adaptation in Hamiltonian Monte Carlo (2019)
-       <https://colindcarroll.com/2019/04/21/step-size-adaptation-in-hamiltonian-monte-carlo>`_.
+       <https://colindcarroll.com/blog/step_size_adapt_hmc.html>`_.
     .. [#stan] `Stan Development Team, Stan Reference Manual (2021), Chapter 15.2
        <https://mc-stan.org/docs/2_28/reference-manual/hmc-algorithm-parameters.html>`_.
     """
@@ -77,6 +77,18 @@ def da_step(
         The adaptation relaxation exponent.
     t0
         The adaptation iteration offset.
+
+    Notes
+    -----
+
+    For an introduction
+    to dual averaging, see the blog post by Colin Carroll [#carroll]_ and the Stan
+    Reference Manual [#stan]_.
+
+    .. [#carroll] `Colin Carroll, Step Size Adaptation in Hamiltonian Monte Carlo (2019)
+       <https://colindcarroll.com/blog/step_size_adapt_hmc.html>`_.
+    .. [#stan] `Stan Development Team, Stan Reference Manual (2021), Chapter 15.2
+       <https://mc-stan.org/docs/2_28/reference-manual/hmc-algorithm-parameters.html>`_.
     """
 
     ks = kernel_state

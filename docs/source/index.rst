@@ -60,7 +60,6 @@ conveniently initialize your :class:`~.goose.EngineBuilder`.
     ~liesel.goose.MCMCSpec
     ~liesel.goose.EngineBuilder
     ~liesel.goose.Engine
-    ~liesel.goose.EpochConfig
 
 MCMC Kernels
 *************
@@ -153,10 +152,13 @@ Model (Advanced)
     :recursive:
     :nosignatures:
 
+    ~liesel.model.LogProb
+    ~liesel.model.FlatLogProb
     ~liesel.model.Calc
     ~liesel.model.Node
     ~liesel.model.Value
     ~liesel.model.PIT
+    ~liesel.distributions.GaussianCopula
     ~liesel.model.TransientCalc
     ~liesel.model.TransientDist
     ~liesel.model.TransientIdentity
@@ -179,7 +181,7 @@ in to using :class:`.Model`. Goose currently includes the following interfaces:
 
     ~liesel.goose.LieselInterface
     ~liesel.goose.DictInterface
-    ~liesel.goose.DataclasslInterface
+    ~liesel.goose.DataclassInterface
     ~liesel.goose.NamedTupleInterface
 
 P-Splines
@@ -195,6 +197,19 @@ P-Splines
     ~liesel.contrib.splines.equidistant_knots
     ~liesel.contrib.splines.pspline_penalty
     ~liesel.distributions.MultivariateNormalDegenerate
+
+
+Advanced MCMC functionality
+*****************************
+
+.. autosummary::
+    :toctree: generated
+    :caption: MCMC (Advanced)
+
+    ~liesel.goose.da
+    ~liesel.goose.mm
+    ~liesel.goose.EpochConfig
+
 
 Experimental API
 ************************

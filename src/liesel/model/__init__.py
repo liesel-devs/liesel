@@ -18,6 +18,7 @@ from .legacy import (
     Smooth,
     SmoothingParam,
 )
+from .logprob import FlatLogProb, LogProb
 from .model import GraphBuilder, Model, load_model, save_model
 from .nodes import (
     Array,
@@ -77,4 +78,6 @@ __all__ = [
     "Var",
     "plot_nodes",
     "plot_vars",
+    "LogProb",
+    "FlatLogProb",
 ]

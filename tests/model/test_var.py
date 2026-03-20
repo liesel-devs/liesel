@@ -566,7 +566,8 @@ class TestVarConstructors:
 
 
 class TestVarPredictions:
-    def test_predict(self) -> None:
+    @pytest.mark.parametrize("in_model", (True, False))
+    def test_predict(self, in_model) -> None:
         n = 10
         x = jax.random.uniform(jax.random.PRNGKey(1), (n,))
         b = 1.0
@@ -582,7 +583,8 @@ class TestVarPredictions:
             y, lsl.Dist(tfp.distributions.Normal, loc=loc, scale=scale), name="y"
         )
 
-        _ = lsl.Model([yvar])
+        if in_model:
+            _ = lsl.Model([yvar])
 
         samples = {
             "b": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1)),
@@ -609,11 +611,48 @@ class TestVarPredictions:
         assert pred.shape[-1] == xnew.shape[-1]
 
         # predict when irrelevant variables from the model are present
-        pred = scale.predict(samples, newdata={"x": xnew})
+        if in_model:
+            pred = scale.predict(samples, newdata={"x": xnew})
+        if not in_model:
+            with pytest.raises(KeyError, match="more strict"):
+                scale.predict(samples, newdata={"x": xnew})
 
         # predict when variables not in the model are present
         with pytest.raises(KeyError):
             scale.predict(samples, newdata={"w": xnew})
+
+    def test_predict_with_ignored_entries(self) -> None:
+        n = 10
+        x = jax.random.uniform(jax.random.PRNGKey(1), (n,))
+        b = 1.0
+        e = jax.random.normal(jax.random.PRNGKey(2), (n,))
+        y = x * b + e
+
+        xvar = lsl.Var.new_obs(x, name="x")
+        bvar = lsl.Var.new_param(jnp.array([b]), name="b")
+        loc = lsl.Var.new_calc(lambda x, b: x * b, x=xvar, b=bvar, name="loc")
+        scale = lsl.Var.new_param(jnp.array([1.0]), name="scale")
+        scale.transform(tfp.bijectors.Exp())
+        yvar = lsl.Var.new_obs(
+            y, lsl.Dist(tfp.distributions.Normal, loc=loc, scale=scale), name="y"
+        )
+
+        _ = lsl.Model([yvar])
+
+        samples = {
+            "b": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1)),
+            "scale_transformed": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1)),
+            "scale": tfp.distributions.Uniform().sample(
+                (4, 7, 1), jax.random.PRNGKey(6)
+            ),
+            "_model_log_lik": tfp.distributions.Uniform().sample(
+                (4, 7), jax.random.PRNGKey(6)
+            ),
+        }
+
+        pred = loc.predict(samples)
+        assert jnp.allclose(pred, x * samples["b"])
+        assert pred.shape[-1] == x.shape[-1]
 
     def test_predict_sample(self) -> None:
         """

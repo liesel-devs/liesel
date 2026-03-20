@@ -74,7 +74,7 @@ class IWLSKernel(
     initial_step_size
         Value at which to start step size tuning.
     da_tune_step_step_size
-        Whether to tune the step size suing dual averaging.
+        Whether to tune the step size using dual averaging.
     da_target_accept
         Target acceptance probability for dual averaging algorithm.
     da_gamma
@@ -93,6 +93,11 @@ class IWLSKernel(
         replacing the observed negative Hessian with a very similar positive definite
         matrix. This is slow, because it performs an eigendecomposition and two cholesky
         factorizations. If ``None``, does nothing.
+
+    Notes
+    -----
+    For more information on step size tuning via dual averaging,
+    see :func:`.da_step` and :class:`.DAKernelState`.
     """
 
     error_book: ClassVar[dict[int, str]] = {
@@ -206,35 +211,6 @@ class IWLSKernel(
         flat_position, _ = ravel_pytree(self.position(model_state))
         return flat_score_fn(flat_position)
 
-    def _default_chol_info(
-        self, model_state: ModelState, flat_hessian_fn: Callable[[Array], Array]
-    ) -> Array:
-        flat_position, _ = ravel_pytree(self.position(model_state))
-        info_matrix = -flat_hessian_fn(flat_position)
-        info_matrix += (
-            1e-6
-            * jnp.mean(jnp.diag(info_matrix))
-            * jnp.eye(jnp.shape(flat_position)[-1])
-        )
-        return jnpla.cholesky(info_matrix)
-
-    def _robust_default_chol_info(
-        self, model_state: ModelState, flat_hessian_fn: Callable[[Array], Array]
-    ) -> Array:
-        flat_position, _ = ravel_pytree(self.position(model_state))
-        info_matrix = -flat_hessian_fn(flat_position)
-        info_matrix += (
-            1e-6
-            * jnp.mean(jnp.diag(info_matrix))
-            * jnp.eye(jnp.shape(flat_position)[-1])
-        )
-        eigvals, eigvecs = jnpla.eigh(info_matrix)  # A = U Λ U^T
-        eigvals_clipped = jnp.clip(eigvals, min=1e5)  # ensure positivity
-
-        info_matrix = eigvecs @ (eigvals_clipped[..., None, :] * eigvecs.T)
-
-        return jnpla.cholesky(info_matrix)
-
     def _chol_info(
         self, model_state: ModelState, flat_hessian_fn: Callable[[Array], Array]
     ) -> tuple[Array, int]:
@@ -259,11 +235,7 @@ class IWLSKernel(
             return self._safe_chol(chol, info_matrix)
 
         chol = self.chol_info_fn(model_state)
-        chol, error_code = jax.lax.cond(
-            jnp.any(jnp.isnan(chol)),
-            lambda: (chol, 1),
-            lambda: (chol, 0),
-        )
+        chol, error_code = self._safe_chol(chol, info_matrix=None)
         return chol, error_code
 
     def _safe_chol(self, chol, info_matrix) -> tuple[Array, int]:
@@ -281,10 +253,17 @@ class IWLSKernel(
                 return jnp.eye(chol.shape[-1]), 2
 
             elif self.fallback_chol_info == "chol_of_modified_info":
+                if self.chol_info_fn is not None:
+                    raise ValueError(
+                        "When using a custom 'chol_info_fn', "
+                        "fallback_chol_info='chol_of_modified_info' "
+                        "is not supported."
+                    )
+
                 eigvals, eigvecs = jnpla.eigh(info_matrix)
 
                 # ensure eigenvalue positivity
-                eigvals_clipped = jnp.clip(eigvals, min=1e5)
+                eigvals_clipped = jnp.clip(eigvals, min=1e-5)
                 info_matrix = eigvecs @ (eigvals_clipped[..., None, :] * eigvecs.T)
                 return jnpla.cholesky(info_matrix), 3
 

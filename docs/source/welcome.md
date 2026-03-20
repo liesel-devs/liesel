@@ -47,7 +47,7 @@ import tensorflow_probability.substrates.jax.bijectors as tfb
 # Tutorials
 
 To start working with Liesel, our tutorials might come in handy, starting with
-a tutorial on [linear regression](tutorials/md/01-lin-reg.md#linear-regression). An overview of our tutorials can be found here: [Liesel tutorials](tutorials_overview.rst).
+a tutorial on [linear regression](tutorials/md/01a-lin-reg.md#linear-regression). An overview of our tutorials can be found here: [Liesel tutorials](tutorials_overview.rst).
 
 # Further Reading
 

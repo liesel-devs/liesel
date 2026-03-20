@@ -11,8 +11,10 @@ location-scale models:
    :maxdepth: 1
    :caption: Basics
 
-   tutorials/md/01-lin-reg
-   tutorials/md/01a-transform
+   tutorials/md/01a-lin-reg
+   tutorials/md/01b-model
+   tutorials/md/01d-gibbs-sampling
+   tutorials/md/01c-transform
    tutorials/md/02-ls-reg
 
 Here are some more advanced topics, including generalized extreme value (GEV) models,
@@ -26,3 +28,4 @@ a comparison of different samplers, and more:
    tutorials/md/04-mcycle
    tutorials/md/05-reproducibility
    tutorials/md/06-pymc
+   tutorials/md/07-error-correction
