@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import logging
 import pickle
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Sequence
+from dataclasses import asdict, dataclass
 from functools import partial
-from typing import NamedTuple, cast
+from typing import Any, NamedTuple, cast
 
 import jax
 import jax.lax
@@ -32,6 +32,7 @@ from .pytree import as_strong_pytree, register_dataclass_as_pytree
 from .types import (
     Array,
     GeneratedQuantity,
+    KernelState,
     KeyArray,
     ModelInterface,
     ModelState,
@@ -297,6 +298,31 @@ class SamplingResults:
         time: Array = next(iter(opt_tis.values())).time
 
         return Option(time)
+
+    def get_warmup_kernel_states(
+        self, process_state: Callable[[KernelState], Any] = asdict
+    ) -> dict[str, Any]:
+        """
+        If available, returns a dictionary of kernel states recorded during
+        warmup, organized by kernel.
+
+        The argument ``process_state`` is a callable that is used to process the kernel
+        states. The default kernel states in Liesel are dataclasses, which is why the
+        default here is ``dataclasses.asdict``.
+        """
+        kernels = list(self.tuning_infos.expect("none").get().expect("none"))
+        states = (
+            self.kernel_states.expect("Kernel states not recorded.")
+            .combine_filtered(lambda config: EpochType.is_warmup(config.type))
+            .expect("none")
+        )
+
+        assert len(kernels) == len(states)
+
+        out = {}
+        for kernel, state in zip(kernels, states):
+            out[kernel] = process_state(state)
+        return out
 
     def get_error_log(self, posterior_only=False) -> Option[ErrorLog]:
         """
