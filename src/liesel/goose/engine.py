@@ -242,6 +242,48 @@ class SamplingResults:
         )
         return opt.expect(f"No warmup transition infos in {repr(self)}")
 
+    def get_warmup_acceptance_probabilities(self) -> dict[str, Array]:
+        """
+        Returns dictionary of acceptance probabilities during warmup by kernel.
+        """
+        transition_infos = self.get_warmup_transition_infos()
+        data = {}
+        for k, tinfo in transition_infos.items():
+            data[k] = jnp.asarray(tinfo.acceptance_prob)
+        return data
+
+    def get_warmup_position_moved(self) -> dict[str, Array]:
+        """
+        Returns dictionary of transition movements (0: no move, 1: move)
+        during warmup by kernel.
+        """
+        transition_infos = self.get_warmup_transition_infos()
+        data = {}
+        for k, tinfo in transition_infos.items():
+            data[k] = jnp.asarray(tinfo.position_moved)
+        return data
+
+    def get_posterior_acceptance_probabilities(self) -> dict[str, Array]:
+        """
+        Returns dictionary of acceptance probabilities during posterior by kernel.
+        """
+        transition_infos = self.get_posterior_transition_infos()
+        data = {}
+        for k, tinfo in transition_infos.items():
+            data[k] = jnp.asarray(tinfo.acceptance_prob)
+        return data
+
+    def get_posterior_position_moved(self) -> dict[str, Array]:
+        """
+        Returns dictionary of transition movements (0: no move, 1: move)
+        during posterior by kernel.
+        """
+        transition_infos = self.get_posterior_transition_infos()
+        data = {}
+        for k, tinfo in transition_infos.items():
+            data[k] = jnp.asarray(tinfo.position_moved)
+        return data
+
     def get_tuning_times(self) -> Option[Array]:
         """
         Returns array of tuning times.
