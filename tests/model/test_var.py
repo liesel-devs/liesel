@@ -522,6 +522,84 @@ class TestAllOutputs:
         assert len(v0.all_input_vars()) == 0
 
 
+def test_all_output_vars():
+    x = lsl.Var(1.0, name="x")
+
+    def dist_mk():
+        return lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=x)
+
+    y = lsl.Var(1.0, name="y")
+    var0 = lsl.Var(lsl.Calc(lambda x: x + 1.0, x), dist_mk(), name="var0")
+    mod0 = lsl.Model([var0] + [x, y], copy=True)
+    assert len(mod0.vars["x"].all_output_vars()) == 1
+    assert len(mod0.vars["y"].all_output_vars()) == 0
+    assert len(mod0.vars["var0"].all_output_vars()) == 0
+
+    var1 = lsl.Var(lsl.Calc(lambda x, y: x + y, x, x), dist_mk(), name="var1")
+    mod1 = lsl.Model([var0, var1] + [x, y], copy=True)
+    assert len(mod1.vars["x"].all_output_vars()) == 2
+    assert len(mod1.vars["y"].all_output_vars()) == 0
+    assert len(mod1.vars["var1"].all_output_vars()) == 0
+
+    var2 = lsl.Var(lsl.Calc(lambda x, y: x + y, x, y), dist_mk(), name="var2")
+    mod2 = lsl.Model([var0, var1, var2] + [x, y], copy=True)
+    assert len(mod2.vars["x"].all_output_vars()) == 3
+    assert len(mod2.vars["y"].all_output_vars()) == 1
+    assert len(mod2.vars["var2"].all_output_vars()) == 0
+
+
+def test_all_output_nodes():
+    x = lsl.Var(1.0, name="x")
+
+    def dist_mk():
+        return lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=x)
+
+    y = lsl.Var(1.0, name="y")
+    var0 = lsl.Var(lsl.Calc(lambda x: x + 1.0, x), dist_mk(), name="var0")
+    mod0 = lsl.Model([var0] + [x, y], copy=True)
+
+    assert len(mod0.vars["x"].all_output_nodes()) == 2
+    assert len(mod0.vars["y"].all_output_nodes()) == 0
+    assert (
+        len(mod0.vars["var0"].all_output_nodes()) == 1 + 1
+    )  # part of the _model_log_prob
+
+    var1 = lsl.Var(lsl.Calc(lambda x, y: x + y, x, x), dist_mk(), name="var1")
+    mod1 = lsl.Model([var0, var1] + [x, y], copy=True)
+    assert len(mod1.vars["x"].all_output_nodes()) == 4
+    assert len(mod1.vars["y"].all_output_nodes()) == 0
+    assert (
+        len(mod1.vars["var1"].all_output_nodes()) == 1 + 1
+    )  # part of the _model_log_prob
+
+    var2 = lsl.Var(lsl.Calc(lambda x, y: x + y, x, y), dist_mk(), name="var2")
+    mod2 = lsl.Model([var0, var1, var2] + [x, y], copy=True)
+    assert len(mod2.vars["x"].all_output_nodes()) == 6
+    assert len(mod2.vars["y"].all_output_nodes()) == 1
+    assert (
+        len(mod2.vars["var2"].all_output_nodes()) == 1 + 1
+    )  # part of the _model_log_prob
+
+
+def test_indirect_connection() -> None:
+    v0 = lsl.Var(1.0, name="v0")
+    n1 = lsl.Calc(lambda x: 2.0 * x, v0, _name="n1")
+    v2 = lsl.Var(lsl.Calc(lambda x: 2.0 * x, n1), name="v2")
+    v3 = lsl.Var(lsl.Calc(lambda x: 2.0 * x, v2), name="v3")
+    _ = lsl.Model([v3])
+
+    # test outputs
+    outputs = v0.all_output_vars()
+    assert len(outputs) == 1
+    assert v2 in outputs
+    assert v3 not in outputs
+
+    # test inputs
+    assert len(v3.all_input_vars()) == 1
+    assert len(v2.all_input_vars()) == 1
+    assert len(v0.all_input_vars()) == 0
+
+
 class TestVarConstructors:
     def test_new_param(self):
         loc = lsl.Var.new_param(1.0, name="loc")
