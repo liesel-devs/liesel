@@ -374,8 +374,8 @@ def _set_aesthetics(
     g.legend.set_title("Chain")
 
     if title is not None:
-        g.fig.suptitle(title)
-        g.fig.subplots_adjust(top=title_spacing)
+        g.figure.suptitle(title)
+        g.figure.subplots_adjust(top=title_spacing)
 
     return g
 
@@ -481,27 +481,30 @@ def plot_trace(
     # The entries `title` to `save_path` are shared with `plot_density()`, `plot_cor()`
     # and partially with `plot_param()`.
 
-    sns.set_theme(style=style)
     plot_df = _setup_plot_df(
         results, params, param_indices, chain_indices, max_chains, include_warmup
     )
 
-    g = sns.relplot(
-        data=plot_df,
-        kind="line",
-        x="iteration",
-        y="value",
-        hue="chain_index",
-        col="param_label",
-        col_wrap=_set_plot_cols(plot_df, ncol),
-        facet_kws=dict(sharex=True, sharey=False),
-        palette=color_palette,
-        height=height,
-        aspect=aspect_ratio,
-        **kwargs,
-    )
+    if color_palette is None:
+        color_palette = "deep"
 
-    g = _set_aesthetics(g, title, title_spacing, xlabel, ylabel="")
+    with sns.axes_style(style):
+        g = sns.relplot(
+            data=plot_df,
+            kind="line",
+            x="iteration",
+            y="value",
+            hue="chain_index",
+            col="param_label",
+            col_wrap=_set_plot_cols(plot_df, ncol),
+            facet_kws=dict(sharex=True, sharey=False),
+            palette=color_palette,
+            height=height,
+            aspect=aspect_ratio,
+            **kwargs,
+        )
+
+        g = _set_aesthetics(g, title, title_spacing, xlabel, ylabel="")
 
     save_figure(g, save_path)
     if show:
@@ -597,25 +600,28 @@ def plot_density(
     # The entries `title` to `save_path` are shared with `plot_trace()`, `plot_cor()`
     # and partially with `plot_param()`.
 
-    sns.set_theme(style=style)
     plot_df = _setup_plot_df(results, params, param_indices, chain_indices, max_chains)
 
-    g = sns.displot(
-        data=plot_df,
-        kind="kde",
-        x="value",
-        y=None,
-        hue="chain_index",
-        col="param_label",
-        col_wrap=_set_plot_cols(plot_df, ncol),
-        facet_kws=dict(sharex=False, sharey=False),
-        palette=color_palette,
-        height=height,
-        aspect=aspect_ratio,
-        **kwargs,
-    )
+    if color_palette is None:
+        color_palette = "deep"
 
-    g = _set_aesthetics(g, title, title_spacing, xlabel, ylabel="")
+    with sns.axes_style(style):
+        g = sns.displot(
+            data=plot_df,
+            kind="kde",
+            x="value",
+            y=None,
+            hue="chain_index",
+            col="param_label",
+            col_wrap=_set_plot_cols(plot_df, ncol),
+            facet_kws=dict(sharex=False, sharey=False),
+            palette=color_palette,
+            height=height,
+            aspect=aspect_ratio,
+            **kwargs,
+        )
+
+        g = _set_aesthetics(g, title, title_spacing, xlabel, ylabel="")
 
     save_figure(g, save_path)
     if show:
@@ -731,7 +737,6 @@ def plot_cor(
     # `plot_density()` and partially with `plot_param()`.
     # The entry `max_lags` is shared with `plot_param()`.
 
-    sns.set_theme(style=style)
     plot_df = _setup_plot_df(results, params, param_indices, chain_indices, max_chains)
     max_lags = _compute_max_lags(plot_df, max_lags)
 
@@ -740,30 +745,34 @@ def plot_cor(
         acor = arviz.autocorr(x)[..., 0:maxlags]
         return sns.lineplot(x=range(maxlags), y=acor, **kwargs)
 
-    g = (
-        sns.FacetGrid(
-            data=plot_df,
-            hue="chain_index",
-            col="param_label",
-            col_wrap=_set_plot_cols(plot_df, ncol),
-            palette=color_palette,
-            height=height,
-            aspect=aspect_ratio,
-            **kwargs,
-        )
-        .map(
-            do_acor_plot,
-            "value",
-            maxlags=max_lags,
-        )
-        .set(
-            xlim=(0, max_lags),
-            ylim=(-0.2, 1.1),
-        )
-        .add_legend()
-    )
+    if color_palette is None:
+        color_palette = "deep"
 
-    g = _set_aesthetics(g, title, title_spacing, xlabel, ylabel="Autocorrelation")
+    with sns.axes_style(style):
+        g = (
+            sns.FacetGrid(
+                data=plot_df,
+                hue="chain_index",
+                col="param_label",
+                col_wrap=_set_plot_cols(plot_df, ncol),
+                palette=color_palette,
+                height=height,
+                aspect=aspect_ratio,
+                **kwargs,
+            )
+            .map(
+                do_acor_plot,
+                "value",
+                maxlags=max_lags,
+            )
+            .set(
+                xlim=(0, max_lags),
+                ylim=(-0.2, 1.1),
+            )
+            .add_legend()
+        )
+
+        g = _set_aesthetics(g, title, title_spacing, xlabel, ylabel="Autocorrelation")
 
     save_figure(g, save_path)
     if show:
@@ -1186,10 +1195,12 @@ def plot_pairs(
     # NOTE: Docstring duplications
     # Multiple arguments in this docstring are shared with other plotting functions.
 
-    sns.set_theme(style=style)
     plot_df = _setup_plot_df(
         results, params, param_indices, chain_indices, max_chains, include_warmup
     )
+
+    if color_palette is None:
+        color_palette = "deep"
 
     plot_df = (
         plot_df.drop(["param_index", "param"], axis=1)
@@ -1200,19 +1211,20 @@ def plot_pairs(
         .drop(["iteration"], axis=1)
     )
 
-    g = sns.pairplot(
-        data=plot_df,
-        hue="chain_index",
-        plot_kws={"alpha": alpha},
-        diag_kind=diag_kind,
-        height=height,
-        aspect=aspect_ratio,
-        palette=color_palette,
-    )
+    with sns.axes_style(style):
+        g = sns.pairplot(
+            data=plot_df,
+            hue="chain_index",
+            plot_kws={"alpha": alpha},
+            diag_kind=diag_kind,
+            height=height,
+            aspect=aspect_ratio,
+            palette=color_palette,
+        )
 
     if title is not None:
-        g.fig.suptitle(title)
-        g.fig.subplots_adjust(top=title_spacing)
+        g.figure.suptitle(title)
+        g.figure.subplots_adjust(top=title_spacing)
 
     save_figure(save_path=save_path)
 
