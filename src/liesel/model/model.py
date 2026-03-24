@@ -2096,8 +2096,19 @@ class TemporaryModel:
                 names_ = f"The automatically assigned names are: {node_names}. "
                 logger.info(f"Unnamed nodes were temporarily named. {names_}")
         elif not self.silent:
-            if var_names or node_names:
-                logger.info("Unnamed variables and/or nodes were temporarily named.")
+            if var_names:
+                names_ = f"The automatically assigned names are: {var_names}. "
+                logger.info(f"Unnamed variables were temporarily named. {names_}")
+            if node_names:
+                names_ = f"The automatically assigned names are: {node_names}. "
+                logger.debug(f"Unnamed nodes were temporarily named. {names_}")
+        else:
+            if var_names:
+                names_ = f"The automatically assigned names are: {var_names}. "
+                logger.debug(f"Unnamed variables were temporarily named. {names_}")
+            if node_names:
+                names_ = f"The automatically assigned names are: {node_names}. "
+                logger.debug(f"Unnamed nodes were temporarily named. {names_}")
 
         model = gb.build_model()
 
