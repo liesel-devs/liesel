@@ -407,6 +407,7 @@ def plot_trace(
     save_path: str | None = None,
     include_warmup: bool = False,
     show: bool = True,
+    alpha: float = 0.8,
     **kwargs,
 ) -> sns.FacetGrid:
     """
@@ -467,6 +468,8 @@ def plot_trace(
         File path where the plot is saved.
     include_warmup
         Include the warmup samples in the trace plot.
+    alpha
+        Transparency, float in ``[0,1]``.
     **kwargs
         Further keyword arguments passed to the seaborn ``relplot()`` function.
 
@@ -501,6 +504,7 @@ def plot_trace(
             palette=color_palette,
             height=height,
             aspect=aspect_ratio,
+            alpha=alpha,
             **kwargs,
         )
 
@@ -826,7 +830,9 @@ def _setup_grid(
     return fig, ax1, ax2, ax3
 
 
-def _add_lineplot(plot_df: pd.DataFrame, ax: Any, color_list: list[str]) -> None:
+def _add_lineplot(
+    plot_df: pd.DataFrame, ax: Any, color_list: list[str], alpha: float
+) -> None:
     """Adds trace plot to plotting grid."""
 
     sns.lineplot(
@@ -837,6 +843,7 @@ def _add_lineplot(plot_df: pd.DataFrame, ax: Any, color_list: list[str]) -> None
         palette=color_list,
         ax=ax,
         legend="full",
+        alpha=alpha,
     ).set(xlabel="Iteration", ylabel="")
 
 
@@ -895,6 +902,7 @@ def plot_param(
     style: str = "whitegrid",
     color_list: list[str] | None = None,
     figure_size: tuple[int | float, int | float] = (9, 6),
+    alpha: float = 0.8,
     # default values chosen for default figure size of (9, 6)
     legend_position: tuple[float, float] = (1.2, 0.4),
     save_path: str | None = None,
@@ -955,6 +963,8 @@ def plot_param(
         panel within the plot grid. The first coordinate specifies the horizontal,  \
         the second coordinate the vertical position. Might require an adjustment when \
         changing the ``figure_size`` values or the number of chains.
+    alpha
+        Transparency in trace plot, float in ``[0,1]``.
     save_path
         File path where the plot is saved.
     """
@@ -966,20 +976,20 @@ def plot_param(
     # `plot_trace()`, `plot_density()` and `plot_cor()`.
     # The entry `max_lags` is shared with `plot_cor()`.
 
-    sns.set_theme(style=style)
     plot_df = _setup_plot_df(results, param, param_index, chain_indices, max_chains)
     _raise_multi_param_error(plot_df, param)
     color_list = _set_colors(plot_df, color_list)
 
-    fig, ax1, ax2, ax3 = _setup_grid(figure_size)
-    _add_lineplot(plot_df, ax1, color_list)
-    _add_kdeplot(plot_df, ax2, color_list)
-    _add_corplot(plot_df, ax3, max_lags, color_list)
-    ax1.legend(title="Chain", bbox_to_anchor=legend_position, frameon=False)
+    with sns.axes_style(style):
+        fig, ax1, ax2, ax3 = _setup_grid(figure_size)
+        _add_lineplot(plot_df, ax1, color_list, alpha=alpha)
+        _add_kdeplot(plot_df, ax2, color_list)
+        _add_corplot(plot_df, ax3, max_lags, color_list)
+        ax1.legend(title="Chain", bbox_to_anchor=legend_position, frameon=False)
 
-    fig.tight_layout()
-    fig.suptitle(_get_title(plot_df, title))
-    fig.subplots_adjust(top=title_spacing)
+        fig.tight_layout()
+        fig.suptitle(_get_title(plot_df, title))
+        fig.subplots_adjust(top=title_spacing)
 
     save_figure(save_path=save_path)
     if show:
