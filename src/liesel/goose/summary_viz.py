@@ -804,7 +804,7 @@ def _set_colors(plot_df: pd.DataFrame, color_list: list[str] | None) -> list[str
 
     if color_list is None:
         # default matplotlib and seaborn colors with 10 elements
-        color_list = sns.color_palette()
+        color_list = sns.color_palette("deep")
 
         # make default color list sufficiently long
         if num_chains > 10:
