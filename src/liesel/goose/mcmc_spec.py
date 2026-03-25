@@ -375,7 +375,7 @@ class LieselMCMC:
         eb.show_progress = show_progress
 
         if adaptation > 0:
-            eb.add_adaptation(adaptation, adaptation_thinning)
+            eb.add_adaptation(adaptation, thinning=adaptation_thinning)
         if burnin > 0:
             eb.add_burnin(burnin, burnin_thinning)
         eb.add_posterior(posterior, posterior_thinning)
