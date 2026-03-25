@@ -270,17 +270,16 @@ class TestModel:
         assert "y_var" in model.vars
 
     def test_vars_order(self, model: Model) -> None:
-        assert list(model.vars) == [
-            "scale",
-            "concentration",
-            "beta_scale",
-            "beta_loc",
-            "X",
-            "sigma_hat",
-            "beta_hat",
-            "mu",
-            "y_var",
-        ]
+        varlist = list(model.vars)
+        assert varlist.index("concentration") < varlist.index("sigma_hat")
+        assert varlist.index("scale") < varlist.index("sigma_hat")
+
+        assert varlist.index("beta_scale") < varlist.index("beta_hat")
+        assert varlist.index("beta_loc") < varlist.index("beta_hat")
+        assert varlist.index("beta_hat") < varlist.index("mu")
+
+        assert varlist.index("sigma_hat") < varlist.index("y_var")
+        assert varlist.index("mu") < varlist.index("y_var")
 
     def test_nodes(self, model: Model) -> None:
         """

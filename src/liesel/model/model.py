@@ -897,6 +897,9 @@ class Model:
         self.update_graph_lazily = False
         self.locked = True
 
+        if validate_log_prob_decomposition:
+            self._validate_log_prob_decomposition()
+
     def _validate_log_prob_decomposition(self):
         consistent = jnp.allclose(self.log_prob, self.log_prior + self.log_lik)
         if not consistent:
@@ -1014,7 +1017,7 @@ class Model:
                     raise RuntimeError(f"{new} can only be part of one model")
                 self._replace_var_with_node(old_nv, new)
             else:
-                self._replace_var_with_node(old_nv, Node._to_node(new))
+                self._replace_var_with_node(old_nv, Value(0.0)._to_node(new))
         else:
             raise TypeError(f"{old=} must be of type Var, got {type(old_nv)}.")
 
