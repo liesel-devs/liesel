@@ -3,13 +3,13 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, ParamSpec, Protocol, assert_never
 
 import tensorflow_probability.substrates.jax.distributions as tfd
 
-from liesel.goose.engine import SamplingResults
-
 from .builder import EngineBuilder
+from .engine import SamplingResults
 from .interface import LieselInterface
 from .types import Array, JitterFunctions, Kernel, KeyArray
 
@@ -297,6 +297,7 @@ class LieselMCMC:
         show_progress: bool = True,
         positions_included: list[str] | None = None,
         positions_excluded: list[str] | None = None,
+        cache_path: str | Path | None = None,
     ) -> SamplingResults:
         """
         Shorthand method for quickly running MCMC for a set number of epochs.
@@ -327,6 +328,9 @@ class LieselMCMC:
         positions_excluded
             List of position keys that should not be tracked. Excluded keys override
             additional keys see :attr:`.EngineBuilder.positions_excluded`.
+        cache_path
+            Filepath to a pickle-file in which results should be saved. If the file
+            exists, results are loaded from this file and no sampling occurs.
 
         Warnings
         ---------
@@ -365,6 +369,11 @@ class LieselMCMC:
             engine.get_results()
 
         """
+        if cache_path is not None:
+            fp = Path(cache_path)
+            if fp.exists():
+                return SamplingResults.pkl_load(fp)
+
         eb = self.get_engine_builder(
             seed=seed, num_chains=num_chains, apply_jitter=apply_jitter
         )
@@ -381,7 +390,11 @@ class LieselMCMC:
         eb.add_posterior(posterior, posterior_thinning)
         engine = eb.build()
         engine.sample_all_epochs()
-        return engine.get_results()
+        results = engine.get_results()
+        if cache_path is not None:
+            fp = Path(cache_path)
+            results.pkl_save(fp)
+        return results
 
 
 @dataclass
