@@ -895,7 +895,7 @@ class Model:
         self._update_graph(nodes_and_vars_list, copy=copy, grow=grow)
         self.outdated = False
         self.update_graph_lazily = False
-        self.locked = True
+        self.locked = False
 
         if validate_log_prob_decomposition:
             self._validate_log_prob_decomposition()
@@ -1404,6 +1404,15 @@ class Model:
         g1 = {g.name: g for n in self._nodes.values() for g in n.groups.values()}
         g2 = {g.name: g for v in self._vars.values() for g in v.groups.values()}
         return g1 | g2
+
+    def copy(self) -> Model:
+        """
+        Returns a new model filled with deep copies of all model nodes and variables.
+        """
+        nodes, vars_ = self.copy_nodes_and_vars()
+        nodes_list = list(nodes.values())
+        vars_list = list(vars_.values())
+        return Model(nodes_list + vars_list)
 
     def copy_vars(self) -> dict[str, Var]:
         """Returns an unfrozen deep copy of the model variables."""
