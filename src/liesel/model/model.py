@@ -822,23 +822,38 @@ class Model:
 
     def __init__(
         self,
-        nodes_and_vars: Iterable[Node | Var],
+        *nodes_and_vars: Node | Var | Iterable[Node | Var],
         grow: bool = True,
         copy: bool = False,
         to_float32: bool = True,
         validate_log_prob_decomposition: bool = True,
     ):
+        # this is for backwards compatibility: Old code, in which an iterable of
+        # nodes or vars is passed, still works.
+        _nodes_and_vars: list[Node | Var] = []
+        for nv in nodes_and_vars:
+            if isinstance(nv, Node | Var):
+                _nodes_and_vars.append(nv)
+            else:
+                try:
+                    iter(nv)
+                    _nodes_and_vars.extend(list(nv))
+                except TypeError:
+                    pass
+        nodes_and_vars_list = _nodes_and_vars
+        # end of compatibility block
+
         self._to_float32 = to_float32
         if grow:
             model = (
                 GraphBuilder(to_float32=to_float32)
-                .add(*nodes_and_vars)
+                .add(*nodes_and_vars_list)
                 .build_model(validate_log_prob_decomposition=False)
             )
-            nodes_and_vars = [*model.nodes.values(), *model.vars.values()]
+            nodes_and_vars_list = [*model.nodes.values(), *model.vars.values()]
             model.pop_nodes_and_vars()
 
-        nodes = [nv for nv in nodes_and_vars if isinstance(nv, Node)]
+        nodes = [nv for nv in nodes_and_vars_list if isinstance(nv, Node)]
         nodes = list(dict.fromkeys(nodes).keys())
         counts = Counter(n.name for n in nodes)
         dups = [k for k, v in counts.items() if v > 1]
@@ -846,7 +861,7 @@ class Model:
         if dups:
             raise RuntimeError(f"Duplicate node names: {', '.join(dups)}")
 
-        _vars = [nv for nv in nodes_and_vars if isinstance(nv, Var)]
+        _vars = [nv for nv in nodes_and_vars_list if isinstance(nv, Var)]
         _vars = list(dict.fromkeys(_vars).keys())
         counts = Counter(v.name for v in _vars)
         dups = [k for k, v in counts.items() if v > 1]
@@ -854,7 +869,7 @@ class Model:
         if dups:
             raise RuntimeError(f"Duplicate variable names: {', '.join(dups)}")
 
-        groups = [g for nv in nodes_and_vars for g in nv.groups.values()]
+        groups = [g for nv in nodes_and_vars_list for g in nv.groups.values()]
         groups = list(dict.fromkeys(groups).keys())
         counts = Counter(g.name for g in groups)
         dups = [k for k, v in counts.items() if v > 1]

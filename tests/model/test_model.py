@@ -97,6 +97,12 @@ def model_nodes() -> Generator:
 
 
 class TestModel:
+    def test_init_model_with_args(self, y_var) -> None:
+        data = Value(2.5, "z")
+        model = Model(y_var, data)
+        assert y_var.name in model.vars
+        assert data.name in model.nodes
+
     def test_copy_length(self, model: Model) -> None:
         """
         Verifies the correct length of copied var and node dicts.
