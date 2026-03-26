@@ -1976,6 +1976,7 @@ class Model:
         prog: Literal[
             "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
         ] = "dot",
+        legend: bool = True,
     ):
         """
         Plots the variables of this model.
@@ -1995,6 +1996,8 @@ class Model:
         prog
             Layout parameter. Available layouts: circo, dot (the default), fdp, neato, \
             osage, patchwork, sfdp, twopi.
+        legend
+            Whether to draw the legend.
 
         See Also
         --------
@@ -2013,6 +2016,7 @@ class Model:
             width=width,
             height=height,
             prog=prog,
+            legend=legend,
         )
 
     def plot_vars(
@@ -2024,6 +2028,7 @@ class Model:
         prog: Literal[
             "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
         ] = "dot",
+        legend: bool = True,
     ):
         """
         Plots the variables of this model.
@@ -2043,6 +2048,8 @@ class Model:
         prog
             Layout parameter. Available layouts: circo, dot (the default), fdp, neato, \
             osage, patchwork, sfdp, twopi.
+        legend
+            Whether to draw the legend.
 
         See Also
         --------
@@ -2062,6 +2069,7 @@ class Model:
             width=width,
             height=height,
             prog=prog,
+            legend=legend,
         )
 
     def plot_nodes(

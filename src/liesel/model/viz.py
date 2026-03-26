@@ -80,6 +80,7 @@ def plot_vars(
     prog: Literal[
         "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
     ] = "dot",
+    legend: bool = True,
 ):
     """
     Plots the variables of a Liesel model.
@@ -99,6 +100,7 @@ def plot_vars(
     prog
         Layout parameter. Available layouts: circo, dot (the default), fdp, neato,
         osage, patchwork, sfdp, twopi.
+    legend
 
     See Also
     --------
@@ -122,7 +124,8 @@ def plot_vars(
     _add_labels(graph, axis, pos)
     edges_in_both = _draw_edges(graph, axis, pos, True)
 
-    _add_legend(axis, draw_legend_for_both=bool(edges_in_both))
+    if legend:
+        _add_legend(axis, draw_legend_for_both=bool(edges_in_both))
 
     if save_path:
         plt.savefig(save_path)

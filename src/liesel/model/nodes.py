@@ -2686,6 +2686,7 @@ class Var:
             "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
         ] = "dot",
         verbose: bool = False,
+        legend: bool = True,
     ) -> None:
         """
         Plots the variables of the Liesel sub-model that terminates in this variable.
@@ -2712,6 +2713,8 @@ class Var:
             If ``True``, the message that will be logged if unnamed nodes are \
             automatically named for plotting contains a list of the automatically \
             assigned names.
+        legend
+            Whether to draw the legend.
 
         See Also
         --------
@@ -2731,6 +2734,7 @@ class Var:
             width=width,
             height=height,
             prog=prog,
+            legend=legend,
         )
 
     def plot_vars(
@@ -2743,6 +2747,7 @@ class Var:
             "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
         ] = "dot",
         verbose: bool = False,
+        legend: bool = True,
     ) -> None:
         """
         Plots the variables of the Liesel sub-model that terminates in this variable.
@@ -2769,6 +2774,8 @@ class Var:
             If ``True``, the message that will be logged if unnamed nodes are \
             automatically named for plotting contains a list of the automatically \
             assigned names.
+        legend
+            Whether to draw the legend.
 
         See Also
         --------
@@ -2789,6 +2796,7 @@ class Var:
             width=width,
             height=height,
             prog=prog,
+            legend=legend,
         )
 
     def predict(
