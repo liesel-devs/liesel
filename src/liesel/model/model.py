@@ -1040,7 +1040,8 @@ class Model:
         nodes, vars_ = self.copy_nodes_and_vars()
         nodes_list = list(nodes.values())
         vars_list = list(vars_.values())
-        return Model(nodes_list + vars_list)
+        nv_list: list[Node | Var] = nodes_list + vars_list
+        return Model(nv_list)
 
     def copy_vars(self) -> dict[str, Var]:
         """Returns an unfrozen deep copy of the model variables."""
