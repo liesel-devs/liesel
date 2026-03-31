@@ -26,7 +26,7 @@ from .types import KeyArray, ModelState, Position, TuningInfo
 
 
 class MHProposal(NamedTuple):
-    """
+    r"""
     Encapsulates a proposed state and the log-correction for a
     Metropolis-Hastings transition.
 
@@ -38,7 +38,7 @@ class MHProposal(NamedTuple):
         The Metropolis-Hastings correction in the case of an asymmetric proposal
         distribution. Let :math:`q(x' | x)` be the density of the proposal ``x'`` given
         the current state ``x``, then the ``log_correction`` is defined as
-        :math:`log[q(x | x') / q(x' | x)]`.
+        :math:`\log[q(x | x') / q(x' | x)]`.
 
     See Also
     --------
@@ -131,6 +131,8 @@ class MHKernel(ModelMixin, TransitionMixin[RWKernelState, MHTransitionInfo], Rep
     ...     pos = {"mu": mu_proposed}
     ...     return gs.MHProposal(pos, log_correction=0.0)
 
+    Note that in this case, the ``"log correction"`` is 0, as the uniform distribution
+    used to generate proposals is symmetric.
 
     >>> builder.add_kernel(gs.MHKernel(["mu"], mu_proposal))
 
