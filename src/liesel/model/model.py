@@ -1134,7 +1134,7 @@ class Model:
 
         If the updated graph contains singleton nodes, i.e. nodes without inputs or
         outputs, these nodes are dropped from the graph. Singleton variables are not
-        dropped, by can be dropped manually by calling :meth:`.drop_singletons`.
+        dropped, but can be dropped manually by calling :meth:`.drop_singletons`.
         """
         return self.add()  # adding with empty list means simply updating
 
