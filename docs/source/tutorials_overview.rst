@@ -28,3 +28,4 @@ a comparison of different samplers, and more:
    tutorials/md/04-mcycle
    tutorials/md/05-reproducibility
    tutorials/md/06-pymc
+   tutorials/md/07-error-correction

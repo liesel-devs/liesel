@@ -16,6 +16,9 @@ from liesel.goose.engine import SamplingResults
 
 from .types import Array
 
+# can be removed once arviz has been upgrade to v1.0
+arviz.Numba.disable_numba()
+
 
 def _raise_chain_indices_error(
     chain_indices: Sequence[int], num_original_chains: int

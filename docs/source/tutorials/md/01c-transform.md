@@ -2,12 +2,12 @@
 # Parameter transformations
 
 This tutorial builds on the [linear regression
-tutorial](01-lin-reg.md#linear-regression). Here, we demonstrate how we
+tutorial](01a-lin-reg.md#linear-regression). Here, we demonstrate how we
 can easily transform a parameter in our model to sample it with NUTS
 instead of a Gibbs Kernel.
 
 First, let’s set up our model again. This is the same model as in the
-[linear regression tutorial](01-lin-reg.md#linear-regression), so we
+[linear regression tutorial](01a-lin-reg.md#linear-regression), so we
 will not go into the details here.
 
 ``` python
@@ -103,7 +103,6 @@ builder.positions_included = ["sigma_sq"]
 engine = builder.build()
 engine.sample_all_epochs()
 ```
-
 
       0%|                                                  | 0/3 [00:00<?, ?chunk/s]
      33%|##############                            | 1/3 [00:01<00:03,  1.52s/chunk]
