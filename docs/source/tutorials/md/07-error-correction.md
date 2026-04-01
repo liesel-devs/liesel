@@ -1,4 +1,5 @@
 
+
 # Bayesian Measurement Error Correction
 
 In this tutorial, we implement a regression model with Bayesian
@@ -12,16 +13,12 @@ distribution of the model parameters and the latent covariate.
 Assuming a total number of $M$ replicates of the covariate $x$ affected
 by measurement error, we can write the measurement error model as
 
-$$
-\tilde{x}_i^{(m)} = x_i + u_i^{(m)}, \quad m = 1, \ldots, M.
-$$
+$$\tilde{x}_i^{(m)} = x_i + u_i^{(m)}, \quad m = 1, \ldots, M.$$
 
 In this tutorial, the replicates are assumed to be independent with
 constant variance
 
-$$
-\mathbf{u}_i \sim N_M(\mathbf{0}, \mathbf{\sigma}^{2}_u\mathbf{I}_M).
-$$
+$$\mathbf{u}_i \sim N_M(\mathbf{0}, \mathbf{\sigma}^{2}_u\mathbf{I}_M).$$
 
 The fundamental concept behind Bayesian measurement error correction is
 to treat the true, unknown covariate values $x_i$ as additional latent
@@ -29,9 +26,9 @@ variables. These values are then imputed using MCMC simulations while
 simultaneously estimating all other parameters of the model. To achieve
 this, we assign a simple prior distribution to $x_i$. We further add
 hyperpriors with assigned prior distributions to the distribution
-parameters of $x_i$, to achieve further flexibility. $$
-x_i \sim N(\mu_x,\tau^2_x), \quad \mu_x \sim N(0, \tau^2_{\mu}), \quad \tau^2_x \sim IG(a_x,b_x)
-$$ These priors correspond to being relatively uninformative about the
+parameters of $x_i$, to achieve further flexibility.
+$$x_i \sim N(\mu_x,\tau^2_x), \quad \mu_x \sim N(0, \tau^2_{\mu}), \quad \tau^2_x \sim IG(a_x,b_x)$$
+These priors correspond to being relatively uninformative about the
 distribution of $x_i$.
 
 ## Imports
@@ -94,7 +91,7 @@ ax1.grid(True, alpha=0.3)
 ![](07-error-correction_files/figure-commonmark/plot-data-1.png)
 
 We simulate the response as done in the [linear regression
-tutorial](01a-lin-reg.md#linear-regression) from the model
+tutorial](01-lin-reg.md#linear-regression) from the model
 $y_i | x_i \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \;\sigma^{2}_y)$
 given our true covariate.
 
@@ -169,6 +166,7 @@ sigma_u_prior = lsl.Dist(tfd.InverseGamma, concentration=0.01, scale=0.01)
 sigma_sq_u = lsl.Var.new_param(value=10.0, distribution=sigma_u_prior, name="sigma_sq_u")
 sigma_u = lsl.Var.new_calc(jnp.sqrt, sigma_sq_u, name="sigma_u").update()
 log_sigma_u = sigma_sq_u.transform(tfb.Exp())
+
 
 # Measurement distribution location
 measurement_dist_loc = lsl.Calc(lambda x: jnp.expand_dims(x, -1), x_estimated)
@@ -259,12 +257,10 @@ to sample our x-values. To draw from $\mu_x$ and $\tau^2_x$ we use Gibbs
 kernels ({class}`~.goose.GibbsKernel`), as this allows us to use custom
 transition functions for our parameters. The full conditionals are:
 
-$$
-\begin{eqnarray}
+$$\begin{eqnarray}
 \mu_x | \cdot \sim N \left(\frac{n\bar{x}\tau^2_\mu}{n\tau^2_\mu+\tau^2_x},\frac{\tau^2_x\tau^2_\mu}{n\tau^2_\mu+\tau^2_x}\right)\\
 \tau^2_x | \cdot \sim IG \left( a_x + \frac{n}{2}, b_x + \frac{1}{2}\sum_{i=1}^{n}(x_i - \mu_x)^2   \right)\\
-\end{eqnarray}.
-$$
+\end{eqnarray}.$$
 
 Let us implement these
 
@@ -301,6 +297,7 @@ def transition_mu_x(prng_key, model_state):
     mu_x = jnp.squeeze(mu_mean + mu_std * normal_sample)
 
     return {"mu_x": mu_x}
+
 
 def transition_tau2_x(prng_key, model_state):
     """
@@ -343,6 +340,7 @@ eb_sample = gs.EngineBuilder(seed = 2 , num_chains=4)
 eb_sample.set_model(gs.LieselInterface(model))
 eb_sample.set_initial_values(model.state)
 
+
 eb_sample.add_kernel(gs.NUTSKernel(["x_estimated"]))
 
 eb_sample.add_kernel(gs.GibbsKernel(["mu_x"], transition_mu_x))
@@ -358,51 +356,52 @@ engine = eb_sample.build()
 engine.sample_all_epochs()
 ```
 
+
       0%|                                                  | 0/3 [00:00<?, ?chunk/s]
-     33%|##############                            | 1/3 [00:09<00:18,  9.26s/chunk]
-    100%|##########################################| 3/3 [00:09<00:00,  3.09s/chunk]
+     33%|##############                            | 1/3 [00:14<00:28, 14.11s/chunk]
+    100%|##########################################| 3/3 [00:14<00:00,  4.70s/chunk]
 
       0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|#########################################| 1/1 [00:00<00:00, 973.38chunk/s]
+    100%|#########################################| 1/1 [00:00<00:00, 695.80chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 1431.01chunk/s]
+    100%|#########################################| 2/2 [00:00<00:00, 721.29chunk/s]
 
       0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|########################################| 4/4 [00:00<00:00, 1570.17chunk/s]
+    100%|#########################################| 4/4 [00:00<00:00, 951.68chunk/s]
 
       0%|                                                 | 0/22 [00:00<?, ?chunk/s]
-     41%|################7                        | 9/22 [00:00<00:00, 76.14chunk/s]
-     77%|##############################9         | 17/22 [00:00<00:00, 29.92chunk/s]
-    100%|########################################| 22/22 [00:00<00:00, 25.88chunk/s]
-    100%|########################################| 22/22 [00:00<00:00, 28.99chunk/s]
+     41%|################7                        | 9/22 [00:00<00:00, 62.60chunk/s]
+     73%|#############################           | 16/22 [00:00<00:00, 28.35chunk/s]
+     91%|####################################3   | 20/22 [00:00<00:00, 25.82chunk/s]
+    100%|########################################| 22/22 [00:00<00:00, 27.69chunk/s]
 
       0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|#########################################| 8/8 [00:00<00:00, 108.09chunk/s]
+    100%|##########################################| 8/8 [00:00<00:00, 88.66chunk/s]
 
       0%|                                                 | 0/80 [00:00<?, ?chunk/s]
-     12%|#####                                   | 10/80 [00:00<00:00, 79.87chunk/s]
-     22%|#########                               | 18/80 [00:00<00:01, 35.65chunk/s]
-     29%|###########5                            | 23/80 [00:00<00:01, 30.89chunk/s]
-     34%|#############5                          | 27/80 [00:00<00:01, 28.42chunk/s]
-     39%|###############5                        | 31/80 [00:01<00:01, 26.84chunk/s]
-     42%|#################                       | 34/80 [00:01<00:01, 25.77chunk/s]
-     46%|##################5                     | 37/80 [00:01<00:01, 25.44chunk/s]
-     50%|####################                    | 40/80 [00:01<00:01, 25.09chunk/s]
-     54%|#####################5                  | 43/80 [00:01<00:01, 24.67chunk/s]
-     57%|#######################                 | 46/80 [00:01<00:01, 24.30chunk/s]
-     61%|########################5               | 49/80 [00:01<00:01, 24.06chunk/s]
-     65%|##########################              | 52/80 [00:01<00:01, 23.90chunk/s]
-     69%|###########################5            | 55/80 [00:02<00:01, 23.84chunk/s]
-     72%|#############################           | 58/80 [00:02<00:00, 23.59chunk/s]
-     76%|##############################5         | 61/80 [00:02<00:00, 23.52chunk/s]
-     80%|################################        | 64/80 [00:02<00:00, 23.33chunk/s]
-     84%|#################################5      | 67/80 [00:02<00:00, 23.24chunk/s]
-     88%|###################################     | 70/80 [00:02<00:00, 23.53chunk/s]
-     91%|####################################5   | 73/80 [00:02<00:00, 23.19chunk/s]
-     95%|######################################  | 76/80 [00:02<00:00, 23.06chunk/s]
-     99%|#######################################5| 79/80 [00:03<00:00, 23.27chunk/s]
-    100%|########################################| 80/80 [00:03<00:00, 25.80chunk/s]
+     12%|#####                                   | 10/80 [00:00<00:00, 75.57chunk/s]
+     22%|#########                               | 18/80 [00:00<00:01, 34.97chunk/s]
+     29%|###########5                            | 23/80 [00:00<00:01, 30.38chunk/s]
+     34%|#############5                          | 27/80 [00:00<00:01, 28.17chunk/s]
+     39%|###############5                        | 31/80 [00:01<00:01, 26.93chunk/s]
+     42%|#################                       | 34/80 [00:01<00:01, 26.35chunk/s]
+     46%|##################5                     | 37/80 [00:01<00:01, 26.03chunk/s]
+     50%|####################                    | 40/80 [00:01<00:01, 25.56chunk/s]
+     54%|#####################5                  | 43/80 [00:01<00:01, 25.46chunk/s]
+     57%|#######################                 | 46/80 [00:01<00:01, 25.45chunk/s]
+     61%|########################5               | 49/80 [00:01<00:01, 25.20chunk/s]
+     65%|##########################              | 52/80 [00:01<00:01, 24.95chunk/s]
+     69%|###########################5            | 55/80 [00:01<00:01, 24.89chunk/s]
+     72%|#############################           | 58/80 [00:02<00:00, 24.63chunk/s]
+     76%|##############################5         | 61/80 [00:02<00:00, 24.10chunk/s]
+     80%|################################        | 64/80 [00:02<00:00, 24.41chunk/s]
+     84%|#################################5      | 67/80 [00:02<00:00, 24.20chunk/s]
+     88%|###################################     | 70/80 [00:02<00:00, 24.05chunk/s]
+     91%|####################################5   | 73/80 [00:02<00:00, 24.13chunk/s]
+     95%|######################################  | 76/80 [00:02<00:00, 24.16chunk/s]
+     99%|#######################################5| 79/80 [00:02<00:00, 24.21chunk/s]
+    100%|########################################| 80/80 [00:03<00:00, 26.47chunk/s]
 
 Now we can take a look at the results for our parameters
 
@@ -560,27 +559,27 @@ kernel_03
 
 <td>
 
-1.246
+1.243
 </td>
 
 <td>
 
-0.150
+0.151
 </td>
 
 <td>
 
-0.988
+0.997
 </td>
 
 <td>
 
-1.249
+1.243
 </td>
 
 <td>
 
-1.488
+1.485
 </td>
 
 <td>
@@ -590,17 +589,17 @@ kernel_03
 
 <td>
 
-540.200
+605.435
 </td>
 
 <td>
 
-1056.941
+1074.267
 </td>
 
 <td>
 
-1.003
+1.008
 </td>
 
 </tr>
@@ -634,7 +633,7 @@ kernel_03
 
 <td>
 
-1.974
+1.975
 </td>
 
 <td>
@@ -649,17 +648,17 @@ kernel_03
 
 <td>
 
-591.546
+679.242
 </td>
 
 <td>
 
-1283.417
+1386.457
 </td>
 
 <td>
 
-1.004
+1.007
 </td>
 
 </tr>
@@ -698,7 +697,7 @@ kernel_01
 
 <td>
 
-10.070
+10.071
 </td>
 
 <td>
@@ -713,12 +712,12 @@ kernel_01
 
 <td>
 
-7303.088
+7348.424
 </td>
 
 <td>
 
-7748.320
+7610.055
 </td>
 
 <td>
@@ -757,12 +756,12 @@ kernel_05
 
 <td>
 
--0.087
+-0.088
 </td>
 
 <td>
 
--0.015
+-0.016
 </td>
 
 <td>
@@ -777,17 +776,17 @@ kernel_05
 
 <td>
 
-1260.910
+1485.667
 </td>
 
 <td>
 
-2778.489
+2576.685
 </td>
 
 <td>
 
-1.000
+1.001
 </td>
 
 </tr>
@@ -811,17 +810,17 @@ kernel_04
 
 <td>
 
-0.020
+0.021
 </td>
 
 <td>
 
-0.156
+0.155
 </td>
 
 <td>
 
--0.251
+-0.242
 </td>
 
 <td>
@@ -831,7 +830,7 @@ kernel_04
 
 <td>
 
-0.263
+0.262
 </td>
 
 <td>
@@ -841,17 +840,17 @@ kernel_04
 
 <td>
 
-384.157
+419.396
 </td>
 
 <td>
 
-826.976
+779.469
 </td>
 
 <td>
 
-1.004
+1.005
 </td>
 
 </tr>
@@ -875,27 +874,27 @@ kernel_02
 
 <td>
 
-27.406
+27.404
 </td>
 
 <td>
 
-1.773
+1.774
 </td>
 
 <td>
 
-24.646
+24.653
 </td>
 
 <td>
 
-27.321
+27.329
 </td>
 
 <td>
 
-30.420
+30.422
 </td>
 
 <td>
@@ -905,12 +904,12 @@ kernel_02
 
 <td>
 
-7907.684
+7926.054
 </td>
 
 <td>
 
-7415.993
+7808.784
 </td>
 
 <td>
@@ -958,6 +957,16 @@ count
 
 <th>
 
+sample_size
+</th>
+
+<th>
+
+sample_size_total
+</th>
+
+<th>
+
 relative
 </th>
 
@@ -993,6 +1002,14 @@ phase
 
 </th>
 
+<th>
+
+</th>
+
+<th>
+
+</th>
+
 </tr>
 
 </thead>
@@ -1001,7 +1018,7 @@ phase
 
 <tr>
 
-<th rowspan="2" valign="top">
+<th rowspan="4" valign="top">
 
 kernel_00
 </th>
@@ -1028,6 +1045,16 @@ warmup
 
 <td>
 
+4000
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
 0.005
 </td>
 
@@ -1043,6 +1070,84 @@ posterior
 <td>
 
 0
+</td>
+
+<td>
+
+8000
+</td>
+
+<td>
+
+8000
+</td>
+
+<td>
+
+0.000
+</td>
+
+</tr>
+
+<tr>
+
+<th rowspan="2" valign="top">
+
+2
+</th>
+
+<th rowspan="2" valign="top">
+
+maximum tree depth
+</th>
+
+<th>
+
+warmup
+</th>
+
+<td>
+
+1
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
+0.000
+</td>
+
+</tr>
+
+<tr>
+
+<th>
+
+posterior
+</th>
+
+<td>
+
+0
+</td>
+
+<td>
+
+8000
+</td>
+
+<td>
+
+8000
 </td>
 
 <td>
@@ -1076,12 +1181,22 @@ warmup
 
 <td>
 
-58
+56
 </td>
 
 <td>
 
-0.015
+4000
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
+0.014
 </td>
 
 </tr>
@@ -1096,6 +1211,16 @@ posterior
 <td>
 
 0
+</td>
+
+<td>
+
+8000
+</td>
+
+<td>
+
+8000
 </td>
 
 <td>
@@ -1129,12 +1254,22 @@ warmup
 
 <td>
 
-55
+54
 </td>
 
 <td>
 
-0.014
+4000
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
+0.013
 </td>
 
 </tr>
@@ -1149,6 +1284,16 @@ posterior
 <td>
 
 0
+</td>
+
+<td>
+
+8000
+</td>
+
+<td>
+
+8000
 </td>
 
 <td>
@@ -1182,12 +1327,22 @@ warmup
 
 <td>
 
-51
+55
 </td>
 
 <td>
 
-0.013
+4000
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
+0.014
 </td>
 
 </tr>
@@ -1202,6 +1357,16 @@ posterior
 <td>
 
 0
+</td>
+
+<td>
+
+8000
+</td>
+
+<td>
+
+8000
 </td>
 
 <td>

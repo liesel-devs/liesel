@@ -1,4 +1,5 @@
 
+
 # Location-scale regression
 
 This tutorial implements a Bayesian location-scale regression model
@@ -11,11 +12,10 @@ This tutorial assumes a linear relationship between the expected value
 of the response and the regressors, whereas a logarithmic link is chosen
 for the standard deviation. More specifically, we choose the model
 
-$$
-\begin{aligned}
+$$\begin{aligned}
 y_i \sim \mathcal{N}_{} \left( \mathbf{x}_i^T \boldsymbol{\beta}, \exp \left( \mathbf{ z}_i^T \boldsymbol{\gamma} \right)^2 \right)
-\end{aligned}
-$$ in which the single observation are conditionally independent.
+\end{aligned}$$
+in which the single observation are conditionally independent.
 
 From the equation we see that *location* covariates are collected in the
 design matrix $\mathbf{X}$ and *scale* covariates are contained in the
@@ -173,33 +173,33 @@ engine.sample_all_epochs()
 
 
       0%|                                                  | 0/3 [00:00<?, ?chunk/s]
-     33%|##############                            | 1/3 [00:01<00:03,  1.93s/chunk]
-    100%|##########################################| 3/3 [00:01<00:00,  1.55chunk/s]
+     33%|##############                            | 1/3 [00:04<00:08,  4.04s/chunk]
+    100%|##########################################| 3/3 [00:04<00:00,  1.35s/chunk]
 
       0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|########################################| 1/1 [00:00<00:00, 2562.19chunk/s]
+    100%|########################################| 1/1 [00:00<00:00, 1151.02chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 3236.35chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 1524.92chunk/s]
 
       0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|########################################| 4/4 [00:00<00:00, 3842.70chunk/s]
+    100%|########################################| 4/4 [00:00<00:00, 1245.80chunk/s]
 
       0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|#########################################| 8/8 [00:00<00:00, 422.39chunk/s]
+    100%|#########################################| 8/8 [00:00<00:00, 338.07chunk/s]
 
       0%|                                                 | 0/22 [00:00<?, ?chunk/s]
-     73%|############################3          | 16/22 [00:00<00:00, 146.53chunk/s]
-    100%|#######################################| 22/22 [00:00<00:00, 133.29chunk/s]
+     68%|##########################5            | 15/22 [00:00<00:00, 141.31chunk/s]
+    100%|#######################################| 22/22 [00:00<00:00, 124.73chunk/s]
 
       0%|                                                 | 0/20 [00:00<?, ?chunk/s]
-     80%|###############################2       | 16/20 [00:00<00:00, 151.28chunk/s]
-    100%|#######################################| 20/20 [00:00<00:00, 139.69chunk/s]
+     75%|#############################2         | 15/20 [00:00<00:00, 146.48chunk/s]
+    100%|#######################################| 20/20 [00:00<00:00, 130.83chunk/s]
 
       0%|                                                 | 0/40 [00:00<?, ?chunk/s]
-     48%|##################5                    | 19/40 [00:00<00:00, 182.81chunk/s]
-     95%|#####################################  | 38/40 [00:00<00:00, 134.80chunk/s]
-    100%|#######################################| 40/40 [00:00<00:00, 138.65chunk/s]
+     45%|#################5                     | 18/40 [00:00<00:00, 168.92chunk/s]
+     88%|##################################1    | 35/40 [00:00<00:00, 126.60chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 127.98chunk/s]
 
 Now that we have 1000 posterior samples per chain, we can check the
 results. Starting with the trace plots just using one chain.

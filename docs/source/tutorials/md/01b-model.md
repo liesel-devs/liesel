@@ -1,4 +1,5 @@
 
+
 # Model building with Liesel
 
 In this tutorial, we go into more depth regarding the model building
@@ -29,9 +30,9 @@ distribution and the parameter nodes would have some prior distribution
 (for example, a normal-inverse-gamma prior). The following table shows
 the different node types and some examples of their use cases.
 
-|                          | **Strong node**              | **Weak node**                                      |
-|--------------------------|------------------------------|----------------------------------------------------|
-| **With distribution**    | Response, parameter, …       | Copula, …                                          |
+|  | **Strong node** | **Weak node** |
+|----|----|----|
+| **With distribution** | Response, parameter, … | Copula, … |
 | **Without distribution** | Covariate, hyperparameter, … | Inverse link function, parameter transformation, … |
 
 A PGM is a collection of connected nodes. Two nodes can be connected
@@ -40,9 +41,7 @@ value or the distribution of the second node. Nodes *without* an edge
 between them are assumed to be conditionally independent, allowing us to
 factorize the model log-probability as
 
-$$
-\log p(\text{Model}) = \sum_{\text{Node $\in$ Model}} \log p(\text{Node} \mid \text{Inputs}(\text{Node})).
-$$
+$$\log p(\text{Model}) = \sum_{\text{Node $\in$ Model}} \log p(\text{Node} \mid \text{Inputs}(\text{Node})).$$
 
 So let us consider the same model and data from the [linear regression
 tutorial](01a-lin-reg.md), where we had the underlying model
@@ -88,7 +87,7 @@ plt.ylabel("Response y")
 plt.show()
 ```
 
-![](01b-model_files/figure-commonmark/unnamed-chunk-1-1.png)
+![](01b-model_files/figure-commonmark/unnamed-chunk-2-1.png)
 
 ### Building the model graph
 
@@ -195,7 +194,7 @@ the `log_prob` property.
 model.log_prob
 ```
 
-    Array(-1179.6559, dtype=float32)
+    Array(-1179.656, dtype=float32)
 
 The individual nodes also have a `log_prob` property. In fact, because
 of the conditional independence assumption of the model, the
@@ -210,7 +209,7 @@ we would get two log-probability values, and for `y` we would get 500.
 beta.log_prob.sum() + sigma_sq.log_prob + y.log_prob.sum()
 ```
 
-    Array(-1179.6559, dtype=float32)
+    Array(-1179.656, dtype=float32)
 
 Nodes without a probability distribution return a log-probability of
 zero.
@@ -242,7 +241,7 @@ print(f"Old log-prob of sigma_sq: {sigma_sq.log_prob}")
 print(f"Old log-prob of y: {y.log_prob.sum()}\n")
 ```
 
-    Old log-prob of y: -1161.635498046875
+    Old log-prob of y: -1161.6356201171875
 
 ``` python
 sigma_sq.value = 1.0
