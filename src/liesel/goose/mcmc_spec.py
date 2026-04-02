@@ -297,7 +297,7 @@ class LieselMCMC:
         show_progress: bool = True,
         positions_included: list[str] | None = None,
         positions_excluded: list[str] | None = None,
-        cache_path: str | Path | None = None,
+        save_path: str | Path | None = None,
     ) -> SamplingResults:
         """
         Shorthand method for quickly running MCMC for a set number of epochs.
@@ -328,8 +328,8 @@ class LieselMCMC:
         positions_excluded
             List of position keys that should not be tracked. Excluded keys override
             additional keys see :attr:`.EngineBuilder.positions_excluded`.
-        cache_path
-            Filepath to a pickle-file in which results should be saved. If the file
+        save_path
+            Filepath to a pickle file in which results should be saved. If the file
             exists, results are loaded from this file and no sampling occurs.
 
         Warnings
@@ -369,9 +369,11 @@ class LieselMCMC:
             engine.get_results()
 
         """
-        if cache_path is not None:
-            fp = Path(cache_path)
+        if save_path is not None:
+            fp = Path(save_path)
+            logger.info(f"Save path provided: {fp}.")
             if fp.exists():
+                logger.info(f"Loading results from {fp}. No sampling is happening.")
                 return SamplingResults.pkl_load(fp)
 
         eb = self.get_engine_builder(
@@ -391,8 +393,9 @@ class LieselMCMC:
         engine = eb.build()
         engine.sample_all_epochs()
         results = engine.get_results()
-        if cache_path is not None:
-            fp = Path(cache_path)
+        if save_path is not None:
+            fp = Path(save_path)
+            logger.info(f"Saving results to save path: {fp}.")
             results.pkl_save(fp)
         return results
 
