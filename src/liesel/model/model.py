@@ -1405,6 +1405,20 @@ class Model:
         g2 = {g.name: g for v in self._vars.values() for g in v.groups.values()}
         return g1 | g2
 
+    def copy(self) -> Model:
+        """
+        Returns a new model filled with deep copies of all model nodes and variables.
+        """
+        nodes, vars_ = self.copy_nodes_and_vars()
+        nodes_list = list(nodes.values())
+        vars_list = list(vars_.values())
+        nv_list: list[Node | Var] = nodes_list + vars_list
+        model = Model(nv_list)
+        names = [nv.name for nv in self.seed_nodes_and_vars]
+        seed_nv = [nv for nv in nv_list if nv.name in names]
+        model.seed_nodes_and_vars = seed_nv
+        return model
+
     def copy_nodes_and_vars(self) -> tuple[dict[str, Node], dict[str, Var]]:
         """Returns an unfrozen deep copy of the model nodes and variables."""
         nodes, _vars = deepcopy((self._nodes, self._vars))
