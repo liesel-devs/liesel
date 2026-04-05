@@ -1180,3 +1180,71 @@ class TestModelAdd:
         assert model.log_lik == pytest.approx(
             (y.log_prob + x2.log_prob + x3.log_prob).sum()
         )
+
+
+class TestRebuildModel:
+    def test_singleton_var_is_dropped(self):
+        x1 = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x1")
+        x2 = lsl.Var.new_obs(jrd.normal(jrd.key(2), (10,)), name="x2")
+
+        loc = lsl.Var.new_calc(lambda *args: sum(args), x1, name="loc")
+
+        scale = lsl.Var.new_param(
+            1.0,
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="scale",
+        )
+
+        y = lsl.Var.new_obs(
+            jrd.normal(jrd.key(2), (10,)),
+            lsl.Dist(tfd.Normal, loc=loc, scale=scale),
+            name="y",
+        )
+
+        model = lsl.Model([y])
+        model.locked = False
+
+        assert jnp.allclose(loc.value, x1.value)
+
+        loc.value_node.set_inputs(x2)
+        assert jnp.allclose(loc.value, x2.value)
+
+        model.rebuild_graph()
+
+        assert x2.name in model.vars
+        assert x1.name not in model.vars
+
+    def test_rebuild_from_x2(self):
+        x1 = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x1")
+        x2 = lsl.Var.new_obs(jrd.normal(jrd.key(2), (10,)), name="x2")
+
+        loc = lsl.Var.new_calc(lambda *args: sum(args), x1, name="loc")
+
+        scale = lsl.Var.new_param(
+            1.0,
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="scale",
+        )
+
+        y = lsl.Var.new_obs(
+            jrd.normal(jrd.key(2), (10,)),
+            lsl.Dist(tfd.Normal, loc=loc, scale=scale),
+            name="y",
+        )
+
+        model = lsl.Model([y])
+        model.locked = False
+
+        assert jnp.allclose(loc.value, x1.value)
+
+        loc.value_node.set_inputs(x2)
+        assert jnp.allclose(loc.value, x2.value)
+
+        model.rebuild_graph(x2)
+
+        assert x2.name in model.vars
+        assert x1.name not in model.vars
+        assert y.name not in model.vars
+
+        assert x1.model is None
+        assert y.model is None

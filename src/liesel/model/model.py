@@ -868,6 +868,7 @@ class Model:
         self.outdated = False
         self.update_graph_lazily = False
         self.locked = True
+        self.seed_nodes_and_vars = nodes_and_vars
 
     def _replace_node(self, old: Node, new: Node) -> Self:
         """Replaces the ``old`` with the ``new`` node."""
@@ -1077,6 +1078,37 @@ class Model:
                 "be Model.locked = False, so do not rely on this error if you are "
                 "using the default."
             )
+
+    def rebuild_graph(self, *vars_nodes_and_names: Var | Node | str) -> Self:
+        """
+        Rebuilds the model graph by re-discovering the outputs of all supplied nodes and
+        variables. Also accepts strings, which must be the names of nodes or variables
+        currently in the model.
+
+        If no nodes or variables are supplied, uses the seed nodes and variables
+        supplied to the model during initialization.
+        """
+        self._ensure_unlocked()
+        vars_nodes: list[Var | Node] = []
+        if vars_nodes_and_names:
+            for nvn in vars_nodes_and_names:
+                if isinstance(nvn, str):
+                    if nvn in self.vars:
+                        vars_nodes.append(self.vars[nvn])
+                    elif nvn in self.nodes:
+                        vars_nodes.append(self.nodes[nvn])
+                    else:
+                        raise KeyError(
+                            f"No Node or Var with anme '{nvn}' found in model."
+                        )
+                else:
+                    vars_nodes.append(nvn)
+        else:
+            vars_nodes += self.seed_nodes_and_vars
+
+        self._update_graph(vars_nodes)
+        self.outdated = False
+        return self
 
     def update_graph(self) -> Self:
         """
