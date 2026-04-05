@@ -278,6 +278,66 @@ class TestBasicModifyModel:
         assert x2.name in model.vars
         assert x1.name in model.vars  # now singleton node, not dropped
 
+    def test_modify_names(self):
+        x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
+        scale = lsl.Var.new_param(
+            1.0, lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="scale"
+        )
+
+        y = lsl.Var.new_obs(
+            jrd.normal(jrd.key(2), (10,)),
+            lsl.Dist(tfd.Normal, loc=x, scale=scale),
+            name="y",
+        )
+
+        model = lsl.Model([y])
+        model.locked = False
+
+        model.modify_names(lambda x: x + ".m1")
+
+        for var in model.vars.values():
+            assert var.name[-3:] == ".m1"
+
+        for node in model.nodes.values():
+            if node.name.startswith("_model"):
+                continue
+            assert node.name[-3:] == ".m1"
+
+        for nv in model.vars | model.nodes:
+            if nv.startswith("_model"):
+                continue
+            assert nv[-3:] == ".m1"
+
+    def test_prefix_names(self):
+        x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
+        scale = lsl.Var.new_param(
+            1.0, lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="scale"
+        )
+
+        y = lsl.Var.new_obs(
+            jrd.normal(jrd.key(2), (10,)),
+            lsl.Dist(tfd.Normal, loc=x, scale=scale),
+            name="y",
+        )
+
+        model = lsl.Model([y])
+        model.locked = False
+
+        model.prefix_names("m1.")
+
+        for var in model.vars.values():
+            assert var.name[:3] == "m1."
+
+        for node in model.nodes.values():
+            if node.name.startswith("_model"):
+                continue
+            assert node.name[:3] == "m1."
+
+        for nv in model.vars | model.nodes:
+            if nv.startswith("_model"):
+                continue
+            assert nv[:3] == "m1."
+
 
 class TestBracketReplace:
     def test_bracket_replace_value_input_var_with_var(self):

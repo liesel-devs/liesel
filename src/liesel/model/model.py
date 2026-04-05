@@ -8,7 +8,7 @@ import logging
 import math
 import re
 from collections import Counter
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from copy import deepcopy
 from types import MappingProxyType
 from typing import IO, Any, Literal, Self, TypeVar
@@ -1078,6 +1078,26 @@ class Model:
                 "be Model.locked = False, so do not rely on this error if you are "
                 "using the default."
             )
+
+    def modify_names(self, fn: Callable[[str], str]):
+        """
+        Modifies the names of all variables and nodes in the model according to the
+        supplied function.
+        """
+        update_graph_lazily = self.update_graph_lazily
+        self.update_graph_lazily = True
+        nv_dict = self.nodes | self.vars
+        for nv in nv_dict.values():
+            nv.name = fn(nv.name)
+        self.update_graph()
+        self.update_graph_lazily = update_graph_lazily
+        return self
+
+    def prefix_names(self, prefix: str) -> Self:
+        """
+        Adds a prefix to the names of all variables and nodes in the model.
+        """
+        return self.modify_names(lambda name: prefix + name)
 
     def rebuild_graph(self, *vars_nodes_and_names: Var | Node | str) -> Self:
         """
