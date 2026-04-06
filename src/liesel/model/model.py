@@ -802,17 +802,7 @@ class GraphBuilder:
 
 class Model:
     """
-    A model with a static graph.
-
-    .. tip::
-        If you have an existing model and want to make changes to it, you can use the
-        :meth:`.Model.pop_nodes_and_vars` method to release the nodes and variables
-        of the model. You can then make changes to them, for example i.e. changing the
-        distribution of a variable or the inputs of a calculation. Afterwards, you
-        initialize a *new* model with your changed variables.
-        If you simply want to change the value of a variable, it is not necessary to
-        call :meth:`~.Model.pop_nodes_and_vars`, you can simply override the
-        :attr:`.Var.value` attribute. Remeber to call :meth:`.Model.update` afterwards.
+    A probabilistic graphical model.
 
     Parameters
     ----------
