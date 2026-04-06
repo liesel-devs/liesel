@@ -1025,6 +1025,18 @@ class Model:
         return self
 
     def _remove_disconnected_parental_submodel(self, of: str | Node | Var) -> Self:
+        """
+        Removes the variable/node supplied as ``of`` and its inputs, then updates the
+        graph. If any of the removed variables/nodes is still an input to any of the
+        remaining variables/nodes in the model graph, they are re-added through the
+        update. Otherwise, they are removed from the model graph.
+
+
+        Note that, if any of the removed variables/nodes are in
+        :attr:`.seed_nodes_and_vars`, they remain in :attr:`.seed_nodes_and_vars` and
+        would be re-added to the graph if :meth:`.rebuild_graph` is called without
+        arguments.
+        """
         if isinstance(of, str):
             if of in self.nodes:
                 of = self.nodes[of]
@@ -1320,6 +1332,9 @@ class Model:
     def _check_for_duplicates(
         nodes_and_vars: Iterable[Node | Var],
     ) -> tuple[list[Node], list[Var]]:
+        """
+        Errors if there are two or more nodes/variables with the same name.
+        """
         nodes = [nv for nv in nodes_and_vars if isinstance(nv, Node)]
         nodes = list(dict.fromkeys(nodes).keys())
         counts = Counter(n.name for n in nodes)
