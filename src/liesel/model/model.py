@@ -865,10 +865,53 @@ class Model:
         self._to_float32 = to_float32
         self._auto_update = True
         self._update_graph(nodes_and_vars, copy=copy, grow=grow)
-        self.outdated = False
+        self.graph_outdated = False
         self.update_graph_lazily = False
         self.locked = True
         self.seed_nodes_and_vars = nodes_and_vars
+
+    @property
+    def graph_outdated(self) -> bool:
+        """
+        Whether the model graph is outdated.
+
+        The model graph can be updated with :meth:`.update_graph` or
+        :meth:`.rebuild_graph`.
+        """
+        return self._graph_outdated
+
+    @graph_outdated.setter
+    def graph_outdated(self, value: bool) -> None:
+        if not isinstance(value, bool):
+            raise TypeError(f"Value must be bool, got {type(value)}.")
+        self._graph_outdated = value
+
+    @property
+    def locked(self) -> bool:
+        """
+        Whether the model graph is locked.
+
+        If the model graph is locked, the in- and outputs, names, and distributions of
+        variables and nodes in the model graph cannot be changed.
+        """
+        return self._locked
+
+    @locked.setter
+    def locked(self, value: bool) -> None:
+        if not isinstance(value, bool):
+            raise TypeError(f"Value must be bool, got {type(value)}.")
+        self._locked = value
+
+    @property
+    def seed_nodes_and_vars(self) -> Iterable[Node | Var]:
+        """
+        The seed nodes and variables passed to the model during initialization.
+        """
+        return self._seed_nodes_and_vars
+
+    @seed_nodes_and_vars.setter
+    def seed_nodes_and_vars(self, value: Iterable[Node | Var]) -> None:
+        self._seed_nodes_and_vars = value
 
     def _replace_node(self, old: Node, new: Node) -> Self:
         """Replaces the ``old`` with the ``new`` node."""
@@ -887,7 +930,7 @@ class Model:
             node.set_inputs(*inputs, **kwinputs)
 
         self._nodes = {nd.name: nd for nd in nodes}
-        self.outdated = True
+        self.graph_outdated = True
 
         return self
 
@@ -919,7 +962,7 @@ class Model:
         self._replace_node(old.var_value_node, new.var_value_node)
         self._replace_node(old.value_node, new.value_node)
 
-        self.outdated = True
+        self.graph_outdated = True
 
         return self
 
@@ -936,7 +979,7 @@ class Model:
 
         self._replace_node(old.var_value_node, new)
 
-        self.outdated = True
+        self.graph_outdated = True
 
         return self
 
@@ -945,7 +988,6 @@ class Model:
     ) -> Self:
         """
         Replaces the ``old`` with the ``new`` node or variable.
-        Both must be of the same type.
         """
 
         if isinstance(old, str):
@@ -1020,7 +1062,7 @@ class Model:
         self._vars = {
             v.name: v for v in self.vars.values() if v not in p_nodes_and_vars
         }
-        self.outdated = True
+        self.graph_outdated = True
 
         if not self.update_graph_lazily:
             self.update_graph()
@@ -1105,7 +1147,7 @@ class Model:
         variables. Also accepts strings, which must be the names of nodes or variables
         currently in the model.
 
-        If no nodes or variables are supplied, uses the seed nodes and variables
+        If no nodes or variables are supplied, uses the :attr:`.seed_nodes_and_vars`
         supplied to the model during initialization.
         """
         self._ensure_unlocked()
@@ -1127,7 +1169,7 @@ class Model:
             vars_nodes += self.seed_nodes_and_vars
 
         self._update_graph(vars_nodes)
-        self.outdated = False
+        self.graph_outdated = False
         return self
 
     def update_graph(self) -> Self:
@@ -1153,7 +1195,7 @@ class Model:
 
         existing_nodes_and_vars += list(vars_and_nodes)
         self._update_graph(existing_nodes_and_vars)
-        self.outdated = False
+        self.graph_outdated = False
         return self
 
     def join(self, *models: Model, copy: bool = False) -> Self:
