@@ -766,3 +766,26 @@ class TestVarSample:
         assert "y" in samples
         assert "sigma" in samples
         assert "b" in samples
+
+
+class TestValueConversion:
+    def test_default(self):
+        a = lsl.Var.new_param(1.0)
+        assert isinstance(a.value, jax.Array)
+
+    def test_no_conversion(self):
+        a = lsl.Var.new_param(1.0, convert=lambda x: x)
+        assert not isinstance(a.value, jax.Array)
+        assert isinstance(a.value, float)
+
+    def test_changed_default(self):
+        class MyVar(lsl.Var):
+            value_conversion_fn = staticmethod(lambda x: x)
+
+        a = MyVar.new_param(1.0, convert=lambda x: x)
+        assert not isinstance(a.value, jax.Array)
+        assert isinstance(a.value, float)
+
+    def test_calc(self):
+        a = lsl.Var.new_calc(lambda x, y: x + y, 1.0, 1.0)
+        assert isinstance(a.value, jax.Array)

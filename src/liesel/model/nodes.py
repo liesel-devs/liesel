@@ -155,6 +155,10 @@ class Node(ABC):
         automatically generated upon initialization of a :class:`.Model`.
     _needs_seed
         Whether the node needs a seed / PRNG key.
+    convert
+        A function used to process the value of this node. The default uses the
+        function stored in :attr:`.value_conversion_fn`, which is
+        ``jax.numpy.asarray``.
 
     See Also
     --------
@@ -174,15 +178,28 @@ class Node(ABC):
     .. _TensorFlow Probability: https://www.tensorflow.org/probability
     """
 
+    value_conversion_fn: Callable[[Any], Any] = staticmethod(jnp.asarray)
+    """
+    The function used to process the value of this variable, if ``convert="default"``
+    is supplied during init. Can be overwritten to change the default. In this case,
+    make sure to overwrite it with a static method, for example::
+
+        class MyNode(lsl.Node):
+            value_conversion_fn = staticmethod(lambda x: x)
+    """
+
     def __init__(
         self,
         *inputs: Any,
         _name: str = "",
         _needs_seed: bool = False,
-        convert: Callable[[Any], Any] = jnp.asarray,
+        convert: Callable[[Any], Any] | Literal["default"] = "default",
         **kwinputs: Any,
     ):
-        self._convert = convert
+        if convert == "default":
+            self._convert = self.value_conversion_fn
+        else:
+            self._convert = convert
         self._groups: dict[str, Group] = {}
         self._inputs = tuple(self._to_node(_input) for _input in inputs)
         self._kwinputs = {kw: self._to_node(_input) for kw, _input in kwinputs.items()}
@@ -569,7 +586,12 @@ class Value(Node):
         The value of the node.
     _name
         The name of the node. If you do not specify a name, a unique name will
-        be \ automatically generated upon initialization of a :class:`.Model`.
+        be automatically generated upon initialization of a :class:`.Model`.
+    convert
+        A function used to process the value of this node. The default uses the
+        function stored in :attr:`.value_conversion_fn`, which is
+        ``jax.numpy.asarray``.
+
 
     See Also
     --------
@@ -609,10 +631,12 @@ class Value(Node):
     """
 
     def __init__(
-        self, value: Any, _name: str = "", convert: Callable[[Any], Any] = jnp.asarray
+        self,
+        value: Any,
+        _name: str = "",
+        convert: Callable[[Any], Any] | Literal["default"] = "default",
     ):
-        super().__init__(_name=_name)
-        self._convert = convert
+        super().__init__(_name=_name, convert=convert)
         self.value = value
 
     def flag_outdated(self) -> Value:
@@ -633,7 +657,15 @@ class Value(Node):
 
     @value.setter
     def value(self, value: Any):
-        self._value = self._convert(value)
+        try:
+            self._value = self._convert(value)
+        except TypeError as e:
+            msg = (
+                "Error during value conversion. If you updated the "
+                "`value_conversion_fn` class attribute, please make sure to define "
+                "it as a staticmethod."
+            )
+            raise TypeError(msg) from e
 
         if self.model:
             for node in self.outputs:
@@ -696,6 +728,10 @@ class Calc(Node):
     _update_on_init
         If ``True``, the calculator will try to evaluate its function upon \
         initialization.
+    convert_inputs
+        A function used to process the values of this node's inputs.
+        The default uses the function stored in :attr:`.value_conversion_fn`, which is
+        ``jax.numpy.asarray``.
     **kwinputs
         Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
         will be converted to :class:`.Value` nodes. The values of these inputs will be
@@ -753,7 +789,7 @@ class Calc(Node):
         _name: str = "",
         _needs_seed: bool = False,
         _update_on_init: bool = True,
-        convert_inputs: Callable[[Any], Any] = jnp.asarray,
+        convert_inputs: Callable[[Any], Any] | Literal["default"] = "default",
         **kwinputs: Any,
     ):
         super().__init__(
@@ -867,6 +903,10 @@ class Dist(Node):
         Optional parameter bijector specification for transforming
         distribution parameters. See :meth:`.Dist.biject_parameters` for supported
         formats and behavior.
+    convert_inputs
+        A function used to process the values of this node's inputs.
+        The default uses the function stored in :attr:`.value_conversion_fn`, which is
+        ``jax.numpy.asarray``.
     **kwinputs
         Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
         will be converted to :class:`.Value` nodes. The values of these inputs will be
@@ -934,7 +974,7 @@ class Dist(Node):
         | Literal["auto"]
         | dict[str, Bijector | Literal["auto"] | None]
         | Sequence[Bijector | Literal["auto"] | None] = None,
-        convert_inputs: Callable[[Any], Any] = jnp.asarray,
+        convert_inputs: Callable[[Any], Any] | Literal["default"] = "default",
         **kwinputs: Any,
     ):
         super().__init__(
@@ -1503,6 +1543,10 @@ class Var:
         call :meth:`.biject` with this bijector upon initialization. \
         Any supplied inference information will be passed to the bijected \
         variable.
+    convert
+        A function used to process the value of this variable. The default uses the
+        function stored in :attr:`.value_conversion_fn`, which is ``jax.numpy.asarray``.
+
 
     See Also
     --------
@@ -1546,6 +1590,16 @@ class Var:
         "_convert",
     )
 
+    value_conversion_fn: Callable[[Any], Any] = staticmethod(jnp.asarray)
+    """
+    The function used to process the value of this variable, if ``convert="default"``
+    is supplied during init. Can be overwritten to change the default. In this case,
+    make sure to overwrite it with a static method, for example::
+
+        class MyVar(lsl.Var):
+            value_conversion_fn = staticmethod(lambda x: x)
+    """
+
     def __init__(
         self,
         value: Any,
@@ -1553,10 +1607,13 @@ class Var:
         name: str = "",
         inference: InferenceTypes = None,
         bijector: None | Bijector | Literal["auto"] = None,
-        convert: Callable[[Any], Any] = jnp.asarray,
+        convert: Callable[[Any], Any] | Literal["default"] = "default",
     ):
         self._name = name
-        self._convert = convert
+        if convert == "default":
+            self._convert = self.value_conversion_fn
+        else:
+            self._convert = convert
         self._value_node: Node = Value(None, convert=lambda x: x)
         self._dist_node: Dist = NoDist()
 
@@ -1594,7 +1651,7 @@ class Var:
         name: str = "",
         inference: InferenceTypes = None,
         bijector: None | Bijector | Literal["auto"] = None,
-        convert: Callable[[Any], Any] = jnp.asarray,
+        convert: Callable[[Any], Any] | Literal["default"] = "default",
     ) -> Var:
         """
         Initializes a strong variable that acts as a model parameter.
@@ -1621,6 +1678,10 @@ class Var:
             will call :meth:`.biject` with this bijector upon initialization. \
             Any supplied inference information will be passed to the bijected \
             variable.
+        convert
+            A function used to process the value of this variable. The default uses the
+            function stored in :attr:`.value_conversion_fn`, which is
+            ``jax.numpy.asarray``.
 
         See Also
         --------
@@ -1667,7 +1728,7 @@ class Var:
         value: Any,
         distribution: Dist | None = None,
         name: str = "",
-        convert: Callable[[Any], Any] = jnp.asarray,
+        convert: Callable[[Any], Any] | Literal["default"] = "default",
     ) -> Var:
         """
         Initializes a strong variable that holds observed data.
@@ -1685,6 +1746,10 @@ class Var:
         name
             The name of the variable. If you do not specify a name, a unique name will \
             be automatically generated upon initialization of a :class:`.Model`.
+        convert
+            A function used to process the value of this variable. The default uses the
+            function stored in :attr:`.value_conversion_fn`, which is
+            ``jax.numpy.asarray``.
 
         See Also
         --------
@@ -1723,7 +1788,7 @@ class Var:
         name: str = "",
         _needs_seed: bool = False,
         _update_on_init: bool = True,
-        convert: Callable[[Any], Any] = jnp.asarray,
+        convert_inputs: Callable[[Any], Any] | Literal["default"] = "default",
         **kwinputs: Any,
     ) -> Var:
         """
@@ -1758,6 +1823,10 @@ class Var:
         _update_on_init
             If ``True``, the calculator will try to evaluate its function upon \
             initialization.
+        convert_inputs
+            A function used to process the values of this variable's inputs.
+            The default uses the function stored in :attr:`.value_conversion_fn`,
+            which is ``jax.numpy.asarray``.
         **kwinputs
             Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
             will be converted to :class:`.Data` nodes. The values of these inputs will \
@@ -1809,16 +1878,19 @@ class Var:
         .. _docs: https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html
         """  # noqa: E501
 
+        if convert_inputs == "default":
+            convert_inputs = cls.value_conversion_fn
+
         calc = Calc(
             function,
             *inputs,
             _name=f"{name}_calc",
             _needs_seed=_needs_seed,
             _update_on_init=_update_on_init,
-            convert_inputs=convert,
+            convert_inputs=convert_inputs,
             **kwinputs,
         )
-        var = cls(calc, distribution=distribution, name=name, convert=convert)
+        var = cls(calc, distribution=distribution, name=name, convert=lambda x: x)
         return var
 
     @classmethod
@@ -1827,7 +1899,7 @@ class Var:
         value: Any,
         name: str = "",
         inference: InferenceTypes = None,
-        convert: Callable[[Any], Any] = jnp.asarray,
+        convert: Callable[[Any], Any] | Literal["default"] = "default",
     ) -> Var:
         """
         Initializes a strong variable without a distribution.
@@ -1843,6 +1915,10 @@ class Var:
             be automatically generated upon initialization of a :class:`.Model`.
         inference
             Additional information that can be used to set up inference algorithms.
+        convert
+            A function used to process the value of this variable. The default uses the
+            function stored in :attr:`.value_conversion_fn`, which is
+            ``jax.numpy.asarray``.
 
         See Also
         --------
