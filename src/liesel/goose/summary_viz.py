@@ -374,8 +374,8 @@ def _set_aesthetics(
     g.legend.set_title("Chain")
 
     if title is not None:
-        g.fig.suptitle(title)
-        g.fig.subplots_adjust(top=title_spacing)
+        g.figure.suptitle(title)
+        g.figure.subplots_adjust(top=title_spacing)
 
     return g
 
@@ -407,6 +407,7 @@ def plot_trace(
     save_path: str | None = None,
     include_warmup: bool = False,
     show: bool = True,
+    alpha: float = 0.8,
     **kwargs,
 ) -> sns.FacetGrid:
     """
@@ -467,6 +468,8 @@ def plot_trace(
         File path where the plot is saved.
     include_warmup
         Include the warmup samples in the trace plot.
+    alpha
+        Transparency, float in ``[0,1]``.
     **kwargs
         Further keyword arguments passed to the seaborn ``relplot()`` function.
 
@@ -481,27 +484,31 @@ def plot_trace(
     # The entries `title` to `save_path` are shared with `plot_density()`, `plot_cor()`
     # and partially with `plot_param()`.
 
-    sns.set_theme(style=style)
     plot_df = _setup_plot_df(
         results, params, param_indices, chain_indices, max_chains, include_warmup
     )
 
-    g = sns.relplot(
-        data=plot_df,
-        kind="line",
-        x="iteration",
-        y="value",
-        hue="chain_index",
-        col="param_label",
-        col_wrap=_set_plot_cols(plot_df, ncol),
-        facet_kws=dict(sharex=True, sharey=False),
-        palette=color_palette,
-        height=height,
-        aspect=aspect_ratio,
-        **kwargs,
-    )
+    if color_palette is None:
+        color_palette = "deep"
 
-    g = _set_aesthetics(g, title, title_spacing, xlabel, ylabel="")
+    with sns.axes_style(style):
+        g = sns.relplot(
+            data=plot_df,
+            kind="line",
+            x="iteration",
+            y="value",
+            hue="chain_index",
+            col="param_label",
+            col_wrap=_set_plot_cols(plot_df, ncol),
+            facet_kws=dict(sharex=True, sharey=False),
+            palette=color_palette,
+            height=height,
+            aspect=aspect_ratio,
+            alpha=alpha,
+            **kwargs,
+        )
+
+        g = _set_aesthetics(g, title, title_spacing, xlabel, ylabel="")
 
     save_figure(g, save_path)
     if show:
@@ -597,25 +604,28 @@ def plot_density(
     # The entries `title` to `save_path` are shared with `plot_trace()`, `plot_cor()`
     # and partially with `plot_param()`.
 
-    sns.set_theme(style=style)
     plot_df = _setup_plot_df(results, params, param_indices, chain_indices, max_chains)
 
-    g = sns.displot(
-        data=plot_df,
-        kind="kde",
-        x="value",
-        y=None,
-        hue="chain_index",
-        col="param_label",
-        col_wrap=_set_plot_cols(plot_df, ncol),
-        facet_kws=dict(sharex=False, sharey=False),
-        palette=color_palette,
-        height=height,
-        aspect=aspect_ratio,
-        **kwargs,
-    )
+    if color_palette is None:
+        color_palette = "deep"
 
-    g = _set_aesthetics(g, title, title_spacing, xlabel, ylabel="")
+    with sns.axes_style(style):
+        g = sns.displot(
+            data=plot_df,
+            kind="kde",
+            x="value",
+            y=None,
+            hue="chain_index",
+            col="param_label",
+            col_wrap=_set_plot_cols(plot_df, ncol),
+            facet_kws=dict(sharex=False, sharey=False),
+            palette=color_palette,
+            height=height,
+            aspect=aspect_ratio,
+            **kwargs,
+        )
+
+        g = _set_aesthetics(g, title, title_spacing, xlabel, ylabel="")
 
     save_figure(g, save_path)
     if show:
@@ -731,7 +741,6 @@ def plot_cor(
     # `plot_density()` and partially with `plot_param()`.
     # The entry `max_lags` is shared with `plot_param()`.
 
-    sns.set_theme(style=style)
     plot_df = _setup_plot_df(results, params, param_indices, chain_indices, max_chains)
     max_lags = _compute_max_lags(plot_df, max_lags)
 
@@ -740,30 +749,34 @@ def plot_cor(
         acor = arviz.autocorr(x)[..., 0:maxlags]
         return sns.lineplot(x=range(maxlags), y=acor, **kwargs)
 
-    g = (
-        sns.FacetGrid(
-            data=plot_df,
-            hue="chain_index",
-            col="param_label",
-            col_wrap=_set_plot_cols(plot_df, ncol),
-            palette=color_palette,
-            height=height,
-            aspect=aspect_ratio,
-            **kwargs,
-        )
-        .map(
-            do_acor_plot,
-            "value",
-            maxlags=max_lags,
-        )
-        .set(
-            xlim=(0, max_lags),
-            ylim=(-0.2, 1.1),
-        )
-        .add_legend()
-    )
+    if color_palette is None:
+        color_palette = "deep"
 
-    g = _set_aesthetics(g, title, title_spacing, xlabel, ylabel="Autocorrelation")
+    with sns.axes_style(style):
+        g = (
+            sns.FacetGrid(
+                data=plot_df,
+                hue="chain_index",
+                col="param_label",
+                col_wrap=_set_plot_cols(plot_df, ncol),
+                palette=color_palette,
+                height=height,
+                aspect=aspect_ratio,
+                **kwargs,
+            )
+            .map(
+                do_acor_plot,
+                "value",
+                maxlags=max_lags,
+            )
+            .set(
+                xlim=(0, max_lags),
+                ylim=(-0.2, 1.1),
+            )
+            .add_legend()
+        )
+
+        g = _set_aesthetics(g, title, title_spacing, xlabel, ylabel="Autocorrelation")
 
     save_figure(g, save_path)
     if show:
@@ -791,7 +804,7 @@ def _set_colors(plot_df: pd.DataFrame, color_list: list[str] | None) -> list[str
 
     if color_list is None:
         # default matplotlib and seaborn colors with 10 elements
-        color_list = sns.color_palette()
+        color_list = sns.color_palette("deep")
 
         # make default color list sufficiently long
         if num_chains > 10:
@@ -817,7 +830,9 @@ def _setup_grid(
     return fig, ax1, ax2, ax3
 
 
-def _add_lineplot(plot_df: pd.DataFrame, ax: Any, color_list: list[str]) -> None:
+def _add_lineplot(
+    plot_df: pd.DataFrame, ax: Any, color_list: list[str], alpha: float
+) -> None:
     """Adds trace plot to plotting grid."""
 
     sns.lineplot(
@@ -828,6 +843,7 @@ def _add_lineplot(plot_df: pd.DataFrame, ax: Any, color_list: list[str]) -> None
         palette=color_list,
         ax=ax,
         legend="full",
+        alpha=alpha,
     ).set(xlabel="Iteration", ylabel="")
 
 
@@ -886,6 +902,7 @@ def plot_param(
     style: str = "whitegrid",
     color_list: list[str] | None = None,
     figure_size: tuple[int | float, int | float] = (9, 6),
+    alpha: float = 0.8,
     # default values chosen for default figure size of (9, 6)
     legend_position: tuple[float, float] = (1.2, 0.4),
     save_path: str | None = None,
@@ -946,6 +963,8 @@ def plot_param(
         panel within the plot grid. The first coordinate specifies the horizontal,  \
         the second coordinate the vertical position. Might require an adjustment when \
         changing the ``figure_size`` values or the number of chains.
+    alpha
+        Transparency in trace plot, float in ``[0,1]``.
     save_path
         File path where the plot is saved.
     """
@@ -957,20 +976,20 @@ def plot_param(
     # `plot_trace()`, `plot_density()` and `plot_cor()`.
     # The entry `max_lags` is shared with `plot_cor()`.
 
-    sns.set_theme(style=style)
     plot_df = _setup_plot_df(results, param, param_index, chain_indices, max_chains)
     _raise_multi_param_error(plot_df, param)
     color_list = _set_colors(plot_df, color_list)
 
-    fig, ax1, ax2, ax3 = _setup_grid(figure_size)
-    _add_lineplot(plot_df, ax1, color_list)
-    _add_kdeplot(plot_df, ax2, color_list)
-    _add_corplot(plot_df, ax3, max_lags, color_list)
-    ax1.legend(title="Chain", bbox_to_anchor=legend_position, frameon=False)
+    with sns.axes_style(style):
+        fig, ax1, ax2, ax3 = _setup_grid(figure_size)
+        _add_lineplot(plot_df, ax1, color_list, alpha=alpha)
+        _add_kdeplot(plot_df, ax2, color_list)
+        _add_corplot(plot_df, ax3, max_lags, color_list)
+        ax1.legend(title="Chain", bbox_to_anchor=legend_position, frameon=False)
 
-    fig.tight_layout()
-    fig.suptitle(_get_title(plot_df, title))
-    fig.subplots_adjust(top=title_spacing)
+        fig.tight_layout()
+        fig.suptitle(_get_title(plot_df, title))
+        fig.subplots_adjust(top=title_spacing)
 
     save_figure(save_path=save_path)
     if show:
@@ -1186,10 +1205,12 @@ def plot_pairs(
     # NOTE: Docstring duplications
     # Multiple arguments in this docstring are shared with other plotting functions.
 
-    sns.set_theme(style=style)
     plot_df = _setup_plot_df(
         results, params, param_indices, chain_indices, max_chains, include_warmup
     )
+
+    if color_palette is None:
+        color_palette = "deep"
 
     plot_df = (
         plot_df.drop(["param_index", "param"], axis=1)
@@ -1200,19 +1221,20 @@ def plot_pairs(
         .drop(["iteration"], axis=1)
     )
 
-    g = sns.pairplot(
-        data=plot_df,
-        hue="chain_index",
-        plot_kws={"alpha": alpha},
-        diag_kind=diag_kind,
-        height=height,
-        aspect=aspect_ratio,
-        palette=color_palette,
-    )
+    with sns.axes_style(style):
+        g = sns.pairplot(
+            data=plot_df,
+            hue="chain_index",
+            plot_kws={"alpha": alpha},
+            diag_kind=diag_kind,
+            height=height,
+            aspect=aspect_ratio,
+            palette=color_palette,
+        )
 
     if title is not None:
-        g.fig.suptitle(title)
-        g.fig.subplots_adjust(top=title_spacing)
+        g.figure.suptitle(title)
+        g.figure.subplots_adjust(top=title_spacing)
 
     save_figure(save_path=save_path)
 
