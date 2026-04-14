@@ -1131,9 +1131,9 @@ def loo(
     ----------
     - Computations are carried out via ArviZ: https://python.arviz.org/en/stable/
     - Theoretical background: Vehtari, A., Gelman, A., & Gabry, J. (2017). Practical
-        Bayesian model evaluation using leave-one-out cross-validation and WAIC.
-        Statistics and Computing, 27(5), 1413–1432.
-        https://doi.org/10.1007/s11222-016-9696-4
+      Bayesian model evaluation using leave-one-out cross-validation and WAIC.
+      Statistics and Computing, 27(5), 1413–1432.
+      https://doi.org/10.1007/s11222-016-9696-4
 
     """
     if samples is None and reff is None:
