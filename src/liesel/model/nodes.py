@@ -156,6 +156,10 @@ class Node(ABC):
         automatically generated upon initialization of a :class:`.Model`.
     _needs_seed
         Whether the node needs a seed / PRNG key.
+    convert
+        A function used to process the value of this node. The default uses the
+        function stored in :attr:`.convert_value`, which is
+        ``jax.numpy.asarray``.
 
     See Also
     --------
@@ -180,8 +184,13 @@ class Node(ABC):
         *inputs: Any,
         _name: str = "",
         _needs_seed: bool = False,
+        convert: Callable[[Any], Any] | Literal["default"] = "default",
         **kwinputs: Any,
     ):
+        if convert == "default":
+            self._convert: Callable[[Any], Any] = self.convert_value
+        else:
+            self._convert = convert
         self._groups: dict[str, Group] = {}
         self._inputs = tuple(self._to_node(_input) for _input in inputs)
         self._kwinputs = {kw: self._to_node(_input) for kw, _input in kwinputs.items()}
@@ -195,6 +204,24 @@ class Node(ABC):
 
         self.monitor = False
         """Whether the node should be monitored by an inference algorithm."""
+
+    @staticmethod
+    def convert_value(x: Any) -> Any:
+        """
+        The function used to process the value of this node, if ``convert="default"``
+        is supplied during init.
+
+        Can be overwritten on subclasses to create node
+        classes with different default conversion behavior.
+        Make sure to overwrite it with a static method, for example (re-implementing
+        the default behavior)::
+
+            class MyNode(lsl.Node):
+                @staticmethod
+                def convert_value(x):
+                    return jnp.asarray(x)
+        """
+        return jnp.asarray(x)
 
     def _add_output(self, output: Node) -> Node:
         self._outputs = _unique_tuple(self._outputs, [output])
@@ -218,13 +245,12 @@ class Node(ABC):
         self._var = var
         return self
 
-    @staticmethod
-    def _to_node(x: Any) -> Node:
+    def _to_node(self, x: Any) -> Node:
         if isinstance(x, Var):
             return x.var_value_node
 
         if not isinstance(x, Node):
-            return Value(x)
+            return Value(x, convert=self._convert)
 
         return x
 
@@ -538,7 +564,8 @@ class InputGroup(TransientNode):
     """
     A node that groups its inputs for another node.
 
-    Essentially, this node "forwards" the values of its inputs to its outputs
+    Essentially, this node "forwards" the val
+    ues of its inputs to its outputs
     as an :class:`.ArgGroup`.
     """
 
@@ -569,7 +596,12 @@ class Value(Node):
         The value of the node.
     _name
         The name of the node. If you do not specify a name, a unique name will
-        be \ automatically generated upon initialization of a :class:`.Model`.
+        be automatically generated upon initialization of a :class:`.Model`.
+    convert
+        A function used to process the value of this node. The default uses the
+        function stored in :attr:`.convert_value`, which is
+        ``jax.numpy.asarray``.
+
 
     See Also
     --------
@@ -608,9 +640,14 @@ class Value(Node):
     Value(name="my_name")
     """
 
-    def __init__(self, value: Any, _name: str = ""):
-        super().__init__(_name=_name)
-        self._value = value
+    def __init__(
+        self,
+        value: Any,
+        _name: str = "",
+        convert: Callable[[Any], Any] | Literal["default"] = "default",
+    ):
+        super().__init__(_name=_name, convert=convert)
+        self.value = value
 
     def flag_outdated(self) -> Value:
         """Stops the recursion setting outdated flags."""
@@ -630,7 +667,15 @@ class Value(Node):
 
     @value.setter
     def value(self, value: Any):
-        self._value = value
+        try:
+            self._value = self._convert(value)
+        except TypeError as e:
+            msg = (
+                "Error during value conversion. If you updated the "
+                "`.convert_value` method, please make sure to define "
+                "it as a staticmethod."
+            )
+            raise TypeError(msg) from e
 
         if self.model:
             for node in self.outputs:
@@ -693,6 +738,10 @@ class Calc(Node):
     _update_on_init
         If ``True``, the calculator will try to evaluate its function upon \
         initialization.
+    convert_inputs
+        A function used to process the values of this node's inputs.
+        The default uses the function stored in :attr:`.convert_value`, which is
+        ``jax.numpy.asarray``.
     **kwinputs
         Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
         will be converted to :class:`.Value` nodes. The values of these inputs will be
@@ -750,9 +799,16 @@ class Calc(Node):
         _name: str = "",
         _needs_seed: bool = False,
         _update_on_init: bool = True,
+        convert_inputs: Callable[[Any], Any] | Literal["default"] = "default",
         **kwinputs: Any,
     ):
-        super().__init__(*inputs, **kwinputs, _name=_name, _needs_seed=_needs_seed)
+        super().__init__(
+            *inputs,
+            **kwinputs,
+            _name=_name,
+            _needs_seed=_needs_seed,
+            convert=convert_inputs,
+        )
         self._function = function
         self._update_on_init = _update_on_init
 
@@ -857,6 +913,10 @@ class Dist(Node):
         Optional parameter bijector specification for transforming
         distribution parameters. See :meth:`.Dist.biject_parameters` for supported
         formats and behavior.
+    convert_inputs
+        A function used to process the values of this node's inputs.
+        The default uses the function stored in :attr:`.convert_value`, which is
+        ``jax.numpy.asarray``.
     **kwinputs
         Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
         will be converted to :class:`.Value` nodes. The values of these inputs will be
@@ -924,9 +984,16 @@ class Dist(Node):
         | Literal["auto"]
         | dict[str, Bijector | Literal["auto"] | None]
         | Sequence[Bijector | Literal["auto"] | None] = None,
+        convert_inputs: Callable[[Any], Any] | Literal["default"] = "default",
         **kwinputs: Any,
     ):
-        super().__init__(*inputs, **kwinputs, _name=_name, _needs_seed=_needs_seed)
+        super().__init__(
+            *inputs,
+            **kwinputs,
+            _name=_name,
+            _needs_seed=_needs_seed,
+            convert=convert_inputs,
+        )
 
         self._at: Node | None = None
         self._distribution = distribution
@@ -1486,6 +1553,10 @@ class Var:
         call :meth:`.biject` with this bijector upon initialization. \
         Any supplied inference information will be passed to the bijected \
         variable.
+    convert
+        A function used to process the value of this variable. The default uses the
+        function stored in :attr:`.convert_value`, which is ``jax.numpy.asarray``.
+
     distribution
         Deprecated argument name for the probability distribution of the variable,
         kept for backwards-compatibility.
@@ -1530,6 +1601,7 @@ class Var:
         "_role",
         "_value_node",
         "_var_value_node",
+        "_convert",
     )
 
     def __init__(
@@ -1539,6 +1611,7 @@ class Var:
         name: str = "",
         inference: InferenceTypes = None,
         bijector: None | Bijector | Literal["auto"] = None,
+        convert: Callable[[Any], Any] | Literal["default"] = "default",
         distribution: Dist | None = None,
     ):
         if dist is not None and distribution is not None:
@@ -1551,7 +1624,11 @@ class Var:
             dist = distribution
 
         self._name = name
-        self._value_node: Node = Value(None)
+        if convert == "default":
+            self._convert: Callable[[Any], Any] = self.convert_value
+        else:
+            self._convert = convert
+        self._value_node: Node = Value(None, convert=lambda x: x)
         self._dist_node: Dist = NoDist()
 
         self._var_value_node: VarValue = VarValue(
@@ -1580,6 +1657,24 @@ class Var:
         if bijector is not None:
             self.biject(bijector=bijector, inference=inference)
 
+    @staticmethod
+    def convert_value(x: Any) -> Any:
+        """
+        The function used to process the value of this variable, if
+        ``convert="default"`` is supplied during init.
+
+        Can be overwritten on subclasses
+        to create variable classes with different default conversion behavior. Make sure
+        to overwrite it with a static method, for example (re-implementing the default
+        behavior)::
+
+            class MyVar(lsl.Var):
+                @staticmethod
+                def convert_value(x):
+                    return jnp.asarray(x)
+        """
+        return jnp.asarray(x)
+
     @classmethod
     def new_param(
         cls,
@@ -1588,6 +1683,7 @@ class Var:
         name: str = "",
         inference: InferenceTypes = None,
         bijector: None | Bijector | Literal["auto"] = None,
+        convert: Callable[[Any], Any] | Literal["default"] = "default",
         distribution: Dist | None = None,
     ) -> Var:
         """
@@ -1615,6 +1711,10 @@ class Var:
             will call :meth:`.biject` with this bijector upon initialization. \
             Any supplied inference information will be passed to the bijected \
             variable.
+        convert
+            A function used to process the value of this variable. The default uses the
+            function stored in :attr:`.convert_value`, which is
+            ``jax.numpy.asarray``.
         distribution
             Deprecated argument name for the probability distribution of the variable,
             kept for backwards-compatibility.
@@ -1650,6 +1750,7 @@ class Var:
             name,
             inference=inference,
             bijector=bijector,
+            convert=convert,
             distribution=distribution,
         )
         var.value_node.monitor = True
@@ -1666,6 +1767,7 @@ class Var:
         dist: Dist | None = None,
         name: str = "",
         distribution: Dist | None = None,
+        convert: Callable[[Any], Any] | Literal["default"] = "default",
     ) -> Var:
         """
         Initializes a strong variable that holds observed data.
@@ -1683,6 +1785,10 @@ class Var:
         name
             The name of the variable. If you do not specify a name, a unique name will \
             be automatically generated upon initialization of a :class:`.Model`.
+        convert
+            A function used to process the value of this variable. The default uses the
+            function stored in :attr:`.convert_value`, which is
+            ``jax.numpy.asarray``.
         distribution
             Deprecated argument name for the probability distribution of the variable,
             kept for backwards-compatibility.
@@ -1712,7 +1818,7 @@ class Var:
         Var(name="")
 
         """
-        var = cls(value, dist, name, distribution=distribution)
+        var = cls(value, dist, name, distribution=distribution, convert=convert)
         var.observed = True
         return var
 
@@ -1725,8 +1831,9 @@ class Var:
         name: str = "",
         _needs_seed: bool = False,
         _update_on_init: bool = True,
-        distribution: Dist | None = None,
+        convert_inputs: Callable[[Any], Any] | Literal["default"] = "default",
         cache: bool = True,
+        distribution: Dist | None = None,
         **kwinputs: Any,
     ) -> Var:
         """
@@ -1761,10 +1868,10 @@ class Var:
         _update_on_init
             If ``True``, the calculator will try to evaluate its function upon \
             initialization.
-        distribution
-            Deprecated argument name for the probability distribution of the variable,
-            kept for backwards-compatibility.
-            Please use the new name ``dist``.
+        convert_inputs
+            A function used to process the values of this variable's inputs.
+            The default uses the function stored in :attr:`.convert_value`,
+            which is ``jax.numpy.asarray``.
         cache
             If ``False``, this variable will not store a cache of its value. This means,
             the ``function`` is evaluated every single time that the value of this
@@ -1773,6 +1880,10 @@ class Var:
             down computations otherwise (such as when the function performs a
             matrix inversion). Internally, if ``cache=True``, this variable wraps a
             :class:`.Calc`, and if ``cache=False``, it wraps a :class:`.TransientCalc`.
+        distribution
+            Deprecated argument name for the probability distribution of the variable,
+            kept for backwards-compatibility.
+            Please use the new name ``dist``.
         **kwinputs
             Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
             will be converted to :class:`.Data` nodes. The values of these inputs will \
@@ -1824,6 +1935,9 @@ class Var:
         .. _docs: https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html
         """  # noqa: E501
 
+        if convert_inputs == "default":
+            convert_inputs = cls.convert_value
+
         if cache:
             calc_class = Calc
         else:
@@ -1835,14 +1949,21 @@ class Var:
             _name=f"{name}_calc",
             _needs_seed=_needs_seed,
             _update_on_init=_update_on_init,
+            convert_inputs=convert_inputs,
             **kwinputs,
         )
-        var = cls(calc, dist=dist, distribution=distribution, name=name)
+        var = cls(
+            calc, dist=dist, distribution=distribution, name=name, convert=lambda x: x
+        )
         return var
 
     @classmethod
     def new_value(
-        cls, value: Any, name: str = "", inference: InferenceTypes = None
+        cls,
+        value: Any,
+        name: str = "",
+        inference: InferenceTypes = None,
+        convert: Callable[[Any], Any] | Literal["default"] = "default",
     ) -> Var:
         """
         Initializes a strong variable without a distribution.
@@ -1858,6 +1979,10 @@ class Var:
             be automatically generated upon initialization of a :class:`.Model`.
         inference
             Additional information that can be used to set up inference algorithms.
+        convert
+            A function used to process the value of this variable. The default uses the
+            function stored in :attr:`.convert_value`, which is
+            ``jax.numpy.asarray``.
 
         See Also
         --------
@@ -1876,7 +2001,7 @@ class Var:
         Var(name="")
 
         """
-        var = cls(value, name=name, inference=inference)
+        var = cls(value, name=name, inference=inference, convert=convert)
         return var
 
     def get_inference(self, key: str | None) -> InferenceTypes:
@@ -2523,10 +2648,10 @@ class Var:
     @no_model_setter
     def value_node(self, value_node: Any):
         if isinstance(value_node, Var):
-            value_node = Calc(lambda x: x, value_node)
+            value_node = Calc(lambda x: x, value_node, convert_inputs=self._convert)
 
         if not isinstance(value_node, Node):
-            value_node = Value(value_node)
+            value_node = Value(value_node, convert=self._convert)
 
         if value_node.model:
             raise RuntimeError(
@@ -2964,6 +3089,7 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
         _name="",
         _needs_seed=var.dist_node.needs_seed,
         bijectors=None,
+        convert_inputs=jnp.asarray,
         **kwinputs,
     )
 
@@ -2995,6 +3121,7 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
                 _name="",
                 _needs_seed=value_node_needs_seed,
                 _update_on_init=value_node_update_on_init,
+                convert_inputs=jnp.asarray,
                 **value_kwinputs,
             ),
             transformed_dist,
@@ -3083,6 +3210,7 @@ def _transform_var_with_bijector_class(
                 _name="",
                 _needs_seed=value_node_needs_seed,
                 _update_on_init=value_node_upadte_on_init,
+                convert_inputs=jnp.asarray,
                 **value_kwinputs,
             ),
             dist_node_transformed,
