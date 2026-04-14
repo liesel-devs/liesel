@@ -18,6 +18,7 @@ import jax
 import jax.numpy as jnp
 import jax.random
 import networkx as nx
+import pandas as pd
 
 from .nodes import Array, Calc, Dist, Group, Node, NodeState, Value, Var, VarValue
 from .viz import plot_nodes, plot_vars
@@ -399,7 +400,9 @@ class GraphBuilder:
 
         return self
 
-    def build_model(self, copy: bool = False) -> Model:
+    def build_model(
+        self, copy: bool = False, validate_log_prob_decomposition: bool = True
+    ) -> Model:
         """
         Builds a model from the graph.
 
@@ -496,7 +499,15 @@ class GraphBuilder:
         nodes, _vars = gb._all_nodes_and_vars()
         nodes_and_vars = nodes + _vars
 
-        model = Model(nodes_and_vars, grow=False, copy=copy, to_float32=self.to_float32)
+        model = Model(
+            nodes_and_vars,
+            grow=False,
+            copy=copy,
+            to_float32=self.to_float32,
+            validate_log_prob_decomposition=False,
+        )
+        if validate_log_prob_decomposition:
+            model._validate_log_prob_decomposition()
 
         if not copy:
             self.nodes.clear()
@@ -811,20 +822,38 @@ class Model:
 
     def __init__(
         self,
-        nodes_and_vars: Iterable[Node | Var],
+        *nodes_and_vars: Node | Var | Iterable[Node | Var],
         grow: bool = True,
         copy: bool = False,
-        to_float32: bool = False,
+        to_float32: bool = True,
+        validate_log_prob_decomposition: bool = True,
     ):
+        # this is for backwards compatibility: Old code, in which an iterable of
+        # nodes or vars is passed, still works.
+        _nodes_and_vars: list[Node | Var] = []
+        for nv in nodes_and_vars:
+            if isinstance(nv, Node | Var):
+                _nodes_and_vars.append(nv)
+            else:
+                try:
+                    iter(nv)
+                    _nodes_and_vars.extend(list(nv))
+                except TypeError:
+                    pass
+        nodes_and_vars_list = _nodes_and_vars
+        # end of compatibility block
+
         self._to_float32 = to_float32
         if grow:
             model = (
-                GraphBuilder(to_float32=to_float32).add(*nodes_and_vars).build_model()
+                GraphBuilder(to_float32=to_float32)
+                .add(*nodes_and_vars_list)
+                .build_model(validate_log_prob_decomposition=False)
             )
-            nodes_and_vars = [*model.nodes.values(), *model.vars.values()]
+            nodes_and_vars_list = [*model.nodes.values(), *model.vars.values()]
             model.pop_nodes_and_vars()
 
-        nodes = [nv for nv in nodes_and_vars if isinstance(nv, Node)]
+        nodes = [nv for nv in nodes_and_vars_list if isinstance(nv, Node)]
         nodes = list(dict.fromkeys(nodes).keys())
         counts = Counter(n.name for n in nodes)
         dups = [k for k, v in counts.items() if v > 1]
@@ -832,7 +861,7 @@ class Model:
         if dups:
             raise RuntimeError(f"Duplicate node names: {', '.join(dups)}")
 
-        _vars = [nv for nv in nodes_and_vars if isinstance(nv, Var)]
+        _vars = [nv for nv in nodes_and_vars_list if isinstance(nv, Var)]
         _vars = list(dict.fromkeys(_vars).keys())
         counts = Counter(v.name for v in _vars)
         dups = [k for k, v in counts.items() if v > 1]
@@ -840,7 +869,7 @@ class Model:
         if dups:
             raise RuntimeError(f"Duplicate variable names: {', '.join(dups)}")
 
-        groups = [g for nv in nodes_and_vars for g in nv.groups.values()]
+        groups = [g for nv in nodes_and_vars_list for g in nv.groups.values()]
         groups = list(dict.fromkeys(groups).keys())
         counts = Counter(g.name for g in groups)
         dups = [k for k, v in counts.items() if v > 1]
@@ -866,6 +895,9 @@ class Model:
         self._var_graph = self._build_var_graph(self._vars.values())
 
         self._sorted_nodes = list(nx.topological_sort(self._node_graph))
+        self._sorted_vars = list(nx.topological_sort(self._var_graph))
+        self._nodes = {n.name: n for n in self._sorted_nodes}
+        self._vars = {n.name: n for n in self._sorted_vars}
 
         self._simulation_graph = self._build_simulation_graph(self._nodes.values())
         self._simulation_nodes = list(nx.topological_sort(self._simulation_graph))
@@ -878,6 +910,27 @@ class Model:
                 self._seed_nodes.append(node)
 
             node.update()
+
+        if validate_log_prob_decomposition:
+            self._validate_log_prob_decomposition()
+
+    def _validate_log_prob_decomposition(self):
+        consistent = jnp.allclose(self.log_prob, self.log_prior + self.log_lik)
+        if not consistent:
+            logger.warning(
+                "Inconsistent log prob decomposition: "
+                f"Model.log_prob={self.log_prob:.2f} ≠ "
+                f"(Model.log_lik={self.log_lik:.2f} + "
+                f"Model.log_prior={self.log_prior:.2f}). "
+            )
+
+            for var in self.vars.values():
+                if var.dist_node is not None:
+                    if not var.parameter and not var.observed:
+                        logger.warning(
+                            f"{var} has a distribution but "
+                            "Var.parameter=False and Var.observed=False."
+                        )
 
     @staticmethod
     def _build_node_graph(nodes: Iterable[Node]) -> nx.DiGraph:
@@ -980,6 +1033,20 @@ class Model:
         g2 = {g.name: g for v in self._vars.values() for g in v.groups.values()}
         return g1 | g2
 
+    def copy(self) -> Model:
+        """
+        Returns a new model filled with deep copies of all model nodes and variables.
+        """
+        nodes, vars_ = self.copy_nodes_and_vars()
+        nodes_list = list(nodes.values())
+        vars_list = list(vars_.values())
+        nv_list: list[Node | Var] = nodes_list + vars_list
+        return Model(nv_list)
+
+    def copy_vars(self) -> dict[str, Var]:
+        """Returns an unfrozen deep copy of the model variables."""
+        return self.copy_nodes_and_vars()[1]
+
     def copy_nodes_and_vars(self) -> tuple[dict[str, Node], dict[str, Var]]:
         """Returns an unfrozen deep copy of the model nodes and variables."""
         nodes, _vars = deepcopy((self._nodes, self._vars))
@@ -1077,6 +1144,15 @@ class Model:
     def nodes(self) -> MappingProxyType[str, Node]:
         """A mapping of the model nodes with their names as keys."""
         return MappingProxyType(self._nodes)
+
+    def pop_vars(self) -> dict[str, Var]:
+        """
+        Pops the variables out of this model.
+
+        All nodes and variables are unfrozen and their reference to this model
+        is removed. This model becomes invalid and cannot be used anymore.
+        """
+        return self.pop_nodes_and_vars()[1]
 
     def pop_nodes_and_vars(self) -> tuple[dict[str, Node], dict[str, Var]]:
         """
@@ -1520,6 +1596,58 @@ class Model:
         brackets = f"({len(self._nodes)} nodes, {len(self._vars)} vars)"
         return type(self).__name__ + brackets
 
+    def plot(
+        self,
+        show: bool = True,
+        save_path: str | None | IO = None,
+        width: int = 14,
+        height: int = 10,
+        prog: Literal[
+            "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
+        ] = "dot",
+        legend: bool = True,
+    ):
+        """
+        Plots the variables of this model.
+
+        Wraps :func:`~.viz.plot_vars`. Alias for :meth:`.Model.plot_vars`.
+
+        Parameters
+        ----------
+        show
+            Whether to show the plot in a new window.
+        save_path
+            Path to save the plot. If not provided, the plot will not be saved.
+        width
+            Width of the plot in inches.
+        height
+            Height of the plot in inches.
+        prog
+            Layout parameter. Available layouts: circo, dot (the default), fdp, neato, \
+            osage, patchwork, sfdp, twopi.
+        legend
+            Whether to draw the legend.
+
+        See Also
+        --------
+        .Var.plot_vars : Plots the variables of the Liesel sub-model that terminates in
+            this variable.
+        .Var.plot_nodes : Plots the nodes of the Liesel sub-model that terminates in
+            this variable.
+        .Model.plot_vars : Plots the variables of a Liesel model.
+        .Model.plot_nodes : Plots the nodes of a Liesel model.
+        .viz.plot_vars : Plots the variables of a Liesel model.
+        .viz.plot_nodes : Plots the nodes of a Liesel model.
+        """
+        return self.plot_vars(
+            show=show,
+            save_path=save_path,
+            width=width,
+            height=height,
+            prog=prog,
+            legend=legend,
+        )
+
     def plot_vars(
         self,
         show: bool = True,
@@ -1529,6 +1657,7 @@ class Model:
         prog: Literal[
             "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
         ] = "dot",
+        legend: bool = True,
     ):
         """
         Plots the variables of this model.
@@ -1548,6 +1677,8 @@ class Model:
         prog
             Layout parameter. Available layouts: circo, dot (the default), fdp, neato, \
             osage, patchwork, sfdp, twopi.
+        legend
+            Whether to draw the legend.
 
         See Also
         --------
@@ -1567,6 +1698,7 @@ class Model:
             width=width,
             height=height,
             prog=prog,
+            legend=legend,
         )
 
     def plot_nodes(
@@ -1846,6 +1978,48 @@ class Model:
 
         return jax.tree.map(unflatten_batch_dims, flat_predictions)
 
+    def diagnose(self, verbose: bool = False) -> pd.DataFrame:
+        """
+        Provides a dataframe with diagnostic information about the model.
+        """
+
+        rows = []
+        for k, v in self.vars.items():
+            v.update()
+            row: dict[str, Any] = {}
+            row["name"] = k
+            row["has_dist"] = v.has_dist
+            if verbose:
+                row["n_input_vars"] = len(v.all_input_vars())
+                row["n_output_vars"] = len(v.all_output_vars())
+                row["parameter"] = v.parameter
+                row["observerd"] = v.observed
+                row["strong"] = v.strong
+
+            for name, target in (("value", v.value_node), ("log_prob", v.dist_node)):
+                if target is None:
+                    continue
+                row[f"{name}_n_nan"] = jnp.isnan(target.value).sum()
+                row[f"{name}_n_inf"] = jnp.isinf(target.value).sum()
+                row[f"{name}_size"] = jnp.max(jnp.size(target.value))
+                row[f"{name}_dtype"] = jnp.asarray(target.value).dtype
+                if verbose:
+                    row[f"{name}_mean"] = jnp.mean(target.value)
+                    row[f"{name}_sd"] = jnp.std(target.value)
+                    row[f"{name}_min"] = jnp.min(target.value)
+                    row[f"{name}_max"] = jnp.max(target.value)
+                    row[f"{name}_n_input_nodes"] = len(target.all_input_nodes())
+                    row[f"{name}_n_output_nodes"] = len(target.all_output_nodes())
+
+            if verbose:
+                row["value_node_name"] = v.value_node.name
+                if v.dist_node is not None:
+                    row["dist_node_name"] = v.dist_node.name
+
+            rows.append(row)
+
+        return pd.DataFrame(rows)
+
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Save and load models ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1955,8 +2129,19 @@ class TemporaryModel:
                 names_ = f"The automatically assigned names are: {node_names}. "
                 logger.info(f"Unnamed nodes were temporarily named. {names_}")
         elif not self.silent:
-            if var_names or node_names:
-                logger.info("Unnamed variables and/or nodes were temporarily named.")
+            if var_names:
+                names_ = f"The automatically assigned names are: {var_names}. "
+                logger.info(f"Unnamed variables were temporarily named. {names_}")
+            if node_names:
+                names_ = f"The automatically assigned names are: {node_names}. "
+                logger.debug(f"Unnamed nodes were temporarily named. {names_}")
+        else:
+            if var_names:
+                names_ = f"The automatically assigned names are: {var_names}. "
+                logger.debug(f"Unnamed variables were temporarily named. {names_}")
+            if node_names:
+                names_ = f"The automatically assigned names are: {node_names}. "
+                logger.debug(f"Unnamed nodes were temporarily named. {names_}")
 
         model = gb.build_model()
 

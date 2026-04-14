@@ -15,6 +15,7 @@ from typing import IO, TYPE_CHECKING, Any, Literal, NamedTuple, Self, TypeGuard,
 
 import jax
 import jax.numpy as jnp
+import pandas as pd
 import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as jd
 import tensorflow_probability.substrates.numpy.bijectors as nb
@@ -1529,7 +1530,7 @@ class Var:
     ----------
     value
         The value of the variable.
-    distribution
+    dist
         The probability distribution of the variable.
     name
         The name of the variable. If you do not specify a name, a unique name will be \
@@ -1547,6 +1548,10 @@ class Var:
         A function used to process the value of this variable. The default uses the
         function stored in :attr:`.value_conversion_fn`, which is ``jax.numpy.asarray``.
 
+    distribution
+        Deprecated argument name for the probability distribution of the variable,
+        kept for backwards-compatibility.
+        Please use the new name ``dist``.
 
     See Also
     --------
@@ -1603,12 +1608,22 @@ class Var:
     def __init__(
         self,
         value: Any,
-        distribution: Dist | None = None,
+        dist: Dist | None = None,
         name: str = "",
         inference: InferenceTypes = None,
         bijector: None | Bijector | Literal["auto"] = None,
         convert: Callable[[Any], Any] | Literal["default"] = "default",
+        distribution: Dist | None = None,
     ):
+        if dist is not None and distribution is not None:
+            raise ValueError(
+                "Values for 'dist' and 'distribution' provided. "
+                "Please provide the distribution only via 'dist'; the name "
+                "'distribution' is deprecated."
+            )
+        if dist is None:
+            dist = distribution
+
         self._name = name
         if convert == "default":
             self._convert = self.value_conversion_fn
@@ -1625,7 +1640,7 @@ class Var:
 
         # use setters
         self.value_node = value  # type: ignore  # unfrozen
-        self.dist_node = distribution  # type: ignore  # unfrozen
+        self.dist_node = dist  # type: ignore  # unfrozen
 
         self._auto_transform = False
         self._bijected_var: Var | None = None
@@ -1647,11 +1662,12 @@ class Var:
     def new_param(
         cls,
         value: Any,
-        distribution: Dist | None = None,
+        dist: Dist | None = None,
         name: str = "",
         inference: InferenceTypes = None,
         bijector: None | Bijector | Literal["auto"] = None,
         convert: Callable[[Any], Any] | Literal["default"] = "default",
+        distribution: Dist | None = None,
     ) -> Var:
         """
         Initializes a strong variable that acts as a model parameter.
@@ -1664,7 +1680,7 @@ class Var:
         ----------
         value
             The value of the variable.
-        distribution
+        dist
             The probability distribution of the variable.
         name
             The name of the variable. If you do not specify a name, a unique name will \
@@ -1682,6 +1698,10 @@ class Var:
             A function used to process the value of this variable. The default uses the
             function stored in :attr:`.value_conversion_fn`, which is
             ``jax.numpy.asarray``.
+        distribution
+            Deprecated argument name for the probability distribution of the variable,
+            kept for backwards-compatibility.
+            Please use the new name ``dist``.
 
         See Also
         --------
@@ -1702,18 +1722,25 @@ class Var:
         A simple parameter with a normal prior:
 
         >>> prior = lsl.Dist(tfd.Normal, loc=0.0, scale=1.0)
-        >>> x = lsl.Var.new_param(1.0, distribution=prior)
+        >>> x = lsl.Var.new_param(1.0, dist=prior)
         >>> x
         Var(name="")
 
         """
         var = cls(
+            
             value,
-            distribution,
+           
+            dist,
+           
             name,
+           
             inference=inference,
+           
             bijector=bijector,
             convert=convert,
+        ,
+            distribution=distribution,
         )
         var.value_node.monitor = True
         if var.bijected_var is not None:
@@ -1725,9 +1752,13 @@ class Var:
     @classmethod
     def new_obs(
         cls,
+       
         value: Any,
-        distribution: Dist | None = None,
+       
+        dist: Dist | None = None,
         name: str = "",
+        distribution: Dist | None = None,
+       ,
         convert: Callable[[Any], Any] | Literal["default"] = "default",
     ) -> Var:
         """
@@ -1741,7 +1772,7 @@ class Var:
         ----------
         value
             The value of the variable.
-        distribution
+        dist
             The probability distribution of the variable.
         name
             The name of the variable. If you do not specify a name, a unique name will \
@@ -1750,6 +1781,10 @@ class Var:
             A function used to process the value of this variable. The default uses the
             function stored in :attr:`.value_conversion_fn`, which is
             ``jax.numpy.asarray``.
+        distribution
+            Deprecated argument name for the probability distribution of the variable,
+            kept for backwards-compatibility.
+            Please use the new name ``dist``.
 
         See Also
         --------
@@ -1770,12 +1805,12 @@ class Var:
         A simple observed variable with a normal distribution:
 
         >>> prior = lsl.Dist(tfd.Normal, loc=0.0, scale=1.0)
-        >>> x = lsl.Var.new_param(1.0, distribution=prior)
+        >>> x = lsl.Var.new_param(1.0, dist=prior)
         >>> x
         Var(name="")
 
         """
-        var = cls(value, distribution, name, convert=convert)
+        var = cls(value, dist, name, distribution=distribution, convert=convert)
         var.observed = True
         return var
 
@@ -1784,11 +1819,13 @@ class Var:
         cls,
         function: Callable[..., Any],
         *inputs: Any,
-        distribution: Dist | None = None,
+        dist: Dist | None = None,
         name: str = "",
         _needs_seed: bool = False,
         _update_on_init: bool = True,
         convert_inputs: Callable[[Any], Any] | Literal["default"] = "default",
+        cache: bool = True,
+        distribution: Dist | None = None,
         **kwinputs: Any,
     ) -> Var:
         """
@@ -1813,7 +1850,7 @@ class Var:
             will be converted to :class:`.Value` nodes. The values of these inputs \
             will be passed to the wrapped function in the same order they are entered \
             here.
-        distribution
+        dist
             The probability distribution of the variable.
         name
             The name of the node. If you do not specify a name, a unique name will be \
@@ -1827,6 +1864,18 @@ class Var:
             A function used to process the values of this variable's inputs.
             The default uses the function stored in :attr:`.value_conversion_fn`,
             which is ``jax.numpy.asarray``.
+        cache
+            If ``False``, this variable will not store a cache of its value. This means,
+            the ``function`` is evaluated every single time that the value of this
+            variable is requested. This can save memory, if the computations are
+            trivial (such as prepending an axis to an array), but it can greatly slow
+            down computations otherwise (such as when the function performs a
+            matrix inversion). Internally, if ``cache=True``, this variable wraps a
+            :class:`.Calc`, and if ``cache=False``, it wraps a :class:`.TransientCalc`.
+        distribution
+            Deprecated argument name for the probability distribution of the variable,
+            kept for backwards-compatibility.
+            Please use the new name ``dist``.
         **kwinputs
             Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
             will be converted to :class:`.Data` nodes. The values of these inputs will \
@@ -1881,7 +1930,12 @@ class Var:
         if convert_inputs == "default":
             convert_inputs = cls.value_conversion_fn
 
-        calc = Calc(
+        if cache:
+            calc_class = Calc
+        else:
+            calc_class = TransientCalc
+
+        calc = calc_class(
             function,
             *inputs,
             _name=f"{name}_calc",
@@ -1890,7 +1944,7 @@ class Var:
             convert_inputs=convert_inputs,
             **kwinputs,
         )
-        var = cls(calc, distribution=distribution, name=name, convert=lambda x: x)
+        var = cls(calc, dist=dist, distribution=distribution, name=name, convert=lambda x: x)
         return var
 
     @classmethod
@@ -1949,20 +2003,30 @@ class Var:
             return self.inference[key]
         return self.inference
 
-    def all_input_nodes(self) -> tuple[Node, ...]:
+    def all_input_nodes(
+        self, to: Literal["value_node", "dist_node", "both"] = "both"
+    ) -> tuple[Node, ...]:
         """Returns all input *nodes* as a unique tuple."""
         inputs1 = self.value_node.all_input_nodes()
         inputs2 = self._dist_node.all_input_nodes()
-        return _unique_tuple(inputs1, inputs2)
+        match to:
+            case "value_node":
+                return inputs1
+            case "dist_node":
+                return inputs2
+            case "both":
+                return _unique_tuple(inputs1, inputs2)
 
-    def all_input_vars(self) -> tuple[Var, ...]:
+    def all_input_vars(
+        self, to: Literal["value_node", "dist_node", "both"] = "both"
+    ) -> tuple[Var, ...]:
         """
         Returns all input *variables* as a unique tuple.
 
         The returned tuple also contains input variables that are indirect inputs
         of this variable through nodes without variables.
         """
-        nodes = list(self.all_input_nodes())
+        nodes = list(self.all_input_nodes(to=to))
         visited = []
         _vars = []
 
@@ -2320,23 +2384,34 @@ class Var:
         self._bijected_var = value
 
     @in_model_method
-    def all_output_nodes(self) -> tuple[Node, ...]:
+    def all_output_nodes(
+        self, of: Literal["value_node", "dist_node", "both"] = "both"
+    ) -> tuple[Node, ...]:
         """Returns all output *nodes* as a unique tuple."""
-        nodes = list(self.value_node.all_output_nodes())
-        nodes.extend(self.var_value_node.all_output_nodes())
-        nodes.extend(self._dist_node.all_output_nodes())
+        match of:
+            case "value_node":
+                nodes = list(self.value_node.all_output_nodes())
+                nodes.extend(self.var_value_node.all_output_nodes())
+            case "dist_node":
+                nodes = list(self._dist_node.all_output_nodes())
+            case "both":
+                nodes = list(self.value_node.all_output_nodes())
+                nodes.extend(self.var_value_node.all_output_nodes())
+                nodes.extend(self._dist_node.all_output_nodes())
         nodes = [node for node in nodes if node is not self.var_value_node]
         return _unique_tuple(nodes)
 
     @in_model_method
-    def all_output_vars(self) -> tuple[Var, ...]:
+    def all_output_vars(
+        self, of: Literal["value_node", "dist_node", "both"] = "both"
+    ) -> tuple[Var, ...]:
         """
         Returns all output *variables* as a unique tuple.
 
         The returned tuple also contains output variables that are indirect outputs
         of this variable through nodes without variables.
         """
-        nodes = list(self.all_output_nodes())
+        nodes = list(self.all_output_nodes(of=of))
         visited = []
         _vars = []
 
@@ -2638,6 +2713,67 @@ class Var:
                     subgraph = model.node_parental_subgraph(*filtered_nodes)
                     plot_nodes(subgraph, **kwargs)
 
+    def plot(
+        self,
+        show: bool = True,
+        save_path: str | None | IO = None,
+        width: int = 14,
+        height: int = 10,
+        prog: Literal[
+            "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
+        ] = "dot",
+        verbose: bool = False,
+        legend: bool = True,
+    ) -> None:
+        """
+        Plots the variables of the Liesel sub-model that terminates in this variable.
+
+        Wraps :func:`~.viz.plot_vars`. Alias for :meth:`.Var.plot_vars`.
+
+        Parameters
+        ----------
+        verbose
+            If ``True``, logs a message if unnamed variables or nodes are temporarily \
+            named for plotting.
+        show
+            Whether to show the plot in a new window.
+        save_path
+            Path to save the plot. If not provided, the plot will not be saved.
+        width
+            Width of the plot in inches.
+        height
+            Height of the plot in inches.
+        prog
+            Layout parameter. Available layouts: circo, dot (the default), fdp, neato, \
+            osage, patchwork, sfdp, twopi.
+        verbose
+            If ``True``, the message that will be logged if unnamed nodes are \
+            automatically named for plotting contains a list of the automatically \
+            assigned names.
+        legend
+            Whether to draw the legend.
+
+        See Also
+        --------
+        .Var.plot_vars : Plots the variables of the Liesel sub-model that terminates in
+            this variable.
+        .Var.plot_nodes : Plots the nodes of the Liesel sub-model that terminates in
+            this variable.
+        .Model.plot_vars : Plots the variables of a Liesel model.
+        .Model.plot_nodes : Plots the nodes of a Liesel model.
+        .viz.plot_vars : Plots the variables of a Liesel model.
+        .viz.plot_nodes : Plots the nodes of a Liesel model.
+        """
+        return self.plot_vars(
+            verbose=verbose,
+            show=show,
+            save_path=save_path,
+            width=width,
+            height=height,
+            prog=prog,
+            legend=legend,
+        )
+
     def plot_vars(
         self,
         show: bool = True,
@@ -2648,6 +2784,7 @@ class Var:
             "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
         ] = "dot",
         verbose: bool = False,
+        legend: bool = True,
     ) -> None:
         """
         Plots the variables of the Liesel sub-model that terminates in this variable.
@@ -2674,6 +2811,8 @@ class Var:
             If ``True``, the message that will be logged if unnamed nodes are \
             automatically named for plotting contains a list of the automatically \
             assigned names.
+        legend
+            Whether to draw the legend.
 
         See Also
         --------
@@ -2694,6 +2833,7 @@ class Var:
             width=width,
             height=height,
             prog=prog,
+            legend=legend,
         )
 
     def predict(
@@ -2752,6 +2892,33 @@ class Var:
 
         pred = submodel.predict(samples=samples, predict=[self.name], newdata=newdata)
         return pred[self.name]
+
+    def diagnose(self, verbose: bool = False) -> pd.DataFrame:
+        """
+        Provides a dataframe with diagnostic information about this variable's submodel.
+        """
+        if self.model is not None:
+            submodel = self.model.parental_submodel(self)
+        else:
+            from liesel.model.model import TemporaryModel
+
+            try:
+                to_float32 = not jax.config.jax_enable_x64  # type: ignore
+            except Exception:  # just to be really sure in case anything changes
+                # this is an implicit test of whether x64 flag is enabled
+                import jax.numpy as jnp
+
+                to_float32 = jnp.array(1.0).dtype == jnp.dtype("float32")
+
+            with TemporaryModel(self, silent=True, to_float32=to_float32) as model:
+                submodel = model.parental_submodel(self)
+
+        if self.model is None:
+            model = submodel
+        else:
+            model = self.model
+
+        return model.diagnose(verbose=verbose)
 
     def sample(
         self,

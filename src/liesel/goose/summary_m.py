@@ -17,7 +17,7 @@ from liesel.__version__ import __version__
 from liesel.goose.engine import ErrorLog, SamplingResults
 from liesel.goose.epoch import EpochType
 from liesel.goose.pytree import slice_leaves, stack_leaves
-from liesel.goose.types import Array, Position
+from liesel.goose.types import Array, Position, TransitionInfo
 from liesel.option import Option
 
 # can be removed once arviz has been upgrade to v1.0
@@ -122,6 +122,37 @@ summary_quantities: Sequence[SummaryQuantities] = (
     "mcse_mean",
     "mcse_sd",
 )
+
+
+def _summarize_acceptance_probabilities(
+    transition_infos: dict[str, TransitionInfo], phase: str
+) -> list[dict[str, Any]]:
+    data = []
+    for k, tinfo in transition_infos.items():
+        ap = jnp.asarray(tinfo.acceptance_prob)
+        pm = jnp.asarray(tinfo.position_moved)
+        chains, _ = ap.shape
+        for c in range(chains):
+            chain = {"kernel": k, "phase": phase, "chain": c}
+            chain["acceptance_probability"] = float(ap[c, ...].mean())
+            chain["position_moved"] = jnp.mean(pm[c, ...])
+            if float(chain["position_moved"]) > 1.0:  # type: ignore # spurious warning
+                if int(chain["position_moved"].round()) == 99:  # type: ignore
+                    chain["position_moved"] = jnp.nan
+            data.append(chain)
+    return data
+
+
+def summarize_acceptance_probabilities(
+    results: SamplingResults,
+) -> list[dict[str, Any]]:
+    warmup = _summarize_acceptance_probabilities(
+        results.get_warmup_transition_infos(), "warmup"
+    )
+    posterior = _summarize_acceptance_probabilities(
+        results.get_posterior_transition_infos(), "posterior"
+    )
+    return warmup + posterior
 
 
 class Summary:
@@ -318,12 +349,24 @@ class Summary:
             results.get_error_log(False).unwrap(), results.get_error_log(True)
         )
 
+        pos_keys_by_kernels = []
+        for k, v in results.get_pos_keys_by_kernels().items():
+            pos_keys_by_kernels.append({"kernel": k, "positions": ", ".join(v)})
+
+        if len(pos_keys_by_kernels) == 1:
+            posdf = pd.DataFrame(pos_keys_by_kernels, index=pd.Index([0]))
+        else:
+            posdf = pd.DataFrame(pos_keys_by_kernels)
+        posdf = posdf.set_index(["kernel"])
+
         self._which = which
         self.per_chain = per_chain
         self.quantities = quantities
         self.config = config
         self.sample_info = sample_info
         self.error_summary = error_summary
+        self.pos_keys_by_kernels_df = posdf
+        self._acceptance_prob_summary = summarize_acceptance_probabilities(results)
         self.kernels_by_pos_key = results.get_kernels_by_pos_key()
         self.liesel_version = __version__
 
@@ -494,6 +537,19 @@ class Summary:
 
         return df
 
+    def acceptance_prob_df(self) -> pd.DataFrame:
+        """Returns an overview of acceptance probabilities as a dataframe."""
+        apdf = pd.DataFrame(self._acceptance_prob_summary)
+        apdf = apdf.set_index(["kernel", "phase", "chain"])
+        apdf = apdf.join(self.pos_keys_by_kernels_df, on="kernel")
+        apdf = apdf.reset_index().set_index(["kernel", "positions", "phase", "chain"])
+
+        if not self.per_chain:
+            apdf = apdf.groupby(level=["kernel", "positions", "phase"]).agg(
+                {"acceptance_probability": "mean", "position_moved": "mean"}
+            )
+        return apdf
+
     def error_df(self, per_chain: bool = False) -> pd.DataFrame:
         """
         Returns an overview of the errors recorded during sampling as a dataframe.
@@ -558,10 +614,16 @@ class Summary:
 
         df["relative"] = df["count"] / df["sample_size_total"]
 
+        df = (
+            df.join(self.pos_keys_by_kernels_df, on="kernel")
+            .reset_index()
+            .set_index(["kernel", "positions", "error_code", "error_msg", "phase"])
+        )
+
         # df = df.drop(columns="sample_size")
 
         if not per_chain:
-            df = df.groupby(level=[0, 1, 2, 3], observed=True)
+            df = df.groupby(level=[0, 1, 2, 3, 4], observed=True)
             df = df.aggregate(
                 {
                     "count": "sum",
@@ -590,9 +652,12 @@ class Summary:
 
     def _repr_html_(self):
         param_df = self._param_df()
+        apdf = self.acceptance_prob_df()
         error_df = self._error_df()
 
         html = "\n<p><strong>Parameter summary:</strong></p>\n" + param_df.to_html()
+
+        html += "\n<p><strong>Acceptance probabilities:</strong></p>\n" + apdf.to_html()
 
         if not error_df.empty:
             html += "\n<p><strong>Error summary:</strong></p>\n" + error_df.to_html()
@@ -602,16 +667,21 @@ class Summary:
 
     def _repr_markdown_(self):
         param_df = self._param_df()
+        apdf = self.acceptance_prob_df()
         error_df = self._error_df()
 
         try:
             param_md = param_df.to_markdown()
+            apdf_md = apdf.to_markdown()
             error_md = error_df.to_markdown()
         except ImportError:
             param_md = f"```\n{repr(param_df)}\n```"
+            apdf_md = f"```\n{repr(apdf)}\n```"
             error_md = f"```\n{repr(error_df)}\n```"
 
         md = "\n\n**Parameter summary:**\n\n" + param_md
+
+        md += "\n\n**Acceptance probabilities:**\n\n" + apdf_md
 
         if not error_df.empty:
             md += "\n\n**Error summary:**\n\n" + error_md

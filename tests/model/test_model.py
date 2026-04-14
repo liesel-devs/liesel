@@ -97,6 +97,12 @@ def model_nodes() -> Generator:
 
 
 class TestModel:
+    def test_init_model_with_args(self, y_var) -> None:
+        data = Value(2.5, "z")
+        model = Model(y_var, data)
+        assert y_var.name in model.vars
+        assert data.name in model.nodes
+
     def test_copy_length(self, model: Model) -> None:
         """
         Verifies the correct length of copied var and node dicts.
@@ -263,6 +269,19 @@ class TestModel:
         assert "mu" in model.vars
         assert "y_var" in model.vars
 
+    def test_vars_order(self, model: Model) -> None:
+        assert list(model.vars) == [
+            "scale",
+            "concentration",
+            "beta_scale",
+            "beta_loc",
+            "X",
+            "sigma_hat",
+            "beta_hat",
+            "mu",
+            "y_var",
+        ]
+
     def test_nodes(self, model: Model) -> None:
         """
         Verifies that all necessary nodes are present in Model.nodes.
@@ -408,6 +427,16 @@ class TestModel:
             3.0
         )
         assert model.nodes["z"].value == pytest.approx(3.0)
+
+    def test_diagnose(self, model) -> None:
+        df = model.diagnose()
+
+        assert df.shape[0] == len(model.vars)
+
+        df2 = model.diagnose(verbose=True)
+
+        assert df.shape[0] == df2.shape[0]
+        assert df.shape[1] < df2.shape[1]
 
 
 class TestPredictions:
