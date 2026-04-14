@@ -13,7 +13,6 @@ from copy import deepcopy
 from types import MappingProxyType
 from typing import IO, Any, Literal, TypeVar
 
-import arviz as az
 import dill
 import jax
 import jax.numpy as jnp
@@ -1703,166 +1702,6 @@ class Model:
         model.update()
         return model.state
 
-    def log_lik_pointwise(
-        self,
-        samples: dict[str, jax.typing.ArrayLike],
-        newdata: dict[str, jax.typing.ArrayLike] | None = None,
-        include: Sequence[str] | None = None,
-        exclude: Sequence[str] | None = None,
-    ) -> jax.Array:
-        """
-        Returns an array of pointwise log probabilities for all observed variables
-        with distributions in the model.
-
-        Parameters
-        ----------
-        samples
-            Dictionary of samples at which to evaluate log probs. If ``samples``
-            contains entries for weak variables or for nodes in :attr:`.model_nodes`
-            they are ignored.
-        newdata
-            Dictionary of new data at which to evaluate log probs. The keys should \
-            correspond to variable or node names in the model whose values should be \
-            set to the given values before evaluating predictions. If ``None`` \
-            (default), the current variable values are used.
-        include, exclude
-            Sequences of strings identifying a subset of variable names to in- or
-            exclude.
-
-        Returns
-        -------
-        An array of dimension ``(nchains, nsamples, nobs)``, where ``nobs`` is the
-        total number of pointwise log probability evaluations.
-
-        """
-        include = include if include is not None else []
-        exclude = exclude if exclude is not None else []
-        in_both = set(include).intersection(exclude)
-        if len(in_both) > 0:
-            raise ValueError(
-                f"Nonempty intersection of include and exclude: {in_both}. "
-                "Variables can be either included or excluded, but not both."
-            )
-
-        for name in include:
-            if name not in self.vars:
-                logger.warning(
-                    f"Name {name} was supplied to 'include', but is not in Model.vars."
-                )
-
-        for name in exclude:
-            if name not in self.vars:
-                logger.warning(
-                    f"Name {name} was supplied to 'exclude', but is not in Model.vars."
-                )
-
-        ll_names = []
-        for var in self.observed.values():
-            if var.dist_node is None:
-                continue
-
-            if var.name in exclude:
-                continue
-
-            if len(include) > 0 and var.name not in include:
-                continue
-
-            if not var.dist_node.per_obs:
-                raise ValueError(
-                    f"{var} has Var.dist_node.per_obs=False. "
-                    "For point log probability computation, "
-                    "Var.dist_node.per_obs=True is required for "
-                    "all variables contributing to the likelihood."
-                )
-
-            if not var.value.shape == var.log_prob.shape:
-                msg = (
-                    f"{var}.value has shape {var.value.shape}, "
-                    f"while {var}.log_prob has shape {var.log_prob.shape}. This "
-                    f"suggests that the pointwise log prob for {var} may not be "
-                    "available, or that you may be using a multivariate distribution. "
-                    "Please double check."
-                )
-                logger.warning(msg)
-
-            ll_names.append(var.dist_node.name)
-
-        pointwise_ll_dict = self.predict(samples, predict=ll_names, newdata=newdata)
-        flat_pointwise_log_likelihoods = []
-        for v in pointwise_ll_dict.values():
-            v = jnp.asarray(v)
-            vshape = v.shape[:2] + (-1,)
-            flat_pointwise_log_likelihoods.append(jnp.reshape(v, vshape))
-        pointwise_ll_array = jnp.concatenate(flat_pointwise_log_likelihoods, axis=-1)
-        return pointwise_ll_array
-
-    def loo(
-        self,
-        samples: dict[str, jax.typing.ArrayLike],
-        include: Sequence[str] | None = None,
-        exclude: Sequence[str] | None = None,
-        reff: float | None = None,
-        scale: Literal["log", "negative_log", "deviance"] = "log",
-    ) -> az.ELPDData:
-        """
-        Compute Pareto-smoothed importance sampling leave-one-out cross-validation
-        (PSIS-LOO-CV) via ArviZ.
-
-        Parameters
-        ----------
-        samples
-            Dictionary of samples at which to evaluate log probs. If ``samples``
-            contains entries for weak variables or for nodes in :attr:`.model_nodes`
-            they are ignored.
-        newdata
-            Dictionary of new data at which to evaluate log probs. The keys should \
-            correspond to variable or node names in the model whose values should be \
-            set to the given values before evaluating predictions. If ``None`` \
-            (default), the current variable values are used.
-        include, exclude
-            Sequences of strings identifying a subset of variable names to in- or
-            exclude in point log probability. The default is to include all observed
-            variables with distributions.
-        reff
-            Relative MCMC efficiency, ess / n i.e. number of effective samples divided
-            by the number of actual samples. Computed from the samples by default.
-        scale
-            Output scale. The options are:
-
-            - ``log``: (default) log probability scale.
-            - ``negative_log``: ``-1 * log``
-            - ``deviance``: ``-2 * log``
-
-            A higher log probability (or a lower deviance or negative log_score)
-            indicates a model with better predictive accuracy.
-
-        References
-        ----------
-        - Computations are carried out via ArviZ: https://python.arviz.org/en/stable/
-        - Theoretical background: Vehtari, A., Gelman, A., & Gabry, J. (2017). Practical
-          Bayesian model evaluation using leave-one-out cross-validation and WAIC.
-          Statistics and Computing, 27(5), 1413–1432.
-          https://doi.org/10.1007/s11222-016-9696-4
-
-        """
-        import liesel.goose as gs
-
-        pll = self.log_lik_pointwise(
-            samples, newdata=None, include=include, exclude=exclude
-        )
-        idat = az.convert_to_inference_data({"observed": pll}, group="log_likelihood")
-        if reff is None:
-            avg_ess = (
-                gs.SamplesSummary(samples, which=["ess_bulk"])
-                .to_dataframe()["ess_bulk"]
-                .mean()
-            )
-            nsamples = pll.shape[0] * pll.shape[1]
-            reff = avg_ess / nsamples
-
-        arviz_loo = az.loo(idat, reff=reff, scale=scale)
-        return arviz_loo
-
     def predict(
         self,
         samples: dict[str, jax.typing.ArrayLike],
@@ -2145,3 +1984,73 @@ class TemporaryModel:
         self.gb.vars.clear()
 
         return False  # Returning False means exceptions are not suppressed
+
+
+def log_prob_pointwise(
+    vars_: dict[str, Var],
+    samples: dict[str, jax.typing.ArrayLike],
+    newdata: dict[str, jax.typing.ArrayLike] | None = None,
+) -> dict[str, jax.Array]:
+    """
+    Returns an array of pointwise log probabilities for all observed variables with
+    distributions in the model.
+
+    Parameters
+    ----------
+    vars_
+        Dictionary of variables for which to evaluate log probs.
+    samples
+        Dictionary of samples at which to evaluate log probs. If ``samples`` contains
+        entries for weak variables or for nodes in :attr:`.model_nodes` they are
+        ignored.
+    newdata
+        Dictionary of new data at which to evaluate log probs. The keys should
+        correspond to variable or node names in the model whose values should be set
+        to the given values before evaluating predictions. If ``None`` (default), the
+        current variable values are used.
+
+    Returns
+    -------
+    A dictionary with pointwise log probability evaluations as values and the
+    :class:`.Dist` node names of the supplied variables as keys.
+    """
+    ll_names = []
+    models = []
+    for var in vars_.values():
+        if not var.model:
+            raise ValueError(f"{var} is not part of a model.")
+        models.append(var.model)
+
+        if var.dist_node is None:
+            continue
+
+        if not var.dist_node.per_obs:
+            raise ValueError(
+                f"{var} has Var.dist_node.per_obs=False. "
+                "For point log probability computation, "
+                "Var.dist_node.per_obs=True is required for "
+                "all variables contributing to the likelihood."
+            )
+
+        if not var.value.shape == var.log_prob.shape:
+            msg = (
+                f"{var}.value has shape {var.value.shape}, "
+                f"while {var}.log_prob has shape {var.log_prob.shape}. This "
+                f"suggests that the pointwise log prob for {var} may not be "
+                "available, or that you may be using a multivariate distribution. "
+                "Please double check."
+            )
+            logger.warning(msg)
+
+        ll_names.append(var.dist_node.name)
+
+    n_models = len(set(models))
+    if n_models > 1:
+        raise RuntimeError(
+            "The supplied variables must all belong to the same model. "
+            f"Found {n_models} different models."
+        )
+
+    model = models[0]
+    pointwise_ll_dict = model.predict(samples, predict=ll_names, newdata=newdata)
+    return pointwise_ll_dict
