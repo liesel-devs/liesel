@@ -10,7 +10,7 @@ import jax.random as rnd
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
-from liesel.model.model import GraphBuilder, Model, save_model
+from liesel.model.model import GraphBuilder, Model, log_prob_pointwise, save_model
 from liesel.model.nodes import Calc, Dist, Group, TransientNode, Value, Var
 
 
@@ -1132,3 +1132,18 @@ class TestSample:
             model.sample(
                 shape=(11,), seed=rnd.key(8), posterior_samples=samples1, fixed=["b"]
             )
+
+
+class TestPointwiseLogLik:
+    def test_pointwise_ll(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Normal(loc=1.0, scale=0.01).sample(
+                (4, 100), rnd.PRNGKey(6)
+            ),
+            "beta_hat": tfd.Normal(loc=jnp.array([1.0, 2.0]), scale=0.1).sample(
+                (4, 100), rnd.PRNGKey(6)
+            ),
+        }
+
+        pll = log_prob_pointwise(model.observed, samples)
+        assert pll["y_var_log_prob"].shape == (4, 100, 500)

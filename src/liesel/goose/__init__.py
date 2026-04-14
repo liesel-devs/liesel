@@ -21,7 +21,7 @@ from .mh_kernel import MHKernel, MHProposal
 from .nuts import NUTSKernel
 from .optim import OptimResult, Stopper, history_to_df, optim_flat
 from .rw import RWKernel
-from .summary_m import SamplesSummary, Summary
+from .summary_m import SamplesSummary, Summary, loo
 from .summary_viz import (
     plot_cor,
     plot_density,
@@ -61,6 +61,7 @@ __all__ = [
     "Summary",
     "SamplesSummary",
     "SamplingResults",
+    "loo",
     "plot_cor",
     "plot_density",
     "plot_param",

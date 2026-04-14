@@ -2169,3 +2169,72 @@ class TemporaryModel:
         self.gb.vars.clear()
 
         return False  # Returning False means exceptions are not suppressed
+
+
+def log_prob_pointwise(
+    vars_: dict[str, Var],
+    samples: dict[str, jax.typing.ArrayLike],
+    newdata: dict[str, jax.typing.ArrayLike] | None = None,
+) -> dict[str, jax.Array]:
+    """
+    Returns a dictionary of pointwise log probabilities for the supplied variables.
+
+    Parameters
+    ----------
+    vars_
+        Dictionary of variables for which to evaluate log probs.
+    samples
+        Dictionary of samples at which to evaluate log probs. If ``samples`` contains
+        entries for weak variables or for nodes in :attr:`.model_nodes` they are
+        ignored.
+    newdata
+        Dictionary of new data at which to evaluate log probs. The keys should
+        correspond to variable or node names in the model whose values should be set
+        to the given values before evaluating predictions. If ``None`` (default), the
+        current variable values are used.
+
+    Returns
+    -------
+    A dictionary with pointwise log probability evaluations as values and the
+    :class:`.Dist` node names of the supplied variables as keys.
+    """
+    ll_names = []
+    models = []
+    for var in vars_.values():
+        if not var.model:
+            raise ValueError(f"{var} is not part of a model.")
+        models.append(var.model)
+
+        if var.dist_node is None:
+            continue
+
+        if not var.dist_node.per_obs:
+            raise ValueError(
+                f"{var} has Var.dist_node.per_obs=False. "
+                "For point log probability computation, "
+                "Var.dist_node.per_obs=True is required for "
+                "all variables contributing to the likelihood."
+            )
+
+        if not var.value.shape == var.log_prob.shape:
+            msg = (
+                f"{var}.value has shape {var.value.shape}, "
+                f"while {var}.log_prob has shape {var.log_prob.shape}. This "
+                f"suggests that the pointwise log prob for {var} may not be "
+                "available, or that you may be using a multivariate distribution. "
+                "Please double check."
+            )
+            logger.warning(msg)
+
+        ll_names.append(var.dist_node.name)
+
+    n_models = len(set(models))
+    if n_models > 1:
+        raise RuntimeError(
+            "The supplied variables must all belong to the same model. "
+            f"Found {n_models} different models."
+        )
+
+    model = models[0]
+    pointwise_ll_dict = model.predict(samples, predict=ll_names, newdata=newdata)
+    return pointwise_ll_dict

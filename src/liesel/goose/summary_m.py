@@ -1059,3 +1059,104 @@ class SamplesSummary:
         else:
             diagnostics["aggregated_by"] = by
         return diagnostics
+
+
+def concatenate_arrays_in_dict(
+    x: dict[str, jax.typing.ArrayLike], n_leading_axes: int = 2
+) -> jax.Array:
+    """
+    Concatenates all arrays in the supplied dictionary into a single array.
+
+    Returns
+    -------
+    An array of dimension ``(leading1, leading1, nobs)``, where ``nobs`` is the total
+    number of elements in the non-leading axes of the dictionary values. As the default
+    case, we expect the output to have shape ``(nchains, nsamples, nobs)``.
+    """
+
+    flat_arrays = []
+    for v in x.values():
+        # assumed to have shape (s, c, ...)
+
+        v = jnp.atleast_3d(jnp.asarray(v))
+
+        vshape = v.shape[:n_leading_axes] + (-1,)
+        flat_arrays.append(jnp.reshape(v, vshape))
+
+    out_array = jnp.concatenate(flat_arrays, axis=-1)
+    return out_array
+
+
+def loo(
+    lpp: dict[str, jax.typing.ArrayLike] | jax.typing.ArrayLike,
+    samples: dict[str, jax.typing.ArrayLike] | None,
+    reff: float | None = None,
+    scale: Literal["log", "negative_log", "deviance"] = "log",
+) -> az.ELPDData:
+    """
+    Compute Pareto-smoothed importance sampling leave-one-out cross-validation
+    (PSIS-LOO-CV) statistic via ArviZ.
+
+    Parameters
+    ----------
+    lpp
+        Dictionary or array of pointwise log probability evaluations.
+        If passed as a dictionary, each value is expected to have shape
+        ``(nsamples, nchains, ...)``.
+        If passed as an array, it is assumed to have shape ``(nsamples, nchains, n)``.
+    samples
+        Dictionary of samples at which to evaluate log probs. If ``samples``
+        contains entries for weak variables or for nodes in :attr:`.model_nodes`
+        they are ignored.
+    newdata
+        Dictionary of new data at which to evaluate log probs. The keys should \
+        correspond to variable or node names in the model whose values should be \
+        set to the given values before evaluating predictions. If ``None`` \
+        (default), the current variable values are used.
+    reff
+        Relative MCMC efficiency, ess / n i.e. number of effective samples divided
+        by the number of actual samples. Computed from the samples by default.
+    scale
+        Output scale. The options are:
+
+        - ``log``: (default) log probability scale.
+        - ``negative_log``: ``-1 * log``
+        - ``deviance``: ``-2 * log``
+
+        A higher log probability (or a lower deviance or negative log_score)
+        indicates a model with better predictive accuracy.
+
+
+    References
+    ----------
+    - Computations are carried out via ArviZ: https://python.arviz.org/en/stable/
+    - Theoretical background: Vehtari, A., Gelman, A., & Gabry, J. (2017). Practical
+      Bayesian model evaluation using leave-one-out cross-validation and WAIC.
+      Statistics and Computing, 27(5), 1413–1432.
+      https://doi.org/10.1007/s11222-016-9696-4
+
+    """
+    if samples is None and reff is None:
+        raise ValueError(
+            "Both 'samples' and 'reff' are None, so relative MCMC efficiency is not "
+            "available."
+        )
+
+    try:
+        lpp_array = jnp.asarray(lpp)
+    except Exception:  # assume its a dict now
+        lpp_array = concatenate_arrays_in_dict(lpp)
+
+    idat = az.convert_to_inference_data({"observed": lpp_array}, group="log_likelihood")
+    if reff is None and samples is not None:
+        avg_ess = (
+            SamplesSummary(samples, which=["ess_bulk"])
+            .to_dataframe()["ess_bulk"]
+            .mean()
+        )
+        nsamples = lpp_array.shape[0] * lpp_array.shape[1]
+        reff = avg_ess / nsamples
+    # now we assume reff is not None
+
+    arviz_loo = az.loo(idat, reff=reff, scale=scale)
+    return arviz_loo
