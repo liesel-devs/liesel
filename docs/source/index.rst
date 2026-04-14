@@ -103,6 +103,7 @@ The central classes for handling your sampling results are:
     ~liesel.goose.SamplingResults
     ~liesel.goose.Summary
     ~liesel.goose.SamplesSummary
+    ~liesel.goose.loo
 
 You can obtain your posterior samples as a dictionary via
 :meth:`~.goose.SamplingResults.get_posterior_samples`. There is also experimental support
@@ -152,6 +153,7 @@ Model (Advanced)
     :recursive:
     :nosignatures:
 
+    ~liesel.model.log_prob_pointwise
     ~liesel.model.LogProb
     ~liesel.model.FlatLogProb
     ~liesel.model.Calc
