@@ -33,7 +33,7 @@ class LogProb:
 
     >>> x = lsl.Var.new_param(
     ...     jnp.zeros(2),
-    ...     distribution=lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+    ...     dist=lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
     ...     name="x",
     ... )
     >>> model = lsl.Model([x])
@@ -139,7 +139,7 @@ class FlatLogProb:
 
     >>> x = lsl.Var.new_param(
     ...     jnp.zeros(2),
-    ...     distribution=lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+    ...     dist=lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
     ...     name="x",
     ... )
     >>> model = lsl.Model([x])

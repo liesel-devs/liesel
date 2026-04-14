@@ -80,6 +80,7 @@ def plot_vars(
     prog: Literal[
         "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
     ] = "dot",
+    legend: bool = True,
 ):
     """
     Plots the variables of a Liesel model.
@@ -99,6 +100,7 @@ def plot_vars(
     prog
         Layout parameter. Available layouts: circo, dot (the default), fdp, neato,
         osage, patchwork, sfdp, twopi.
+    legend
 
     See Also
     --------
@@ -120,8 +122,10 @@ def plot_vars(
     _add_nodes_with_distribution_to_plot(graph, axis, pos)
     _add_nodes_without_distribution_to_plot(graph, axis, pos)
     _add_labels(graph, axis, pos)
-    _draw_edges(graph, axis, pos, True)
-    _add_legend(axis)
+    edges_in_both = _draw_edges(graph, axis, pos, True)
+
+    if legend:
+        _add_legend(axis, draw_legend_for_both=bool(edges_in_both))
 
     if save_path:
         plt.savefig(save_path)
@@ -167,7 +171,7 @@ def _add_nodes_with_distribution_to_plot(graph, axis, pos):
     nx.draw_networkx_nodes(
         graph,
         pos,
-        node_size=1200,
+        node_size=1300,
         node_color=nodes_with_distribution.values(),
         nodelist=nodes_with_distribution,
         node_shape="*",
@@ -187,7 +191,7 @@ def _add_nodes_without_distribution_to_plot(graph, axis, pos):
     nx.draw_networkx_nodes(
         graph,
         pos,
-        node_size=500,
+        node_size=700,
         node_color=nodes_without_distribution.values(),
         nodelist=nodes_without_distribution,
         node_shape="o",
@@ -199,11 +203,7 @@ def _add_labels(graph, axis, pos):
     """Adds labels to the figure."""
 
     labels = {
-        node: (
-            f"{type(node).__name__}\n{node.name}"
-            if node.name is not None
-            else node.role.name
-        )
+        node: (f"{node.name}" if node.name is not None else node.role.name)
         for node in pos
     }
 
@@ -214,6 +214,7 @@ def _draw_edges(graph, axis, pos, is_var):
     """Adds edges to the figure."""
 
     edges = list(graph.edges)
+    edges_in_both = set()
 
     if is_var:
         dist_edges = []
@@ -249,6 +250,7 @@ def _draw_edges(graph, axis, pos, is_var):
             pos,
             edgelist=edges_in_both,
             edge_color="#FF0000",
+            style="dashed",
             arrows=True,
             ax=axis,
             node_size=500,
@@ -258,7 +260,8 @@ def _draw_edges(graph, axis, pos, is_var):
             graph,
             pos,
             edgelist=dist_edges,
-            edge_color="#aaaaaa",
+            edge_color="#111111",
+            style="dotted",
             arrows=True,
             ax=axis,
             node_size=500,
@@ -273,14 +276,31 @@ def _draw_edges(graph, axis, pos, is_var):
         ax=axis,
         node_size=500,
     )
+    return edges_in_both
 
 
-def _add_legend(axis):
+def _add_legend(axis, draw_legend_for_both):
     """Adds a legend to the figure."""
 
     legend_elements = [
-        Line2D([0], [0], color="#8da0cb", lw=4, label="Strong"),
-        Line2D([0], [0], color="#fc8d62", lw=4, label="Weak"),
+        Line2D(
+            [0],
+            [0],
+            color="#8da0cb",
+            label="Strong",
+            marker="o",
+            markersize=12,
+            linewidth=0,
+        ),
+        Line2D(
+            [0],
+            [0],
+            color="#fc8d62",
+            label="Weak",
+            marker="o",
+            markersize=12,
+            linewidth=0,
+        ),
         Line2D(
             [0],
             [0],
@@ -302,33 +322,30 @@ def _add_legend(axis):
         Line2D(
             [0],
             [0],
-            marker=r"$\rightarrow$",
             color="#111111",
-            label="Used in value",
-            markerfacecolor="k",
-            markersize=12,
-            lw=0,
+            linewidth=1.5,
+            label="Distribution",
         ),
         Line2D(
             [0],
             [0],
-            marker=r"$\rightarrow$",
-            color="#AAAAAA",
-            label="Used in distribution",
-            markerfacecolor="k",
-            markersize=12,
-            lw=0,
-        ),
-        Line2D(
-            [0],
-            [0],
-            marker=r"$\rightarrow$",
-            color="#FF0000",
-            label="Used in value and distribution",
-            markerfacecolor="k",
-            markersize=12,
-            lw=0,
+            color="#111111",
+            linestyle=":",
+            linewidth=1.5,
+            label="Value",
         ),
     ]
+
+    if draw_legend_for_both:
+        legend_elements.append(
+            Line2D(
+                [0],
+                [0],
+                color="#FF0000",
+                linestyle="--",
+                label="Value and distribution",
+                linewidth=1.5,
+            ),
+        )
 
     axis.legend(handles=legend_elements, loc="best")
