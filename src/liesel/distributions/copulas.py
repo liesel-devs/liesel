@@ -60,7 +60,7 @@ class GaussianCopula(tfd.TransformedDistribution):
     ...     lambda *inputs: jnp.stack(inputs, axis=1),
     ...     x1_pit,
     ...     x2_pit,
-    ...     distribution=lsl.Dist(GaussianCopula, dependence=correlation),
+    ...     dist=lsl.Dist(GaussianCopula, dependence=correlation),
     ...     name="x_dependence",
     ... ).update()
 
