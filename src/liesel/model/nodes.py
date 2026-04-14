@@ -1728,18 +1728,12 @@ class Var:
 
         """
         var = cls(
-            
             value,
-           
             dist,
-           
             name,
-           
             inference=inference,
-           
             bijector=bijector,
             convert=convert,
-        ,
             distribution=distribution,
         )
         var.value_node.monitor = True
@@ -1752,13 +1746,10 @@ class Var:
     @classmethod
     def new_obs(
         cls,
-       
         value: Any,
-       
         dist: Dist | None = None,
         name: str = "",
         distribution: Dist | None = None,
-       ,
         convert: Callable[[Any], Any] | Literal["default"] = "default",
     ) -> Var:
         """
@@ -1944,7 +1935,9 @@ class Var:
             convert_inputs=convert_inputs,
             **kwinputs,
         )
-        var = cls(calc, dist=dist, distribution=distribution, name=name, convert=lambda x: x)
+        var = cls(
+            calc, dist=dist, distribution=distribution, name=name, convert=lambda x: x
+        )
         return var
 
     @classmethod
