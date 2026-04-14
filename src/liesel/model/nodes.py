@@ -158,7 +158,7 @@ class Node(ABC):
         Whether the node needs a seed / PRNG key.
     convert
         A function used to process the value of this node. The default uses the
-        function stored in :attr:`.value_conversion_fn`, which is
+        function stored in :attr:`.convert_value`, which is
         ``jax.numpy.asarray``.
 
     See Also
@@ -179,16 +179,6 @@ class Node(ABC):
     .. _TensorFlow Probability: https://www.tensorflow.org/probability
     """
 
-    value_conversion_fn: Callable[[Any], Any] = staticmethod(jnp.asarray)
-    """
-    The function used to process the value of this variable, if ``convert="default"``
-    is supplied during init. Can be overwritten to change the default. In this case,
-    make sure to overwrite it with a static method, for example::
-
-        class MyNode(lsl.Node):
-            value_conversion_fn = staticmethod(lambda x: x)
-    """
-
     def __init__(
         self,
         *inputs: Any,
@@ -198,7 +188,7 @@ class Node(ABC):
         **kwinputs: Any,
     ):
         if convert == "default":
-            self._convert = self.value_conversion_fn
+            self._convert: Callable[[Any], Any] = self.convert_value
         else:
             self._convert = convert
         self._groups: dict[str, Group] = {}
@@ -214,6 +204,22 @@ class Node(ABC):
 
         self.monitor = False
         """Whether the node should be monitored by an inference algorithm."""
+
+    @staticmethod
+    def convert_value(x: Any) -> Any:
+        """
+        The function used to process the value of this node, if ``convert="default"``
+        is supplied during init. Can be overwritten on subclasses to create node
+        classes with different default conversion behavior.
+        Make sure to overwrite it with a static method, for example (re-implementing
+        the default behavior)::
+
+            class MyNode(lsl.Node):
+                @staticmethod
+                def convert_value(x):
+                    return jnp.asarray(x)
+        """
+        return jnp.asarray(x)
 
     def _add_output(self, output: Node) -> Node:
         self._outputs = _unique_tuple(self._outputs, [output])
@@ -556,7 +562,8 @@ class InputGroup(TransientNode):
     """
     A node that groups its inputs for another node.
 
-    Essentially, this node "forwards" the values of its inputs to its outputs
+    Essentially, this node "forwards" the val
+    ues of its inputs to its outputs
     as an :class:`.ArgGroup`.
     """
 
@@ -590,7 +597,7 @@ class Value(Node):
         be automatically generated upon initialization of a :class:`.Model`.
     convert
         A function used to process the value of this node. The default uses the
-        function stored in :attr:`.value_conversion_fn`, which is
+        function stored in :attr:`.convert_value`, which is
         ``jax.numpy.asarray``.
 
 
@@ -663,7 +670,7 @@ class Value(Node):
         except TypeError as e:
             msg = (
                 "Error during value conversion. If you updated the "
-                "`value_conversion_fn` class attribute, please make sure to define "
+                "`.convert_value` method, please make sure to define "
                 "it as a staticmethod."
             )
             raise TypeError(msg) from e
@@ -731,7 +738,7 @@ class Calc(Node):
         initialization.
     convert_inputs
         A function used to process the values of this node's inputs.
-        The default uses the function stored in :attr:`.value_conversion_fn`, which is
+        The default uses the function stored in :attr:`.convert_value`, which is
         ``jax.numpy.asarray``.
     **kwinputs
         Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
@@ -906,7 +913,7 @@ class Dist(Node):
         formats and behavior.
     convert_inputs
         A function used to process the values of this node's inputs.
-        The default uses the function stored in :attr:`.value_conversion_fn`, which is
+        The default uses the function stored in :attr:`.convert_value`, which is
         ``jax.numpy.asarray``.
     **kwinputs
         Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
@@ -1546,7 +1553,7 @@ class Var:
         variable.
     convert
         A function used to process the value of this variable. The default uses the
-        function stored in :attr:`.value_conversion_fn`, which is ``jax.numpy.asarray``.
+        function stored in :attr:`.convert_value`, which is ``jax.numpy.asarray``.
 
     distribution
         Deprecated argument name for the probability distribution of the variable,
@@ -1595,16 +1602,6 @@ class Var:
         "_convert",
     )
 
-    value_conversion_fn: Callable[[Any], Any] = staticmethod(jnp.asarray)
-    """
-    The function used to process the value of this variable, if ``convert="default"``
-    is supplied during init. Can be overwritten to change the default. In this case,
-    make sure to overwrite it with a static method, for example::
-
-        class MyVar(lsl.Var):
-            value_conversion_fn = staticmethod(lambda x: x)
-    """
-
     def __init__(
         self,
         value: Any,
@@ -1626,7 +1623,7 @@ class Var:
 
         self._name = name
         if convert == "default":
-            self._convert = self.value_conversion_fn
+            self._convert: Callable[[Any], Any] = self.convert_value
         else:
             self._convert = convert
         self._value_node: Node = Value(None, convert=lambda x: x)
@@ -1657,6 +1654,21 @@ class Var:
         # Apply bijector eagerly if provided
         if bijector is not None:
             self.biject(bijector=bijector, inference=inference)
+
+    @staticmethod
+    def convert_value(x: Any) -> Any:
+        """
+        The function used to process the value of this variable, if
+        ``convert="default"`` is supplied during init. Can be overwritten on subclasses
+        to create variable classes with different default conversion behavior. Make sure
+        to overwrite it with a static method, for example (re-implementing the default
+        behavior)::
+
+            class MyVar(lsl.Var):
+                @staticmethod def convert_value(x):
+                    return jnp.asarray(x)
+        """
+        return jnp.asarray(x)
 
     @classmethod
     def new_param(
@@ -1696,7 +1708,7 @@ class Var:
             variable.
         convert
             A function used to process the value of this variable. The default uses the
-            function stored in :attr:`.value_conversion_fn`, which is
+            function stored in :attr:`.convert_value`, which is
             ``jax.numpy.asarray``.
         distribution
             Deprecated argument name for the probability distribution of the variable,
@@ -1770,7 +1782,7 @@ class Var:
             be automatically generated upon initialization of a :class:`.Model`.
         convert
             A function used to process the value of this variable. The default uses the
-            function stored in :attr:`.value_conversion_fn`, which is
+            function stored in :attr:`.convert_value`, which is
             ``jax.numpy.asarray``.
         distribution
             Deprecated argument name for the probability distribution of the variable,
@@ -1853,7 +1865,7 @@ class Var:
             initialization.
         convert_inputs
             A function used to process the values of this variable's inputs.
-            The default uses the function stored in :attr:`.value_conversion_fn`,
+            The default uses the function stored in :attr:`.convert_value`,
             which is ``jax.numpy.asarray``.
         cache
             If ``False``, this variable will not store a cache of its value. This means,
@@ -1919,7 +1931,7 @@ class Var:
         """  # noqa: E501
 
         if convert_inputs == "default":
-            convert_inputs = cls.value_conversion_fn
+            convert_inputs = cls.convert_value
 
         if cache:
             calc_class = Calc
@@ -1964,7 +1976,7 @@ class Var:
             Additional information that can be used to set up inference algorithms.
         convert
             A function used to process the value of this variable. The default uses the
-            function stored in :attr:`.value_conversion_fn`, which is
+            function stored in :attr:`.convert_value`, which is
             ``jax.numpy.asarray``.
 
         See Also
