@@ -2177,8 +2177,7 @@ def log_prob_pointwise(
     newdata: dict[str, jax.typing.ArrayLike] | None = None,
 ) -> dict[str, jax.Array]:
     """
-    Returns an array of pointwise log probabilities for all observed variables with
-    distributions in the model.
+    Returns a dictionary of pointwise log probabilities for the supplied variables.
 
     Parameters
     ----------
