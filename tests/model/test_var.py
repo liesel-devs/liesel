@@ -431,13 +431,13 @@ class TestAllInputs:
 
 class TestAllOutputs:
     def test_all_output_vars(self):
-        x = lsl.Var(1, name="x")
+        x = lsl.Var(1.0, name="x")
 
         def dist_mk():
             return lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=x)
 
-        y = lsl.Var(1, name="y")
-        var0 = lsl.Var(lsl.Calc(lambda x: x + 1, x), dist_mk(), name="var0")
+        y = lsl.Var(1.0, name="y")
+        var0 = lsl.Var(lsl.Calc(lambda x: x + 1.0, x), dist_mk(), name="var0")
         mod0 = lsl.Model([var0] + [x, y], copy=True)
         assert len(mod0.vars["x"].all_output_vars()) == 1
         assert len(mod0.vars["x"].all_output_vars(of="dist_node")) == 0
@@ -456,12 +456,12 @@ class TestAllOutputs:
         assert len(mod2.vars["y"].all_output_vars()) == 1
         assert len(mod2.vars["var2"].all_output_vars()) == 0
 
-        x = lsl.Var(1, name="x")
+        x = lsl.Var(1.0, name="x")
 
         def dist_mk():
             return lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=x)
 
-        var0 = lsl.Var(lsl.Calc(lambda x: x + 1, x), dist_mk(), name="var0")
+        var0 = lsl.Var(lsl.Calc(lambda x: x + 1.0, x), dist_mk(), name="var0")
         d0 = lsl.TransientIdentity(var0.dist_node, _name="v0dist")
         y = lsl.Var(d0, name="y")
         mod0 = lsl.Model([var0] + [x, y], copy=True)
@@ -473,13 +473,13 @@ class TestAllOutputs:
         assert len(mod0.vars["var0"].all_output_vars(of="value_node")) == 1
 
     def test_all_output_nodes(self):
-        x = lsl.Var(1, name="x")
+        x = lsl.Var(1.0, name="x")
 
         def dist_mk():
             return lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=x)
 
-        y = lsl.Var(1, name="y")
-        var0 = lsl.Var(lsl.Calc(lambda x: x + 1, x), dist_mk(), name="var0")
+        y = lsl.Var(1.0, name="y")
+        var0 = lsl.Var(lsl.Calc(lambda x: x + 1.0, x), dist_mk(), name="var0")
         mod0 = lsl.Model([var0] + [x, y], copy=True)
         assert len(mod0.vars["x"].all_output_nodes()) == 2
         assert len(mod0.vars["y"].all_output_nodes()) == 0
@@ -775,6 +775,29 @@ class TestVarSample:
         assert "y" in samples
         assert "sigma" in samples
         assert "b" in samples
+
+
+class TestValueConversion:
+    def test_default(self):
+        a = lsl.Var.new_param(1.0)
+        assert isinstance(a.value, jax.Array)
+
+    def test_no_conversion(self):
+        a = lsl.Var.new_param(1.0, convert=lambda x: x)
+        assert not isinstance(a.value, jax.Array)
+        assert isinstance(a.value, float)
+
+    def test_changed_default(self):
+        class MyVar(lsl.Var):
+            value_conversion_fn = staticmethod(lambda x: x)
+
+        a = MyVar.new_param(1.0, convert=lambda x: x)
+        assert not isinstance(a.value, jax.Array)
+        assert isinstance(a.value, float)
+
+    def test_calc(self):
+        a = lsl.Var.new_calc(lambda x, y: x + y, 1.0, 1.0)
+        assert isinstance(a.value, jax.Array)
 
 
 class TestVarDiagnose:
