@@ -209,7 +209,9 @@ class Node(ABC):
     def convert_value(x: Any) -> Any:
         """
         The function used to process the value of this node, if ``convert="default"``
-        is supplied during init. Can be overwritten on subclasses to create node
+        is supplied during init.
+
+        Can be overwritten on subclasses to create node
         classes with different default conversion behavior.
         Make sure to overwrite it with a static method, for example (re-implementing
         the default behavior)::
@@ -1659,13 +1661,16 @@ class Var:
     def convert_value(x: Any) -> Any:
         """
         The function used to process the value of this variable, if
-        ``convert="default"`` is supplied during init. Can be overwritten on subclasses
+        ``convert="default"`` is supplied during init.
+
+        Can be overwritten on subclasses
         to create variable classes with different default conversion behavior. Make sure
         to overwrite it with a static method, for example (re-implementing the default
         behavior)::
 
             class MyVar(lsl.Var):
-                @staticmethod def convert_value(x):
+                @staticmethod
+                def convert_value(x):
                     return jnp.asarray(x)
         """
         return jnp.asarray(x)
