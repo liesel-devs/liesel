@@ -1,12 +1,15 @@
 from itertools import product
 
 import jax.numpy as jnp
+import jax.random as rnd
 import numpy as np
 import pytest
+import tensorflow_probability.substrates.jax.distributions as tfd
 
+import liesel.model as lsl
 from liesel.__version__ import __version__
 from liesel.goose.engine import SamplingResults
-from liesel.goose.summary_m import SamplesSummary, Summary
+from liesel.goose.summary_m import SamplesSummary, Summary, loo
 
 # TODO: add tests to test correctness of quantities
 # TODO: speed up tests
@@ -561,3 +564,55 @@ class TestSamplesSummary:
         samples = result.get_posterior_samples()
         summary = SamplesSummary(samples, per_chain=per_chain)
         summary.aggregate_diagnostics(by)
+
+
+@pytest.fixture
+def model():
+    """
+    A simple linear model with an additional unconnected data node for testing purposes.
+    """
+    key = rnd.PRNGKey(13)
+    n = 500
+    true_beta = jnp.array([1.0, 2.0])
+    true_sigma = 1.0
+
+    key_x, key_y = rnd.split(key, 2)
+
+    x0 = tfd.Uniform().sample(seed=key_x, sample_shape=n)
+    X = jnp.column_stack([jnp.ones(n), x0])
+    y = tfd.Normal(loc=X @ true_beta, scale=true_sigma).sample(seed=key_y)
+
+    sigma_hat = lsl.Var.new_param(
+        value=10.0,
+        name="sigma_hat",
+    )
+
+    beta_hat = lsl.Var.new_param(value=jnp.array([0.0, 0.0]), name="beta_hat")
+
+    x_var = lsl.Var.new_obs(X, name="X")
+
+    mu_calc = lsl.Calc(lambda X, beta: X @ beta, x_var, beta_hat)
+    mu_hat = lsl.Var(mu_calc, name="mu")
+
+    likelihood = lsl.Dist(tfd.Normal, loc=mu_hat, scale=sigma_hat)
+    y_var = lsl.Var.new_obs(value=y, distribution=likelihood, name="y_var")
+
+    yield lsl.Model([y_var])
+
+
+def test_loo(model):
+    samples = {
+        "sigma_hat": tfd.Normal(loc=1.0, scale=0.01).sample((4, 100), rnd.PRNGKey(6)),
+        "beta_hat": tfd.Normal(loc=jnp.array([1.0, 2.0]), scale=0.1).sample(
+            (4, 100), rnd.PRNGKey(6)
+        ),
+    }
+
+    lpp = lsl.log_prob_pointwise(model.observed, samples)
+    loo_ = loo(lpp, samples)
+    assert loo_.elpd_loo == pytest.approx(-727.999, abs=0.01)
+    assert loo_.p_loo == pytest.approx(5.829, abs=0.01)
+    assert loo_.se == pytest.approx(15.777, abs=0.01)
+
+    with pytest.raises(ValueError, match="relative MCMC efficiency"):
+        loo(lpp, None)

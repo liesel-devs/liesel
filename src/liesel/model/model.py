@@ -18,6 +18,7 @@ import jax
 import jax.numpy as jnp
 import jax.random
 import networkx as nx
+import pandas as pd
 
 from .nodes import Array, Calc, Dist, Group, Node, NodeState, Value, Var, VarValue
 from .viz import plot_nodes, plot_vars
@@ -128,7 +129,7 @@ class GraphBuilder:
     the graph will be updated. So the value of ``c`` is now available:
 
     >>> c.value
-    3.0
+    Array(3., dtype=float32, weak_type=True)
 
     The graph builder is now empty:
 
@@ -136,7 +137,7 @@ class GraphBuilder:
     []
     """
 
-    def __init__(self, to_float32: bool = True):
+    def __init__(self, to_float32: bool = False):
         self.nodes: list[Node] = []
         """The nodes that were explicitly added to the graph."""
 
@@ -399,7 +400,9 @@ class GraphBuilder:
 
         return self
 
-    def build_model(self, copy: bool = False) -> Model:
+    def build_model(
+        self, copy: bool = False, validate_log_prob_decomposition: bool = True
+    ) -> Model:
         """
         Builds a model from the graph.
 
@@ -452,7 +455,7 @@ class GraphBuilder:
         in the graph will be updated. So the value of ``c`` is now available:
 
         >>> c.value
-        3.0
+        Array(3., dtype=float32, weak_type=True)
 
         The graph builder is now empty:
 
@@ -496,7 +499,15 @@ class GraphBuilder:
         nodes, _vars = gb._all_nodes_and_vars()
         nodes_and_vars = nodes + _vars
 
-        model = Model(nodes_and_vars, grow=False, copy=copy, to_float32=self.to_float32)
+        model = Model(
+            nodes_and_vars,
+            grow=False,
+            copy=copy,
+            to_float32=self.to_float32,
+            validate_log_prob_decomposition=False,
+        )
+        if validate_log_prob_decomposition:
+            model._validate_log_prob_decomposition()
 
         if not copy:
             self.nodes.clear()
@@ -847,18 +858,55 @@ class Model:
 
     def __init__(
         self,
-        nodes_and_vars: Iterable[Node | Var],
+        *nodes_and_vars: Node | Var | Iterable[Node | Var],
         grow: bool = True,
         copy: bool = False,
         to_float32: bool = True,
+        validate_log_prob_decomposition: bool = True,
     ):
+        # this is for backwards compatibility: Old code, in which an iterable of
+        # nodes or vars is passed, still works.
+        _nodes_and_vars: list[Node | Var] = []
+        for nv in nodes_and_vars:
+            if isinstance(nv, Node | Var):
+                _nodes_and_vars.append(nv)
+            else:
+                try:
+                    iter(nv)
+                    _nodes_and_vars.extend(list(nv))
+                except TypeError:
+                    pass
+        nodes_and_vars_list = _nodes_and_vars
+        # end of compatibility block
+
         self._to_float32 = to_float32
         self._auto_update = True
-        self._update_graph(nodes_and_vars, copy=copy, grow=grow)
+        self._update_graph(nodes_and_vars_list, copy=copy, grow=grow)
         self.graph_outdated = False
         self.update_graph_lazily = False
         self.locked = True
-        self.seed_nodes_and_vars = nodes_and_vars
+        self.seed_nodes_and_vars = nodes_and_vars_list
+
+        if validate_log_prob_decomposition:
+            self._validate_log_prob_decomposition()
+
+    def _validate_log_prob_decomposition(self):
+        consistent = jnp.allclose(self.log_prob, self.log_prior + self.log_lik)
+        if not consistent:
+            logger.warning(
+                "Inconsistent log prob decomposition: "
+                f"Model.log_prob={self.log_prob:.2f} ≠ "
+                f"(Model.log_lik={self.log_lik:.2f} + "
+                f"Model.log_prior={self.log_prior:.2f}). "
+            )
+
+            for var in self.vars.values():
+                if var.dist_node is not None:
+                    if not var.parameter and not var.observed:
+                        logger.warning(
+                            f"{var} has a distribution but "
+                            "Var.parameter=False and Var.observed=False."
+                        )
 
     @property
     def graph_outdated(self) -> bool:
@@ -1297,6 +1345,9 @@ class Model:
         self._var_graph = self._build_var_graph(self._vars.values())
 
         self._sorted_nodes = list(nx.topological_sort(self._node_graph))
+        self._sorted_vars = list(nx.topological_sort(self._var_graph))
+        self._nodes = {n.name: n for n in self._sorted_nodes}
+        self._vars = {n.name: n for n in self._sorted_vars}
 
         self._simulation_graph = self._build_simulation_graph(self._nodes.values())
         self._simulation_nodes = list(nx.topological_sort(self._simulation_graph))
@@ -1466,6 +1517,10 @@ class Model:
         model.seed_nodes_and_vars = seed_nv
         return model
 
+    def copy_vars(self) -> dict[str, Var]:
+        """Returns an unfrozen deep copy of the model variables."""
+        return self.copy_nodes_and_vars()[1]
+
     def copy_nodes_and_vars(self) -> tuple[dict[str, Node], dict[str, Var]]:
         """Returns an unfrozen deep copy of the model nodes and variables."""
         nodes, _vars = deepcopy((self._nodes, self._vars))
@@ -1563,6 +1618,15 @@ class Model:
     def nodes(self) -> MappingProxyType[str, Node]:
         """A mapping of the model nodes with their names as keys."""
         return MappingProxyType(self._nodes)
+
+    def pop_vars(self) -> dict[str, Var]:
+        """
+        Pops the variables out of this model.
+
+        All nodes and variables are unfrozen and their reference to this model
+        is removed. This model becomes invalid and cannot be used anymore.
+        """
+        return self.pop_nodes_and_vars()[1]
 
     def pop_nodes_and_vars(self) -> tuple[dict[str, Node], dict[str, Var]]:
         """
@@ -2015,11 +2079,12 @@ class Model:
         prog: Literal[
             "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
         ] = "dot",
+        legend: bool = True,
     ):
         """
         Plots the variables of this model.
 
-        Wraps :func:`~.viz.plot_vars`.
+        Wraps :func:`~.viz.plot_vars`. Alias for :meth:`.Model.plot_vars`.
 
         Parameters
         ----------
@@ -2034,6 +2099,8 @@ class Model:
         prog
             Layout parameter. Available layouts: circo, dot (the default), fdp, neato, \
             osage, patchwork, sfdp, twopi.
+        legend
+            Whether to draw the legend.
 
         See Also
         --------
@@ -2046,13 +2113,13 @@ class Model:
         .viz.plot_vars : Plots the variables of a Liesel model.
         .viz.plot_nodes : Plots the nodes of a Liesel model.
         """
-        return plot_vars(
-            self,
+        return self.plot_vars(
             show=show,
             save_path=save_path,
             width=width,
             height=height,
             prog=prog,
+            legend=legend,
         )
 
     def plot_vars(
@@ -2064,6 +2131,7 @@ class Model:
         prog: Literal[
             "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
         ] = "dot",
+        legend: bool = True,
     ):
         """
         Plots the variables of this model.
@@ -2083,6 +2151,8 @@ class Model:
         prog
             Layout parameter. Available layouts: circo, dot (the default), fdp, neato, \
             osage, patchwork, sfdp, twopi.
+        legend
+            Whether to draw the legend.
 
         See Also
         --------
@@ -2102,6 +2172,7 @@ class Model:
             width=width,
             height=height,
             prog=prog,
+            legend=legend,
         )
 
     def plot_nodes(
@@ -2381,6 +2452,48 @@ class Model:
 
         return jax.tree.map(unflatten_batch_dims, flat_predictions)
 
+    def diagnose(self, verbose: bool = False) -> pd.DataFrame:
+        """
+        Provides a dataframe with diagnostic information about the model.
+        """
+
+        rows = []
+        for k, v in self.vars.items():
+            v.update()
+            row: dict[str, Any] = {}
+            row["name"] = k
+            row["has_dist"] = v.has_dist
+            if verbose:
+                row["n_input_vars"] = len(v.all_input_vars())
+                row["n_output_vars"] = len(v.all_output_vars())
+                row["parameter"] = v.parameter
+                row["observerd"] = v.observed
+                row["strong"] = v.strong
+
+            for name, target in (("value", v.value_node), ("log_prob", v.dist_node)):
+                if target is None:
+                    continue
+                row[f"{name}_n_nan"] = jnp.isnan(target.value).sum()
+                row[f"{name}_n_inf"] = jnp.isinf(target.value).sum()
+                row[f"{name}_size"] = jnp.max(jnp.size(target.value))
+                row[f"{name}_dtype"] = jnp.asarray(target.value).dtype
+                if verbose:
+                    row[f"{name}_mean"] = jnp.mean(target.value)
+                    row[f"{name}_sd"] = jnp.std(target.value)
+                    row[f"{name}_min"] = jnp.min(target.value)
+                    row[f"{name}_max"] = jnp.max(target.value)
+                    row[f"{name}_n_input_nodes"] = len(target.all_input_nodes())
+                    row[f"{name}_n_output_nodes"] = len(target.all_output_nodes())
+
+            if verbose:
+                row["value_node_name"] = v.value_node.name
+                if v.dist_node is not None:
+                    row["dist_node_name"] = v.dist_node.name
+
+            rows.append(row)
+
+        return pd.DataFrame(rows)
+
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Save and load models ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -2455,7 +2568,7 @@ class TemporaryModel:
         *vars_and_nodes,
         verbose: bool = False,
         silent: bool = False,
-        to_float32: bool = True,
+        to_float32: bool = False,
     ):
         self.vars_and_nodes = vars_and_nodes
         self.verbose = verbose
@@ -2490,8 +2603,19 @@ class TemporaryModel:
                 names_ = f"The automatically assigned names are: {node_names}. "
                 logger.info(f"Unnamed nodes were temporarily named. {names_}")
         elif not self.silent:
-            if var_names or node_names:
-                logger.info("Unnamed variables and/or nodes were temporarily named.")
+            if var_names:
+                names_ = f"The automatically assigned names are: {var_names}. "
+                logger.info(f"Unnamed variables were temporarily named. {names_}")
+            if node_names:
+                names_ = f"The automatically assigned names are: {node_names}. "
+                logger.debug(f"Unnamed nodes were temporarily named. {names_}")
+        else:
+            if var_names:
+                names_ = f"The automatically assigned names are: {var_names}. "
+                logger.debug(f"Unnamed variables were temporarily named. {names_}")
+            if node_names:
+                names_ = f"The automatically assigned names are: {node_names}. "
+                logger.debug(f"Unnamed nodes were temporarily named. {names_}")
 
         model = gb.build_model()
 
@@ -2519,3 +2643,72 @@ class TemporaryModel:
         self.gb.vars.clear()
 
         return False  # Returning False means exceptions are not suppressed
+
+
+def log_prob_pointwise(
+    vars_: dict[str, Var],
+    samples: dict[str, jax.typing.ArrayLike],
+    newdata: dict[str, jax.typing.ArrayLike] | None = None,
+) -> dict[str, jax.Array]:
+    """
+    Returns a dictionary of pointwise log probabilities for the supplied variables.
+
+    Parameters
+    ----------
+    vars_
+        Dictionary of variables for which to evaluate log probs.
+    samples
+        Dictionary of samples at which to evaluate log probs. If ``samples`` contains
+        entries for weak variables or for nodes in :attr:`.model_nodes` they are
+        ignored.
+    newdata
+        Dictionary of new data at which to evaluate log probs. The keys should
+        correspond to variable or node names in the model whose values should be set
+        to the given values before evaluating predictions. If ``None`` (default), the
+        current variable values are used.
+
+    Returns
+    -------
+    A dictionary with pointwise log probability evaluations as values and the
+    :class:`.Dist` node names of the supplied variables as keys.
+    """
+    ll_names = []
+    models = []
+    for var in vars_.values():
+        if not var.model:
+            raise ValueError(f"{var} is not part of a model.")
+        models.append(var.model)
+
+        if var.dist_node is None:
+            continue
+
+        if not var.dist_node.per_obs:
+            raise ValueError(
+                f"{var} has Var.dist_node.per_obs=False. "
+                "For point log probability computation, "
+                "Var.dist_node.per_obs=True is required for "
+                "all variables contributing to the likelihood."
+            )
+
+        if not var.value.shape == var.log_prob.shape:
+            msg = (
+                f"{var}.value has shape {var.value.shape}, "
+                f"while {var}.log_prob has shape {var.log_prob.shape}. This "
+                f"suggests that the pointwise log prob for {var} may not be "
+                "available, or that you may be using a multivariate distribution. "
+                "Please double check."
+            )
+            logger.warning(msg)
+
+        ll_names.append(var.dist_node.name)
+
+    n_models = len(set(models))
+    if n_models > 1:
+        raise RuntimeError(
+            "The supplied variables must all belong to the same model. "
+            f"Found {n_models} different models."
+        )
+
+    model = models[0]
+    pointwise_ll_dict = model.predict(samples, predict=ll_names, newdata=newdata)
+    return pointwise_ll_dict

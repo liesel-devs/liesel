@@ -269,247 +269,257 @@ def test_update_value_unfrozen_weak():
 # ------------- test all_inputs_* / all_outputs_* ------------------------
 
 
-def test_all_input_nodes_strong_no_dist():
-    var = lsl.Var(0)
-    assert len(var.all_input_nodes()) == 0
+class TestAllInputs:
+    def test_all_input_nodes_strong_no_dist(self):
+        var = lsl.Var(0)
+        assert len(var.all_input_nodes()) == 0
 
+    def test_all_input_nodes_weak_no_dist(self):
+        x = lsl.Value(1)
+        var = lsl.Var(lsl.Calc(lambda x: x + 1, x))
+        assert len(var.all_input_nodes()) == 1
 
-def test_all_input_nodes_weak_no_dist():
-    x = lsl.Value(1)
-    var = lsl.Var(lsl.Calc(lambda x: x + 1, x))
-    assert len(var.all_input_nodes()) == 1
-
-
-def test_all_input_nodes_weak_no_dist_2():
-    x = lsl.Value(1)
-    var = lsl.Var(
-        lsl.Calc(
-            lambda x, y: x + y,
-            x,
-            x,
+    def test_all_input_nodes_weak_no_dist_2(self):
+        x = lsl.Value(1)
+        var = lsl.Var(
+            lsl.Calc(
+                lambda x, y: x + y,
+                x,
+                x,
+            )
         )
-    )
-    assert len(var.all_input_nodes()) == 1
+        assert len(var.all_input_nodes()) == 1
 
+    def test_all_input_nodes_weak_no_dist_3(self):
+        x = lsl.Value(1)
+        y = lsl.Value(2)
+        var = lsl.Var(lsl.Calc(lambda x, y: x + y, x, y))
+        assert len(var.all_input_nodes()) == 2
 
-def test_all_input_nodes_weak_no_dist_3():
-    x = lsl.Value(1)
-    y = lsl.Value(2)
-    var = lsl.Var(
-        lsl.Calc(
-            lambda x, y: x + y,
-            x,
-            y,
+    def test_all_input_nodes_to_dist_weak_no_dist_3(self):
+        x = lsl.Value(1)
+        y = lsl.Value(2)
+        var = lsl.Var(lsl.Calc(lambda x, y: x + y, x, y))
+        assert len(var.all_input_nodes(to="dist_node")) == 0
+
+    def test_all_input_nodes_strong_w_dist(self):
+        dist = lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=1.0)
+
+        var = lsl.Var(0.0, dist)
+        assert len(var.all_input_nodes()) == 3
+
+    def test_all_input_nodes_to_value_strong_w_dist(self):
+        dist = lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=1.0)
+
+        var = lsl.Var(0.0, dist)
+        assert len(var.all_input_nodes(to="value_node")) == 0
+
+    def test_all_input_nodes_weak_w_dist(self):
+        dist = lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=1.0)
+        x = lsl.Value(1)
+        var = lsl.Var(lsl.Calc(lambda x: x + 1, x), dist)
+        assert len(var.all_input_nodes()) == 4
+
+    def test_all_input_nodes_weak_w_dist_2(self):
+        dist = lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=1.0)
+
+        x = lsl.Value(1)
+        var = lsl.Var(
+            lsl.Calc(
+                lambda x, y: x + y,
+                x,
+                x,
+            ),
+            dist,
         )
-    )
-    assert len(var.all_input_nodes()) == 2
+        assert len(var.all_input_nodes()) == 4
 
-
-def test_all_input_nodes_strong_w_dist():
-    dist = lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=1.0)
-
-    var = lsl.Var(0.0, dist)
-    assert len(var.all_input_nodes()) == 3
-
-
-def test_all_input_nodes_weak_w_dist():
-    dist = lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=1.0)
-    x = lsl.Value(1)
-    var = lsl.Var(lsl.Calc(lambda x: x + 1, x), dist)
-    assert len(var.all_input_nodes()) == 4
-
-
-def test_all_input_nodes_weak_w_dist_2():
-    dist = lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=1.0)
-
-    x = lsl.Value(1)
-    var = lsl.Var(
-        lsl.Calc(
-            lambda x, y: x + y,
-            x,
-            x,
-        ),
-        dist,
-    )
-    assert len(var.all_input_nodes()) == 4
-
-
-def test_all_input_nodes_weak_w_dist_3():
-    dist = lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=1.0)
-    x = lsl.Value(1)
-    y = lsl.Value(2)
-    var = lsl.Var(
-        lsl.Calc(
-            lambda x, y: x + y,
-            x,
-            y,
-        ),
-        dist,
-    )
-    assert len(var.all_input_nodes()) == 5
-
-
-###
-
-
-def test_all_input_vars_strong_no_dist():
-    var = lsl.Var(0)
-    assert len(var.all_input_vars()) == 0
-
-
-def test_all_input_vars_weak_no_dist():
-    x = lsl.Var(1)
-    var = lsl.Var(lsl.Calc(lambda x: x + 1, x))
-    assert len(var.all_input_vars()) == 1
-
-
-def test_all_input_vars_weak_no_dist_2():
-    x = lsl.Var(1)
-    var = lsl.Var(
-        lsl.Calc(
-            lambda x, y: x + y,
-            x,
-            x,
+    def test_all_input_nodes_weak_w_dist_3(self):
+        dist = lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=1.0)
+        x = lsl.Value(1)
+        y = lsl.Value(2)
+        var = lsl.Var(
+            lsl.Calc(
+                lambda x, y: x + y,
+                x,
+                y,
+            ),
+            dist,
         )
-    )
-    assert len(var.all_input_vars()) == 1
+        assert len(var.all_input_nodes()) == 5
 
+    ###
 
-def test_all_input_vars_weak_no_dist_3():
-    x = lsl.Var(1)
-    y = lsl.Var(2)
-    var = lsl.Var(
-        lsl.Calc(
-            lambda x, y: x + y,
-            x,
-            y,
+    def test_all_input_vars_strong_no_dist(self):
+        var = lsl.Var(0)
+        assert len(var.all_input_vars()) == 0
+
+    def test_all_input_vars_weak_no_dist(self):
+        x = lsl.Var(1)
+        var = lsl.Var(lsl.Calc(lambda x: x + 1, x))
+        assert len(var.all_input_vars()) == 1
+
+    def test_all_input_vars_weak_no_dist_2(self):
+        x = lsl.Var(1)
+        var = lsl.Var(
+            lsl.Calc(
+                lambda x, y: x + y,
+                x,
+                x,
+            )
         )
-    )
-    assert len(var.all_input_vars()) == 2
+        assert len(var.all_input_vars()) == 1
+
+    def test_all_input_vars_weak_no_dist_3(self):
+        x = lsl.Var(1)
+        y = lsl.Var(2)
+        var = lsl.Var(
+            lsl.Calc(
+                lambda x, y: x + y,
+                x,
+                y,
+            )
+        )
+        assert len(var.all_input_vars()) == 2
+
+    def test_all_input_vars_strong_w_dist(self):
+        dist = lsl.Dist(tfp.distributions.Normal, loc=lsl.Var(0.0), scale=lsl.Var(1.0))
+
+        var = lsl.Var(lsl.Var(0.0), dist)
+        assert len(var.all_input_vars()) == 3
+
+    def test_all_input_vars_weak_w_dist_1(self):
+        def dist_mk():
+            return lsl.Dist(
+                tfp.distributions.Normal, loc=lsl.Var(0.0), scale=lsl.Var(1.0)
+            )
+
+        x = lsl.Var(1)
+        y = lsl.Var(1)
+        z_node = lsl.Value(1)
+        var = lsl.Var(lsl.Calc(lambda x: x + 1, x), dist_mk())
+        assert len(var.all_input_vars()) == 3
+
+        var = lsl.Var(lsl.Calc(lambda x, y: x + y, x, x), dist_mk())
+        assert len(var.all_input_vars()) == 3
+
+        var = lsl.Var(lsl.Calc(lambda x, y: x + y, x, y), dist_mk())
+        assert len(var.all_input_vars()) == 4
+
+        var = lsl.Var(lsl.Calc(lambda x, y: x + y, x, z_node), dist_mk())
+        assert len(var.all_input_vars()) == 3
+
+    def test_all_input_vars_weak_w_dist_2(self):
+        def dist_mk():
+            return lsl.Dist(lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=1.0))
+
+        x = lsl.Var(1)
+        y = lsl.Var(1)
+        z_node = lsl.Value(1)
+        var = lsl.Var(lsl.Calc(lambda x: x + 1, x), dist_mk())
+        assert len(var.all_input_vars()) == 1
+
+        var = lsl.Var(lsl.Calc(lambda x, y: x + y, x, x), dist_mk())
+        assert len(var.all_input_vars()) == 1
+
+        var = lsl.Var(lsl.Calc(lambda x, y: x + y, x, y), dist_mk())
+        assert len(var.all_input_vars()) == 2
+
+        var = lsl.Var(lsl.Calc(lambda x, y: x + y, x, z_node), dist_mk())
+        assert len(var.all_input_vars()) == 1
 
 
-def test_all_input_vars_strong_w_dist():
-    dist = lsl.Dist(tfp.distributions.Normal, loc=lsl.Var(0.0), scale=lsl.Var(1.0))
+class TestAllOutputs:
+    def test_all_output_vars(self):
+        x = lsl.Var(1.0, name="x")
 
-    var = lsl.Var(lsl.Var(0.0), dist)
-    assert len(var.all_input_vars()) == 3
+        def dist_mk():
+            return lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=x)
 
+        y = lsl.Var(1.0, name="y")
+        var0 = lsl.Var(lsl.Calc(lambda x: x + 1.0, x), dist_mk(), name="var0")
+        mod0 = lsl.Model([var0] + [x, y], copy=True)
+        assert len(mod0.vars["x"].all_output_vars()) == 1
+        assert len(mod0.vars["x"].all_output_vars(of="dist_node")) == 0
+        assert len(mod0.vars["y"].all_output_vars()) == 0
+        assert len(mod0.vars["var0"].all_output_vars()) == 0
 
-def test_all_input_vars_weak_w_dist_1():
-    def dist_mk():
-        return lsl.Dist(tfp.distributions.Normal, loc=lsl.Var(0.0), scale=lsl.Var(1.0))
+        var1 = lsl.Var(lsl.Calc(lambda x, y: x + y, x, x), dist_mk(), name="var1")
+        mod1 = lsl.Model([var0, var1] + [x, y], copy=True)
+        assert len(mod1.vars["x"].all_output_vars()) == 2
+        assert len(mod1.vars["y"].all_output_vars()) == 0
+        assert len(mod1.vars["var1"].all_output_vars()) == 0
 
-    x = lsl.Var(1)
-    y = lsl.Var(1)
-    z_node = lsl.Value(1)
-    var = lsl.Var(lsl.Calc(lambda x: x + 1, x), dist_mk())
-    assert len(var.all_input_vars()) == 3
+        var2 = lsl.Var(lsl.Calc(lambda x, y: x + y, x, y), dist_mk(), name="var2")
+        mod2 = lsl.Model([var0, var1, var2] + [x, y], copy=True)
+        assert len(mod2.vars["x"].all_output_vars()) == 3
+        assert len(mod2.vars["y"].all_output_vars()) == 1
+        assert len(mod2.vars["var2"].all_output_vars()) == 0
 
-    var = lsl.Var(lsl.Calc(lambda x, y: x + y, x, x), dist_mk())
-    assert len(var.all_input_vars()) == 3
+        x = lsl.Var(1.0, name="x")
 
-    var = lsl.Var(lsl.Calc(lambda x, y: x + y, x, y), dist_mk())
-    assert len(var.all_input_vars()) == 4
+        def dist_mk():
+            return lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=x)
 
-    var = lsl.Var(lsl.Calc(lambda x, y: x + y, x, z_node), dist_mk())
-    assert len(var.all_input_vars()) == 3
+        var0 = lsl.Var(lsl.Calc(lambda x: x + 1.0, x), dist_mk(), name="var0")
+        d0 = lsl.TransientIdentity(var0.dist_node, _name="v0dist")
+        y = lsl.Var(d0, name="y")
+        mod0 = lsl.Model([var0] + [x, y], copy=True)
+        assert len(mod0.vars["x"].all_output_vars()) == 1
+        assert len(mod0.vars["x"].all_output_vars(of="dist_node")) == 0
+        assert len(mod0.vars["y"].all_output_vars()) == 0
+        assert len(mod0.vars["var0"].all_output_vars()) == 1
+        assert len(mod0.vars["var0"].all_output_vars(of="dist_node")) == 1
+        assert len(mod0.vars["var0"].all_output_vars(of="value_node")) == 1
 
+    def test_all_output_nodes(self):
+        x = lsl.Var(1.0, name="x")
 
-def test_all_input_vars_weak_w_dist_2():
-    def dist_mk():
-        return lsl.Dist(lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=1.0))
+        def dist_mk():
+            return lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=x)
 
-    x = lsl.Var(1)
-    y = lsl.Var(1)
-    z_node = lsl.Value(1)
-    var = lsl.Var(lsl.Calc(lambda x: x + 1, x), dist_mk())
-    assert len(var.all_input_vars()) == 1
+        y = lsl.Var(1.0, name="y")
+        var0 = lsl.Var(lsl.Calc(lambda x: x + 1.0, x), dist_mk(), name="var0")
+        mod0 = lsl.Model([var0] + [x, y], copy=True)
+        assert len(mod0.vars["x"].all_output_nodes()) == 2
+        assert len(mod0.vars["y"].all_output_nodes()) == 0
+        assert (
+            len(mod0.vars["var0"].all_output_nodes()) == 1 + 1
+        )  # part of the _model_log_prob
 
-    var = lsl.Var(lsl.Calc(lambda x, y: x + y, x, x), dist_mk())
-    assert len(var.all_input_vars()) == 1
+        var1 = lsl.Var(lsl.Calc(lambda x, y: x + y, x, x), dist_mk(), name="var1")
+        mod1 = lsl.Model([var0, var1] + [x, y], copy=True)
+        assert len(mod1.vars["x"].all_output_nodes()) == 4
+        assert len(mod1.vars["y"].all_output_nodes()) == 0
+        assert (
+            len(mod1.vars["var1"].all_output_nodes()) == 1 + 1
+        )  # part of the _model_log_prob
 
-    var = lsl.Var(lsl.Calc(lambda x, y: x + y, x, y), dist_mk())
-    assert len(var.all_input_vars()) == 2
+        var2 = lsl.Var(lsl.Calc(lambda x, y: x + y, x, y), dist_mk(), name="var2")
+        mod2 = lsl.Model([var0, var1, var2] + [x, y], copy=True)
+        assert len(mod2.vars["x"].all_output_nodes()) == 6
+        assert len(mod2.vars["y"].all_output_nodes()) == 1
+        assert (
+            len(mod2.vars["var2"].all_output_nodes()) == 1 + 1
+        )  # part of the _model_log_prob
 
-    var = lsl.Var(lsl.Calc(lambda x, y: x + y, x, z_node), dist_mk())
-    assert len(var.all_input_vars()) == 1
+    def test_indirect_connection(self) -> None:
+        v0 = lsl.Var(1.0, name="v0")
+        n1 = lsl.Calc(lambda x: 2.0 * x, v0, _name="n1")
+        v2 = lsl.Var(lsl.Calc(lambda x: 2.0 * x, n1), name="v2")
+        v3 = lsl.Var(lsl.Calc(lambda x: 2.0 * x, v2), name="v3")
+        _ = lsl.Model([v3])
 
+        # test outputs
+        outputs = v0.all_output_vars()
+        assert len(outputs) == 1
+        assert v2 in outputs
+        assert v3 not in outputs
 
-def test_all_output_vars():
-    x = lsl.Var(1, name="x")
-
-    def dist_mk():
-        return lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=x)
-
-    y = lsl.Var(1, name="y")
-    var0 = lsl.Var(lsl.Calc(lambda x: x + 1, x), dist_mk(), name="var0")
-    mod0 = lsl.Model([var0] + [x, y], copy=True)
-    assert len(mod0.vars["x"].all_output_vars()) == 1
-    assert len(mod0.vars["y"].all_output_vars()) == 0
-    assert len(mod0.vars["var0"].all_output_vars()) == 0
-
-    var1 = lsl.Var(lsl.Calc(lambda x, y: x + y, x, x), dist_mk(), name="var1")
-    mod1 = lsl.Model([var0, var1] + [x, y], copy=True)
-    assert len(mod1.vars["x"].all_output_vars()) == 2
-    assert len(mod1.vars["y"].all_output_vars()) == 0
-    assert len(mod1.vars["var1"].all_output_vars()) == 0
-
-    var2 = lsl.Var(lsl.Calc(lambda x, y: x + y, x, y), dist_mk(), name="var2")
-    mod2 = lsl.Model([var0, var1, var2] + [x, y], copy=True)
-    assert len(mod2.vars["x"].all_output_vars()) == 3
-    assert len(mod2.vars["y"].all_output_vars()) == 1
-    assert len(mod2.vars["var2"].all_output_vars()) == 0
-
-
-def test_all_output_nodes():
-    x = lsl.Var(1, name="x")
-
-    def dist_mk():
-        return lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=x)
-
-    y = lsl.Var(1, name="y")
-    var0 = lsl.Var(lsl.Calc(lambda x: x + 1, x), dist_mk(), name="var0")
-    mod0 = lsl.Model([var0] + [x, y], copy=True)
-    assert len(mod0.vars["x"].all_output_nodes()) == 2
-    assert len(mod0.vars["y"].all_output_nodes()) == 0
-    assert (
-        len(mod0.vars["var0"].all_output_nodes()) == 1 + 1
-    )  # part of the _model_log_prob
-
-    var1 = lsl.Var(lsl.Calc(lambda x, y: x + y, x, x), dist_mk(), name="var1")
-    mod1 = lsl.Model([var0, var1] + [x, y], copy=True)
-    assert len(mod1.vars["x"].all_output_nodes()) == 4
-    assert len(mod1.vars["y"].all_output_nodes()) == 0
-    assert (
-        len(mod1.vars["var1"].all_output_nodes()) == 1 + 1
-    )  # part of the _model_log_prob
-
-    var2 = lsl.Var(lsl.Calc(lambda x, y: x + y, x, y), dist_mk(), name="var2")
-    mod2 = lsl.Model([var0, var1, var2] + [x, y], copy=True)
-    assert len(mod2.vars["x"].all_output_nodes()) == 6
-    assert len(mod2.vars["y"].all_output_nodes()) == 1
-    assert (
-        len(mod2.vars["var2"].all_output_nodes()) == 1 + 1
-    )  # part of the _model_log_prob
-
-
-def test_indirect_connection() -> None:
-    v0 = lsl.Var(1.0, name="v0")
-    n1 = lsl.Calc(lambda x: 2.0 * x, v0, _name="n1")
-    v2 = lsl.Var(lsl.Calc(lambda x: 2.0 * x, n1), name="v2")
-    v3 = lsl.Var(lsl.Calc(lambda x: 2.0 * x, v2), name="v3")
-    _ = lsl.Model([v3])
-
-    # test outputs
-    outputs = v0.all_output_vars()
-    assert len(outputs) == 1
-    assert v2 in outputs
-    assert v3 not in outputs
-
-    # test inputs
-    assert len(v3.all_input_vars()) == 1
-    assert len(v2.all_input_vars()) == 1
-    assert len(v0.all_input_vars()) == 0
+        # test inputs
+        assert len(v3.all_input_vars()) == 1
+        assert len(v2.all_input_vars()) == 1
+        assert len(v0.all_input_vars()) == 0
 
 
 class TestVarConstructors:
@@ -765,3 +775,43 @@ class TestVarSample:
         assert "y" in samples
         assert "sigma" in samples
         assert "b" in samples
+
+
+class TestValueConversion:
+    def test_default(self):
+        a = lsl.Var.new_param(1.0)
+        assert isinstance(a.value, jax.Array)
+
+    def test_no_conversion(self):
+        a = lsl.Var.new_param(1.0, convert=lambda x: x)
+        assert not isinstance(a.value, jax.Array)
+        assert isinstance(a.value, float)
+
+    def test_changed_default(self):
+        class MyVar(lsl.Var):
+            value_conversion_fn = staticmethod(lambda x: x)
+
+        a = MyVar.new_param(1.0, convert=lambda x: x)
+        assert not isinstance(a.value, jax.Array)
+        assert isinstance(a.value, float)
+
+    def test_calc(self):
+        a = lsl.Var.new_calc(lambda x, y: x + y, 1.0, 1.0)
+        assert isinstance(a.value, jax.Array)
+
+
+class TestVarDiagnose:
+    def test_diagnose_without_model(self):
+        v0 = lsl.Var(1.0, name="v0")
+        n1 = lsl.Calc(lambda x: 2.0 * x, v0, _name="n1")
+        v2 = lsl.Var(lsl.Calc(lambda x: 2.0 * x, n1), name="v2")
+        v3 = lsl.Var(lsl.Calc(lambda x: 2.0 * x, v2), name="v3")
+        assert v3.diagnose().shape[0] == 3
+
+    def test_diagnose_with_model(self):
+        v0 = lsl.Var(1.0, name="v0")
+        n1 = lsl.Calc(lambda x: 2.0 * x, v0, _name="n1")
+        v2 = lsl.Var(lsl.Calc(lambda x: 2.0 * x, n1), name="v2")
+        v3 = lsl.Var(lsl.Calc(lambda x: 2.0 * x, v2), name="v3")
+        _ = lsl.Model([v3])
+        assert v3.diagnose().shape[0] == 3
