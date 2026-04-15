@@ -1023,6 +1023,7 @@ class TestModelAdd:
         )
         model.add(x2)
 
+        assert x2 in model.seed_nodes_and_vars
         assert x2.name in model.vars
         assert x2.name in model.observed
         assert x2.log_prob is not None

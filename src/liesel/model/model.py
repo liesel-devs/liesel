@@ -941,14 +941,14 @@ class Model:
         self._locked = value
 
     @property
-    def seed_nodes_and_vars(self) -> Iterable[Node | Var]:
+    def seed_nodes_and_vars(self) -> list[Node | Var]:
         """
         The seed nodes and variables passed to the model during initialization.
         """
         return self._seed_nodes_and_vars
 
     @seed_nodes_and_vars.setter
-    def seed_nodes_and_vars(self, value: Iterable[Node | Var]) -> None:
+    def seed_nodes_and_vars(self, value: list[Node | Var]) -> None:
         self._seed_nodes_and_vars = value
 
     def _replace_node(self, old: Node, new: Node) -> Self:
@@ -1243,11 +1243,12 @@ class Model:
         vars_ = [nd for nd in self.vars.values() if not nd.name.startswith("_model")]
         existing_nodes_and_vars = nodes + vars_
 
-        existing_nodes_and_vars += list(vars_and_nodes)
+        vn_list = list(vars_and_nodes)
+        existing_nodes_and_vars += vn_list
         self._update_graph(existing_nodes_and_vars)
         self.graph_outdated = False
 
-        self.seed_nodes_and_vars += vars_and_nodes
+        self.seed_nodes_and_vars += vn_list
         return self
 
     def join(self, *models: Model, copy: bool = False) -> Self:
