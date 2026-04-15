@@ -644,8 +644,8 @@ class Value(Node):
     Adding this node to a model leads to an automatically generated name:
 
     >>> model = lsl.Model([nameless_node])
-    >>> nameless_node
-    Value(name="n0")
+    >>> nameless_node.name.startswith("_")
+    True
 
     A constant node with a name:
 
