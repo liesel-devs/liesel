@@ -1246,6 +1246,8 @@ class Model:
         existing_nodes_and_vars += list(vars_and_nodes)
         self._update_graph(existing_nodes_and_vars)
         self.graph_outdated = False
+
+        self.seed_nodes_and_vars += vars_and_nodes
         return self
 
     def join(self, *models: Model, copy: bool = False) -> Self:
