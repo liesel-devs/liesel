@@ -1049,7 +1049,7 @@ class Model:
                     raise RuntimeError(f"{new} can only be part of one model")
                 self._replace_var_with_node(old_nv, new)
             else:
-                self._replace_var_with_node(old_nv, Node._to_node(new))
+                self._replace_var_with_node(old_nv, Value(new))
         else:
             raise TypeError(f"{old=} must be of type Var, got {type(old_nv)}.")
 

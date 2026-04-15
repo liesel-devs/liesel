@@ -273,9 +273,9 @@ class TestModel:
         assert list(model.vars) == [
             "scale",
             "concentration",
+            "X",
             "beta_scale",
             "beta_loc",
-            "X",
             "sigma_hat",
             "beta_hat",
             "mu",
