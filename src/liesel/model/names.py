@@ -2,7 +2,7 @@ import random
 import uuid
 
 colors = """
-alizarin 
+alizarin
 amaranth
 amber
 amethyst
