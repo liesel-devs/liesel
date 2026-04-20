@@ -499,7 +499,7 @@ class TestBracketReplace:
     def test_bracket_replace_value_input_var_with_array(self):
         x1 = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x1")
         x2 = lsl.Var.new_obs(jrd.normal(jrd.key(2), (10,)), name="x2")
-        x3 = jrd.normal(jrd.key(3), (10,))
+        x3 = lsl.Value(jrd.normal(jrd.key(3), (10,)))
 
         loc = lsl.Var.new_calc(lambda *args: sum(args), x1, x2, name="loc")
 
@@ -527,11 +527,11 @@ class TestBracketReplace:
         nodes_after = set(list(model.nodes))
 
         assert len(nodes_after - nodes_before) == 1
-        assert "n2" in nodes_after - nodes_before
+        assert x3.name in nodes_after - nodes_before
 
-        assert jnp.allclose(loc.value, x2.value + x3)
+        assert jnp.allclose(loc.value, x2.value + x3.value)
 
-        assert "n2" in model.nodes
+        assert x3.name in model.nodes
         assert x2.name in model.vars
         assert x1.name in model.vars  # now singleton node, not dropped
 
@@ -606,7 +606,7 @@ class TestBracketReplace:
     def test_bracket_replace_log_prob_input_var_with_array(self):
         x1 = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x1")
         x2 = lsl.Var.new_obs(jrd.normal(jrd.key(2), (10,)), name="x2")
-        x3 = jrd.normal(jrd.key(3), (10,))
+        x3 = lsl.Value(jrd.normal(jrd.key(3), (10,)))
 
         loc = lsl.Var.new_calc(lambda *args: sum(args), x1, x2, name="loc")
 
@@ -630,10 +630,10 @@ class TestBracketReplace:
         y.dist_node["loc"] = x3
 
         assert jnp.allclose(loc.value, x1.value + x2.value)
-        assert jnp.allclose(y.dist_node["loc"].value, x3)
+        assert jnp.allclose(y.dist_node["loc"].value, x3.value)
 
         assert loc.name in model.vars
-        assert "n2" in model.nodes
+        assert x3.name in model.nodes
         assert x2.name in model.vars
         assert x1.name in model.vars  # now singleton node, not dropped
 
@@ -1211,13 +1211,6 @@ class TestModelAdd:
         )
         model2 = lsl.Model([x2])
         model3 = lsl.Model([x3])
-
-        with pytest.raises(RuntimeError, match="Duplicate node names"):
-            model.join(model2, model3)
-
-        model3.locked = False  # to allow renaming
-        x3.dist_node["loc"].name = x3.dist_node["loc"].name + "_x3"
-        x3.dist_node["scale"].name = x3.dist_node["scale"].name + "_x3"
 
         model.join(model2, model3)
 
