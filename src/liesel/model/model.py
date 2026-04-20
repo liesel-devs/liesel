@@ -268,7 +268,11 @@ class GraphBuilder:
 
     @staticmethod
     def _do_set_missing_names(nodes_or_vars: Iterable[NV], prefix: str) -> list[str]:
-        """Sets the missing names for the given nodes or variables."""
+        """
+        Sets the missing names for the given nodes or variables.
+
+        Deprecated; use :meth:`.Var.ensure_name` instead.
+        """
         other = [nv.name for nv in nodes_or_vars if nv.name]
         counter = -1
 
@@ -290,8 +294,19 @@ class GraphBuilder:
     def _set_missing_names(self) -> dict[str, list[str]]:
         """Sets the missing node and variable names."""
         nodes, _vars = self._all_nodes_and_vars()
-        auto_var_names = self._do_set_missing_names(_vars, prefix="v")
-        auto_node_names = self._do_set_missing_names(nodes, prefix="n")
+
+        var_names_before = set([v.name for v in _vars])
+        for var in _vars:
+            var.ensure_name()
+        var_names_after = set([v.name for v in _vars])
+        auto_var_names = list(var_names_after - var_names_before)
+
+        node_names_before = set([v.name for v in nodes])
+        for node in nodes:
+            node.ensure_name()
+        node_names_after = set([v.name for v in nodes])
+        auto_node_names = list(node_names_after - node_names_before)
+
         return {"vars": auto_var_names, "nodes": auto_node_names}
 
     def add(
