@@ -22,6 +22,7 @@ import tensorflow_probability.substrates.numpy.bijectors as nb
 import tensorflow_probability.substrates.numpy.distributions as nd
 
 from ..distributions.nodist import NoDistribution
+from .names import random_name
 from .viz import plot_nodes, plot_vars
 
 if TYPE_CHECKING:
@@ -334,6 +335,19 @@ class Node(ABC):
     def name(self, name: str):
         self._name = name
 
+    def ensure_name(self) -> Self:
+        """
+        Ensures that the node has a name.
+
+        If the node already has a name, nothing happens. Otherwise, a unique random
+        name is generated with a leading underscore.
+        """
+        if self.name:
+            return self
+        else:
+            self.name = "_" + random_name()
+            return self
+
     @property
     def needs_seed(self) -> bool:
         """Whether the node needs a seed / PRNG key."""
@@ -641,8 +655,8 @@ class Value(Node):
     Adding this node to a model leads to an automatically generated name:
 
     >>> model = lsl.Model([nameless_node])
-    >>> nameless_node
-    Value(name="n0")
+    >>> nameless_node.name.startswith("_")
+    True
 
     A constant node with a name:
 
@@ -3115,6 +3129,19 @@ class Var:
             height=height,
             prog=prog,
         )
+
+    def ensure_name(self) -> Self:
+        """
+        Ensures that the variable has a name.
+
+        If the variable already has a name, nothing happens. Otherwise, a unique random
+        name is generated with a leading underscore.
+        """
+        if self.name:
+            return self
+        else:
+            self.name = "_" + random_name()
+            return self
 
 
 def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) -> Var:

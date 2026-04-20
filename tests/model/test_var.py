@@ -815,3 +815,31 @@ class TestVarDiagnose:
         v3 = lsl.Var(lsl.Calc(lambda x: 2.0 * x, v2), name="v3")
         _ = lsl.Model([v3])
         assert v3.diagnose().shape[0] == 3
+
+
+class TestVarNaming:
+    def test_auto_naming(self):
+        a = lsl.Var(1.0)
+
+        assert a.name == ""
+        assert a.value_node.name == ""
+        assert a.var_value_node.name == "_var_value"
+
+        b = lsl.Var(1.0, name="v1")
+
+        lsl.Model(a, b)
+
+        assert a.name.startswith("_")
+        assert a.value_node.name == f"{a.name}_value"
+        assert a.var_value_node.name == f"{a.name}_var_value"
+
+        assert b.name == "v1"
+        assert b.value_node.name == "v1_value"
+        assert b.var_value_node.name == "v1_var_value"
+
+    def test_ensure_name(self):
+        a = lsl.Var(1.0).ensure_name()
+
+        assert a.name.startswith("_")
+        assert a.value_node.name == a.name + "_value"
+        assert a.var_value_node.name == a.name + "_var_value"
