@@ -86,6 +86,30 @@ def in_model_getter(fn):
     return wrapped
 
 
+def no_model_method(fn):
+    @wraps(fn)
+    def wrapped(self, *args, **kwargs):
+        if self.model:
+            raise RuntimeError(
+                f"{repr(self)} is part of a model, cannot call {fn.__name__}()"
+            )
+        return fn(self, *args, **kwargs)
+
+    return wrapped
+
+
+def no_model_setter(fn):
+    @wraps(fn)
+    def wrapped(self, *args, **kwargs):
+        if self.model:
+            raise RuntimeError(
+                f"{repr(self)} is part of a model, cannot set '{fn.__name__}'"
+            )
+        return fn(self, *args, **kwargs)
+
+    return wrapped
+
+
 def changes_model_graph(fn):
     @wraps(fn)
     def wrapped(self, *args, **kwargs):
@@ -200,6 +224,7 @@ class Node(ABC):
         self._model: weakref.ref[Model] | Callable[[], None] = lambda: None
         self._name = _name
         self._needs_seed = _needs_seed
+        self._seed_node: Value | None = None
         self._outdated = True
         self._outputs: tuple[Node, ...] = ()
         self._value: Any = None
@@ -349,6 +374,25 @@ class Node(ABC):
             return self
 
     @property
+    def seed_node(self) -> Value | None:
+        return self._seed_node
+
+    @seed_node.setter
+    @no_model_setter
+    def seed_node(self, value: Value | None):
+        if value is None:
+            kwinputs_without_seed = self.kwinputs.copy()
+            kwinputs_without_seed.pop("seed", None)
+            self.set_inputs(*self.inputs, **kwinputs_without_seed)
+
+        kwinputs_with_seed = dict(self.kwinputs)
+        assert value is not None
+        kwinputs_with_seed["seed"] = value
+        self.set_inputs(*self.inputs, **kwinputs_with_seed)
+
+        self._seed_node = value
+
+    @property
     def needs_seed(self) -> bool:
         """Whether the node needs a seed / PRNG key."""
         return self._needs_seed
@@ -357,6 +401,11 @@ class Node(ABC):
     @changes_model_graph
     def needs_seed(self, needs_seed: bool):
         self._needs_seed = needs_seed
+
+        if not needs_seed:
+            kwinputs_without_seed = self.kwinputs.copy()
+            kwinputs_without_seed.pop("seed", None)
+            self.set_inputs(*self.inputs, **kwinputs_without_seed)
 
     @property
     def outdated(self) -> bool:

@@ -220,9 +220,9 @@ class GraphBuilder:
         nodes, _ = self._all_nodes_and_vars()
 
         for node in nodes:
-            if node.needs_seed:
+            if node.needs_seed and not node.seed_node:
                 seed = Value(jax.random.PRNGKey(0), _name=f"_model_{node.name}_seed")
-                node.set_inputs(*node.inputs, **{"seed": seed} | node.kwinputs)
+                node.seed_node = seed
 
         return self
 
@@ -483,7 +483,7 @@ class GraphBuilder:
             logger.warning("No nodes in graph builder, building an empty model")
 
         for node in nodes:
-            if node.name.startswith("_model"):
+            if node.name.startswith("_model") and not node.name.endswith("_seed"):
                 raise RuntimeError(f"{repr(node)} has reserved name '_model*'")
 
         gb = self.copy()
@@ -541,7 +541,7 @@ class GraphBuilder:
             logger.warning("No nodes in graph builder, building an empty model")
 
         for node in nodes:
-            if node.name.startswith("_model"):
+            if node.name.startswith("_model") and not node.name.endswith("_seed"):
                 raise RuntimeError(f"{repr(node)} has reserved name '_model*'")
 
         gb = self.copy()
@@ -899,7 +899,7 @@ class Model:
         self._update_graph(nodes_and_vars_list, copy=copy, grow=grow)
         self.graph_outdated = False
         self.update_graph_lazily = False
-        self.locked = True
+        self.locked = False
         self.seed_nodes_and_vars = nodes_and_vars_list
 
         if validate_log_prob_decomposition:
