@@ -2,10 +2,9 @@
 Goose MCMC framework.
 """
 
-from .builder import EngineBuilder as EngineBuilder
-from .engine import Engine as Engine
-from .engine import SamplingResults
-from .epoch import EpochConfig, EpochType
+from .builder import EngineBuilder
+from .engine import Engine, SamplingResults
+from .epoch import EpochConfig, EpochState, EpochType
 from .gibbs import GibbsKernel
 from .hmc import HMCKernel
 from .interface import (
@@ -16,7 +15,17 @@ from .interface import (
 )
 from .interface_log_prob import FlatInterfaceLogProb, InterfaceLogProb
 from .iwls import IWLSKernel
+from .kernel import (
+    DefaultTransitionInfo,
+    DefaultTuningInfo,
+    ModelMixin,
+    TransitionMixin,
+    TransitionOutcome,
+    TuningOutcome,
+    WarmupOutcome,
+)
 from .mcmc_spec import LieselMCMC, MCMCSpec
+from .mh import mh_step
 from .mh_kernel import MHKernel, MHProposal
 from .nuts import NUTSKernel
 from .optim import OptimResult, Stopper, history_to_df, optim_flat
@@ -30,10 +39,30 @@ from .summary_viz import (
     plot_scatter,
     plot_trace,
 )
-from .types import Kernel, ModelInterface, Position
+from .types import (
+    Kernel,
+    KernelState,
+    ModelInterface,
+    ModelState,
+    Position,
+    TransitionInfo,
+    TuningInfo,
+)
 from .warmup import stan_epochs
 
 __all__ = [
+    "Engine",
+    "EngineBuilder",
+    "mh_step",
+    "EpochState",
+    "KernelState",
+    "DefaultTransitionInfo",
+    "DefaultTuningInfo",
+    "ModelMixin",
+    "TransitionMixin",
+    "TransitionOutcome",
+    "TuningOutcome",
+    "WarmupOutcome",
     "DictInterface",
     "DataclassInterface",
     "DictModel",
@@ -52,11 +81,14 @@ __all__ = [
     "MHKernel",
     "MHProposal",
     "ModelInterface",
+    "ModelState",
     "NamedTupleInterface",
     "NUTSKernel",
     "Position",
     "history_to_df",
     "Stopper",
+    "TransitionInfo",
+    "TuningInfo",
     "RWKernel",
     "Summary",
     "SamplesSummary",
