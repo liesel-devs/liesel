@@ -19,17 +19,17 @@ pd.options.display.html.border = 0
 
 ## Custom Metropolis-Hastings kernel
 
-The easiest way to use a custom MCMC kernel in `liesel.goose` is to provide a proposal 
-function for a {class}`.MHKernel`. The function must accept a pseudo-random number key, 
+The easiest way to use a custom MCMC kernel in `liesel.goose` is to provide a proposal
+function for a {class}`.MHKernel`. The function must accept a pseudo-random number key,
 a model state and a step size as arguments, and
-be compatible with just-in-time compilation via `jax` (i.e., pure, without 
-side-effects). It returns a {class}`.MHProposal`, which simply wraps the proposed 
-value and the Metropolis-Hastings log-correction factor. 
-The {class}`.MHKernel` handles the acceptance/rejection logic and is fully equipped with 
-dual averaging functionality for step size tuning, which can be switched on by passing 
-`da_tune_step_size` as a keyword argument to the kernel. In this case, users should 
+be compatible with just-in-time compilation via `jax` (i.e., pure, without
+side-effects). It returns a {class}`.MHProposal`, which simply wraps the proposed
+value and the Metropolis-Hastings log-correction factor.
+The {class}`.MHKernel` handles the acceptance/rejection logic and is fully equipped with
+dual averaging functionality for step size tuning, which can be switched on by passing
+`da_tune_step_size` as a keyword argument to the kernel. In this case, users should
 ensure that their settings for the initial step size (default: $1$) and the target
- acceptance probability (default: $.234$) are suitable. 
+ acceptance probability (default: $.234$) are suitable.
 
 
 As an example, a random walk kernel (like {class}`.RWKernel`) can be implemented with
@@ -59,14 +59,14 @@ It can then be attached to the coefficient variable with
 ... )
 ```
 
-In this case, the proposal distribution is symmetric, so the log correction factor is 
-zero by definition. We still compute it here explicitly for the purpose of 
+In this case, the proposal distribution is symmetric, so the log correction factor is
+zero by definition. We still compute it here explicitly for the purpose of
 demonstration.
 
-While a custom proposal function for a {class}`.MHKernel` can be written conveniently, 
-it may not cover cases in which a custom MCMC kernel requires additional hyperparameters 
-or specialized tuning. For such cases, `liesel.goose` provides tools for users to write 
-their own classes, implementing the {class}`.Kernel` protocol. 
+While a custom proposal function for a {class}`.MHKernel` can be written conveniently,
+it may not cover cases in which a custom MCMC kernel requires additional hyperparameters
+or specialized tuning. For such cases, `liesel.goose` provides tools for users to write
+their own classes, implementing the {class}`.Kernel` protocol.
 
 The next section shows you how to write such a fully custom kernel class.
 
@@ -93,28 +93,28 @@ The purpose of the transition method is to move the subset of the model state ha
 ...         ...
 ```
 
-Since the {meth}`.Kernel.transition` method must be pure, and MCMC transitions generally involve 
-the generation of random numbers, a key for pseudo-random number generation (PRNG) 
-needs to be provided as an argument. In addition, the {meth}`.Kernel.transition` method receives 
-the kernel state, the model state and the epoch state as arguments, and returns a 
-{class}`.TransitionOutcome` object, which wraps the new kernel state, the new model state and 
-some meta-information about the transition, e.g.~an error code or the acceptance 
-probability (in a {class}`.TransitionInfo` object). 
+Since the {meth}`.Kernel.transition` method must be pure, and MCMC transitions generally involve
+the generation of random numbers, a key for pseudo-random number generation (PRNG)
+needs to be provided as an argument. In addition, the {meth}`.Kernel.transition` method receives
+the kernel state, the model state and the epoch state as arguments, and returns a
+{class}`.TransitionOutcome` object, which wraps the new kernel state, the new model state and
+some meta-information about the transition, e.g.~an error code or the acceptance
+probability (in a {class}`.TransitionInfo` object).
 An error code of zero indicates that the transition did not produce an error.
 
-All inputs and outputs must be valid *pytrees* (i.e.~arrays or nested lists, tuples 
-or dicts of arrays). The structure of these objects, e.g.~the shape of the arrays in 
-the kernel state, must not change between transitions. 
-This allows the kernels to have specialized {class}`.KernelState` and {class}`.TransitionInfo` 
+All inputs and outputs must be valid *pytrees* (i.e.~arrays or nested lists, tuples
+or dicts of arrays). The structure of these objects, e.g.~the shape of the arrays in
+the kernel state, must not change between transitions.
+This allows the kernels to have specialized {class}`.KernelState` and {class}`.TransitionInfo`
 classes. A kernel state can be any pytree.
 
 
 **The tune method.**
-The {meth}`.Kernel.tune` method is updates the kernel hyperparameters at the end of an adaptation 
-epoch. The method receives the PRNG key, the model state, the kernel state, the epoch 
-state, and (optionally) the *history*, i.e.~the samples from the previous epoch, as 
-arguments. It returns a {class}`.TuningOutcome` object that wraps the new kernel state and some 
-meta-information about the tuning process, e.g.~an error code. As for the transition, 
+The {meth}`.Kernel.tune` method is updates the kernel hyperparameters at the end of an adaptation
+epoch. The method receives the PRNG key, the model state, the kernel state, the epoch
+state, and (optionally) the *history*, i.e.~the samples from the previous epoch, as
+arguments. It returns a {class}`.TuningOutcome` object that wraps the new kernel state and some
+meta-information about the tuning process, e.g.~an error code. As for the transition,
 the {class}`.TuningInfo` class can be kernel-specific but must be a valid pytree.
 
 The signature of the {meth}`.Kernel.tune` method is as follows:
@@ -178,7 +178,7 @@ The {class}`.ModelMixin` gives the kernel access to the model and provides conve
 methods such as {meth}`.ModelMixin.position`, which extracts the part of the model
 state handled by this kernel.
 
-The {class}`.TransitionMixin` provides the public {meth}`.TransitionMixin.transition` method. 
+The {class}`.TransitionMixin` provides the public {meth}`.TransitionMixin.transition` method.
 Internally, it
 dispatches to `_standard_transition` or `_adaptive_transition`, depending on the
 current epoch. This means that we only have to implement these two methods.
@@ -616,4 +616,3 @@ results = gs.LieselMCMC(model).run_for_epochs(
 
 gs.Summary(results)
 ```
-
