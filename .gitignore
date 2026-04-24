@@ -182,3 +182,4 @@ cython_debug/
 .DS_Store
 /tests/notebooks
 docs/source/tutorials/qmd/.Rprofile
+docs/render.sh
