@@ -87,7 +87,6 @@ instance.
     ~liesel.goose.MHKernel
     ~liesel.goose.MHProposal
     ~liesel.goose.GibbsKernel
-    ~liesel.goose.Kernel
 
 Summary & Plots
 ****************************
@@ -208,9 +207,22 @@ Advanced MCMC functionality
     :toctree: generated
     :caption: MCMC (Advanced)
 
+    ~liesel.goose.mh_step
     ~liesel.goose.da
     ~liesel.goose.mm
     ~liesel.goose.EpochConfig
+    ~liesel.goose.EpochState
+    ~liesel.goose.EpochType
+    ~liesel.goose.Kernel
+    ~liesel.goose.TransitionInfo
+    ~liesel.goose.TuningInfo
+    ~liesel.goose.DefaultTransitionInfo
+    ~liesel.goose.DefaultTuningInfo
+    ~liesel.goose.TransitionMixin
+    ~liesel.goose.TransitionOutcome
+    ~liesel.goose.TuningOutcome
+    ~liesel.goose.WarmupOutcome
+    ~liesel.goose.ModelMixin
 
 
 Experimental API
