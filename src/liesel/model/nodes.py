@@ -110,6 +110,32 @@ def no_model_setter(fn):
     return wrapped
 
 
+def changes_model_graph(fn):
+    @wraps(fn)
+    def wrapped(self, *args, **kwargs):
+        if self.model and self.model.locked:
+            raise RuntimeError(
+                f"{repr(self)} is part of a locked model, cannot call {fn.__name__}(). "
+                "To allow for changes to the model, you can set the Model.locked flag "
+                "to False. "
+                "ATTENTION: Note that, from v0.5, the default state for models will "
+                "be Model.locked = False, so do not rely on this error if you are "
+                "using the default."
+            )
+        # pull out model here, because it may not be available on self below
+        # in all cases, e.g. if a node's name is changed in fn (because Node.model
+        # uses the name to check whether the node is still part of the model).
+        model = self.model
+        out = fn(self, *args, **kwargs)
+        if model:
+            model.outdated = True
+            if not model.update_graph_lazily:
+                model.update_graph()
+        return out
+
+    return wrapped
+
+
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Nodes ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -198,6 +224,7 @@ class Node(ABC):
         self._model: weakref.ref[Model] | Callable[[], None] = lambda: None
         self._name = _name
         self._needs_seed = _needs_seed
+        self._seed_node: Value | None = None
         self._outdated = True
         self._outputs: tuple[Node, ...] = ()
         self._value: Any = None
@@ -263,7 +290,7 @@ class Node(ABC):
         self._var = None
         return self
 
-    @no_model_method
+    @changes_model_graph
     def add_inputs(self, *inputs: Any, **kwinputs: Any) -> Node:
         """Adds non-keyword and keyword input nodes to the existing ones."""
         inputs = self.inputs + inputs
@@ -285,13 +312,13 @@ class Node(ABC):
         self.state = NodeState(None, True)
         return self
 
-    @in_model_method
     def flag_outdated(self) -> Node:
         """Flags the node and its recursive outputs as outdated."""
         self._outdated = True
 
-        for node in self._outputs:
-            node.flag_outdated()
+        if self.model:
+            for node in self._outputs:
+                node.flag_outdated()
 
         return self
 
@@ -313,7 +340,15 @@ class Node(ABC):
     @property
     def model(self) -> Model | None:
         """The model the node is part of."""
-        return self._model()
+        model = self._model()
+        if model is None:
+            return None
+
+        if self.name in model.nodes:
+            return model
+
+        self._unset_model()
+        return None
 
     @property
     def name(self) -> str:
@@ -321,7 +356,7 @@ class Node(ABC):
         return self._name
 
     @name.setter
-    @no_model_setter
+    @changes_model_graph
     def name(self, name: str):
         self._name = name
 
@@ -339,14 +374,38 @@ class Node(ABC):
             return self
 
     @property
+    def seed_node(self) -> Value | None:
+        return self._seed_node
+
+    @seed_node.setter
+    @no_model_setter
+    def seed_node(self, value: Value | None):
+        if value is None:
+            kwinputs_without_seed = self.kwinputs.copy()
+            kwinputs_without_seed.pop("seed", None)
+            self.set_inputs(*self.inputs, **kwinputs_without_seed)
+
+        kwinputs_with_seed = dict(self.kwinputs)
+        assert value is not None
+        kwinputs_with_seed["seed"] = value
+        self.set_inputs(*self.inputs, **kwinputs_with_seed)
+
+        self._seed_node = value
+
+    @property
     def needs_seed(self) -> bool:
         """Whether the node needs a seed / PRNG key."""
         return self._needs_seed
 
     @needs_seed.setter
-    @no_model_setter
+    @changes_model_graph
     def needs_seed(self, needs_seed: bool):
         self._needs_seed = needs_seed
+
+        if not needs_seed:
+            kwinputs_without_seed = self.kwinputs.copy()
+            kwinputs_without_seed.pop("seed", None)
+            self.set_inputs(*self.inputs, **kwinputs_without_seed)
 
     @property
     def outdated(self) -> bool:
@@ -363,7 +422,7 @@ class Node(ABC):
         """The output nodes."""
         return self._outputs
 
-    @no_model_method
+    @changes_model_graph
     def set_inputs(self, *inputs: Any, **kwinputs: Any) -> Node:
         """Sets the non-keyword and keyword input nodes."""
         self._inputs = tuple(self._to_node(_input) for _input in inputs)
@@ -485,6 +544,7 @@ class Node(ABC):
         kwinputs[key] = self._to_node(value)
         return self.set_inputs(*self.inputs, **kwinputs)
 
+    @changes_model_graph
     def __setitem__(self, key: int | str, value: Node | Var | Any) -> None:
         if isinstance(key, int):
             all_inputs = self.all_input_nodes()
@@ -847,7 +907,7 @@ class Calc(Node):
         return self._function
 
     @function.setter
-    @no_model_setter
+    @changes_model_graph
     def function(self, function: Callable[..., Any]):
         self._function = function
 
@@ -1031,7 +1091,7 @@ class Dist(Node):
         return self._at
 
     @at.setter
-    @no_model_setter
+    @changes_model_graph
     def at(self, at: Node | None):
         if self.var and at is not self.var.var_value_node:
             raise RuntimeError(
@@ -1046,7 +1106,7 @@ class Dist(Node):
         return self._distribution
 
     @distribution.setter
-    @no_model_setter
+    @changes_model_graph
     def distribution(self, distribution: Callable[..., Distribution]):
         self._distribution = distribution
 
@@ -1068,7 +1128,7 @@ class Dist(Node):
         return self._per_obs
 
     @per_obs.setter
-    @no_model_setter
+    @changes_model_graph
     def per_obs(self, per_obs: bool):
         self._per_obs = per_obs
 
@@ -2067,6 +2127,7 @@ class Var:
 
         return _unique_tuple(_vars)
 
+    @changes_model_graph
     def transform(
         self,
         bijector: type[jb.Bijector] | jb.Bijector | None = None,
@@ -2470,20 +2531,42 @@ class Var:
         return self._dist_node if self.has_dist else None
 
     @dist_node.setter
-    @no_model_setter
+    @changes_model_graph
     def dist_node(self, dist_node: Dist | None):
         if not dist_node:
             dist_node = NoDist()
 
-        if dist_node.model:
-            raise RuntimeError(
-                f"{repr(dist_node)} is part of a model, cannot be set as dist node"
-            )
-
         if self.name and not dist_node.name:
             dist_node.name = f"{self.name}_log_prob"  # type: ignore  # unfrozen
 
-        self._dist_node._unset_var()
+        if self._dist_node.model:
+            model = self._dist_node.model
+            auto_update_before = model.auto_update
+            model.auto_update = False
+
+            lazy_before = model.update_graph_lazily
+            model.update_graph_lazily = True
+            inputs = self._dist_node.inputs
+            kwinputs = self._dist_node.kwinputs
+            inputs = inputs + tuple(kwinputs.values())
+            self._dist_node._unset_var()
+            self._dist_node.set_inputs()
+            model._nodes = {
+                n.name: n for n in model._nodes.values() if n is not self._dist_node
+            }
+
+            self._dist_node.at = None
+            for nv in inputs:
+                model._remove_disconnected_parental_submodel(nv)
+                if isinstance(nv, VarValue):
+                    assert nv.var
+                    model._remove_disconnected_parental_submodel(nv.var)
+
+            model.update_graph_lazily = lazy_before
+            model.auto_update = auto_update_before
+        else:
+            self._dist_node._unset_var()
+            self._dist_node.at = None
 
         dist_node._set_var(self)
         dist_node.at = self.var_value_node  # type: ignore  # unfrozen
@@ -2519,7 +2602,7 @@ class Var:
         return self._name
 
     @name.setter
-    @no_model_setter
+    @changes_model_graph
     def name(self, name: str):
         if name and self.value_node.name in ("", f"{self.name}_value"):
             self.value_node.name = f"{name}_value"  # type: ignore  # unfrozen
@@ -2565,8 +2648,10 @@ class Var:
         return self._observed
 
     @observed.setter
-    @no_model_setter
+    @changes_model_graph
     def observed(self, observed: bool):
+        if self.parameter and observed is True:
+            raise ValueError("Cannot set observed flag to True if parameter=True")
         self._observed = observed
 
     @property
@@ -2595,8 +2680,10 @@ class Var:
         return self._parameter
 
     @parameter.setter
-    @no_model_setter
+    @changes_model_graph
     def parameter(self, parameter: bool):
+        if self.observed and parameter is True:
+            raise ValueError("Cannot set parameter flag to True if observed=True")
         self._parameter = parameter
 
     @property
@@ -2659,7 +2746,7 @@ class Var:
         return self._value_node
 
     @value_node.setter
-    @no_model_setter
+    @changes_model_graph
     def value_node(self, value_node: Any):
         if isinstance(value_node, Var):
             value_node = Calc(lambda x: x, value_node, convert_inputs=self._convert)
@@ -2668,14 +2755,22 @@ class Var:
             value_node = Value(value_node, convert=self._convert)
 
         if value_node.model:
-            raise RuntimeError(
-                f"{repr(value_node)} is part of a model, cannot be set as value node"
-            )
+            if value_node.model is not self.model:
+                raise RuntimeError(
+                    f"{repr(value_node)} and {self} must be part of no "
+                    "model, or the same model."
+                )
 
         if self.name and not value_node.name:
             value_node.name = f"{self.name}_value"
 
         self.value_node._unset_var()
+        if self.model:
+            self.model._nodes = {
+                n.name: n
+                for n in self.model._nodes.values()
+                if n is not self.value_node
+            }
 
         value_node._set_var(self)
         self._value_node = value_node

@@ -8,10 +8,10 @@ import logging
 import math
 import re
 from collections import Counter
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from copy import deepcopy
 from types import MappingProxyType
-from typing import IO, Any, Literal, TypeVar
+from typing import IO, Any, Literal, Self, TypeVar
 
 import dill
 import jax
@@ -220,9 +220,9 @@ class GraphBuilder:
         nodes, _ = self._all_nodes_and_vars()
 
         for node in nodes:
-            if node.needs_seed:
+            if node.needs_seed and not node.seed_node:
                 seed = Value(jax.random.PRNGKey(0), _name=f"_model_{node.name}_seed")
-                node.set_inputs(*node.inputs, **{"seed": seed} | node.kwinputs)
+                node.seed_node = seed
 
         return self
 
@@ -483,7 +483,7 @@ class GraphBuilder:
             logger.warning("No nodes in graph builder, building an empty model")
 
         for node in nodes:
-            if node.name.startswith("_model"):
+            if node.name.startswith("_model") and not node.name.endswith("_seed"):
                 raise RuntimeError(f"{repr(node)} has reserved name '_model*'")
 
         gb = self.copy()
@@ -534,6 +534,45 @@ class GraphBuilder:
 
         return model
 
+    def _discover_nodes_and_vars(self) -> list[Node | Var]:
+        nodes, _vars = self._all_nodes_and_vars()
+
+        if not nodes:
+            logger.warning("No nodes in graph builder, building an empty model")
+
+        for node in nodes:
+            if node.name.startswith("_model") and not node.name.endswith("_seed"):
+                raise RuntimeError(f"{repr(node)} has reserved name '_model*'")
+
+        gb = self.copy()
+
+        nodes, _vars = gb._all_nodes_and_vars()
+
+        for var in _vars:
+            if var.auto_transform:
+                if var.dist_node is None:
+                    raise RuntimeError(
+                        f"Auto-transform of {var} failed, because it has no"
+                        " distribution, which means no default bijector can be found."
+                    )
+                tname = f"{var.name}_transformed"
+                if tname in nodes or tname in _vars:
+                    raise RuntimeError(
+                        f"Auto-transform of {var} failed, because a variable of the "
+                        f"name {tname} is already present in {gb}."
+                    )
+                var.transform(bijector=None)
+
+        gb._set_missing_names()
+        gb._add_model_log_lik_node()
+        gb._add_model_log_prior_node()
+        gb._add_model_log_prob_node()
+        gb._add_model_seed_nodes()
+
+        nodes, _vars = gb._all_nodes_and_vars()
+        nodes_and_vars = nodes + _vars
+        return nodes_and_vars
+
     def convert_dtype(
         self, from_dtype: str | jax.numpy.dtype, to_dtype: str | jax.numpy.dtype
     ) -> GraphBuilder:
@@ -573,6 +612,10 @@ class GraphBuilder:
                     pass
 
         for node in nodes:
+            if node.model:
+                auto_update_before = node.model.auto_update
+                node.model.auto_update = False
+
             try:
                 wrappers = jax.tree.map(ConversionWrapper, node.value)
 
@@ -585,6 +628,9 @@ class GraphBuilder:
                     logger.info(f"Converted dtype of {repr(node)}.value")
             except AttributeError:
                 pass
+
+            if node.model:
+                node.model.auto_update = auto_update_before
 
         return self
 
@@ -782,17 +828,7 @@ class GraphBuilder:
 
 class Model:
     """
-    A model with a static graph.
-
-    .. tip::
-        If you have an existing model and want to make changes to it, you can use the
-        :meth:`.Model.pop_nodes_and_vars` method to release the nodes and variables
-        of the model. You can then make changes to them, for example i.e. changing the
-        distribution of a variable or the inputs of a calculation. Afterwards, you
-        initialize a *new* model with your changed variables.
-        If you simply want to change the value of a variable, it is not necessary to
-        call :meth:`~.Model.pop_nodes_and_vars`, you can simply override the
-        :attr:`.Var.value` attribute. Remeber to call :meth:`.Model.update` afterwards.
+    A probabilistic graphical model.
 
     Parameters
     ----------
@@ -859,72 +895,12 @@ class Model:
         # end of compatibility block
 
         self._to_float32 = to_float32
-        if grow:
-            model = (
-                GraphBuilder(to_float32=to_float32)
-                .add(*nodes_and_vars_list)
-                .build_model(validate_log_prob_decomposition=False)
-            )
-            nodes_and_vars_list = [*model.nodes.values(), *model.vars.values()]
-            model.pop_nodes_and_vars()
-
-        nodes = [nv for nv in nodes_and_vars_list if isinstance(nv, Node)]
-        nodes = list(dict.fromkeys(nodes).keys())
-        counts = Counter(n.name for n in nodes)
-        dups = [k for k, v in counts.items() if v > 1]
-
-        if dups:
-            raise RuntimeError(f"Duplicate node names: {', '.join(dups)}")
-
-        _vars = [nv for nv in nodes_and_vars_list if isinstance(nv, Var)]
-        _vars = list(dict.fromkeys(_vars).keys())
-        counts = Counter(v.name for v in _vars)
-        dups = [k for k, v in counts.items() if v > 1]
-
-        if dups:
-            raise RuntimeError(f"Duplicate variable names: {', '.join(dups)}")
-
-        groups = [g for nv in nodes_and_vars_list for g in nv.groups.values()]
-        groups = list(dict.fromkeys(groups).keys())
-        counts = Counter(g.name for g in groups)
-        dups = [k for k, v in counts.items() if v > 1]
-
-        if dups:
-            raise RuntimeError(f"Duplicate group names: {', '.join(dups)}")
-
-        self._nodes = {n.name: n for n in nodes}
-        self._vars = {v.name: v for v in _vars}
-
-        if copy:
-            self._nodes, self._vars = deepcopy((self._nodes, self._vars))
-
-        for node in self._nodes.values():
-            node._clear_outputs()
-            node._set_model(self)
-
-        for node in self._nodes.values():
-            for _input in node.all_input_nodes():
-                _input._add_output(node)
-
-        self._node_graph = self._build_node_graph(self._nodes.values())
-        self._var_graph = self._build_var_graph(self._vars.values())
-
-        self._sorted_nodes = list(nx.topological_sort(self._node_graph))
-        self._sorted_vars = list(nx.topological_sort(self._var_graph))
-        self._nodes = {n.name: n for n in self._sorted_nodes}
-        self._vars = {n.name: n for n in self._sorted_vars}
-
-        self._simulation_graph = self._build_simulation_graph(self._nodes.values())
-        self._simulation_nodes = list(nx.topological_sort(self._simulation_graph))
-
         self._auto_update = True
-        self._seed_nodes = []
-
-        for node in self._sorted_nodes:
-            if node.name.startswith("_model_") and node.name.endswith("_seed"):
-                self._seed_nodes.append(node)
-
-            node.update()
+        self._update_graph(nodes_and_vars_list, copy=copy, grow=grow)
+        self.graph_outdated = False
+        self.update_graph_lazily = False
+        self.locked = False
+        self.seed_nodes_and_vars = nodes_and_vars_list
 
         if validate_log_prob_decomposition:
             self._validate_log_prob_decomposition()
@@ -946,6 +922,503 @@ class Model:
                             f"{var} has a distribution but "
                             "Var.parameter=False and Var.observed=False."
                         )
+
+    @property
+    def graph_outdated(self) -> bool:
+        """
+        Whether the model graph is outdated.
+
+        The model graph can be updated with :meth:`.update_graph` or
+        :meth:`.rebuild_graph`.
+        """
+        return self._graph_outdated
+
+    @graph_outdated.setter
+    def graph_outdated(self, value: bool) -> None:
+        if not isinstance(value, bool):
+            raise TypeError(f"Value must be bool, got {type(value)}.")
+        self._graph_outdated = value
+
+    @property
+    def locked(self) -> bool:
+        """
+        Whether the model graph is locked.
+
+        If the model graph is locked, the in- and outputs, names, and distributions of
+        variables and nodes in the model graph cannot be changed.
+        """
+        return self._locked
+
+    @locked.setter
+    def locked(self, value: bool) -> None:
+        if not isinstance(value, bool):
+            raise TypeError(f"Value must be bool, got {type(value)}.")
+        self._locked = value
+
+    @property
+    def seed_nodes_and_vars(self) -> list[Node | Var]:
+        """
+        The seed nodes and variables passed to the model during initialization.
+        """
+        return self._seed_nodes_and_vars
+
+    @seed_nodes_and_vars.setter
+    def seed_nodes_and_vars(self, value: list[Node | Var]) -> None:
+        self._seed_nodes_and_vars = value
+
+    def _replace_node(self, old: Node, new: Node) -> Self:
+        """Replaces the ``old`` with the ``new`` node."""
+        if not isinstance(old, Node):
+            raise TypeError(f"'old' must be of type Node, got {type(old).__name__}.")
+
+        if not isinstance(new, Node):
+            raise TypeError(f"'new' must be of type Node, got {type(new).__name__}.")
+
+        nodes = [new if x is old else x for x in self.nodes.values()]
+        GraphBuilder._do_set_missing_names(nodes, prefix="n")
+
+        for node in nodes:
+            inputs = [new if x is old else x for x in node.inputs]
+            kwinputs = {k: new if v is old else v for k, v in node.kwinputs.items()}
+            node.set_inputs(*inputs, **kwinputs)
+
+        self._nodes = {nd.name: nd for nd in nodes}
+        self.graph_outdated = True
+
+        return self
+
+    def _replace_var_with_var(self, old: Var, new: Var) -> Self:
+        """Replaces the ``old`` with the ``new`` variable."""
+        if not isinstance(old, Var):
+            raise TypeError(f"'old' must be of type Var, got {type(old).__name__}.")
+
+        if not isinstance(new, Var):
+            raise TypeError(f"'new' must be of type Var, got {type(new).__name__}.")
+
+        vars_ = [new if x is old else x for x in self.vars.values()]
+        GraphBuilder._do_set_missing_names(vars_, prefix="v")
+        self._vars = {v.name: v for v in vars_}
+
+        if old.dist_node:
+            if not new.dist_node:
+                lazy_before = self.update_graph_lazily
+                self.update_graph_lazily = True
+
+                auto_update_before = self.auto_update
+                self.auto_update = False
+                old.dist_node = None
+                self.auto_update = auto_update_before
+                self.update_graph_lazily = lazy_before
+            else:
+                self._replace_node(old.dist_node, new.dist_node)
+
+        self._replace_node(old.var_value_node, new.var_value_node)
+        self._replace_node(old.value_node, new.value_node)
+
+        self.graph_outdated = True
+
+        return self
+
+    def _replace_var_with_node(self, old: Var, new: Node) -> Self:
+        """Replaces the ``old`` with the ``new`` variable."""
+        if not isinstance(old, Var):
+            raise TypeError(f"'old' must be of type Var, got {type(old).__name__}.")
+
+        if not isinstance(new, Node):
+            raise TypeError(f"'new' must be of type Node, got {type(new).__name__}.")
+
+        vars_ = [x for x in self.vars.values() if x is not old]
+        self._vars = {v.name: v for v in vars_}
+
+        self._replace_node(old.var_value_node, new)
+
+        self.graph_outdated = True
+
+        return self
+
+    def replace(
+        self, old: str | Var, new: Node | Var | float | int | jax.Array
+    ) -> Self:
+        """
+        Replaces the ``old`` with the ``new`` node or variable.
+        """
+
+        if isinstance(old, str):
+            if old in self.nodes:
+                raise TypeError(f"{old=} must be of type Var, got a Node.")
+            elif old in self.vars:
+                old_nv = self.vars[old]
+            else:
+                raise KeyError(f"{old=} not found in the model.")
+        else:
+            old_nv = old
+
+        if isinstance(old_nv, Var):
+            if isinstance(new, Var):
+                if new.model and new.model is not self:
+                    raise RuntimeError(f"{new} can only be part of one model")
+
+                self._replace_var_with_var(old_nv, new)
+            elif isinstance(new, Node):
+                if new.model and new.model is not self:
+                    raise RuntimeError(f"{new} can only be part of one model")
+                self._replace_var_with_node(old_nv, new)
+            else:
+                self._replace_var_with_node(old_nv, Value(new))
+        else:
+            raise TypeError(f"{old=} must be of type Var, got {type(old_nv)}.")
+
+        if not self.update_graph_lazily:
+            self.update_graph()
+
+        old_is_still_in_model = old_nv.name in self.nodes or old_nv.name in self.vars
+        if old_is_still_in_model:
+            self._remove_disconnected_parental_submodel(old)
+
+        return self
+
+    def _remove_disconnected_parental_submodel(self, of: str | Node | Var) -> Self:
+        """
+        Removes the variable/node supplied as ``of`` and its inputs, then updates the
+        graph. If any of the removed variables/nodes is still an input to any of the
+        remaining variables/nodes in the model graph, they are re-added through the
+        update. Otherwise, they are removed from the model graph.
+
+
+        Note that, if any of the removed variables/nodes are in
+        :attr:`.seed_nodes_and_vars`, they remain in :attr:`.seed_nodes_and_vars` and
+        would be re-added to the graph if :meth:`.rebuild_graph` is called without
+        arguments.
+        """
+        if isinstance(of, str):
+            if of in self.nodes:
+                of = self.nodes[of]
+            elif of in self.vars:
+                of = self.vars[of]
+            else:
+                raise KeyError(f"{of=} not found in the model.")
+        else:
+            of = of
+
+        p_nodes_and_vars = set()
+
+        if isinstance(of, Var):
+            p_nodes_and_vars.update(nx.ancestors(self.var_graph, of))
+            p_nodes_and_vars.update(nx.ancestors(self.node_graph, of.var_value_node))
+            p_nodes_and_vars.update(nx.ancestors(self.node_graph, of.value_node))
+            p_nodes_and_vars.add(of)
+            p_nodes_and_vars.add(of.var_value_node)
+            p_nodes_and_vars.add(of.value_node)
+            if of.dist_node:
+                p_nodes_and_vars.update(nx.ancestors(self.node_graph, of.dist_node))
+                p_nodes_and_vars.add(of.dist_node)
+
+        else:
+            p_nodes_and_vars.update(nx.ancestors(self.node_graph, of))
+            p_nodes_and_vars.add(of)
+
+        for nv in p_nodes_and_vars.copy():
+            if isinstance(nv, VarValue):
+                p_nodes_and_vars.add(nv.var)
+
+        self._nodes = {
+            n.name: n for n in self.nodes.values() if n not in p_nodes_and_vars
+        }
+        self._vars = {
+            v.name: v for v in self.vars.values() if v not in p_nodes_and_vars
+        }
+        self.graph_outdated = True
+
+        if not self.update_graph_lazily:
+            self.update_graph()
+
+        return self
+
+    def _get_singletons(self, graph: nx.DiGraph):
+        G = graph
+        singletons1 = [n for n, d in G.degree() if d == 0]
+        singletons2 = [
+            n for n in G.nodes() if G.in_degree(n) == 0 and G.out_degree(n) == 0
+        ]
+        singletons = set(singletons1 + singletons2)
+        return [
+            nd
+            for nd in singletons
+            if isinstance(nd, Var) or not nd.name.startswith("_model")
+        ]
+
+    def _drop_singleton_nodes(
+        self, nodes: dict[str, Node], graph: nx.DiGraph
+    ) -> dict[str, Node]:
+        """
+        Removes all singleton nodes from the provided GraphBuilder.
+        """
+        singletons = self._get_singletons(graph)
+
+        for nv in singletons:
+            if nv.name.startswith("_model"):
+                continue
+            nodes.pop(nv.name, None)
+        return nodes
+
+    def _drop_singleton_vars(
+        self, vars_: dict[str, Var], graph: nx.DiGraph
+    ) -> dict[str, Var]:
+        """
+        Removes all singleton variables from the provided GraphBuilder.
+        """
+        singletons = self._get_singletons(graph)
+
+        for nv in singletons:
+            if nv.name.startswith("_model"):
+                continue
+            vars_.pop(nv.name, None)
+        return vars_
+
+    def _ensure_unlocked(self):
+        if self.locked:
+            raise RuntimeError(
+                f"{self} is locked, cannot rebuild graph."
+                "To allow for changes to the model, you can set the Model.locked flag "
+                "to False. "
+                "ATTENTION: Note that, from v0.5, the default state for models will "
+                "be Model.locked = False, so do not rely on this error if you are "
+                "using the default."
+            )
+
+    def modify_names(self, fn: Callable[[str], str]):
+        """
+        Modifies the names of all variables and nodes in the model according to the
+        supplied function.
+        """
+        update_graph_lazily = self.update_graph_lazily
+        self.update_graph_lazily = True
+        nv_dict = self.nodes | self.vars
+        for nv in nv_dict.values():
+            nv.name = fn(nv.name)
+        self.update_graph()
+        self.update_graph_lazily = update_graph_lazily
+        return self
+
+    def prefix_names(self, prefix: str) -> Self:
+        """
+        Adds a prefix to the names of all variables and nodes in the model.
+        """
+        return self.modify_names(lambda name: prefix + name)
+
+    def rebuild_graph(self, *vars_nodes_and_names: Var | Node | str) -> Self:
+        """
+        Rebuilds the model graph by re-discovering the outputs of all supplied nodes and
+        variables. Also accepts strings, which must be the names of nodes or variables
+        currently in the model.
+
+        If no nodes or variables are supplied, uses the :attr:`.seed_nodes_and_vars`
+        supplied to the model during initialization.
+        """
+        self._ensure_unlocked()
+        vars_nodes: list[Var | Node] = []
+        if vars_nodes_and_names:
+            for nvn in vars_nodes_and_names:
+                if isinstance(nvn, str):
+                    if nvn in self.vars:
+                        vars_nodes.append(self.vars[nvn])
+                    elif nvn in self.nodes:
+                        vars_nodes.append(self.nodes[nvn])
+                    else:
+                        raise KeyError(
+                            f"No Node or Var with anme '{nvn}' found in model."
+                        )
+                else:
+                    vars_nodes.append(nvn)
+        else:
+            vars_nodes += self.seed_nodes_and_vars
+
+        self._update_graph(vars_nodes)
+        self.graph_outdated = False
+        return self
+
+    def update_graph(self) -> Self:
+        """
+        Updates the model graph by re-discovering the outputs of all nodes and variables
+        in the graph.
+
+        If the updated graph contains singleton nodes, i.e. nodes without inputs or
+        outputs, these nodes are dropped from the graph. Singleton variables are not
+        dropped, but can be dropped manually by calling :meth:`.drop_singletons`.
+        """
+        return self.add()  # adding with empty list means simply updating
+
+    def add(self, *vars_and_nodes: Var | Node) -> Self:
+        """
+        Adds a variable number of :class:`.Var`s and/or :class:`.Node`s to the model.
+        """
+        self._ensure_unlocked()
+
+        nodes = [nd for nd in self.nodes.values() if not nd.name.startswith("_model")]
+        vars_ = [nd for nd in self.vars.values() if not nd.name.startswith("_model")]
+        existing_nodes_and_vars = nodes + vars_
+
+        vn_list = list(vars_and_nodes)
+        existing_nodes_and_vars += vn_list
+        self._update_graph(existing_nodes_and_vars)
+        self.graph_outdated = False
+
+        self.seed_nodes_and_vars += vn_list
+        return self
+
+    def join(self, *models: Model, copy: bool = False) -> Self:
+        """
+        Adds all variables and nodes from the supplied models to this model.
+
+        If ``copy=False``, the variables and nodes are removed from their original
+        models, leaving them empty. If ``copy=True``, variables and nodes are copied
+        instead.
+        """
+        # Check for duplicate names first to error without side effects
+        _vars_and_nodes: list[Var | Node] = []
+        for _model in models:
+            # remove model nodes
+            _nodes_list = [
+                nd for nd in _model.nodes.values() if not nd.name.startswith("_model")
+            ]
+            _vars_list = [
+                nd for nd in _model.vars.values() if not nd.name.startswith("_model")
+            ]
+
+            _vars_and_nodes += _nodes_list
+            _vars_and_nodes += _vars_list
+
+        self._check_for_duplicates(_vars_and_nodes)
+
+        # now do the actual joining
+
+        vars_and_nodes: list[Var | Node] = []
+
+        for model in models:
+            if copy:
+                nodes, vars_ = model.copy_nodes_and_vars()
+            else:
+                nodes, vars_ = model.pop_nodes_and_vars()
+
+            # remove model nodes
+            nodes_list = [
+                nd for nd in nodes.values() if not nd.name.startswith("_model")
+            ]
+            vars_list = [
+                nd for nd in vars_.values() if not nd.name.startswith("_model")
+            ]
+
+            vars_and_nodes += nodes_list
+            vars_and_nodes += vars_list
+
+        return self.add(*vars_and_nodes)
+
+    def drop_singletons(self) -> Self:
+        """
+        Drops any singleton nodes and variables, i.e. nodes or variables that have
+        neither outputs nor inputs.
+        """
+        self._vars = self._drop_singleton_vars(self._vars, self._var_graph)
+        for name, nd in self._nodes.copy().items():
+            if isinstance(nd, VarValue):
+                assert nd.var
+                if nd.var.name not in self._vars:
+                    self._nodes.pop(name, None)
+
+            if nd.var is not None and nd.var.name not in self._vars:
+                nd._unset_var()
+
+        self.update_graph()
+        self._nodes = self._drop_singleton_nodes(self._nodes, self._node_graph)
+        self.update_graph()
+        return self
+
+    def _update_graph(
+        self,
+        nodes_and_vars: Iterable[Node | Var],
+        copy: bool = False,
+        grow: bool = True,
+    ) -> Self:
+        if grow:
+            nodes_and_vars = self._discover_nodes_and_vars(nodes_and_vars)
+
+        nodes, _vars = self._check_for_duplicates(nodes_and_vars)
+
+        self._nodes = {n.name: n for n in nodes}
+        self._vars = {v.name: v for v in _vars}
+
+        if copy:
+            self._nodes, self._vars = deepcopy((self._nodes, self._vars))
+
+        for node in self._nodes.values():
+            node._clear_outputs()
+            if node.model is not self:
+                node._set_model(self)
+
+        for node in self._nodes.values():
+            for _input in node.all_input_nodes():
+                _input._add_output(node)
+
+        self._node_graph = self._build_node_graph(self._nodes.values())
+        self._var_graph = self._build_var_graph(self._vars.values())
+
+        self._sorted_nodes = list(nx.topological_sort(self._node_graph))
+        self._sorted_vars = list(nx.topological_sort(self._var_graph))
+        self._nodes = {n.name: n for n in self._sorted_nodes}
+        self._vars = {n.name: n for n in self._sorted_vars}
+
+        self._simulation_graph = self._build_simulation_graph(self._nodes.values())
+        self._simulation_nodes = list(nx.topological_sort(self._simulation_graph))
+
+        self._seed_nodes = []
+
+        for node in self._sorted_nodes:
+            if node.name.startswith("_model_") and node.name.endswith("_seed"):
+                self._seed_nodes.append(node)
+
+            node.update()
+
+        return self
+
+    def _discover_nodes_and_vars(
+        self, nodes_and_vars: Iterable[Node | Var]
+    ) -> list[Node | Var]:
+        gb = GraphBuilder(to_float32=self._to_float32).add(*nodes_and_vars)
+        nodes_and_vars = gb._discover_nodes_and_vars()
+        return nodes_and_vars
+
+    @staticmethod
+    def _check_for_duplicates(
+        nodes_and_vars: Iterable[Node | Var],
+    ) -> tuple[list[Node], list[Var]]:
+        """
+        Errors if there are two or more nodes/variables with the same name.
+        """
+        nodes = [nv for nv in nodes_and_vars if isinstance(nv, Node)]
+        nodes = list(dict.fromkeys(nodes).keys())
+        counts = Counter(n.name for n in nodes)
+        dups = [k for k, v in counts.items() if v > 1]
+
+        if dups:
+            raise RuntimeError(f"Duplicate node names: {', '.join(dups)}")
+
+        _vars = [nv for nv in nodes_and_vars if isinstance(nv, Var)]
+        _vars = list(dict.fromkeys(_vars).keys())
+        counts = Counter(v.name for v in _vars)
+        dups = [k for k, v in counts.items() if v > 1]
+
+        if dups:
+            raise RuntimeError(f"Duplicate variable names: {', '.join(dups)}")
+
+        groups = [g for nv in nodes_and_vars for g in nv.groups.values()]
+        groups = list(dict.fromkeys(groups).keys())
+        counts = Counter(g.name for g in groups)
+        dups = [k for k, v in counts.items() if v > 1]
+
+        if dups:
+            raise RuntimeError(f"Duplicate group names: {', '.join(dups)}")
+
+        return nodes, _vars
 
     @staticmethod
     def _build_node_graph(nodes: Iterable[Node]) -> nx.DiGraph:
@@ -1056,7 +1529,11 @@ class Model:
         nodes_list = list(nodes.values())
         vars_list = list(vars_.values())
         nv_list: list[Node | Var] = nodes_list + vars_list
-        return Model(nv_list)
+        model = Model(nv_list)
+        names = [nv.name for nv in self.seed_nodes_and_vars]
+        seed_nv = [nv for nv in nv_list if nv.name in names]
+        model.seed_nodes_and_vars = seed_nv
+        return model
 
     def copy_vars(self) -> dict[str, Var]:
         """Returns an unfrozen deep copy of the model variables."""

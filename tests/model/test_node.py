@@ -76,9 +76,14 @@ def test_frozen_data_name_manipulation() -> None:
     x = Value(2.0, _name="x")
     x.update()
 
+    model = Model([x])
+    x.name = "a"
+    model.pop_vars()
+
     with pytest.raises(RuntimeError):
-        _ = Model([x])
-        x.name = "a"
+        model = Model([x])
+        model.locked = True
+        x.name = "b"
 
 
 def test_frozen_data_needs_seed_manipulation() -> None:
@@ -232,9 +237,14 @@ def test_frozen_calc_name_manipulation(Calc) -> None:
     calc = Calc(np.exp, x)
     calc.update()
 
+    model = Model([calc])
+    calc.name = "a"
+    model.pop_vars()
+
     with pytest.raises(RuntimeError):
-        _ = Model([calc])
-        calc.name = "a"
+        model = Model([calc])
+        model.locked = True
+        calc.name = "b"
 
 
 @pytest.mark.parametrize("Calc", [Calc, TransientCalc])
@@ -254,8 +264,13 @@ def test_frozen_calculator_function_manipulation(Calc) -> None:
     calc = Calc(np.exp, x)
     calc.update()
 
+    model = Model([calc])
+    calc.function = np.log
+    model.pop_vars()
+
     with pytest.raises(RuntimeError):
-        _ = Model([calc])
+        model = Model([calc])
+        model.locked = True
         calc.function = np.log
 
 
@@ -527,8 +542,13 @@ def test_frozen_distribution_name_manipulation(Dist) -> None:
     dist.at = x
     dist.update()
 
+    model = Model([dist])
+    dist.name = "normal"
+    model.pop_vars()
+
     with pytest.raises(RuntimeError):
-        _ = Model([dist])
+        model = Model([dist])
+        model.locked = True
         dist.name = "normal"
 
 
@@ -555,8 +575,16 @@ def test_frozen_distribution_distribution_manipulation(Dist) -> None:
     dist.at = x
     dist.update()
 
-    with pytest.raises(RuntimeError):
-        _ = Model([dist])
+    model = Model([dist])
+    with pytest.raises(RuntimeWarning, match="divide by zero"):
+        dist.distribution = tfd.Exponential
+
+    dist.distribution = tfd.LogNormal
+    model.pop_vars()
+
+    with pytest.raises(RuntimeError, match="part of a locked model"):
+        model = Model([dist])
+        model.locked = True
         dist.distribution = tfd.Exponential
 
 
@@ -569,11 +597,19 @@ def test_frozen_distribution_inputs_manipulation(Dist) -> None:
     dist.at = x
     dist.update()
 
-    rate = Value(1.0, _name="rate")
-
-    with pytest.raises(RuntimeError):
+    with pytest.raises(TypeError):
         _ = Model([dist])
-        dist.set_inputs(rate)
+        dist.set_inputs()
+
+    with pytest.raises(TypeError):
+        dist.set_inputs(rate=Value(1.0))
+
+    dist.set_inputs(1.0, 2.0)
+    assert dist[0].value == pytest.approx(1.0)
+    assert dist[1].value == pytest.approx(2.0)
+
+    with pytest.raises(TypeError):
+        dist.set_inputs(2.0)
 
 
 @pytest.mark.parametrize("Dist", [Dist, TransientDist])
@@ -581,16 +617,23 @@ def test_frozen_distribution_kwinputs_manipulation(Dist) -> None:
     x = Value(1.0, _name="x")
     loc = Value(0.0, _name="loc")
     scale = Value(1.0, _name="scale")
-    dist = Dist(tfd.Normal, loc, scale)
+    dist = Dist(tfd.Normal, loc=loc, scale=scale)
     dist.at = x
     dist.update()
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(TypeError):
         _ = Model([dist])
         dist.set_inputs()
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(TypeError):
         dist.set_inputs(rate=Value(1.0))
+
+    dist.set_inputs(loc=1.0, scale=2.0)
+    assert dist["loc"].value == pytest.approx(1.0)
+    assert dist["scale"].value == pytest.approx(2.0)
+
+    with pytest.raises(TypeError):
+        dist.set_inputs(loc=2.0)
 
 
 @pytest.mark.parametrize("Dist", [Dist, TransientDist])

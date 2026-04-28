@@ -1,7 +1,6 @@
 import jax
 import numpy as np
 import pytest
-import tensorflow_probability.substrates.jax as tfp
 
 import liesel.model.model as lmodel
 import liesel.model.nodes as lnodes
@@ -65,19 +64,3 @@ def test_auto_dtype_conversion() -> None:
     gb.add(float_node, int_node)
     assert float_node.value.dtype == "float32"
     assert int_node.value.dtype == "int32"
-
-
-def test_transform_raises_error_for_duplicate_nodes() -> None:
-    lmbd = lnodes.Var(1.0, name="lambda")
-    dist = lnodes.Dist(tfp.distributions.Exponential, lmbd)
-    x = lnodes.Var(1.0, dist, name="x")
-
-    gb = lmodel.GraphBuilder()
-
-    model = gb.add(x).build_model()
-
-    nodes, vars = model.copy_nodes_and_vars()
-
-    with pytest.raises(RuntimeError):
-        gb.add(*nodes.values(), *vars.values())
-        x.transform()
