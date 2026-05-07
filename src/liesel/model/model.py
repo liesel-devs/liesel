@@ -267,27 +267,18 @@ class GraphBuilder:
         return all_nodes, all_vars
 
     @staticmethod
-    def _do_set_missing_names(nodes_or_vars: Iterable[NV], prefix: str) -> list[str]:
+    def _do_set_missing_names(nodes_or_vars: Iterable[NV]) -> list[str]:
         """
         Sets the missing names for the given nodes or variables.
 
         Deprecated; use :meth:`.Var.ensure_name` instead.
         """
-        other = [nv.name for nv in nodes_or_vars if nv.name]
-        counter = -1
-
         automatically_set_names = []
 
         for nv in nodes_or_vars:
             if not nv.name:
-                name = f"{prefix}{(counter := counter + 1)}"
-
-                while name in other:
-                    name = f"{prefix}{(counter := counter + 1)}"
-
-                nv.name = name
-                other.append(name)
-                automatically_set_names.append(name)
+                nv.ensure_name()
+                automatically_set_names.append(str(nv.name))
 
         return automatically_set_names
 
@@ -975,7 +966,7 @@ class Model:
             raise TypeError(f"'new' must be of type Node, got {type(new).__name__}.")
 
         nodes = [new if x is old else x for x in self.nodes.values()]
-        GraphBuilder._do_set_missing_names(nodes, prefix="n")
+        GraphBuilder._do_set_missing_names(nodes)
 
         for node in nodes:
             inputs = [new if x is old else x for x in node.inputs]
@@ -996,7 +987,7 @@ class Model:
             raise TypeError(f"'new' must be of type Var, got {type(new).__name__}.")
 
         vars_ = [new if x is old else x for x in self.vars.values()]
-        GraphBuilder._do_set_missing_names(vars_, prefix="v")
+        GraphBuilder._do_set_missing_names(vars_)
         self._vars = {v.name: v for v in vars_}
 
         if old.dist_node:

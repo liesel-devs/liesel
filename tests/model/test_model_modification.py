@@ -854,11 +854,22 @@ class TestReplace:
         model = lsl.Model([y])
         model.locked = False
 
-        assert "n0" not in model.nodes
+        auto_names_nodes = [
+            name
+            for name in model.nodes
+            if name.startswith("_") and not name.startswith("_model")
+        ]
+        assert not auto_names_nodes
         model.replace(scale, 10.0)
 
         assert y.dist_node["scale"].value == pytest.approx(10.0)
-        assert "n0" in model.nodes
+
+        auto_names_nodes = [
+            name
+            for name in model.nodes
+            if name.startswith("_") and not name.startswith("_model")
+        ]
+        assert len(auto_names_nodes) == 1
         assert scale.name not in model.vars
         assert "scale_value" not in model.nodes
         assert "scale_log_prob" not in model.nodes
