@@ -940,6 +940,43 @@ class TestReplace:
         assert "a" in model.vars
         assert "b" not in model.vars
 
+    def test_replace_var_with_itself(self):
+        x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
+        scale = lsl.Var.new_param(
+            1.0,
+            lsl.Dist(
+                tfd.InverseGamma,
+                concentration=lsl.Var.new_param(1.0, name="a"),
+                scale=lsl.Var.new_param(1.0, name="b"),
+            ),
+            name="scale",
+        )
+
+        y = lsl.Var.new_obs(
+            jrd.normal(jrd.key(2), (10,)),
+            lsl.Dist(tfd.Normal, loc=x, scale=scale),
+            name="y",
+        )
+
+        model = lsl.Model([y])
+        model.locked = False
+
+        model.replace(scale, scale)
+
+        assert y.dist_node["scale"] is scale
+        assert scale.name in model.vars
+        assert "scale_value" in model.nodes
+        assert "scale_log_prob" in model.nodes
+        assert "scale_var_value" in model.nodes
+
+        assert scale.model
+
+        model.replace(y, y)
+
+        assert y.name in model.vars
+        assert x.name in model.vars
+        assert scale.name in model.vars
+
 
 class TestDropSingletons:
     def test_singleton_var_is_not_dropped(self):

@@ -1042,6 +1042,8 @@ class Model:
         """
         Replaces the ``old`` with the ``new`` node or variable.
         """
+        if old is new:
+            return self
 
         if isinstance(old, str):
             if old in self.nodes:
