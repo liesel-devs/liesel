@@ -29,3 +29,4 @@ a comparison of different samplers, and more:
    tutorials/md/05-reproducibility
    tutorials/md/06-pymc
    tutorials/md/07-error-correction
+   tutorials/md/08-custom-kernel
