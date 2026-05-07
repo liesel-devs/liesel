@@ -869,11 +869,13 @@ class TestReplace:
             for name in model.nodes
             if name.startswith("_") and not name.startswith("_model")
         ]
-        assert len(auto_names_nodes) == 1
-        assert scale.name not in model.vars
-        assert "scale_value" not in model.nodes
+        assert not auto_names_nodes
+        assert model.vars[scale.name] is not scale
+        assert 10.0 == pytest.approx(model.vars[scale.name].value)
+        assert scale.name in model.vars
+        assert "scale_value" in model.nodes
+        assert "scale_var_value" in model.nodes
         assert "scale_log_prob" not in model.nodes
-        assert "scale_var_value" not in model.nodes
 
     def test_disconnected_parents_of_replaced_var_are_removed(self):
         x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
