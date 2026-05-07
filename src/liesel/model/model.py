@@ -1055,15 +1055,24 @@ class Model:
         else:
             old_nv = old
 
+        same_name = False
         if isinstance(old_nv, Var):
             if isinstance(new, Var):
                 if new.model and new.model is not self:
                     raise RuntimeError(f"{new} can only be part of one model")
 
+                same_name = old_nv.name == new.name
+                if same_name:
+                    new.name = new.name + "__tmp_new__"
                 self._replace_var_with_var(old_nv, new)
+
             elif isinstance(new, Node):
                 if new.model and new.model is not self:
                     raise RuntimeError(f"{new} can only be part of one model")
+
+                same_name = old_nv.name == new.name
+                if same_name:
+                    new.name = new.name + "__tmp_new__"
                 self._replace_var_with_node(old_nv, new)
             else:
                 self._replace_var_with_node(old_nv, Value(new))
@@ -1076,6 +1085,9 @@ class Model:
         old_is_still_in_model = old_nv.name in self.nodes or old_nv.name in self.vars
         if old_is_still_in_model:
             self._remove_disconnected_parental_submodel(old)
+
+        if same_name and hasattr(new, "name"):
+            new.name = old_nv.name
 
         return self
 
