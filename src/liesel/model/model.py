@@ -1048,6 +1048,10 @@ class Model:
 
         same_name = False
         if isinstance(old_nv, Var):
+            if not isinstance(new, Var | Node):
+                new = Var.new_value(new)
+                new.name = old_nv.name
+
             if isinstance(new, Var):
                 if new.model and new.model is not self:
                     raise RuntimeError(f"{new} can only be part of one model")
@@ -1066,7 +1070,7 @@ class Model:
                     new.name = new.name + "__tmp_new__"
                 self._replace_var_with_node(old_nv, new)
             else:
-                self._replace_var_with_node(old_nv, Value(new))
+                raise RuntimeError("Unexpected unknown problem in Model.replace().")
         else:
             raise TypeError(f"{old=} must be of type Var, got {type(old_nv)}.")
 
