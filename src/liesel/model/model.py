@@ -1330,8 +1330,8 @@ class Model:
 
         Returns
         -------
-        A dictionary of variable and node names and their sampled values. Includes
-        only sampled variables.
+            A dictionary of variable and node names and their sampled values. Includes
+            only sampled variables.
         """
 
         posterior_samples = posterior_samples if posterior_samples is not None else {}
