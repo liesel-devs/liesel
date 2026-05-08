@@ -1762,7 +1762,8 @@ class Model:
             if node.name.startswith("_model_") and node.name.endswith("_seed"):
                 self._seed_nodes.append(node)
 
-            node.update()
+            if self.auto_update:
+                node.update()
 
         return self
 
@@ -1907,18 +1908,26 @@ class Model:
         g2 = {g.name: g for v in self._vars.values() for g in v.groups.values()}
         return g1 | g2
 
-    def copy(self) -> Model:
+    def copy(self, clear_state: bool = False) -> Model:
         """
         Returns a new model filled with deep copies of all model nodes and variables.
+
+        Parameters
+        ----------
+        clear_state
+            If ``True``, the model state will be cleared before constructing the
+            parental submodel, i.e., all values will be removed. This can be used to
+            save memory, if only the model structure is required.
         """
-        nodes, vars_ = self.copy_nodes_and_vars()
-        nodes_list = list(nodes.values())
-        vars_list = list(vars_.values())
-        nv_list: list[Node | Var] = nodes_list + vars_list
-        model = Model(nv_list)
-        names = [nv.name for nv in self.seed_nodes_and_vars]
-        seed_nv = [nv for nv in nv_list if nv.name in names]
-        model.seed_nodes_and_vars = seed_nv
+        backup = self.state
+        if clear_state:
+            for node in self._nodes.values():
+                node.clear_state()
+
+        model = deepcopy(self)
+
+        self.state = backup
+
         return model
 
     def copy_vars(self) -> dict[str, Var]:
@@ -1959,30 +1968,60 @@ class Model:
         subgraph = self.var_graph.subgraph(nodes_to_include)
         return subgraph
 
-    def parental_submodel(self, *of: Var | Node) -> Model:
+    def parental_submodel(
+        self, *of: Var | Node | str, clear_state: bool = False
+    ) -> Model:
         """
         Returns a new model that consists only of the given variables and nodes and \
         their parent variables and nodes. The new model contains copies of these \
         variables and nodes.
+
+        Parameters
+        ----------
+        clear_state
+            If ``True``, the model state will be cleared before constructing the
+            parental submodel, i.e., all values will be removed. This can be used to
+            save memory, if only the model structure is required.
         """
-
-        nodes_to_include = set()
-
-        for node in of:
-            if isinstance(node, Var):
-                nodes_to_include.update(nx.ancestors(self.var_graph, node))
-
+        of_nv: list[Var | Node] = []
+        for nvn in of:
+            if isinstance(nvn, str):
+                if nvn in self.vars:
+                    of_nv.append(self.vars[nvn])
+                elif nvn in self.nodes:
+                    of_nv.append(self.nodes[nvn])
+                else:
+                    raise KeyError(f"No node or variable of name {nvn} found in model.")
             else:
-                nodes_to_include.update(nx.ancestors(self.node_graph, node))
+                of_nv.append(nvn)
 
-            nodes_to_include.add(node)
+        backup = self.state
+        if clear_state:
+            for node in self._nodes.values():
+                node.clear_state()
 
         nodes, vars_ = self.copy_nodes_and_vars()
         nodes_and_vars = nodes | vars_
 
-        copy_of_nodes_to_include = [nodes_and_vars[n.name] for n in nodes_to_include]
+        copy_of_nodes_to_include = [nodes_and_vars[n.name] for n in of_nv]
 
-        return Model(copy_of_nodes_to_include, to_float32=self._to_float32, copy=False)
+        stub = Value(0.0)
+        model = Model(stub)  # adding a stub node to avoid printing a warning
+
+        # turning auto update off to avoid errors caused by the Nones
+        model.auto_update = False
+        model.add(*copy_of_nodes_to_include)
+
+        # removing the stub node
+        model._nodes.pop(stub.name)
+        model.seed_nodes_and_vars.remove(stub)
+        model.update_graph()
+
+        # turning auto update back on to restore default
+        model.auto_update = True
+
+        self.state = backup
+        return model
 
     @property
     def log_lik(self) -> Array:
