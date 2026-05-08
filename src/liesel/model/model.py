@@ -1450,9 +1450,11 @@ class Model:
             if copy:
                 model = model.copy()
 
-            seed_nodes_and_vars = model.seed_nodes_and_vars
-            model.pop_nodes_and_vars()
-            self._add_vars_and_nodes(*seed_nodes_and_vars, add_to_seeds=add_to_seeds)
+            if add_to_seeds:
+                self.seed_nodes_and_vars += model.seed_nodes_and_vars
+            nodes_, vars_ = model.pop_nodes_and_vars()
+            nodes_and_vars = list(nodes_.values()) + list(vars_.values())
+            self._add_vars_and_nodes(*nodes_and_vars, add_to_seeds=False)
 
         return self
 

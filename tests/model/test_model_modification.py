@@ -1293,6 +1293,42 @@ class TestModelAdd:
         assert x2 in model.seed_nodes_and_vars
         assert x2.dist_node.name in model.nodes
 
+    def test_add_one_larger_model(self):
+        x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
+        scale = lsl.Var.new_param(1.0, name="scale")
+
+        y = lsl.Var.new_obs(
+            jrd.normal(jrd.key(2), (10,)),
+            lsl.Dist(tfd.Normal, loc=x, scale=scale),
+            name="y",
+        )
+
+        model = lsl.Model([y])
+        model.locked = False
+
+        x2 = lsl.Var.new_obs(
+            jrd.normal(jrd.key(2), (10,)),
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="x2",
+        )
+
+        y2 = lsl.Var.new_obs(
+            jrd.normal(jrd.key(2), (10,)),
+            lsl.Dist(tfd.Normal, loc=x2, scale=1.0),
+            name="y2",
+        )
+
+        model2 = lsl.Model([y2])
+        model.add(model2)
+
+        assert x not in model.seed_nodes_and_vars
+        assert y in model.seed_nodes_and_vars
+        assert x2 not in model.seed_nodes_and_vars
+        assert x2.name in model.vars
+        assert x2.dist_node.name in model.nodes
+        assert y2 in model.seed_nodes_and_vars
+        assert y2.dist_node.name in model.nodes
+
     def test_add_one_model_copy(self):
         x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
         scale = lsl.Var.new_param(1.0, name="scale")
