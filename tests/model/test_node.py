@@ -887,14 +887,13 @@ class TestDistSetitem:
         with pytest.raises(AttributeError):
             del x.dist_node[0]
 
-    def test_assign_none_raises_valuerror(self):
+    def test_assign_none(self):
         x = Var(
             0.0,
             Dist(tfd.Normal, loc=Var(0.0, name="loc"), scale=Var(1.0, name="scale")),
         ).update()
 
-        with pytest.raises(ValueError):
-            x.dist_node["loc"] = None
+        x.dist_node["loc"] = None
 
 
 class TestCalcGetitem:

@@ -247,9 +247,9 @@ class Node(ABC):
             class MyNode(lsl.Node):
                 @staticmethod
                 def convert_value(x):
-                    return jnp.asarray(x)
+                    return jnp.asarray(x) if x is not None else x
         """
-        return jnp.asarray(x)
+        return jnp.asarray(x) if x is not None else x
 
     def _add_output(self, output: Node) -> Node:
         self._outputs = _unique_tuple(self._outputs, [output])
@@ -1745,9 +1745,9 @@ class Var:
             class MyVar(lsl.Var):
                 @staticmethod
                 def convert_value(x):
-                    return jnp.asarray(x)
+                    return jnp.asarray(x) if x is not None else x
         """
-        return jnp.asarray(x)
+        return jnp.asarray(x) if x is not None else x
 
     @classmethod
     def new_param(
