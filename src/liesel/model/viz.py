@@ -324,7 +324,7 @@ def _add_legend(axis, draw_legend_for_both):
             [0],
             color="#111111",
             linewidth=1.5,
-            label="Distribution",
+            label="Value",
         ),
         Line2D(
             [0],
@@ -332,7 +332,7 @@ def _add_legend(axis, draw_legend_for_both):
             color="#111111",
             linestyle=":",
             linewidth=1.5,
-            label="Value",
+            label="Distribution",
         ),
     ]
 
