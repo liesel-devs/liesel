@@ -378,20 +378,21 @@ def optim_flat(
     if optimizer is None:
         optimizer = optax.adam(learning_rate=1e-2)
 
-    n_train = _find_sample_size(model_train)
-    n_validation = _find_sample_size(model_validation)
-
     do_batching = batch_size is not None
     if do_batching:
         shuffle_batch_indices = True
         observed = _find_observed(model_train)
+        n_train = _find_sample_size(model_train)
+        n_validation = _find_sample_size(model_validation)
+        batch_size = batch_size if batch_size is not None else n_train
     else:
         shuffle_batch_indices = False
         # not because there are no observed, but because we don't need to update
         # observed with their batches
         observed = {}
-
-    batch_size = batch_size if batch_size is not None else n_train
+        n_train = 1
+        n_validation = 1
+        batch_size = 1
 
     interface_train = LieselInterface(model_train)
     position = interface_train.extract_position(params, model_train.state)
@@ -424,9 +425,12 @@ def optim_flat(
         position = position | batched_observed  # type: ignore
 
         updated_state = interface_train.update_state(position, model_state)
-        log_lik = likelihood_scalar * updated_state["_model_log_lik"].value
-        log_prior = updated_state["_model_log_prior"].value
-        log_prob = log_lik + log_prior
+        if not do_batching:
+            log_prob = updated_state["_model_log_prob"].value
+        else:
+            log_lik = likelihood_scalar * updated_state["_model_log_lik"].value
+            log_prior = updated_state["_model_log_prior"].value
+            log_prob = log_lik + log_prior
         return -log_prob
 
     def _neg_log_prob_train(position: Position, model_state: ModelState):
@@ -439,6 +443,9 @@ def optim_flat(
         log_prior = updated_state["_model_log_prior"].value
         log_prob = log_lik + log_prior
         return -log_prob
+
+    if model_validation is model_train:
+        _neg_log_prob_validation = _neg_log_prob_train
 
     neg_log_prob_grad = jax.grad(_batched_neg_log_prob, argnums=0)
 
