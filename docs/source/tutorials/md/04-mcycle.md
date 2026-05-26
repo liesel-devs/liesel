@@ -35,8 +35,8 @@ import liesel_gam as gam
 from ryp import r, to_py
 ```
 
-    Warning message:
-    package ‘arrow’ was built under R version 4.5.2 
+We start off by loading the dataset form R via
+[ryp](https://github.com/Wainberg/ryp).
 
 ``` python
 r("library(MASS)")
@@ -63,97 +63,20 @@ inverse link to keep the standard deviation positive. The
 attaches to the regression coefficients.
 
 ``` python
-def build_mcycle_model(default_inference):
-    tb = gam.TermBuilder.from_df(mcycle, default_inference=default_inference)
+tb = gam.TermBuilder.from_df(mcycle, default_inference=gs.MCMCSpec(gs.IWLSKernel))
 
-    loc_intercept = lsl.Var.new_param(
-        jnp.array(float(mcycle["accel"].mean())),
-        distribution=None,
-        inference=default_inference,
-        name="$\\beta_{0,loc}$",
-    )
-    scale_intercept = lsl.Var.new_param(
-        jnp.array(float(np.log(mcycle["accel"].std()))),
-        distribution=None,
-        inference=default_inference,
-        name="$\\beta_{0,scale}$",
-    )
+loc = gam.AdditivePredictor("loc")
+scale = gam.AdditivePredictor("scale", inv_link=jnp.exp)
 
-    loc = gam.AdditivePredictor("loc", intercept=loc_intercept)
-    scale = gam.AdditivePredictor(
-        "scale",
-        inv_link=jnp.exp,
-        intercept=scale_intercept,
-    )
+loc_smooth = tb.ps("times", k=20)
+scale_smooth = tb.ps("times", k=20)
 
-    loc_smooth = tb.ps("times", k=20)
-    scale_smooth = tb.ps("times", k=20)
+loc += loc_smooth
+scale += scale_smooth
 
-    loc += loc_smooth
-    scale += scale_smooth
-
-    response_dist = lsl.Dist(tfd.Normal, loc=loc, scale=scale)
-    y = lsl.Var.new_obs(mcycle["accel"].to_numpy(), response_dist, name="y")
-    model = lsl.Model([y])
-
-    return {
-        "model": model,
-        "loc": loc,
-        "scale": scale,
-        "loc_smooth": loc_smooth,
-        "scale_smooth": scale_smooth,
-        "loc_tau2_name": loc_smooth.scale.value_node[0].name,
-        "scale_tau2_name": scale_smooth.scale.value_node[0].name,
-    }
-
-
-def plot_loc_estimate(results, model, title):
-    samples = results.get_posterior_samples()
-    loc_samples = model.vars["loc"].predict(samples)
-    loc_summary = gs.SamplesSummary.from_array(
-        loc_samples,
-        name="loc",
-        which=["mean", "quantiles"],
-    )
-    loc_summary_df = loc_summary.to_dataframe().reset_index()
-
-    loc_summary_df["times"] = mcycle["times"].to_numpy()
-    plot_data = (
-        loc_summary_df[["times", "mean", "q_0.05", "q_0.95"]]
-        .groupby("times", as_index=False)
-        .mean()
-        .sort_values("times")
-    )
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-    ax.fill_between(
-        plot_data["times"],
-        plot_data["q_0.05"],
-        plot_data["q_0.95"],
-        color=sns.color_palette()[1],
-        alpha=0.25,
-        label="90% credible interval",
-    )
-    sns.lineplot(
-        data=plot_data,
-        x="times",
-        y="mean",
-        color=sns.color_palette()[1],
-        linewidth=2,
-        label="posterior mean",
-        ax=ax,
-    )
-    sns.scatterplot(
-        data=mcycle,
-        x="times",
-        y="accel",
-        color="0.25",
-        s=25,
-        ax=ax,
-        label="observed data",
-    )
-    ax.set(xlabel="time after impact", ylabel="acceleration", title=title)
-    plt.show()
+response_dist = lsl.Dist(tfd.Normal, loc=loc, scale=scale)
+y = lsl.Var.new_obs(mcycle["accel"], response_dist, name="y")
+model = lsl.Model(y)
 ```
 
 ## Metropolis-in-Gibbs
@@ -164,16 +87,13 @@ for the smoothing variances ($\tau^2$) of the splines. The Gibbs kernels
 for $\tau^2$ are added automatically by the P-spline terms.
 
 ``` python
-iwls_parts = build_mcycle_model(gs.MCMCSpec(gs.IWLSKernel.untuned))
-iwls_model = iwls_parts["model"]
-
-builder = gs.LieselMCMC(iwls_model).get_engine_builder(seed=42, num_chains=4)
-builder.set_duration(warmup_duration=5000, posterior_duration=1000)
-builder.show_progress = False
-
-engine = builder.build()
-engine.sample_all_epochs()
-iwls_results = engine.get_results()
+iwls_results = gs.LieselMCMC(model).run_for_epochs(
+    seed=1,
+    num_chains=4,
+    adaptation=1000,
+    posterior=1000,
+    show_progress=False
+)
 ```
 
     liesel.goose.builder - WARNING - No jitter functions provided for position keys '$\\beta_{ps(times)}$', '$\\beta_{ps(times)1}$', '$\\tau_{ps(times)}^2$', '$\\beta_{0,loc}$', '$\\tau_{ps(times)1}^2$', '$\\beta_{0,scale}$'. The initial values for these keys won't be jittered
@@ -271,31 +191,31 @@ $\beta_{0,loc}$
 kernel_03
 </td>
 <td>
--24.910
+-26.213
 </td>
 <td>
-1.747
+1.751
 </td>
 <td>
--27.803
+-29.207
 </td>
 <td>
--24.925
+-26.064
 </td>
 <td>
--21.913
+-23.221
 </td>
 <td>
 4000
 </td>
 <td>
-30.574
+14.615
 </td>
 <td>
-28.526
+31.861
 </td>
 <td>
-1.148
+1.218
 </td>
 </tr>
 <tr>
@@ -309,31 +229,31 @@ $\beta_{0,scale}$
 kernel_05
 </td>
 <td>
-2.726
+2.732
 </td>
 <td>
-0.073
+0.072
 </td>
 <td>
-2.608
+2.615
 </td>
 <td>
-2.725
+2.730
 </td>
 <td>
-2.847
+2.854
 </td>
 <td>
 4000
 </td>
 <td>
-305.438
+241.668
 </td>
 <td>
-1200.355
+1138.909
 </td>
 <td>
-1.016
+1.028
 </td>
 </tr>
 <tr>
@@ -347,31 +267,31 @@ $\beta_{ps(times)1}$
 kernel_01
 </td>
 <td>
--0.003
+0.006
 </td>
 <td>
-0.138
+0.109
 </td>
 <td>
--0.231
+-0.172
 </td>
 <td>
--0.001
+0.004
 </td>
 <td>
-0.219
+0.188
 </td>
 <td>
 4000
 </td>
 <td>
-489.045
+140.567
 </td>
 <td>
-522.089
+208.700
 </td>
 <td>
-1.013
+1.032
 </td>
 </tr>
 <tr>
@@ -382,31 +302,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.017
+0.019
 </td>
 <td>
-0.143
+0.141
 </td>
 <td>
--0.194
+-0.209
 </td>
 <td>
-0.008
+0.018
 </td>
 <td>
-0.251
+0.233
 </td>
 <td>
 4000
 </td>
 <td>
-593.156
+69.797
 </td>
 <td>
-610.800
+91.882
 </td>
 <td>
-1.013
+1.071
 </td>
 </tr>
 <tr>
@@ -417,31 +337,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.004
+0.035
 </td>
 <td>
-0.140
+0.136
 </td>
 <td>
--0.211
+-0.162
 </td>
 <td>
-0.005
+0.026
 </td>
 <td>
-0.231
+0.280
 </td>
 <td>
 4000
 </td>
 <td>
-588.577
+98.782
 </td>
 <td>
-531.941
+125.672
 </td>
 <td>
-1.010
+1.048
 </td>
 </tr>
 <tr>
@@ -452,31 +372,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.029
+0.027
 </td>
 <td>
-0.143
+0.128
 </td>
 <td>
--0.194
+-0.177
 </td>
 <td>
-0.025
+0.018
 </td>
 <td>
-0.262
+0.245
 </td>
 <td>
 4000
 </td>
 <td>
-457.969
+113.664
 </td>
 <td>
-559.436
+180.741
 </td>
 <td>
-1.007
+1.045
 </td>
 </tr>
 <tr>
@@ -487,31 +407,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.026
+0.053
 </td>
 <td>
-0.139
+0.133
 </td>
 <td>
--0.195
+-0.137
 </td>
 <td>
-0.019
+0.036
 </td>
 <td>
-0.260
+0.291
 </td>
 <td>
 4000
 </td>
 <td>
-608.695
+83.485
 </td>
 <td>
-389.265
+175.894
 </td>
 <td>
-1.011
+1.060
 </td>
 </tr>
 <tr>
@@ -522,16 +442,16 @@ kernel_01
 kernel_01
 </td>
 <td>
--0.039
+-0.015
 </td>
 <td>
-0.151
+0.123
 </td>
 <td>
--0.290
+-0.239
 </td>
 <td>
--0.032
+-0.008
 </td>
 <td>
 0.170
@@ -540,13 +460,13 @@ kernel_01
 4000
 </td>
 <td>
-437.680
+79.079
 </td>
 <td>
-504.303
+105.890
 </td>
 <td>
-1.016
+1.037
 </td>
 </tr>
 <tr>
@@ -557,31 +477,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.062
+0.042
 </td>
 <td>
-0.150
+0.140
 </td>
 <td>
--0.161
+-0.158
 </td>
 <td>
-0.047
+0.039
 </td>
 <td>
-0.341
+0.290
 </td>
 <td>
 4000
 </td>
 <td>
-462.601
+31.116
 </td>
 <td>
-301.090
+34.077
 </td>
 <td>
-1.019
+1.096
 </td>
 </tr>
 <tr>
@@ -592,31 +512,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.009
+-0.000
 </td>
 <td>
-0.129
+0.127
 </td>
 <td>
--0.189
+-0.202
 </td>
 <td>
-0.001
+-0.007
 </td>
 <td>
-0.233
+0.222
 </td>
 <td>
 4000
 </td>
 <td>
-541.647
+90.478
 </td>
 <td>
-650.310
+122.496
 </td>
 <td>
-1.008
+1.060
 </td>
 </tr>
 <tr>
@@ -627,31 +547,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.089
+0.097
 </td>
 <td>
-0.143
+0.129
 </td>
 <td>
--0.103
+-0.075
 </td>
 <td>
-0.069
+0.070
 </td>
 <td>
-0.363
+0.350
 </td>
 <td>
 4000
 </td>
 <td>
-262.137
+79.525
 </td>
 <td>
-320.196
+187.577
 </td>
 <td>
-1.020
+1.048
 </td>
 </tr>
 <tr>
@@ -668,25 +588,25 @@ kernel_01
 0.124
 </td>
 <td>
--0.283
+-0.307
 </td>
 <td>
--0.072
+-0.077
 </td>
 <td>
-0.105
+0.103
 </td>
 <td>
 4000
 </td>
 <td>
-477.883
+102.234
 </td>
 <td>
-595.435
+155.427
 </td>
 <td>
-1.008
+1.025
 </td>
 </tr>
 <tr>
@@ -697,31 +617,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.123
+0.111
 </td>
 <td>
-0.114
+0.106
 </td>
 <td>
--0.046
+-0.043
 </td>
 <td>
-0.117
+0.099
 </td>
 <td>
-0.317
+0.295
 </td>
 <td>
 4000
 </td>
 <td>
-430.334
+75.736
 </td>
 <td>
-770.002
+171.676
 </td>
 <td>
-1.010
+1.052
 </td>
 </tr>
 <tr>
@@ -732,31 +652,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.008
+0.010
 </td>
 <td>
-0.105
+0.102
 </td>
 <td>
--0.169
+-0.162
 </td>
 <td>
-0.013
+0.015
 </td>
 <td>
-0.179
+0.172
 </td>
 <td>
 4000
 </td>
 <td>
-530.890
+89.284
 </td>
 <td>
-664.621
+105.849
 </td>
 <td>
-1.006
+1.018
 </td>
 </tr>
 <tr>
@@ -767,31 +687,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.202
+0.178
 </td>
 <td>
-0.116
+0.131
 </td>
 <td>
-0.041
+0.019
 </td>
 <td>
-0.182
+0.146
 </td>
 <td>
-0.417
+0.441
 </td>
 <td>
 4000
 </td>
 <td>
-125.432
+19.945
 </td>
 <td>
-371.652
+50.456
 </td>
 <td>
-1.040
+1.135
 </td>
 </tr>
 <tr>
@@ -802,31 +722,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.136
+0.126
 </td>
 <td>
-0.097
+0.098
 </td>
 <td>
--0.009
+-0.016
 </td>
 <td>
-0.125
+0.117
 </td>
 <td>
-0.313
+0.297
 </td>
 <td>
 4000
 </td>
 <td>
-185.684
+35.677
 </td>
 <td>
-364.844
+114.857
 </td>
 <td>
-1.016
+1.083
 </td>
 </tr>
 <tr>
@@ -837,31 +757,31 @@ kernel_01
 kernel_01
 </td>
 <td>
--0.081
+-0.058
 </td>
 <td>
-0.082
+0.086
 </td>
 <td>
--0.230
+-0.214
 </td>
 <td>
--0.074
+-0.049
 </td>
 <td>
-0.040
+0.067
 </td>
 <td>
 4000
 </td>
 <td>
-150.863
+30.560
 </td>
 <td>
-462.045
+98.126
 </td>
 <td>
-1.024
+1.098
 </td>
 </tr>
 <tr>
@@ -872,31 +792,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.041
+0.040
 </td>
 <td>
-0.056
+0.053
 </td>
 <td>
--0.044
+-0.037
 </td>
 <td>
-0.036
+0.032
 </td>
 <td>
-0.136
+0.137
 </td>
 <td>
 4000
 </td>
 <td>
-258.346
+59.596
 </td>
 <td>
-459.441
+135.636
 </td>
 <td>
-1.016
+1.056
 </td>
 </tr>
 <tr>
@@ -907,31 +827,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.024
+0.033
 </td>
 <td>
 0.033
 </td>
 <td>
--0.033
+-0.028
 </td>
 <td>
-0.026
+0.035
 </td>
 <td>
-0.076
+0.084
 </td>
 <td>
 4000
 </td>
 <td>
-170.649
+45.163
 </td>
 <td>
-376.682
+102.433
 </td>
 <td>
-1.015
+1.068
 </td>
 </tr>
 <tr>
@@ -948,25 +868,25 @@ kernel_01
 0.013
 </td>
 <td>
--0.083
+-0.080
 </td>
 <td>
 -0.064
 </td>
 <td>
--0.043
+-0.040
 </td>
 <td>
 4000
 </td>
 <td>
-254.981
+24.797
 </td>
 <td>
-404.432
+144.280
 </td>
 <td>
-1.019
+1.115
 </td>
 </tr>
 <tr>
@@ -977,31 +897,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.108
+0.119
 </td>
 <td>
-0.052
+0.050
 </td>
 <td>
-0.028
+0.043
 </td>
 <td>
-0.107
+0.116
 </td>
 <td>
-0.194
+0.205
 </td>
 <td>
 4000
 </td>
 <td>
-219.708
+58.168
 </td>
 <td>
-309.781
+120.078
 </td>
 <td>
-1.014
+1.078
 </td>
 </tr>
 <tr>
@@ -1015,31 +935,31 @@ $\beta_{ps(times)}$
 kernel_00
 </td>
 <td>
--2.732
+-1.943
 </td>
 <td>
-10.483
+11.096
 </td>
 <td>
--19.865
+-20.391
 </td>
 <td>
--2.450
+-1.793
 </td>
 <td>
-14.323
+16.067
 </td>
 <td>
 4000
 </td>
 <td>
-713.961
+397.699
 </td>
 <td>
-899.471
+582.046
 </td>
 <td>
-1.008
+1.005
 </td>
 </tr>
 <tr>
@@ -1050,31 +970,31 @@ kernel_00
 kernel_00
 </td>
 <td>
--10.715
+-11.799
 </td>
 <td>
-9.951
+10.548
 </td>
 <td>
--28.084
+-30.909
 </td>
 <td>
--10.512
+-11.086
 </td>
 <td>
-5.542
+4.430
 </td>
 <td>
 4000
 </td>
 <td>
-540.994
+283.456
 </td>
 <td>
-859.774
+586.405
 </td>
 <td>
-1.005
+1.015
 </td>
 </tr>
 <tr>
@@ -1085,31 +1005,31 @@ kernel_00
 kernel_00
 </td>
 <td>
-0.888
+1.740
 </td>
 <td>
-9.320
+9.624
 </td>
 <td>
--14.424
+-13.528
 </td>
 <td>
-0.710
+1.464
 </td>
 <td>
-16.260
+18.137
 </td>
 <td>
 4000
 </td>
 <td>
-698.991
+333.845
 </td>
 <td>
-812.920
+573.129
 </td>
 <td>
-1.006
+1.017
 </td>
 </tr>
 <tr>
@@ -1120,28 +1040,28 @@ kernel_00
 kernel_00
 </td>
 <td>
--4.075
+-4.040
 </td>
 <td>
-9.227
+9.351
 </td>
 <td>
--19.007
+-19.722
 </td>
 <td>
--4.512
+-3.794
 </td>
 <td>
-11.730
+10.951
 </td>
 <td>
 4000
 </td>
 <td>
-630.985
+388.400
 </td>
 <td>
-890.362
+854.681
 </td>
 <td>
 1.008
@@ -1155,31 +1075,31 @@ kernel_00
 kernel_00
 </td>
 <td>
--9.288
+-9.228
 </td>
 <td>
-9.014
+9.155
 </td>
 <td>
--24.461
+-24.850
 </td>
 <td>
--8.682
+-9.028
 </td>
 <td>
-4.624
+4.780
 </td>
 <td>
 4000
 </td>
 <td>
-596.041
+421.988
 </td>
 <td>
-1391.095
+652.118
 </td>
 <td>
-1.002
+1.006
 </td>
 </tr>
 <tr>
@@ -1190,31 +1110,31 @@ kernel_00
 kernel_00
 </td>
 <td>
--9.903
+-10.452
 </td>
 <td>
-8.389
+8.709
 </td>
 <td>
--24.204
+-24.908
 </td>
 <td>
--9.645
+-10.478
 </td>
 <td>
-3.448
+3.865
 </td>
 <td>
 4000
 </td>
 <td>
-796.095
+425.636
 </td>
 <td>
-1163.362
+920.454
 </td>
 <td>
-1.003
+1.010
 </td>
 </tr>
 <tr>
@@ -1225,31 +1145,31 @@ kernel_00
 kernel_00
 </td>
 <td>
--0.095
+-0.988
 </td>
 <td>
-7.701
+8.028
 </td>
 <td>
--12.768
+-14.321
 </td>
 <td>
--0.097
+-0.746
 </td>
 <td>
-12.513
+11.684
 </td>
 <td>
 4000
 </td>
 <td>
-896.380
+430.340
 </td>
 <td>
-927.114
+511.833
 </td>
 <td>
-1.001
+1.009
 </td>
 </tr>
 <tr>
@@ -1260,31 +1180,31 @@ kernel_00
 kernel_00
 </td>
 <td>
-0.435
+-0.105
 </td>
 <td>
-7.433
+7.031
 </td>
 <td>
--12.099
+-11.512
 </td>
 <td>
-0.682
+-0.007
 </td>
 <td>
-12.595
+11.625
 </td>
 <td>
 4000
 </td>
 <td>
-866.687
+476.577
 </td>
 <td>
-1232.600
+877.767
 </td>
 <td>
-1.004
+1.006
 </td>
 </tr>
 <tr>
@@ -1295,28 +1215,28 @@ kernel_00
 kernel_00
 </td>
 <td>
-10.705
+10.605
 </td>
 <td>
-6.615
+6.809
 </td>
 <td>
-0.051
+-0.463
 </td>
 <td>
-10.642
+10.702
 </td>
 <td>
-21.293
+21.835
 </td>
 <td>
 4000
 </td>
 <td>
-827.099
+362.236
 </td>
 <td>
-1352.644
+886.350
 </td>
 <td>
 1.009
@@ -1330,31 +1250,31 @@ kernel_00
 kernel_00
 </td>
 <td>
--15.538
+-15.479
 </td>
 <td>
-5.947
+5.647
 </td>
 <td>
--25.842
+-24.737
 </td>
 <td>
--15.325
+-15.501
 </td>
 <td>
--5.869
+-6.234
 </td>
 <td>
 4000
 </td>
 <td>
-581.717
+426.211
 </td>
 <td>
-939.400
+954.628
 </td>
 <td>
-1.006
+1.015
 </td>
 </tr>
 <tr>
@@ -1365,31 +1285,31 @@ kernel_00
 kernel_00
 </td>
 <td>
--7.652
+-7.572
 </td>
 <td>
-4.995
+4.898
 </td>
 <td>
--15.790
+-15.742
 </td>
 <td>
--7.628
+-7.534
 </td>
 <td>
-0.507
+0.427
 </td>
 <td>
 4000
 </td>
 <td>
-558.099
+351.065
 </td>
 <td>
-1073.579
+682.496
 </td>
 <td>
-1.003
+1.018
 </td>
 </tr>
 <tr>
@@ -1400,31 +1320,31 @@ kernel_00
 kernel_00
 </td>
 <td>
--23.730
+-24.189
 </td>
 <td>
-4.415
+4.439
 </td>
 <td>
--31.292
+-31.671
 </td>
 <td>
--23.565
+-24.031
 </td>
 <td>
--16.776
+-17.272
 </td>
 <td>
 4000
 </td>
 <td>
-666.083
+420.979
 </td>
 <td>
-1011.282
+831.000
 </td>
 <td>
-1.005
+1.008
 </td>
 </tr>
 <tr>
@@ -1435,31 +1355,31 @@ kernel_00
 kernel_00
 </td>
 <td>
-9.275
+9.110
 </td>
 <td>
-3.370
+3.333
 </td>
 <td>
-3.832
+3.727
 </td>
 <td>
-9.179
+9.102
 </td>
 <td>
-14.693
+14.434
 </td>
 <td>
 4000
 </td>
 <td>
-637.836
+459.347
 </td>
 <td>
-791.635
+597.028
 </td>
 <td>
-1.005
+1.008
 </td>
 </tr>
 <tr>
@@ -1470,31 +1390,31 @@ kernel_00
 kernel_00
 </td>
 <td>
--10.215
+-9.982
 </td>
 <td>
-2.685
+2.560
 </td>
 <td>
--14.670
+-14.087
 </td>
 <td>
--10.052
+-10.011
 </td>
 <td>
--5.978
+-5.782
 </td>
 <td>
 4000
 </td>
 <td>
-563.973
+507.317
 </td>
 <td>
-852.673
+793.389
 </td>
 <td>
-1.005
+1.019
 </td>
 </tr>
 <tr>
@@ -1505,31 +1425,31 @@ kernel_00
 kernel_00
 </td>
 <td>
-12.250
+12.336
 </td>
 <td>
-2.007
+1.899
 </td>
 <td>
-9.058
+9.249
 </td>
 <td>
-12.266
+12.332
 </td>
 <td>
-15.598
+15.446
 </td>
 <td>
 4000
 </td>
 <td>
-851.110
+409.204
 </td>
 <td>
-1067.349
+736.894
 </td>
 <td>
-1.005
+1.014
 </td>
 </tr>
 <tr>
@@ -1540,31 +1460,31 @@ kernel_00
 kernel_00
 </td>
 <td>
-2.293
+2.232
 </td>
 <td>
-1.252
+1.280
 </td>
 <td>
-0.376
+0.231
 </td>
 <td>
-2.300
+2.226
 </td>
 <td>
-4.382
+4.258
 </td>
 <td>
 4000
 </td>
 <td>
-822.039
+257.726
 </td>
 <td>
-834.812
+570.068
 </td>
 <td>
-1.006
+1.022
 </td>
 </tr>
 <tr>
@@ -1575,31 +1495,31 @@ kernel_00
 kernel_00
 </td>
 <td>
--3.161
+-3.103
 </td>
 <td>
-0.669
+0.676
 </td>
 <td>
--4.212
+-4.141
 </td>
 <td>
--3.168
+-3.092
 </td>
 <td>
--2.136
+-2.065
 </td>
 <td>
 4000
 </td>
 <td>
-708.511
+434.684
 </td>
 <td>
-845.892
+425.517
 </td>
 <td>
-1.006
+1.012
 </td>
 </tr>
 <tr>
@@ -1610,31 +1530,31 @@ kernel_00
 kernel_00
 </td>
 <td>
-0.896
+0.973
 </td>
 <td>
-0.246
+0.253
 </td>
 <td>
-0.528
+0.578
 </td>
 <td>
-0.896
+0.974
 </td>
 <td>
-1.288
+1.351
 </td>
 <td>
 4000
 </td>
 <td>
-352.140
+121.961
 </td>
 <td>
-699.838
+331.332
 </td>
 <td>
-1.016
+1.042
 </td>
 </tr>
 <tr>
@@ -1645,31 +1565,31 @@ kernel_00
 kernel_00
 </td>
 <td>
-2.984
+3.036
 </td>
 <td>
-0.956
+1.000
 </td>
 <td>
-1.506
+1.538
 </td>
 <td>
-2.995
+3.054
 </td>
 <td>
-4.445
+4.515
 </td>
 <td>
 4000
 </td>
 <td>
-830.011
+314.256
 </td>
 <td>
-757.008
+256.175
 </td>
 <td>
-1.010
+1.024
 </td>
 </tr>
 <tr>
@@ -1683,16 +1603,16 @@ $\tau_{ps(times)1}^2$
 kernel_04
 </td>
 <td>
-0.021
+0.019
 </td>
 <td>
-0.020
+0.019
 </td>
 <td>
-0.004
+0.003
 </td>
 <td>
-0.015
+0.012
 </td>
 <td>
 0.057
@@ -1701,13 +1621,13 @@ kernel_04
 4000
 </td>
 <td>
-81.590
+18.976
 </td>
 <td>
-227.193
+107.587
 </td>
 <td>
-1.051
+1.137
 </td>
 </tr>
 <tr>
@@ -1721,31 +1641,31 @@ $\tau_{ps(times)}^2$
 kernel_02
 </td>
 <td>
-135.771
+140.043
 </td>
 <td>
-62.629
+68.106
 </td>
 <td>
-62.848
+63.973
 </td>
 <td>
-122.247
+124.400
 </td>
 <td>
-257.854
+267.884
 </td>
 <td>
 4000
 </td>
 <td>
-656.147
+465.950
 </td>
 <td>
-1712.164
+858.394
 </td>
 <td>
-1.003
+1.005
 </td>
 </tr>
 </tbody>
@@ -1797,10 +1717,10 @@ $\beta_{ps(times)}$
 posterior
 </th>
 <td>
-0.596
+0.866
 </td>
 <td>
-0.593
+0.867
 </td>
 </tr>
 <tr>
@@ -1808,10 +1728,10 @@ posterior
 warmup
 </th>
 <td>
-0.597
+0.794
 </td>
 <td>
-0.596
+0.793
 </td>
 </tr>
 <tr>
@@ -1825,10 +1745,10 @@ $\beta_{ps(times)1}$
 posterior
 </th>
 <td>
-0.434
+0.868
 </td>
 <td>
-0.443
+0.867
 </td>
 </tr>
 <tr>
@@ -1836,10 +1756,10 @@ posterior
 warmup
 </th>
 <td>
-0.425
+0.793
 </td>
 <td>
-0.422
+0.793
 </td>
 </tr>
 <tr>
@@ -1881,10 +1801,10 @@ $\beta_{0,loc}$
 posterior
 </th>
 <td>
-0.920
+0.917
 </td>
 <td>
-0.925
+0.918
 </td>
 </tr>
 <tr>
@@ -1892,10 +1812,10 @@ posterior
 warmup
 </th>
 <td>
-0.921
+0.923
 </td>
 <td>
-0.919
+0.921
 </td>
 </tr>
 <tr>
@@ -1937,10 +1857,10 @@ $\beta_{0,scale}$
 posterior
 </th>
 <td>
-0.911
+0.908
 </td>
 <td>
-0.912
+0.906
 </td>
 </tr>
 <tr>
@@ -1948,48 +1868,75 @@ posterior
 warmup
 </th>
 <td>
-0.909
+0.912
 </td>
 <td>
-0.909
+0.910
 </td>
 </tr>
 </tbody>
 </table>
 
 ``` python
-fig = gs.plot_trace(iwls_results, iwls_parts["loc"].intercept.name)
-fig = gs.plot_trace(iwls_results, iwls_parts["loc_tau2_name"])
-fig = gs.plot_trace(iwls_results, iwls_parts["loc_smooth"].coef.name)
-
-fig = gs.plot_trace(iwls_results, iwls_parts["scale"].intercept.name)
-fig = gs.plot_trace(iwls_results, iwls_parts["scale_tau2_name"])
-fig = gs.plot_trace(iwls_results, iwls_parts["scale_smooth"].coef.name)
+gs.plot_trace(iwls_results)
 ```
 
 <img src="04-mcycle_files/figure-commonmark/iwls-traces-output-1.png"
-id="iwls-traces-1" />
-
-<img src="04-mcycle_files/figure-commonmark/iwls-traces-output-2.png"
-id="iwls-traces-2" />
-
-<img src="04-mcycle_files/figure-commonmark/iwls-traces-output-3.png"
-id="iwls-traces-3" />
-
-<img src="04-mcycle_files/figure-commonmark/iwls-traces-output-4.png"
-id="iwls-traces-4" />
-
-<img src="04-mcycle_files/figure-commonmark/iwls-traces-output-5.png"
-id="iwls-traces-5" />
-
-<img src="04-mcycle_files/figure-commonmark/iwls-traces-output-6.png"
-id="iwls-traces-6" />
+id="iwls-traces" />
 
 To confirm that the chains have converged to reasonable values, here is
 a plot of the estimated mean function:
 
 ``` python
-plot_loc_estimate(iwls_results, iwls_model, "Estimated mean function (IWLS/Gibbs)")
+def plot_loc_estimate(results, model, title):
+    samples = results.get_posterior_samples()
+    loc_samples = model.vars["loc"].predict(samples)
+    loc_summary = gs.SamplesSummary.from_array(
+        loc_samples,
+        name="loc",
+        which=["mean", "quantiles"],
+    )
+    loc_summary_df = loc_summary.to_dataframe().reset_index()
+
+    loc_summary_df["times"] = mcycle["times"].to_numpy()
+    plot_data = (
+        loc_summary_df[["times", "mean", "q_0.05", "q_0.95"]]
+        .groupby("times", as_index=False)
+        .mean()
+        .sort_values("times")
+    )
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.fill_between(
+        plot_data["times"],
+        plot_data["q_0.05"],
+        plot_data["q_0.95"],
+        color=sns.color_palette()[1],
+        alpha=0.25,
+        label="90% credible interval",
+    )
+    sns.lineplot(
+        data=plot_data,
+        x="times",
+        y="mean",
+        color=sns.color_palette()[1],
+        linewidth=2,
+        label="posterior mean",
+        ax=ax,
+    )
+    sns.scatterplot(
+        data=mcycle,
+        x="times",
+        y="accel",
+        color="0.25",
+        s=25,
+        ax=ax,
+        label="observed data",
+    )
+    ax.set(xlabel="time after impact", ylabel="acceleration", title=title)
+    plt.show()
+
+plot_loc_estimate(iwls_results, model, "Estimated mean function (IWLS/Gibbs)")
 ```
 
 <img src="04-mcycle_files/figure-commonmark/iwls-spline-output-1.png"
@@ -2003,14 +1950,28 @@ coefficients and then log-transform the smoothing variances. This is the
 model graph before the transformation:
 
 ``` python
-nuts_parts = build_mcycle_model(gs.MCMCSpec(gs.NUTSKernel))
-nuts_model = nuts_parts["model"]
-lsl.plot_vars(nuts_model)
+def strategy_term_blocked(model: lsl.Model, predictors: list[str], kernel_constructor, **kwargs):
+    model = model.copy()
+    for k, v in model.parameters.items():
+        if "tau" in k:
+            v.biject(tfb.Exp(), inference="drop")
+
+
+    for predictor_name in predictors:
+        predictor = model.vars[predictor_name]
+
+        for term in predictor.terms.values():
+            for param in model.parental_submodel(term).parameters.values():
+                model.parameters[param.name].inference = gs.MCMCSpec(
+                    kernel_constructor, kernel_group=term.name, kernel_kwargs=kwargs
+                )
+
+    return model
 ```
 
-<img
-src="04-mcycle_files/figure-commonmark/untransformed-graph-output-1.png"
-id="untransformed-graph" />
+``` python
+nuts_model = strategy_term_blocked(model, ["loc", "scale"], gs.NUTSKernel)
+```
 
 To transform the smoothing variances with the method
 {meth}`.Var.transform`, we need to retrieve the nodes and variables from
@@ -2024,23 +1985,7 @@ unconstrained log scale. These transformed smoothing variances receive
 NUTS kernels as well.
 
 ``` python
-nodes, _vars = nuts_model.pop_nodes_and_vars()
-
-loc_tau2_transformed = _vars[nuts_parts["loc_tau2_name"]].transform(
-    tfb.Exp(),
-    inference=gs.MCMCSpec(gs.NUTSKernel),
-)
-scale_tau2_transformed = _vars[nuts_parts["scale_tau2_name"]].transform(
-    tfb.Exp(),
-    inference=gs.MCMCSpec(gs.NUTSKernel),
-)
-
-nuts_model = lsl.Model([_vars["y"]])
-nuts_parts["model"] = nuts_model
-nuts_parts["loc_tau2_transformed_name"] = loc_tau2_transformed.name
-nuts_parts["scale_tau2_transformed_name"] = scale_tau2_transformed.name
-
-lsl.plot_vars(nuts_model)
+nuts_model.plot()
 ```
 
 <img
@@ -2053,23 +1998,16 @@ parameters. Here, each parameter has its own NUTS kernel through its
 `MCMCSpec`.
 
 ``` python
-builder = gs.LieselMCMC(nuts_model).get_engine_builder(seed=42, num_chains=4)
-builder.set_epochs(
-    gs.stan_epochs(
-        warmup_duration=5000,
-        posterior_duration=1000,
-        init_duration=750,
-        term_duration=500,
-    )
+nuts_results = gs.LieselMCMC(nuts_model).run_for_epochs(
+    seed=1,
+    num_chains=4,
+    adaptation=1000,
+    posterior=1000,
+    show_progress=False
 )
-builder.show_progress = False
-
-engine = builder.build()
-engine.sample_all_epochs()
-nuts_results = engine.get_results()
 ```
 
-    liesel.goose.builder - WARNING - No jitter functions provided for position keys '$\\beta_{ps(times)}$', '$\\beta_{ps(times)1}$', '$\\tau_{ps(times)}^2$_transformed', '$\\beta_{0,loc}$', '$\\tau_{ps(times)1}^2$_transformed', '$\\beta_{0,scale}$'. The initial values for these keys won't be jittered
+    liesel.goose.builder - WARNING - No jitter functions provided for position keys '$\\beta_{ps(times)}$', 'h($\\tau_{ps(times)}^2$)', '$\\beta_{ps(times)1}$', 'h($\\tau_{ps(times)1}^2$)', '$\\beta_{0,loc}$', '$\\beta_{0,scale}$'. The initial values for these keys won't be jittered
     liesel.goose.engine - INFO - Initializing kernels...
     liesel.goose.engine - INFO - Done
     liesel.goose.engine - INFO - Finished warmup
@@ -2161,34 +2099,34 @@ $\beta_{0,loc}$
 ()
 </th>
 <td>
-kernel_03
+kernel_02
 </td>
 <td>
--25.369
+-25.406
 </td>
 <td>
-2.006
+2.092
 </td>
 <td>
--29.010
+-28.957
 </td>
 <td>
--25.166
+-25.433
 </td>
 <td>
--22.577
+-21.945
 </td>
 <td>
 4000
 </td>
 <td>
-43.613
+20.847
 </td>
 <td>
-52.705
+51.691
 </td>
 <td>
-1.092
+1.160
 </td>
 </tr>
 <tr>
@@ -2199,34 +2137,34 @@ $\beta_{0,scale}$
 ()
 </th>
 <td>
-kernel_05
+kernel_03
 </td>
 <td>
-2.724
+2.719
 </td>
 <td>
-0.073
+0.074
 </td>
 <td>
-2.608
+2.600
 </td>
 <td>
-2.720
+2.718
 </td>
 <td>
-2.844
+2.847
 </td>
 <td>
 4000
 </td>
 <td>
-821.547
+593.904
 </td>
 <td>
-1974.596
+1161.455
 </td>
 <td>
-1.004
+1.008
 </td>
 </tr>
 <tr>
@@ -2240,31 +2178,31 @@ $\beta_{ps(times)1}$
 kernel_01
 </td>
 <td>
--0.004
+-0.001
 </td>
 <td>
 0.144
 </td>
 <td>
--0.248
+-0.224
 </td>
 <td>
 -0.002
 </td>
 <td>
-0.220
+0.231
 </td>
 <td>
 4000
 </td>
 <td>
-4842.105
+4865.687
 </td>
 <td>
-1565.868
+1827.309
 </td>
 <td>
-1.008
+1.004
 </td>
 </tr>
 <tr>
@@ -2275,31 +2213,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.023
+0.026
 </td>
 <td>
-0.144
+0.140
 </td>
 <td>
--0.197
+-0.191
 </td>
 <td>
-0.016
+0.020
 </td>
 <td>
-0.258
+0.261
 </td>
 <td>
 4000
 </td>
 <td>
-4832.726
+3837.422
 </td>
 <td>
-1395.071
+1711.363
 </td>
 <td>
-1.004
+1.002
 </td>
 </tr>
 <tr>
@@ -2310,31 +2248,31 @@ kernel_01
 kernel_01
 </td>
 <td>
+0.010
+</td>
+<td>
+0.146
+</td>
+<td>
+-0.219
+</td>
+<td>
 0.007
 </td>
 <td>
-0.134
-</td>
-<td>
--0.206
-</td>
-<td>
-0.007
-</td>
-<td>
-0.222
+0.246
 </td>
 <td>
 4000
 </td>
 <td>
-4905.377
+4833.485
 </td>
 <td>
-1585.187
+2003.847
 </td>
 <td>
-1.011
+1.002
 </td>
 </tr>
 <tr>
@@ -2345,31 +2283,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.030
+0.028
 </td>
 <td>
-0.136
+0.142
 </td>
 <td>
--0.175
+-0.187
 </td>
 <td>
-0.022
+0.023
 </td>
 <td>
-0.263
+0.257
 </td>
 <td>
 4000
 </td>
 <td>
-3397.991
+4718.000
 </td>
 <td>
-1396.298
+2261.449
 </td>
 <td>
-1.008
+1.003
 </td>
 </tr>
 <tr>
@@ -2380,31 +2318,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.024
+0.026
 </td>
 <td>
-0.137
+0.143
 </td>
 <td>
--0.184
+-0.190
 </td>
 <td>
 0.018
 </td>
 <td>
-0.262
+0.258
 </td>
 <td>
 4000
 </td>
 <td>
-4286.639
+4746.008
 </td>
 <td>
-1784.165
+2056.843
 </td>
 <td>
-1.005
+1.000
 </td>
 </tr>
 <tr>
@@ -2415,13 +2353,13 @@ kernel_01
 kernel_01
 </td>
 <td>
--0.026
+-0.030
 </td>
 <td>
-0.137
+0.138
 </td>
 <td>
--0.266
+-0.274
 </td>
 <td>
 -0.020
@@ -2433,13 +2371,13 @@ kernel_01
 4000
 </td>
 <td>
-4922.653
+4663.933
 </td>
 <td>
-1172.641
+1869.444
 </td>
 <td>
-1.003
+1.004
 </td>
 </tr>
 <tr>
@@ -2453,28 +2391,28 @@ kernel_01
 0.053
 </td>
 <td>
-0.141
+0.146
 </td>
 <td>
 -0.149
 </td>
 <td>
-0.042
+0.040
 </td>
 <td>
-0.297
+0.303
 </td>
 <td>
 4000
 </td>
 <td>
-2438.733
+3609.435
 </td>
 <td>
-1255.639
+1830.890
 </td>
 <td>
-1.008
+1.002
 </td>
 </tr>
 <tr>
@@ -2488,28 +2426,28 @@ kernel_01
 0.010
 </td>
 <td>
-0.124
+0.126
 </td>
 <td>
--0.184
+-0.190
 </td>
 <td>
-0.007
+0.010
 </td>
 <td>
-0.217
+0.214
 </td>
 <td>
 4000
 </td>
 <td>
-4900.594
+4935.995
 </td>
 <td>
-1824.634
+2397.686
 </td>
 <td>
-1.002
+1.003
 </td>
 </tr>
 <tr>
@@ -2520,31 +2458,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.089
+0.093
 </td>
 <td>
-0.139
+0.144
 </td>
 <td>
--0.108
+-0.103
 </td>
 <td>
-0.069
+0.075
 </td>
 <td>
-0.331
+0.351
 </td>
 <td>
 4000
 </td>
 <td>
-849.349
+1893.935
 </td>
 <td>
-1181.744
+2035.444
 </td>
 <td>
-1.006
+1.002
 </td>
 </tr>
 <tr>
@@ -2555,31 +2493,31 @@ kernel_01
 kernel_01
 </td>
 <td>
--0.084
+-0.086
 </td>
 <td>
-0.123
+0.125
 </td>
 <td>
--0.300
+-0.310
 </td>
 <td>
--0.073
+-0.075
 </td>
 <td>
-0.093
+0.098
 </td>
 <td>
 4000
 </td>
 <td>
-1116.770
+2419.058
 </td>
 <td>
-1583.504
+2538.494
 </td>
 <td>
-1.003
+1.001
 </td>
 </tr>
 <tr>
@@ -2590,31 +2528,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.116
+0.112
 </td>
 <td>
-0.116
+0.118
 </td>
 <td>
--0.058
+-0.059
 </td>
 <td>
-0.105
+0.101
 </td>
 <td>
-0.322
+0.315
 </td>
 <td>
 4000
 </td>
 <td>
-1196.035
+2630.999
 </td>
 <td>
-2208.095
+2189.664
 </td>
 <td>
-1.003
+1.002
 </td>
 </tr>
 <tr>
@@ -2625,31 +2563,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.008
+0.006
 </td>
 <td>
-0.111
+0.112
 </td>
 <td>
--0.179
+-0.180
 </td>
 <td>
 0.009
 </td>
 <td>
-0.186
+0.185
 </td>
 <td>
 4000
 </td>
 <td>
-3149.319
+2786.039
 </td>
 <td>
-2429.953
+1945.294
 </td>
 <td>
-1.010
+1.003
 </td>
 </tr>
 <tr>
@@ -2660,31 +2598,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.197
+0.206
 </td>
 <td>
-0.118
+0.125
 </td>
 <td>
-0.033
+0.031
 </td>
 <td>
-0.181
+0.191
 </td>
 <td>
-0.413
+0.432
 </td>
 <td>
 4000
 </td>
 <td>
-335.780
+782.815
 </td>
 <td>
-1195.854
+1620.467
 </td>
 <td>
-1.009
+1.005
 </td>
 </tr>
 <tr>
@@ -2695,31 +2633,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.134
+0.137
 </td>
 <td>
-0.097
+0.098
 </td>
 <td>
--0.009
+-0.011
 </td>
 <td>
-0.126
+0.129
 </td>
 <td>
-0.305
+0.313
 </td>
 <td>
 4000
 </td>
 <td>
-701.704
+1297.899
 </td>
 <td>
-1948.889
+1985.461
 </td>
 <td>
-1.006
+1.004
 </td>
 </tr>
 <tr>
@@ -2730,31 +2668,31 @@ kernel_01
 kernel_01
 </td>
 <td>
--0.079
+-0.084
 </td>
 <td>
-0.082
+0.086
 </td>
 <td>
--0.228
+-0.234
 </td>
 <td>
--0.069
+-0.076
 </td>
 <td>
-0.042
+0.044
 </td>
 <td>
 4000
 </td>
 <td>
-538.975
+850.361
 </td>
 <td>
-1663.924
+1629.364
 </td>
 <td>
-1.009
+1.006
 </td>
 </tr>
 <tr>
@@ -2765,31 +2703,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.041
+0.042
 </td>
 <td>
 0.056
 </td>
 <td>
--0.041
+-0.045
 </td>
 <td>
-0.038
+0.039
 </td>
 <td>
-0.139
+0.140
 </td>
 <td>
 4000
 </td>
 <td>
-752.307
+1244.020
 </td>
 <td>
-1779.916
+2075.111
 </td>
 <td>
-1.004
+1.005
 </td>
 </tr>
 <tr>
@@ -2800,31 +2738,31 @@ kernel_01
 kernel_01
 </td>
 <td>
+0.024
+</td>
+<td>
+0.033
+</td>
+<td>
+-0.033
+</td>
+<td>
 0.026
 </td>
 <td>
-0.032
-</td>
-<td>
--0.029
-</td>
-<td>
-0.028
-</td>
-<td>
-0.074
+0.075
 </td>
 <td>
 4000
 </td>
 <td>
-719.412
+1138.862
 </td>
 <td>
-1919.841
+1783.305
 </td>
 <td>
-1.004
+1.006
 </td>
 </tr>
 <tr>
@@ -2841,25 +2779,25 @@ kernel_01
 0.012
 </td>
 <td>
--0.082
+-0.083
 </td>
 <td>
 -0.064
 </td>
 <td>
--0.041
+-0.042
 </td>
 <td>
 4000
 </td>
 <td>
-1221.315
+1373.161
 </td>
 <td>
-1430.333
+2067.120
 </td>
 <td>
-1.001
+1.003
 </td>
 </tr>
 <tr>
@@ -2870,31 +2808,31 @@ kernel_01
 kernel_01
 </td>
 <td>
-0.109
+0.107
 </td>
 <td>
-0.048
+0.049
 </td>
 <td>
-0.031
+0.029
 </td>
 <td>
-0.109
+0.107
 </td>
 <td>
-0.190
+0.189
 </td>
 <td>
 4000
 </td>
 <td>
-1062.062
+1290.884
 </td>
 <td>
-2014.278
+2209.372
 </td>
 <td>
-1.002
+1.004
 </td>
 </tr>
 <tr>
@@ -2908,28 +2846,28 @@ $\beta_{ps(times)}$
 kernel_00
 </td>
 <td>
--2.607
+-2.527
 </td>
 <td>
-10.849
+10.633
 </td>
 <td>
--20.241
+-20.086
 </td>
 <td>
--2.425
+-2.542
 </td>
 <td>
-15.274
+15.016
 </td>
 <td>
 4000
 </td>
 <td>
-3303.347
+3339.421
 </td>
 <td>
-2353.446
+2575.492
 </td>
 <td>
 1.001
@@ -2943,31 +2881,31 @@ kernel_00
 kernel_00
 </td>
 <td>
--11.456
+-11.710
 </td>
 <td>
-10.296
+10.546
 </td>
 <td>
--29.047
+-29.956
 </td>
 <td>
--10.868
+-11.340
 </td>
 <td>
-4.520
+4.385
 </td>
 <td>
 4000
 </td>
 <td>
-1710.492
+2493.486
 </td>
 <td>
-2147.822
+1729.977
 </td>
 <td>
-1.003
+1.002
 </td>
 </tr>
 <tr>
@@ -2978,31 +2916,31 @@ kernel_00
 kernel_00
 </td>
 <td>
-1.716
+1.454
 </td>
 <td>
-9.298
+9.272
 </td>
 <td>
--13.051
+-13.853
 </td>
 <td>
-1.462
+1.420
 </td>
 <td>
-17.932
+17.279
 </td>
 <td>
 4000
 </td>
 <td>
-2064.857
+3013.791
 </td>
 <td>
-1521.513
+2643.261
 </td>
 <td>
-1.002
+1.001
 </td>
 </tr>
 <tr>
@@ -3013,31 +2951,31 @@ kernel_00
 kernel_00
 </td>
 <td>
--3.419
+-3.426
 </td>
 <td>
-9.286
+9.352
 </td>
 <td>
--18.964
+-18.700
 </td>
 <td>
--3.347
+-3.308
 </td>
 <td>
-11.909
+11.991
 </td>
 <td>
 4000
 </td>
 <td>
-2886.417
+3192.660
 </td>
 <td>
-2722.851
+2173.979
 </td>
 <td>
-1.001
+1.003
 </td>
 </tr>
 <tr>
@@ -3048,31 +2986,31 @@ kernel_00
 kernel_00
 </td>
 <td>
--9.347
+-9.376
 </td>
 <td>
-8.932
+9.100
 </td>
 <td>
--24.367
+-24.283
 </td>
 <td>
--9.022
+-9.303
 </td>
 <td>
-4.849
+5.538
 </td>
 <td>
 4000
 </td>
 <td>
-2358.204
+3002.045
 </td>
 <td>
-2487.737
+2790.959
 </td>
 <td>
-1.002
+1.001
 </td>
 </tr>
 <tr>
@@ -3083,31 +3021,31 @@ kernel_00
 kernel_00
 </td>
 <td>
--10.265
+-10.152
 </td>
 <td>
-8.665
+8.447
 </td>
 <td>
--24.618
+-23.899
 </td>
 <td>
--10.170
+-9.990
 </td>
 <td>
-3.831
+3.609
 </td>
 <td>
 4000
 </td>
 <td>
-2122.979
+2718.652
 </td>
 <td>
-2195.173
+2734.985
 </td>
 <td>
-1.001
+1.002
 </td>
 </tr>
 <tr>
@@ -3118,31 +3056,31 @@ kernel_00
 kernel_00
 </td>
 <td>
--0.459
+-0.366
 </td>
 <td>
-7.809
+7.687
 </td>
 <td>
--13.418
+-12.877
 </td>
 <td>
--0.307
+-0.284
 </td>
 <td>
-12.276
+12.225
 </td>
 <td>
 4000
 </td>
 <td>
-2064.042
+2653.856
 </td>
 <td>
-2289.534
+3064.486
 </td>
 <td>
-1.002
+1.000
 </td>
 </tr>
 <tr>
@@ -3153,31 +3091,31 @@ kernel_00
 kernel_00
 </td>
 <td>
-0.411
+0.245
 </td>
 <td>
-7.387
+7.051
 </td>
 <td>
--11.625
+-11.337
 </td>
 <td>
-0.415
+0.209
 </td>
 <td>
-12.450
+11.797
 </td>
 <td>
 4000
 </td>
 <td>
-2142.239
+2533.482
 </td>
 <td>
-2466.506
+2579.525
 </td>
 <td>
-1.001
+1.000
 </td>
 </tr>
 <tr>
@@ -3188,31 +3126,31 @@ kernel_00
 kernel_00
 </td>
 <td>
-10.613
+10.839
 </td>
 <td>
-6.696
+6.719
 </td>
 <td>
--0.013
+0.020
 </td>
 <td>
-10.596
+10.713
 </td>
 <td>
-21.887
+22.120
 </td>
 <td>
 4000
 </td>
 <td>
-1801.249
+1952.035
 </td>
 <td>
-2594.161
+2349.124
 </td>
 <td>
-1.000
+1.002
 </td>
 </tr>
 <tr>
@@ -3223,28 +3161,28 @@ kernel_00
 kernel_00
 </td>
 <td>
--15.575
+-15.628
 </td>
 <td>
-5.949
+5.748
 </td>
 <td>
--25.488
+-25.015
 </td>
 <td>
--15.482
+-15.502
 </td>
 <td>
--5.976
+-6.466
 </td>
 <td>
 4000
 </td>
 <td>
-1602.088
+1665.761
 </td>
 <td>
-1817.710
+2437.188
 </td>
 <td>
 1.001
@@ -3258,31 +3196,31 @@ kernel_00
 kernel_00
 </td>
 <td>
--7.663
+-7.547
 </td>
 <td>
-4.899
+4.805
 </td>
 <td>
--15.917
+-15.307
 </td>
 <td>
--7.486
+-7.554
 </td>
 <td>
-0.052
+0.173
 </td>
 <td>
 4000
 </td>
 <td>
-1351.925
+1554.656
 </td>
 <td>
-2002.459
+2145.946
 </td>
 <td>
-1.001
+1.002
 </td>
 </tr>
 <tr>
@@ -3293,28 +3231,28 @@ kernel_00
 kernel_00
 </td>
 <td>
--23.864
+-23.949
 </td>
 <td>
-4.463
+4.402
 </td>
 <td>
--31.348
+-31.289
 </td>
 <td>
--23.866
+-23.979
 </td>
 <td>
--16.695
+-16.815
 </td>
 <td>
 4000
 </td>
 <td>
-1272.300
+1466.565
 </td>
 <td>
-1802.697
+2282.000
 </td>
 <td>
 1.002
@@ -3328,31 +3266,31 @@ kernel_00
 kernel_00
 </td>
 <td>
-9.127
+9.117
 </td>
 <td>
-3.288
+3.234
 </td>
 <td>
-3.762
+3.881
 </td>
 <td>
-9.133
+9.094
 </td>
 <td>
-14.573
+14.368
 </td>
 <td>
 4000
 </td>
 <td>
-1156.104
+1004.538
 </td>
 <td>
-1553.037
+2011.027
 </td>
 <td>
-1.001
+1.004
 </td>
 </tr>
 <tr>
@@ -3363,31 +3301,31 @@ kernel_00
 kernel_00
 </td>
 <td>
--10.157
+-10.185
 </td>
 <td>
-2.627
+2.499
 </td>
 <td>
--14.455
+-14.296
 </td>
 <td>
--10.171
+-10.148
 </td>
 <td>
--5.880
+-6.229
 </td>
 <td>
 4000
 </td>
 <td>
-1176.906
+1389.109
 </td>
 <td>
-1469.207
+1738.964
 </td>
 <td>
-1.000
+1.001
 </td>
 </tr>
 <tr>
@@ -3398,31 +3336,31 @@ kernel_00
 kernel_00
 </td>
 <td>
-12.255
+12.293
 </td>
 <td>
-1.916
+1.828
 </td>
 <td>
-9.134
+9.301
 </td>
 <td>
-12.233
+12.286
 </td>
 <td>
-15.346
+15.210
 </td>
 <td>
 4000
 </td>
 <td>
-1076.985
+1302.774
 </td>
 <td>
-1519.308
+1752.459
 </td>
 <td>
-1.002
+1.001
 </td>
 </tr>
 <tr>
@@ -3433,31 +3371,31 @@ kernel_00
 kernel_00
 </td>
 <td>
-2.269
+2.277
 </td>
 <td>
-1.254
+1.206
 </td>
 <td>
-0.183
+0.371
 </td>
 <td>
-2.283
+2.271
 </td>
 <td>
-4.248
+4.201
 </td>
 <td>
 4000
 </td>
 <td>
-798.258
+849.755
 </td>
 <td>
-971.386
+1653.897
 </td>
 <td>
-1.003
+1.007
 </td>
 </tr>
 <tr>
@@ -3468,31 +3406,31 @@ kernel_00
 kernel_00
 </td>
 <td>
--3.121
+-3.114
 </td>
 <td>
-0.646
+0.627
 </td>
 <td>
--4.205
+-4.109
 </td>
 <td>
--3.108
+-3.104
 </td>
 <td>
--2.115
+-2.113
 </td>
 <td>
 4000
 </td>
 <td>
-971.773
+953.857
 </td>
 <td>
-1289.352
+1554.638
 </td>
 <td>
-1.000
+1.001
 </td>
 </tr>
 <tr>
@@ -3506,28 +3444,28 @@ kernel_00
 0.926
 </td>
 <td>
-0.249
+0.238
 </td>
 <td>
-0.503
+0.539
 </td>
 <td>
-0.928
+0.933
 </td>
 <td>
-1.323
+1.302
 </td>
 <td>
 4000
 </td>
 <td>
-564.444
+265.357
 </td>
 <td>
-1053.286
+1207.415
 </td>
 <td>
-1.014
+1.020
 </td>
 </tr>
 <tr>
@@ -3538,28 +3476,28 @@ kernel_00
 kernel_00
 </td>
 <td>
-3.019
+3.026
 </td>
 <td>
-0.946
+0.897
 </td>
 <td>
-1.495
+1.613
 </td>
 <td>
-3.008
+3.038
 </td>
 <td>
-4.531
+4.385
 </td>
 <td>
 4000
 </td>
 <td>
-904.776
+957.490
 </td>
 <td>
-1093.781
+1398.392
 </td>
 <td>
 1.003
@@ -3567,75 +3505,75 @@ kernel_00
 </tr>
 <tr>
 <th>
-$\tau_{ps(times)1}^2$\_transformed
+h($\tau_{ps(times)1}^2$)
 </th>
 <th>
 ()
 </th>
 <td>
-kernel_04
+kernel_01
 </td>
 <td>
--4.264
+-4.211
 </td>
 <td>
-0.846
+0.852
 </td>
 <td>
--5.706
+-5.681
 </td>
 <td>
--4.236
+-4.167
 </td>
 <td>
--2.891
+-2.840
 </td>
 <td>
 4000
 </td>
 <td>
-117.647
+370.497
 </td>
 <td>
-336.641
+630.175
 </td>
 <td>
-1.034
+1.008
 </td>
 </tr>
 <tr>
 <th>
-$\tau_{ps(times)}^2$\_transformed
+h($\tau_{ps(times)}^2$)
 </th>
 <th>
 ()
 </th>
 <td>
-kernel_02
+kernel_00
 </td>
 <td>
 4.835
 </td>
 <td>
-0.432
+0.437
 </td>
 <td>
-4.154
+4.130
 </td>
 <td>
-4.834
+4.823
 </td>
 <td>
-5.562
+5.585
 </td>
 <td>
 4000
 </td>
 <td>
-715.566
+1626.298
 </td>
 <td>
-1295.437
+2113.605
 </td>
 <td>
 1.001
@@ -3684,13 +3622,13 @@ phase
 kernel_00
 </th>
 <th rowspan="2" valign="top">
-$\beta_{ps(times)}$
+$\beta_{ps(times)}$, h($\tau_{ps(times)}^2$)
 </th>
 <th>
 posterior
 </th>
 <td>
-0.840
+0.871
 </td>
 <td>
 NaN
@@ -3701,7 +3639,7 @@ NaN
 warmup
 </th>
 <td>
-0.795
+0.792
 </td>
 <td>
 NaN
@@ -3712,13 +3650,13 @@ NaN
 kernel_01
 </th>
 <th rowspan="2" valign="top">
-$\beta_{ps(times)1}$
+$\beta_{ps(times)1}$, h($\tau_{ps(times)1}^2$)
 </th>
 <th>
 posterior
 </th>
 <td>
-0.846
+0.878
 </td>
 <td>
 NaN
@@ -3729,7 +3667,7 @@ NaN
 warmup
 </th>
 <td>
-0.796
+0.795
 </td>
 <td>
 NaN
@@ -3740,44 +3678,16 @@ NaN
 kernel_02
 </th>
 <th rowspan="2" valign="top">
-$\tau_{ps(times)}^2$\_transformed
-</th>
-<th>
-posterior
-</th>
-<td>
-0.839
-</td>
-<td>
-NaN
-</td>
-</tr>
-<tr>
-<th>
-warmup
-</th>
-<td>
-0.796
-</td>
-<td>
-NaN
-</td>
-</tr>
-<tr>
-<th rowspan="2" valign="top">
-kernel_03
-</th>
-<th rowspan="2" valign="top">
 $\beta_{0,loc}$
 </th>
 <th>
 posterior
 </th>
 <td>
-0.831
+0.920
 </td>
 <td>
-NaN
+0.917
 </td>
 </tr>
 <tr>
@@ -3785,43 +3695,15 @@ NaN
 warmup
 </th>
 <td>
-0.795
+0.920
 </td>
 <td>
-NaN
+0.918
 </td>
 </tr>
 <tr>
 <th rowspan="2" valign="top">
-kernel_04
-</th>
-<th rowspan="2" valign="top">
-$\tau_{ps(times)1}^2$\_transformed
-</th>
-<th>
-posterior
-</th>
-<td>
-0.858
-</td>
-<td>
-NaN
-</td>
-</tr>
-<tr>
-<th>
-warmup
-</th>
-<td>
-0.795
-</td>
-<td>
-NaN
-</td>
-</tr>
-<tr>
-<th rowspan="2" valign="top">
-kernel_05
+kernel_03
 </th>
 <th rowspan="2" valign="top">
 $\beta_{0,scale}$
@@ -3830,10 +3712,10 @@ $\beta_{0,scale}$
 posterior
 </th>
 <td>
-0.846
+0.902
 </td>
 <td>
-NaN
+0.903
 </td>
 </tr>
 <tr>
@@ -3841,10 +3723,10 @@ NaN
 warmup
 </th>
 <td>
-0.796
+0.910
 </td>
 <td>
-NaN
+0.912
 </td>
 </tr>
 </tbody>
@@ -3910,7 +3792,7 @@ phase
 kernel_00
 </th>
 <th rowspan="4" valign="top">
-$\beta_{ps(times)}$
+$\beta_{ps(times)}$, h($\tau_{ps(times)}^2$)
 </th>
 <th rowspan="2" valign="top">
 1
@@ -3922,16 +3804,16 @@ divergent transition
 warmup
 </th>
 <td>
-1552
+389
 </td>
 <td>
-20000
+4000
 </td>
 <td>
-20000
+4000
 </td>
 <td>
-0.078
+0.097
 </td>
 </tr>
 <tr>
@@ -3939,7 +3821,7 @@ warmup
 posterior
 </th>
 <td>
-96
+54
 </td>
 <td>
 4000
@@ -3948,7 +3830,7 @@ posterior
 4000
 </td>
 <td>
-0.024
+0.014
 </td>
 </tr>
 <tr>
@@ -3962,16 +3844,16 @@ maximum tree depth
 warmup
 </th>
 <td>
-2660
+393
 </td>
 <td>
-20000
+4000
 </td>
 <td>
-20000
+4000
 </td>
 <td>
-0.133
+0.098
 </td>
 </tr>
 <tr>
@@ -3996,7 +3878,7 @@ posterior
 kernel_01
 </th>
 <th rowspan="4" valign="top">
-$\beta_{ps(times)1}$
+$\beta_{ps(times)1}$, h($\tau_{ps(times)1}^2$)
 </th>
 <th rowspan="2" valign="top">
 1
@@ -4008,16 +3890,16 @@ divergent transition
 warmup
 </th>
 <td>
-889
+279
 </td>
 <td>
-20000
+4000
 </td>
 <td>
-20000
+4000
 </td>
 <td>
-0.044
+0.070
 </td>
 </tr>
 <tr>
@@ -4048,197 +3930,13 @@ maximum tree depth
 warmup
 </th>
 <td>
-1
-</td>
-<td>
-20000
-</td>
-<td>
-20000
-</td>
-<td>
-0.000
-</td>
-</tr>
-<tr>
-<th>
-posterior
-</th>
-<td>
-0
+11
 </td>
 <td>
 4000
 </td>
 <td>
 4000
-</td>
-<td>
-0.000
-</td>
-</tr>
-<tr>
-<th rowspan="2" valign="top">
-kernel_02
-</th>
-<th rowspan="2" valign="top">
-$\tau_{ps(times)}^2$\_transformed
-</th>
-<th rowspan="2" valign="top">
-1
-</th>
-<th rowspan="2" valign="top">
-divergent transition
-</th>
-<th>
-warmup
-</th>
-<td>
-88
-</td>
-<td>
-20000
-</td>
-<td>
-20000
-</td>
-<td>
-0.004
-</td>
-</tr>
-<tr>
-<th>
-posterior
-</th>
-<td>
-0
-</td>
-<td>
-4000
-</td>
-<td>
-4000
-</td>
-<td>
-0.000
-</td>
-</tr>
-<tr>
-<th rowspan="2" valign="top">
-kernel_03
-</th>
-<th rowspan="2" valign="top">
-$\beta_{0,loc}$
-</th>
-<th rowspan="2" valign="top">
-1
-</th>
-<th rowspan="2" valign="top">
-divergent transition
-</th>
-<th>
-warmup
-</th>
-<td>
-138
-</td>
-<td>
-20000
-</td>
-<td>
-20000
-</td>
-<td>
-0.007
-</td>
-</tr>
-<tr>
-<th>
-posterior
-</th>
-<td>
-0
-</td>
-<td>
-4000
-</td>
-<td>
-4000
-</td>
-<td>
-0.000
-</td>
-</tr>
-<tr>
-<th rowspan="2" valign="top">
-kernel_04
-</th>
-<th rowspan="2" valign="top">
-$\tau_{ps(times)1}^2$\_transformed
-</th>
-<th rowspan="2" valign="top">
-1
-</th>
-<th rowspan="2" valign="top">
-divergent transition
-</th>
-<th>
-warmup
-</th>
-<td>
-96
-</td>
-<td>
-20000
-</td>
-<td>
-20000
-</td>
-<td>
-0.005
-</td>
-</tr>
-<tr>
-<th>
-posterior
-</th>
-<td>
-0
-</td>
-<td>
-4000
-</td>
-<td>
-4000
-</td>
-<td>
-0.000
-</td>
-</tr>
-<tr>
-<th rowspan="2" valign="top">
-kernel_05
-</th>
-<th rowspan="2" valign="top">
-$\beta_{0,scale}$
-</th>
-<th rowspan="2" valign="top">
-1
-</th>
-<th rowspan="2" valign="top">
-divergent transition
-</th>
-<th>
-warmup
-</th>
-<td>
-68
-</td>
-<td>
-20000
-</td>
-<td>
-20000
 </td>
 <td>
 0.003
@@ -4265,32 +3963,11 @@ posterior
 </table>
 
 ``` python
-fig = gs.plot_trace(nuts_results, nuts_parts["loc"].intercept.name)
-fig = gs.plot_trace(nuts_results, nuts_parts["loc_tau2_transformed_name"])
-fig = gs.plot_trace(nuts_results, nuts_parts["loc_smooth"].coef.name)
-
-fig = gs.plot_trace(nuts_results, nuts_parts["scale"].intercept.name)
-fig = gs.plot_trace(nuts_results, nuts_parts["scale_tau2_transformed_name"])
-fig = gs.plot_trace(nuts_results, nuts_parts["scale_smooth"].coef.name)
+gs.plot_trace(nuts_results)
 ```
 
 <img src="04-mcycle_files/figure-commonmark/nuts-traces-output-1.png"
-id="nuts-traces-1" />
-
-<img src="04-mcycle_files/figure-commonmark/nuts-traces-output-2.png"
-id="nuts-traces-2" />
-
-<img src="04-mcycle_files/figure-commonmark/nuts-traces-output-3.png"
-id="nuts-traces-3" />
-
-<img src="04-mcycle_files/figure-commonmark/nuts-traces-output-4.png"
-id="nuts-traces-4" />
-
-<img src="04-mcycle_files/figure-commonmark/nuts-traces-output-5.png"
-id="nuts-traces-5" />
-
-<img src="04-mcycle_files/figure-commonmark/nuts-traces-output-6.png"
-id="nuts-traces-6" />
+id="nuts-traces" />
 
 Again, here is a plot of the estimated mean function:
 

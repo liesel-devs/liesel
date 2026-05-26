@@ -72,49 +72,57 @@ The `default_inference` argument determines which MCMC kernel Liesel-GAM attache
 ```{python}
 #| label: model-helper
 
-def build_mcycle_model(default_inference):
-    tb = gam.TermBuilder.from_df(mcycle, default_inference=default_inference)
+tb = gam.TermBuilder.from_df(mcycle, default_inference=gs.MCMCSpec(gs.IWLSKernel))
 
-    loc_intercept = lsl.Var.new_param(
-        jnp.array(float(mcycle["accel"].mean())),
-        distribution=None,
-        inference=default_inference,
-        name="$\\beta_{0,loc}$",
-    )
-    scale_intercept = lsl.Var.new_param(
-        jnp.array(float(np.log(mcycle["accel"].std()))),
-        distribution=None,
-        inference=default_inference,
-        name="$\\beta_{0,scale}$",
-    )
+loc = gam.AdditivePredictor("loc")
+scale = gam.AdditivePredictor("scale", inv_link=jnp.exp)
 
-    loc = gam.AdditivePredictor("loc", intercept=loc_intercept)
-    scale = gam.AdditivePredictor(
-        "scale",
-        inv_link=jnp.exp,
-        intercept=scale_intercept,
-    )
+loc_smooth = tb.ps("times", k=20)
+scale_smooth = tb.ps("times", k=20)
 
-    loc_smooth = tb.ps("times", k=20)
-    scale_smooth = tb.ps("times", k=20)
+loc += loc_smooth
+scale += scale_smooth
 
-    loc += loc_smooth
-    scale += scale_smooth
+response_dist = lsl.Dist(tfd.Normal, loc=loc, scale=scale)
+y = lsl.Var.new_obs(mcycle["accel"], response_dist, name="y")
+model = lsl.Model(y)
+```
 
-    response_dist = lsl.Dist(tfd.Normal, loc=loc, scale=scale)
-    y = lsl.Var.new_obs(mcycle["accel"].to_numpy(), response_dist, name="y")
-    model = lsl.Model([y])
+## Metropolis-in-Gibbs
 
-    return {
-        "model": model,
-        "loc": loc,
-        "scale": scale,
-        "loc_smooth": loc_smooth,
-        "scale_smooth": scale_smooth,
-        "loc_tau2_name": loc_smooth.scale.value_node[0].name,
-        "scale_tau2_name": scale_smooth.scale.value_node[0].name,
-    }
+First, we try a Metropolis-in-Gibbs sampling scheme with IWLS kernels for the regression coefficients ($\boldsymbol{\beta}$) and Gibbs kernels for the smoothing variances ($\tau^2$) of the splines.
+The Gibbs kernels for $\tau^2$ are added automatically by the P-spline terms.
 
+```{python}
+#| label: iwls-sampling
+
+iwls_results = gs.LieselMCMC(model).run_for_epochs(
+    seed=1,
+    num_chains=4,
+    adaptation=1000,
+    posterior=1000,
+    show_progress=False
+)
+```
+
+Clearly, the performance of the sampler could be better, especially for the intercept of the mean.
+The corresponding chain exhibits a very strong autocorrelation.
+
+```{python}
+#| label: iwls-summary
+
+gs.Summary(iwls_results)
+```
+
+```{python}
+#| label: iwls-traces
+gs.plot_trace(iwls_results)
+```
+
+To confirm that the chains have converged to reasonable values, here is a plot of the estimated mean function:
+
+```{python}
+#| label: iwls-spline
 
 def plot_loc_estimate(results, model, title):
     samples = results.get_posterior_samples()
@@ -163,55 +171,8 @@ def plot_loc_estimate(results, model, title):
     )
     ax.set(xlabel="time after impact", ylabel="acceleration", title=title)
     plt.show()
-```
 
-## Metropolis-in-Gibbs
-
-First, we try a Metropolis-in-Gibbs sampling scheme with IWLS kernels for the regression coefficients ($\boldsymbol{\beta}$) and Gibbs kernels for the smoothing variances ($\tau^2$) of the splines.
-The Gibbs kernels for $\tau^2$ are added automatically by the P-spline terms.
-
-```{python}
-#| label: iwls-sampling
-
-iwls_parts = build_mcycle_model(gs.MCMCSpec(gs.IWLSKernel.untuned))
-iwls_model = iwls_parts["model"]
-
-builder = gs.LieselMCMC(iwls_model).get_engine_builder(seed=42, num_chains=4)
-builder.set_duration(warmup_duration=5000, posterior_duration=1000)
-builder.show_progress = False
-
-engine = builder.build()
-engine.sample_all_epochs()
-iwls_results = engine.get_results()
-```
-
-Clearly, the performance of the sampler could be better, especially for the intercept of the mean.
-The corresponding chain exhibits a very strong autocorrelation.
-
-```{python}
-#| label: iwls-summary
-
-gs.Summary(iwls_results)
-```
-
-```{python}
-#| label: iwls-traces
-
-fig = gs.plot_trace(iwls_results, iwls_parts["loc"].intercept.name)
-fig = gs.plot_trace(iwls_results, iwls_parts["loc_tau2_name"])
-fig = gs.plot_trace(iwls_results, iwls_parts["loc_smooth"].coef.name)
-
-fig = gs.plot_trace(iwls_results, iwls_parts["scale"].intercept.name)
-fig = gs.plot_trace(iwls_results, iwls_parts["scale_tau2_name"])
-fig = gs.plot_trace(iwls_results, iwls_parts["scale_smooth"].coef.name)
-```
-
-To confirm that the chains have converged to reasonable values, here is a plot of the estimated mean function:
-
-```{python}
-#| label: iwls-spline
-
-plot_loc_estimate(iwls_results, iwls_model, "Estimated mean function (IWLS/Gibbs)")
+plot_loc_estimate(iwls_results, model, "Estimated mean function (IWLS/Gibbs)")
 ```
 
 ## NUTS sampler
@@ -221,11 +182,29 @@ To do so, we first build a fresh model with NUTS inference for the regression co
 This is the model graph before the transformation:
 
 ```{python}
+def strategy_term_blocked(model: lsl.Model, predictors: list[str], kernel_constructor, **kwargs):
+    model = model.copy()
+    for k, v in model.parameters.items():
+        if "tau" in k:
+            v.biject(tfb.Exp(), inference="drop")
+
+
+    for predictor_name in predictors:
+        predictor = model.vars[predictor_name]
+
+        for term in predictor.terms.values():
+            for param in model.parental_submodel(term).parameters.values():
+                model.parameters[param.name].inference = gs.MCMCSpec(
+                    kernel_constructor, kernel_group=term.name, kernel_kwargs=kwargs
+                )
+
+    return model
+```
+
+```{python}
 #| label: untransformed-graph
 
-nuts_parts = build_mcycle_model(gs.MCMCSpec(gs.NUTSKernel))
-nuts_model = nuts_parts["model"]
-lsl.plot_vars(nuts_model)
+nuts_model = strategy_term_blocked(model, ["loc", "scale"], gs.NUTSKernel)
 ```
 
 To transform the smoothing variances with the method {meth}`.Var.transform`, we need to retrieve the nodes and variables from the model.
@@ -237,24 +216,7 @@ These transformed smoothing variances receive NUTS kernels as well.
 
 ```{python}
 #| label: transformed-graph
-
-nodes, _vars = nuts_model.pop_nodes_and_vars()
-
-loc_tau2_transformed = _vars[nuts_parts["loc_tau2_name"]].transform(
-    tfb.Exp(),
-    inference=gs.MCMCSpec(gs.NUTSKernel),
-)
-scale_tau2_transformed = _vars[nuts_parts["scale_tau2_name"]].transform(
-    tfb.Exp(),
-    inference=gs.MCMCSpec(gs.NUTSKernel),
-)
-
-nuts_model = lsl.Model([_vars["y"]])
-nuts_parts["model"] = nuts_model
-nuts_parts["loc_tau2_transformed_name"] = loc_tau2_transformed.name
-nuts_parts["scale_tau2_transformed_name"] = scale_tau2_transformed.name
-
-lsl.plot_vars(nuts_model)
+nuts_model.plot()
 ```
 
 Now we can set up the NUTS sampler.
@@ -264,20 +226,13 @@ Here, each parameter has its own NUTS kernel through its `MCMCSpec`.
 ```{python}
 #| label: nuts-sampling
 
-builder = gs.LieselMCMC(nuts_model).get_engine_builder(seed=42, num_chains=4)
-builder.set_epochs(
-    gs.stan_epochs(
-        warmup_duration=5000,
-        posterior_duration=1000,
-        init_duration=750,
-        term_duration=500,
-    )
+nuts_results = gs.LieselMCMC(nuts_model).run_for_epochs(
+    seed=1,
+    num_chains=4,
+    adaptation=1000,
+    posterior=1000,
+    show_progress=False
 )
-builder.show_progress = False
-
-engine = builder.build()
-engine.sample_all_epochs()
-nuts_results = engine.get_results()
 ```
 
 The NUTS sampler overall seems to do a good job and even yields higher effective sample sizes than the IWLS sampler, especially for the spline coefficients of the scale model.
@@ -292,13 +247,7 @@ gs.Summary(nuts_results)
 ```{python}
 #| label: nuts-traces
 
-fig = gs.plot_trace(nuts_results, nuts_parts["loc"].intercept.name)
-fig = gs.plot_trace(nuts_results, nuts_parts["loc_tau2_transformed_name"])
-fig = gs.plot_trace(nuts_results, nuts_parts["loc_smooth"].coef.name)
-
-fig = gs.plot_trace(nuts_results, nuts_parts["scale"].intercept.name)
-fig = gs.plot_trace(nuts_results, nuts_parts["scale_tau2_transformed_name"])
-fig = gs.plot_trace(nuts_results, nuts_parts["scale_smooth"].coef.name)
+gs.plot_trace(nuts_results)
 ```
 
 Again, here is a plot of the estimated mean function:
