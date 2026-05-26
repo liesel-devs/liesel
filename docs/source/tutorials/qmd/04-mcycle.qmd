@@ -26,7 +26,7 @@ It contains the following two variables:
 
 We set up the model in Python with [Liesel-GAM](https://github.com/liesel-devs/liesel_gam), using {class}`liesel_gam.TermBuilder` for the P-spline terms.
 See the [Liesel-GAM documentation and examples](https://github.com/liesel-devs/liesel_gam#readme) for more information about additive terms and predictors.
-The tutorial reads a small CSV copy of the `MASS::mcycle` data set, so no R code is needed during rendering.
+We load the data set from R with [ryp](https://github.com/Wainberg/ryp) and then continue with a pure Python model specification and sampling workflow.
 
 ```{python}
 #| label: imports
@@ -46,7 +46,7 @@ import liesel_gam as gam
 from ryp import r, to_py
 ```
 
-We start off by loading the dataset form R via [ryp](https://github.com/Wainberg/ryp).
+We start by loading the data set from the R package `MASS` and converting it to a pandas data frame.
 
 ```{python}
 r("library(MASS)")
@@ -64,10 +64,12 @@ ax.set(xlabel="time after impact", ylabel="acceleration", title="mcycle data")
 plt.show()
 ```
 
-The following helper builds the Gaussian location-scale model.
+Next, we build the Gaussian location-scale model.
 Both distributional parameters use an additive predictor with an intercept and a P-spline in `times`.
 The scale predictor uses an exponential inverse link to keep the standard deviation positive.
-The `default_inference` argument determines which MCMC kernel Liesel-GAM attaches to the regression coefficients.
+The `TermBuilder` is initialized with an IWLS MCMC specification, so the P-spline regression coefficients are sampled with IWLS kernels by default.
+The additive predictor intercepts also use their default IWLS inference specification.
+The smoothing variances of the P-splines receive Gibbs kernels automatically.
 
 ```{python}
 #| label: model-helper
@@ -77,8 +79,8 @@ tb = gam.TermBuilder.from_df(mcycle, default_inference=gs.MCMCSpec(gs.IWLSKernel
 loc = gam.AdditivePredictor("loc")
 scale = gam.AdditivePredictor("scale", inv_link=jnp.exp)
 
-loc_smooth = tb.ps("times", k=20)
-scale_smooth = tb.ps("times", k=20)
+loc_smooth = tb.ps("times", k=20, prefix="loc.")
+scale_smooth = tb.ps("times", k=20, prefix="scale.")
 
 loc += loc_smooth
 scale += scale_smooth
@@ -90,8 +92,8 @@ model = lsl.Model(y)
 
 ## Metropolis-in-Gibbs
 
-First, we try a Metropolis-in-Gibbs sampling scheme with IWLS kernels for the regression coefficients ($\boldsymbol{\beta}$) and Gibbs kernels for the smoothing variances ($\tau^2$) of the splines.
-The Gibbs kernels for $\tau^2$ are added automatically by the P-spline terms.
+First, we run the model with the inference specifications attached during model construction.
+This gives a Metropolis-in-Gibbs sampling scheme with IWLS kernels for the regression coefficients ($\boldsymbol{\beta}$) and Gibbs kernels for the smoothing variances ($\tau^2$) of the splines.
 
 ```{python}
 #| label: iwls-sampling
@@ -119,7 +121,7 @@ gs.Summary(iwls_results)
 gs.plot_trace(iwls_results)
 ```
 
-To confirm that the chains have converged to reasonable values, here is a plot of the estimated mean function:
+To confirm that the chains have converged to reasonable values, we plot the posterior mean of the location predictor together with a 90% credible interval:
 
 ```{python}
 #| label: iwls-spline
@@ -177,9 +179,8 @@ plot_loc_estimate(iwls_results, model, "Estimated mean function (IWLS/Gibbs)")
 
 ## NUTS sampler
 
-As an alternative, we try using NUTS kernels for all parameters.
-To do so, we first build a fresh model with NUTS inference for the regression coefficients and then log-transform the smoothing variances.
-This is the model graph before the transformation:
+As an alternative, we use NUTS kernels for the spline-specific parameter blocks.
+The helper below copies the model graph, log-transforms the smoothing variances by bijecting them with an exponential bijector, and assigns one NUTS kernel group per additive term.
 
 ```{python}
 def strategy_term_blocked(model: lsl.Model, predictors: list[str], kernel_constructor, **kwargs):
@@ -191,6 +192,10 @@ def strategy_term_blocked(model: lsl.Model, predictors: list[str], kernel_constr
 
     for predictor_name in predictors:
         predictor = model.vars[predictor_name]
+        if predictor.intercept:
+            predictor.intercept.inference = gs.MCMCSpec(
+                    kernel_constructor, kernel_kwargs=kwargs
+                )
 
         for term in predictor.terms.values():
             for param in model.parental_submodel(term).parameters.values():
@@ -207,21 +212,16 @@ def strategy_term_blocked(model: lsl.Model, predictors: list[str], kernel_constr
 nuts_model = strategy_term_blocked(model, ["loc", "scale"], gs.NUTSKernel)
 ```
 
-To transform the smoothing variances with the method {meth}`.Var.transform`, we need to retrieve the nodes and variables from the model.
-This is necessary because, while they are part of a model, the inputs and outputs of nodes and variables cannot be changed.
-We retrieve the nodes and variables using {meth}`.Model.pop_nodes_and_vars`, which renders the model empty.
-
-After transformation, there are two additional variables on the unconstrained log scale.
-These transformed smoothing variances receive NUTS kernels as well.
+The resulting model contains transformed smoothing variances on the unconstrained log scale.
+Here is the transformed model graph:
 
 ```{python}
 #| label: transformed-graph
 nuts_model.plot()
 ```
 
-Now we can set up the NUTS sampler.
-In complex models like this one, it can be beneficial to use individual NUTS samplers for blocks of parameters.
-Here, each parameter has its own NUTS kernel through its `MCMCSpec`.
+Now we can run the sampler from the `MCMCSpec` objects stored in the model.
+In complex models like this one, it can be beneficial to sample the parameters of each additive term in a separate NUTS block.
 
 ```{python}
 #| label: nuts-sampling
@@ -235,7 +235,7 @@ nuts_results = gs.LieselMCMC(nuts_model).run_for_epochs(
 )
 ```
 
-The NUTS sampler overall seems to do a good job and even yields higher effective sample sizes than the IWLS sampler, especially for the spline coefficients of the scale model.
+The blocked NUTS strategy overall seems to do a good job and can yield higher effective sample sizes than the IWLS sampler, especially for the spline coefficients of the scale model.
 
 ```{python}
 #| label: nuts-summary
@@ -250,7 +250,7 @@ gs.Summary(nuts_results)
 gs.plot_trace(nuts_results)
 ```
 
-Again, here is a plot of the estimated mean function:
+Again, here is the posterior mean function with a 90% credible interval:
 
 ```{python}
 #| label: nuts-spline
