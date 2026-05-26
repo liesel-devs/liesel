@@ -129,10 +129,20 @@ kernel:
 ``` python
 # | label: coefficients
 dist_beta = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
-beta = lsl.Var.new_param(jnp.array([10.0, 10.0]), dist_beta, name="beta", inference=gs.MCMCSpec(gs.NUTSKernel))
+beta = lsl.Var.new_param(
+    jnp.array([10.0, 10.0]),
+    dist_beta,
+    name="beta",
+    inference=gs.MCMCSpec(gs.NUTSKernel),
+)
 
 dist_gamma = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
-gamma = lsl.Var.new_param(jnp.array([5.0, 5.0]), dist_gamma, name="gamma", inference=gs.MCMCSpec(gs.NUTSKernel))
+gamma = lsl.Var.new_param(
+    jnp.array([5.0, 5.0]),
+    dist_gamma,
+    name="gamma",
+    inference=gs.MCMCSpec(gs.NUTSKernel),
+)
 ```
 
 The additional complexity of the location-scale model compared to the
@@ -179,38 +189,35 @@ posterior samples per chain.
 ``` python
 # | label: sample
 results = gs.LieselMCMC(model).run_for_epochs(
-    seed=1,
-    num_chains=4,
-    adaptation=1000,
-    posterior=1000
+    seed=1, num_chains=4, adaptation=1000, posterior=1000
 )
 ```
 
 
       0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-     25%|##########5                               | 1/4 [00:02<00:07,  2.55s/chunk]
-    100%|##########################################| 4/4 [00:02<00:00,  1.57chunk/s]
+     25%|##########5                               | 1/4 [00:02<00:07,  2.48s/chunk]
+    100%|##########################################| 4/4 [00:02<00:00,  1.61chunk/s]
 
       0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|########################################| 1/1 [00:00<00:00, 1789.38chunk/s]
+    100%|########################################| 1/1 [00:00<00:00, 1804.78chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 2762.14chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 2958.94chunk/s]
 
       0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|########################################| 4/4 [00:00<00:00, 3246.99chunk/s]
+    100%|########################################| 4/4 [00:00<00:00, 3734.08chunk/s]
 
       0%|                                                 | 0/21 [00:00<?, ?chunk/s]
-     86%|#################################4     | 18/21 [00:00<00:00, 169.89chunk/s]
-    100%|#######################################| 21/21 [00:00<00:00, 162.95chunk/s]
+     81%|###############################5       | 17/21 [00:00<00:00, 166.17chunk/s]
+    100%|#######################################| 21/21 [00:00<00:00, 156.01chunk/s]
 
       0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|#########################################| 8/8 [00:00<00:00, 591.55chunk/s]
+    100%|#########################################| 8/8 [00:00<00:00, 517.90chunk/s]
 
       0%|                                                 | 0/40 [00:00<?, ?chunk/s]
-     50%|###################5                   | 20/40 [00:00<00:00, 175.91chunk/s]
-     95%|#####################################  | 38/40 [00:00<00:00, 145.62chunk/s]
-    100%|#######################################| 40/40 [00:00<00:00, 148.67chunk/s]
+     50%|###################5                   | 20/40 [00:00<00:00, 193.98chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 144.91chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 150.56chunk/s]
 
 Now that we have 1000 posterior samples per chain, we can check the
 results, starting with trace plots for the sampled parameters.

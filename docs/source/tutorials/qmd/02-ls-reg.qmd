@@ -126,10 +126,20 @@ sample each parameter block with a NUTS kernel:
 ```{python}
 # | label: coefficients
 dist_beta = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
-beta = lsl.Var.new_param(jnp.array([10.0, 10.0]), dist_beta, name="beta", inference=gs.MCMCSpec(gs.NUTSKernel))
+beta = lsl.Var.new_param(
+    jnp.array([10.0, 10.0]),
+    dist_beta,
+    name="beta",
+    inference=gs.MCMCSpec(gs.NUTSKernel),
+)
 
 dist_gamma = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
-gamma = lsl.Var.new_param(jnp.array([5.0, 5.0]), dist_gamma, name="gamma", inference=gs.MCMCSpec(gs.NUTSKernel))
+gamma = lsl.Var.new_param(
+    jnp.array([5.0, 5.0]),
+    dist_gamma,
+    name="gamma",
+    inference=gs.MCMCSpec(gs.NUTSKernel),
+)
 ```
 
 The additional complexity of the location-scale model compared to the standard linear
@@ -175,10 +185,7 @@ We run 1000 adaptation iterations and then draw 1000 posterior samples per chain
 ```{python}
 # | label: sample
 results = gs.LieselMCMC(model).run_for_epochs(
-    seed=1,
-    num_chains=4,
-    adaptation=1000,
-    posterior=1000
+    seed=1, num_chains=4, adaptation=1000, posterior=1000
 )
 ```
 
