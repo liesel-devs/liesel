@@ -2,7 +2,7 @@ name: pytest-cron
 
 on:
   schedule:
-    - cron: '0 9 * * 2'  # Every Tuesday at 09:00 UTC
+    - cron: '7 9 * * 2'  # Every Tuesday at 09:00 UTC
   workflow_dispatch: # trigger manually from GitHub UI
 
 env:
@@ -34,3 +34,26 @@ jobs:
 
       - name: Run doctests
         run: uv run pytest --doctest-modules src/liesel
+
+  notify-failure:
+    needs: pytest-cron
+    if: failure()
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Create failure issue
+        run: |
+          gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_WORKFLOW failed" \
+            --body-file - <<EOF
+          The workflow **$GITHUB_WORKFLOW** failed.
+
+          Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          Branch: $GITHUB_REF
+          Commit: $GITHUB_SHA
+          EOF
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

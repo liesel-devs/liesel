@@ -117,6 +117,44 @@ class GibbsKernel(
         self._transition_fn = transition_fn
         self.identifier = identifier
 
+    @classmethod
+    def with_transition_fn(
+        cls, transition_fn: Callable[[KeyArray, ModelState], Position]
+    ) -> Callable[[Sequence[str], str], "GibbsKernel"]:
+        """
+        Return a Gibbs kernel factory with a fixed transition function.
+
+        This helper is useful when a Gibbs kernel should be configured through an
+        :class:`.MCMCSpec`. The returned callable accepts the position keys and an
+        optional identifier, matching the kernel factory interface expected by
+        :class:`.LieselMCMC`.
+
+        Parameters
+        ----------
+        transition_fn
+            Function implementing one Gibbs update. It receives a PRNG key and the
+            current model state, and must return a position dictionary with updated
+            values for the variables handled by the kernel.
+
+        Returns
+        -------
+        Callable
+            A kernel factory that creates :class:`.GibbsKernel` instances for a given
+            sequence of position keys.
+        """
+
+        def gibbs_kernel_constructor(
+            position_keys: Sequence[str],
+            identifier: str = "",
+        ) -> GibbsKernel:
+            return GibbsKernel(
+                position_keys=position_keys,
+                transition_fn=transition_fn,
+                identifier=identifier,
+            )
+
+        return gibbs_kernel_constructor
+
     def init_state(self, prng_key, model_state):
         """
         Initializes an (empty) kernel state.
