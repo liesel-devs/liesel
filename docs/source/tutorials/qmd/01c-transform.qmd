@@ -1,10 +1,10 @@
 ---
-engine: knitr
+engine: jupyter
 ---
 
 ```{python}
-#| label: setup
-#| include: false
+# | label: setup
+# | include: false
 
 import liesel.goose as gs
 import pandas as pd
@@ -17,12 +17,14 @@ pd.options.display.html.border = 0
 
 # Parameter transformations
 
-This tutorial builds on the [linear regression tutorial](01-lin-reg.md#linear-regression). Here, we demonstrate how we can easily transform a parameter in our model to sample it with NUTS instead of a Gibbs Kernel.
+This tutorial builds on the [linear regression tutorial](01a-lin-reg.md#linear-regression).
+Here, we demonstrate how to transform a positive-valued parameter so that it can be sampled with a NUTS kernel on an unconstrained scale.
 
-First, let's set up our model again. This is the same model as in the [linear regression tutorial](01-lin-reg.md#linear-regression), so we will not go into the details here.
+First, let's set up the linear regression model again.
+The data-generating process and the model structure are the same as in the [linear regression tutorial](01a-lin-reg.md#linear-regression), but this time we prepare the model for joint NUTS sampling of the regression coefficients and the error variance.
 
 ```{python}
-#| label: model-setup
+# | label: model-setup
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -48,7 +50,12 @@ y_vec = X_mat @ true_beta + rng.normal(scale=true_sigma, size=n)
 # Model
 # Part 1: Model for the mean
 beta_prior = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
-beta = lsl.Var.new_param(value=np.array([0.0, 0.0]), distribution=beta_prior,name="beta")
+beta = lsl.Var.new_param(
+    value=np.array([0.0, 0.0]),
+    dist=beta_prior,
+    name="beta",
+    inference=gs.MCMCSpec(gs.NUTSKernel, kernel_group="1"),
+)
 
 X = lsl.Var.new_obs(X_mat, name="X")
 mu = lsl.Var(lsl.Calc(jnp.dot, X, beta), name="mu")
@@ -57,68 +64,66 @@ mu = lsl.Var(lsl.Calc(jnp.dot, X, beta), name="mu")
 a = lsl.Var(0.01, name="a")
 b = lsl.Var(0.01, name="b")
 sigma_sq_prior = lsl.Dist(tfd.InverseGamma, concentration=a, scale=b)
-sigma_sq = lsl.Var.new_param(value=10.0, distribution=sigma_sq_prior, name="sigma_sq")
+sigma_sq = lsl.Var.new_param(value=10.0, dist=sigma_sq_prior, name="sigma_sq")
 
 sigma = lsl.Var(lsl.Calc(jnp.sqrt, sigma_sq), name="sigma")
 
 # Observation model
 y_dist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
-y = lsl.Var(y_vec, distribution=y_dist, name="y")
+y = lsl.Var(y_vec, dist=y_dist, name="y")
 ```
 
-Now let's try to sample the full parameter vector $(\boldsymbol{\beta}', \sigma)'$ with a single NUTS kernel instead of using a NUTS kernel for $\boldsymbol{\beta}$ and a Gibbs kernel for $\sigma^2$. Since the standard deviation is a positive-valued parameter, we need to log-transform it to sample it with a NUTS kernel. The {class}`.Var` class provides the method {meth}`.Var.transform` for this purpose.
+Now let's try to sample the regression coefficients $\boldsymbol{\beta}$ and the variance $\sigma^2$ with a single NUTS kernel.
+NUTS operates on unconstrained real-valued parameters, whereas $\sigma^2$ must remain positive.
+We therefore biject `sigma_sq` with an exponential bijector.
+This creates an unconstrained latent variable representing $\log(\sigma^2)$ and keeps `sigma_sq` as the positive back-transformed value.
+Both `beta` and the transformed variance receive NUTS inference specifications with the same `kernel_group`, so Goose samples them jointly in one NUTS block.
 
 ```{python}
-#| label: graph-and-transformation
-sigma_sq.transform(tfb.Exp())
+# | label: graph-and-transformation
+sigma_sq.biject(tfb.Exp(), inference=gs.MCMCSpec(gs.NUTSKernel, kernel_group="1"))
 
-gb = lsl.GraphBuilder().add(y)
-model = gb.build_model()
-lsl.plot_vars(model)
+model = lsl.Model(y)
+model.plot()
 ```
 
 
-The response distribution still requires the standard deviation on the original scale. The model graph shows that the back-transformation from the logarithmic to the original scale is performed by a inserting the `sigma_sq_transformed` node and turning the `sigma_sq` node into a weak node. This weak node now deterministically depends on `sigma_sq_transformed`: its value is the back-transformed variance.
+The response distribution still requires the standard deviation on the original scale.
+The model graph shows that `sigma_sq` is now a deterministic, positive-valued transformation of its unconstrained latent variable.
+The standard deviation `sigma` is then computed as `sqrt(sigma_sq)`, so the likelihood continues to receive a valid scale parameter.
 
-Now we can set up and run an MCMC algorithm with a NUTS kernel for all parameters.
+Now we can set up and run the MCMC algorithm directly from the `MCMCSpec` objects stored in the model.
+We also include `sigma_sq` in the stored positions, because the NUTS kernel itself samples the transformed variable, while `sigma_sq` is the easier quantity to interpret.
 
 ```{python}
-#| label: sample
-builder = gs.EngineBuilder(seed=1339, num_chains=4)
+# | label: sample
 
-builder.set_model(gs.LieselInterface(model))
-builder.set_initial_values(model.state)
-
-builder.add_kernel(gs.NUTSKernel(["beta", "sigma_sq_transformed"]))
-
-builder.set_duration(warmup_duration=1000, posterior_duration=1000)
-
-# by default, goose only stores the parameters specified in the kernels.
-# let's also store the standard deviation on the original scale.
-builder.positions_included = ["sigma_sq"]
-
-engine = builder.build()
-engine.sample_all_epochs()
+results = gs.LieselMCMC(model).run_for_epochs(
+    seed=1,
+    num_chains=4,
+    adaptation=1000,
+    posterior=1000,
+    positions_included=["sigma_sq"],
+)
 ```
 
 Judging from the trace plots, it seems that all chains have converged.
 
 ```{python}
-#| label: traceplots
-results = engine.get_results()
+# | label: traceplots
 g = gs.plot_trace(results)
 ```
 
-We can also take a look at the summary table, which includes the original $\sigma^2$ and the transformed $\log(\sigma^2)$.
+We can also take a look at the summary table, which includes both the original $\sigma^2$ and the transformed $\log(\sigma^2)$.
 
 ```{python results="asis"}
-#| label: summary
+# | label: summary
 gs.Summary(results)
 ```
 
 Finally, let's check the autocorrelation of the samples.
 
 ```{python}
-#| label: correlation-plots
+# | label: correlation-plots
 g = gs.plot_cor(results)
 ```
