@@ -253,7 +253,7 @@ print(gs.Summary(results))
     /Users/johannesbrachem/Documents/git/liesel/.venv/lib/python3.13/site-packages/arviz/stats/diagnostics.py:596: RuntimeWarning: invalid value encountered in scalar divide
       (between_chain_variance / within_chain_variance + num_samples - 1) / (num_samples)
                              var_fqn     kernel  ...   hdi_low  hdi_high
-    variable                                     ...                    
+    variable                                     ...
     beta                     beta[0]  kernel_00  ...  2.984958  3.091510
     beta                     beta[1]  kernel_00  ... -0.062392  0.035103
     beta                     beta[2]  kernel_00  ...  3.904486  4.007542
