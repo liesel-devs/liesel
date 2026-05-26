@@ -3,8 +3,8 @@ engine: jupyter
 ---
 
 ```{python}
-#| label: setup
-#| include: false
+# | label: setup
+# | include: false
 
 import liesel.goose as gs
 import pandas as pd
@@ -28,7 +28,7 @@ We simulate data from a GEV model with three distributional parameters:
 - The shape or concentration parameter ($\xi$) is a function of an intercept and a linear effect.
 
 ```{python}
-#| label: imports
+# | label: imports
 
 import jax
 import jax.numpy as jnp
@@ -45,7 +45,7 @@ sns.set_theme(style="whitegrid")
 ```
 
 ```{python}
-#| label: data-generation
+# | label: data-generation
 
 key = jax.random.PRNGKey(13)
 n = 500
@@ -66,24 +66,22 @@ y = tfd.GeneralizedExtremeValue(
     concentration=true_concentration,
 ).sample(seed=key_y)
 
-data = pd.DataFrame(
-    {
-        "y": np.asarray(y),
-        "intercept": np.ones_like(y),
-        "x0": np.asarray(x0),
-        "x1": np.asarray(x1),
-        "x2": np.asarray(x2),
-        "true_loc": np.asarray(true_loc),
-        "true_scale": np.asarray(true_scale),
-        "true_concentration": np.asarray(true_concentration),
-    }
-)
+data = pd.DataFrame({
+    "y": np.asarray(y),
+    "intercept": np.ones_like(y),
+    "x0": np.asarray(x0),
+    "x1": np.asarray(x1),
+    "x2": np.asarray(x2),
+    "true_loc": np.asarray(true_loc),
+    "true_scale": np.asarray(true_scale),
+    "true_concentration": np.asarray(true_concentration),
+})
 ```
 
 Here is the simulated response:
 
 ```{python}
-#| label: plot-data
+# | label: plot-data
 
 fig, ax = plt.subplots(figsize=(8, 4))
 sns.lineplot(x=data.index, y=data["y"], ax=ax, color="0.25", linewidth=1)
@@ -96,7 +94,7 @@ The `TermBuilder` reads the covariates from a pandas data frame and creates Lies
 The additive predictors are passed directly to `tfd.GeneralizedExtremeValue`.
 
 ```{python}
-#| label: model
+# | label: model
 
 tb = gam.TermBuilder.from_df(data, default_inference=gs.MCMCSpec(gs.IWLSKernel))
 
@@ -138,13 +136,10 @@ The support of the GEV distribution changes with the parameter values (compare [
 
 
 ```{python}
-#| label: sampling
+# | label: sampling
 
 results = gs.LieselMCMC(model).run_for_epochs(
-    seed=1,
-    num_chains=4,
-    adaptation=1000,
-    posterior=2500
+    seed=1, num_chains=4, adaptation=1000, posterior=2500
 )
 gs.Summary(results)
 ```
@@ -152,7 +147,7 @@ gs.Summary(results)
 The corresponding trace plots:
 
 ```{python}
-#| label: traces
+# | label: traces
 
 fig = gs.plot_trace(results, loc.intercept.name)
 fig = gs.plot_trace(results, loc_smooth_tau2_name)
@@ -164,7 +159,7 @@ fig = gs.plot_trace(results, concentration_x2.coef.name)
 Finally, we can evaluate the posterior samples of the location predictor and compare the posterior mean with the true function used in the simulation.
 
 ```{python}
-#| label: spline
+# | label: spline
 
 samples = results.get_posterior_samples()
 loc_samples = model.vars["loc"].predict(samples)

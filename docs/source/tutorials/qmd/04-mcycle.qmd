@@ -3,8 +3,8 @@ engine: jupyter
 ---
 
 ```{python}
-#| label: setup
-#| include: false
+# | label: setup
+# | include: false
 
 import liesel.goose as gs
 import pandas as pd
@@ -29,7 +29,7 @@ See the [Liesel-GAM documentation and examples](https://github.com/liesel-devs/l
 We load the data set from R with [ryp](https://github.com/Wainberg/ryp) and then continue with a pure Python model specification and sampling workflow.
 
 ```{python}
-#| label: imports
+# | label: imports
 
 from pathlib import Path
 
@@ -56,7 +56,7 @@ mcycle = to_py("mcycle", format="pandas")
 ```
 
 ```{python}
-#| label: data
+# | label: data
 
 fig, ax = plt.subplots(figsize=(8, 4))
 sns.scatterplot(data=mcycle, x="times", y="accel", color="0.25", s=35, ax=ax)
@@ -72,7 +72,7 @@ The additive predictor intercepts also use their default IWLS inference specific
 The smoothing variances of the P-splines receive Gibbs kernels automatically.
 
 ```{python}
-#| label: model-helper
+# | label: model-helper
 
 tb = gam.TermBuilder.from_df(mcycle, default_inference=gs.MCMCSpec(gs.IWLSKernel))
 
@@ -96,14 +96,10 @@ First, we run the model with the inference specifications attached during model 
 This gives a Metropolis-in-Gibbs sampling scheme with IWLS kernels for the regression coefficients ($\boldsymbol{\beta}$) and Gibbs kernels for the smoothing variances ($\tau^2$) of the splines.
 
 ```{python}
-#| label: iwls-sampling
+# | label: iwls-sampling
 
 iwls_results = gs.LieselMCMC(model).run_for_epochs(
-    seed=1,
-    num_chains=4,
-    adaptation=1000,
-    posterior=1000,
-    show_progress=False
+    seed=1, num_chains=4, adaptation=1000, posterior=1000, show_progress=False
 )
 ```
 
@@ -111,20 +107,21 @@ Clearly, the performance of the sampler could be better, especially for the inte
 The corresponding chain exhibits a very strong autocorrelation.
 
 ```{python}
-#| label: iwls-summary
+# | label: iwls-summary
 
 gs.Summary(iwls_results)
 ```
 
 ```{python}
-#| label: iwls-traces
+# | label: iwls-traces
 gs.plot_trace(iwls_results)
 ```
 
 To confirm that the chains have converged to reasonable values, we plot the posterior mean of the location predictor together with a 90% credible interval:
 
 ```{python}
-#| label: iwls-spline
+# | label: iwls-spline
+
 
 def plot_loc_estimate(results, model, title):
     samples = results.get_posterior_samples()
@@ -174,6 +171,7 @@ def plot_loc_estimate(results, model, title):
     ax.set(xlabel="time after impact", ylabel="acceleration", title=title)
     plt.show()
 
+
 plot_loc_estimate(iwls_results, model, "Estimated mean function (IWLS/Gibbs)")
 ```
 
@@ -183,19 +181,20 @@ As an alternative, we use NUTS kernels for the spline-specific parameter blocks.
 The helper below copies the model graph, log-transforms the smoothing variances by bijecting them with an exponential bijector, and assigns one NUTS kernel group per additive term.
 
 ```{python}
-def strategy_term_blocked(model: lsl.Model, predictors: list[str], kernel_constructor, **kwargs):
+def strategy_term_blocked(
+    model: lsl.Model, predictors: list[str], kernel_constructor, **kwargs
+):
     model = model.copy()
     for k, v in model.parameters.items():
         if "tau" in k:
             v.biject(tfb.Exp(), inference="drop")
 
-
     for predictor_name in predictors:
         predictor = model.vars[predictor_name]
         if predictor.intercept:
             predictor.intercept.inference = gs.MCMCSpec(
-                    kernel_constructor, kernel_kwargs=kwargs
-                )
+                kernel_constructor, kernel_kwargs=kwargs
+            )
 
         for term in predictor.terms.values():
             for param in model.parental_submodel(term).parameters.values():
@@ -207,7 +206,7 @@ def strategy_term_blocked(model: lsl.Model, predictors: list[str], kernel_constr
 ```
 
 ```{python}
-#| label: untransformed-graph
+# | label: untransformed-graph
 
 nuts_model = strategy_term_blocked(model, ["loc", "scale"], gs.NUTSKernel)
 ```
@@ -216,7 +215,7 @@ The resulting model contains transformed smoothing variances on the unconstraine
 Here is the transformed model graph:
 
 ```{python}
-#| label: transformed-graph
+# | label: transformed-graph
 nuts_model.plot()
 ```
 
@@ -224,28 +223,24 @@ Now we can run the sampler from the `MCMCSpec` objects stored in the model.
 In complex models like this one, it can be beneficial to sample the parameters of each additive term in a separate NUTS block.
 
 ```{python}
-#| label: nuts-sampling
+# | label: nuts-sampling
 
 nuts_results = gs.LieselMCMC(nuts_model).run_for_epochs(
-    seed=1,
-    num_chains=4,
-    adaptation=1000,
-    posterior=1000,
-    show_progress=False
+    seed=1, num_chains=4, adaptation=1000, posterior=1000, show_progress=False
 )
 ```
 
 The blocked NUTS strategy overall seems to do a good job and can yield higher effective sample sizes than the IWLS sampler, especially for the spline coefficients of the scale model.
 
 ```{python}
-#| label: nuts-summary
-#| output: asis
+# | label: nuts-summary
+# | output: asis
 
 gs.Summary(nuts_results)
 ```
 
 ```{python}
-#| label: nuts-traces
+# | label: nuts-traces
 
 gs.plot_trace(nuts_results)
 ```
@@ -253,7 +248,7 @@ gs.plot_trace(nuts_results)
 Again, here is the posterior mean function with a 90% credible interval:
 
 ```{python}
-#| label: nuts-spline
+# | label: nuts-spline
 
 plot_loc_estimate(nuts_results, nuts_model, "Estimated mean function (NUTS)")
 ```

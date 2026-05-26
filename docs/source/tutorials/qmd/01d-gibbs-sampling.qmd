@@ -3,10 +3,11 @@ engine: knitr
 ---
 
 ```{python}
-#| label: setup
-#| include: false
+# | label: setup
+# | include: false
 import liesel.goose as gs
 import pandas as pd
+
 gs.Summary.__repr__ = gs.Summary._repr_html_
 gs.Summary._repr_markdown_ = gs.Summary._repr_html_
 pd.options.display.float_format = "{:.3f}".format
@@ -21,7 +22,7 @@ As this tutorial is a continuation of the previous tutorials, we will use the sa
 ## Data and imports
 
 ```{python}
-#| label: imports
+# | label: imports
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -37,7 +38,7 @@ import matplotlib.pyplot as plt
 ```
 
 ```{python}
-#| label: build-model
+# | label: build-model
 # Generate data
 rng = np.random.default_rng(42)
 
@@ -97,12 +98,11 @@ we use the method {meth}`~.goose.interface.LieselInterface.extract_position`
 of the {class}`~.goose.interface.LieselInterface`.
 
 ```{python}
-#| label: define-transition-function
+# | label: define-transition-function
 def draw_sigma_sq(prng_key, model_state):
     # extract relevant values from model state
     pos = interface.extract_position(
-      position_keys=["y", "mu", "sigma_sq", "a", "b"],
-      model_state=model_state
+        position_keys=["y", "mu", "sigma_sq", "a", "b"], model_state=model_state
     )
     # calculate relevant intermediate quantities
     n = len(pos["y"])
@@ -118,13 +118,13 @@ def draw_sigma_sq(prng_key, model_state):
 After constructing the Gibbs sampler, we can build our engine.
 
 ```{python}
-#| label: engine-setup-with-gibbs-sampler
+# | label: engine-setup-with-gibbs-sampler
 interface = gs.LieselInterface(model)
 builder = gs.EngineBuilder(seed=1338, num_chains=4)
 builder.set_model(gs.LieselInterface(model))
 builder.set_initial_values(model.state)
 builder.add_kernel(gs.NUTSKernel(["beta"]))
-builder.add_kernel(gs.GibbsKernel(["sigma_sq"], draw_sigma_sq)) # add gibbs sampler
+builder.add_kernel(gs.GibbsKernel(["sigma_sq"], draw_sigma_sq))  # add gibbs sampler
 builder.set_duration(warmup_duration=1000, posterior_duration=1000)
 engine = builder.build()
 engine.sample_all_epochs()
@@ -141,7 +141,7 @@ summary
 And plot these
 
 ```{python}
-#| label: trace-plot
+# | label: trace-plot
 g = gs.plot_trace(results)
 gs.plot_param(results, param="sigma_sq", param_index=0)
 ```

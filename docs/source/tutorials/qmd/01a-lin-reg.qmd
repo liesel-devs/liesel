@@ -3,10 +3,11 @@ engine: jupyter
 ---
 
 ```{python}
-#| label: setup
-#| include: false
+# | label: setup
+# | include: false
 import liesel.goose as gs
 import pandas as pd
+
 gs.Summary.__repr__ = gs.Summary._repr_html_
 gs.Summary._repr_markdown_ = gs.Summary._repr_html_
 pd.options.display.float_format = "{:.3f}".format
@@ -22,7 +23,7 @@ In this tutorial, we build a linear regression model with Liesel and estimate it
 Before we can generate the data and build the model, we need to load Liesel and a number of other packages. We usually import the model building library `liesel.model` as `lsl`, and the MCMC library `liesel.goose` as `gs`.
 
 ```{python}
-#| label: imports
+# | label: imports
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -42,7 +43,7 @@ import matplotlib.pyplot as plt
 Now we can simulate 500 observations from the linear regression model $y_i \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \;\sigma^2)$ with the true parameters $\boldsymbol{\beta} = (\beta_0, \beta_1)' = (1, 2)'$ and $\sigma = 1$. The relationship between the response $y_i$ and the covariate $x_i$ is visualized in the following scatterplot.
 
 ```{python}
-#| label: generate-data
+# | label: generate-data
 
 rng = np.random.default_rng(42)
 
@@ -88,7 +89,7 @@ to use the same names here. This is a general feature of {class}`.Dist`, you sho
 always use the parameter names from TFP to refer to the parameters of your distribution.
 
 ```{python}
-#| label: beta-distribution
+# | label: beta-distribution
 beta_prior = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
 ```
 
@@ -97,9 +98,12 @@ coefficient with the {meth}`.Var.new_param` constructor.
 We also attach an {class}`~.goose.MCMCSpec` to `beta`, which tells Goose to sample this parameter with a NUTS kernel later on:
 
 ```{python}
-#| label: beta-parameter
+# | label: beta-parameter
 beta = lsl.Var.new_param(
-    value=jnp.array([0.0, 0.0]), dist=beta_prior, name="beta", inference=gs.MCMCSpec(gs.NUTSKernel)
+    value=jnp.array([0.0, 0.0]),
+    dist=beta_prior,
+    name="beta",
+    inference=gs.MCMCSpec(gs.NUTSKernel),
 )
 ```
 
@@ -110,7 +114,7 @@ $\sigma^2 \sim \text{InverseGamma}(a, b)$ with $a = b = 0.01$.
 In this introductory model, we do not attach an MCMC kernel to `sigma_sq`, so it remains fixed at its initial value during sampling.
 
 ```{python}
-#| label: standard-deviation-node
+# | label: standard-deviation-node
 sigma_sq_prior = lsl.Dist(tfd.InverseGamma, concentration=0.01, scale=0.01)
 sigma_sq = lsl.Var.new_param(value=1.0, dist=sigma_sq_prior, name="sigma_sq")
 ```
@@ -131,7 +135,7 @@ $y_i \sim \mathcal{N}(\mu_i, \;\sigma^2)$ with $\mu_i = \beta_0 + \beta_1 x_i$,
 so we use the name `mu` for this product.
 
 ```{python}
-#| label: calculator-setup
+# | label: calculator-setup
 X = lsl.Var.new_obs(X_mat, name="X")
 mu = lsl.Var.new_calc(jnp.dot, X, beta, name="mu")
 ```
@@ -143,7 +147,7 @@ we also need to specify the response's distribution.
 We use our `sigma` and `mu` to specify this distribution:
 
 ```{python}
-#| label: response-var
+# | label: response-var
 y_dist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
 y = lsl.Var.new_obs(y_vec, dist=y_dist, name="y")
 ```
@@ -153,7 +157,7 @@ y = lsl.Var.new_obs(y_vec, dist=y_dist, name="y")
 Now, we can set up the {class}`.Model`. Here, we will only add the response.
 
 ```{python}
-#| label: model-init
+# | label: model-init
 model = lsl.Model([y])
 ```
 
@@ -163,7 +167,7 @@ If the layout of the graph looks messy for you,
 please make sure you have the `pygraphviz` package installed.
 
 ```{python}
-#| label: plot-vars
+# | label: plot-vars
 lsl.plot_vars(model)
 ```
 
@@ -187,7 +191,7 @@ The {class}`.LieselMCMC` helper reads these inference specifications from the mo
 Here we request 1000 adaptation iterations and 1000 posterior draws per chain.
 
 ```{python}
-#| label: goose-MCMC-engine-setup
+# | label: goose-MCMC-engine-setup
 
 results = gs.LieselMCMC(model).run_for_epochs(
     seed=1337, num_chains=4, adaptation=1000, posterior=1000

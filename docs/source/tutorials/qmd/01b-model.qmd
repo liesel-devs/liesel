@@ -3,8 +3,8 @@ engine: knitr
 ---
 
 ```{python}
-#| label: setup
-#| include: false
+# | label: setup
+# | include: false
 
 import liesel.goose as gs
 import pandas as pd
@@ -95,8 +95,6 @@ plt.title("Simulated data from the linear regression model")
 plt.xlabel("Covariate x")
 plt.ylabel("Response y")
 plt.show()
-
-
 ```
 
 ### Building the model graph
@@ -111,7 +109,7 @@ so we start from there and then work our way down. To do so, we need to define i
 {class}`.Dist` class.
 
 ```{python}
-#| label: beta-distribution
+# | label: beta-distribution
 beta_prior = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
 ```
 
@@ -124,8 +122,10 @@ With this distribution object, we can now create the node for our regression
 coefficient with the {meth}`.Var.new_param` constructor:
 
 ```{python}
-#| label: beta-parameter
-beta = lsl.Var.new_param(value=np.array([0.0, 0.0]), distribution=beta_prior, name="beta")
+# | label: beta-parameter
+beta = lsl.Var.new_param(
+    value=np.array([0.0, 0.0]), distribution=beta_prior, name="beta"
+)
 ```
 
 The second branch of the tree contains the residual standard deviation, which we again build using the weakly informative prior
@@ -133,7 +133,7 @@ $\sigma^2 \sim \text{InverseGamma}(a, b)$ with $a = b = 0.01$ on the squared sta
 deviation. This time, we supply the hyperparameters as {class}`.Var` instances.
 
 ```{python}
-#| label: standard-deviation-node
+# | label: standard-deviation-node
 a = lsl.Var.new_param(0.01, name="a")
 b = lsl.Var.new_param(0.01, name="b")
 sigma_sq_prior = lsl.Dist(tfd.InverseGamma, concentration=a, scale=b)
@@ -153,7 +153,7 @@ sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma").update()
 We do the same to compute the matrix-vector product after constructing the design matrix
 
 ```{python}
-#| label: calculator-setup
+# | label: calculator-setup
 X = lsl.Var.new_obs(X_mat, name="X")
 mu = lsl.Var.new_calc(jnp.dot, X, beta, name="mu")
 ```
@@ -162,7 +162,7 @@ Finally, we can connect the branches of the tree in a response node.
 The node values are our observed response values, and as before, we must specify the response distribution.
 
 ```{python}
-#| label: response-var
+# | label: response-var
 y_dist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
 y = lsl.Var.new_obs(y_vec, distribution=y_dist, name="y")
 ```
@@ -170,7 +170,7 @@ y = lsl.Var.new_obs(y_vec, distribution=y_dist, name="y")
 Now, to construct a full-fledged Liesel model from our individual node objects, we only add the response node.
 
 ```{python}
-#| label: model-init
+# | label: model-init
 model = lsl.Model([y])
 model
 ```
@@ -185,7 +185,7 @@ In the figure below, we can see the tree-like structure of the graph and identif
 two branches for the mean and the standard deviation of the response.
 
 ```{python}
-#| label: plot-vars
+# | label: plot-vars
 lsl.plot_vars(model)
 ```
 
@@ -195,7 +195,7 @@ The log-probability of the model, which can be interpreted as the unnormalized
 log-posterior in a Bayesian context, can be accessed with the `log_prob` property.
 
 ```{python}
-#| label: print-log-prob
+# | label: print-log-prob
 model.log_prob
 ```
 
@@ -208,14 +208,14 @@ log-probability contributions of each element in the values of the nodes.
 So for `beta` we would get two log-probability values, and for `y` we would get 500.
 
 ```{python}
-#| label: log-prob-demo
+# | label: log-prob-demo
 beta.log_prob.sum() + sigma_sq.log_prob + y.log_prob.sum()
 ```
 
 Nodes without a probability distribution return a log-probability of zero.
 
 ```{python}
-#| label: zero-log-prob-demo
+# | label: zero-log-prob-demo
 sigma.log_prob
 ```
 
@@ -225,7 +225,7 @@ the corresponding node, the log-probability of the response node, and the
 log-probability of the model change as well.
 
 ```{python}
-#| label: log-prob-updating-demo
+# | label: log-prob-updating-demo
 print(f"Old value of sigma_sq: {sigma_sq.value}")
 print(f"Old log-prob of sigma_sq: {sigma_sq.log_prob}")
 print(f"Old log-prob of y: {y.log_prob.sum()}\n")

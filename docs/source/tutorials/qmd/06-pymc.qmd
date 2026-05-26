@@ -3,8 +3,8 @@ engine: knitr
 ---
 
 ```{python}
-#| label: setup
-#| include: false
+# | label: setup
+# | include: false
 
 import liesel.goose as gs
 import pymc as pm
@@ -46,7 +46,7 @@ to zero.
 First, we generate the data. We use a model with four coefficients but assume that only two variables are relevant, namely the first and the third one.
 
 ```{python}
-#| label: data-generation
+# | label: data-generation
 
 RANDOM_SEED = 123
 rng = np.random.RandomState(RANDOM_SEED)
@@ -67,11 +67,11 @@ y = X @ beta_vec + sigma_scalar * errors
 Then, we can specify the model using PyMC.
 
 ```{python}
-#| label: model
+# | label: model
 
 spike_and_slab_model = pm.Model()
 
-mu = 0.
+mu = 0.0
 
 alpha_tau = 1.0
 beta_tau = 1.0
@@ -86,15 +86,18 @@ nu = 0.1
 
 with spike_and_slab_model:
     # priors
-    sigma2 = pm.InverseGamma(
-        "sigma2", alpha=alpha_sigma, beta=beta_sigma
-    )
+    sigma2 = pm.InverseGamma("sigma2", alpha=alpha_sigma, beta=beta_sigma)
 
     theta = pm.Beta("theta", alpha=alpha_theta, beta=beta_theta)
     delta = pm.Bernoulli("delta", p=theta, size=p)
     tau = pm.InverseGamma("tau", alpha=alpha_tau, beta=beta_tau)
 
-    beta = pm.Normal("beta", mu=0.0, sigma=nu * (1 - delta) + delta * pm.math.sqrt(tau / sigma2), shape=p)
+    beta = pm.Normal(
+        "beta",
+        mu=0.0,
+        sigma=nu * (1 - delta) + delta * pm.math.sqrt(tau / sigma2),
+        shape=p,
+    )
 
     # make a data node
     Xx = pm.Data("X", X)
@@ -106,7 +109,7 @@ with spike_and_slab_model:
 Let's take a look at our model:
 
 ```{python}
-#| label: model-output
+# | label: model-output
 
 spike_and_slab_model
 ```
@@ -116,38 +119,47 @@ The class {class}`.PyMCInterface` offers an interface between PyMC and Goose. By
 The initial position can be extracted with {meth}`.get_initial_state`. The model state is represented as a `Position`.
 
 ```{python}
-#| label: pymc-interface
+# | label: pymc-interface
 
-interface = PyMCInterface(spike_and_slab_model, additional_vars=["sigma2", "tau", "theta"])
+interface = PyMCInterface(
+    spike_and_slab_model, additional_vars=["sigma2", "tau", "theta"]
+)
 state = interface.get_initial_state()
 ```
 
 Since $\delta_j$ is a discrete variable, we need to use a Gibbs sampler to draw samples for it. Unfortunately, we cannot derive the posterior analytically, but what we can do is use a Metropolis-Hastings step as a transition function:
 
 ```{python}
-#| label: delta-transition-fn
+# | label: delta-transition-fn
+
 
 def delta_transition_fn(prng_key, model_state):
     draw_key, mh_key = jax.random.split(prng_key)
     theta_logodds = model_state["theta_logodds__"]
     p = jax.numpy.exp(theta_logodds) / (1 + jax.numpy.exp(theta_logodds))
     draw = jax.random.bernoulli(draw_key, p=p, shape=(4,))
-    proposal = {"delta": jax.numpy.asarray(draw,dtype=np.int64)}
-    _, state = gs.mh.mh_step(prng_key=mh_key, model=interface, proposal=proposal, model_state=model_state)
+    proposal = {"delta": jax.numpy.asarray(draw, dtype=np.int64)}
+    _, state = gs.mh.mh_step(
+        prng_key=mh_key, model=interface, proposal=proposal, model_state=model_state
+    )
     return state
 ```
 
 Finally, we can sample from the posterior as we do for any other Liesel model. In this case, we use a {class}`~.goose.GibbsKernel` for $\boldsymbol{\delta}$ and a {class}`~.goose.NUTSKernel` both for the remaining parameters.
 
 ```{python}
-#| label: model-init-sampling
+# | label: model-init-sampling
 
 builder = gs.EngineBuilder(seed=13, num_chains=4)
 builder.set_model(interface)
 builder.set_initial_values(state)
 builder.set_duration(warmup_duration=1000, posterior_duration=2000)
 
-builder.add_kernel(gs.NUTSKernel(position_keys=["beta", "sigma2_log__", "tau_log__", "theta_logodds__"]))
+builder.add_kernel(
+    gs.NUTSKernel(
+        position_keys=["beta", "sigma2_log__", "tau_log__", "theta_logodds__"]
+    )
+)
 builder.add_kernel(gs.GibbsKernel(["delta"], transition_fn=delta_transition_fn))
 
 builder.positions_included = ["sigma2", "tau"]
@@ -160,7 +172,7 @@ engine.sample_all_epochs()
 Now, we can take a look at the summary of the results and at the trace plots.
 
 ```{python}
-#| label: results-summary
+# | label: results-summary
 
 results = engine.get_results()
 print(gs.Summary(results))
@@ -172,7 +184,7 @@ As we can see from the posterior means of the $\boldsymbol{\delta}$ parameters, 
 2. $\delta_2$ and $\delta_4$ (`delta[1]` and `delta[3]` in the table) have a posterior mean of $0.06$, indicating exclusion.
 
 ```{python}
-#| label: results-plot
+# | label: results-plot
 
 gs.plot_trace(results)
 ```

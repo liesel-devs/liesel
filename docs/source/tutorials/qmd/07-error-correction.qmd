@@ -3,8 +3,8 @@ engine: knitr
 ---
 
 ```{python}
-#| label: setup
-#| include: false
+# | label: setup
+# | include: false
 
 import liesel.goose as gs
 import pandas as pd
@@ -53,7 +53,7 @@ These priors correspond to being relatively uninformative about the distribution
 First, we import all of the required packages.
 
 ```{python}
-#| label: imports
+# | label: imports
 import jax
 import jax.numpy as jnp
 import liesel.model as lsl
@@ -75,34 +75,36 @@ tfd = tfp.distributions
 Afterwards we will start by simulating some data with replicates.
 
 ```{python}
-#| label: Create data
+# | label: Create data
 # Define the number of samples and replicates
 seed = 123
 
 n = 500  # Number of data points
-M = 3    # Number of replicates per sample
+M = 3  # Number of replicates per sample
 key = jax.random.PRNGKey(seed)
-x = 10 + 5 * jax.random.normal(key, n) # create the true x
+x = 10 + 5 * jax.random.normal(key, n)  # create the true x
 
-sigma_u_true = 1 # variance of the replicates
+sigma_u_true = 1  # variance of the replicates
 
 keys = jax.random.split(key, n)
-x_tilde = jnp.array([x[i] + sigma_u_true * jax.random.normal(keys[i], (M,)) for i in range(n)]) # observed x-values
+x_tilde = jnp.array([
+    x[i] + sigma_u_true * jax.random.normal(keys[i], (M,)) for i in range(n)
+])  # observed x-values
 ```
 
 ``` {python}
-#| label: plot-data
+# | label: plot-data
 # Plot Data
 fig, ax1 = plt.subplots(figsize=(8, 4))
 
 # True x vs observed replicates
-ax1.scatter(x, x_tilde[:, 0], alpha=0.6, s=20, label='Replicate 1', color='red')
-ax1.scatter(x, x_tilde[:, 1], alpha=0.6, s=20, label='Replicate 2', color='blue')
-ax1.scatter(x, x_tilde[:, 2], alpha=0.6, s=20, label='Replicate 3', color='green')
-ax1.plot([x.min(), x.max()], [x.min(), x.max()], 'k--', alpha=0.7, label='True')
-ax1.set_xlabel('True x')
-ax1.set_ylabel('Observed x (replicates)')
-ax1.set_title('True vs Observed Values')
+ax1.scatter(x, x_tilde[:, 0], alpha=0.6, s=20, label="Replicate 1", color="red")
+ax1.scatter(x, x_tilde[:, 1], alpha=0.6, s=20, label="Replicate 2", color="blue")
+ax1.scatter(x, x_tilde[:, 2], alpha=0.6, s=20, label="Replicate 3", color="green")
+ax1.plot([x.min(), x.max()], [x.min(), x.max()], "k--", alpha=0.7, label="True")
+ax1.set_xlabel("True x")
+ax1.set_ylabel("Observed x (replicates)")
+ax1.set_title("True vs Observed Values")
 ax1.legend()
 ax1.grid(True, alpha=0.3)
 ```
@@ -110,10 +112,10 @@ ax1.grid(True, alpha=0.3)
 We simulate the response as done in the [linear regression tutorial](01-lin-reg.md#linear-regression) from the model $y_i | x_i \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \;\sigma^{2}_y)$ given our true covariate.
 
 ```{python}
-#| label: Create response
+# | label: Create response
 rng = np.random.default_rng(42)
 
-sigma_y_true = 1.0 # variance of the response
+sigma_y_true = 1.0  # variance of the response
 
 true_beta = np.array([1.0, 2.0])
 
@@ -134,27 +136,27 @@ arguments of the different distributions.
 
 We begin by establishing $\tau^2_{x}$.
 ```{python}
-#| label: distributions
+# | label: distributions
 # Define hyperparameters for variance of x
-a_x = lsl.Var.new_param(0.001, name = "a_x")
-b_x = lsl.Var.new_param(0.001, name = "b_x")
+a_x = lsl.Var.new_param(0.001, name="a_x")
+b_x = lsl.Var.new_param(0.001, name="b_x")
 
 # Define prior for tau2_x using an Inverse Gamma distribution
-tau2_x_prior = lsl.Dist(tfd.InverseGamma, concentration = a_x, scale = b_x)
-tau2_x = lsl.Var.new_param(10.0, distribution = tau2_x_prior, name = "tau2_x")
+tau2_x_prior = lsl.Dist(tfd.InverseGamma, concentration=a_x, scale=b_x)
+tau2_x = lsl.Var.new_param(10.0, distribution=tau2_x_prior, name="tau2_x")
 ```
 
 Following that we define $\tau^2_{\mu}$, so we can define $\mu_x$ afterwards.
 
 ```{python}
 # Define the scales for mu_x (mean of x)
-tau2_mu = lsl.Var.new_param(1000.0, name= "tau2_mu")
+tau2_mu = lsl.Var.new_param(1000.0, name="tau2_mu")
 
 # Define prior for mu_x using a Normal distribution
-mu_x_prior = lsl.Dist(tfd.Normal, loc = 0.0, scale = tau2_mu)
+mu_x_prior = lsl.Dist(tfd.Normal, loc=0.0, scale=tau2_mu)
 
 # Define mu_x as a parameter with the prior distribution
-mu_x = lsl.Var.new_param(x_tilde.mean(), distribution = mu_x_prior, name = "mu_x")
+mu_x = lsl.Var.new_param(x_tilde.mean(), distribution=mu_x_prior, name="mu_x")
 ```
 
 With that we then can configure the prior distribution for $x_i$ and construct our x-values as a model
@@ -162,19 +164,23 @@ parameter.
 
 ```{python}
 # Define prior distribution for x
-x_prior_dist = lsl.Dist(tfd.Normal, loc = mu_x, scale = tau2_x)
+x_prior_dist = lsl.Dist(tfd.Normal, loc=mu_x, scale=tau2_x)
 
 # Estimate x using the mean of replicates and assign a prior distribution
-x_estimated = lsl.Var.new_param(x_tilde.mean(axis = 1), # initial estimation is the mean of the replicates
-                                distribution = x_prior_dist,
-                                name="x_estimated")
+x_estimated = lsl.Var.new_param(
+    x_tilde.mean(axis=1),  # initial estimation is the mean of the replicates
+    distribution=x_prior_dist,
+    name="x_estimated",
+)
 ```
 
 Now, we incorporate the variance and scale of our measurements and formalize the likelihood.
 ```{python}
 # Define the scale of the measurement distribution
 sigma_u_prior = lsl.Dist(tfd.InverseGamma, concentration=0.01, scale=0.01)
-sigma_sq_u = lsl.Var.new_param(value=10.0, distribution=sigma_u_prior, name="sigma_sq_u")
+sigma_sq_u = lsl.Var.new_param(
+    value=10.0, distribution=sigma_u_prior, name="sigma_sq_u"
+)
 sigma_u = lsl.Var.new_calc(jnp.sqrt, sigma_sq_u, name="sigma_u").update()
 log_sigma_u = sigma_sq_u.transform(tfb.Exp())
 
@@ -183,32 +189,32 @@ log_sigma_u = sigma_sq_u.transform(tfb.Exp())
 measurement_dist_loc = lsl.Calc(lambda x: jnp.expand_dims(x, -1), x_estimated)
 
 # Define likelihood model for measurement error
-measurement_dist = lsl.Dist(
-    tfd.Normal,
-    loc = measurement_dist_loc,
-    scale = sigma_u
-    )
+measurement_dist = lsl.Dist(tfd.Normal, loc=measurement_dist_loc, scale=sigma_u)
 # Measurements
-x_tilde_var = lsl.Var(x_tilde, distribution = measurement_dist, name = "x_tilde")
+x_tilde_var = lsl.Var(x_tilde, distribution=measurement_dist, name="x_tilde")
 ```
 
 Afterwards we define $\boldsymbol{\beta}$, our design matrix and $\sigma^{2}_y$ (the variance of the response). Note that we have to create the design matrix using {meth}`.Var.new_calc` as we continuously update our x-values during the inference.
 
 ```{python}
-#| label: design matrix
+# | label: design matrix
 beta_prior = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
-beta = lsl.Var.new_param(np.array([0.0, 0.0]), name = "beta", distribution= beta_prior)
+beta = lsl.Var.new_param(np.array([0.0, 0.0]), name="beta", distribution=beta_prior)
+
 
 def create_x(x):
-  return jnp.column_stack([np.ones(n), x])
+    return jnp.column_stack([np.ones(n), x])
 
-X_mat = lsl.Var.new_calc(create_x, x_estimated,  name = "X") # design matrix
+
+X_mat = lsl.Var.new_calc(create_x, x_estimated, name="X")  # design matrix
 
 a = lsl.Var.new_param(0.01, name="a")
 b = lsl.Var.new_param(0.01, name="b")
 
 sigma_sq_prior = lsl.Dist(tfd.InverseGamma, concentration=a, scale=b)
-sigma_sq_y = lsl.Var.new_param(value=10.0, distribution=sigma_sq_prior, name="sigma_sq_y")
+sigma_sq_y = lsl.Var.new_param(
+    value=10.0, distribution=sigma_sq_prior, name="sigma_sq_y"
+)
 sigma_y = lsl.Var.new_calc(jnp.sqrt, sigma_sq_y, name="sigma_y").update()
 log_sigma = sigma_sq_y.transform(tfb.Exp())
 ```
@@ -216,34 +222,23 @@ log_sigma = sigma_sq_y.transform(tfb.Exp())
 We now can create the distribution for our response. Note that the response is assumed to be distributed as $y_i | \tilde{x}_i \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \;\sigma^{2}_y)$ as we are estimating the x-values as well. Both $\sigma^{2}_y$ (variance of the response) and $\sigma^{2}_u$ (variance of the measurements) are assumed to follow an $\text{InverseGamma}(a, b)$ distribution and are log-transformed to ensure positivity.
 
 ```{python}
-#| label: joint model for x and y
+# | label: joint model for x and y
 # create joint model for x and y
 
-mu_of_y = lsl.Var.new_calc( # compute the dot product
-    jnp.dot,
-    X_mat,
-    beta,
-    name="mu_of_y"
-    )
+mu_of_y = lsl.Var.new_calc(  # compute the dot product
+    jnp.dot, X_mat, beta, name="mu_of_y"
+)
 
 # Define the likelihood distribution of y (Normal with estimated mean and scale)
-y_dist = lsl.Dist(
-    tfd.Normal,
-    loc=mu_of_y,
-    scale= sigma_y
-  )
+y_dist = lsl.Dist(tfd.Normal, loc=mu_of_y, scale=sigma_y)
 
 # Define y as an observed variable with the specified distribution
-y_var = lsl.Var.new_obs(
-    value=y_vec,
-    distribution=y_dist,
-    name="y"
-)
+y_var = lsl.Var.new_obs(value=y_vec, distribution=y_dist, name="y")
 ```
 
 Now we can take a look at our model
 ```{python}
-#| label: plot-vars
+# | label: plot-vars
 # create joint model for x and y
 model = lsl.Model([y_var, x_tilde_var])
 
@@ -266,7 +261,7 @@ $$
 Let us implement these
 
 ```{python}
-#| label: transition-functions
+# | label: transition-functions
 def transition_mu_x(prng_key, model_state):
     """
     Sample mu_x from its posterior distribution conditioned on the data.
@@ -281,7 +276,7 @@ def transition_mu_x(prng_key, model_state):
     # Extract relevant parameters from model state
     pos = interface.extract_position(
         position_keys=["x_estimated", "tau2_x", "tau2_mu", "a_x", "b_x"],
-        model_state=model_state
+        model_state=model_state,
     )
     x = pos["x_estimated"]
     n = len(x)
@@ -315,7 +310,7 @@ def transition_tau2_x(prng_key, model_state):
     # Extract relevant parameters from model state
     pos = interface.extract_position(
         position_keys=["a_x", "b_x", "x_estimated", "mu_x", "b_x"],
-        model_state=model_state
+        model_state=model_state,
     )
     a_x = pos["a_x"]
     b_x = pos["b_x"]
@@ -325,22 +320,23 @@ def transition_tau2_x(prng_key, model_state):
 
     # Compute the new alpha and beta for the inverse gamma distribution
     alpha_new = a_x + n / 2
-    beta_new = b_x + ((x - mu_x)**2).sum() / 2
+    beta_new = b_x + ((x - mu_x) ** 2).sum() / 2
 
     # Sample tau2_x from the inverse gamma distribution
-    tau2_x = jnp.squeeze(tfd.InverseGamma(concentration=alpha_new, scale=beta_new).sample(seed=prng_key))
+    tau2_x = jnp.squeeze(
+        tfd.InverseGamma(concentration=alpha_new, scale=beta_new).sample(seed=prng_key)
+    )
 
-    return {"tau2_x" : tau2_x}
-
+    return {"tau2_x": tau2_x}
 ```
 
  We set up our engine and draw 2000 posterior samples.
 
 ```{python}
-#| label: kernels
+# | label: kernels
 # #add kernels and return engine
 interface = gs.LieselInterface(model)
-eb_sample = gs.EngineBuilder(seed = 2 , num_chains=4)
+eb_sample = gs.EngineBuilder(seed=2, num_chains=4)
 eb_sample.set_model(gs.LieselInterface(model))
 eb_sample.set_initial_values(model.state)
 
@@ -354,7 +350,12 @@ eb_sample.add_kernel(gs.NUTSKernel(["beta"]))
 eb_sample.add_kernel(gs.NUTSKernel(["sigma_sq_y_transformed"]))
 eb_sample.add_kernel(gs.NUTSKernel(["sigma_sq_u_transformed"]))
 
-eb_sample.set_duration(warmup_duration = 1000, posterior_duration = 2000, thinning_posterior=1, term_duration=200)
+eb_sample.set_duration(
+    warmup_duration=1000,
+    posterior_duration=2000,
+    thinning_posterior=1,
+    term_duration=200,
+)
 
 engine = eb_sample.build()
 engine.sample_all_epochs()
@@ -363,46 +364,46 @@ engine.sample_all_epochs()
 Now we can take a look at the results for our parameters
 
 ```{python}
-#| label: view-results
+# | label: view-results
 results = engine.get_results()
 summary = gs.Summary(results)
-gs.Summary(results, deselected = ["x_estimated"])
+gs.Summary(results, deselected=["x_estimated"])
 ```
 
  And the traceplots for $\beta$, $\log(\sigma_y)$ and $\log(\sigma_u)$.
 
 ```{python}
-#| label: plot-trace-mean
+# | label: plot-trace-mean
 # Plot the trace of all location coefficients
 fig = gs.plot_trace(results, "beta")
 ```
 
 ```{python}
-#| label: plot-sigma-y
+# | label: plot-sigma-y
 fig = gs.plot_param(results, "sigma_sq_y_transformed")
 ```
 
 ```{python}
-#| label: plot-sigma-x
+# | label: plot-sigma-x
 fig = gs.plot_param(results, "sigma_sq_u_transformed")
 ```
 
 We further can also have a look at our first ten sampled x values and the mean
 
 ```{python}
-#| label: plot-trace-x
+# | label: plot-trace-x
 fig = gs.plot_trace(results, "x_estimated", range(10))
 ```
 
 ```{python}
-#| label: plot-param-mu-x
+# | label: plot-param-mu-x
 fig = gs.plot_param(results, "mu_x")
 ```
 
 To finally evaluate the model we can plot the regression line
 
 ```{python}
-#| label: plot-regression-line
+# | label: plot-regression-line
 
 # Extract quantities from the summary
 x_means = summary.quantities["mean"]["x_estimated"]
@@ -414,19 +415,19 @@ sns.set_theme(style="whitegrid")
 fig, ax = plt.subplots(figsize=(10, 6))
 
 # Plot Observed Data (Faint)
-ax.scatter(x, y_vec, color='gray', alpha=0.4, s=30, label='Observed (Noisy)')
+ax.scatter(x, y_vec, color="gray", alpha=0.4, s=30, label="Observed (Noisy)")
 
 # Plot Estimated Latent Positions (Stronger)
-ax.scatter(x_means, y_vec, color='steelblue', alpha=0.8, s=30, label='Latent Estimate')
+ax.scatter(x_means, y_vec, color="steelblue", alpha=0.8, s=30, label="Latent Estimate")
 
 # Plot Regression Line
-ax.plot(x_means, y_pred, color='firebrick', lw=2.5, label='Regression Line')
+ax.plot(x_means, y_pred, color="firebrick", lw=2.5, label="Regression Line")
 
 # Labels and Title
 ax.set_title(f"Measurement Error Correction\nSlope: {beta_est[1]:.3f}", fontsize=14)
 ax.set_xlabel("Covariate X (Observed vs Latent)", fontsize=12)
 ax.set_ylabel("Target Y", fontsize=12)
-ax.legend(frameon=True, fancybox=True, framealpha=1, loc='best')
+ax.legend(frameon=True, fancybox=True, framealpha=1, loc="best")
 
 plt.tight_layout()
 plt.show()
