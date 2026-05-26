@@ -100,25 +100,28 @@ class Stopper:
     max_iter
         The maximum number of optimization steps.
     patience
-        Early stopping happens only, if there was no improvement for the number of\
-        patience iterations, and there were at least as many iterations as the length\
-        of the patience window.
+        Length of the recent loss window considered for early stopping. Early stopping\
+        is checked only after more than ``patience`` optimization steps have been\
+        evaluated. In other words, because ``i`` is zero-based, ``stop_early()`` first\
+        returns ``True`` no earlier than ``i == patience + 1``.
     atol
-        The absolute tolerance for early stopping.
+        The non-negative absolute tolerance for early stopping.
     rtol
-        The relative tolerance for early stopping. The default of ``0.0`` means that \
-        no early stopping happens based on the relative tolerance.
+        The non-negative relative tolerance for early stopping. The default of \
+        ``0.0`` means that no early stopping happens based on the relative tolerance.
 
     Notes
     -----
-    Early stopping happens, when the oldest loss value within the patience window is
-    the best loss value within the patience window. A simplified pseudo-implementation
-    is:
+    Early stopping is based on the window of the most recent ``patience`` loss values
+    ending at the current zero-based iteration ``i``. Without tolerances, early stopping
+    happens when the oldest loss value in this window is also the best loss value in
+    this window. A simplified pseudo-implementation is:
 
     .. code-block:: python
 
         def stop(patience, i, loss_history):
-            recent_history = loss_history[-patience:]
+            current_history = loss_history[: i + 1]
+            recent_history = current_history[-patience:]
             oldest_within_patience = recent_history[0]
             best_within_patience = np.min(recent_history)
 
@@ -129,13 +132,14 @@ class Stopper:
     the absolute *or* relative difference between the oldest loss within patience and
     the best loss within patience is so small that it can be neglected.
     To be clear: If either of the two conditions is met, then early stopping happens.
-    The relative magnitude of the difference is calculaterd with respect to the best
-    lost within patience. A simplified pseudo-implementation is:
+    The relative magnitude of the difference is calculated with respect to the best
+    loss within patience. A simplified pseudo-implementation is:
 
     .. code-block:: python
 
         def stop(patience, i, loss_history, atol, rtol):
-            recent_history = loss_history[-patience:]
+            current_history = loss_history[: i + 1]
+            recent_history = current_history[-patience:]
             oldest_within_patience = recent_history[0]
             best_within_patience = np.min(recent_history)
 
@@ -153,6 +157,18 @@ class Stopper:
     patience: int
     atol: float = 1e-3
     rtol: float = 0.0
+
+    def __post_init__(self):
+        if self.max_iter < 1:
+            raise ValueError("max_iter must be at least 1.")
+        if self.patience < 1:
+            raise ValueError("patience must be at least 1.")
+        if self.patience > self.max_iter:
+            raise ValueError("patience must be less than or equal to max_iter.")
+        if self.atol < 0:
+            raise ValueError("atol must be non-negative.")
+        if self.rtol < 0:
+            raise ValueError("rtol must be non-negative.")
 
     def stop_early(self, i: int | Array, loss_history: Array):
         p = self.patience
@@ -191,10 +207,12 @@ class Stopper:
 
     def which_best_in_recent_history(self, i: int, loss_history: Array):
         """
-        Identifies the index of the best observation in recent history.
+        Identifies the index of the best observation in the recent loss window.
 
-        Recent history includes the last ``p`` iterations looking backwards from the
-        current iteration `ì``., where ``p`` is the patience.
+        The recent loss window contains the last ``p`` entries of ``loss_history``,
+        looking backwards from the current zero-based iteration ``i``, where ``p`` is
+        the patience. This returns the best index in that recent window, not
+        necessarily the global best index in the full loss history.
         """
         p = self.patience
         recent_history = jax.lax.dynamic_slice(

@@ -381,10 +381,27 @@ def test_find_observed_weak():
 
 
 class TestStopper:
+    @pytest.mark.parametrize(
+        "kwargs, match",
+        [
+            ({"max_iter": 0, "patience": 1}, "max_iter must be at least 1"),
+            ({"max_iter": 10, "patience": 0}, "patience must be at least 1"),
+            (
+                {"max_iter": 5, "patience": 6},
+                "patience must be less than or equal to max_iter",
+            ),
+            ({"max_iter": 10, "patience": 5, "atol": -1.0}, "atol"),
+            ({"max_iter": 10, "patience": 5, "rtol": -1.0}, "rtol"),
+        ],
+    )
+    def test_invalid_configuration(self, kwargs, match):
+        with pytest.raises(ValueError, match=match):
+            Stopper(**kwargs)
+
     def test_stopper_does_not_stop(self):
         stopper = Stopper(patience=5, max_iter=100)
 
-        # case 1: continous decrease
+        # case 1: continuous decrease
         loss_history = np.linspace(100, 0, 100)
         stop = stopper.stop_early(i=6, loss_history=loss_history)
         assert not stop
