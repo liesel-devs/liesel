@@ -17,8 +17,8 @@ pd.options.display.html.border = 0
 This tutorial implements a Bayesian location-scale regression model
 within the Liesel framework. In contrast to the standard linear model
 with constant variance, the location-scale model allows for
-heteroscedasticity such that both the mean of the response variable as
-well as its variance depend on (possibly) different covariates.
+heteroscedasticity by letting both the mean and the scale of the
+response distribution depend on covariates.
 
 This tutorial assumes a linear relationship between the expected value
 of the response and the regressors, whereas a logarithmic link is chosen
@@ -28,13 +28,14 @@ $$
 \begin{aligned}
 y_i \sim \mathcal{N}_{} \left( \mathbf{x}_i^T \boldsymbol{\beta}, \exp \left( \mathbf{ z}_i^T \boldsymbol{\gamma} \right)^2 \right)
 \end{aligned}
-$$ in which the single observation are conditionally independent.
+$$ in which the observations are conditionally independent.
 
 From the equation we see that *location* covariates are collected in the
 design matrix $\mathbf{X}$ and *scale* covariates are contained in the
 design matrix $\mathbf{Z}$. Both matrices can, but generally do not have
-to, share common regressors. We refer to $\boldsymbol{\beta}$ as
-location parameter and to $\boldsymbol{\gamma}$ as scale parameter.
+to, share common regressors. We refer to $\boldsymbol{\beta}$ as the
+location parameter vector and to $\boldsymbol{\gamma}$ as the scale
+parameter vector.
 
 In this notebook, both design matrices only contain one intercept and
 one regressor column. However, the model design naturally generalizes to
@@ -55,7 +56,7 @@ import liesel.model as lsl
 sns.set_theme(style="whitegrid")
 ```
 
-First lets generate the data according to the model
+First let’s generate the data according to the model.
 
 ``` python
 # | label: data-generation
@@ -115,28 +116,31 @@ plt.show()
 
 ![](02-ls-reg_files/figure-commonmark/unnamed-chunk-4-1.png)
 
-Since positivity of the variance is ensured by the exponential function,
+Since positivity of the scale is ensured by the exponential function,
 the linear part $\mathbf{z}_i^T \boldsymbol{\gamma}$ is not restricted
 to the positive real line. Hence, setting a normal prior distribution
 for $\gamma$ is feasible, leading to an almost symmetric specification
 of the location and scale parts of the model. The variables `beta` and
-`gamma` are initialized with values far away from zero to support a
-stable sampling process:
+`gamma` are initialized as parameter variables with weakly informative
+normal priors. We also attach {class}`~.goose.MCMCSpec` objects that
+tell {class}`.LieselMCMC` to sample each parameter block with a NUTS
+kernel:
 
 ``` python
 # | label: coefficients
 dist_beta = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
-beta = lsl.Var.new_param(jnp.array([10.0, 10.0]), dist_beta, name="beta")
+beta = lsl.Var.new_param(jnp.array([10.0, 10.0]), dist_beta, name="beta", inference=gs.MCMCSpec(gs.NUTSKernel))
 
 dist_gamma = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
-gamma = lsl.Var.new_param(jnp.array([5.0, 5.0]), dist_gamma, name="gamma")
+gamma = lsl.Var.new_param(jnp.array([5.0, 5.0]), dist_gamma, name="gamma", inference=gs.MCMCSpec(gs.NUTSKernel))
 ```
 
 The additional complexity of the location-scale model compared to the
 standard linear model is handled in the next step. Since `gamma` takes
 values on the whole real line, but the response variable `y` expects a
-positive scale input, we need to apply the exponential function to the
-linear predictor to ensure positivity.
+positive scale input, we apply the exponential function to the scale
+predictor. The mean predictor `mu` and the positive `scale` are then
+passed to the normal likelihood of `y`.
 
 ``` python
 # | label: observation-nodes
@@ -152,87 +156,67 @@ dist_y = lsl.Dist(tfd.Normal, loc=mu, scale=scale)
 y = lsl.Var.new_obs(y_vec, dist_y, name="y")
 ```
 
-We can now combine the nodes in a model and visualize it
+We can now initialize the model from the response variable and visualize
+the resulting graph. All other variables are collected automatically
+because they are inputs to `y`, directly or indirectly.
 
 ``` python
 # | label: build-and-plot-graph
-sns.set_theme(style="white")
 
-gb = lsl.GraphBuilder()
-gb.add(y)
-```
+model = lsl.Model(y)
 
-    GraphBuilder(0 nodes, 1 vars)
-
-``` python
-model = gb.build_model()  # builds the model from the graph (PGMs)
-
-lsl.plot_vars(model=model, width=12, height=8)
+model.plot(width=12, height=8)
 ```
 
 ![](02-ls-reg_files/figure-commonmark/unnamed-chunk-7-3.png)
 
-We choose the No U-Turn sampler for generating posterior samples.
-Therefore the location and scale parameters can be drawn by separate
-NUTS kernels, or, if all remaining inputs to the kernel coincide, by one
-common kernel. The latter option might lead to better estimation results
-but lacks the flexibility to e.g. choose different step sizes during the
-sampling process.
-
-However, we will just fuse everything into one kernel, do not use any
-specific arguments and hope that the default warmup scheme (similar to
-the warmup used in STAN) will do the trick.
+We generate posterior samples with the No-U-Turn sampler. The sampler
+setup is taken from the inference specifications on `beta` and `gamma`,
+so {class}`.LieselMCMC` can construct the two NUTS kernels directly from
+the model. We run 1000 adaptation iterations and then draw 1000
+posterior samples per chain.
 
 ``` python
 # | label: sample
-builder = gs.EngineBuilder(seed=73, num_chains=4)
-
-builder.set_model(gs.LieselInterface(model))
-builder.set_initial_values(model.state)
-
-builder.add_kernel(gs.NUTSKernel(["beta", "gamma"]))
-builder.set_duration(warmup_duration=1500, posterior_duration=1000, term_duration=500)
-
-engine = builder.build()
-engine.sample_all_epochs()
+results = gs.LieselMCMC(model).run_for_epochs(
+    seed=1,
+    num_chains=4,
+    adaptation=1000,
+    posterior=1000
+)
 ```
 
 
-      0%|                                                  | 0/3 [00:00<?, ?chunk/s]
-     33%|##############                            | 1/3 [00:01<00:03,  1.66s/chunk]
-    100%|##########################################| 3/3 [00:01<00:00,  1.80chunk/s]
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
+     25%|##########5                               | 1/4 [00:02<00:07,  2.55s/chunk]
+    100%|##########################################| 4/4 [00:02<00:00,  1.57chunk/s]
 
       0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|########################################| 1/1 [00:00<00:00, 1772.74chunk/s]
+    100%|########################################| 1/1 [00:00<00:00, 1789.38chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 3119.60chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 2762.14chunk/s]
 
       0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|########################################| 4/4 [00:00<00:00, 3378.42chunk/s]
+    100%|########################################| 4/4 [00:00<00:00, 3246.99chunk/s]
+
+      0%|                                                 | 0/21 [00:00<?, ?chunk/s]
+     86%|#################################4     | 18/21 [00:00<00:00, 169.89chunk/s]
+    100%|#######################################| 21/21 [00:00<00:00, 162.95chunk/s]
 
       0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|#########################################| 8/8 [00:00<00:00, 446.08chunk/s]
-
-      0%|                                                 | 0/22 [00:00<?, ?chunk/s]
-     77%|##############################1        | 17/22 [00:00<00:00, 157.47chunk/s]
-    100%|#######################################| 22/22 [00:00<00:00, 148.05chunk/s]
-
-      0%|                                                 | 0/20 [00:00<?, ?chunk/s]
-     80%|###############################2       | 16/20 [00:00<00:00, 158.95chunk/s]
-    100%|#######################################| 20/20 [00:00<00:00, 150.01chunk/s]
+    100%|#########################################| 8/8 [00:00<00:00, 591.55chunk/s]
 
       0%|                                                 | 0/40 [00:00<?, ?chunk/s]
-     50%|###################5                   | 20/40 [00:00<00:00, 193.77chunk/s]
-    100%|#######################################| 40/40 [00:00<00:00, 148.47chunk/s]
-    100%|#######################################| 40/40 [00:00<00:00, 153.81chunk/s]
+     50%|###################5                   | 20/40 [00:00<00:00, 175.91chunk/s]
+     95%|#####################################  | 38/40 [00:00<00:00, 145.62chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 148.67chunk/s]
 
 Now that we have 1000 posterior samples per chain, we can check the
-results. Starting with the trace plots just using one chain.
+results, starting with trace plots for the sampled parameters.
 
 ``` python
 # | label: traceplots
-results = engine.get_results()
 gs.plot_trace(results, ncol=4)
 ```
 
