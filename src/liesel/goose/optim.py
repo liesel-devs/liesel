@@ -115,7 +115,10 @@ class Stopper:
     Early stopping is based on the window of the most recent ``patience`` loss values
     ending at the current zero-based iteration ``i``. Without tolerances, early stopping
     happens when the oldest loss value in this window is also the best loss value in
-    this window. A simplified pseudo-implementation is:
+    this window. This is a rolling-window rule, not a best-so-far rule that counts the
+    number of iterations since the global best loss. It can therefore continue while
+    the recent window still contains newer improvements, even if the global best loss
+    was observed before the current window. A simplified pseudo-implementation is:
 
     .. code-block:: python
 
