@@ -48,9 +48,9 @@ class OptimResult:
     max_iter: int
     """Maximum number of iterations."""
     n_train: int
-    """Number of training observations."""
+    """Number of training observations, or ``1`` if batching was disabled."""
     n_validation: int
-    """Number of test observations."""
+    """Number of validation observations, or ``1`` if batching was disabled."""
 
 
 def _find_observed(model: Model) -> dict[str, Var | Node]:
@@ -268,8 +268,10 @@ def optim_flat(
         A :class:`.Stopper` that carries information about the maximum number of\
         iterations and early stopping.
     batch_size
-        The batch size. If ``None``, the whole dataset\
-        is used for each optimization step.
+        The batch size. If ``None``, batching is disabled and each optimization step\
+        uses the full model log probability. In this case, the result stores\
+        ``n_train == n_validation == 1`` because no observation count is needed for\
+        likelihood rescaling.
     batch-seed
         Batches are assembled randomly in each iteration. This is the seed used for \
         shuffling in this step.
@@ -277,17 +279,23 @@ def optim_flat(
         If ``True``, the position history is saved to the results object.
     model_validation
         If supplied, this model serves as a validation model, which means that early\
-        stopping is based on the negative log likelihood evaluated using the observed\
-        data in this model. If ``None``, no early stopping is conducted.
+        stopping is based on the validation loss evaluated using this model. If\
+        ``None``, the training model is also used as the validation model, so training\
+        and validation losses are identical.
     restore_best_position
         If ``True``, the position with the lowest loss within the patience defined\
-        by the supplied :class:`.Stopper` is restored as the final postion. If \
+        by the supplied :class:`.Stopper` is restored as the final position. If \
         ``False``, the last iteration's position is used.
     prune_history
         If ``True``, the history is pruned to the length of the final iteration. This\
         means, the history can be shorter than the maximum number of iterations defined\
         by the supplied :class:`.Stopper`. If ``False``, unused history entries are set\
         to ``jax.numpy.nan`` if optimization stops early.
+    validate_log_prob_decomposition
+        Whether to check that the model log probability is equal to the sum of the\
+        model log likelihood and model log prior before optimization starts. Disable\
+        this only for models whose log probability intentionally cannot be decomposed\
+        in this way.
     progress_bar
         Whether to use a progress bar.
     progress_n_updates
@@ -307,8 +315,9 @@ def optim_flat(
     Notes
     -----
 
-    If you use batching, be aware that the
-    batching functionality implemented here assumes a "flat" model structure. This means
+    If ``batch_size`` is ``None``, batching is disabled. If you use batching, be aware
+    that the batching functionality implemented here assumes a "flat" model structure.
+    This means
     that this function assumes that, for all :class:`.Var` objects in your model, it
     is valid to index their values like this::
 
@@ -316,6 +325,9 @@ def optim_flat(
 
     The batching functionality also assumes that all objects that should be batched
     are included as :class:`.Var` objects with ``Var.observed`` set to ``True``.
+    With batching enabled, the training loss rescales the batched log likelihood by
+    ``n_train / batch_size``. The validation loss rescales the validation log likelihood
+    by ``n_train / n_validation`` when a separate validation model is supplied.
 
     Examples
     --------

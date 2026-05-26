@@ -3,6 +3,7 @@ from collections.abc import Iterator
 import jax
 import jax.numpy as jnp
 import numpy as np
+import optax
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
@@ -136,7 +137,7 @@ class TestOptim:
         )
 
         assert result_train.n_train == result_train.n_validation
-        assert result_train_validation.n_train != result_train_validation.n_validation
+        assert result_train_validation.n_train == result_train_validation.n_validation
 
         assert not jnp.allclose(
             result_train_validation.history["loss_train"],
@@ -162,6 +163,54 @@ class TestOptim:
         assert jnp.allclose(
             result.history["tracked"]["sigma"],
             jnp.exp(result.history["position"]["log_sigma"]),
+        )
+
+    def test_optim_flat_no_batching_without_observed_data(self):
+        x = lsl.Var.new_param(
+            5.0,
+            distribution=lsl.Dist(tfd.Normal, loc=1.0, scale=1.0),
+            name="x",
+        )
+        model = lsl.Model([x])
+
+        result = optim_flat(
+            model,
+            params=["x"],
+            optimizer=optax.sgd(learning_rate=0.5),
+            stopper=Stopper(max_iter=5, patience=5),
+            progress_bar=False,
+            restore_best_position=False,
+        )
+
+        assert result.n_train == 1
+        assert result.n_validation == 1
+        assert result.history["loss_train"][-1] < result.history["loss_train"][0]
+        assert abs(result.position["x"] - 1.0) < abs(5.0 - 1.0)
+
+    def test_optim_flat_no_batching_uses_full_log_prob_for_same_validation_model(self):
+        x = lsl.Var(
+            0.0,
+            distribution=lsl.Dist(tfd.Normal, loc=1.0, scale=1.0),
+            name="x",
+        )
+        ydist = lsl.Dist(tfd.Normal, loc=x, scale=1.0)
+        y = lsl.Var.new_obs(jnp.array([5.0]), ydist, name="y")
+        model = lsl.Model([y])
+
+        result = optim_flat(
+            model,
+            params=["x"],
+            optimizer=optax.sgd(learning_rate=0.5),
+            stopper=Stopper(max_iter=5, patience=5),
+            model_validation=model,
+            progress_bar=False,
+            restore_best_position=False,
+            validate_log_prob_decomposition=False,
+        )
+
+        assert result.position["x"] == pytest.approx(3.0)
+        assert jnp.allclose(
+            result.history["loss_train"], result.history["loss_validation"]
         )
 
 
