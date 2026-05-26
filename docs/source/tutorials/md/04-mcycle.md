@@ -35,6 +35,9 @@ import liesel_gam as gam
 from ryp import r, to_py
 ```
 
+    Warning message:
+    package ‘arrow’ was built under R version 4.5.2 
+
 We start by loading the data set from the R package `MASS` and
 converting it to a pandas data frame.
 
@@ -91,11 +94,7 @@ scheme with IWLS kernels for the regression coefficients
 
 ``` python
 iwls_results = gs.LieselMCMC(model).run_for_epochs(
-    seed=1,
-    num_chains=4,
-    adaptation=1000,
-    posterior=1000,
-    show_progress=False
+    seed=1, num_chains=4, adaptation=1000, posterior=1000, show_progress=False
 )
 ```
 
@@ -1940,6 +1939,7 @@ def plot_loc_estimate(results, model, title):
     ax.set(xlabel="time after impact", ylabel="acceleration", title=title)
     plt.show()
 
+
 plot_loc_estimate(iwls_results, model, "Estimated mean function (IWLS/Gibbs)")
 ```
 
@@ -1954,19 +1954,20 @@ smoothing variances by bijecting them with an exponential bijector, and
 assigns one NUTS kernel group per additive term.
 
 ``` python
-def strategy_term_blocked(model: lsl.Model, predictors: list[str], kernel_constructor, **kwargs):
+def strategy_term_blocked(
+    model: lsl.Model, predictors: list[str], kernel_constructor, **kwargs
+):
     model = model.copy()
     for k, v in model.parameters.items():
         if "tau" in k:
             v.biject(tfb.Exp(), inference="drop")
 
-
     for predictor_name in predictors:
         predictor = model.vars[predictor_name]
         if predictor.intercept:
             predictor.intercept.inference = gs.MCMCSpec(
-                    kernel_constructor, kernel_kwargs=kwargs
-                )
+                kernel_constructor, kernel_kwargs=kwargs
+            )
 
         for term in predictor.terms.values():
             for param in model.parental_submodel(term).parameters.values():
@@ -1998,11 +1999,7 @@ the parameters of each additive term in a separate NUTS block.
 
 ``` python
 nuts_results = gs.LieselMCMC(nuts_model).run_for_epochs(
-    seed=1,
-    num_chains=4,
-    adaptation=1000,
-    posterior=1000,
-    show_progress=False
+    seed=1, num_chains=4, adaptation=1000, posterior=1000, show_progress=False
 )
 ```
 

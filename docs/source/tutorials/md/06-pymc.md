@@ -1,4 +1,18 @@
 
+``` python
+# | label: setup
+# | include: false
+
+import liesel.goose as gs
+import pymc as pm
+import numpy as np
+
+from liesel.experimental.pymc import PyMCInterface
+import jax
+
+gs.Summary._repr_markdown_ = gs.Summary._repr_html_
+```
+
 # PyMC and Liesel: Spike and Slab
 
 Liesel provides an interface for
@@ -47,6 +61,8 @@ assume that only two variables are relevant, namely the first and the
 third one.
 
 ``` python
+# | label: data-generation
+
 RANDOM_SEED = 123
 rng = np.random.RandomState(RANDOM_SEED)
 
@@ -66,9 +82,11 @@ y = X @ beta_vec + sigma_scalar * errors
 Then, we can specify the model using PyMC.
 
 ``` python
+# | label: model
+
 spike_and_slab_model = pm.Model()
 
-mu = 0.
+mu = 0.0
 
 alpha_tau = 1.0
 beta_tau = 1.0
@@ -83,15 +101,18 @@ nu = 0.1
 
 with spike_and_slab_model:
     # priors
-    sigma2 = pm.InverseGamma(
-        "sigma2", alpha=alpha_sigma, beta=beta_sigma
-    )
+    sigma2 = pm.InverseGamma("sigma2", alpha=alpha_sigma, beta=beta_sigma)
 
     theta = pm.Beta("theta", alpha=alpha_theta, beta=beta_theta)
     delta = pm.Bernoulli("delta", p=theta, size=p)
     tau = pm.InverseGamma("tau", alpha=alpha_tau, beta=beta_tau)
 
-    beta = pm.Normal("beta", mu=0.0, sigma=nu * (1 - delta) + delta * pm.math.sqrt(tau / sigma2), shape=p)
+    beta = pm.Normal(
+        "beta",
+        mu=0.0,
+        sigma=nu * (1 - delta) + delta * pm.math.sqrt(tau / sigma2),
+        shape=p,
+    )
 
     # make a data node
     Xx = pm.Data("X", X)
@@ -105,10 +126,12 @@ with spike_and_slab_model:
 Let’s take a look at our model:
 
 ``` python
+# | label: model-output
+
 spike_and_slab_model
 ```
 
-    <pymc.model.core.Model object at 0x141ad5d30>
+    <pymc.model.core.Model object at 0x10dbe2120>
 
 The class {class}`.PyMCInterface` offers an interface between PyMC and
 Goose. By default, the constructor of {class}`.PyMCInterface` keeps
@@ -123,7 +146,11 @@ The initial position can be extracted with {meth}`.get_initial_state`.
 The model state is represented as a `Position`.
 
 ``` python
-interface = PyMCInterface(spike_and_slab_model, additional_vars=["sigma2", "tau", "theta"])
+# | label: pymc-interface
+
+interface = PyMCInterface(
+    spike_and_slab_model, additional_vars=["sigma2", "tau", "theta"]
+)
 state = interface.get_initial_state()
 ```
 
@@ -133,13 +160,18 @@ analytically, but what we can do is use a Metropolis-Hastings step as a
 transition function:
 
 ``` python
+# | label: delta-transition-fn
+
+
 def delta_transition_fn(prng_key, model_state):
     draw_key, mh_key = jax.random.split(prng_key)
     theta_logodds = model_state["theta_logodds__"]
     p = jax.numpy.exp(theta_logodds) / (1 + jax.numpy.exp(theta_logodds))
     draw = jax.random.bernoulli(draw_key, p=p, shape=(4,))
-    proposal = {"delta": jax.numpy.asarray(draw,dtype=np.int64)}
-    _, state = gs.mh.mh_step(prng_key=mh_key, model=interface, proposal=proposal, model_state=model_state)
+    proposal = {"delta": jax.numpy.asarray(draw, dtype=np.int64)}
+    _, state = gs.mh.mh_step(
+        prng_key=mh_key, model=interface, proposal=proposal, model_state=model_state
+    )
     return state
 ```
 
@@ -149,12 +181,18 @@ $\boldsymbol{\delta}$ and a {class}`~.goose.NUTSKernel` both for the
 remaining parameters.
 
 ``` python
+# | label: model-init-sampling
+
 builder = gs.EngineBuilder(seed=13, num_chains=4)
 builder.set_model(interface)
 builder.set_initial_values(state)
 builder.set_duration(warmup_duration=1000, posterior_duration=2000)
 
-builder.add_kernel(gs.NUTSKernel(position_keys=["beta", "sigma2_log__", "tau_log__", "theta_logodds__"]))
+builder.add_kernel(
+    gs.NUTSKernel(
+        position_keys=["beta", "sigma2_log__", "tau_log__", "theta_logodds__"]
+    )
+)
 builder.add_kernel(gs.GibbsKernel(["delta"], transition_fn=delta_transition_fn))
 
 builder.positions_included = ["sigma2", "tau"]
@@ -162,7 +200,7 @@ builder.positions_included = ["sigma2", "tau"]
 engine = builder.build()
 ```
 
-    /Users/johannesbrachem/.pyenv/versions/3.13.1/envs/liesel-3.13-numpy2/lib/python3.13/site-packages/jax/_src/numpy/array_methods.py:122: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/jax-ml/jax#current-gotchas for more.
+    /Users/johannesbrachem/Documents/git/liesel/.venv/lib/python3.13/site-packages/jax/_src/numpy/array_methods.py:125: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/jax-ml/jax#current-gotchas for more.
       return lax_numpy.astype(self, dtype, copy=copy, device=device)
 
 ``` python
@@ -170,63 +208,65 @@ engine.sample_all_epochs()
 ```
 
 
-      0%|                                                  | 0/3 [00:00<?, ?chunk/s]<string>:6: UserWarning: Explicitly requested dtype <class 'numpy.int64'> requested in asarray is not available, and will be truncated to dtype int32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/jax-ml/jax#current-gotchas for more.
+      0%|                                                  | 0/3 [00:00<?, ?chunk/s]<string>:9: UserWarning: Explicitly requested dtype int64 requested in asarray is not available, and will be truncated to dtype int32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/jax-ml/jax#current-gotchas for more.
 
-     33%|##############                            | 1/3 [00:02<00:05,  2.91s/chunk]
-    100%|##########################################| 3/3 [00:02<00:00,  1.03chunk/s]
+     33%|##############                            | 1/3 [00:02<00:05,  2.77s/chunk]
+    100%|##########################################| 3/3 [00:02<00:00,  1.08chunk/s]
 
       0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|########################################| 1/1 [00:00<00:00, 2132.34chunk/s]
+    100%|########################################| 1/1 [00:00<00:00, 3194.44chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 4082.05chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 3332.78chunk/s]
 
       0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|########################################| 4/4 [00:00<00:00, 4733.98chunk/s]
+    100%|########################################| 4/4 [00:00<00:00, 3738.24chunk/s]
 
       0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|#########################################| 8/8 [00:00<00:00, 865.25chunk/s]
+    100%|#########################################| 8/8 [00:00<00:00, 996.12chunk/s]
 
       0%|                                                 | 0/20 [00:00<?, ?chunk/s]
-    100%|#######################################| 20/20 [00:00<00:00, 281.01chunk/s]
+    100%|#######################################| 20/20 [00:00<00:00, 321.67chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 3419.73chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 3892.63chunk/s]
 
       0%|                                                 | 0/80 [00:00<?, ?chunk/s]
-     36%|##############1                        | 29/80 [00:00<00:00, 277.47chunk/s]
-     71%|###########################7           | 57/80 [00:00<00:00, 236.33chunk/s]
-    100%|#######################################| 80/80 [00:00<00:00, 232.26chunk/s]
+     40%|###############6                       | 32/80 [00:00<00:00, 311.56chunk/s]
+     80%|###############################2       | 64/80 [00:00<00:00, 271.76chunk/s]
+    100%|#######################################| 80/80 [00:00<00:00, 270.83chunk/s]
 
 Now, we can take a look at the summary of the results and at the trace
 plots.
 
 ``` python
+# | label: results-summary
+
 results = engine.get_results()
 print(gs.Summary(results))
 ```
 
-    /Users/johannesbrachem/.pyenv/versions/3.13.1/envs/liesel-3.13-numpy2/lib/python3.13/site-packages/arviz/stats/diagnostics.py:845: RuntimeWarning: invalid value encountered in scalar divide
+    /Users/johannesbrachem/Documents/git/liesel/.venv/lib/python3.13/site-packages/arviz/stats/diagnostics.py:845: RuntimeWarning: invalid value encountered in scalar divide
       varsd = varvar / evar / 4
-    /Users/johannesbrachem/.pyenv/versions/3.13.1/envs/liesel-3.13-numpy2/lib/python3.13/site-packages/arviz/stats/diagnostics.py:845: RuntimeWarning: invalid value encountered in scalar divide
+    /Users/johannesbrachem/Documents/git/liesel/.venv/lib/python3.13/site-packages/arviz/stats/diagnostics.py:845: RuntimeWarning: invalid value encountered in scalar divide
       varsd = varvar / evar / 4
-    /Users/johannesbrachem/.pyenv/versions/3.13.1/envs/liesel-3.13-numpy2/lib/python3.13/site-packages/arviz/stats/diagnostics.py:596: RuntimeWarning: invalid value encountered in scalar divide
+    /Users/johannesbrachem/Documents/git/liesel/.venv/lib/python3.13/site-packages/arviz/stats/diagnostics.py:596: RuntimeWarning: invalid value encountered in scalar divide
       (between_chain_variance / within_chain_variance + num_samples - 1) / (num_samples)
                              var_fqn     kernel  ...   hdi_low  hdi_high
-    variable                                     ...
-    beta                     beta[0]  kernel_00  ...  2.983979  3.089679
-    beta                     beta[1]  kernel_00  ... -0.060213  0.037683
-    beta                     beta[2]  kernel_00  ...  3.901725  4.003946
-    beta                     beta[3]  kernel_00  ... -0.052502  0.048943
+    variable                                     ...                    
+    beta                     beta[0]  kernel_00  ...  2.984958  3.091510
+    beta                     beta[1]  kernel_00  ... -0.062392  0.035103
+    beta                     beta[2]  kernel_00  ...  3.904486  4.007542
+    beta                     beta[3]  kernel_00  ... -0.051128  0.050621
     delta                   delta[0]  kernel_01  ...  1.000000  1.000000
     delta                   delta[1]  kernel_01  ...  0.000000  0.000000
     delta                   delta[2]  kernel_01  ...  1.000000  1.000000
     delta                   delta[3]  kernel_01  ...  0.000000  0.000000
-    sigma2                    sigma2          -  ...  0.941187  1.091447
-    sigma2_log__        sigma2_log__  kernel_00  ... -0.059287  0.088789
-    tau                          tau          -  ...  0.316583  0.679981
-    tau_log__              tau_log__  kernel_00  ...  0.961559  3.379387
-    theta_logodds__  theta_logodds__  kernel_00  ... -0.769520  0.753686
+    sigma2                    sigma2          -  ...  0.938549  1.092050
+    sigma2_log__        sigma2_log__  kernel_00  ... -0.058979  0.092068
+    tau                          tau          -  ...  0.323917  0.689343
+    tau_log__              tau_log__  kernel_00  ...  0.875061  3.353702
+    theta_logodds__  theta_logodds__  kernel_00  ... -0.735829  0.797049
 
     [13 rows x 17 columns]
 
@@ -240,9 +280,11 @@ influence on the respose $\mathbf{y}$:
     have a posterior mean of $0.06$, indicating exclusion.
 
 ``` python
+# | label: results-plot
+
 gs.plot_trace(results)
 ```
 
-![](06-pymc_files/figure-commonmark/results-plot-1.png)
+![](06-pymc_files/figure-commonmark/unnamed-chunk-9-1.png)
 
-![](06-pymc_files/figure-commonmark/results-plot-2.png)
+![](06-pymc_files/figure-commonmark/unnamed-chunk-9-2.png)

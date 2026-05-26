@@ -175,5 +175,5 @@ Now that we have 1000 posterior samples per chain, we can check the results. Sta
 ```{python}
 # | label: traceplots
 results = engine.get_results()
-g = gs.plot_trace(results, ncol=4)
+gs.plot_trace(results, ncol=4)
 ```

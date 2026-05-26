@@ -1,4 +1,16 @@
 
+``` python
+# | label: setup
+# | include: false
+import liesel.goose as gs
+import pandas as pd
+
+gs.Summary.__repr__ = gs.Summary._repr_html_
+gs.Summary._repr_markdown_ = gs.Summary._repr_html_
+pd.options.display.float_format = "{:.3f}".format
+pd.options.display.html.border = 0
+```
+
 # Gibbs Sampling
 
 This tutorial extends the [linear regression
@@ -11,6 +23,7 @@ use the same model and data assumed there.
 ## Data and imports
 
 ``` python
+# | label: imports
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -26,6 +39,7 @@ import matplotlib.pyplot as plt
 ```
 
 ``` python
+# | label: build-model
 # Generate data
 rng = np.random.default_rng(42)
 
@@ -69,7 +83,7 @@ model = lsl.Model([y])
 lsl.plot_vars(model)
 ```
 
-![](01d-gibbs-sampling_files/figure-commonmark/build-model-1.png)
+![](01d-gibbs-sampling_files/figure-commonmark/unnamed-chunk-3-1.png)
 
 ## MCMC inference
 
@@ -89,11 +103,11 @@ the `model_state`, we use the method
 {class}`~.goose.interface.LieselInterface`.
 
 ``` python
+# | label: define-transition-function
 def draw_sigma_sq(prng_key, model_state):
     # extract relevant values from model state
     pos = interface.extract_position(
-      position_keys=["y", "mu", "sigma_sq", "a", "b"],
-      model_state=model_state
+        position_keys=["y", "mu", "sigma_sq", "a", "b"], model_state=model_state
     )
     # calculate relevant intermediate quantities
     n = len(pos["y"])
@@ -109,12 +123,13 @@ def draw_sigma_sq(prng_key, model_state):
 After constructing the Gibbs sampler, we can build our engine.
 
 ``` python
+# | label: engine-setup-with-gibbs-sampler
 interface = gs.LieselInterface(model)
 builder = gs.EngineBuilder(seed=1338, num_chains=4)
 builder.set_model(gs.LieselInterface(model))
 builder.set_initial_values(model.state)
 builder.add_kernel(gs.NUTSKernel(["beta"]))
-builder.add_kernel(gs.GibbsKernel(["sigma_sq"], draw_sigma_sq)) # add gibbs sampler
+builder.add_kernel(gs.GibbsKernel(["sigma_sq"], draw_sigma_sq))  # add gibbs sampler
 builder.set_duration(warmup_duration=1000, posterior_duration=1000)
 engine = builder.build()
 engine.sample_all_epochs()
@@ -122,30 +137,30 @@ engine.sample_all_epochs()
 
 
       0%|                                                  | 0/3 [00:00<?, ?chunk/s]
-     33%|##############                            | 1/3 [00:01<00:03,  1.60s/chunk]
-    100%|##########################################| 3/3 [00:01<00:00,  1.87chunk/s]
+     33%|##############                            | 1/3 [00:01<00:03,  1.52s/chunk]
+    100%|##########################################| 3/3 [00:01<00:00,  1.97chunk/s]
 
       0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|########################################| 1/1 [00:00<00:00, 2066.16chunk/s]
+    100%|########################################| 1/1 [00:00<00:00, 2661.36chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 3623.59chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 3322.22chunk/s]
 
       0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|########################################| 4/4 [00:00<00:00, 3964.37chunk/s]
+    100%|########################################| 4/4 [00:00<00:00, 3421.83chunk/s]
 
       0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|########################################| 8/8 [00:00<00:00, 1318.19chunk/s]
+    100%|########################################| 8/8 [00:00<00:00, 1351.31chunk/s]
 
       0%|                                                 | 0/20 [00:00<?, ?chunk/s]
-    100%|#######################################| 20/20 [00:00<00:00, 379.48chunk/s]
+    100%|#######################################| 20/20 [00:00<00:00, 385.38chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 3546.98chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 3272.96chunk/s]
 
       0%|                                                 | 0/40 [00:00<?, ?chunk/s]
-     82%|################################1      | 33/40 [00:00<00:00, 317.62chunk/s]
-    100%|#######################################| 40/40 [00:00<00:00, 304.37chunk/s]
+     92%|####################################   | 37/40 [00:00<00:00, 364.49chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 356.96chunk/s]
 
 Finally, we can take a look at our results
 
@@ -237,31 +252,31 @@ beta
 kernel_00
 </td>
 <td>
-0.984
+0.983
 </td>
 <td>
-0.091
+0.088
 </td>
 <td>
-0.837
+0.840
 </td>
 <td>
-0.984
+0.983
 </td>
 <td>
-1.135
+1.127
 </td>
 <td>
 4000
 </td>
 <td>
-1101.340
+1203.479
 </td>
 <td>
-1252.702
+1447.140
 </td>
 <td>
-1.005
+1.004
 </td>
 </tr>
 <tr>
@@ -272,28 +287,28 @@ kernel_00
 kernel_00
 </td>
 <td>
-1.911
-</td>
-<td>
-0.161
-</td>
-<td>
-1.649
-</td>
-<td>
 1.912
 </td>
 <td>
-2.171
+0.156
+</td>
+<td>
+1.664
+</td>
+<td>
+1.911
+</td>
+<td>
+2.162
 </td>
 <td>
 4000
 </td>
 <td>
-1130.029
+1198.342
 </td>
 <td>
-1237.464
+1393.313
 </td>
 <td>
 1.006
@@ -328,10 +343,104 @@ kernel_01
 4000
 </td>
 <td>
-3859.015
+3843.144
 </td>
 <td>
-3732.136
+3728.061
+</td>
+<td>
+1.001
+</td>
+</tr>
+</tbody>
+</table>
+<p>
+<strong>Acceptance probabilities:</strong>
+</p>
+<table border="0" class="dataframe">
+<thead>
+<tr style="text-align: right;">
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+acceptance_probability
+</th>
+<th>
+position_moved
+</th>
+</tr>
+<tr>
+<th>
+kernel
+</th>
+<th>
+positions
+</th>
+<th>
+phase
+</th>
+<th>
+</th>
+<th>
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th rowspan="2" valign="top">
+kernel_00
+</th>
+<th rowspan="2" valign="top">
+beta
+</th>
+<th>
+posterior
+</th>
+<td>
+0.910
+</td>
+<td>
+NaN
+</td>
+</tr>
+<tr>
+<th>
+warmup
+</th>
+<td>
+0.791
+</td>
+<td>
+NaN
+</td>
+</tr>
+<tr>
+<th rowspan="2" valign="top">
+kernel_01
+</th>
+<th rowspan="2" valign="top">
+sigma_sq
+</th>
+<th>
+posterior
+</th>
+<td>
+1.000
+</td>
+<td>
+1.000
+</td>
+</tr>
+<tr>
+<th>
+warmup
+</th>
+<td>
+1.000
 </td>
 <td>
 1.000
@@ -345,6 +454,8 @@ kernel_01
 <table border="0" class="dataframe">
 <thead>
 <tr style="text-align: right;">
+<th>
+</th>
 <th>
 </th>
 <th>
@@ -371,6 +482,9 @@ relative
 kernel
 </th>
 <th>
+positions
+</th>
+<th>
 error_code
 </th>
 <th>
@@ -395,6 +509,9 @@ phase
 kernel_00
 </th>
 <th rowspan="2" valign="top">
+beta
+</th>
+<th rowspan="2" valign="top">
 1
 </th>
 <th rowspan="2" valign="top">
@@ -404,7 +521,7 @@ divergent transition
 warmup
 </th>
 <td>
-62
+54
 </td>
 <td>
 4000
@@ -413,7 +530,7 @@ warmup
 4000
 </td>
 <td>
-0.016
+0.014
 </td>
 </tr>
 <tr>
@@ -439,15 +556,18 @@ posterior
 And plot these
 
 ``` python
-g = gs.plot_trace(results)
+# | label: trace-plot
+gs.plot_trace(results)
 ```
 
-![](01d-gibbs-sampling_files/figure-commonmark/trace-plot-3.png)
+![](01d-gibbs-sampling_files/figure-commonmark/unnamed-chunk-7-3.png)
+
+![](01d-gibbs-sampling_files/figure-commonmark/unnamed-chunk-7-4.png)
 
 ``` python
 gs.plot_param(results, param="sigma_sq", param_index=0)
 ```
 
-![](01d-gibbs-sampling_files/figure-commonmark/trace-plot-4.png)
+![](01d-gibbs-sampling_files/figure-commonmark/unnamed-chunk-7-5.png)
 
 With that we end the tutorial on Gibbs sampling.

@@ -111,7 +111,7 @@ Judging from the trace plots, it seems that all chains have converged.
 
 ```{python}
 # | label: traceplots
-g = gs.plot_trace(results)
+gs.plot_trace(results)
 ```
 
 We can also take a look at the summary table, which includes both the original $\sigma^2$ and the transformed $\log(\sigma^2)$.
@@ -125,5 +125,5 @@ Finally, let's check the autocorrelation of the samples.
 
 ```{python}
 # | label: correlation-plots
-g = gs.plot_cor(results)
+gs.plot_cor(results)
 ```

@@ -1,4 +1,17 @@
 
+``` python
+# | label: setup
+# | include: false
+
+import liesel.goose as gs
+import pandas as pd
+
+gs.Summary.__repr__ = gs.Summary._repr_html_
+gs.Summary._repr_markdown_ = gs.Summary._repr_html_
+pd.options.display.float_format = "{:.3f}".format
+pd.options.display.html.border = 0
+```
+
 # Location-scale regression
 
 This tutorial implements a Bayesian location-scale regression model
@@ -28,6 +41,7 @@ one regressor column. However, the model design naturally generalizes to
 any (reasonable) number of covariates.
 
 ``` python
+# | label: imports
 import jax
 import jax.numpy as jnp
 import tensorflow_probability.substrates.jax.distributions as tfd
@@ -44,6 +58,7 @@ sns.set_theme(style="whitegrid")
 First lets generate the data according to the model
 
 ``` python
+# | label: data-generation
 key = jax.random.PRNGKey(13)
 n = 500
 
@@ -52,8 +67,14 @@ key, key_X, key_Z, key_y = jax.random.split(key, 4)
 true_beta = jnp.array([1.0, 3.0])
 true_gamma = jnp.array([0.0, 0.5])
 
-X_mat = jnp.column_stack([jnp.ones(n), tfd.Uniform(low=0., high=5.).sample(n, seed=key_X)])
-Z_mat = jnp.column_stack([jnp.ones(n), tfd.Normal(loc=2., scale=1.).sample(n, seed=key_Z)])
+X_mat = jnp.column_stack([
+    jnp.ones(n),
+    tfd.Uniform(low=0.0, high=5.0).sample(n, seed=key_X),
+])
+Z_mat = jnp.column_stack([
+    jnp.ones(n),
+    tfd.Normal(loc=2.0, scale=1.0).sample(n, seed=key_Z),
+])
 
 true_mean = X_mat @ true_beta
 true_scale = jnp.exp(Z_mat @ true_gamma)
@@ -68,6 +89,7 @@ $\mathbf{z}$. Larger values of $\mathbf{ z}$ lead to a larger variance
 of the response.
 
 ``` python
+# | label: plot-data
 fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(12, 6))
 sns.regplot(
     x=X_mat[:, 1],
@@ -91,7 +113,7 @@ fig.tight_layout()
 plt.show()
 ```
 
-![](02-ls-reg_files/figure-commonmark/plot-data-1.png)
+![](02-ls-reg_files/figure-commonmark/unnamed-chunk-4-1.png)
 
 Since positivity of the variance is ensured by the exponential function,
 the linear part $\mathbf{z}_i^T \boldsymbol{\gamma}$ is not restricted
@@ -102,11 +124,12 @@ of the location and scale parts of the model. The variables `beta` and
 stable sampling process:
 
 ``` python
+# | label: coefficients
 dist_beta = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
-beta = lsl.Var.new_param(jnp.array([10., 10.]), dist_beta, name="beta")
+beta = lsl.Var.new_param(jnp.array([10.0, 10.0]), dist_beta, name="beta")
 
 dist_gamma = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
-gamma = lsl.Var.new_param(jnp.array([5., 5.]), dist_gamma, name="gamma")
+gamma = lsl.Var.new_param(jnp.array([5.0, 5.0]), dist_gamma, name="gamma")
 ```
 
 The additional complexity of the location-scale model compared to the
@@ -116,6 +139,7 @@ positive scale input, we need to apply the exponential function to the
 linear predictor to ensure positivity.
 
 ``` python
+# | label: observation-nodes
 X = lsl.Var.new_obs(X_mat, name="X")
 Z = lsl.Var.new_obs(Z_mat, name="Z")
 
@@ -131,6 +155,7 @@ y = lsl.Var.new_obs(y_vec, dist_y, name="y")
 We can now combine the nodes in a model and visualize it
 
 ``` python
+# | label: build-and-plot-graph
 sns.set_theme(style="white")
 
 gb = lsl.GraphBuilder()
@@ -140,12 +165,12 @@ gb.add(y)
     GraphBuilder(0 nodes, 1 vars)
 
 ``` python
-model = gb.build_model() # builds the model from the graph (PGMs)
+model = gb.build_model()  # builds the model from the graph (PGMs)
 
 lsl.plot_vars(model=model, width=12, height=8)
 ```
 
-![](02-ls-reg_files/figure-commonmark/build-and-plot-graph-3.png)
+![](02-ls-reg_files/figure-commonmark/unnamed-chunk-7-3.png)
 
 We choose the No U-Turn sampler for generating posterior samples.
 Therefore the location and scale parameters can be drawn by separate
@@ -159,6 +184,7 @@ specific arguments and hope that the default warmup scheme (similar to
 the warmup used in STAN) will do the trick.
 
 ``` python
+# | label: sample
 builder = gs.EngineBuilder(seed=73, num_chains=4)
 
 builder.set_model(gs.LieselInterface(model))
@@ -173,40 +199,43 @@ engine.sample_all_epochs()
 
 
       0%|                                                  | 0/3 [00:00<?, ?chunk/s]
-     33%|##############                            | 1/3 [00:01<00:03,  1.93s/chunk]
-    100%|##########################################| 3/3 [00:01<00:00,  1.55chunk/s]
+     33%|##############                            | 1/3 [00:01<00:03,  1.66s/chunk]
+    100%|##########################################| 3/3 [00:01<00:00,  1.80chunk/s]
 
       0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|########################################| 1/1 [00:00<00:00, 2562.19chunk/s]
+    100%|########################################| 1/1 [00:00<00:00, 1772.74chunk/s]
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 3236.35chunk/s]
+    100%|########################################| 2/2 [00:00<00:00, 3119.60chunk/s]
 
       0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|########################################| 4/4 [00:00<00:00, 3842.70chunk/s]
+    100%|########################################| 4/4 [00:00<00:00, 3378.42chunk/s]
 
       0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|#########################################| 8/8 [00:00<00:00, 422.39chunk/s]
+    100%|#########################################| 8/8 [00:00<00:00, 446.08chunk/s]
 
       0%|                                                 | 0/22 [00:00<?, ?chunk/s]
-     73%|############################3          | 16/22 [00:00<00:00, 146.53chunk/s]
-    100%|#######################################| 22/22 [00:00<00:00, 133.29chunk/s]
+     77%|##############################1        | 17/22 [00:00<00:00, 157.47chunk/s]
+    100%|#######################################| 22/22 [00:00<00:00, 148.05chunk/s]
 
       0%|                                                 | 0/20 [00:00<?, ?chunk/s]
-     80%|###############################2       | 16/20 [00:00<00:00, 151.28chunk/s]
-    100%|#######################################| 20/20 [00:00<00:00, 139.69chunk/s]
+     80%|###############################2       | 16/20 [00:00<00:00, 158.95chunk/s]
+    100%|#######################################| 20/20 [00:00<00:00, 150.01chunk/s]
 
       0%|                                                 | 0/40 [00:00<?, ?chunk/s]
-     48%|##################5                    | 19/40 [00:00<00:00, 182.81chunk/s]
-     95%|#####################################  | 38/40 [00:00<00:00, 134.80chunk/s]
-    100%|#######################################| 40/40 [00:00<00:00, 138.65chunk/s]
+     50%|###################5                   | 20/40 [00:00<00:00, 193.77chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 148.47chunk/s]
+    100%|#######################################| 40/40 [00:00<00:00, 153.81chunk/s]
 
 Now that we have 1000 posterior samples per chain, we can check the
 results. Starting with the trace plots just using one chain.
 
 ``` python
+# | label: traceplots
 results = engine.get_results()
-g = gs.plot_trace(results, ncol=4)
+gs.plot_trace(results, ncol=4)
 ```
 
-![](02-ls-reg_files/figure-commonmark/traceplots-5.png)
+![](02-ls-reg_files/figure-commonmark/unnamed-chunk-9-5.png)
+
+![](02-ls-reg_files/figure-commonmark/unnamed-chunk-9-6.png)

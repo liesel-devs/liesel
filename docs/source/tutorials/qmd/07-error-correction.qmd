@@ -375,29 +375,29 @@ gs.Summary(results, deselected=["x_estimated"])
 ```{python}
 # | label: plot-trace-mean
 # Plot the trace of all location coefficients
-fig = gs.plot_trace(results, "beta")
+gs.plot_trace(results, "beta")
 ```
 
 ```{python}
 # | label: plot-sigma-y
-fig = gs.plot_param(results, "sigma_sq_y_transformed")
+gs.plot_param(results, "sigma_sq_y_transformed")
 ```
 
 ```{python}
 # | label: plot-sigma-x
-fig = gs.plot_param(results, "sigma_sq_u_transformed")
+gs.plot_param(results, "sigma_sq_u_transformed")
 ```
 
 We further can also have a look at our first ten sampled x values and the mean
 
 ```{python}
 # | label: plot-trace-x
-fig = gs.plot_trace(results, "x_estimated", range(10))
+gs.plot_trace(results, "x_estimated", range(10))
 ```
 
 ```{python}
 # | label: plot-param-mu-x
-fig = gs.plot_param(results, "mu_x")
+gs.plot_param(results, "mu_x")
 ```
 
 To finally evaluate the model we can plot the regression line

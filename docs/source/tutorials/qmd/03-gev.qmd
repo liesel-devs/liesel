@@ -149,11 +149,11 @@ The corresponding trace plots:
 ```{python}
 # | label: traces
 
-fig = gs.plot_trace(results, loc.intercept.name)
-fig = gs.plot_trace(results, loc_smooth_tau2_name)
-fig = gs.plot_trace(results, loc_smooth.coef.name)
-fig = gs.plot_trace(results, scale_x1.coef.name)
-fig = gs.plot_trace(results, concentration_x2.coef.name)
+gs.plot_trace(results, loc.intercept.name)
+gs.plot_trace(results, loc_smooth_tau2_name)
+gs.plot_trace(results, loc_smooth.coef.name)
+gs.plot_trace(results, scale_x1.coef.name)
+gs.plot_trace(results, concentration_x2.coef.name)
 ```
 
 Finally, we can evaluate the posterior samples of the location predictor and compare the posterior mean with the true function used in the simulation.

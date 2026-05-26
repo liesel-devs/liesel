@@ -142,7 +142,7 @@ And plot these
 
 ```{python}
 # | label: trace-plot
-g = gs.plot_trace(results)
+gs.plot_trace(results)
 gs.plot_param(results, param="sigma_sq", param_index=0)
 ```
 

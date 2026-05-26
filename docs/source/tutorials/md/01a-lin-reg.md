@@ -91,18 +91,25 @@ beta_prior = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
 ```
 
 Now we can create our regression coefficient with the
-{meth}`.Var.new_param` constructor:
+{meth}`.Var.new_param` constructor. We also attach an
+{class}`~.goose.MCMCSpec` to `beta`, which tells Goose to sample this
+parameter with a NUTS kernel later on:
 
 ``` python
 beta = lsl.Var.new_param(
-    value=jnp.array([0.0, 0.0]), dist=beta_prior, name="beta", inference=gs.MCMCSpec(gs.NUTSKernel)
+    value=jnp.array([0.0, 0.0]),
+    dist=beta_prior,
+    name="beta",
+    inference=gs.MCMCSpec(gs.NUTSKernel),
 )
 ```
 
-### The standard deviation
+### The variance and standard deviation
 
-We define the standard deviation using the weakly informative prior
-$\sigma^2 \sim \text{InverseGamma}(a, b)$ with $a = b = 0.01$.
+We define the variance using the weakly informative prior
+$\sigma^2 \sim \text{InverseGamma}(a, b)$ with $a = b = 0.01$. In this
+introductory model, we do not attach an MCMC kernel to `sigma_sq`, so it
+remains fixed at its initial value during sampling.
 
 ``` python
 sigma_sq_prior = lsl.Dist(tfd.InverseGamma, concentration=0.01, scale=0.01)
@@ -176,18 +183,15 @@ compatible with the {class}`.Kernel` protocol. In any case, the user is
 responsible for constructing a mathematically valid algorithm.
 
 We start with a very simple sampling scheme, keeping $\sigma^2$ fixed at
-the true value and using a NUTS sampler for $\boldsymbol{\beta}$. More
-on sampling $\sigma^2$ can be found in the [Parameter transformations
-tutorial](01c-transform.md) and the [Gibbs sampling
-tutorial](01d-gibbs-sampling.md). The kernels are added to a
-{class}`~.goose.Engine`, which coordinates the sampling, including the
-kernel tuning during the warmup, and the MCMC bookkeeping. The engine
-can be configured step by step with a {class}`.EngineBuilder`. Starting
-from a Liesel model, it is straight-forward to obtain an engine builder
-using the {class}`.LieselMCMC` helper. We then need to define the
-kernels, and the sampling duration. Finally, we can call the
-{meth}`.EngineBuilder.build` method, which returns a fully configured
-MCMC engine.
+its initial value and using a NUTS sampler for $\boldsymbol{\beta}$.
+More on sampling $\sigma^2$ can be found in the [Parameter
+transformations tutorial](01c-transform.md) and the [Gibbs sampling
+tutorial](01d-gibbs-sampling.md). The NUTS kernel for `beta` was
+specified above through the variable’s `inference` attribute. The
+{class}`.LieselMCMC` helper reads these inference specifications from
+the model and can run the sampler directly with
+{meth}`~.goose.LieselMCMC.run_for_epochs`. Here we request 1000
+adaptation iterations and 1000 posterior draws per chain.
 
 ``` python
 results = gs.LieselMCMC(model).run_for_epochs(
@@ -204,37 +208,33 @@ results = gs.LieselMCMC(model).run_for_epochs(
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 4, 3, 3 / 100 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
-      0%|                                                  | 0/1 [00:00<?, ?chunk/s]100%|█████████████████████████████████████████| 1/1 [00:00<00:00, 948.94chunk/s]
+      0%|                                                  | 0/1 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 1/1 [00:00<00:00, 1260.69chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 2, 1 / 25 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1910.84chunk/s]
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1814.54chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 1, 2 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 4/4 [00:00<00:00, 2094.27chunk/s]
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 4/4 [00:00<00:00, 2925.92chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 2, 2 / 100 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 525 transitions, 25 jitted together
-      0%|                                                 | 0/21 [00:00<?, ?chunk/s]100%|███████████████████████████████████████| 21/21 [00:00<00:00, 475.92chunk/s]
+      0%|                                                 | 0/21 [00:00<?, ?chunk/s]100%|███████████████████████████████████████| 21/21 [00:00<00:00, 477.57chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 4, 1, 6 / 525 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 200 transitions, 25 jitted together
-      0%|                                                  | 0/8 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 8/8 [00:00<00:00, 1324.69chunk/s]
+      0%|                                                  | 0/8 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 8/8 [00:00<00:00, 1336.03chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 4, 1, 3 / 200 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Finished warmup
     liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
-      0%|                                                 | 0/40 [00:00<?, ?chunk/s]100%|███████████████████████████████████████| 40/40 [00:00<00:00, 442.23chunk/s]
+      0%|                                                 | 0/40 [00:00<?, ?chunk/s]100%|███████████████████████████████████████| 40/40 [00:00<00:00, 439.94chunk/s]
     liesel.goose.engine - INFO - Finished epoch
 
-Now we can run the MCMC algorithm for the specified duration by calling
-the {meth}`~.goose.Engine.sample_all_epochs` method. In a first step,
-the model and the sampling algorithm are compiled, so don’t worry if you
-don’t see an output right away. The subsequent samples will be generated
-much faster.
-
-Finally, we can extract the results and print a summary table.
+The call to {meth}`~.goose.LieselMCMC.run_for_epochs` builds the engine,
+compiles the model and sampling algorithm, runs all epochs, and returns
+the sampling results. Finally, we print a summary table.
 
 ``` python
 summary = gs.Summary(results)
@@ -559,6 +559,6 @@ posterior
 </table>
 
 Here, we end this first tutorial. We have learned how to build a linear
-regression model and seen how we can use Kernels for drawing MCMC
-samples - that is quite a bit for the start. Now, have fun modelling
-with Liesel!
+regression model, attach a NUTS kernel through an inference
+specification, and draw MCMC samples - that is quite a bit for the
+start. Now, have fun modelling with Liesel!
