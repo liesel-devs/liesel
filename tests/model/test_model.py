@@ -428,6 +428,67 @@ class TestModel:
         )
         assert model.nodes["z"].value == pytest.approx(3.0)
 
+    def test_update_state_weak_var_with_switch(self) -> None:
+        x = Var(1.0, name="x")
+        y = Var.new_calc(lambda x: x + 1.0, x, name="y")
+        z = Var.new_calc(lambda y: 2.0 * y, y, name="z")
+        model = Model([z])
+
+        with pytest.raises(RuntimeError, match="weak"):
+            model.update_state({"y": 10.0})
+
+        state = model.update_state({"y": 10.0}, allow_weak_vars=True)
+        extracted_pos = model.extract_position(["y", "z"], model_state=state)
+
+        assert extracted_pos["y"] == pytest.approx(10.0)
+        assert extracted_pos["z"] == pytest.approx(20.0)
+        assert model.vars["y"].value == pytest.approx(2.0)
+        assert model.vars["z"].value == pytest.approx(4.0)
+
+    def test_update_state_weak_var_with_switch_supports_jax_transforms(self) -> None:
+        x = Var(1.0, name="x")
+        y = Var.new_calc(lambda x: x + 1.0, x, name="y")
+        obs = Var(0.0, Dist(tfd.Normal, loc=y, scale=1.0), name="obs")
+        obs.observed = True
+        model = Model([obs])
+        model_state = model.state
+
+        def log_prob(y_value):
+            state = model.update_state(
+                {"y": y_value}, model_state, allow_weak_vars=True
+            )
+            return state["_model_log_prob"].value
+
+        y_value = jnp.array(0.5)
+
+        assert log_prob(y_value) == pytest.approx(-1.0439385)
+        assert jax.grad(log_prob)(y_value) == pytest.approx(-0.5)
+        assert jax.jit(log_prob)(y_value) == pytest.approx(-1.0439385)
+        assert jax.jit(jax.grad(log_prob))(y_value) == pytest.approx(-0.5)
+
+    def test_update_state_rejects_ambiguous_weak_var_position(self) -> None:
+        x = Var(1.0, name="x")
+        y = Var.new_calc(lambda x: x + 1.0, x, name="y")
+        z = Var.new_calc(lambda y: 2.0 * y, y, name="z")
+        model = Model([z])
+
+        with pytest.raises(RuntimeError, match="Ambiguous weak variable update"):
+            model.update_state({"x": 4.0, "y": 10.0}, allow_weak_vars=True)
+
+        with pytest.raises(RuntimeError, match="Ambiguous weak variable update"):
+            model.update_state({"y": 10.0, "x": 4.0}, allow_weak_vars=True)
+
+        with pytest.raises(RuntimeError, match="Ambiguous weak variable update"):
+            model.update_state({"y": 10.0, "z": 20.0}, allow_weak_vars=True)
+
+    def test_update_state_transient_weak_var_with_switch_fails(self) -> None:
+        x = Var(1.0, name="x")
+        y = Var.new_calc(lambda x: x + 1.0, x, name="y", cache=False)
+        model = Model([y])
+
+        with pytest.raises(RuntimeError, match="transient"):
+            model.update_state({"y": 10.0}, allow_weak_vars=True)
+
     def test_diagnose(self, model) -> None:
         df = model.diagnose()
 

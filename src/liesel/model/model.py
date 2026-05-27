@@ -20,7 +20,18 @@ import jax.random
 import networkx as nx
 import pandas as pd
 
-from .nodes import Array, Calc, Dist, Group, Node, NodeState, Value, Var, VarValue
+from .nodes import (
+    Array,
+    Calc,
+    Dist,
+    Group,
+    Node,
+    NodeState,
+    TransientNode,
+    Value,
+    Var,
+    VarValue,
+)
 from .viz import plot_nodes, plot_vars
 
 __all__ = ["GraphBuilder", "Model", "load_model", "save_model"]
@@ -1793,11 +1804,59 @@ class Model:
 
         return position
 
+    def _node_for_position_key(self, key: str) -> Node:
+        try:
+            return self.nodes[key]
+        except KeyError:
+            return self.vars[key].value_node
+
+    def _validate_weak_var_position(self, position: dict[str, Array]) -> None:
+        weak_vars = [
+            (key, self.vars[key])
+            for key in position
+            if key in self.vars and self.vars[key].weak
+        ]
+
+        if not weak_vars:
+            return
+
+        position_nodes = {key: self._node_for_position_key(key) for key in position}
+
+        for weak_key, var in weak_vars:
+            value_node = var.value_node
+            related_nodes = (
+                nx.ancestors(self.node_graph, value_node)
+                | nx.descendants(self.node_graph, value_node)
+                | {value_node}
+            )
+
+            for key, node in position_nodes.items():
+                if key != weak_key and node in related_nodes:
+                    raise RuntimeError(
+                        "Ambiguous weak variable update. "
+                        f"Cannot update weak variable '{weak_key}' together "
+                        f"with related position key '{key}'."
+                    )
+
+    @staticmethod
+    def _set_weak_var_value(var: Var, value: Array) -> None:
+        if isinstance(var.value_node, TransientNode):
+            raise RuntimeError(
+                f"{repr(var)} is weak and transient, cannot set cached value"
+            )
+
+        var.value_node.state = NodeState(value, False)
+
+        for node in var.value_node.outputs:
+            node.flag_outdated()
+
     def update_state(
         self,
         position: dict[str, Array],
         model_state: dict[str, NodeState] | None = None,
         inplace: bool = False,
+        *,
+        allow_weak_vars: bool = False,
     ) -> dict[str, NodeState]:
         """
         Updates and returns a model state given a position.
@@ -1813,6 +1872,14 @@ class Model:
             If ``False`` (default), a new model state is returned, while the current \
             model's state is left unchanged. If ``True``, the current model's state is \
             updated in place.
+        allow_weak_vars
+            If ``False`` (default), weak variables remain read-only. If ``True``, \
+            entries in ``position`` keyed by weak variable names are written directly \
+            to the cached value of the variable's value node and downstream nodes are \
+            updated accordingly. Positions must be unambiguous: no weak variable \
+            entry may be combined with another entry targeting the same value node, \
+            an ancestor, or a descendant. Transient weak variables cannot be set this \
+            way.
 
         Warnings
         --------
@@ -1831,6 +1898,9 @@ class Model:
         for node in model.nodes.values():
             node._outdated = False
 
+        if allow_weak_vars:
+            model._validate_weak_var_position(position)
+
         # temporarily disable auto_update to avoid shape incompatibilities
         # when updating variables sequentially with new shapes
         original_auto_update = model.auto_update
@@ -1841,7 +1911,11 @@ class Model:
                 try:
                     model.nodes[key].value = value  # type: ignore  # data node
                 except KeyError:
-                    model.vars[key].value = value
+                    var = model.vars[key]
+                    if allow_weak_vars and var.weak:
+                        model._set_weak_var_value(var, value)
+                    else:
+                        var.value = value
         finally:
             # restore original auto_update setting
             model.auto_update = original_auto_update
