@@ -30,12 +30,12 @@ We will build a Spike and Slab model, a Bayesian approach that allows for variab
 
 $$
 \begin{aligned}
-\mathbf{y} &\sim& \mathcal{N} \left( \mathbf{X}\boldsymbol{\beta}, \sigma^2 \mathbf{I} \right)\\
-\boldsymbol{\beta}_j &\sim& \mathcal{N}\left(0, (1 - \delta_j)\nu + \delta_j\tau^2_j / \sigma^2 \right)\\
-\tau^2_j &\sim& \mathcal{IG}(\text{a}_{\tau}, \text{b}_{\tau})\\
-\delta_j &\sim& \text{Bernoulli}(\theta)\\
-\theta &\sim& \text{Beta}(\text{a}_\theta, \text{b}_\theta)\\
-\sigma^2 &\sim& \mathcal{IG}(\text{a}_{\sigma^2}, \text{b}_{\sigma^2})
+\mathbf{y} &\sim \mathcal{N} \left( \mathbf{X}\boldsymbol{\beta}, \sigma^2 \mathbf{I} \right)\\
+\boldsymbol{\beta}_j &\sim \mathcal{N}\left(0, (1 - \delta_j)\nu + \delta_j\tau^2_j / \sigma^2 \right)\\
+\tau^2_j &\sim \mathcal{IG}(\text{a}_{\tau}, \text{b}_{\tau})\\
+\delta_j &\sim\text{Bernoulli}(\theta)\\
+\theta &\sim\text{Beta}(\text{a}_\theta, \text{b}_\theta)\\
+\sigma^2 &\sim \mathcal{IG}(\text{a}_{\sigma^2}, \text{b}_{\sigma^2})
 \end{aligned}.
 $$
 
