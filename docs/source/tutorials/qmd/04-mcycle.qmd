@@ -99,7 +99,7 @@ This gives a Metropolis-in-Gibbs sampling scheme with IWLS kernels for the regre
 # | label: iwls-sampling
 
 iwls_results = gs.LieselMCMC(model).run_for_epochs(
-    seed=1, num_chains=4, adaptation=1000, posterior=1000, show_progress=False
+    seed=1, num_chains=4, adaptation=1000, posterior=10000, posterior_thinning=10, show_progress=False
 )
 ```
 
