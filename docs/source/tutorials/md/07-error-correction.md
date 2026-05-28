@@ -97,7 +97,7 @@ src="07-error-correction_files/figure-commonmark/plot-data-output-1.png"
 id="plot-data" />
 
 We simulate the response as done in the [linear regression
-tutorial](01-lin-reg.md#linear-regression) from the model
+tutorial](01a-lin-reg.md#linear-regression) from the model
 $y_i | x_i \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \;\sigma^{2}_y)$
 given our true covariate.
 
