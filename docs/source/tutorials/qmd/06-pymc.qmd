@@ -1,5 +1,5 @@
 ---
-engine: knitr
+engine: jupyter
 ---
 
 ```{python}
@@ -29,14 +29,14 @@ pip install liesel[pymc]
 We will build a Spike and Slab model, a Bayesian approach that allows for variable selection by assuming a mixture of two distributions for the prior distribution of the regression coefficients: a point mass at zero (the "spike") and a continuous distribution centered around zero (the "slab"). The model assumes that each coefficient $\beta_j$ has a corresponding indicator variable $\delta_j$ that takes a value of either 0 or 1, indicating whether the variable is included in the model or not. The prior distribution of the indicator variables is a Bernoulli distribution, with a parameter $\theta$ that controls the sparsity of the model. When the parameter is close to 1, the model is more likely to include all variables, while when it is close to 0, the model is more likely to select only a few variables. In our case, we assign a Beta hyperprior to $\theta$:
 
 $$
-\begin{eqnarray}
+\begin{aligned}
 \mathbf{y} &\sim& \mathcal{N} \left( \mathbf{X}\boldsymbol{\beta}, \sigma^2 \mathbf{I} \right)\\
-\boldsymbol{\beta}_j &\sim& \mathbfcal{N}\left(0, (1 - \delta_j)\nu + \delta_j\tau^2_j / \sigma^2 \right)\\
+\boldsymbol{\beta}_j &\sim& \mathcal{N}\left(0, (1 - \delta_j)\nu + \delta_j\tau^2_j / \sigma^2 \right)\\
 \tau^2_j &\sim& \mathcal{IG}(\text{a}_{\tau}, \text{b}_{\tau})\\
 \delta_j &\sim& \text{Bernoulli}(\theta)\\
 \theta &\sim& \text{Beta}(\text{a}_\theta, \text{b}_\theta)\\
 \sigma^2 &\sim& \mathcal{IG}(\text{a}_{\sigma^2}, \text{b}_{\sigma^2})
-\end{eqnarray}.
+\end{aligned}.
 $$
 
 where $\nu$ is a hyperparameter that we set to a fixed small value. That way, when $\delta_j = 0$,

@@ -1,17 +1,3 @@
-
-``` python
-# | label: setup
-# | include: false
-
-import liesel.goose as gs
-import pandas as pd
-
-gs.Summary.__repr__ = gs.Summary._repr_html_
-gs.Summary._repr_markdown_ = gs.Summary._repr_html_
-pd.options.display.float_format = "{:.3f}".format
-pd.options.display.html.border = 0
-```
-
 # Location-scale regression
 
 This tutorial implements a Bayesian location-scale regression model
@@ -42,7 +28,6 @@ one regressor column. However, the model design naturally generalizes to
 any (reasonable) number of covariates.
 
 ``` python
-# | label: imports
 import jax
 import jax.numpy as jnp
 import tensorflow_probability.substrates.jax.distributions as tfd
@@ -59,7 +44,6 @@ sns.set_theme(style="whitegrid")
 First let’s generate the data according to the model.
 
 ``` python
-# | label: data-generation
 key = jax.random.PRNGKey(13)
 n = 500
 
@@ -90,7 +74,6 @@ $\mathbf{z}$. Larger values of $\mathbf{ z}$ lead to a larger variance
 of the response.
 
 ``` python
-# | label: plot-data
 fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(12, 6))
 sns.regplot(
     x=X_mat[:, 1],
@@ -114,7 +97,8 @@ fig.tight_layout()
 plt.show()
 ```
 
-![](02-ls-reg_files/figure-commonmark/unnamed-chunk-4-1.png)
+<img src="02-ls-reg_files/figure-commonmark/plot-data-output-1.png"
+id="plot-data" />
 
 Since positivity of the scale is ensured by the exponential function,
 the linear part $\mathbf{z}_i^T \boldsymbol{\gamma}$ is not restricted
@@ -127,7 +111,6 @@ tell {class}`.LieselMCMC` to sample each parameter block with a NUTS
 kernel:
 
 ``` python
-# | label: coefficients
 dist_beta = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
 beta = lsl.Var.new_param(
     jnp.array([10.0, 10.0]),
@@ -153,7 +136,6 @@ predictor. The mean predictor `mu` and the positive `scale` are then
 passed to the normal likelihood of `y`.
 
 ``` python
-# | label: observation-nodes
 X = lsl.Var.new_obs(X_mat, name="X")
 Z = lsl.Var.new_obs(Z_mat, name="Z")
 
@@ -171,14 +153,14 @@ the resulting graph. All other variables are collected automatically
 because they are inputs to `y`, directly or indirectly.
 
 ``` python
-# | label: build-and-plot-graph
-
 model = lsl.Model(y)
 
 model.plot(width=12, height=8)
 ```
 
-![](02-ls-reg_files/figure-commonmark/unnamed-chunk-7-3.png)
+<img
+src="02-ls-reg_files/figure-commonmark/build-and-plot-graph-output-1.png"
+id="build-and-plot-graph" />
 
 We generate posterior samples with the No-U-Turn sampler. The sampler
 setup is taken from the inference specifications on `beta` and `gamma`,
@@ -187,46 +169,55 @@ the model. We run 1000 adaptation iterations and then draw 1000
 posterior samples per chain.
 
 ``` python
-# | label: sample
 results = gs.LieselMCMC(model).run_for_epochs(
     seed=1, num_chains=4, adaptation=1000, posterior=1000
 )
 ```
 
-
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-     25%|##########5                               | 1/4 [00:02<00:07,  2.48s/chunk]
-    100%|##########################################| 4/4 [00:02<00:00,  1.61chunk/s]
-
-      0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|########################################| 1/1 [00:00<00:00, 1804.78chunk/s]
-
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 2958.94chunk/s]
-
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|########################################| 4/4 [00:00<00:00, 3734.08chunk/s]
-
-      0%|                                                 | 0/21 [00:00<?, ?chunk/s]
-     81%|###############################5       | 17/21 [00:00<00:00, 166.17chunk/s]
-    100%|#######################################| 21/21 [00:00<00:00, 156.01chunk/s]
-
-      0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|#########################################| 8/8 [00:00<00:00, 517.90chunk/s]
-
-      0%|                                                 | 0/40 [00:00<?, ?chunk/s]
-     50%|###################5                   | 20/40 [00:00<00:00, 193.98chunk/s]
-    100%|#######################################| 40/40 [00:00<00:00, 144.91chunk/s]
-    100%|#######################################| 40/40 [00:00<00:00, 150.56chunk/s]
+    liesel.goose.builder - WARNING - No jitter functions provided for position keys 'beta', 'gamma'. The initial values for these keys won't be jittered
+    liesel.goose.engine - INFO - Initializing kernels...
+    liesel.goose.engine - INFO - Done
+    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 100 transitions, 25 jitted together
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s] 25%|██████████▌                               | 1/4 [00:02<00:06,  2.02s/chunk]100%|██████████████████████████████████████████| 4/4 [00:02<00:00,  1.98chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 4, 4, 3, 4 / 100 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 4, 7, 5, 7 / 100 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
+      0%|                                                  | 0/1 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 1/1 [00:00<00:00, 1136.05chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 1, 1 / 25 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 3, 1, 1, 2 / 25 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1275.45chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 4, 2, 1 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 1, 2, 1, 0 / 50 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 4/4 [00:00<00:00, 1677.05chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 2, 2, 2 / 100 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 2, 3, 6, 2 / 100 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 525 transitions, 25 jitted together
+      0%|                                                 | 0/21 [00:00<?, ?chunk/s] 86%|█████████████████████████████████▍     | 18/21 [00:00<00:00, 179.50chunk/s]100%|███████████████████████████████████████| 21/21 [00:00<00:00, 172.79chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 4, 1 / 525 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 3, 4, 5, 6 / 525 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 200 transitions, 25 jitted together
+      0%|                                                  | 0/8 [00:00<?, ?chunk/s]100%|█████████████████████████████████████████| 8/8 [00:00<00:00, 570.97chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 2, 2 / 200 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 2, 6, 3, 3 / 200 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Finished warmup
+    liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
+      0%|                                                 | 0/40 [00:00<?, ?chunk/s] 52%|████████████████████▍                  | 21/40 [00:00<00:00, 203.11chunk/s]100%|███████████████████████████████████████| 40/40 [00:00<00:00, 163.70chunk/s]
+    liesel.goose.engine - INFO - Finished epoch
 
 Now that we have 1000 posterior samples per chain, we can check the
 results, starting with trace plots for the sampled parameters.
 
 ``` python
-# | label: traceplots
 gs.plot_trace(results, ncol=4)
 ```
 
-![](02-ls-reg_files/figure-commonmark/unnamed-chunk-9-5.png)
-
-![](02-ls-reg_files/figure-commonmark/unnamed-chunk-9-6.png)
+<img src="02-ls-reg_files/figure-commonmark/traceplots-output-1.png"
+id="traceplots" />

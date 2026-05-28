@@ -1,5 +1,5 @@
 ---
-engine: knitr
+engine: jupyter
 ---
 
 ```{python}
@@ -252,10 +252,10 @@ We choose NUTS kernels ({class}`~.goose.NUTSKernel`) for generating posterior sa
 To draw from $\mu_x$ and $\tau^2_x$ we use Gibbs kernels ({class}`~.goose.GibbsKernel`), as this allows us to use custom transition functions for our parameters. The full conditionals are:
 
 $$
-\begin{eqnarray}
-\mu_x | \cdot \sim N \left(\frac{n\bar{x}\tau^2_\mu}{n\tau^2_\mu+\tau^2_x},\frac{\tau^2_x\tau^2_\mu}{n\tau^2_\mu+\tau^2_x}\right)\\
-\tau^2_x | \cdot \sim IG \left( a_x + \frac{n}{2}, b_x + \frac{1}{2}\sum_{i=1}^{n}(x_i - \mu_x)^2   \right)\\
-\end{eqnarray}.
+\begin{aligned}
+\mu_x \mid \cdot &\sim N \left(\frac{n\bar{x}\tau^2_\mu}{n\tau^2_\mu+\tau^2_x},\frac{\tau^2_x\tau^2_\mu}{n\tau^2_\mu+\tau^2_x}\right)\\
+\tau^2_x \mid \cdot &\sim IG \left( a_x + \frac{n}{2}, b_x + \frac{1}{2}\sum_{i=1}^{n}(x_i - \mu_x)^2   \right)\\
+\end{aligned}.
 $$
 
 Let us implement these

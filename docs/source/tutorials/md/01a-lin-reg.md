@@ -203,32 +203,32 @@ results = gs.LieselMCMC(model).run_for_epochs(
     liesel.goose.engine - INFO - Initializing kernels...
     liesel.goose.engine - INFO - Done
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 100 transitions, 25 jitted together
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s] 25%|██████████▌                               | 1/4 [00:01<00:03,  1.16s/chunk]100%|██████████████████████████████████████████| 4/4 [00:01<00:00,  3.45chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 4, 3, 3 / 100 transitions
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s] 25%|██████████▌                               | 1/4 [00:01<00:03,  1.27s/chunk]100%|██████████████████████████████████████████| 4/4 [00:01<00:00,  3.15chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 5, 4 / 100 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
-      0%|                                                  | 0/1 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 1/1 [00:00<00:00, 1302.17chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 2, 1 / 25 transitions
+      0%|                                                  | 0/1 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 1/1 [00:00<00:00, 1300.16chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 1, 2, 2 / 25 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1974.25chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 1, 2 / 50 transitions
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1932.41chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 2 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 4/4 [00:00<00:00, 2654.20chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 2, 2 / 100 transitions
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 4/4 [00:00<00:00, 2713.44chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 1, 1, 3 / 100 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 525 transitions, 25 jitted together
-      0%|                                                 | 0/21 [00:00<?, ?chunk/s]100%|███████████████████████████████████████| 21/21 [00:00<00:00, 481.48chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 4, 1, 6 / 525 transitions
+      0%|                                                 | 0/21 [00:00<?, ?chunk/s]100%|███████████████████████████████████████| 21/21 [00:00<00:00, 455.04chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 4, 2, 1, 3 / 525 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 200 transitions, 25 jitted together
-      0%|                                                  | 0/8 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 8/8 [00:00<00:00, 1350.44chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 4, 1, 3 / 200 transitions
+      0%|                                                  | 0/8 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 8/8 [00:00<00:00, 1650.49chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 3, 4, 3 / 200 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Finished warmup
     liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
-      0%|                                                 | 0/40 [00:00<?, ?chunk/s]100%|███████████████████████████████████████| 40/40 [00:00<00:00, 443.00chunk/s]
+      0%|                                                 | 0/40 [00:00<?, ?chunk/s]100%|███████████████████████████████████████| 40/40 [00:00<00:00, 440.10chunk/s]
     liesel.goose.engine - INFO - Finished epoch
 
 The call to {meth}`~.goose.LieselMCMC.run_for_epochs` builds the engine,
@@ -322,31 +322,31 @@ beta
 kernel_00
 </td>
 <td>
-0.982
+0.984
 </td>
 <td>
 0.088
 </td>
 <td>
-0.837
+0.838
 </td>
 <td>
-0.983
+0.985
 </td>
 <td>
-1.124
+1.126
 </td>
 <td>
 4000
 </td>
 <td>
-1169.010
+1151.201
 </td>
 <td>
-1290.602
+1385.802
 </td>
 <td>
-1.003
+1.002
 </td>
 </tr>
 <tr>
@@ -357,28 +357,28 @@ kernel_00
 kernel_00
 </td>
 <td>
-1.912
+1.906
 </td>
 <td>
-0.153
+0.154
 </td>
 <td>
-1.662
+1.648
 </td>
 <td>
-1.912
+1.907
 </td>
 <td>
-2.166
+2.156
 </td>
 <td>
 4000
 </td>
 <td>
-1116.171
+1199.216
 </td>
 <td>
-1296.992
+1432.785
 </td>
 <td>
 1.003
@@ -433,7 +433,7 @@ beta
 posterior
 </th>
 <td>
-0.876
+0.877
 </td>
 <td>
 NaN
@@ -525,7 +525,7 @@ divergent transition
 warmup
 </th>
 <td>
-57
+56
 </td>
 <td>
 4000

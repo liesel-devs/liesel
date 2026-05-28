@@ -1,17 +1,3 @@
-
-``` python
-# | label: setup
-# | include: false
-
-import liesel.goose as gs
-import pandas as pd
-
-gs.Summary.__repr__ = gs.Summary._repr_html_
-gs.Summary._repr_markdown_ = gs.Summary._repr_html_
-pd.options.display.float_format = "{:.3f}".format
-pd.options.display.html.border = 0
-```
-
 # Bayesian Measurement Error Correction
 
 In this tutorial, we implement a regression model with Bayesian
@@ -52,7 +38,6 @@ distribution of $x_i$.
 First, we import all of the required packages.
 
 ``` python
-# | label: imports
 import jax
 import jax.numpy as jnp
 import liesel.model as lsl
@@ -75,7 +60,6 @@ tfd = tfp.distributions
 Afterwards we will start by simulating some data with replicates.
 
 ``` python
-# | label: Create data
 # Define the number of samples and replicates
 seed = 123
 
@@ -93,7 +77,6 @@ x_tilde = jnp.array([
 ```
 
 ``` python
-# | label: plot-data
 # Plot Data
 fig, ax1 = plt.subplots(figsize=(8, 4))
 
@@ -109,7 +92,9 @@ ax1.legend()
 ax1.grid(True, alpha=0.3)
 ```
 
-![](07-error-correction_files/figure-commonmark/unnamed-chunk-4-1.png)
+<img
+src="07-error-correction_files/figure-commonmark/plot-data-output-1.png"
+id="plot-data" />
 
 We simulate the response as done in the [linear regression
 tutorial](01-lin-reg.md#linear-regression) from the model
@@ -117,7 +102,6 @@ $y_i | x_i \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \;\sigma^{2}_y)$
 given our true covariate.
 
 ``` python
-# | label: Create response
 rng = np.random.default_rng(42)
 
 sigma_y_true = 1.0  # variance of the response
@@ -143,7 +127,6 @@ the `loc` and `scale` arguments of the different distributions.
 We begin by establishing $\tau^2_{x}$.
 
 ``` python
-# | label: distributions
 # Define hyperparameters for variance of x
 a_x = lsl.Var.new_param(0.001, name="a_x")
 b_x = lsl.Var.new_param(0.001, name="b_x")
@@ -210,7 +193,6 @@ create the design matrix using {meth}`.Var.new_calc` as we continuously
 update our x-values during the inference.
 
 ``` python
-# | label: design matrix
 beta_prior = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
 beta = lsl.Var.new_param(np.array([0.0, 0.0]), name="beta", distribution=beta_prior)
 
@@ -241,7 +223,6 @@ assumed to follow an $\text{InverseGamma}(a, b)$ distribution and are
 log-transformed to ensure positivity.
 
 ``` python
-# | label: joint model for x and y
 # create joint model for x and y
 
 mu_of_y = lsl.Var.new_calc(  # compute the dot product
@@ -258,7 +239,6 @@ y_var = lsl.Var.new_obs(value=y_vec, distribution=y_dist, name="y")
 Now we can take a look at our model
 
 ``` python
-# | label: plot-vars
 # create joint model for x and y
 model = lsl.Model([y_var, x_tilde_var])
 
@@ -266,7 +246,12 @@ model = lsl.Model([y_var, x_tilde_var])
 model.plot_vars()
 ```
 
-![](07-error-correction_files/figure-commonmark/unnamed-chunk-12-3.png)
+    liesel.model.model - WARNING - Inconsistent log prob decomposition: Model.log_prob=-19741.52 ≠ (Model.log_lik=-14871.53 + Model.log_prior=-1715.54). 
+    liesel.model.model - WARNING - Var(name="x_tilde") has a distribution but Var.parameter=False and Var.observed=False.
+
+<img
+src="07-error-correction_files/figure-commonmark/plot-vars-output-2.png"
+id="plot-vars" />
 
 ## MCMC Inference
 
@@ -277,16 +262,15 @@ kernels ({class}`~.goose.GibbsKernel`), as this allows us to use custom
 transition functions for our parameters. The full conditionals are:
 
 $$
-\begin{eqnarray}
-\mu_x | \cdot \sim N \left(\frac{n\bar{x}\tau^2_\mu}{n\tau^2_\mu+\tau^2_x},\frac{\tau^2_x\tau^2_\mu}{n\tau^2_\mu+\tau^2_x}\right)\\
-\tau^2_x | \cdot \sim IG \left( a_x + \frac{n}{2}, b_x + \frac{1}{2}\sum_{i=1}^{n}(x_i - \mu_x)^2   \right)\\
-\end{eqnarray}.
+\begin{aligned}
+\mu_x \mid \cdot &\sim N \left(\frac{n\bar{x}\tau^2_\mu}{n\tau^2_\mu+\tau^2_x},\frac{\tau^2_x\tau^2_\mu}{n\tau^2_\mu+\tau^2_x}\right)\\
+\tau^2_x \mid \cdot &\sim IG \left( a_x + \frac{n}{2}, b_x + \frac{1}{2}\sum_{i=1}^{n}(x_i - \mu_x)^2   \right)\\
+\end{aligned}.
 $$
 
 Let us implement these
 
 ``` python
-# | label: transition-functions
 def transition_mu_x(prng_key, model_state):
     """
     Sample mu_x from its posterior distribution conditioned on the data.
@@ -358,7 +342,6 @@ def transition_tau2_x(prng_key, model_state):
 We set up our engine and draw 2000 posterior samples.
 
 ``` python
-# | label: kernels
 # #add kernels and return engine
 interface = gs.LieselInterface(model)
 eb_sample = gs.EngineBuilder(seed=2, num_chains=4)
@@ -386,50 +369,59 @@ engine = eb_sample.build()
 engine.sample_all_epochs()
 ```
 
-
-      0%|                                                  | 0/3 [00:00<?, ?chunk/s]
-     33%|##############                            | 1/3 [00:05<00:11,  5.66s/chunk]
-    100%|##########################################| 3/3 [00:05<00:00,  1.89s/chunk]
-
-      0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|########################################| 1/1 [00:00<00:00, 1160.25chunk/s]
-
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 1776.49chunk/s]
-
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|########################################| 4/4 [00:00<00:00, 1797.05chunk/s]
-
-      0%|                                                 | 0/22 [00:00<?, ?chunk/s]
-     41%|################7                        | 9/22 [00:00<00:00, 89.93chunk/s]
-     82%|################################7       | 18/22 [00:00<00:00, 37.45chunk/s]
-    100%|########################################| 22/22 [00:00<00:00, 37.43chunk/s]
-
-      0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|#########################################| 8/8 [00:00<00:00, 136.82chunk/s]
-
-      0%|                                                 | 0/80 [00:00<?, ?chunk/s]
-     14%|#####5                                  | 11/80 [00:00<00:00, 93.16chunk/s]
-     26%|##########5                             | 21/80 [00:00<00:01, 46.64chunk/s]
-     34%|#############5                          | 27/80 [00:00<00:01, 41.41chunk/s]
-     40%|################                        | 32/80 [00:00<00:01, 39.56chunk/s]
-     46%|##################5                     | 37/80 [00:00<00:01, 37.87chunk/s]
-     51%|####################5                   | 41/80 [00:00<00:01, 37.06chunk/s]
-     56%|######################5                 | 45/80 [00:01<00:00, 36.53chunk/s]
-     61%|########################5               | 49/80 [00:01<00:00, 36.20chunk/s]
-     66%|##########################5             | 53/80 [00:01<00:00, 36.08chunk/s]
-     71%|############################5           | 57/80 [00:01<00:00, 35.85chunk/s]
-     76%|##############################5         | 61/80 [00:01<00:00, 35.71chunk/s]
-     81%|################################5       | 65/80 [00:01<00:00, 35.62chunk/s]
-     86%|##################################5     | 69/80 [00:01<00:00, 35.65chunk/s]
-     91%|####################################5   | 73/80 [00:01<00:00, 35.55chunk/s]
-     96%|######################################5 | 77/80 [00:02<00:00, 35.22chunk/s]
-    100%|########################################| 80/80 [00:02<00:00, 38.03chunk/s]
+    liesel.goose.builder - WARNING - No jitter functions provided. The initial values won't be jittered
+    liesel.goose.engine - INFO - Initializing kernels...
+    liesel.goose.engine - INFO - Done
+    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 75 transitions, 25 jitted together
+      0%|                                                  | 0/3 [00:00<?, ?chunk/s] 33%|██████████████                            | 1/3 [00:04<00:09,  4.77s/chunk]100%|██████████████████████████████████████████| 3/3 [00:04<00:00,  1.59s/chunk]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 0, 1, 1, 0 / 75 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 4, 4, 2, 4 / 75 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 3, 2, 4, 2 / 75 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_05: 4, 3, 4, 4 / 75 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
+      0%|                                                  | 0/1 [00:00<?, ?chunk/s]100%|█████████████████████████████████████████| 1/1 [00:00<00:00, 858.26chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 25 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 2, 3, 1, 2 / 25 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 2, 2, 2, 1 / 25 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_05: 1, 1, 1, 1 / 25 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1156.73chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 3, 1, 1, 1 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 2, 2, 3, 1 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_05: 1, 1, 1, 3 / 50 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 4/4 [00:00<00:00, 1563.14chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 100 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 4, 1, 2, 4 / 100 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 2, 1, 2, 1 / 100 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_05: 3, 2, 2, 2 / 100 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 550 transitions, 25 jitted together
+      0%|                                                 | 0/22 [00:00<?, ?chunk/s] 41%|████████████████▊                        | 9/22 [00:00<00:00, 88.47chunk/s] 82%|████████████████████████████████▋       | 18/22 [00:00<00:00, 36.98chunk/s]100%|████████████████████████████████████████| 22/22 [00:00<00:00, 36.99chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 550 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 3, 3, 3, 4 / 550 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 1, 3, 3, 2 / 550 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_05: 2, 1, 3, 3 / 550 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 200 transitions, 25 jitted together
+      0%|                                                  | 0/8 [00:00<?, ?chunk/s]100%|█████████████████████████████████████████| 8/8 [00:00<00:00, 143.74chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 200 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 3, 3, 3, 2 / 200 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 3, 3, 1, 2 / 200 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_05: 2, 3, 3, 1 / 200 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Finished warmup
+    liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 2000 transitions, 25 jitted together
+      0%|                                                 | 0/80 [00:00<?, ?chunk/s] 14%|█████▌                                  | 11/80 [00:00<00:00, 94.32chunk/s] 26%|██████████▌                             | 21/80 [00:00<00:01, 47.87chunk/s] 34%|█████████████▌                          | 27/80 [00:00<00:01, 42.37chunk/s] 40%|████████████████                        | 32/80 [00:00<00:01, 40.56chunk/s] 46%|██████████████████▌                     | 37/80 [00:00<00:01, 38.56chunk/s] 52%|█████████████████████                   | 42/80 [00:01<00:01, 37.36chunk/s] 57%|███████████████████████                 | 46/80 [00:01<00:00, 36.91chunk/s] 62%|█████████████████████████               | 50/80 [00:01<00:00, 36.82chunk/s] 68%|███████████████████████████             | 54/80 [00:01<00:00, 36.83chunk/s] 72%|█████████████████████████████           | 58/80 [00:01<00:00, 36.80chunk/s] 78%|███████████████████████████████         | 62/80 [00:01<00:00, 36.73chunk/s] 82%|█████████████████████████████████       | 66/80 [00:01<00:00, 36.59chunk/s] 88%|███████████████████████████████████     | 70/80 [00:01<00:00, 36.48chunk/s] 92%|█████████████████████████████████████   | 74/80 [00:01<00:00, 31.71chunk/s] 98%|███████████████████████████████████████ | 78/80 [00:02<00:00, 32.79chunk/s]100%|████████████████████████████████████████| 80/80 [00:02<00:00, 37.90chunk/s]
+    liesel.goose.engine - INFO - Finished epoch
 
 Now we can take a look at the results for our parameters
 
 ``` python
-# | label: view-results
 results = engine.get_results()
 summary = gs.Summary(results)
 gs.Summary(results, deselected=["x_estimated"])
@@ -1185,53 +1177,52 @@ posterior
 And the traceplots for $\beta$, $\log(\sigma_y)$ and $\log(\sigma_u)$.
 
 ``` python
-# | label: plot-trace-mean
 # Plot the trace of all location coefficients
 gs.plot_trace(results, "beta")
 ```
 
-![](07-error-correction_files/figure-commonmark/unnamed-chunk-16-5.png)
-
-![](07-error-correction_files/figure-commonmark/unnamed-chunk-16-6.png)
+<img
+src="07-error-correction_files/figure-commonmark/plot-trace-mean-output-1.png"
+id="plot-trace-mean" />
 
 ``` python
-# | label: plot-sigma-y
 gs.plot_param(results, "sigma_sq_y_transformed")
 ```
 
-![](07-error-correction_files/figure-commonmark/unnamed-chunk-17-9.png)
+<img
+src="07-error-correction_files/figure-commonmark/plot-sigma-y-output-1.png"
+id="plot-sigma-y" />
 
 ``` python
-# | label: plot-sigma-x
 gs.plot_param(results, "sigma_sq_u_transformed")
 ```
 
-![](07-error-correction_files/figure-commonmark/unnamed-chunk-18-11.png)
+<img
+src="07-error-correction_files/figure-commonmark/plot-sigma-x-output-1.png"
+id="plot-sigma-x" />
 
 We further can also have a look at our first ten sampled x values and
 the mean
 
 ``` python
-# | label: plot-trace-x
 gs.plot_trace(results, "x_estimated", range(10))
 ```
 
-![](07-error-correction_files/figure-commonmark/unnamed-chunk-19-13.png)
-
-![](07-error-correction_files/figure-commonmark/unnamed-chunk-19-14.png)
+<img
+src="07-error-correction_files/figure-commonmark/plot-trace-x-output-1.png"
+id="plot-trace-x" />
 
 ``` python
-# | label: plot-param-mu-x
 gs.plot_param(results, "mu_x")
 ```
 
-![](07-error-correction_files/figure-commonmark/unnamed-chunk-20-17.png)
+<img
+src="07-error-correction_files/figure-commonmark/plot-param-mu-x-output-1.png"
+id="plot-param-mu-x" />
 
 To finally evaluate the model we can plot the regression line
 
 ``` python
-# | label: plot-regression-line
-
 # Extract quantities from the summary
 x_means = summary.quantities["mean"]["x_estimated"]
 beta_est = summary.quantities["mean"]["beta"]
@@ -1260,4 +1251,6 @@ plt.tight_layout()
 plt.show()
 ```
 
-![](07-error-correction_files/figure-commonmark/unnamed-chunk-21-19.png)
+<img
+src="07-error-correction_files/figure-commonmark/plot-regression-line-output-1.png"
+id="plot-regression-line" />
