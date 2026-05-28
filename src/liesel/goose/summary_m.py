@@ -20,9 +20,6 @@ from liesel.goose.pytree import slice_leaves, stack_leaves
 from liesel.goose.types import Array, Position, TransitionInfo
 from liesel.option import Option
 
-# can be removed once arviz has been upgrade to v1.0
-az.Numba.disable_numba()
-
 
 class ErrorSummaryForOneCode(NamedTuple):
     error_code: int
@@ -699,7 +696,7 @@ def _create_quantity_dict(
     hdi_prob: float,
     which: Sequence[SummaryQuantities] = summary_quantities,
 ) -> dict[str, dict[str, np.ndarray]]:
-    azchain = az.convert_to_inference_data(chain).posterior
+    azchain = az.from_dict({"posterior": chain})["posterior"].dataset
 
     quantities = {}
     # calculate quantities
@@ -712,7 +709,7 @@ def _create_quantity_dict(
     if "quantiles" in which:
         quantities["quantile"] = azchain.quantile(q=quantiles, dim=["chain", "draw"])
     if "hdi" in which:
-        quantities["hdi"] = az.hdi(azchain, hdi_prob=hdi_prob)
+        quantities["hdi"] = az.hdi(azchain, prob=hdi_prob)
 
     if "ess_bulk" in which:
         quantities["ess_bulk"] = az.ess(azchain, method="bulk")
@@ -726,24 +723,18 @@ def _create_quantity_dict(
     if "mcse_sd" in which:
         quantities["mcse_sd"] = az.mcse(azchain, method="sd")
 
-    if "rhat" in which and azchain.chain.size > 1:
+    if "rhat" in which and azchain.sizes["chain"] > 1:
         quantities["rhat"] = az.rhat(azchain)
 
     # convert to simple dict[str, np.ndarray]
     for key, val in quantities.items():
-        quantities[key] = {k: v.values for k, v in val.data_vars.items()}
-
-    # hdi shape BEFORE
-    # VarIDX --- HDI
-
-    # special treatment for hdi since the function uses the last axis to refer
-    # to the quantile
-    if "hdi" in quantities:
-        for k, v in quantities["hdi"].items():
-            quantities["hdi"][k] = np.moveaxis(v, -1, 0)
-
-    # hdi shape AFTER
-    # HDI --- VarIDX
+        quantity = {}
+        for k, v in val.data_vars.items():
+            if key == "hdi":
+                remaining_dims = [dim for dim in v.dims if dim != "ci_bound"]
+                v = v.transpose("ci_bound", *remaining_dims)
+            quantity[k] = v.values
+        quantities[key] = quantity
 
     return quantities
 
@@ -1087,6 +1078,22 @@ def concatenate_arrays_in_dict(
     return out_array
 
 
+def _apply_loo_scale(
+    result: az.ELPDData,
+    scale: Literal["log", "negative_log", "deviance"],
+) -> az.ELPDData:
+    if scale != "log":
+        multiplier = -1 if scale == "negative_log" else -2
+        result.elpd = multiplier * result.elpd
+        result.se = abs(multiplier) * result.se
+        result.elpd_i = multiplier * result.elpd_i
+        result.scale = scale
+
+    result.elpd_loo = result.elpd
+    result.p_loo = result.p
+    return result
+
+
 def loo(
     lpp: dict[str, jax.typing.ArrayLike] | jax.typing.ArrayLike,
     samples: dict[str, jax.typing.ArrayLike] | None,
@@ -1147,7 +1154,8 @@ def loo(
     except Exception:  # assume its a dict now
         lpp_array = concatenate_arrays_in_dict(lpp)
 
-    idat = az.convert_to_inference_data({"observed": lpp_array}, group="log_likelihood")
+    lpp_array = np.asarray(lpp_array)
+    idat = az.from_dict({"log_likelihood": {"observed": lpp_array}})
     if reff is None and samples is not None:
         avg_ess = (
             SamplesSummary(samples, which=["ess_bulk"])
@@ -1158,5 +1166,4 @@ def loo(
         reff = avg_ess / nsamples
     # now we assume reff is not None
 
-    arviz_loo = az.loo(idat, reff=reff, scale=scale)
-    return arviz_loo
+    return _apply_loo_scale(az.loo(idat, reff=reff), scale)
