@@ -76,6 +76,18 @@ def _transform_back(var_transformed: Var) -> Calc:
     return Calc(fn, var_transformed.value_node, *inputs, **kwinputs)  # type: ignore
 
 
+def _set_weak_var_value(var: Var, value: Array) -> None:
+    if isinstance(var.value_node, TransientNode):
+        raise RuntimeError(
+            f"{repr(var)} is weak and transient, cannot set cached value"
+        )
+
+    var.value_node.state = NodeState(value, False)
+
+    for node in var.value_node.outputs:
+        node.flag_outdated()
+
+
 class GraphBuilder:
     """
     A graph builder, used to set up a :class:`.Model`.
@@ -1838,18 +1850,6 @@ class Model:
                         f"with related position key '{key}'."
                     )
 
-    @staticmethod
-    def _set_weak_var_value(var: Var, value: Array) -> None:
-        if isinstance(var.value_node, TransientNode):
-            raise RuntimeError(
-                f"{repr(var)} is weak and transient, cannot set cached value"
-            )
-
-        var.value_node.state = NodeState(value, False)
-
-        for node in var.value_node.outputs:
-            node.flag_outdated()
-
     def update_state(
         self,
         position: dict[str, Array],
@@ -1913,7 +1913,7 @@ class Model:
                 except KeyError:
                     var = model.vars[key]
                     if allow_weak_vars and var.weak:
-                        model._set_weak_var_value(var, value)
+                        _set_weak_var_value(var, value)
                     else:
                         var.value = value
         finally:
