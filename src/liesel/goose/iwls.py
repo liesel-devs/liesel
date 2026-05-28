@@ -3,7 +3,7 @@ Iteratively weighted least squares (IWLS) sampler
 """
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import ClassVar, Literal, Self, get_args
 
 import jax
@@ -31,7 +31,7 @@ from .types import Array, KeyArray, ModelState, Position
 
 
 @register_dataclass_as_pytree
-@dataclass
+@dataclass(init=False)
 class IWLSKernelState:
     """
     A dataclass for the state of a :class:`.IWLSKernel`, implementing the
@@ -39,12 +39,27 @@ class IWLSKernelState:
     """
 
     step_size: float
-    error_sum: float = field(init=False)
-    log_avg_step_size: float = field(init=False)
-    mu: float = field(init=False)
+    error_sum: float
+    log_avg_step_size: float
+    mu: float
 
-    def __post_init__(self):
-        da_init(self)
+    def __init__(
+        self,
+        step_size: float,
+        *,
+        error_sum: float | None = None,
+        log_avg_step_size: float | None = None,
+        mu: float | None = None,
+    ):
+        self.step_size = step_size
+        if error_sum is None and log_avg_step_size is None and mu is None:
+            da_init(self)
+        elif error_sum is None or log_avg_step_size is None or mu is None:
+            raise ValueError("Dual averaging fields must all be set or all be omitted.")
+        else:
+            self.error_sum = error_sum
+            self.log_avg_step_size = log_avg_step_size
+            self.mu = mu
 
 
 IWLSTransitionInfo = DefaultTransitionInfo

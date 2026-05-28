@@ -3,7 +3,7 @@ Random walk sampler.
 """
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import ClassVar
 
 import jax
@@ -27,7 +27,7 @@ from .types import KeyArray, ModelState, Position, TuningInfo
 
 
 @register_dataclass_as_pytree
-@dataclass
+@dataclass(init=False)
 class RWKernelState:
     """
     A dataclass for the state of a ``RWKernel``, implementing the
@@ -35,12 +35,27 @@ class RWKernelState:
     """
 
     step_size: float
-    error_sum: float = field(default=0.0, init=False)
-    log_avg_step_size: float = field(default=0.0, init=False)
-    mu: float = field(init=False)
+    error_sum: float
+    log_avg_step_size: float
+    mu: float
 
-    def __post_init__(self):
-        da_init(self)
+    def __init__(
+        self,
+        step_size: float,
+        *,
+        error_sum: float | None = None,
+        log_avg_step_size: float | None = None,
+        mu: float | None = None,
+    ):
+        self.step_size = step_size
+        if error_sum is None and log_avg_step_size is None and mu is None:
+            da_init(self)
+        elif error_sum is None or log_avg_step_size is None or mu is None:
+            raise ValueError("Dual averaging fields must all be set or all be omitted.")
+        else:
+            self.error_sum = error_sum
+            self.log_avg_step_size = log_avg_step_size
+            self.mu = mu
 
 
 RWTransitionInfo = DefaultTransitionInfo

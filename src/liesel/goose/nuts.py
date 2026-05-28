@@ -3,7 +3,7 @@ No U-Turn Sampler (NUTS).
 """
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import partial
 from typing import ClassVar
 
@@ -32,7 +32,7 @@ from .types import Array, KeyArray, ModelState, Position
 
 
 @register_dataclass_as_pytree
-@dataclass
+@dataclass(init=False)
 class NUTSKernelState:
     """
     A dataclass for the state of a :class:`.NUTSKernel`, implementing the
@@ -41,12 +41,29 @@ class NUTSKernelState:
 
     step_size: float
     inverse_mass_matrix: Array
-    error_sum: float = field(init=False)
-    log_avg_step_size: float = field(init=False)
-    mu: float = field(init=False)
+    error_sum: float
+    log_avg_step_size: float
+    mu: float
 
-    def __post_init__(self):
-        da_init(self)
+    def __init__(
+        self,
+        step_size: float,
+        inverse_mass_matrix: Array,
+        *,
+        error_sum: float | None = None,
+        log_avg_step_size: float | None = None,
+        mu: float | None = None,
+    ):
+        self.step_size = step_size
+        self.inverse_mass_matrix = inverse_mass_matrix
+        if error_sum is None and log_avg_step_size is None and mu is None:
+            da_init(self)
+        elif error_sum is None or log_avg_step_size is None or mu is None:
+            raise ValueError("Dual averaging fields must all be set or all be omitted.")
+        else:
+            self.error_sum = error_sum
+            self.log_avg_step_size = log_avg_step_size
+            self.mu = mu
 
 
 @register_dataclass_as_pytree
