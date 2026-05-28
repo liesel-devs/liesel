@@ -134,9 +134,84 @@ class TestModel:
         assert all([not var.model for var in nodes_and_vars[1].values()])
 
     def test_copy_computational_model(self, model: Model) -> None:
-        model._copy_computational_model()
-        # TODO: Fill this test. At the moment, I am uncertain as to what this method
-        # is supposed to achieve exactly.
+        cmodel = model._copy_computational_model()
+
+        for n, v in cmodel.vars.items():
+            assert v.value is None
+            assert n in model.vars
+
+        for n, nv in cmodel.nodes.items():
+            assert nv.value is None
+            assert n in model.nodes
+
+        for n, v in model.vars.items():
+            assert v.value is not None
+            assert n in cmodel.vars
+
+        for n, nv in model.nodes.items():
+            assert nv.value is not None
+            assert n in cmodel.nodes
+
+    def test_copy_method(self, model: Model) -> None:
+        cmodel = model.copy()
+
+        for n, v in cmodel.vars.items():
+            assert jnp.allclose(v.value, model.vars[n].value)
+            assert n in model.vars
+
+        for n, nv in cmodel.nodes.items():
+            assert jnp.allclose(nv.value, model.nodes[n].value)
+            assert n in model.nodes
+
+        for n, v in model.vars.items():
+            assert n in cmodel.vars
+
+        for n, nv in model.nodes.items():
+            assert n in cmodel.nodes
+
+    def test_copy_method_cleared(self, model: Model) -> None:
+        cmodel = model.copy(clear_state=True)
+
+        for n, v in cmodel.vars.items():
+            assert v.value is None
+            assert n in model.vars
+
+        for n, nv in cmodel.nodes.items():
+            assert nv.value is None
+            assert n in model.nodes
+
+        for n, v in model.vars.items():
+            assert v.value is not None
+            assert n in cmodel.vars
+
+        for n, nv in model.nodes.items():
+            assert nv.value is not None
+            assert n in cmodel.nodes
+
+    def test_parental_submodel(self, model: Model) -> None:
+        mu_model = model.parental_submodel("mu")
+        assert len(mu_model.vars) == 5
+        assert len(mu_model.nodes) == 14
+
+        for name in ["X", "beta_scale", "beta_loc", "beta_hat", "mu"]:
+            assert name in mu_model.vars
+            assert jnp.allclose(mu_model.vars[name].value, model.vars[name].value)
+
+        mu_model = model.parental_submodel("mu", clear_state=True)
+        assert len(mu_model.vars) == 5
+
+        for name in ["X", "beta_scale", "beta_loc", "beta_hat", "mu"]:
+            assert name in mu_model.vars
+            assert mu_model.vars[name].value is None
+            assert model.vars[name].value is not None
+
+    def test_init_model_with_var_copies(self, model: Model) -> None:
+        mu_model = Model(model.vars["mu"], copy=True)
+
+        assert len(mu_model.vars) == 5
+        for name in ["X", "beta_scale", "beta_loc", "beta_hat", "mu"]:
+            assert name in mu_model.vars
+            assert jnp.allclose(mu_model.vars[name].value, model.vars[name].value)
 
     def test_groups(self, model: Model) -> None:
         """
@@ -273,9 +348,9 @@ class TestModel:
         assert list(model.vars) == [
             "scale",
             "concentration",
+            "X",
             "beta_scale",
             "beta_loc",
-            "X",
             "sigma_hat",
             "beta_hat",
             "mu",
