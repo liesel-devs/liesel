@@ -1,9 +1,15 @@
-
 # GEV responses
 
 In this tutorial, we illustrate how to set up a distributional
 regression model with the generalized extreme value distribution as a
-response distribution. First, we simulate some data in R:
+response distribution. We configure the model in Python with
+[Liesel-GAM](https://github.com/liesel-devs/liesel_gam), using
+{class}`liesel_gam.TermBuilder` for linear terms and P-splines. See the
+[Liesel-GAM documentation and
+examples](https://github.com/liesel-devs/liesel_gam#readme) for a
+broader overview of the available term types.
+
+We simulate data from a GEV model with three distributional parameters:
 
 - The location parameter ($\mu$) is a function of an intercept and a
   non-linear covariate effect.
@@ -12,121 +18,167 @@ response distribution. First, we simulate some data in R:
 - The shape or concentration parameter ($\xi$) is a function of an
   intercept and a linear effect.
 
-After simulating the data, we can configure the model with a single call
-to the `rliesel::liesel()` function.
+``` python
+import jax
+import jax.numpy as jnp
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+import tensorflow_probability.substrates.jax.distributions as tfd
 
-``` r
-library(rliesel)
-library(VGAM)
+import liesel.goose as gs
+import liesel.model as lsl
+import liesel_gam as gam
+
+sns.set_theme(style="whitegrid")
 ```
 
-    Loading required package: stats4
+    Warning message:
+    package ‘arrow’ was built under R version 4.5.2
 
-    Loading required package: splines
+``` python
+key = jax.random.PRNGKey(13)
+n = 500
 
-``` r
-set.seed(13)
+key, key_x0, key_x1, key_x2, key_y = jax.random.split(key, 5)
 
-n <- 1000
+x0 = jax.random.uniform(key_x0, (n,))
+x1 = jax.random.uniform(key_x1, (n,))
+x2 = jax.random.uniform(key_x2, (n,))
 
-x0 <- runif(n)
-x1 <- runif(n)
-x2 <- runif(n)
+true_loc = jnp.sin(2 * jnp.pi * x0)
+true_scale = jnp.exp(-1.0 + x1)
+true_concentration = 0.1 + x2
 
-y <- rgev(
-  n,
-  location = 0 + sin(2 * pi * x0),
-  scale = exp(-3 + x1),
-  shape = 0.1 + x2
+y = tfd.GeneralizedExtremeValue(
+    loc=true_loc,
+    scale=true_scale,
+    concentration=true_concentration,
+).sample(seed=key_y)
+
+data = pd.DataFrame({
+    "y": np.asarray(y),
+    "intercept": np.ones_like(y),
+    "x0": np.asarray(x0),
+    "x1": np.asarray(x1),
+    "x2": np.asarray(x2),
+    "true_loc": np.asarray(true_loc),
+    "true_scale": np.asarray(true_scale),
+    "true_concentration": np.asarray(true_concentration),
+})
+```
+
+Here is the simulated response:
+
+``` python
+fig, ax = plt.subplots(figsize=(8, 4))
+sns.lineplot(x=data.index, y=data["y"], ax=ax, color="0.25", linewidth=1)
+ax.set(xlabel="observation", ylabel="y", title="Simulated GEV response")
+plt.show()
+```
+
+<img src="03-gev_files/figure-commonmark/plot-data-output-1.png"
+id="plot-data" />
+
+We now construct the distributional regression model. The `TermBuilder`
+reads the covariates from a pandas data frame and creates Liesel
+variables for the corresponding model terms. The additive predictors are
+passed directly to `tfd.GeneralizedExtremeValue`.
+
+``` python
+tb = gam.TermBuilder.from_df(data, default_inference=gs.MCMCSpec(gs.IWLSKernel))
+
+loc = gam.AdditivePredictor("loc", intercept=True)
+scale = gam.AdditivePredictor("scale", inv_link=jnp.exp, intercept=False)
+concentration = gam.AdditivePredictor("concentration", intercept=False)
+
+loc_smooth = tb.ps("x0", k=10)
+scale_x1 = tb.lin("intercept + x1")
+concentration_x2 = tb.lin("intercept + x2")
+
+loc += loc_smooth
+scale += scale_x1
+concentration += concentration_x2
+
+# The GEV distribution is numerically delicate around xi = 0, so we start away
+# from the Gumbel case while keeping the linear effect initialized at zero.
+concentration_x2.coef.value = jnp.array([0.1, 0.0])
+concentration.update()
+
+response_dist = lsl.Dist(
+    tfd.GeneralizedExtremeValue,
+    loc=loc,
+    scale=scale,
+    concentration=concentration,
 )
+y_var = lsl.Var.new_obs(data["y"].to_numpy(), response_dist, name="y")
 
-plot(y)
+model = lsl.Model([y_var])
+
+# ScaleIG represents tau = sqrt(tau2). The Gibbs kernel samples tau2.
+loc_smooth_tau2_name = loc_smooth.scale.value_node[0].name
 ```
 
-![](03-gev_files/figure-commonmark/model-1.png)
-
-``` r
-model <- liesel(
-  response = y,
-  distribution = "GeneralizedExtremeValue",
-  predictors = list(
-    loc = predictor(~ s(x0)),
-    scale = predictor(~ x1, inverse_link = "Exp"),
-    concentration = predictor(~ x2)
-  )
-)
-```
-
-    Did not find response 'y' in data. Using 'y' found in parent environment.
-
-Now, we can continue in Python and use the `lsl.dist_reg_mcmc()`
-function to set up a sampling algorithm with IWLS kernels for the
-regression coefficients ($\boldsymbol{\beta}$) and a Gibbs kernel for
-the smoothing parameter ($\tau^2$) of the spline.
+We use Liesel’s `MCMCSpec` objects, which are added automatically by
+Liesel-GAM, to set up the sampler. The default Liesel-GAM setup uses
+IWLS kernels for regression coefficients and a Gibbs kernel for the
+smoothing variance of the P-spline.
 
 The support of the GEV distribution changes with the parameter values
 (compare
 [Wikipedia](https://en.wikipedia.org/wiki/Generalized_extreme_value_distribution)).
-To ensure that the initial parameters support the observed data we set
-$xi = 0.1$ and disable jittering of the the variance and regression
-parameters. For the latter, we supply user-defined jitter functions to
-`lsl.dist_reg_mcmc` that are essentially the identity function w.r.t.
-the parameter value.
 
 ``` python
-import liesel.model as lsl
-import jax.numpy as jnp
-
-model = r.model
-
-# concentration == 0.0 seems to break the sampler
-model.vars["concentration_p0_beta"].value = jnp.array([0.1, 0.0])
-
-builder = lsl.dist_reg_mcmc(model, seed=42, num_chains=4, tau2_jitter_fn=lambda key, val: val, beta_jitter_fn=lambda key, val: val)
-builder.set_duration(warmup_duration=1000, posterior_duration=1000)
-
-engine = builder.build()
-engine.sample_all_epochs()
-```
-
-
-      0%|                                                  | 0/3 [00:00<?, ?chunk/s]
-     33%|##############                            | 1/3 [00:04<00:09,  4.81s/chunk]
-    100%|##########################################| 3/3 [00:04<00:00,  1.60s/chunk]
-
-      0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|########################################| 1/1 [00:00<00:00, 1828.38chunk/s]
-
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 1919.15chunk/s]
-
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|########################################| 4/4 [00:00<00:00, 2291.97chunk/s]
-
-      0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|#########################################| 8/8 [00:00<00:00, 396.61chunk/s]
-
-      0%|                                                 | 0/20 [00:00<?, ?chunk/s]
-     65%|#########################3             | 13/20 [00:00<00:00, 114.97chunk/s]
-    100%|########################################| 20/20 [00:00<00:00, 82.45chunk/s]
-
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 2123.70chunk/s]
-
-      0%|                                                 | 0/40 [00:00<?, ?chunk/s]
-     32%|############6                          | 13/40 [00:00<00:00, 114.72chunk/s]
-     62%|#########################               | 25/40 [00:00<00:00, 69.94chunk/s]
-     82%|#################################       | 33/40 [00:00<00:00, 52.50chunk/s]
-    100%|########################################| 40/40 [00:00<00:00, 64.56chunk/s]
-
-Some tabular summary statistics of the posterior samples:
-
-``` python
-import liesel.goose as gs
-
-results = engine.get_results()
+results = gs.LieselMCMC(model).run_for_epochs(
+    seed=1, num_chains=4, adaptation=1000, posterior=2500
+)
 gs.Summary(results)
 ```
+
+    liesel.goose.builder - WARNING - No jitter functions provided for position keys '$\\beta_{ps(x0)}$', '$\\tau_{ps(x0)}^2$', '$\\beta_{0,loc}$', '$\\beta_{lin(X)}$', '$\\beta_{lin(X1)}$'. The initial values for these keys won't be jittered
+    liesel.goose.engine - INFO - Initializing kernels...
+    liesel.goose.engine - INFO - Done
+    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 100 transitions, 25 jitted together
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s] 25%|██████████▌                               | 1/4 [00:03<00:10,  3.62s/chunk]100%|██████████████████████████████████████████| 4/4 [00:03<00:00,  1.10chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 100 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 2, 0, 0, 2 / 100 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 3, 4, 2, 2 / 100 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
+      0%|                                                  | 0/1 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 1/1 [00:00<00:00, 1217.86chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 1, 1 / 25 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 1, 1, 0, 1 / 25 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 1, 1, 1, 1 / 25 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1455.85chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 0 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 2, 0, 0, 3 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 1, 1, 1, 2 / 50 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 4/4 [00:00<00:00, 1801.87chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 2, 0 / 100 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 2, 1, 0, 1 / 100 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 3, 1, 2, 1 / 100 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 525 transitions, 25 jitted together
+      0%|                                                 | 0/21 [00:00<?, ?chunk/s] 76%|█████████████████████████████▋         | 16/21 [00:00<00:00, 157.53chunk/s]100%|███████████████████████████████████████| 21/21 [00:00<00:00, 131.69chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 1, 1 / 525 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 4, 1, 2, 1 / 525 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 7, 6, 8, 4 / 525 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 200 transitions, 25 jitted together
+      0%|                                                  | 0/8 [00:00<?, ?chunk/s]100%|█████████████████████████████████████████| 8/8 [00:00<00:00, 623.89chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 1, 1, 3 / 200 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 1, 3, 3, 2 / 200 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 2, 4, 84, 2 / 200 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Finished warmup
+    liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 2500 transitions, 25 jitted together
+      0%|                                                | 0/100 [00:00<?, ?chunk/s] 17%|██████▍                               | 17/100 [00:00<00:00, 156.17chunk/s] 33%|████████████▌                         | 33/100 [00:00<00:00, 103.29chunk/s] 45%|█████████████████▌                     | 45/100 [00:00<00:00, 95.92chunk/s] 56%|█████████████████████▊                 | 56/100 [00:00<00:00, 70.69chunk/s] 66%|█████████████████████████▋             | 66/100 [00:00<00:00, 75.90chunk/s] 76%|█████████████████████████████▋         | 76/100 [00:00<00:00, 81.03chunk/s] 85%|█████████████████████████████████▏     | 85/100 [00:00<00:00, 82.51chunk/s] 94%|████████████████████████████████████▋  | 94/100 [00:01<00:00, 83.47chunk/s]100%|██████████████████████████████████████| 100/100 [00:01<00:00, 85.17chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 8, 4, 872, 2 / 2500 transitions
+    liesel.goose.engine - INFO - Finished epoch
 
 <p>
 <strong>Parameter summary:</strong>
@@ -200,399 +252,8 @@ index
 </thead>
 <tbody>
 <tr>
-<th rowspan="2" valign="top">
-concentration_p0_beta
-</th>
 <th>
-(0,)
-</th>
-<td>
-kernel_00
-</td>
-<td>
-0.104
-</td>
-<td>
-0.054
-</td>
-<td>
-0.016
-</td>
-<td>
-0.103
-</td>
-<td>
-0.193
-</td>
-<td>
-4000
-</td>
-<td>
-372.271
-</td>
-<td>
-988.761
-</td>
-<td>
-1.004
-</td>
-</tr>
-<tr>
-<th>
-(1,)
-</th>
-<td>
-kernel_00
-</td>
-<td>
-0.964
-</td>
-<td>
-0.099
-</td>
-<td>
-0.796
-</td>
-<td>
-0.967
-</td>
-<td>
-1.121
-</td>
-<td>
-4000
-</td>
-<td>
-207.805
-</td>
-<td>
-645.642
-</td>
-<td>
-1.010
-</td>
-</tr>
-<tr>
-<th rowspan="9" valign="top">
-loc_np0_beta
-</th>
-<th>
-(0,)
-</th>
-<td>
-kernel_03
-</td>
-<td>
-0.469
-</td>
-<td>
-0.207
-</td>
-<td>
-0.121
-</td>
-<td>
-0.469
-</td>
-<td>
-0.807
-</td>
-<td>
-4000
-</td>
-<td>
-54.068
-</td>
-<td>
-156.325
-</td>
-<td>
-1.067
-</td>
-</tr>
-<tr>
-<th>
-(1,)
-</th>
-<td>
-kernel_03
-</td>
-<td>
--0.147
-</td>
-<td>
-0.129
-</td>
-<td>
--0.358
-</td>
-<td>
--0.149
-</td>
-<td>
-0.067
-</td>
-<td>
-4000
-</td>
-<td>
-51.923
-</td>
-<td>
-105.754
-</td>
-<td>
-1.081
-</td>
-</tr>
-<tr>
-<th>
-(2,)
-</th>
-<td>
-kernel_03
-</td>
-<td>
-0.473
-</td>
-<td>
-0.139
-</td>
-<td>
-0.241
-</td>
-<td>
-0.472
-</td>
-<td>
-0.696
-</td>
-<td>
-4000
-</td>
-<td>
-85.108
-</td>
-<td>
-129.521
-</td>
-<td>
-1.037
-</td>
-</tr>
-<tr>
-<th>
-(3,)
-</th>
-<td>
-kernel_03
-</td>
-<td>
--0.008
-</td>
-<td>
-0.073
-</td>
-<td>
--0.132
-</td>
-<td>
--0.005
-</td>
-<td>
-0.113
-</td>
-<td>
-4000
-</td>
-<td>
-61.796
-</td>
-<td>
-168.336
-</td>
-<td>
-1.093
-</td>
-</tr>
-<tr>
-<th>
-(4,)
-</th>
-<td>
-kernel_03
-</td>
-<td>
-0.472
-</td>
-<td>
-0.070
-</td>
-<td>
-0.362
-</td>
-<td>
-0.470
-</td>
-<td>
-0.589
-</td>
-<td>
-4000
-</td>
-<td>
-64.460
-</td>
-<td>
-135.078
-</td>
-<td>
-1.074
-</td>
-</tr>
-<tr>
-<th>
-(5,)
-</th>
-<td>
-kernel_03
-</td>
-<td>
-0.458
-</td>
-<td>
-0.031
-</td>
-<td>
-0.412
-</td>
-<td>
-0.457
-</td>
-<td>
-0.512
-</td>
-<td>
-4000
-</td>
-<td>
-87.095
-</td>
-<td>
-127.444
-</td>
-<td>
-1.023
-</td>
-</tr>
-<tr>
-<th>
-(6,)
-</th>
-<td>
-kernel_03
-</td>
-<td>
--5.911
-</td>
-<td>
-0.031
-</td>
-<td>
--5.964
-</td>
-<td>
--5.913
-</td>
-<td>
--5.862
-</td>
-<td>
-4000
-</td>
-<td>
-75.689
-</td>
-<td>
-136.909
-</td>
-<td>
-1.069
-</td>
-</tr>
-<tr>
-<th>
-(7,)
-</th>
-<td>
-kernel_03
-</td>
-<td>
-0.375
-</td>
-<td>
-0.069
-</td>
-<td>
-0.253
-</td>
-<td>
-0.375
-</td>
-<td>
-0.488
-</td>
-<td>
-4000
-</td>
-<td>
-87.037
-</td>
-<td>
-169.840
-</td>
-<td>
-1.040
-</td>
-</tr>
-<tr>
-<th>
-(8,)
-</th>
-<td>
-kernel_03
-</td>
-<td>
--1.794
-</td>
-<td>
-0.026
-</td>
-<td>
--1.837
-</td>
-<td>
--1.794
-</td>
-<td>
--1.753
-</td>
-<td>
-4000
-</td>
-<td>
-87.187
-</td>
-<td>
-160.277
-</td>
-<td>
-1.059
-</td>
-</tr>
-<tr>
-<th>
-loc_np0_tau2
+$\beta_{0,loc}$
 </th>
 <th>
 ()
@@ -601,36 +262,109 @@ loc_np0_tau2
 kernel_02
 </td>
 <td>
-5.967
+0.003
 </td>
 <td>
-4.374
+0.026
 </td>
 <td>
-2.276
+-0.037
 </td>
 <td>
-4.946
+0.002
 </td>
 <td>
-12.862
+0.047
 </td>
 <td>
-4000
+10000
 </td>
 <td>
-3610.352
+177.883
 </td>
 <td>
-3848.888
+457.979
 </td>
 <td>
-1.001
+1.021
+</td>
+</tr>
+<tr>
+<th rowspan="2" valign="top">
+$\beta_{lin(X)}$
+</th>
+<th>
+(0,)
+</th>
+<td>
+kernel_03
+</td>
+<td>
+-1.218
+</td>
+<td>
+0.099
+</td>
+<td>
+-1.378
+</td>
+<td>
+-1.219
+</td>
+<td>
+-1.054
+</td>
+<td>
+10000
+</td>
+<td>
+202.379
+</td>
+<td>
+508.367
+</td>
+<td>
+1.018
 </td>
 </tr>
 <tr>
 <th>
-loc_p0_beta
+(1,)
+</th>
+<td>
+kernel_03
+</td>
+<td>
+1.400
+</td>
+<td>
+0.137
+</td>
+<td>
+1.172
+</td>
+<td>
+1.399
+</td>
+<td>
+1.623
+</td>
+<td>
+10000
+</td>
+<td>
+307.969
+</td>
+<td>
+865.843
+</td>
+<td>
+1.006
+</td>
+</tr>
+<tr>
+<th rowspan="2" valign="top">
+$\beta_{lin(X1)}$
 </th>
 <th>
 (0,)
@@ -639,69 +373,31 @@ loc_p0_beta
 kernel_04
 </td>
 <td>
--0.027
+0.071
 </td>
 <td>
-0.002
+0.110
 </td>
 <td>
--0.031
+-0.061
 </td>
 <td>
--0.027
+0.074
 </td>
 <td>
--0.023
+0.255
 </td>
 <td>
-4000
+10000
 </td>
 <td>
-90.065
+8.659
 </td>
 <td>
-390.131
+50.997
 </td>
 <td>
-1.050
-</td>
-</tr>
-<tr>
-<th rowspan="2" valign="top">
-scale_p0_beta
-</th>
-<th>
-(0,)
-</th>
-<td>
-kernel_01
-</td>
-<td>
--3.093
-</td>
-<td>
-0.059
-</td>
-<td>
--3.190
-</td>
-<td>
--3.090
-</td>
-<td>
--2.999
-</td>
-<td>
-4000
-</td>
-<td>
-151.457
-</td>
-<td>
-348.065
-</td>
-<td>
-1.057
+1.406
 </td>
 </tr>
 <tr>
@@ -709,34 +405,568 @@ kernel_01
 (1,)
 </th>
 <td>
-kernel_01
+kernel_04
 </td>
 <td>
-1.197
+1.070
+</td>
+<td>
+0.201
+</td>
+<td>
+0.724
+</td>
+<td>
+1.075
+</td>
+<td>
+1.296
+</td>
+<td>
+10000
+</td>
+<td>
+10.591
+</td>
+<td>
+678.843
+</td>
+<td>
+1.320
+</td>
+</tr>
+<tr>
+<th rowspan="9" valign="top">
+$\beta_{ps(x0)}$
+</th>
+<th>
+(0,)
+</th>
+<td>
+kernel_00
 </td>
 <td>
 0.081
 </td>
 <td>
-1.067
+0.117
 </td>
 <td>
-1.196
+-0.112
 </td>
 <td>
-1.332
+0.082
 </td>
 <td>
-4000
+0.271
 </td>
 <td>
-246.643
+10000
 </td>
 <td>
-530.955
+256.969
 </td>
 <td>
-1.038
+495.439
+</td>
+<td>
+1.029
+</td>
+</tr>
+<tr>
+<th>
+(1,)
+</th>
+<td>
+kernel_00
+</td>
+<td>
+0.002
+</td>
+<td>
+0.119
+</td>
+<td>
+-0.194
+</td>
+<td>
+0.006
+</td>
+<td>
+0.187
+</td>
+<td>
+10000
+</td>
+<td>
+373.587
+</td>
+<td>
+726.253
+</td>
+<td>
+1.009
+</td>
+</tr>
+<tr>
+<th>
+(2,)
+</th>
+<td>
+kernel_00
+</td>
+<td>
+0.048
+</td>
+<td>
+0.125
+</td>
+<td>
+-0.161
+</td>
+<td>
+0.047
+</td>
+<td>
+0.256
+</td>
+<td>
+10000
+</td>
+<td>
+309.323
+</td>
+<td>
+560.738
+</td>
+<td>
+1.005
+</td>
+</tr>
+<tr>
+<th>
+(3,)
+</th>
+<td>
+kernel_00
+</td>
+<td>
+-0.008
+</td>
+<td>
+0.110
+</td>
+<td>
+-0.185
+</td>
+<td>
+-0.005
+</td>
+<td>
+0.163
+</td>
+<td>
+10000
+</td>
+<td>
+328.177
+</td>
+<td>
+556.151
+</td>
+<td>
+1.008
+</td>
+</tr>
+<tr>
+<th>
+(4,)
+</th>
+<td>
+kernel_00
+</td>
+<td>
+-0.149
+</td>
+<td>
+0.102
+</td>
+<td>
+-0.314
+</td>
+<td>
+-0.149
+</td>
+<td>
+0.021
+</td>
+<td>
+10000
+</td>
+<td>
+300.963
+</td>
+<td>
+548.966
+</td>
+<td>
+1.019
+</td>
+</tr>
+<tr>
+<th>
+(5,)
+</th>
+<td>
+kernel_00
+</td>
+<td>
+0.042
+</td>
+<td>
+0.072
+</td>
+<td>
+-0.076
+</td>
+<td>
+0.041
+</td>
+<td>
+0.157
+</td>
+<td>
+10000
+</td>
+<td>
+296.677
+</td>
+<td>
+530.711
+</td>
+<td>
+1.021
+</td>
+</tr>
+<tr>
+<th>
+(6,)
+</th>
+<td>
+kernel_00
+</td>
+<td>
+-0.357
+</td>
+<td>
+0.048
+</td>
+<td>
+-0.437
+</td>
+<td>
+-0.356
+</td>
+<td>
+-0.281
+</td>
+<td>
+10000
+</td>
+<td>
+303.546
+</td>
+<td>
+527.516
+</td>
+<td>
+1.019
+</td>
+</tr>
+<tr>
+<th>
+(7,)
+</th>
+<td>
+kernel_00
+</td>
+<td>
+-0.000
+</td>
+<td>
+0.020
+</td>
+<td>
+-0.034
+</td>
+<td>
+0.000
+</td>
+<td>
+0.032
+</td>
+<td>
+10000
+</td>
+<td>
+312.715
+</td>
+<td>
+543.417
+</td>
+<td>
+1.006
+</td>
+</tr>
+<tr>
+<th>
+(8,)
+</th>
+<td>
+kernel_00
+</td>
+<td>
+-0.050
+</td>
+<td>
+0.060
+</td>
+<td>
+-0.145
+</td>
+<td>
+-0.050
+</td>
+<td>
+0.050
+</td>
+<td>
+10000
+</td>
+<td>
+296.621
+</td>
+<td>
+421.972
+</td>
+<td>
+1.025
+</td>
+</tr>
+<tr>
+<th>
+$\tau_{ps(x0)}^2$
+</th>
+<th>
+()
+</th>
+<td>
+kernel_01
+</td>
+<td>
+0.031
+</td>
+<td>
+0.022
+</td>
+<td>
+0.012
+</td>
+<td>
+0.025
+</td>
+<td>
+0.068
+</td>
+<td>
+10000
+</td>
+<td>
+1540.702
+</td>
+<td>
+2724.639
+</td>
+<td>
+1.003
+</td>
+</tr>
+</tbody>
+</table>
+<p>
+<strong>Acceptance probabilities:</strong>
+</p>
+<table border="0" class="dataframe">
+<thead>
+<tr style="text-align: right;">
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+acceptance_probability
+</th>
+<th>
+position_moved
+</th>
+</tr>
+<tr>
+<th>
+kernel
+</th>
+<th>
+positions
+</th>
+<th>
+phase
+</th>
+<th>
+</th>
+<th>
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th rowspan="2" valign="top">
+kernel_00
+</th>
+<th rowspan="2" valign="top">
+$\beta_{ps(x0)}$
+</th>
+<th>
+posterior
+</th>
+<td>
+0.828
+</td>
+<td>
+0.823
+</td>
+</tr>
+<tr>
+<th>
+warmup
+</th>
+<td>
+0.793
+</td>
+<td>
+0.792
+</td>
+</tr>
+<tr>
+<th rowspan="2" valign="top">
+kernel_01
+</th>
+<th rowspan="2" valign="top">
+$\tau_{ps(x0)}^2$
+</th>
+<th>
+posterior
+</th>
+<td>
+1.000
+</td>
+<td>
+1.000
+</td>
+</tr>
+<tr>
+<th>
+warmup
+</th>
+<td>
+1.000
+</td>
+<td>
+1.000
+</td>
+</tr>
+<tr>
+<th rowspan="2" valign="top">
+kernel_02
+</th>
+<th rowspan="2" valign="top">
+$\beta_{0,loc}$
+</th>
+<th>
+posterior
+</th>
+<td>
+0.882
+</td>
+<td>
+0.882
+</td>
+</tr>
+<tr>
+<th>
+warmup
+</th>
+<td>
+0.888
+</td>
+<td>
+0.886
+</td>
+</tr>
+<tr>
+<th rowspan="2" valign="top">
+kernel_03
+</th>
+<th rowspan="2" valign="top">
+$\beta_{lin(X)}$
+</th>
+<th>
+posterior
+</th>
+<td>
+0.867
+</td>
+<td>
+0.866
+</td>
+</tr>
+<tr>
+<th>
+warmup
+</th>
+<td>
+0.793
+</td>
+<td>
+0.790
+</td>
+</tr>
+<tr>
+<th rowspan="2" valign="top">
+kernel_04
+</th>
+<th rowspan="2" valign="top">
+$\beta_{lin(X1)}$
+</th>
+<th>
+posterior
+</th>
+<td>
+0.848
+</td>
+<td>
+0.848
+</td>
+</tr>
+<tr>
+<th>
+warmup
+</th>
+<td>
+0.791
+</td>
+<td>
+0.793
 </td>
 </tr>
 </tbody>
@@ -756,7 +986,15 @@ kernel_01
 <th>
 </th>
 <th>
+</th>
+<th>
 count
+</th>
+<th>
+sample_size
+</th>
+<th>
+sample_size_total
 </th>
 <th>
 relative
@@ -765,6 +1003,9 @@ relative
 <tr>
 <th>
 kernel
+</th>
+<th>
+positions
 </th>
 <th>
 error_code
@@ -779,6 +1020,10 @@ phase
 </th>
 <th>
 </th>
+<th>
+</th>
+<th>
+</th>
 </tr>
 </thead>
 <tbody>
@@ -787,6 +1032,9 @@ phase
 kernel_00
 </th>
 <th rowspan="2" valign="top">
+$\beta_{ps(x0)}$
+</th>
+<th rowspan="2" valign="top">
 90
 </th>
 <th rowspan="2" valign="top">
@@ -796,10 +1044,16 @@ nan acceptance prob
 warmup
 </th>
 <td>
-69
+28
 </td>
 <td>
-0.017
+4000
+</td>
+<td>
+4000
+</td>
+<td>
+0.007
 </td>
 </tr>
 <tr>
@@ -807,7 +1061,13 @@ warmup
 posterior
 </th>
 <td>
-1
+0
+</td>
+<td>
+10000
+</td>
+<td>
+10000
 </td>
 <td>
 0.000
@@ -815,7 +1075,10 @@ posterior
 </tr>
 <tr>
 <th rowspan="2" valign="top">
-kernel_01
+kernel_03
+</th>
+<th rowspan="2" valign="top">
+$\beta_{lin(X)}$
 </th>
 <th rowspan="2" valign="top">
 90
@@ -827,7 +1090,13 @@ nan acceptance prob
 warmup
 </th>
 <td>
-32
+33
+</td>
+<td>
+4000
+</td>
+<td>
+4000
 </td>
 <td>
 0.008
@@ -841,44 +1110,62 @@ posterior
 0
 </td>
 <td>
-0.000
-</td>
-</tr>
-<tr>
-<th rowspan="2" valign="top">
-kernel_03
-</th>
-<th rowspan="2" valign="top">
-90
-</th>
-<th rowspan="2" valign="top">
-nan acceptance prob
-</th>
-<th>
-warmup
-</th>
-<td>
-25
+10000
 </td>
 <td>
-0.006
-</td>
-</tr>
-<tr>
-<th>
-posterior
-</th>
-<td>
-0
+10000
 </td>
 <td>
 0.000
 </td>
 </tr>
 <tr>
-<th rowspan="2" valign="top">
+<th rowspan="6" valign="top">
 kernel_04
 </th>
+<th rowspan="6" valign="top">
+$\beta_{lin(X1)}$
+</th>
+<th rowspan="2" valign="top">
+2
+</th>
+<th rowspan="2" valign="top">
+indefinite information matrix (fallback to identity)
+</th>
+<th>
+warmup
+</th>
+<td>
+84
+</td>
+<td>
+4000
+</td>
+<td>
+4000
+</td>
+<td>
+0.021
+</td>
+</tr>
+<tr>
+<th>
+posterior
+</th>
+<td>
+872
+</td>
+<td>
+10000
+</td>
+<td>
+10000
+</td>
+<td>
+0.087
+</td>
+</tr>
+<tr>
 <th rowspan="2" valign="top">
 90
 </th>
@@ -889,10 +1176,16 @@ nan acceptance prob
 warmup
 </th>
 <td>
-23
+58
 </td>
 <td>
-0.006
+4000
+</td>
+<td>
+4000
+</td>
+<td>
+0.014
 </td>
 </tr>
 <tr>
@@ -903,98 +1196,133 @@ posterior
 0
 </td>
 <td>
+10000
+</td>
+<td>
+10000
+</td>
+<td>
 0.000
+</td>
+</tr>
+<tr>
+<th rowspan="2" valign="top">
+92
+</th>
+<th rowspan="2" valign="top">
+indefinite information matrix (fallback to identity) + nan acceptance
+prob
+</th>
+<th>
+warmup
+</th>
+<td>
+2
+</td>
+<td>
+4000
+</td>
+<td>
+4000
+</td>
+<td>
+0.001
+</td>
+</tr>
+<tr>
+<th>
+posterior
+</th>
+<td>
+14
+</td>
+<td>
+10000
+</td>
+<td>
+10000
+</td>
+<td>
+0.001
 </td>
 </tr>
 </tbody>
 </table>
 
-And the corresponding trace plots:
+The corresponding trace plots:
 
 ``` python
-fig = gs.plot_trace(results, "loc_p0_beta")
+gs.plot_trace(results, loc.intercept.name)
+gs.plot_trace(results, loc_smooth_tau2_name)
+gs.plot_trace(results, loc_smooth.coef.name)
+gs.plot_trace(results, scale_x1.coef.name)
+gs.plot_trace(results, concentration_x2.coef.name)
 ```
 
-![](03-gev_files/figure-commonmark/traces-1.png)
+<img src="03-gev_files/figure-commonmark/traces-output-1.png"
+id="traces-1" />
+
+<img src="03-gev_files/figure-commonmark/traces-output-2.png"
+id="traces-2" />
+
+<img src="03-gev_files/figure-commonmark/traces-output-3.png"
+id="traces-3" />
+
+<img src="03-gev_files/figure-commonmark/traces-output-4.png"
+id="traces-4" />
+
+<img src="03-gev_files/figure-commonmark/traces-output-5.png"
+id="traces-5" />
+
+Finally, we can evaluate the posterior samples of the location predictor
+and compare the posterior mean with the true function used in the
+simulation.
 
 ``` python
-fig = gs.plot_trace(results, "loc_np0_tau2")
+samples = results.get_posterior_samples()
+loc_samples = model.vars["loc"].predict(samples)
+loc_summary = gs.SamplesSummary.from_array(
+    loc_samples,
+    name="loc",
+    which=["mean", "quantiles"],
+)
+loc_summary_df = loc_summary.to_dataframe().reset_index()
+
+loc_summary_df["x0"] = data["x0"].to_numpy()
+loc_summary_df["true_loc"] = data["true_loc"].to_numpy()
+loc_summary_df = loc_summary_df.sort_values("x0")
+
+fig, ax = plt.subplots(figsize=(8, 5))
+sns.lineplot(
+    data=loc_summary_df,
+    x="x0",
+    y="true_loc",
+    color=sns.color_palette()[0],
+    linewidth=2,
+    label="true location",
+    ax=ax,
+)
+ax.fill_between(
+    loc_summary_df["x0"],
+    loc_summary_df["q_0.05"],
+    loc_summary_df["q_0.95"],
+    color=sns.color_palette()[1],
+    alpha=0.25,
+    label="90% credible interval",
+)
+sns.lineplot(
+    data=loc_summary_df,
+    x="x0",
+    y="mean",
+    color=sns.color_palette()[1],
+    linewidth=2,
+    label="posterior mean",
+    ax=ax,
+)
+
+ax.set(xlabel="x0", ylabel="location", title="Estimated location function")
+plt.show()
 ```
 
-![](03-gev_files/figure-commonmark/traces-2.png)
-
-``` python
-fig = gs.plot_trace(results, "loc_np0_beta")
-```
-
-![](03-gev_files/figure-commonmark/traces-3.png)
-
-``` python
-fig = gs.plot_trace(results, "scale_p0_beta")
-```
-
-![](03-gev_files/figure-commonmark/traces-4.png)
-
-``` python
-fig = gs.plot_trace(results, "concentration_p0_beta")
-```
-
-![](03-gev_files/figure-commonmark/traces-5.png)
-
-We need to reset the index of the summary data frame before we can
-transfer it to R.
-
-``` python
-summary = gs.Summary(results).to_dataframe().reset_index()
-```
-
-After transferring the summary data frame to R, we can process it with
-packages like dplyr and ggplot2. Here is a visualization of the
-estimated spline vs. the true function:
-
-``` r
-library(dplyr)
-```
-
-
-    Attaching package: 'dplyr'
-
-    The following objects are masked from 'package:stats':
-
-        filter, lag
-
-    The following objects are masked from 'package:base':
-
-        intersect, setdiff, setequal, union
-
-``` r
-library(ggplot2)
-library(reticulate)
-```
-
-    Warning: package 'reticulate' was built under R version 4.4.1
-
-``` r
-summary <- py$summary
-
-beta <- summary %>%
-  filter(variable == "loc_np0_beta") %>%
-  group_by(var_index) %>%
-  summarize(mean = mean(mean)) %>%
-  ungroup()
-
-beta <- beta$mean
-X <- py_to_r(model$vars["loc_np0_X"]$value)
-estimate <- X %*% beta
-
-true <- sin(2 * pi * x0)
-
-ggplot(data.frame(x0 = x0, estimate = estimate, true = true)) +
-  geom_line(aes(x0, estimate), color = palette()[2]) +
-  geom_line(aes(x0, true), color = palette()[4]) +
-  ggtitle("Estimated spline (red) vs. true function (blue)") +
-  ylab("f") +
-  theme_minimal()
-```
-
-![](03-gev_files/figure-commonmark/spline-11.png)
+<img src="03-gev_files/figure-commonmark/spline-output-1.png"
+id="spline" />

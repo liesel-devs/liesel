@@ -2,6 +2,7 @@ project:
   title: "tutorials"
   output-dir: ../md
 format: gfm
-engine: knitr
+engine: jupyter
+jupyter: python3
 execute:
   cache: false

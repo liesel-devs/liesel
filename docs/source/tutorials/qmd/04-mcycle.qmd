@@ -1,10 +1,10 @@
 ---
-engine: knitr
+engine: jupyter
 ---
 
 ```{python}
-#| label: setup
-#| include: false
+# | label: setup
+# | include: false
 
 import liesel.goose as gs
 import pandas as pd
@@ -17,254 +17,238 @@ pd.options.display.html.border = 0
 
 # Comparing samplers
 
-In this tutorial, we are comparing two different sampling schemes on the `mcycle` dataset with a Gaussian location-scale regression model and two splines for the mean and the standard deviation. The `mcycle` dataset is a "data frame giving a series of measurements of head acceleration in a simulated motorcycle accident, used to test crash helmets" (from the help page). It contains the following two variables:
+In this tutorial, we compare two different sampling schemes on the `mcycle` dataset with a Gaussian location-scale regression model and two splines for the mean and the standard deviation.
+The `mcycle` dataset is a "data frame giving a series of measurements of head acceleration in a simulated motorcycle accident, used to test crash helmets" (from the help page).
+It contains the following two variables:
 
 - `times`: in milliseconds after impact
 - `accel`: in g
 
-We start off in R by loading the dataset and setting up the model with the `rliesel::liesel()` function.
+We set up the model in Python with [Liesel-GAM](https://github.com/liesel-devs/liesel_gam), using {class}`liesel_gam.TermBuilder` for the P-spline terms.
+See the [Liesel-GAM documentation and examples](https://github.com/liesel-devs/liesel_gam#readme) for more information about additive terms and predictors.
+We load the data set from R with [ryp](https://github.com/Wainberg/ryp) and then continue with a pure Python model specification and sampling workflow.
 
-```{r}
-#| label: model
+```{python}
+# | label: imports
 
-library(MASS)
-library(rliesel)
+from pathlib import Path
 
-data(mcycle)
-with(mcycle, plot(times, accel))
+import jax.numpy as jnp
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+import tensorflow_probability.substrates.jax.bijectors as tfb
+import tensorflow_probability.substrates.jax.distributions as tfd
 
-model <- liesel(
-  response = mcycle$accel,
-  distribution = "Normal",
-  predictors = list(
-    loc = predictor(~ s(times)),
-    scale = predictor(~ s(times), inverse_link = "Exp")
-  ),
-  data = mcycle
-)
+import liesel.goose as gs
+import liesel.model as lsl
+import liesel_gam as gam
+from ryp import r, to_py
+```
+
+We start by loading the data set from the R package `MASS` and converting it to a pandas data frame.
+
+```{python}
+r("library(MASS)")
+r("data(mcycle); mcycle <- as.data.frame(mcycle)")
+
+mcycle = to_py("mcycle", format="pandas")
+```
+
+```{python}
+# | label: data
+
+fig, ax = plt.subplots(figsize=(8, 4))
+sns.scatterplot(data=mcycle, x="times", y="accel", color="0.25", s=35, ax=ax)
+ax.set(xlabel="time after impact", ylabel="acceleration", title="mcycle data")
+plt.show()
+```
+
+Next, we build the Gaussian location-scale model.
+Both distributional parameters use an additive predictor with an intercept and a P-spline in `times`.
+The scale predictor uses an exponential inverse link to keep the standard deviation positive.
+The `TermBuilder` is initialized with an IWLS MCMC specification, so the P-spline regression coefficients are sampled with IWLS kernels by default.
+The additive predictor intercepts also use their default IWLS inference specification.
+The smoothing variances of the P-splines receive Gibbs kernels automatically.
+
+```{python}
+# | label: model-helper
+
+tb = gam.TermBuilder.from_df(mcycle, default_inference=gs.MCMCSpec(gs.IWLSKernel))
+
+loc = gam.AdditivePredictor("loc")
+scale = gam.AdditivePredictor("scale", inv_link=jnp.exp)
+
+loc_smooth = tb.ps("times", k=20, prefix="loc.")
+scale_smooth = tb.ps("times", k=20, prefix="scale.")
+
+loc += loc_smooth
+scale += scale_smooth
+
+response_dist = lsl.Dist(tfd.Normal, loc=loc, scale=scale)
+y = lsl.Var.new_obs(mcycle["accel"], response_dist, name="y")
+model = lsl.Model(y)
 ```
 
 ## Metropolis-in-Gibbs
 
-First, we try a Metropolis-in-Gibbs sampling scheme with IWLS kernels for the regression coefficients ($\boldsymbol{\beta}$) and Gibbs kernels for the smoothing parameters ($\tau^2$) of the splines.
+First, we run the model with the inference specifications attached during model construction.
+This gives a Metropolis-in-Gibbs sampling scheme with IWLS kernels for the regression coefficients ($\boldsymbol{\beta}$) and Gibbs kernels for the smoothing variances ($\tau^2$) of the splines.
 
 ```{python}
-#| label: iwls-sampling
+# | label: iwls-sampling
 
-import liesel.model as lsl
-
-model = r.model
-
-builder = lsl.dist_reg_mcmc(model, seed=42, num_chains=4)
-builder.set_duration(warmup_duration=5000, posterior_duration=1000)
-builder.show_progress = False
-
-engine = builder.build()
-engine.sample_all_epochs()
+iwls_results = gs.LieselMCMC(model).run_for_epochs(
+    seed=1, num_chains=4, adaptation=1000, posterior=10000, posterior_thinning=10, show_progress=False
+)
 ```
 
-Clearly, the performance of the sampler could be better, especially for the intercept of the mean. The corresponding chain exhibits a very strong autocorrelation.
+Clearly, the performance of the sampler could be better, especially for the intercept of the mean.
+The corresponding chain exhibits a very strong autocorrelation.
 
 ```{python}
-#| label: iwls-summary
+# | label: iwls-summary
 
-import liesel.goose as gs
-
-results = engine.get_results()
-gs.Summary(results)
+gs.Summary(iwls_results)
 ```
 
 ```{python}
-#| label: iwls-traces
-
-fig = gs.plot_trace(results, "loc_p0_beta")
-fig = gs.plot_trace(results, "loc_np0_tau2")
-fig = gs.plot_trace(results, "loc_np0_beta")
-
-fig = gs.plot_trace(results, "scale_p0_beta")
-fig = gs.plot_trace(results, "scale_np0_tau2")
-fig = gs.plot_trace(results, "scale_np0_beta")
+# | label: iwls-traces
+gs.plot_trace(iwls_results)
 ```
 
-To confirm that the chains have converged to reasonable values, here is a plot of the estimated mean function:
+To confirm that the chains have converged to reasonable values, we plot the posterior mean of the location predictor together with a 90% credible interval:
 
 ```{python}
-#| label: iwls-summary-df
+# | label: iwls-spline
 
-summary = gs.Summary(results).to_dataframe().reset_index()
-```
 
-```{r}
-#| label: iwls-spline
+def plot_loc_estimate(results, model, title):
+    samples = results.get_posterior_samples()
+    loc_samples = model.vars["loc"].predict(samples)
+    loc_summary = gs.SamplesSummary.from_array(
+        loc_samples,
+        name="loc",
+        which=["mean", "quantiles"],
+    )
+    loc_summary_df = loc_summary.to_dataframe().reset_index()
 
-library(dplyr)
-library(ggplot2)
-library(reticulate)
+    loc_summary_df["times"] = mcycle["times"].to_numpy()
+    plot_data = (
+        loc_summary_df[["times", "mean", "q_0.05", "q_0.95"]]
+        .groupby("times", as_index=False)
+        .mean()
+        .sort_values("times")
+    )
 
-summary <- py$summary
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.fill_between(
+        plot_data["times"],
+        plot_data["q_0.05"],
+        plot_data["q_0.95"],
+        color=sns.color_palette()[1],
+        alpha=0.25,
+        label="90% credible interval",
+    )
+    sns.lineplot(
+        data=plot_data,
+        x="times",
+        y="mean",
+        color=sns.color_palette()[1],
+        linewidth=2,
+        label="posterior mean",
+        ax=ax,
+    )
+    sns.scatterplot(
+        data=mcycle,
+        x="times",
+        y="accel",
+        color="0.25",
+        s=25,
+        ax=ax,
+        label="observed data",
+    )
+    ax.set(xlabel="time after impact", ylabel="acceleration", title=title)
+    plt.show()
 
-beta <- summary %>%
-  filter(variable == "loc_np0_beta") %>%
-  group_by(var_index) %>%
-  summarize(mean = mean(mean)) %>%
-  ungroup()
 
-beta <- beta$mean
-X <- py_to_r(model$vars["loc_np0_X"]$value)
-f <- X %*% beta
-
-beta0 <- summary %>%
-  filter(variable == "loc_p0_beta") %>%
-  group_by(var_index) %>%
-  summarize(mean = mean(mean)) %>%
-  ungroup()
-
-beta0 <- beta0$mean
-
-ggplot(data.frame(times = mcycle$times, mean = beta0 + f)) +
-  geom_line(aes(times, mean), color = palette()[2], size = 1) +
-  geom_point(aes(times, accel), data = mcycle) +
-  ggtitle("Estimated mean function") +
-  theme_minimal()
+plot_loc_estimate(iwls_results, model, "Estimated mean function (IWLS/Gibbs)")
 ```
 
 ## NUTS sampler
 
-As an alternative, we try using NUTS kernels for all parameters.
-To do so, we first need to log-transform the smoothing parameters.
-This is the model graph before the transformation:
+As an alternative, we use NUTS kernels for the spline-specific parameter blocks.
+The helper below copies the model graph, log-transforms the smoothing variances by bijecting them with an exponential bijector, and assigns one NUTS kernel group per additive term.
 
 ```{python}
-#| label: untransformed-graph
+def strategy_term_blocked(
+    model: lsl.Model, predictors: list[str], kernel_constructor, **kwargs
+):
+    model = model.copy()
+    for k, v in model.parameters.items():
+        if "tau" in k:
+            v.biject(tfb.Exp(), inference="drop")
 
-lsl.plot_vars(model)
+    for predictor_name in predictors:
+        predictor = model.vars[predictor_name]
+        if predictor.intercept:
+            predictor.intercept.inference = gs.MCMCSpec(
+                kernel_constructor, kernel_kwargs=kwargs
+            )
+
+        for term in predictor.terms.values():
+            for param in model.parental_submodel(term).parameters.values():
+                model.parameters[param.name].inference = gs.MCMCSpec(
+                    kernel_constructor, kernel_group=term.name, kernel_kwargs=kwargs
+                )
+
+    return model
 ```
 
-To transform the smoothing parameters with the method {meth}`.Var.transform`,
-we need to retrieve the nodes and vars form the model. This is necessary, because
-while they are part of a model, the inputs and outputs of nodes and vars cannot
-be changed.
-We retrieve the nodes and vars using {meth}`.Model.pop_nodes_and_vars`,
-which renders the model empty.
-
-Note, RLiesel automatically populates the parameter variables with intormation
-how to conduct the MCMC inference. To trasform the variables, we can drop it.
-We setup the MCMC sampler in the next chunk.
-
-After transformation, there are two additional nodes in the new model graph.
-
-
 ```{python}
-#| label: transformed-graph
+# | label: untransformed-graph
 
-import tensorflow_probability.substrates.jax.bijectors as tfb
-
-nodes, _vars = model.pop_nodes_and_vars()
-
-_vars["loc_np0_tau2"].transform(tfb.Exp(), inference='drop')
-_vars["scale_np0_tau2"].transform(tfb.Exp(), inference='drop')
-
-gb = lsl.GraphBuilder().add(_vars["response"])
-
-model = gb.build_model()
-lsl.plot_vars(model)
+nuts_model = strategy_term_blocked(model, ["loc", "scale"], gs.NUTSKernel)
 ```
 
-Now we can set up the NUTS sampler. In complex models like this one it can be
-very beneficial to use individual NUTS samplers for blocks of parameters. This
-is pretty much the same strategy that we apply to the IWLS sampler, too.
-
-
+The resulting model contains transformed smoothing variances on the unconstrained log scale.
+Here is the transformed model graph:
 
 ```{python}
-#| label: nuts-sampling
+# | label: transformed-graph
+nuts_model.plot()
+```
 
-builder = gs.EngineBuilder(seed=42, num_chains=4)
+Now we can run the sampler from the `MCMCSpec` objects stored in the model.
+In complex models like this one, it can be beneficial to sample the parameters of each additive term in a separate NUTS block.
 
-builder.set_model(gs.LieselInterface(model))
+```{python}
+# | label: nuts-sampling
 
-# add NUTS kernels
-parameters = [name for name, var in model.vars.items() if var.parameter]
-
-for parameter in parameters:
-  builder.add_kernel(gs.NUTSKernel([parameter]))
-
-
-builder.set_initial_values(model.state)
-
-builder.set_epochs(
-  gs.stan_epochs(warmup_duration=5000, posterior_duration=1000, init_duration=750, term_duration=500)
+nuts_results = gs.LieselMCMC(nuts_model).run_for_epochs(
+    seed=1, num_chains=4, adaptation=1000, posterior=1000, show_progress=False
 )
-
-builder.show_progress = False
-
-engine = builder.build()
-engine.sample_all_epochs()
 ```
 
-The NUTS sampler overall seems to do a good job - and even yields higher
-effective sample sizes than the IWLS sampler, especially for the spline
-coefficients of the scale model.
+The blocked NUTS strategy overall seems to do a good job and can yield higher effective sample sizes than the IWLS sampler, especially for the spline coefficients of the scale model.
 
 ```{python}
-#| label: nuts-summary
-#| output: asis
+# | label: nuts-summary
+# | output: asis
 
-results = engine.get_results()
-gs.Summary(results)
+gs.Summary(nuts_results)
 ```
 
 ```{python}
-#| label: nuts-traces
+# | label: nuts-traces
 
-fig = gs.plot_trace(results, "loc_p0_beta")
-fig = gs.plot_trace(results, "loc_np0_tau2_transformed")
-fig = gs.plot_trace(results, "loc_np0_beta")
-
-fig = gs.plot_trace(results, "scale_p0_beta")
-fig = gs.plot_trace(results, "scale_np0_tau2_transformed")
-fig = gs.plot_trace(results, "scale_np0_beta")
+gs.plot_trace(nuts_results)
 ```
 
-Again, here is a plot of the estimated mean function:
+Again, here is the posterior mean function with a 90% credible interval:
 
 ```{python}
-#| label: nuts-summary-df
+# | label: nuts-spline
 
-summary = gs.Summary(results).to_dataframe().reset_index()
-```
-
-```{r}
-#| label: nuts-spline
-
-library(dplyr)
-library(ggplot2)
-library(reticulate)
-
-summary <- py$summary
-model <- py$model
-
-beta <- summary %>%
-  filter(variable == "loc_np0_beta") %>%
-  group_by(var_index) %>%
-  summarize(mean = mean(mean)) %>%
-  ungroup()
-
-beta <- beta$mean
-X <- model$vars["loc_np0_X"]$value
-f <- X %*% beta
-
-beta0 <- summary %>%
-  filter(variable == "loc_p0_beta") %>%
-  group_by(var_index) %>%
-  summarize(mean = mean(mean)) %>%
-  ungroup()
-
-beta0 <- beta0$mean
-
-ggplot(data.frame(times = mcycle$times, mean = beta0 + f)) +
-  geom_line(aes(times, mean), color = palette()[2], size = 1) +
-  geom_point(aes(times, accel), data = mcycle) +
-  ggtitle("Estimated mean function") +
-  theme_minimal()
+plot_loc_estimate(nuts_results, nuts_model, "Estimated mean function (NUTS)")
 ```
