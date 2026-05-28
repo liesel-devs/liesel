@@ -106,7 +106,7 @@ The central classes for handling your sampling results are:
 
 You can obtain your posterior samples as a dictionary via
 :meth:`~.goose.SamplingResults.get_posterior_samples`. There is also experimental support
-for turning your samples into an ``arviz.InferenceData`` object via
+for turning your samples into an ArviZ data object via
 :func:`.to_arviz_inference_data`.
 
 Goose also comes with a number of plotting functions that give you quick

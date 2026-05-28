@@ -22,7 +22,7 @@ classifiers = [
 
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "arviz>=0.15,<1.0", # requires refactor on our side
+    "arviz>=1.1",
     # a warning is emitted during import with v1.3 because of jaxopt <=0.8.3 being
     # required
     "blackjax>=1.0,<1.3",
