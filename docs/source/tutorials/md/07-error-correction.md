@@ -246,7 +246,7 @@ model = lsl.Model([y_var, x_tilde_var])
 model.plot_vars()
 ```
 
-    liesel.model.model - WARNING - Inconsistent log prob decomposition: Model.log_prob=-19741.52 ≠ (Model.log_lik=-14871.53 + Model.log_prior=-1715.54). 
+    liesel.model.model - WARNING - Inconsistent log prob decomposition: Model.log_prob=-19741.52 ≠ (Model.log_lik=-14871.53 + Model.log_prior=-1715.54).
     liesel.model.model - WARNING - Var(name="x_tilde") has a distribution but Var.parameter=False and Var.observed=False.
 
 <img

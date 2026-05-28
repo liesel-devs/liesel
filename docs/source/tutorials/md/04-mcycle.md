@@ -36,7 +36,7 @@ from ryp import r, to_py
 ```
 
     Warning message:
-    package ‘arrow’ was built under R version 4.5.2 
+    package ‘arrow’ was built under R version 4.5.2
 
 We start by loading the data set from the R package `MASS` and
 converting it to a pandas data frame.

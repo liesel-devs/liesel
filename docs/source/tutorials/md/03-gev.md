@@ -34,7 +34,7 @@ sns.set_theme(style="whitegrid")
 ```
 
     Warning message:
-    package ‘arrow’ was built under R version 4.5.2 
+    package ‘arrow’ was built under R version 4.5.2
 
 ``` python
 key = jax.random.PRNGKey(13)
