@@ -158,17 +158,16 @@ Now, we can set up the {class}`.Model`. Here, we will only add the response.
 
 ```{python}
 # | label: model-init
-model = lsl.Model([y])
+model = lsl.Model(y)
 ```
 
-The {func}`.plot_vars()` function visualizes the model.
-More on that in the [Model building with Liesel tutorial](01b-model.md)
+The {meth}`.Model.plot()` method visualizes the model.
 If the layout of the graph looks messy for you,
 please make sure you have the `pygraphviz` package installed.
 
 ```{python}
 # | label: plot-vars
-lsl.plot_vars(model)
+model.plot()
 ```
 
 ## MCMC inference with Goose
