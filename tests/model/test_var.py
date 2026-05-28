@@ -49,9 +49,14 @@ def test_name() -> None:
     var.name = "bar"
     assert var.name == "bar"
 
+    model = lsl.Model([var])
+    var.name = "foo"
+    model.pop_vars()
+
     with pytest.raises(RuntimeError):
-        _ = lsl.Model([var])
-        var.name = "foo"
+        model = lsl.Model([var])
+        model.locked = True
+        var.name = "foobar"
 
 
 def test_role() -> None:
@@ -74,8 +79,13 @@ def test_observed() -> None:
     var.observed = True
     assert var.observed
 
+    model = lsl.Model([var])
+    var.observed = False
+    model.pop_vars()
+
     with pytest.raises(RuntimeError):
-        _ = lsl.Model([var])
+        model = lsl.Model([var])
+        model.locked = True
         var.observed = False
 
 
@@ -87,8 +97,13 @@ def test_parameter() -> None:
     var.parameter = True
     assert var.parameter
 
+    model = lsl.Model([var])
+    var.parameter = False
+    model.pop_vars()
+
     with pytest.raises(RuntimeError):
-        _ = lsl.Model([var])
+        model = lsl.Model([var])
+        model.locked = True
         var.parameter = False
 
 
@@ -123,8 +138,13 @@ def test_value_node() -> None:
     assert var.value_node is not node0
     assert var.value_node is node1
 
+    model = lsl.Model([var])
+    var.value_node = node0
+    model.pop_vars()
+
     with pytest.raises(RuntimeError):
-        _ = lsl.Model([var])
+        model = lsl.Model([var])
+        model.locked = True
         var.value_node = node0
 
 

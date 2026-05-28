@@ -1,14 +1,15 @@
-
 # Parameter transformations
 
 This tutorial builds on the [linear regression
-tutorial](01a-lin-reg.md#linear-regression). Here, we demonstrate how we
-can easily transform a parameter in our model to sample it with NUTS
-instead of a Gibbs Kernel.
+tutorial](01a-lin-reg.md#linear-regression). Here, we demonstrate how to
+transform a positive-valued parameter so that it can be sampled with a
+NUTS kernel on an unconstrained scale.
 
-First, let’s set up our model again. This is the same model as in the
-[linear regression tutorial](01a-lin-reg.md#linear-regression), so we
-will not go into the details here.
+First, let’s set up the linear regression model again. The
+data-generating process and the model structure are the same as in the
+[linear regression tutorial](01a-lin-reg.md#linear-regression), but this
+time we prepare the model for joint NUTS sampling of the regression
+coefficients and the error variance.
 
 ``` python
 import jax
@@ -36,7 +37,12 @@ y_vec = X_mat @ true_beta + rng.normal(scale=true_sigma, size=n)
 # Model
 # Part 1: Model for the mean
 beta_prior = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
-beta = lsl.Var.new_param(value=np.array([0.0, 0.0]), distribution=beta_prior,name="beta")
+beta = lsl.Var.new_param(
+    value=np.array([0.0, 0.0]),
+    dist=beta_prior,
+    name="beta",
+    inference=gs.MCMCSpec(gs.NUTSKernel, kernel_group="1"),
+)
 
 X = lsl.Var.new_obs(X_mat, name="X")
 mu = lsl.Var(lsl.Calc(jnp.dot, X, beta), name="mu")
@@ -45,108 +51,109 @@ mu = lsl.Var(lsl.Calc(jnp.dot, X, beta), name="mu")
 a = lsl.Var(0.01, name="a")
 b = lsl.Var(0.01, name="b")
 sigma_sq_prior = lsl.Dist(tfd.InverseGamma, concentration=a, scale=b)
-sigma_sq = lsl.Var.new_param(value=10.0, distribution=sigma_sq_prior, name="sigma_sq")
+sigma_sq = lsl.Var.new_param(value=10.0, dist=sigma_sq_prior, name="sigma_sq")
 
 sigma = lsl.Var(lsl.Calc(jnp.sqrt, sigma_sq), name="sigma")
 
 # Observation model
 y_dist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
-y = lsl.Var(y_vec, distribution=y_dist, name="y")
+y = lsl.Var(y_vec, dist=y_dist, name="y")
 ```
 
-Now let’s try to sample the full parameter vector
-$(\boldsymbol{\beta}', \sigma)'$ with a single NUTS kernel instead of
-using a NUTS kernel for $\boldsymbol{\beta}$ and a Gibbs kernel for
-$\sigma^2$. Since the standard deviation is a positive-valued parameter,
-we need to log-transform it to sample it with a NUTS kernel. The
-{class}`.Var` class provides the method {meth}`.Var.transform` for this
-purpose.
+Now let’s try to sample the regression coefficients $\boldsymbol{\beta}$
+and the variance $\sigma^2$ with a single NUTS kernel. NUTS operates on
+unconstrained real-valued parameters, whereas $\sigma^2$ must remain
+positive. We therefore biject `sigma_sq` with an exponential bijector.
+This creates an unconstrained latent variable representing
+$\log(\sigma^2)$ and keeps `sigma_sq` as the positive back-transformed
+value. Both `beta` and the transformed variance receive NUTS inference
+specifications with the same `kernel_group`, so Goose samples them
+jointly in one NUTS block.
 
 ``` python
-sigma_sq.transform(tfb.Exp())
+sigma_sq.biject(tfb.Exp(), inference=gs.MCMCSpec(gs.NUTSKernel, kernel_group="1"))
+
+model = lsl.Model(y)
+model.plot()
 ```
 
-    Var(name="sigma_sq_transformed")
+    liesel.model.model - WARNING - Inconsistent log prob decomposition: Model.log_prob=-1177.35 ≠ (Model.log_lik=0.00 + Model.log_prior=-15.72).
+    liesel.model.model - WARNING - Var(name="y") has a distribution but Var.parameter=False and Var.observed=False.
 
-``` python
-gb = lsl.GraphBuilder().add(y)
-model = gb.build_model()
-lsl.plot_vars(model)
-```
-
-![](01c-transform_files/figure-commonmark/graph-and-transformation-1.png)
+<img
+src="01c-transform_files/figure-commonmark/graph-and-transformation-output-2.png"
+id="graph-and-transformation" />
 
 The response distribution still requires the standard deviation on the
-original scale. The model graph shows that the back-transformation from
-the logarithmic to the original scale is performed by a inserting the
-`sigma_sq_transformed` node and turning the `sigma_sq` node into a weak
-node. This weak node now deterministically depends on
-`sigma_sq_transformed`: its value is the back-transformed variance.
+original scale. The model graph shows that `sigma_sq` is now a
+deterministic, positive-valued transformation of its unconstrained
+latent variable. The standard deviation `sigma` is then computed as
+`sqrt(sigma_sq)`, so the likelihood continues to receive a valid scale
+parameter.
 
-Now we can set up and run an MCMC algorithm with a NUTS kernel for all
-parameters.
+Now we can set up and run the MCMC algorithm directly from the
+`MCMCSpec` objects stored in the model. We also include `sigma_sq` in
+the stored positions, because the NUTS kernel itself samples the
+transformed variable, while `sigma_sq` is the easier quantity to
+interpret.
 
 ``` python
-builder = gs.EngineBuilder(seed=1339, num_chains=4)
-
-builder.set_model(gs.LieselInterface(model))
-builder.set_initial_values(model.state)
-
-builder.add_kernel(gs.NUTSKernel(["beta", "sigma_sq_transformed"]))
-
-builder.set_duration(warmup_duration=1000, posterior_duration=1000)
-
-# by default, goose only stores the parameters specified in the kernels.
-# let's also store the standard deviation on the original scale.
-builder.positions_included = ["sigma_sq"]
-
-engine = builder.build()
-engine.sample_all_epochs()
+results = gs.LieselMCMC(model).run_for_epochs(
+    seed=1,
+    num_chains=4,
+    adaptation=1000,
+    posterior=1000,
+    positions_included=["sigma_sq"],
+)
 ```
 
-      0%|                                                  | 0/3 [00:00<?, ?chunk/s]
-     33%|##############                            | 1/3 [00:01<00:03,  1.52s/chunk]
-    100%|##########################################| 3/3 [00:01<00:00,  1.98chunk/s]
-
-      0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|########################################| 1/1 [00:00<00:00, 2709.50chunk/s]
-
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 3390.71chunk/s]
-
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|########################################| 4/4 [00:00<00:00, 3766.78chunk/s]
-
-      0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|#########################################| 8/8 [00:00<00:00, 830.21chunk/s]
-
-      0%|                                                 | 0/20 [00:00<?, ?chunk/s]
-    100%|#######################################| 20/20 [00:00<00:00, 262.70chunk/s]
-
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 3690.54chunk/s]
-
-      0%|                                                 | 0/40 [00:00<?, ?chunk/s]
-     60%|#######################4               | 24/40 [00:00<00:00, 236.26chunk/s]
-    100%|#######################################| 40/40 [00:00<00:00, 205.87chunk/s]
+    liesel.goose.builder - WARNING - No jitter functions provided for position keys 'h(sigma_sq)', 'beta'. The initial values for these keys won't be jittered
+    liesel.goose.engine - INFO - Initializing kernels...
+    liesel.goose.engine - INFO - Done
+    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 100 transitions, 25 jitted together
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s] 25%|██████████▌                               | 1/4 [00:01<00:04,  1.38s/chunk]100%|██████████████████████████████████████████| 4/4 [00:01<00:00,  2.89chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 2, 4 / 100 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
+      0%|                                                  | 0/1 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 1/1 [00:00<00:00, 1240.55chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 1, 2, 1 / 25 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1683.78chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 3, 1, 2 / 50 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 4/4 [00:00<00:00, 2899.12chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 2, 2 / 100 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 525 transitions, 25 jitted together
+      0%|                                                 | 0/21 [00:00<?, ?chunk/s]100%|███████████████████████████████████████| 21/21 [00:00<00:00, 303.84chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 3, 3, 3 / 525 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 200 transitions, 25 jitted together
+      0%|                                                  | 0/8 [00:00<?, ?chunk/s]100%|█████████████████████████████████████████| 8/8 [00:00<00:00, 895.45chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 4, 3, 1 / 200 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Finished warmup
+    liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
+      0%|                                                 | 0/40 [00:00<?, ?chunk/s] 80%|███████████████████████████████▏       | 32/40 [00:00<00:00, 307.02chunk/s]100%|███████████████████████████████████████| 40/40 [00:00<00:00, 291.56chunk/s]
+    liesel.goose.engine - INFO - Finished epoch
 
 Judging from the trace plots, it seems that all chains have converged.
 
 ``` python
-results = engine.get_results()
-g = gs.plot_trace(results)
+gs.plot_trace(results)
 ```
 
-![](01c-transform_files/figure-commonmark/traceplots-3.png)
+<img src="01c-transform_files/figure-commonmark/traceplots-output-1.png"
+id="traceplots" />
 
-We can also take a look at the summary table, which includes the
+We can also take a look at the summary table, which includes both the
 original $\sigma^2$ and the transformed $\log(\sigma^2)$.
 
 ``` python
 gs.Summary(results)
 ```
-
-<div class="cell-output-display">
 
 <p>
 <strong>Parameter summary:</strong>
@@ -230,31 +237,31 @@ beta
 kernel_00
 </td>
 <td>
-0.988
+0.981
 </td>
 <td>
-0.093
+0.091
 </td>
 <td>
-0.834
+0.833
 </td>
 <td>
-0.987
+0.980
 </td>
 <td>
-1.140
+1.130
 </td>
 <td>
 4000
 </td>
 <td>
-1380.566
+816.958
 </td>
 <td>
-1659.059
+1116.378
 </td>
 <td>
-1.003
+1.002
 </td>
 </tr>
 <tr>
@@ -265,31 +272,69 @@ kernel_00
 kernel_00
 </td>
 <td>
-1.904
+1.914
 </td>
 <td>
-0.162
+0.159
 </td>
 <td>
-1.637
+1.656
 </td>
 <td>
-1.907
+1.916
 </td>
 <td>
-2.165
+2.173
 </td>
 <td>
 4000
 </td>
 <td>
-1515.441
+772.001
 </td>
 <td>
-1646.966
+917.470
 </td>
 <td>
-1.003
+1.001
+</td>
+</tr>
+<tr>
+<th>
+h(sigma_sq)
+</th>
+<th>
+()
+</th>
+<td>
+kernel_00
+</td>
+<td>
+0.042
+</td>
+<td>
+0.062
+</td>
+<td>
+-0.058
+</td>
+<td>
+0.040
+</td>
+<td>
+0.145
+</td>
+<td>
+4000
+</td>
+<td>
+5406.551
+</td>
+<td>
+3299.936
+</td>
+<td>
+1.001
 </td>
 </tr>
 <tr>
@@ -303,69 +348,97 @@ sigma_sq
 \-
 </td>
 <td>
-1.042
+1.045
 </td>
 <td>
-0.066
+0.065
 </td>
 <td>
-0.936
+0.943
 </td>
 <td>
-1.039
+1.041
 </td>
 <td>
-1.154
+1.156
 </td>
 <td>
 4000
 </td>
 <td>
-2330.582
+5406.532
 </td>
 <td>
-2044.393
+3299.936
 </td>
 <td>
-1.002
+1.001
+</td>
+</tr>
+</tbody>
+</table>
+<p>
+<strong>Acceptance probabilities:</strong>
+</p>
+<table border="0" class="dataframe">
+<thead>
+<tr style="text-align: right;">
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+acceptance_probability
+</th>
+<th>
+position_moved
+</th>
+</tr>
+<tr>
+<th>
+kernel
+</th>
+<th>
+positions
+</th>
+<th>
+phase
+</th>
+<th>
+</th>
+<th>
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th rowspan="2" valign="top">
+kernel_00
+</th>
+<th rowspan="2" valign="top">
+h(sigma_sq), beta
+</th>
+<th>
+posterior
+</th>
+<td>
+0.870
+</td>
+<td>
+NaN
 </td>
 </tr>
 <tr>
 <th>
-sigma_sq_transformed
-</th>
-<th>
-()
+warmup
 </th>
 <td>
-kernel_00
+0.791
 </td>
 <td>
-0.039
-</td>
-<td>
-0.063
-</td>
-<td>
--0.066
-</td>
-<td>
-0.039
-</td>
-<td>
-0.143
-</td>
-<td>
-4000
-</td>
-<td>
-2330.584
-</td>
-<td>
-2044.393
-</td>
-<td>
-1.002
+NaN
 </td>
 </tr>
 </tbody>
@@ -385,7 +458,15 @@ kernel_00
 <th>
 </th>
 <th>
+</th>
+<th>
 count
+</th>
+<th>
+sample_size
+</th>
+<th>
+sample_size_total
 </th>
 <th>
 relative
@@ -394,6 +475,9 @@ relative
 <tr>
 <th>
 kernel
+</th>
+<th>
+positions
 </th>
 <th>
 error_code
@@ -408,12 +492,19 @@ phase
 </th>
 <th>
 </th>
+<th>
+</th>
+<th>
+</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <th rowspan="2" valign="top">
 kernel_00
+</th>
+<th rowspan="2" valign="top">
+h(sigma_sq), beta
 </th>
 <th rowspan="2" valign="top">
 1
@@ -425,10 +516,16 @@ divergent transition
 warmup
 </th>
 <td>
-57
+50
 </td>
 <td>
-0.014
+4000
+</td>
+<td>
+4000
+</td>
+<td>
+0.013
 </td>
 </tr>
 <tr>
@@ -439,18 +536,24 @@ posterior
 0
 </td>
 <td>
+4000
+</td>
+<td>
+4000
+</td>
+<td>
 0.000
 </td>
 </tr>
 </tbody>
 </table>
 
-</div>
-
 Finally, let’s check the autocorrelation of the samples.
 
 ``` python
-g = gs.plot_cor(results)
+gs.plot_cor(results)
 ```
 
-![](01c-transform_files/figure-commonmark/correlation-plots-5.png)
+<img
+src="01c-transform_files/figure-commonmark/correlation-plots-output-1.png"
+id="correlation-plots" />

@@ -1,4 +1,3 @@
-
 # Gibbs Sampling
 
 This tutorial extends the [linear regression
@@ -43,15 +42,13 @@ y_vec = X_mat @ true_beta + eps
 # define beta
 beta_prior = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
 
-beta = lsl.Var.new_param(
-    value=jnp.array([0.0, 0.0]), distribution=beta_prior, name="beta"
-)
+beta = lsl.Var.new_param(value=jnp.array([0.0, 0.0]), dist=beta_prior, name="beta")
 
 # define the variance and the scale
 a = lsl.Var.new_param(0.01, name="a")
 b = lsl.Var.new_param(0.01, name="b")
 sigma_sq_prior = lsl.Dist(tfd.InverseGamma, concentration=a, scale=b)
-sigma_sq = lsl.Var.new_param(value=1.0, distribution=sigma_sq_prior, name="sigma_sq")
+sigma_sq = lsl.Var.new_param(value=1.0, dist=sigma_sq_prior, name="sigma_sq")
 
 # Define sigma as a transformation of sigma_sq for the likelihood
 sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma")
@@ -62,14 +59,16 @@ mu = lsl.Var.new_calc(jnp.dot, X, beta, name="mu")
 
 # Build response
 y_dist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
-y = lsl.Var.new_obs(y_vec, distribution=y_dist, name="y")
+y = lsl.Var.new_obs(y_vec, dist=y_dist, name="y")
 
 # Plot model
 model = lsl.Model([y])
-lsl.plot_vars(model)
+model.plot()
 ```
 
-![](01d-gibbs-sampling_files/figure-commonmark/build-model-1.png)
+<img
+src="01d-gibbs-sampling_files/figure-commonmark/build-model-output-1.png"
+id="build-model" />
 
 ## MCMC inference
 
@@ -79,21 +78,21 @@ This time we want to sample the previously fixed `sigma_sq` with a Gibbs
 sampler. Using a Gibbs kernel is a bit more complicated, because Goose
 doesn’t automatically derive the full conditional from the model graph.
 Hence, the user needs to provide a function to sample from the full
-conditional. The function needs to accept a PRNG state and a model state
-as arguments, and it needs to return a dictionary with the node name as
-the key and the new node value as the value. We could also update
-multiple parameters with one Gibbs kernel if we returned a dictionary of
-length two or more. To retrieve the relevant values of our nodes from
-the `model_state`, we use the method
-{meth}`~.goose.interface.LieselInterface.extract_position` of the
-{class}`~.goose.interface.LieselInterface`.
+conditional. The function needs to accept a PRNG key and a model state
+as arguments, and it needs to return a dictionary with the variable name
+as the key and the new variable value as the value. We could also update
+multiple parameters with one Gibbs kernel by returning a dictionary with
+several entries.
+
+For this normal-inverse-gamma model, the full conditional of $\sigma^2$
+is again an inverse-gamma distribution. To retrieve the relevant values
+from the `model_state`, we use {meth}`.Model.extract_position`.
 
 ``` python
 def draw_sigma_sq(prng_key, model_state):
     # extract relevant values from model state
-    pos = interface.extract_position(
-      position_keys=["y", "mu", "sigma_sq", "a", "b"],
-      model_state=model_state
+    pos = model.extract_position(
+        position_keys=["y", "mu", "sigma_sq", "a", "b"], model_state=model_state
     )
     # calculate relevant intermediate quantities
     n = len(pos["y"])
@@ -106,51 +105,60 @@ def draw_sigma_sq(prng_key, model_state):
     return {"sigma_sq": draw}
 ```
 
-After constructing the Gibbs sampler, we can build our engine.
+The regression coefficients `beta` are still sampled with NUTS. For
+`sigma_sq`, we attach an {class}`~.goose.MCMCSpec` with
+{meth}`~.goose.GibbsKernel.with_transition_fn`, which turns our custom
+transition function into a kernel factory that {class}`.LieselMCMC` can
+use. The Gibbs kernel itself does not need adaptation, but the NUTS
+kernel for `beta` does, so we still run an adaptation phase before
+drawing posterior samples.
 
 ``` python
-interface = gs.LieselInterface(model)
-builder = gs.EngineBuilder(seed=1338, num_chains=4)
-builder.set_model(gs.LieselInterface(model))
-builder.set_initial_values(model.state)
-builder.add_kernel(gs.NUTSKernel(["beta"]))
-builder.add_kernel(gs.GibbsKernel(["sigma_sq"], draw_sigma_sq)) # add gibbs sampler
-builder.set_duration(warmup_duration=1000, posterior_duration=1000)
-engine = builder.build()
-engine.sample_all_epochs()
+beta.inference = gs.MCMCSpec(gs.NUTSKernel)
+sigma_sq.inference = gs.MCMCSpec(gs.GibbsKernel.with_transition_fn(draw_sigma_sq))
+
+results = gs.LieselMCMC(model).run_for_epochs(
+    seed=1, num_chains=4, adaptation=1000, posterior=1000
+)
 ```
 
+    liesel.goose.mcmc_spec - WARNING - No inference specification defined for Var(name="b"). If you do not add a kernel for this parameter manually to an EngineBuilder, it will not be sampled.
+    liesel.goose.mcmc_spec - WARNING - No inference specification defined for Var(name="a"). If you do not add a kernel for this parameter manually to an EngineBuilder, it will not be sampled.
+    liesel.goose.builder - WARNING - No jitter functions provided for position keys 'sigma_sq', 'beta'. The initial values for these keys won't be jittered
+    liesel.goose.engine - INFO - Initializing kernels...
+    liesel.goose.engine - INFO - Done
+    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 100 transitions, 25 jitted together
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s] 25%|██████████▌                               | 1/4 [00:01<00:04,  1.65s/chunk]100%|██████████████████████████████████████████| 4/4 [00:01<00:00,  2.42chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 4, 5, 4, 2 / 100 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
+      0%|                                                  | 0/1 [00:00<?, ?chunk/s]100%|█████████████████████████████████████████| 1/1 [00:00<00:00, 928.35chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 1, 1, 1, 1 / 25 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1821.23chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 1, 2, 1, 1 / 50 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 4/4 [00:00<00:00, 1747.44chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 2, 1, 2, 1 / 100 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 525 transitions, 25 jitted together
+      0%|                                                 | 0/21 [00:00<?, ?chunk/s]100%|███████████████████████████████████████| 21/21 [00:00<00:00, 398.16chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 3, 2, 2, 4 / 525 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 200 transitions, 25 jitted together
+      0%|                                                  | 0/8 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 8/8 [00:00<00:00, 1529.02chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 4, 3, 1, 2 / 200 transitions
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Finished warmup
+    liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
+      0%|                                                 | 0/40 [00:00<?, ?chunk/s]100%|███████████████████████████████████████| 40/40 [00:00<00:00, 392.51chunk/s]100%|███████████████████████████████████████| 40/40 [00:00<00:00, 390.75chunk/s]
+    liesel.goose.engine - INFO - Finished epoch
 
-      0%|                                                  | 0/3 [00:00<?, ?chunk/s]
-     33%|##############                            | 1/3 [00:01<00:03,  1.60s/chunk]
-    100%|##########################################| 3/3 [00:01<00:00,  1.87chunk/s]
-
-      0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|########################################| 1/1 [00:00<00:00, 2066.16chunk/s]
-
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 3623.59chunk/s]
-
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|########################################| 4/4 [00:00<00:00, 3964.37chunk/s]
-
-      0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|########################################| 8/8 [00:00<00:00, 1318.19chunk/s]
-
-      0%|                                                 | 0/20 [00:00<?, ?chunk/s]
-    100%|#######################################| 20/20 [00:00<00:00, 379.48chunk/s]
-
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 3546.98chunk/s]
-
-      0%|                                                 | 0/40 [00:00<?, ?chunk/s]
-     82%|################################1      | 33/40 [00:00<00:00, 317.62chunk/s]
-    100%|#######################################| 40/40 [00:00<00:00, 304.37chunk/s]
-
-Finally, we can take a look at our results
+Finally, we can take a look at our results.
 
 ``` python
-results = engine.get_results()
 summary = gs.Summary(results)
 summary
 ```
@@ -234,31 +242,31 @@ beta
 (0,)
 </th>
 <td>
-kernel_00
+kernel_01
 </td>
 <td>
-0.984
+0.983
 </td>
 <td>
-0.091
+0.093
 </td>
 <td>
-0.837
+0.832
 </td>
 <td>
-0.984
+0.983
 </td>
 <td>
-1.135
+1.133
 </td>
 <td>
 4000
 </td>
 <td>
-1101.340
+1063.525
 </td>
 <td>
-1252.702
+1171.567
 </td>
 <td>
 1.005
@@ -269,34 +277,34 @@ kernel_00
 (1,)
 </th>
 <td>
-kernel_00
-</td>
-<td>
-1.911
-</td>
-<td>
-0.161
-</td>
-<td>
-1.649
+kernel_01
 </td>
 <td>
 1.912
 </td>
 <td>
-2.171
+0.159
+</td>
+<td>
+1.652
+</td>
+<td>
+1.912
+</td>
+<td>
+2.172
 </td>
 <td>
 4000
 </td>
 <td>
-1130.029
+1009.363
 </td>
 <td>
-1237.464
+1118.012
 </td>
 <td>
-1.006
+1.007
 </td>
 </tr>
 <tr>
@@ -307,34 +315,128 @@ sigma_sq
 ()
 </th>
 <td>
-kernel_01
+kernel_00
 </td>
 <td>
-1.044
+1.043
 </td>
 <td>
-0.067
+0.066
 </td>
 <td>
 0.939
 </td>
 <td>
-1.040
+1.041
 </td>
 <td>
-1.161
+1.154
 </td>
 <td>
 4000
 </td>
 <td>
-3859.015
+4090.345
 </td>
 <td>
-3732.136
+4014.613
 </td>
 <td>
 1.000
+</td>
+</tr>
+</tbody>
+</table>
+<p>
+<strong>Acceptance probabilities:</strong>
+</p>
+<table border="0" class="dataframe">
+<thead>
+<tr style="text-align: right;">
+<th>
+</th>
+<th>
+</th>
+<th>
+</th>
+<th>
+acceptance_probability
+</th>
+<th>
+position_moved
+</th>
+</tr>
+<tr>
+<th>
+kernel
+</th>
+<th>
+positions
+</th>
+<th>
+phase
+</th>
+<th>
+</th>
+<th>
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th rowspan="2" valign="top">
+kernel_00
+</th>
+<th rowspan="2" valign="top">
+sigma_sq
+</th>
+<th>
+posterior
+</th>
+<td>
+1.000
+</td>
+<td>
+1.000
+</td>
+</tr>
+<tr>
+<th>
+warmup
+</th>
+<td>
+1.000
+</td>
+<td>
+1.000
+</td>
+</tr>
+<tr>
+<th rowspan="2" valign="top">
+kernel_01
+</th>
+<th rowspan="2" valign="top">
+beta
+</th>
+<th>
+posterior
+</th>
+<td>
+0.887
+</td>
+<td>
+NaN
+</td>
+</tr>
+<tr>
+<th>
+warmup
+</th>
+<td>
+0.791
+</td>
+<td>
+NaN
 </td>
 </tr>
 </tbody>
@@ -345,6 +447,8 @@ kernel_01
 <table border="0" class="dataframe">
 <thead>
 <tr style="text-align: right;">
+<th>
+</th>
 <th>
 </th>
 <th>
@@ -371,6 +475,9 @@ relative
 kernel
 </th>
 <th>
+positions
+</th>
+<th>
 error_code
 </th>
 <th>
@@ -392,7 +499,10 @@ phase
 <tbody>
 <tr>
 <th rowspan="2" valign="top">
-kernel_00
+kernel_01
+</th>
+<th rowspan="2" valign="top">
+beta
 </th>
 <th rowspan="2" valign="top">
 1
@@ -404,7 +514,7 @@ divergent transition
 warmup
 </th>
 <td>
-62
+51
 </td>
 <td>
 4000
@@ -413,7 +523,7 @@ warmup
 4000
 </td>
 <td>
-0.016
+0.013
 </td>
 </tr>
 <tr>
@@ -436,18 +546,12 @@ posterior
 </tbody>
 </table>
 
-And plot these
+And plot them.
 
 ``` python
-g = gs.plot_trace(results)
+gs.plot_trace(results)
 ```
 
-![](01d-gibbs-sampling_files/figure-commonmark/trace-plot-3.png)
-
-``` python
-gs.plot_param(results, param="sigma_sq", param_index=0)
-```
-
-![](01d-gibbs-sampling_files/figure-commonmark/trace-plot-4.png)
-
-With that we end the tutorial on Gibbs sampling.
+<img
+src="01d-gibbs-sampling_files/figure-commonmark/trace-plot-output-1.png"
+id="trace-plot" />

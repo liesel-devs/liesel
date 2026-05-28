@@ -1,10 +1,10 @@
 ---
-engine: knitr
+engine: jupyter
 ---
 
 ```{python}
-#| label: setup
-#| include: false
+# | label: setup
+# | include: false
 
 import liesel.goose as gs
 import pandas as pd
@@ -17,129 +17,191 @@ pd.options.display.html.border = 0
 
 # GEV responses
 
-In this tutorial, we illustrate how to set up a distributional regression model with the generalized extreme value distribution as a response distribution. First, we simulate some data in R:
+In this tutorial, we illustrate how to set up a distributional regression model with the generalized extreme value distribution as a response distribution.
+We configure the model in Python with [Liesel-GAM](https://github.com/liesel-devs/liesel_gam), using {class}`liesel_gam.TermBuilder` for linear terms and P-splines.
+See the [Liesel-GAM documentation and examples](https://github.com/liesel-devs/liesel_gam#readme) for a broader overview of the available term types.
+
+We simulate data from a GEV model with three distributional parameters:
 
 - The location parameter ($\mu$) is a function of an intercept and a non-linear covariate effect.
 - The scale parameter ($\sigma$) is a function of an intercept and a linear effect and uses a log-link.
 - The shape or concentration parameter ($\xi$) is a function of an intercept and a linear effect.
 
-After simulating the data, we can configure the model with a single call to the `rliesel::liesel()` function.
-
-```{r}
-#| label: model
-
-library(rliesel)
-library(VGAM)
-
-set.seed(13)
-
-n <- 1000
-
-x0 <- runif(n)
-x1 <- runif(n)
-x2 <- runif(n)
-
-y <- rgev(
-  n,
-  location = 0 + sin(2 * pi * x0),
-  scale = exp(-3 + x1),
-  shape = 0.1 + x2
-)
-
-plot(y)
-
-model <- liesel(
-  response = y,
-  distribution = "GeneralizedExtremeValue",
-  predictors = list(
-    loc = predictor(~ s(x0)),
-    scale = predictor(~ x1, inverse_link = "Exp"),
-    concentration = predictor(~ x2)
-  )
-)
-```
-
-Now, we can continue in Python and use the `lsl.dist_reg_mcmc()` function to set up a sampling algorithm with IWLS kernels for the regression coefficients ($\boldsymbol{\beta}$) and a Gibbs kernel for the smoothing parameter ($\tau^2$) of the spline.
-
-The support of the GEV distribution changes with the parameter values (compare [Wikipedia](https://en.wikipedia.org/wiki/Generalized_extreme_value_distribution)). To ensure that the initial parameters support the observed data we set $xi = 0.1$ and disable jittering of the variance and regression parameters.
-
-
 ```{python}
-#| label: sampling
+# | label: imports
 
-import liesel.model as lsl
+import jax
 import jax.numpy as jnp
-
-model = r.model
-
-# concentration == 0.0 seems to break the sampler
-model.vars["concentration_p0_beta"].value = jnp.array([0.1, 0.0])
-
-builder = lsl.dist_reg_mcmc(model, seed=42, num_chains=4, apply_jitter=False)
-builder.set_duration(warmup_duration=1000, posterior_duration=1000)
-
-engine = builder.build()
-engine.sample_all_epochs()
-```
-
-Some tabular summary statistics of the posterior samples:
-
-```{python}
-#| label: summary
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.goose as gs
+import liesel.model as lsl
+import liesel_gam as gam
 
-results = engine.get_results()
+sns.set_theme(style="whitegrid")
+```
+
+```{python}
+# | label: data-generation
+
+key = jax.random.PRNGKey(13)
+n = 500
+
+key, key_x0, key_x1, key_x2, key_y = jax.random.split(key, 5)
+
+x0 = jax.random.uniform(key_x0, (n,))
+x1 = jax.random.uniform(key_x1, (n,))
+x2 = jax.random.uniform(key_x2, (n,))
+
+true_loc = jnp.sin(2 * jnp.pi * x0)
+true_scale = jnp.exp(-1.0 + x1)
+true_concentration = 0.1 + x2
+
+y = tfd.GeneralizedExtremeValue(
+    loc=true_loc,
+    scale=true_scale,
+    concentration=true_concentration,
+).sample(seed=key_y)
+
+data = pd.DataFrame({
+    "y": np.asarray(y),
+    "intercept": np.ones_like(y),
+    "x0": np.asarray(x0),
+    "x1": np.asarray(x1),
+    "x2": np.asarray(x2),
+    "true_loc": np.asarray(true_loc),
+    "true_scale": np.asarray(true_scale),
+    "true_concentration": np.asarray(true_concentration),
+})
+```
+
+Here is the simulated response:
+
+```{python}
+# | label: plot-data
+
+fig, ax = plt.subplots(figsize=(8, 4))
+sns.lineplot(x=data.index, y=data["y"], ax=ax, color="0.25", linewidth=1)
+ax.set(xlabel="observation", ylabel="y", title="Simulated GEV response")
+plt.show()
+```
+
+We now construct the distributional regression model.
+The `TermBuilder` reads the covariates from a pandas data frame and creates Liesel variables for the corresponding model terms.
+The additive predictors are passed directly to `tfd.GeneralizedExtremeValue`.
+
+```{python}
+# | label: model
+
+tb = gam.TermBuilder.from_df(data, default_inference=gs.MCMCSpec(gs.IWLSKernel))
+
+loc = gam.AdditivePredictor("loc", intercept=True)
+scale = gam.AdditivePredictor("scale", inv_link=jnp.exp, intercept=False)
+concentration = gam.AdditivePredictor("concentration", intercept=False)
+
+loc_smooth = tb.ps("x0", k=10)
+scale_x1 = tb.lin("intercept + x1")
+concentration_x2 = tb.lin("intercept + x2")
+
+loc += loc_smooth
+scale += scale_x1
+concentration += concentration_x2
+
+# The GEV distribution is numerically delicate around xi = 0, so we start away
+# from the Gumbel case while keeping the linear effect initialized at zero.
+concentration_x2.coef.value = jnp.array([0.1, 0.0])
+concentration.update()
+
+response_dist = lsl.Dist(
+    tfd.GeneralizedExtremeValue,
+    loc=loc,
+    scale=scale,
+    concentration=concentration,
+)
+y_var = lsl.Var.new_obs(data["y"].to_numpy(), response_dist, name="y")
+
+model = lsl.Model([y_var])
+
+# ScaleIG represents tau = sqrt(tau2). The Gibbs kernel samples tau2.
+loc_smooth_tau2_name = loc_smooth.scale.value_node[0].name
+```
+
+We use Liesel's `MCMCSpec` objects, which are added automatically by Liesel-GAM, to set up the sampler.
+The default Liesel-GAM setup uses IWLS kernels for regression coefficients and a Gibbs kernel for the smoothing variance of the P-spline.
+
+The support of the GEV distribution changes with the parameter values (compare [Wikipedia](https://en.wikipedia.org/wiki/Generalized_extreme_value_distribution)).
+
+
+```{python}
+# | label: sampling
+
+results = gs.LieselMCMC(model).run_for_epochs(
+    seed=1, num_chains=4, adaptation=1000, posterior=2500
+)
 gs.Summary(results)
 ```
 
-And the corresponding trace plots:
+The corresponding trace plots:
 
 ```{python}
-#| label: traces
+# | label: traces
 
-fig = gs.plot_trace(results, "loc_p0_beta")
-fig = gs.plot_trace(results, "loc_np0_tau2")
-fig = gs.plot_trace(results, "loc_np0_beta")
-fig = gs.plot_trace(results, "scale_p0_beta")
-fig = gs.plot_trace(results, "concentration_p0_beta")
+gs.plot_trace(results, loc.intercept.name)
+gs.plot_trace(results, loc_smooth_tau2_name)
+gs.plot_trace(results, loc_smooth.coef.name)
+gs.plot_trace(results, scale_x1.coef.name)
+gs.plot_trace(results, concentration_x2.coef.name)
 ```
 
-We need to reset the index of the summary data frame before we can transfer it to R.
+Finally, we can evaluate the posterior samples of the location predictor and compare the posterior mean with the true function used in the simulation.
 
 ```{python}
-#| label: summary-df
+# | label: spline
 
-summary = gs.Summary(results).to_dataframe().reset_index()
-```
+samples = results.get_posterior_samples()
+loc_samples = model.vars["loc"].predict(samples)
+loc_summary = gs.SamplesSummary.from_array(
+    loc_samples,
+    name="loc",
+    which=["mean", "quantiles"],
+)
+loc_summary_df = loc_summary.to_dataframe().reset_index()
 
-After transferring the summary data frame to R, we can process it with packages like dplyr and ggplot2. Here is a visualization of the estimated spline vs. the true function:
+loc_summary_df["x0"] = data["x0"].to_numpy()
+loc_summary_df["true_loc"] = data["true_loc"].to_numpy()
+loc_summary_df = loc_summary_df.sort_values("x0")
 
-```{r}
-#| label: spline
+fig, ax = plt.subplots(figsize=(8, 5))
+sns.lineplot(
+    data=loc_summary_df,
+    x="x0",
+    y="true_loc",
+    color=sns.color_palette()[0],
+    linewidth=2,
+    label="true location",
+    ax=ax,
+)
+ax.fill_between(
+    loc_summary_df["x0"],
+    loc_summary_df["q_0.05"],
+    loc_summary_df["q_0.95"],
+    color=sns.color_palette()[1],
+    alpha=0.25,
+    label="90% credible interval",
+)
+sns.lineplot(
+    data=loc_summary_df,
+    x="x0",
+    y="mean",
+    color=sns.color_palette()[1],
+    linewidth=2,
+    label="posterior mean",
+    ax=ax,
+)
 
-library(dplyr)
-library(ggplot2)
-library(reticulate)
-
-summary <- py$summary
-
-beta <- summary %>%
-  filter(variable == "loc_np0_beta") %>%
-  group_by(var_index) %>%
-  summarize(mean = mean(mean)) %>%
-  ungroup()
-
-beta <- beta$mean
-X <- py_to_r(model$vars["loc_np0_X"]$value)
-estimate <- X %*% beta
-
-true <- sin(2 * pi * x0)
-
-ggplot(data.frame(x0 = x0, estimate = estimate, true = true)) +
-  geom_line(aes(x0, estimate), color = palette()[2]) +
-  geom_line(aes(x0, true), color = palette()[4]) +
-  ggtitle("Estimated spline (red) vs. true function (blue)") +
-  ylab("f") +
-  theme_minimal()
+ax.set(xlabel="x0", ylabel="location", title="Estimated location function")
+plt.show()
 ```
