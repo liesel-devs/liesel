@@ -1,4 +1,3 @@
-
 # Defining a custom MCMC kernel
 
 ## Custom Metropolis-Hastings kernel
@@ -619,31 +618,32 @@ model = lsl.Model(y)
 results = gs.LieselMCMC(model).run_for_epochs(
     seed=7, num_chains=4, adaptation=500, posterior=500
 )
-```
 
-
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-     50%|#####################                     | 1/2 [00:00<00:00,  2.38chunk/s]
-    100%|##########################################| 2/2 [00:00<00:00,  4.75chunk/s]
-
-      0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|########################################| 1/1 [00:00<00:00, 2258.65chunk/s]
-
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|########################################| 2/2 [00:00<00:00, 4213.26chunk/s]
-
-      0%|                                                 | 0/11 [00:00<?, ?chunk/s]
-    100%|#######################################| 11/11 [00:00<00:00, 863.01chunk/s]
-
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|########################################| 4/4 [00:00<00:00, 5215.17chunk/s]
-
-      0%|                                                 | 0/20 [00:00<?, ?chunk/s]
-    100%|######################################| 20/20 [00:00<00:00, 3343.27chunk/s]
-
-``` python
 gs.Summary(results)
 ```
+
+    liesel.goose.builder - WARNING - No jitter functions provided for position keys 'mu'. The initial values for these keys won't be jittered
+    liesel.goose.engine - INFO - Initializing kernels...
+    liesel.goose.engine - INFO - Done
+    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s] 50%|█████████████████████                     | 1/2 [00:00<00:00,  2.28chunk/s]100%|██████████████████████████████████████████| 2/2 [00:00<00:00,  4.55chunk/s]
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
+      0%|                                                  | 0/1 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 1/1 [00:00<00:00, 1720.39chunk/s]
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 2/2 [00:00<00:00, 2407.06chunk/s]
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 275 transitions, 25 jitted together
+      0%|                                                 | 0/11 [00:00<?, ?chunk/s]100%|██████████████████████████████████████| 11/11 [00:00<00:00, 4387.76chunk/s]
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 100 transitions, 25 jitted together
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 4/4 [00:00<00:00, 2699.04chunk/s]
+    liesel.goose.engine - INFO - Finished epoch
+    liesel.goose.engine - INFO - Finished warmup
+    liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 500 transitions, 25 jitted together
+      0%|                                                 | 0/20 [00:00<?, ?chunk/s]100%|██████████████████████████████████████| 20/20 [00:00<00:00, 4102.61chunk/s]
+    liesel.goose.engine - INFO - Finished epoch
 
 <p>
 <strong>Parameter summary:</strong>
@@ -727,31 +727,31 @@ mu
 kernel_00
 </td>
 <td>
-0.461
+0.457
 </td>
 <td>
-0.095
+0.098
 </td>
 <td>
-0.298
+0.278
 </td>
 <td>
-0.456
+0.464
 </td>
 <td>
-0.634
+0.609
 </td>
 <td>
 2000
 </td>
 <td>
-319.798
+313.054
 </td>
 <td>
-212.696
+280.319
 </td>
 <td>
-1.016
+1.013
 </td>
 </tr>
 </tbody>
@@ -803,10 +803,10 @@ mu
 posterior
 </th>
 <td>
-0.204
+0.206
 </td>
 <td>
-0.204
+0.205
 </td>
 </tr>
 <tr>
@@ -814,10 +814,10 @@ posterior
 warmup
 </th>
 <td>
-0.222
+0.221
 </td>
 <td>
-0.224
+0.220
 </td>
 </tr>
 </tbody>
