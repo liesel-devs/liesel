@@ -29,8 +29,8 @@ if os.environ.get("READTHEDOCS", "") == "True":
 # -- Project information -----------------------------------------------------
 
 project = "liesel"
-copyright = "2022, Hannes Riebl & Paul Wiemann"
-author = "Hannes Riebl & Paul Wiemann"
+copyright = "2022-2026, Liesel Developers"
+author = "Liesel Developers"
 
 
 # -- General configuration ---------------------------------------------------
@@ -92,7 +92,12 @@ templates_path = ["_templates"]
 # List of patterns, relative to the source directory, that match files and
 # directories to ignore when looking for source files. These patterns also
 # affect html_static_path and html_extra_path.
-exclude_patterns = []
+exclude_patterns = [
+    "generated/liesel.distributions.GaussianCopula.cross_entropy.rst",
+    "generated/liesel.distributions.GaussianCopula.kl_divergence.rst",
+    "generated/liesel.distributions.MultivariateNormalDegenerate.cross_entropy.rst",
+    "generated/liesel.distributions.MultivariateNormalDegenerate.kl_divergence.rst",
+]
 
 
 # -- Options for HTML output -------------------------------------------------
@@ -128,7 +133,13 @@ def linkcode_resolve(domain, info):
 
 
 # Mock / ignore the following modules.
-autodoc_mock_imports = ["liesel.distributions.nodist"]
+autodoc_mock_imports = [
+    "liesel.distributions.nodist",
+    "pymc",
+    "pymc.sampling",
+    "pymc.sampling.jax",
+    "pytensor",
+]
 
 # Map functions and classes with the same lowercase names to other filenames.
 autosummary_filename_map = {

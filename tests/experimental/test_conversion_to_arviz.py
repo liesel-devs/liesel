@@ -8,11 +8,12 @@ from liesel.goose.engine import SamplingResults
 
 def test_structure(result: SamplingResults):
     infdat = to_arviz_inference_data(result)
-    assert infdat.groups() == ["posterior"]
+    posterior = infdat["posterior"].dataset
+    assert list(infdat.children) == ["posterior"]
 
-    assert infdat["posterior"]["foo"].shape == (3, 250, 3)
-    assert infdat["posterior"]["bar"].shape == (3, 250, 3, 5, 7)
-    assert infdat["posterior"]["baz"].shape == (
+    assert posterior["foo"].shape == (3, 250, 3)
+    assert posterior["bar"].shape == (3, 250, 3, 5, 7)
+    assert posterior["baz"].shape == (
         3,
         250,
     )
@@ -20,13 +21,14 @@ def test_structure(result: SamplingResults):
 
 def test_structure_warmup(result: SamplingResults):
     infdat = to_arviz_inference_data(result, include_warmup=True)
-    print(infdat)
+    warmup_posterior = infdat["warmup_posterior"].dataset
 
-    assert "posterior" in infdat.groups() and "warmup_posterior" in infdat.groups()
+    assert "posterior" in infdat.children
+    assert "warmup_posterior" in infdat.children
 
-    assert infdat["warmup_posterior"]["foo"].shape == (3, 50, 3)
-    assert infdat["warmup_posterior"]["bar"].shape == (3, 50, 3, 5, 7)
-    assert infdat["warmup_posterior"]["baz"].shape == (
+    assert warmup_posterior["foo"].shape == (3, 50, 3)
+    assert warmup_posterior["bar"].shape == (3, 50, 3, 5, 7)
+    assert warmup_posterior["baz"].shape == (
         3,
         50,
     )
@@ -34,13 +36,15 @@ def test_structure_warmup(result: SamplingResults):
 
 def test_attributes(result: SamplingResults):
     infdat = to_arviz_inference_data(result)
-    infdat["posterior"].attrs["inference_library"] == "liesel"
-    infdat["posterior"].attrs["inference_library_version"] == liesel.__version__
+    posterior = infdat["posterior"].dataset
+    assert posterior.attrs["inference_library"] == "liesel"
+    assert posterior.attrs["inference_library_version"] == liesel.__version__
 
 
 def test_posterior_mean(result: SamplingResults):
     infdat = to_arviz_inference_data(result)
-    means = infdat["posterior"].mean(["chain", "draw"])
+    posterior = infdat["posterior"].dataset
+    means = posterior.mean(["chain", "draw"])
 
     assert np.allclose(means["foo"], [175.5, 176.5, 177.5])
 

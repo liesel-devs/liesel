@@ -10,7 +10,7 @@ import jax.random as rnd
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
-from liesel.model.model import GraphBuilder, Model, save_model
+from liesel.model.model import GraphBuilder, Model, log_prob_pointwise, save_model
 from liesel.model.nodes import Calc, Dist, Group, TransientNode, Value, Var
 
 
@@ -97,6 +97,12 @@ def model_nodes() -> Generator:
 
 
 class TestModel:
+    def test_init_model_with_args(self, y_var) -> None:
+        data = Value(2.5, "z")
+        model = Model(y_var, data)
+        assert y_var.name in model.vars
+        assert data.name in model.nodes
+
     def test_copy_length(self, model: Model) -> None:
         """
         Verifies the correct length of copied var and node dicts.
@@ -128,9 +134,84 @@ class TestModel:
         assert all([not var.model for var in nodes_and_vars[1].values()])
 
     def test_copy_computational_model(self, model: Model) -> None:
-        model._copy_computational_model()
-        # TODO: Fill this test. At the moment, I am uncertain as to what this method
-        # is supposed to achieve exactly.
+        cmodel = model._copy_computational_model()
+
+        for n, v in cmodel.vars.items():
+            assert v.value is None
+            assert n in model.vars
+
+        for n, nv in cmodel.nodes.items():
+            assert nv.value is None
+            assert n in model.nodes
+
+        for n, v in model.vars.items():
+            assert v.value is not None
+            assert n in cmodel.vars
+
+        for n, nv in model.nodes.items():
+            assert nv.value is not None
+            assert n in cmodel.nodes
+
+    def test_copy_method(self, model: Model) -> None:
+        cmodel = model.copy()
+
+        for n, v in cmodel.vars.items():
+            assert jnp.allclose(v.value, model.vars[n].value)
+            assert n in model.vars
+
+        for n, nv in cmodel.nodes.items():
+            assert jnp.allclose(nv.value, model.nodes[n].value)
+            assert n in model.nodes
+
+        for n, v in model.vars.items():
+            assert n in cmodel.vars
+
+        for n, nv in model.nodes.items():
+            assert n in cmodel.nodes
+
+    def test_copy_method_cleared(self, model: Model) -> None:
+        cmodel = model.copy(clear_state=True)
+
+        for n, v in cmodel.vars.items():
+            assert v.value is None
+            assert n in model.vars
+
+        for n, nv in cmodel.nodes.items():
+            assert nv.value is None
+            assert n in model.nodes
+
+        for n, v in model.vars.items():
+            assert v.value is not None
+            assert n in cmodel.vars
+
+        for n, nv in model.nodes.items():
+            assert nv.value is not None
+            assert n in cmodel.nodes
+
+    def test_parental_submodel(self, model: Model) -> None:
+        mu_model = model.parental_submodel("mu")
+        assert len(mu_model.vars) == 5
+        assert len(mu_model.nodes) == 14
+
+        for name in ["X", "beta_scale", "beta_loc", "beta_hat", "mu"]:
+            assert name in mu_model.vars
+            assert jnp.allclose(mu_model.vars[name].value, model.vars[name].value)
+
+        mu_model = model.parental_submodel("mu", clear_state=True)
+        assert len(mu_model.vars) == 5
+
+        for name in ["X", "beta_scale", "beta_loc", "beta_hat", "mu"]:
+            assert name in mu_model.vars
+            assert mu_model.vars[name].value is None
+            assert model.vars[name].value is not None
+
+    def test_init_model_with_var_copies(self, model: Model) -> None:
+        mu_model = Model(model.vars["mu"], copy=True)
+
+        assert len(mu_model.vars) == 5
+        for name in ["X", "beta_scale", "beta_loc", "beta_hat", "mu"]:
+            assert name in mu_model.vars
+            assert jnp.allclose(mu_model.vars[name].value, model.vars[name].value)
 
     def test_groups(self, model: Model) -> None:
         """
@@ -262,6 +343,19 @@ class TestModel:
         assert "X" in model.vars
         assert "mu" in model.vars
         assert "y_var" in model.vars
+
+    def test_vars_order(self, model: Model) -> None:
+        assert list(model.vars) == [
+            "scale",
+            "concentration",
+            "X",
+            "beta_scale",
+            "beta_loc",
+            "sigma_hat",
+            "beta_hat",
+            "mu",
+            "y_var",
+        ]
 
     def test_nodes(self, model: Model) -> None:
         """
@@ -408,6 +502,16 @@ class TestModel:
             3.0
         )
         assert model.nodes["z"].value == pytest.approx(3.0)
+
+    def test_diagnose(self, model) -> None:
+        df = model.diagnose()
+
+        assert df.shape[0] == len(model.vars)
+
+        df2 = model.diagnose(verbose=True)
+
+        assert df.shape[0] == df2.shape[0]
+        assert df.shape[1] < df2.shape[1]
 
 
 class TestPredictions:
@@ -1103,3 +1207,18 @@ class TestSample:
             model.sample(
                 shape=(11,), seed=rnd.key(8), posterior_samples=samples1, fixed=["b"]
             )
+
+
+class TestPointwiseLogLik:
+    def test_pointwise_ll(self, model) -> None:
+        samples = {
+            "sigma_hat": tfd.Normal(loc=1.0, scale=0.01).sample(
+                (4, 100), rnd.PRNGKey(6)
+            ),
+            "beta_hat": tfd.Normal(loc=jnp.array([1.0, 2.0]), scale=0.1).sample(
+                (4, 100), rnd.PRNGKey(6)
+            ),
+        }
+
+        pll = log_prob_pointwise(model.observed, samples)
+        assert pll["y_var_log_prob"].shape == (4, 100, 500)

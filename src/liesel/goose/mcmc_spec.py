@@ -3,13 +3,13 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, ParamSpec, Protocol, assert_never
 
 import tensorflow_probability.substrates.jax.distributions as tfd
 
-from liesel.goose.engine import SamplingResults
-
 from .builder import EngineBuilder
+from .engine import SamplingResults
 from .interface import LieselInterface
 from .types import Array, JitterFunctions, Kernel, KeyArray
 
@@ -115,7 +115,10 @@ class LieselMCMC:
             If variables in the same kernel group have inconsistent kernels or kernel \
             arguments.
         """
-        vars_ = self.model.vars
+        vars_ = {}
+        for k in reversed(list(self.model.vars.keys())):
+            vars_[k] = self.model.vars[k]
+
         kernel_groups: dict[str, _KernelGroup] = {}
 
         for name, var in vars_.items():
@@ -143,7 +146,7 @@ class LieselMCMC:
                         f" {group_name}."
                     )
 
-                if inference.kernel_kwargs is None:
+                if not inference.kernel_kwargs:
                     pass
                 elif not group.kwargs:
                     group.kwargs = inference.kernel_kwargs
@@ -290,6 +293,11 @@ class LieselMCMC:
         burnin_thinning: int = 1,
         posterior_thinning: int = 1,
         apply_jitter: bool = True,
+        store_kernel_states: bool = False,
+        show_progress: bool = True,
+        positions_included: list[str] | None = None,
+        positions_excluded: list[str] | None = None,
+        save_path: str | Path | None = None,
     ) -> SamplingResults:
         """
         Shorthand method for quickly running MCMC for a set number of epochs.
@@ -309,6 +317,20 @@ class LieselMCMC:
             initial values for a variable will only jittered if the
             :class:`.MCMCSpec` for this variable was supplied with a ``jitter_dist``.
             Think of this argument rather as an off-switch of existing jittering.
+        store_kernel_states
+            Whether to store kernel states in sampling results, which may be useful
+            for debugging.
+        show_progress
+            Whether to show progress bars during sampling.
+        positions_included
+            List of additional position keys that should be tracked, see
+            :attr:`.EngineBuilder.positions_included`.
+        positions_excluded
+            List of position keys that should not be tracked. Excluded keys override
+            additional keys see :attr:`.EngineBuilder.positions_excluded`.
+        save_path
+            Filepath to a pickle file in which results should be saved. If the file
+            exists, results are loaded from this file and no sampling occurs.
 
         Warnings
         ---------
@@ -319,9 +341,9 @@ class LieselMCMC:
 
         See Also
         ---------
-        .get_engine_builder : Method to obtian an :class:`.EngineBuilder` from the
+        .get_engine_builder : Method to obtain an :class:`.EngineBuilder` from the
             LieselMCMC object. The :class:`.EngineBuilder` allows for more detailed
-            custom configuration; for example you can add MCMC kernels via
+            custom configuration; for example you can add additional MCMC kernels via
             :meth:`.EngineBuilder.add_kernel`.
 
         Notes
@@ -331,6 +353,12 @@ class LieselMCMC:
             eb = LieselMCMC(model).get_engine_builder(
                 seed=seed, num_chains=num_chains, apply_jitter=apply_jitter
             )
+
+            eb.store_kernel_states = store_kernel_states
+            eb.positions_included = positions_included or []
+            eb.positions_excluded = positions_excluded or []
+            eb.show_progress = show_progress
+
             if adaptation > 0:
                 eb.add_adaptation(adaptation, adaptation_thinning)
             if burnin > 0:
@@ -341,17 +369,35 @@ class LieselMCMC:
             engine.get_results()
 
         """
+        if save_path is not None:
+            fp = Path(save_path)
+            logger.info(f"Save path provided: {fp}.")
+            if fp.exists():
+                logger.info(f"Loading results from {fp}. No sampling is happening.")
+                return SamplingResults.pkl_load(fp)
+
         eb = self.get_engine_builder(
             seed=seed, num_chains=num_chains, apply_jitter=apply_jitter
         )
+
+        eb.store_kernel_states = store_kernel_states
+        eb.positions_included = positions_included or []
+        eb.positions_excluded = positions_excluded or []
+        eb.show_progress = show_progress
+
         if adaptation > 0:
-            eb.add_adaptation(adaptation, adaptation_thinning)
+            eb.add_adaptation(adaptation, thinning=adaptation_thinning)
         if burnin > 0:
             eb.add_burnin(burnin, burnin_thinning)
         eb.add_posterior(posterior, posterior_thinning)
         engine = eb.build()
         engine.sample_all_epochs()
-        return engine.get_results()
+        results = engine.get_results()
+        if save_path is not None:
+            fp = Path(save_path)
+            logger.info(f"Saving results to save path: {fp}.")
+            results.pkl_save(fp)
+        return results
 
 
 @dataclass

@@ -48,9 +48,9 @@ class OptimResult:
     max_iter: int
     """Maximum number of iterations."""
     n_train: int
-    """Number of training observations."""
+    """Number of training observations, or ``1`` if batching was disabled."""
     n_validation: int
-    """Number of test observations."""
+    """Number of validation observations, or ``1`` if batching was disabled."""
 
 
 def _find_observed(model: Model) -> dict[str, Var | Node]:
@@ -100,25 +100,31 @@ class Stopper:
     max_iter
         The maximum number of optimization steps.
     patience
-        Early stopping happens only, if there was no improvement for the number of\
-        patience iterations, and there were at least as many iterations as the length\
-        of the patience window.
+        Length of the recent loss window considered for early stopping. Early stopping\
+        is checked only after more than ``patience`` optimization steps have been\
+        evaluated. In other words, because ``i`` is zero-based, ``stop_early()`` first\
+        returns ``True`` no earlier than ``i == patience + 1``.
     atol
-        The absolute tolerance for early stopping.
+        The non-negative absolute tolerance for early stopping.
     rtol
-        The relative tolerance for early stopping. The default of ``0.0`` means that \
-        no early stopping happens based on the relative tolerance.
+        The non-negative relative tolerance for early stopping. The default of \
+        ``0.0`` means that no early stopping happens based on the relative tolerance.
 
     Notes
     -----
-    Early stopping happens, when the oldest loss value within the patience window is
-    the best loss value within the patience window. A simplified pseudo-implementation
-    is:
+    Early stopping is based on the window of the most recent ``patience`` loss values
+    ending at the current zero-based iteration ``i``. Without tolerances, early stopping
+    happens when the oldest loss value in this window is also the best loss value in
+    this window. This is a rolling-window rule, not a best-so-far rule that counts the
+    number of iterations since the global best loss. It can therefore continue while
+    the recent window still contains newer improvements, even if the global best loss
+    was observed before the current window. A simplified pseudo-implementation is:
 
     .. code-block:: python
 
         def stop(patience, i, loss_history):
-            recent_history = loss_history[-patience:]
+            current_history = loss_history[: i + 1]
+            recent_history = current_history[-patience:]
             oldest_within_patience = recent_history[0]
             best_within_patience = np.min(recent_history)
 
@@ -129,13 +135,14 @@ class Stopper:
     the absolute *or* relative difference between the oldest loss within patience and
     the best loss within patience is so small that it can be neglected.
     To be clear: If either of the two conditions is met, then early stopping happens.
-    The relative magnitude of the difference is calculaterd with respect to the best
-    lost within patience. A simplified pseudo-implementation is:
+    The relative magnitude of the difference is calculated with respect to the best
+    loss within patience. A simplified pseudo-implementation is:
 
     .. code-block:: python
 
         def stop(patience, i, loss_history, atol, rtol):
-            recent_history = loss_history[-patience:]
+            current_history = loss_history[: i + 1]
+            recent_history = current_history[-patience:]
             oldest_within_patience = recent_history[0]
             best_within_patience = np.min(recent_history)
 
@@ -153,6 +160,18 @@ class Stopper:
     patience: int
     atol: float = 1e-3
     rtol: float = 0.0
+
+    def __post_init__(self):
+        if self.max_iter < 1:
+            raise ValueError("max_iter must be at least 1.")
+        if self.patience < 1:
+            raise ValueError("patience must be at least 1.")
+        if self.patience > self.max_iter:
+            raise ValueError("patience must be less than or equal to max_iter.")
+        if self.atol < 0:
+            raise ValueError("atol must be non-negative.")
+        if self.rtol < 0:
+            raise ValueError("rtol must be non-negative.")
 
     def stop_early(self, i: int | Array, loss_history: Array):
         p = self.patience
@@ -191,10 +210,12 @@ class Stopper:
 
     def which_best_in_recent_history(self, i: int, loss_history: Array):
         """
-        Identifies the index of the best observation in recent history.
+        Identifies the index of the best observation in the recent loss window.
 
-        Recent history includes the last ``p`` iterations looking backwards from the
-        current iteration `ì``., where ``p`` is the patience.
+        The recent loss window contains the last ``p`` entries of ``loss_history``,
+        looking backwards from the current zero-based iteration ``i``, where ``p`` is
+        the patience. This returns the best index in that recent window, not
+        necessarily the global best index in the full loss history.
         """
         p = self.patience
         recent_history = jax.lax.dynamic_slice(
@@ -268,8 +289,10 @@ def optim_flat(
         A :class:`.Stopper` that carries information about the maximum number of\
         iterations and early stopping.
     batch_size
-        The batch size. If ``None``, the whole dataset\
-        is used for each optimization step.
+        The batch size. If ``None``, batching is disabled and each optimization step\
+        uses the full model log probability. In this case, the result stores\
+        ``n_train == n_validation == 1`` because no observation count is needed for\
+        likelihood rescaling.
     batch-seed
         Batches are assembled randomly in each iteration. This is the seed used for \
         shuffling in this step.
@@ -277,17 +300,23 @@ def optim_flat(
         If ``True``, the position history is saved to the results object.
     model_validation
         If supplied, this model serves as a validation model, which means that early\
-        stopping is based on the negative log likelihood evaluated using the observed\
-        data in this model. If ``None``, no early stopping is conducted.
+        stopping is based on the validation loss evaluated using this model. If\
+        ``None``, the training model is also used as the validation model, so training\
+        and validation losses are identical.
     restore_best_position
         If ``True``, the position with the lowest loss within the patience defined\
-        by the supplied :class:`.Stopper` is restored as the final postion. If \
+        by the supplied :class:`.Stopper` is restored as the final position. If \
         ``False``, the last iteration's position is used.
     prune_history
         If ``True``, the history is pruned to the length of the final iteration. This\
         means, the history can be shorter than the maximum number of iterations defined\
         by the supplied :class:`.Stopper`. If ``False``, unused history entries are set\
         to ``jax.numpy.nan`` if optimization stops early.
+    validate_log_prob_decomposition
+        Whether to check that the model log probability is equal to the sum of the\
+        model log likelihood and model log prior before optimization starts. Disable\
+        this only for models whose log probability intentionally cannot be decomposed\
+        in this way.
     progress_bar
         Whether to use a progress bar.
     progress_n_updates
@@ -307,8 +336,9 @@ def optim_flat(
     Notes
     -----
 
-    If you use batching, be aware that the
-    batching functionality implemented here assumes a "flat" model structure. This means
+    If ``batch_size`` is ``None``, batching is disabled. If you use batching, be aware
+    that the batching functionality implemented here assumes a "flat" model structure.
+    This means
     that this function assumes that, for all :class:`.Var` objects in your model, it
     is valid to index their values like this::
 
@@ -316,6 +346,9 @@ def optim_flat(
 
     The batching functionality also assumes that all objects that should be batched
     are included as :class:`.Var` objects with ``Var.observed`` set to ``True``.
+    With batching enabled, the training loss rescales the batched log likelihood by
+    ``n_train / batch_size``. The validation loss rescales the validation log likelihood
+    by ``n_train / n_validation`` when a separate validation model is supplied.
 
     Examples
     --------
@@ -378,20 +411,21 @@ def optim_flat(
     if optimizer is None:
         optimizer = optax.adam(learning_rate=1e-2)
 
-    n_train = _find_sample_size(model_train)
-    n_validation = _find_sample_size(model_validation)
-
     do_batching = batch_size is not None
     if do_batching:
         shuffle_batch_indices = True
         observed = _find_observed(model_train)
+        n_train = _find_sample_size(model_train)
+        n_validation = _find_sample_size(model_validation)
+        batch_size = batch_size if batch_size is not None else n_train
     else:
         shuffle_batch_indices = False
         # not because there are no observed, but because we don't need to update
         # observed with their batches
         observed = {}
-
-    batch_size = batch_size if batch_size is not None else n_train
+        n_train = 1
+        n_validation = 1
+        batch_size = 1
 
     interface_train = LieselInterface(model_train)
     position = interface_train.extract_position(params, model_train.state)
@@ -424,9 +458,12 @@ def optim_flat(
         position = position | batched_observed  # type: ignore
 
         updated_state = interface_train.update_state(position, model_state)
-        log_lik = likelihood_scalar * updated_state["_model_log_lik"].value
-        log_prior = updated_state["_model_log_prior"].value
-        log_prob = log_lik + log_prior
+        if not do_batching:
+            log_prob = updated_state["_model_log_prob"].value
+        else:
+            log_lik = likelihood_scalar * updated_state["_model_log_lik"].value
+            log_prior = updated_state["_model_log_prior"].value
+            log_prob = log_lik + log_prior
         return -log_prob
 
     def _neg_log_prob_train(position: Position, model_state: ModelState):
@@ -439,6 +476,9 @@ def optim_flat(
         log_prior = updated_state["_model_log_prior"].value
         log_prob = log_lik + log_prior
         return -log_prob
+
+    if model_validation is model_train:
+        _neg_log_prob_validation = _neg_log_prob_train
 
     neg_log_prob_grad = jax.grad(_batched_neg_log_prob, argnums=0)
 

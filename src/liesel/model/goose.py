@@ -57,7 +57,7 @@ def finite_discrete_gibbs_kernel(
     >>> prior = lsl.Dist(tfd.FiniteDiscrete, outcomes=value_grid, probs=prior_probs)
     >>> categorical_var = lsl.Var(
     ...     value=values[0],
-    ...     distribution=prior,
+    ...     dist=prior,
     ...     name="categorical_var",
     ... )
 
@@ -71,7 +71,7 @@ def finite_discrete_gibbs_kernel(
     >>> prior = lsl.Dist(tfd.Bernoulli, probs=lsl.Value(0.7))
     >>> dummy_var = lsl.Var(
     ...     value=1,
-    ...     distribution=prior,
+    ...     dist=prior,
     ...     name="dummy_var",
     ... )
 

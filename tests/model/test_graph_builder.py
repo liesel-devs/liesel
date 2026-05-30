@@ -1,6 +1,6 @@
+import jax
 import numpy as np
 import pytest
-import tensorflow_probability.substrates.jax as tfp
 
 import liesel.model.model as lmodel
 import liesel.model.nodes as lnodes
@@ -30,6 +30,7 @@ def test_add_same_group_twice() -> None:
 
 
 def test_manual_dtype_conversion(local_caplog) -> None:
+    jax.config.update("jax_enable_x64", True)
     float_node = lnodes.Value(np.zeros(5, dtype="float64"), _name="float_node")
     int_node = lnodes.Value(np.zeros(5, dtype="int64"), _name="int_node")
 
@@ -52,6 +53,7 @@ def test_manual_dtype_conversion(local_caplog) -> None:
     gb.convert_dtype("int64", "int32")
     assert float_node.value.dtype == "float32"
     assert int_node.value.dtype == "int32"
+    jax.config.update("jax_enable_x64", False)
 
 
 def test_auto_dtype_conversion() -> None:
@@ -61,20 +63,4 @@ def test_auto_dtype_conversion() -> None:
     gb = lmodel.GraphBuilder()
     gb.add(float_node, int_node)
     assert float_node.value.dtype == "float32"
-    assert int_node.value.dtype == "int64"
-
-
-def test_transform_raises_error_for_duplicate_nodes() -> None:
-    lmbd = lnodes.Var(1.0, name="lambda")
-    dist = lnodes.Dist(tfp.distributions.Exponential, lmbd)
-    x = lnodes.Var(1.0, dist, name="x")
-
-    gb = lmodel.GraphBuilder()
-
-    model = gb.add(x).build_model()
-
-    nodes, vars = model.copy_nodes_and_vars()
-
-    with pytest.raises(RuntimeError):
-        gb.add(*nodes.values(), *vars.values())
-        x.transform()
+    assert int_node.value.dtype == "int32"

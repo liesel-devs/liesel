@@ -316,8 +316,8 @@ class TestLieselMCMC:
             gs.LieselMCMC(model).get_kernel_list()
 
         kernels = gs.LieselMCMC(model, which="a").get_kernel_list()
-        assert isinstance(kernels[0], gs.IWLSKernel)
-        assert isinstance(kernels[1], gs.NUTSKernel)
+        assert isinstance(kernels[1], gs.IWLSKernel)
+        assert isinstance(kernels[0], gs.NUTSKernel)
 
         kernels = gs.LieselMCMC(model, which="b").get_kernel_list()
         assert isinstance(kernels[0], gs.IWLSKernel)
@@ -346,7 +346,7 @@ class TestLieselMCMC:
         kernels = mcmc.get_kernel_list()
 
         assert len(kernels) == 1
-        assert kernels[0].position_keys == ("sigma", "mu")
+        assert kernels[0].position_keys == ("mu", "sigma")
 
     def test_kernel_group_equal_kwargs(self):
         """
@@ -421,7 +421,7 @@ class TestLieselMCMC:
         mcmc = gs.LieselMCMC(model)
         kernels = mcmc.get_kernel_list()
         assert len(kernels) == 1
-        assert kernels[0].position_keys == ("sigma", "mu")
+        assert kernels[0].position_keys == ("mu", "sigma")
 
     def test_kernel_group_kwargs_defined_once(self):
         """
@@ -458,7 +458,7 @@ class TestLieselMCMC:
         mcmc = gs.LieselMCMC(model)
         kernels = mcmc.get_kernel_list()
         assert len(kernels) == 1
-        assert kernels[0].position_keys == ("sigma", "mu")
+        assert kernels[0].position_keys == ("mu", "sigma")
         assert kernels[0].da_target_accept == pytest.approx(kwargs["da_target_accept"])
         assert kernels[0].mm_diag == pytest.approx(kwargs["mm_diag"])
 
@@ -668,9 +668,9 @@ class TestLieselMCMC:
         klist = gs.LieselMCMC(model).get_kernel_list()
         position_keys = [k.position_keys for k in klist]
         assert position_keys[0][0] == "layer1"
-        assert position_keys[1][0] == "h(layer2_scale)"
-        assert position_keys[2][0] == "layer2_loc"
-        assert position_keys[3][0] == "layer3"
+        assert position_keys[1][0] == "layer2_loc"
+        assert position_keys[2][0] == "layer3"
+        assert position_keys[3][0] == "h(layer2_scale)"
 
     def test_custom_order_of_kernels(self):
         layer3 = lsl.Var.new_param(

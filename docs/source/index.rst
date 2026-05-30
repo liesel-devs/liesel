@@ -87,7 +87,6 @@ instance.
     ~liesel.goose.MHKernel
     ~liesel.goose.MHProposal
     ~liesel.goose.GibbsKernel
-    ~liesel.goose.Kernel
 
 Summary & Plots
 ****************************
@@ -103,10 +102,11 @@ The central classes for handling your sampling results are:
     ~liesel.goose.SamplingResults
     ~liesel.goose.Summary
     ~liesel.goose.SamplesSummary
+    ~liesel.goose.loo
 
 You can obtain your posterior samples as a dictionary via
 :meth:`~.goose.SamplingResults.get_posterior_samples`. There is also experimental support
-for turning your samples into an ``arviz.InferenceData`` object via
+for turning your samples into an ArviZ data object via
 :func:`.to_arviz_inference_data`.
 
 Goose also comes with a number of plotting functions that give you quick
@@ -152,13 +152,13 @@ Model (Advanced)
     :recursive:
     :nosignatures:
 
+    ~liesel.model.log_prob_pointwise
     ~liesel.model.LogProb
     ~liesel.model.FlatLogProb
     ~liesel.model.Calc
     ~liesel.model.Node
     ~liesel.model.Value
     ~liesel.model.PIT
-    ~liesel.distributions.GaussianCopula
     ~liesel.model.TransientCalc
     ~liesel.model.TransientDist
     ~liesel.model.TransientIdentity
@@ -196,6 +196,18 @@ P-Splines
     ~liesel.contrib.splines.basis_matrix
     ~liesel.contrib.splines.equidistant_knots
     ~liesel.contrib.splines.pspline_penalty
+
+
+Custom Distributions
+********************
+
+.. autosummary::
+    :toctree: generated
+    :caption: Custom Distributions
+    :template: autosummary/class-without-inheritance-strict.rst
+    :nosignatures:
+
+    ~liesel.distributions.GaussianCopula
     ~liesel.distributions.MultivariateNormalDegenerate
 
 
@@ -206,9 +218,24 @@ Advanced MCMC functionality
     :toctree: generated
     :caption: MCMC (Advanced)
 
+    ~liesel.goose.mh_step
     ~liesel.goose.da
     ~liesel.goose.mm
     ~liesel.goose.EpochConfig
+    ~liesel.goose.EpochState
+    ~liesel.goose.EpochType
+    ~liesel.goose.KernelState
+    ~liesel.goose.ModelState
+    ~liesel.goose.Kernel
+    ~liesel.goose.TransitionInfo
+    ~liesel.goose.TuningInfo
+    ~liesel.goose.DefaultTransitionInfo
+    ~liesel.goose.DefaultTuningInfo
+    ~liesel.goose.TransitionMixin
+    ~liesel.goose.TransitionOutcome
+    ~liesel.goose.TuningOutcome
+    ~liesel.goose.WarmupOutcome
+    ~liesel.goose.ModelMixin
 
 
 Experimental API

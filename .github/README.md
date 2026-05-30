@@ -63,7 +63,7 @@ scale = lsl.Var.new_param(1.0, name="scale")
 
 y = lsl.Var.new_obs(
     value=jnp.array([1.314, 0.861, -1.813, 0.587, -1.408]),
-    distribution=lsl.Dist(tfd.Normal, loc=loc, scale=scale),
+    dist=lsl.Dist(tfd.Normal, loc=loc, scale=scale),
     name="y",
 )
 
@@ -200,10 +200,10 @@ kernel_00
 -0.116
 </td>
 <td>
-0.444
+0.445
 </td>
 <td>
--0.828
+-0.830
 </td>
 <td>
 -0.137
@@ -215,10 +215,10 @@ kernel_00
 4000
 </td>
 <td>
-1272.391
+1271.410
 </td>
 <td>
-2643.513
+2674.840
 </td>
 <td>
 1.002
@@ -291,7 +291,7 @@ divergent transition
 warmup
 </th>
 <td>
-45
+46
 </td>
 <td>
 4000
@@ -300,7 +300,7 @@ warmup
 4000
 </td>
 <td>
-0.011
+0.012
 </td>
 </tr>
 <tr>

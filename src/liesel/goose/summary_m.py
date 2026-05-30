@@ -17,11 +17,8 @@ from liesel.__version__ import __version__
 from liesel.goose.engine import ErrorLog, SamplingResults
 from liesel.goose.epoch import EpochType
 from liesel.goose.pytree import slice_leaves, stack_leaves
-from liesel.goose.types import Array, Position
+from liesel.goose.types import Array, Position, TransitionInfo
 from liesel.option import Option
-
-# can be removed once arviz has been upgrade to v1.0
-az.Numba.disable_numba()
 
 
 class ErrorSummaryForOneCode(NamedTuple):
@@ -124,14 +121,45 @@ summary_quantities: Sequence[SummaryQuantities] = (
 )
 
 
+def _summarize_acceptance_probabilities(
+    transition_infos: dict[str, TransitionInfo], phase: str
+) -> list[dict[str, Any]]:
+    data = []
+    for k, tinfo in transition_infos.items():
+        ap = jnp.asarray(tinfo.acceptance_prob)
+        pm = jnp.asarray(tinfo.position_moved)
+        chains, _ = ap.shape
+        for c in range(chains):
+            chain = {"kernel": k, "phase": phase, "chain": c}
+            chain["acceptance_probability"] = float(ap[c, ...].mean())
+            chain["position_moved"] = jnp.mean(pm[c, ...])
+            if float(chain["position_moved"]) > 1.0:  # type: ignore # spurious warning
+                if int(chain["position_moved"].round()) == 99:  # type: ignore
+                    chain["position_moved"] = jnp.nan
+            data.append(chain)
+    return data
+
+
+def summarize_acceptance_probabilities(
+    results: SamplingResults,
+) -> list[dict[str, Any]]:
+    warmup = _summarize_acceptance_probabilities(
+        results.get_warmup_transition_infos(), "warmup"
+    )
+    posterior = _summarize_acceptance_probabilities(
+        results.get_posterior_transition_infos(), "posterior"
+    )
+    return warmup + posterior
+
+
 class Summary:
     """
-    A summary object.
+    Posterior summary and diagnostics for :class:`.SamplingResults`.
 
     Offers two main use cases:
 
     1. View an overall summary by printing a summary instance, including a summary table
-       of the posterior samples and a summary of sammpling errors.
+       of the posterior samples and a summary of sampling errors.
     2. Programmatically access summary statistics via
        ``quantities[quantity_name][var_name]``. Please refer to the documentation of the
        attribute :attr:`.quantities` for details.
@@ -139,21 +167,58 @@ class Summary:
     Additionally, the summary object can be turned into a :class:`~pandas.DataFrame`
     using :meth:`.to_dataframe`.
 
+    If ``per_chain=False``, statistics are computed over all posterior chains and
+    draws. If ``per_chain=True``, each chain is summarized separately.
+
+    The low-level computations for HDIs, effective sample sizes, R-hat, and Monte
+    Carlo standard errors are delegated to `ArviZ <https://python.arviz.org/>`_.
+
+    By default, the summary contains the following statistics:
+
+    - ``mean``: Posterior mean.
+    - ``sd``: Posterior standard deviation.
+    - ``var``: Posterior variance.
+    - ``quantiles``: Posterior quantiles at the probabilities given by
+      ``quantiles``. These are stored as ``"quantile"`` in :attr:`.quantities`
+      and become columns named ``q_<probability>`` in :meth:`.to_dataframe`.
+    - ``hdi``: Highest density interval with probability mass ``hdi_prob``. This is
+      the narrowest posterior interval reported by ArviZ at that probability level.
+      In :meth:`.to_dataframe`, it becomes ``hdi_low`` and ``hdi_high``.
+    - ``ess_bulk``: Bulk effective sample size, a diagnostic for Monte Carlo
+      precision in the central part of the posterior distribution.
+    - ``ess_tail``: Tail effective sample size, a diagnostic for Monte Carlo
+      precision in the posterior tails.
+    - ``rhat``: Rank-normalized split R-hat, a between-chain convergence diagnostic.
+      Values close to 1 indicate better agreement between chains. This statistic is
+      only computed when more than one chain is summarized together.
+    - ``mcse_mean``: Monte Carlo standard error of the posterior mean.
+    - ``mcse_sd``: Monte Carlo standard error of the posterior standard deviation.
+
+    Use ``which`` to compute only a subset of these statistics.
+
     Parameters
     ----------
     results
         The sampling results to summarize.
     additional_chain
-        can be supplied to add more parameters to the summary output. Must be a position
+        Can be supplied to add more parameters to the summary output. Must be a position
         chain which matches chain and time dimension of the posterior chain as returned
         by :meth:`~.goose.SamplingResults.get_posterior_samples`.
+    quantiles
+        Posterior quantile probabilities to compute when ``"quantiles"`` is included
+        in ``which``.
     hdi_prob
-        Level on which to return posterior highest density intervals.
+        Posterior probability mass of the highest density interval to compute when
+        ``"hdi"`` is included in ``which``.
     selected, deselected
         Allow to get a summary only for a subset of the position keys.
     per_chain
         If *True*, the summary is calculated on a per-chain basis. Certain measures like
         ``rhat`` are not available if ``per_chain`` is *True*.
+    which
+        Names of the summary statistics to compute. Supported values are ``"mean"``,
+        ``"sd"``, ``"var"``, ``"quantiles"``, ``"hdi"``, ``"ess_bulk"``,
+        ``"ess_tail"``, ``"rhat"``, ``"mcse_mean"``, and ``"mcse_sd"``.
 
     Notes
     -----
@@ -170,10 +235,15 @@ class Summary:
     """
     Dict of summarizing quantities.
 
-    Built up in hierarchies as. Let ``summary`` be a :class:`.Summary` instance. The
-    hierarchy is::
+    Let ``summary`` be a :class:`.Summary` instance. The hierarchy is::
 
         q = summary.quantities["quantity_name"]["parameter_name"]
+
+    Available quantity names are ``"mean"``, ``"sd"``, ``"var"``, ``"quantile"``,
+    ``"hdi"``, ``"ess_bulk"``, ``"ess_tail"``, ``"rhat"``, ``"mcse_mean"``, and
+    ``"mcse_sd"``, depending on the ``which`` argument. Note that ``which`` uses
+    ``"quantiles"`` to request quantiles, while :attr:`.quantities` stores the
+    result under ``"quantile"``.
 
     The extracted object is an ``np.ndarray``. If ``per_chain=True``, the arrays for
     the ``"quantile"`` and ``"hdi"`` quantities have the following dimensions:
@@ -182,7 +252,7 @@ class Summary:
     2. Second index refers to the quantile/interval
     3. Third and subsequent indices refer to individual parameters.
 
-    If ``per_chain=True``, the arrays for the other quantiles have the dimensions:
+    If ``per_chain=True``, the arrays for the other quantities have the dimensions:
 
     1. First index refers to the chain
     2. Second and subsequent indices refer to individual parameters.
@@ -318,12 +388,24 @@ class Summary:
             results.get_error_log(False).unwrap(), results.get_error_log(True)
         )
 
+        pos_keys_by_kernels = []
+        for k, v in results.get_pos_keys_by_kernels().items():
+            pos_keys_by_kernels.append({"kernel": k, "positions": ", ".join(v)})
+
+        if len(pos_keys_by_kernels) == 1:
+            posdf = pd.DataFrame(pos_keys_by_kernels, index=pd.Index([0]))
+        else:
+            posdf = pd.DataFrame(pos_keys_by_kernels)
+        posdf = posdf.set_index(["kernel"])
+
         self._which = which
         self.per_chain = per_chain
         self.quantities = quantities
         self.config = config
         self.sample_info = sample_info
         self.error_summary = error_summary
+        self.pos_keys_by_kernels_df = posdf
+        self._acceptance_prob_summary = summarize_acceptance_probabilities(results)
         self.kernels_by_pos_key = results.get_kernels_by_pos_key()
         self.liesel_version = __version__
 
@@ -494,6 +576,19 @@ class Summary:
 
         return df
 
+    def acceptance_prob_df(self) -> pd.DataFrame:
+        """Returns an overview of acceptance probabilities as a dataframe."""
+        apdf = pd.DataFrame(self._acceptance_prob_summary)
+        apdf = apdf.set_index(["kernel", "phase", "chain"])
+        apdf = apdf.join(self.pos_keys_by_kernels_df, on="kernel")
+        apdf = apdf.reset_index().set_index(["kernel", "positions", "phase", "chain"])
+
+        if not self.per_chain:
+            apdf = apdf.groupby(level=["kernel", "positions", "phase"]).agg(
+                {"acceptance_probability": "mean", "position_moved": "mean"}
+            )
+        return apdf
+
     def error_df(self, per_chain: bool = False) -> pd.DataFrame:
         """
         Returns an overview of the errors recorded during sampling as a dataframe.
@@ -558,10 +653,16 @@ class Summary:
 
         df["relative"] = df["count"] / df["sample_size_total"]
 
+        df = (
+            df.join(self.pos_keys_by_kernels_df, on="kernel")
+            .reset_index()
+            .set_index(["kernel", "positions", "error_code", "error_msg", "phase"])
+        )
+
         # df = df.drop(columns="sample_size")
 
         if not per_chain:
-            df = df.groupby(level=[0, 1, 2, 3], observed=True)
+            df = df.groupby(level=[0, 1, 2, 3, 4], observed=True)
             df = df.aggregate(
                 {
                     "count": "sum",
@@ -590,9 +691,12 @@ class Summary:
 
     def _repr_html_(self):
         param_df = self._param_df()
+        apdf = self.acceptance_prob_df()
         error_df = self._error_df()
 
         html = "\n<p><strong>Parameter summary:</strong></p>\n" + param_df.to_html()
+
+        html += "\n<p><strong>Acceptance probabilities:</strong></p>\n" + apdf.to_html()
 
         if not error_df.empty:
             html += "\n<p><strong>Error summary:</strong></p>\n" + error_df.to_html()
@@ -602,16 +706,21 @@ class Summary:
 
     def _repr_markdown_(self):
         param_df = self._param_df()
+        apdf = self.acceptance_prob_df()
         error_df = self._error_df()
 
         try:
             param_md = param_df.to_markdown()
+            apdf_md = apdf.to_markdown()
             error_md = error_df.to_markdown()
         except ImportError:
             param_md = f"```\n{repr(param_df)}\n```"
+            apdf_md = f"```\n{repr(apdf)}\n```"
             error_md = f"```\n{repr(error_df)}\n```"
 
         md = "\n\n**Parameter summary:**\n\n" + param_md
+
+        md += "\n\n**Acceptance probabilities:**\n\n" + apdf_md
 
         if not error_df.empty:
             md += "\n\n**Error summary:**\n\n" + error_md
@@ -629,7 +738,7 @@ def _create_quantity_dict(
     hdi_prob: float,
     which: Sequence[SummaryQuantities] = summary_quantities,
 ) -> dict[str, dict[str, np.ndarray]]:
-    azchain = az.convert_to_inference_data(chain).posterior
+    azchain = az.from_dict({"posterior": chain})["posterior"].dataset
 
     quantities = {}
     # calculate quantities
@@ -642,7 +751,7 @@ def _create_quantity_dict(
     if "quantiles" in which:
         quantities["quantile"] = azchain.quantile(q=quantiles, dim=["chain", "draw"])
     if "hdi" in which:
-        quantities["hdi"] = az.hdi(azchain, hdi_prob=hdi_prob)
+        quantities["hdi"] = az.hdi(azchain, prob=hdi_prob)
 
     if "ess_bulk" in which:
         quantities["ess_bulk"] = az.ess(azchain, method="bulk")
@@ -656,31 +765,32 @@ def _create_quantity_dict(
     if "mcse_sd" in which:
         quantities["mcse_sd"] = az.mcse(azchain, method="sd")
 
-    if "rhat" in which and azchain.chain.size > 1:
+    if "rhat" in which and azchain.sizes["chain"] > 1:
         quantities["rhat"] = az.rhat(azchain)
 
     # convert to simple dict[str, np.ndarray]
     for key, val in quantities.items():
-        quantities[key] = {k: v.values for k, v in val.data_vars.items()}
-
-    # hdi shape BEFORE
-    # VarIDX --- HDI
-
-    # special treatment for hdi since the function uses the last axis to refer
-    # to the quantile
-    if "hdi" in quantities:
-        for k, v in quantities["hdi"].items():
-            quantities["hdi"][k] = np.moveaxis(v, -1, 0)
-
-    # hdi shape AFTER
-    # HDI --- VarIDX
+        quantity = {}
+        for k, v in val.data_vars.items():
+            if key == "hdi":
+                remaining_dims = [dim for dim in v.dims if dim != "ci_bound"]
+                v = v.transpose("ci_bound", *remaining_dims)
+            quantity[k] = v.values
+        quantities[key] = quantity
 
     return quantities
 
 
 class SamplesSummary:
     """
-    A summary object based on a dictionary of samples.
+    Posterior summary and diagnostics for a dictionary of sample arrays.
+
+    See :class:`.Summary` for the full description of the computed statistics, their
+    interpretation, the ``quantities`` layout, and the behavior of ``quantiles``,
+    ``hdi_prob``, ``per_chain``, and ``which``. This class computes the same
+    sample-based statistics as :class:`.Summary`, but takes a plain dictionary of
+    sample arrays instead of a :class:`.SamplingResults` object and does not include
+    sampling-error or acceptance-probability diagnostics.
 
     Offers two main use cases:
 
@@ -693,14 +803,22 @@ class SamplesSummary:
     Parameters
     ----------
     samples
-        The dictionary of samples to summarize.
+        The dictionary of samples to summarize. Each array is expected to have leading
+        dimensions ``(nchains, ndraws, ...)``.
+    quantiles
+        Posterior quantile probabilities to compute when ``"quantiles"`` is included
+        in ``which``.
     hdi_prob
-        Level on which to return posterior highest density intervals.
+        Posterior probability mass of the highest density interval to compute when
+        ``"hdi"`` is included in ``which``.
     selected, deselected
         Allow to get a summary only for a subset of the position keys.
     per_chain
         If *True*, the summary is calculated on a per-chain basis. Certain measures like
         ``rhat`` are not available if ``per_chain`` is *True*.
+    which
+        Names of the summary statistics to compute. Supported values are the same as
+        for :class:`.Summary`.
 
     Notes
     -----
@@ -809,9 +927,14 @@ class SamplesSummary:
         Parameters
         ----------
         a
-            The array of samples to summarize.
+            The array of samples to summarize. Expected to have leading dimensions
+            ``(nchains, ndraws, ...)``.
+        quantiles
+            Posterior quantile probabilities to compute when ``"quantiles"`` is
+            included in ``which``.
         hdi_prob
-            Level on which to return posterior highest density intervals.
+            Posterior probability mass of the highest density interval to compute when
+            ``"hdi"`` is included in ``which``.
         selected, deselected
             Allow to get a summary only for a subset of the position keys.
         per_chain
@@ -819,12 +942,15 @@ class SamplesSummary:
             measures like ``rhat`` are not available if ``per_chain`` is *True*.
         name
             Variable name to use for labelling in :meth:`.to_dataframe`.
+        which
+            Names of the summary statistics to compute. Supported values are the same
+            as for :class:`.Summary`.
         """
         samples = {name: a}
         return cls(samples, quantiles, hdi_prob, selected, deselected, per_chain, which)
 
     def to_dataframe(self) -> pd.DataFrame:
-        """Turns Summary object into a :class:`~pandas.DataFrame` object."""
+        """Turns SamplesSummary object into a :class:`~pandas.DataFrame` object."""
 
         # don't change the original data
         quants = self.quantities.copy()
@@ -989,3 +1115,120 @@ class SamplesSummary:
         else:
             diagnostics["aggregated_by"] = by
         return diagnostics
+
+
+def concatenate_arrays_in_dict(
+    x: dict[str, jax.typing.ArrayLike], n_leading_axes: int = 2
+) -> jax.Array:
+    """
+    Concatenates all arrays in the supplied dictionary into a single array.
+
+    Returns
+    -------
+    An array of dimension ``(leading1, leading1, nobs)``, where ``nobs`` is the total
+    number of elements in the non-leading axes of the dictionary values. As the default
+    case, we expect the output to have shape ``(nchains, nsamples, nobs)``.
+    """
+
+    flat_arrays = []
+    for v in x.values():
+        # assumed to have shape (s, c, ...)
+
+        v = jnp.atleast_3d(jnp.asarray(v))
+
+        vshape = v.shape[:n_leading_axes] + (-1,)
+        flat_arrays.append(jnp.reshape(v, vshape))
+
+    out_array = jnp.concatenate(flat_arrays, axis=-1)
+    return out_array
+
+
+def _apply_loo_scale(
+    result: az.ELPDData,
+    scale: Literal["log", "negative_log", "deviance"],
+) -> az.ELPDData:
+    if scale != "log":
+        multiplier = -1 if scale == "negative_log" else -2
+        result.elpd = multiplier * result.elpd
+        result.se = abs(multiplier) * result.se
+        result.elpd_i = multiplier * result.elpd_i
+        result.scale = scale
+
+    result.elpd_loo = result.elpd
+    result.p_loo = result.p
+    return result
+
+
+def loo(
+    lpp: dict[str, jax.typing.ArrayLike] | jax.typing.ArrayLike,
+    samples: dict[str, jax.typing.ArrayLike] | None,
+    reff: float | None = None,
+    scale: Literal["log", "negative_log", "deviance"] = "log",
+) -> az.ELPDData:
+    """
+    Compute Pareto-smoothed importance sampling leave-one-out cross-validation
+    (PSIS-LOO-CV) statistic via ArviZ.
+
+    Parameters
+    ----------
+    lpp
+        Dictionary or array of pointwise log probability evaluations.
+        If passed as a dictionary, each value is expected to have shape
+        ``(nsamples, nchains, ...)``.
+        If passed as an array, it is assumed to have shape ``(nsamples, nchains, n)``.
+    samples
+        Dictionary of samples at which to evaluate log probs. If ``samples``
+        contains entries for weak variables or for nodes in :attr:`.model_nodes`
+        they are ignored.
+    newdata
+        Dictionary of new data at which to evaluate log probs. The keys should \
+        correspond to variable or node names in the model whose values should be \
+        set to the given values before evaluating predictions. If ``None`` \
+        (default), the current variable values are used.
+    reff
+        Relative MCMC efficiency, ess / n i.e. number of effective samples divided
+        by the number of actual samples. Computed from the samples by default.
+    scale
+        Output scale. The options are:
+
+        - ``log``: (default) log probability scale.
+        - ``negative_log``: ``-1 * log``
+        - ``deviance``: ``-2 * log``
+
+        A higher log probability (or a lower deviance or negative log_score)
+        indicates a model with better predictive accuracy.
+
+
+    References
+    ----------
+    - Computations are carried out via ArviZ: https://python.arviz.org/en/stable/
+    - Theoretical background: Vehtari, A., Gelman, A., & Gabry, J. (2017). Practical
+      Bayesian model evaluation using leave-one-out cross-validation and WAIC.
+      Statistics and Computing, 27(5), 1413–1432.
+      https://doi.org/10.1007/s11222-016-9696-4
+
+    """
+    if samples is None and reff is None:
+        raise ValueError(
+            "Both 'samples' and 'reff' are None, so relative MCMC efficiency is not "
+            "available."
+        )
+
+    try:
+        lpp_array = jnp.asarray(lpp)
+    except Exception:  # assume its a dict now
+        lpp_array = concatenate_arrays_in_dict(lpp)
+
+    lpp_array = np.asarray(lpp_array)
+    idat = az.from_dict({"log_likelihood": {"observed": lpp_array}})
+    if reff is None and samples is not None:
+        avg_ess = (
+            SamplesSummary(samples, which=["ess_bulk"])
+            .to_dataframe()["ess_bulk"]
+            .mean()
+        )
+        nsamples = lpp_array.shape[0] * lpp_array.shape[1]
+        reff = avg_ess / nsamples
+    # now we assume reff is not None
+
+    return _apply_loo_scale(az.loo(idat, reff=reff), scale)

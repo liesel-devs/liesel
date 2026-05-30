@@ -15,12 +15,14 @@ from typing import IO, TYPE_CHECKING, Any, Literal, NamedTuple, Self, TypeGuard,
 
 import jax
 import jax.numpy as jnp
+import pandas as pd
 import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as jd
 import tensorflow_probability.substrates.numpy.bijectors as nb
 import tensorflow_probability.substrates.numpy.distributions as nd
 
 from ..distributions.nodist import NoDistribution
+from .names import random_name
 from .viz import plot_nodes, plot_vars
 
 if TYPE_CHECKING:
@@ -108,6 +110,32 @@ def no_model_setter(fn):
     return wrapped
 
 
+def changes_model_graph(fn):
+    @wraps(fn)
+    def wrapped(self, *args, **kwargs):
+        if self.model and self.model.locked:
+            raise RuntimeError(
+                f"{repr(self)} is part of a locked model, cannot call {fn.__name__}(). "
+                "To allow for changes to the model, you can set the Model.locked flag "
+                "to False. "
+                "ATTENTION: Note that, from v0.5, the default state for models will "
+                "be Model.locked = False, so do not rely on this error if you are "
+                "using the default."
+            )
+        # pull out model here, because it may not be available on self below
+        # in all cases, e.g. if a node's name is changed in fn (because Node.model
+        # uses the name to check whether the node is still part of the model).
+        model = self.model
+        out = fn(self, *args, **kwargs)
+        if model:
+            model.outdated = True
+            if not model.update_graph_lazily:
+                model.update_graph()
+        return out
+
+    return wrapped
+
+
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Nodes ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -155,6 +183,10 @@ class Node(ABC):
         automatically generated upon initialization of a :class:`.Model`.
     _needs_seed
         Whether the node needs a seed / PRNG key.
+    convert
+        A function used to process the value of this node. The default uses the
+        function stored in :meth:`.Node.convert_value`, which is
+        ``jax.numpy.asarray``.
 
     See Also
     --------
@@ -179,14 +211,20 @@ class Node(ABC):
         *inputs: Any,
         _name: str = "",
         _needs_seed: bool = False,
+        convert: Callable[[Any], Any] | Literal["default"] = "default",
         **kwinputs: Any,
     ):
+        if convert == "default":
+            self._convert: Callable[[Any], Any] = self.convert_value
+        else:
+            self._convert = convert
         self._groups: dict[str, Group] = {}
         self._inputs = tuple(self._to_node(_input) for _input in inputs)
         self._kwinputs = {kw: self._to_node(_input) for kw, _input in kwinputs.items()}
         self._model: weakref.ref[Model] | Callable[[], None] = lambda: None
         self._name = _name
         self._needs_seed = _needs_seed
+        self._seed_node: Value | None = None
         self._outdated = True
         self._outputs: tuple[Node, ...] = ()
         self._value: Any = None
@@ -194,6 +232,24 @@ class Node(ABC):
 
         self.monitor = False
         """Whether the node should be monitored by an inference algorithm."""
+
+    @staticmethod
+    def convert_value(x: Any) -> Any:
+        """
+        The function used to process the value of this node, if ``convert="default"``
+        is supplied during init.
+
+        Can be overwritten on subclasses to create node
+        classes with different default conversion behavior.
+        Make sure to overwrite it with a static method, for example (re-implementing
+        the default behavior)::
+
+            class MyNode(lsl.Node):
+                @staticmethod
+                def convert_value(x):
+                    return jnp.asarray(x) if x is not None else x
+        """
+        return jnp.asarray(x) if x is not None else x
 
     def _add_output(self, output: Node) -> Node:
         self._outputs = _unique_tuple(self._outputs, [output])
@@ -217,13 +273,12 @@ class Node(ABC):
         self._var = var
         return self
 
-    @staticmethod
-    def _to_node(x: Any) -> Node:
+    def _to_node(self, x: Any) -> Node:
         if isinstance(x, Var):
             return x.var_value_node
 
         if not isinstance(x, Node):
-            return Value(x)
+            return Value(x, convert=self._convert)
 
         return x
 
@@ -235,7 +290,7 @@ class Node(ABC):
         self._var = None
         return self
 
-    @no_model_method
+    @changes_model_graph
     def add_inputs(self, *inputs: Any, **kwinputs: Any) -> Node:
         """Adds non-keyword and keyword input nodes to the existing ones."""
         inputs = self.inputs + inputs
@@ -257,13 +312,13 @@ class Node(ABC):
         self.state = NodeState(None, True)
         return self
 
-    @in_model_method
     def flag_outdated(self) -> Node:
         """Flags the node and its recursive outputs as outdated."""
         self._outdated = True
 
-        for node in self._outputs:
-            node.flag_outdated()
+        if self.model:
+            for node in self._outputs:
+                node.flag_outdated()
 
         return self
 
@@ -285,7 +340,15 @@ class Node(ABC):
     @property
     def model(self) -> Model | None:
         """The model the node is part of."""
-        return self._model()
+        model = self._model()
+        if model is None:
+            return None
+
+        if self.name in model.nodes:
+            return model
+
+        self._unset_model()
+        return None
 
     @property
     def name(self) -> str:
@@ -293,9 +356,41 @@ class Node(ABC):
         return self._name
 
     @name.setter
-    @no_model_setter
+    @changes_model_graph
     def name(self, name: str):
         self._name = name
+
+    def ensure_name(self) -> Self:
+        """
+        Ensures that the node has a name.
+
+        If the node already has a name, nothing happens. Otherwise, a unique random
+        name is generated with a leading underscore.
+        """
+        if self.name:
+            return self
+        else:
+            self.name = "_" + random_name()
+            return self
+
+    @property
+    def seed_node(self) -> Value | None:
+        return self._seed_node
+
+    @seed_node.setter
+    @no_model_setter
+    def seed_node(self, value: Value | None):
+        if value is None:
+            kwinputs_without_seed = self.kwinputs.copy()
+            kwinputs_without_seed.pop("seed", None)
+            self.set_inputs(*self.inputs, **kwinputs_without_seed)
+
+        kwinputs_with_seed = dict(self.kwinputs)
+        assert value is not None
+        kwinputs_with_seed["seed"] = value
+        self.set_inputs(*self.inputs, **kwinputs_with_seed)
+
+        self._seed_node = value
 
     @property
     def needs_seed(self) -> bool:
@@ -303,9 +398,14 @@ class Node(ABC):
         return self._needs_seed
 
     @needs_seed.setter
-    @no_model_setter
+    @changes_model_graph
     def needs_seed(self, needs_seed: bool):
         self._needs_seed = needs_seed
+
+        if not needs_seed:
+            kwinputs_without_seed = self.kwinputs.copy()
+            kwinputs_without_seed.pop("seed", None)
+            self.set_inputs(*self.inputs, **kwinputs_without_seed)
 
     @property
     def outdated(self) -> bool:
@@ -322,7 +422,7 @@ class Node(ABC):
         """The output nodes."""
         return self._outputs
 
-    @no_model_method
+    @changes_model_graph
     def set_inputs(self, *inputs: Any, **kwinputs: Any) -> Node:
         """Sets the non-keyword and keyword input nodes."""
         self._inputs = tuple(self._to_node(_input) for _input in inputs)
@@ -444,6 +544,7 @@ class Node(ABC):
         kwinputs[key] = self._to_node(value)
         return self.set_inputs(*self.inputs, **kwinputs)
 
+    @changes_model_graph
     def __setitem__(self, key: int | str, value: Node | Var | Any) -> None:
         if isinstance(key, int):
             all_inputs = self.all_input_nodes()
@@ -537,7 +638,8 @@ class InputGroup(TransientNode):
     """
     A node that groups its inputs for another node.
 
-    Essentially, this node "forwards" the values of its inputs to its outputs
+    Essentially, this node "forwards" the val
+    ues of its inputs to its outputs
     as an :class:`.ArgGroup`.
     """
 
@@ -568,7 +670,12 @@ class Value(Node):
         The value of the node.
     _name
         The name of the node. If you do not specify a name, a unique name will
-        be \ automatically generated upon initialization of a :class:`.Model`.
+        be automatically generated upon initialization of a :class:`.Model`.
+    convert
+        A function used to process the value of this node. The default uses the
+        function stored in :meth:`.Node.convert_value`, which is
+        ``jax.numpy.asarray``.
+
 
     See Also
     --------
@@ -597,8 +704,8 @@ class Value(Node):
     Adding this node to a model leads to an automatically generated name:
 
     >>> model = lsl.Model([nameless_node])
-    >>> nameless_node
-    Value(name="n0")
+    >>> nameless_node.name.startswith("_")
+    True
 
     A constant node with a name:
 
@@ -607,9 +714,14 @@ class Value(Node):
     Value(name="my_name")
     """
 
-    def __init__(self, value: Any, _name: str = ""):
-        super().__init__(_name=_name)
-        self._value = value
+    def __init__(
+        self,
+        value: Any,
+        _name: str = "",
+        convert: Callable[[Any], Any] | Literal["default"] = "default",
+    ):
+        super().__init__(_name=_name, convert=convert)
+        self.value = value
 
     def flag_outdated(self) -> Value:
         """Stops the recursion setting outdated flags."""
@@ -629,7 +741,15 @@ class Value(Node):
 
     @value.setter
     def value(self, value: Any):
-        self._value = value
+        try:
+            self._value = self._convert(value)
+        except TypeError as e:
+            msg = (
+                "Error during value conversion. If you updated the "
+                "`.convert_value` method, please make sure to define "
+                "it as a staticmethod."
+            )
+            raise TypeError(msg) from e
 
         if self.model:
             for node in self.outputs:
@@ -692,6 +812,10 @@ class Calc(Node):
     _update_on_init
         If ``True``, the calculator will try to evaluate its function upon \
         initialization.
+    convert_inputs
+        A function used to process the values of this node's inputs.
+        The default uses the function stored in :meth:`.Node.convert_value`, which is
+        ``jax.numpy.asarray``.
     **kwinputs
         Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
         will be converted to :class:`.Value` nodes. The values of these inputs will be
@@ -749,9 +873,16 @@ class Calc(Node):
         _name: str = "",
         _needs_seed: bool = False,
         _update_on_init: bool = True,
+        convert_inputs: Callable[[Any], Any] | Literal["default"] = "default",
         **kwinputs: Any,
     ):
-        super().__init__(*inputs, **kwinputs, _name=_name, _needs_seed=_needs_seed)
+        super().__init__(
+            *inputs,
+            **kwinputs,
+            _name=_name,
+            _needs_seed=_needs_seed,
+            convert=convert_inputs,
+        )
         self._function = function
         self._update_on_init = _update_on_init
 
@@ -776,7 +907,7 @@ class Calc(Node):
         return self._function
 
     @function.setter
-    @no_model_setter
+    @changes_model_graph
     def function(self, function: Callable[..., Any]):
         self._function = function
 
@@ -856,6 +987,10 @@ class Dist(Node):
         Optional parameter bijector specification for transforming
         distribution parameters. See :meth:`.Dist.biject_parameters` for supported
         formats and behavior.
+    convert_inputs
+        A function used to process the values of this node's inputs.
+        The default uses the function stored in :meth:`.Node.convert_value`, which is
+        ``jax.numpy.asarray``.
     **kwinputs
         Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
         will be converted to :class:`.Value` nodes. The values of these inputs will be
@@ -923,9 +1058,16 @@ class Dist(Node):
         | Literal["auto"]
         | dict[str, Bijector | Literal["auto"] | None]
         | Sequence[Bijector | Literal["auto"] | None] = None,
+        convert_inputs: Callable[[Any], Any] | Literal["default"] = "default",
         **kwinputs: Any,
     ):
-        super().__init__(*inputs, **kwinputs, _name=_name, _needs_seed=_needs_seed)
+        super().__init__(
+            *inputs,
+            **kwinputs,
+            _name=_name,
+            _needs_seed=_needs_seed,
+            convert=convert_inputs,
+        )
 
         self._at: Node | None = None
         self._distribution = distribution
@@ -949,7 +1091,7 @@ class Dist(Node):
         return self._at
 
     @at.setter
-    @no_model_setter
+    @changes_model_graph
     def at(self, at: Node | None):
         if self.var and at is not self.var.var_value_node:
             raise RuntimeError(
@@ -964,7 +1106,7 @@ class Dist(Node):
         return self._distribution
 
     @distribution.setter
-    @no_model_setter
+    @changes_model_graph
     def distribution(self, distribution: Callable[..., Distribution]):
         self._distribution = distribution
 
@@ -986,7 +1128,7 @@ class Dist(Node):
         return self._per_obs
 
     @per_obs.setter
-    @no_model_setter
+    @changes_model_graph
     def per_obs(self, per_obs: bool):
         self._per_obs = per_obs
 
@@ -1471,7 +1613,7 @@ class Var:
     ----------
     value
         The value of the variable.
-    distribution
+    dist
         The probability distribution of the variable.
     name
         The name of the variable. If you do not specify a name, a unique name will be \
@@ -1485,6 +1627,14 @@ class Var:
         call :meth:`.biject` with this bijector upon initialization. \
         Any supplied inference information will be passed to the bijected \
         variable.
+    convert
+        A function used to process the value of this variable. The default uses the
+        function stored in :meth:`.Var.convert_value`, which is ``jax.numpy.asarray``.
+
+    distribution
+        Deprecated argument name for the probability distribution of the variable,
+        kept for backwards-compatibility.
+        Please use the new name ``dist``.
 
     See Also
     --------
@@ -1525,18 +1675,34 @@ class Var:
         "_role",
         "_value_node",
         "_var_value_node",
+        "_convert",
     )
 
     def __init__(
         self,
         value: Any,
-        distribution: Dist | None = None,
+        dist: Dist | None = None,
         name: str = "",
         inference: InferenceTypes = None,
         bijector: None | Bijector | Literal["auto"] = None,
+        convert: Callable[[Any], Any] | Literal["default"] = "default",
+        distribution: Dist | None = None,
     ):
+        if dist is not None and distribution is not None:
+            raise ValueError(
+                "Values for 'dist' and 'distribution' provided. "
+                "Please provide the distribution only via 'dist'; the name "
+                "'distribution' is deprecated."
+            )
+        if dist is None:
+            dist = distribution
+
         self._name = name
-        self._value_node: Node = Value(None)
+        if convert == "default":
+            self._convert: Callable[[Any], Any] = self.convert_value
+        else:
+            self._convert = convert
+        self._value_node: Node = Value(None, convert=lambda x: x)
         self._dist_node: Dist = NoDist()
 
         self._var_value_node: VarValue = VarValue(
@@ -1547,7 +1713,7 @@ class Var:
 
         # use setters
         self.value_node = value  # type: ignore  # unfrozen
-        self.dist_node = distribution  # type: ignore  # unfrozen
+        self.dist_node = dist  # type: ignore  # unfrozen
 
         self._auto_transform = False
         self._bijected_var: Var | None = None
@@ -1565,14 +1731,34 @@ class Var:
         if bijector is not None:
             self.biject(bijector=bijector, inference=inference)
 
+    @staticmethod
+    def convert_value(x: Any) -> Any:
+        """
+        The function used to process the value of this variable, if
+        ``convert="default"`` is supplied during init.
+
+        Can be overwritten on subclasses
+        to create variable classes with different default conversion behavior. Make sure
+        to overwrite it with a static method, for example (re-implementing the default
+        behavior)::
+
+            class MyVar(lsl.Var):
+                @staticmethod
+                def convert_value(x):
+                    return jnp.asarray(x) if x is not None else x
+        """
+        return jnp.asarray(x) if x is not None else x
+
     @classmethod
     def new_param(
         cls,
         value: Any,
-        distribution: Dist | None = None,
+        dist: Dist | None = None,
         name: str = "",
         inference: InferenceTypes = None,
         bijector: None | Bijector | Literal["auto"] = None,
+        convert: Callable[[Any], Any] | Literal["default"] = "default",
+        distribution: Dist | None = None,
     ) -> Var:
         """
         Initializes a strong variable that acts as a model parameter.
@@ -1585,7 +1771,7 @@ class Var:
         ----------
         value
             The value of the variable.
-        distribution
+        dist
             The probability distribution of the variable.
         name
             The name of the variable. If you do not specify a name, a unique name will \
@@ -1599,6 +1785,14 @@ class Var:
             will call :meth:`.biject` with this bijector upon initialization. \
             Any supplied inference information will be passed to the bijected \
             variable.
+        convert
+            A function used to process the value of this variable. The default uses the
+            function stored in :meth:`.Var.convert_value`, which is
+            ``jax.numpy.asarray``.
+        distribution
+            Deprecated argument name for the probability distribution of the variable,
+            kept for backwards-compatibility.
+            Please use the new name ``dist``.
 
         See Also
         --------
@@ -1619,12 +1813,20 @@ class Var:
         A simple parameter with a normal prior:
 
         >>> prior = lsl.Dist(tfd.Normal, loc=0.0, scale=1.0)
-        >>> x = lsl.Var.new_param(1.0, distribution=prior)
+        >>> x = lsl.Var.new_param(1.0, dist=prior)
         >>> x
         Var(name="")
 
         """
-        var = cls(value, distribution, name, inference=inference, bijector=bijector)
+        var = cls(
+            value,
+            dist,
+            name,
+            inference=inference,
+            bijector=bijector,
+            convert=convert,
+            distribution=distribution,
+        )
         var.value_node.monitor = True
         if var.bijected_var is not None:
             var.bijected_var.parameter = True
@@ -1634,7 +1836,12 @@ class Var:
 
     @classmethod
     def new_obs(
-        cls, value: Any, distribution: Dist | None = None, name: str = ""
+        cls,
+        value: Any,
+        dist: Dist | None = None,
+        name: str = "",
+        distribution: Dist | None = None,
+        convert: Callable[[Any], Any] | Literal["default"] = "default",
     ) -> Var:
         """
         Initializes a strong variable that holds observed data.
@@ -1647,11 +1854,19 @@ class Var:
         ----------
         value
             The value of the variable.
-        distribution
+        dist
             The probability distribution of the variable.
         name
             The name of the variable. If you do not specify a name, a unique name will \
             be automatically generated upon initialization of a :class:`.Model`.
+        convert
+            A function used to process the value of this variable. The default uses the
+            function stored in :meth:`.Var.convert_value`, which is
+            ``jax.numpy.asarray``.
+        distribution
+            Deprecated argument name for the probability distribution of the variable,
+            kept for backwards-compatibility.
+            Please use the new name ``dist``.
 
         See Also
         --------
@@ -1672,12 +1887,12 @@ class Var:
         A simple observed variable with a normal distribution:
 
         >>> prior = lsl.Dist(tfd.Normal, loc=0.0, scale=1.0)
-        >>> x = lsl.Var.new_param(1.0, distribution=prior)
+        >>> x = lsl.Var.new_param(1.0, dist=prior)
         >>> x
         Var(name="")
 
         """
-        var = cls(value, distribution, name)
+        var = cls(value, dist, name, distribution=distribution, convert=convert)
         var.observed = True
         return var
 
@@ -1686,10 +1901,13 @@ class Var:
         cls,
         function: Callable[..., Any],
         *inputs: Any,
-        distribution: Dist | None = None,
+        dist: Dist | None = None,
         name: str = "",
         _needs_seed: bool = False,
         _update_on_init: bool = True,
+        convert_inputs: Callable[[Any], Any] | Literal["default"] = "default",
+        cache: bool = True,
+        distribution: Dist | None = None,
         **kwinputs: Any,
     ) -> Var:
         """
@@ -1714,7 +1932,7 @@ class Var:
             will be converted to :class:`.Value` nodes. The values of these inputs \
             will be passed to the wrapped function in the same order they are entered \
             here.
-        distribution
+        dist
             The probability distribution of the variable.
         name
             The name of the node. If you do not specify a name, a unique name will be \
@@ -1724,6 +1942,22 @@ class Var:
         _update_on_init
             If ``True``, the calculator will try to evaluate its function upon \
             initialization.
+        convert_inputs
+            A function used to process the values of this variable's inputs.
+            The default uses the function stored in :meth:`.Var.convert_value`,
+            which is ``jax.numpy.asarray``.
+        cache
+            If ``False``, this variable will not store a cache of its value. This means,
+            the ``function`` is evaluated every single time that the value of this
+            variable is requested. This can save memory, if the computations are
+            trivial (such as prepending an axis to an array), but it can greatly slow
+            down computations otherwise (such as when the function performs a
+            matrix inversion). Internally, if ``cache=True``, this variable wraps a
+            :class:`.Calc`, and if ``cache=False``, it wraps a :class:`.TransientCalc`.
+        distribution
+            Deprecated argument name for the probability distribution of the variable,
+            kept for backwards-compatibility.
+            Please use the new name ``dist``.
         **kwinputs
             Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
             will be converted to :class:`.Data` nodes. The values of these inputs will \
@@ -1775,20 +2009,35 @@ class Var:
         .. _docs: https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html
         """  # noqa: E501
 
-        calc = Calc(
+        if convert_inputs == "default":
+            convert_inputs = cls.convert_value
+
+        if cache:
+            calc_class = Calc
+        else:
+            calc_class = TransientCalc
+
+        calc = calc_class(
             function,
             *inputs,
             _name=f"{name}_calc",
             _needs_seed=_needs_seed,
             _update_on_init=_update_on_init,
+            convert_inputs=convert_inputs,
             **kwinputs,
         )
-        var = cls(calc, distribution=distribution, name=name)
+        var = cls(
+            calc, dist=dist, distribution=distribution, name=name, convert=lambda x: x
+        )
         return var
 
     @classmethod
     def new_value(
-        cls, value: Any, name: str = "", inference: InferenceTypes = None
+        cls,
+        value: Any,
+        name: str = "",
+        inference: InferenceTypes = None,
+        convert: Callable[[Any], Any] | Literal["default"] = "default",
     ) -> Var:
         """
         Initializes a strong variable without a distribution.
@@ -1804,6 +2053,10 @@ class Var:
             be automatically generated upon initialization of a :class:`.Model`.
         inference
             Additional information that can be used to set up inference algorithms.
+        convert
+            A function used to process the value of this variable. The default uses the
+            function stored in :meth:`.Var.convert_value`, which is
+            ``jax.numpy.asarray``.
 
         See Also
         --------
@@ -1822,7 +2075,7 @@ class Var:
         Var(name="")
 
         """
-        var = cls(value, name=name, inference=inference)
+        var = cls(value, name=name, inference=inference, convert=convert)
         return var
 
     def get_inference(self, key: str | None) -> InferenceTypes:
@@ -1834,20 +2087,30 @@ class Var:
             return self.inference[key]
         return self.inference
 
-    def all_input_nodes(self) -> tuple[Node, ...]:
+    def all_input_nodes(
+        self, to: Literal["value_node", "dist_node", "both"] = "both"
+    ) -> tuple[Node, ...]:
         """Returns all input *nodes* as a unique tuple."""
         inputs1 = self.value_node.all_input_nodes()
         inputs2 = self._dist_node.all_input_nodes()
-        return _unique_tuple(inputs1, inputs2)
+        match to:
+            case "value_node":
+                return inputs1
+            case "dist_node":
+                return inputs2
+            case "both":
+                return _unique_tuple(inputs1, inputs2)
 
-    def all_input_vars(self) -> tuple[Var, ...]:
+    def all_input_vars(
+        self, to: Literal["value_node", "dist_node", "both"] = "both"
+    ) -> tuple[Var, ...]:
         """
         Returns all input *variables* as a unique tuple.
 
         The returned tuple also contains input variables that are indirect inputs
         of this variable through nodes without variables.
         """
-        nodes = list(self.all_input_nodes())
+        nodes = list(self.all_input_nodes(to=to))
         visited = []
         _vars = []
 
@@ -1864,6 +2127,7 @@ class Var:
 
         return _unique_tuple(_vars)
 
+    @changes_model_graph
     def transform(
         self,
         bijector: type[jb.Bijector] | jb.Bijector | None = None,
@@ -2205,23 +2469,34 @@ class Var:
         self._bijected_var = value
 
     @in_model_method
-    def all_output_nodes(self) -> tuple[Node, ...]:
+    def all_output_nodes(
+        self, of: Literal["value_node", "dist_node", "both"] = "both"
+    ) -> tuple[Node, ...]:
         """Returns all output *nodes* as a unique tuple."""
-        nodes = list(self.value_node.all_output_nodes())
-        nodes.extend(self.var_value_node.all_output_nodes())
-        nodes.extend(self._dist_node.all_output_nodes())
+        match of:
+            case "value_node":
+                nodes = list(self.value_node.all_output_nodes())
+                nodes.extend(self.var_value_node.all_output_nodes())
+            case "dist_node":
+                nodes = list(self._dist_node.all_output_nodes())
+            case "both":
+                nodes = list(self.value_node.all_output_nodes())
+                nodes.extend(self.var_value_node.all_output_nodes())
+                nodes.extend(self._dist_node.all_output_nodes())
         nodes = [node for node in nodes if node is not self.var_value_node]
         return _unique_tuple(nodes)
 
     @in_model_method
-    def all_output_vars(self) -> tuple[Var, ...]:
+    def all_output_vars(
+        self, of: Literal["value_node", "dist_node", "both"] = "both"
+    ) -> tuple[Var, ...]:
         """
         Returns all output *variables* as a unique tuple.
 
         The returned tuple also contains output variables that are indirect outputs
         of this variable through nodes without variables.
         """
-        nodes = list(self.all_output_nodes())
+        nodes = list(self.all_output_nodes(of=of))
         visited = []
         _vars = []
 
@@ -2256,20 +2531,42 @@ class Var:
         return self._dist_node if self.has_dist else None
 
     @dist_node.setter
-    @no_model_setter
+    @changes_model_graph
     def dist_node(self, dist_node: Dist | None):
         if not dist_node:
             dist_node = NoDist()
 
-        if dist_node.model:
-            raise RuntimeError(
-                f"{repr(dist_node)} is part of a model, cannot be set as dist node"
-            )
-
         if self.name and not dist_node.name:
             dist_node.name = f"{self.name}_log_prob"  # type: ignore  # unfrozen
 
-        self._dist_node._unset_var()
+        if self._dist_node.model:
+            model = self._dist_node.model
+            auto_update_before = model.auto_update
+            model.auto_update = False
+
+            lazy_before = model.update_graph_lazily
+            model.update_graph_lazily = True
+            inputs = self._dist_node.inputs
+            kwinputs = self._dist_node.kwinputs
+            inputs = inputs + tuple(kwinputs.values())
+            self._dist_node._unset_var()
+            self._dist_node.set_inputs()
+            model._nodes = {
+                n.name: n for n in model._nodes.values() if n is not self._dist_node
+            }
+
+            self._dist_node.at = None
+            for nv in inputs:
+                model._remove_disconnected_parental_submodel(nv)
+                if isinstance(nv, VarValue):
+                    assert nv.var
+                    model._remove_disconnected_parental_submodel(nv.var)
+
+            model.update_graph_lazily = lazy_before
+            model.auto_update = auto_update_before
+        else:
+            self._dist_node._unset_var()
+            self._dist_node.at = None
 
         dist_node._set_var(self)
         dist_node.at = self.var_value_node  # type: ignore  # unfrozen
@@ -2305,7 +2602,7 @@ class Var:
         return self._name
 
     @name.setter
-    @no_model_setter
+    @changes_model_graph
     def name(self, name: str):
         if name and self.value_node.name in ("", f"{self.name}_value"):
             self.value_node.name = f"{name}_value"  # type: ignore  # unfrozen
@@ -2351,8 +2648,10 @@ class Var:
         return self._observed
 
     @observed.setter
-    @no_model_setter
+    @changes_model_graph
     def observed(self, observed: bool):
+        if self.parameter and observed is True:
+            raise ValueError("Cannot set observed flag to True if parameter=True")
         self._observed = observed
 
     @property
@@ -2381,8 +2680,10 @@ class Var:
         return self._parameter
 
     @parameter.setter
-    @no_model_setter
+    @changes_model_graph
     def parameter(self, parameter: bool):
+        if self.observed and parameter is True:
+            raise ValueError("Cannot set parameter flag to True if observed=True")
         self._parameter = parameter
 
     @property
@@ -2445,23 +2746,31 @@ class Var:
         return self._value_node
 
     @value_node.setter
-    @no_model_setter
+    @changes_model_graph
     def value_node(self, value_node: Any):
         if isinstance(value_node, Var):
-            value_node = Calc(lambda x: x, value_node)
+            value_node = Calc(lambda x: x, value_node, convert_inputs=self._convert)
 
         if not isinstance(value_node, Node):
-            value_node = Value(value_node)
+            value_node = Value(value_node, convert=self._convert)
 
         if value_node.model:
-            raise RuntimeError(
-                f"{repr(value_node)} is part of a model, cannot be set as value node"
-            )
+            if value_node.model is not self.model:
+                raise RuntimeError(
+                    f"{repr(value_node)} and {self} must be part of no "
+                    "model, or the same model."
+                )
 
         if self.name and not value_node.name:
             value_node.name = f"{self.name}_value"
 
         self.value_node._unset_var()
+        if self.model:
+            self.model._nodes = {
+                n.name: n
+                for n in self.model._nodes.values()
+                if n is not self.value_node
+            }
 
         value_node._set_var(self)
         self._value_node = value_node
@@ -2523,6 +2832,67 @@ class Var:
                     subgraph = model.node_parental_subgraph(*filtered_nodes)
                     plot_nodes(subgraph, **kwargs)
 
+    def plot(
+        self,
+        show: bool = True,
+        save_path: str | None | IO = None,
+        width: int = 14,
+        height: int = 10,
+        prog: Literal[
+            "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
+        ] = "dot",
+        verbose: bool = False,
+        legend: bool = True,
+    ) -> None:
+        """
+        Plots the variables of the Liesel sub-model that terminates in this variable.
+
+        Wraps :func:`~.viz.plot_vars`. Alias for :meth:`.Var.plot_vars`.
+
+        Parameters
+        ----------
+        verbose
+            If ``True``, logs a message if unnamed variables or nodes are temporarily \
+            named for plotting.
+        show
+            Whether to show the plot in a new window.
+        save_path
+            Path to save the plot. If not provided, the plot will not be saved.
+        width
+            Width of the plot in inches.
+        height
+            Height of the plot in inches.
+        prog
+            Layout parameter. Available layouts: circo, dot (the default), fdp, neato, \
+            osage, patchwork, sfdp, twopi.
+        verbose
+            If ``True``, the message that will be logged if unnamed nodes are \
+            automatically named for plotting contains a list of the automatically \
+            assigned names.
+        legend
+            Whether to draw the legend.
+
+        See Also
+        --------
+        .Var.plot_vars : Plots the variables of the Liesel sub-model that terminates in
+            this variable.
+        .Var.plot_nodes : Plots the nodes of the Liesel sub-model that terminates in
+            this variable.
+        .Model.plot_vars : Plots the variables of a Liesel model.
+        .Model.plot_nodes : Plots the nodes of a Liesel model.
+        .viz.plot_vars : Plots the variables of a Liesel model.
+        .viz.plot_nodes : Plots the nodes of a Liesel model.
+        """
+        return self.plot_vars(
+            verbose=verbose,
+            show=show,
+            save_path=save_path,
+            width=width,
+            height=height,
+            prog=prog,
+            legend=legend,
+        )
+
     def plot_vars(
         self,
         show: bool = True,
@@ -2533,6 +2903,7 @@ class Var:
             "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
         ] = "dot",
         verbose: bool = False,
+        legend: bool = True,
     ) -> None:
         """
         Plots the variables of the Liesel sub-model that terminates in this variable.
@@ -2559,6 +2930,8 @@ class Var:
             If ``True``, the message that will be logged if unnamed nodes are \
             automatically named for plotting contains a list of the automatically \
             assigned names.
+        legend
+            Whether to draw the legend.
 
         See Also
         --------
@@ -2579,6 +2952,7 @@ class Var:
             width=width,
             height=height,
             prog=prog,
+            legend=legend,
         )
 
     def predict(
@@ -2637,6 +3011,33 @@ class Var:
 
         pred = submodel.predict(samples=samples, predict=[self.name], newdata=newdata)
         return pred[self.name]
+
+    def diagnose(self, verbose: bool = False) -> pd.DataFrame:
+        """
+        Provides a dataframe with diagnostic information about this variable's submodel.
+        """
+        if self.model is not None:
+            submodel = self.model.parental_submodel(self)
+        else:
+            from liesel.model.model import TemporaryModel
+
+            try:
+                to_float32 = not jax.config.jax_enable_x64  # type: ignore
+            except Exception:  # just to be really sure in case anything changes
+                # this is an implicit test of whether x64 flag is enabled
+                import jax.numpy as jnp
+
+                to_float32 = jnp.array(1.0).dtype == jnp.dtype("float32")
+
+            with TemporaryModel(self, silent=True, to_float32=to_float32) as model:
+                submodel = model.parental_submodel(self)
+
+        if self.model is None:
+            model = submodel
+        else:
+            model = self.model
+
+        return model.diagnose(verbose=verbose)
 
     def sample(
         self,
@@ -2778,6 +3179,19 @@ class Var:
             prog=prog,
         )
 
+    def ensure_name(self) -> Self:
+        """
+        Ensures that the variable has a name.
+
+        If the variable already has a name, nothing happens. Otherwise, a unique random
+        name is generated with a leading underscore.
+        """
+        if self.name:
+            return self
+        else:
+            self.name = "_" + random_name()
+            return self
+
 
 def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) -> Var:
     if var.dist_node is None:  # type: ignore
@@ -2797,6 +3211,7 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
         _name="",
         _needs_seed=var.dist_node.needs_seed,
         bijectors=None,
+        convert_inputs=jnp.asarray,
         **kwinputs,
     )
 
@@ -2828,6 +3243,7 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
                 _name="",
                 _needs_seed=value_node_needs_seed,
                 _update_on_init=value_node_update_on_init,
+                convert_inputs=jnp.asarray,
                 **value_kwinputs,
             ),
             transformed_dist,
@@ -2916,6 +3332,7 @@ def _transform_var_with_bijector_class(
                 _name="",
                 _needs_seed=value_node_needs_seed,
                 _update_on_init=value_node_upadte_on_init,
+                convert_inputs=jnp.asarray,
                 **value_kwinputs,
             ),
             dist_node_transformed,

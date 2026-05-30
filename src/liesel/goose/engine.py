@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import logging
 import pickle
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Sequence
+from dataclasses import asdict, dataclass
 from functools import partial
-from typing import NamedTuple, cast
+from typing import Any, NamedTuple, cast
 
 import jax
 import jax.lax
@@ -32,6 +32,7 @@ from .pytree import as_strong_pytree, register_dataclass_as_pytree
 from .types import (
     Array,
     GeneratedQuantity,
+    KernelState,
     KeyArray,
     ModelInterface,
     ModelState,
@@ -207,6 +208,21 @@ class SamplingResults:
             f"No position-kernel associations in {repr(self)}"
         )
 
+    def get_pos_keys_by_kernels(self) -> dict[str, list[str]]:
+        """
+        Returns a dict, identifying the position keys governed by each kernel.
+
+        The dict has the format
+        ``{"kernel identifier": ["position key 1", "position key 2"]}``.
+        """
+        pos_key_by_kernels = {}
+        for posname, kernelname in self.get_kernels_by_pos_key().items():
+            if kernelname not in pos_key_by_kernels:
+                pos_key_by_kernels[kernelname] = [posname]
+            else:
+                pos_key_by_kernels[kernelname].append(posname)
+        return pos_key_by_kernels
+
     def get_posterior_transition_infos(self) -> dict[str, TransitionInfo]:
         """
         Returns a dictionary of posterior transition information for all parameters
@@ -216,6 +232,58 @@ class SamplingResults:
             lambda config: config.type == EpochType.POSTERIOR
         )
         return opt.expect(f"No posterior transition infos in {repr(self)}")
+
+    def get_warmup_transition_infos(self) -> dict[str, TransitionInfo]:
+        """
+        Returns a dictionary of posterior transition information for all parameters
+        included in the position.
+        """
+        opt = self.transition_infos.combine_filtered(
+            lambda config: EpochType.is_warmup(config.type)
+        )
+        return opt.expect(f"No warmup transition infos in {repr(self)}")
+
+    def get_warmup_acceptance_probabilities(self) -> dict[str, Array]:
+        """
+        Returns dictionary of acceptance probabilities during warmup by kernel.
+        """
+        transition_infos = self.get_warmup_transition_infos()
+        data = {}
+        for k, tinfo in transition_infos.items():
+            data[k] = jnp.asarray(tinfo.acceptance_prob)
+        return data
+
+    def get_warmup_position_moved(self) -> dict[str, Array]:
+        """
+        Returns dictionary of transition movements (0: no move, 1: move)
+        during warmup by kernel.
+        """
+        transition_infos = self.get_warmup_transition_infos()
+        data = {}
+        for k, tinfo in transition_infos.items():
+            data[k] = jnp.asarray(tinfo.position_moved)
+        return data
+
+    def get_posterior_acceptance_probabilities(self) -> dict[str, Array]:
+        """
+        Returns dictionary of acceptance probabilities during posterior by kernel.
+        """
+        transition_infos = self.get_posterior_transition_infos()
+        data = {}
+        for k, tinfo in transition_infos.items():
+            data[k] = jnp.asarray(tinfo.acceptance_prob)
+        return data
+
+    def get_posterior_position_moved(self) -> dict[str, Array]:
+        """
+        Returns dictionary of transition movements (0: no move, 1: move)
+        during posterior by kernel.
+        """
+        transition_infos = self.get_posterior_transition_infos()
+        data = {}
+        for k, tinfo in transition_infos.items():
+            data[k] = jnp.asarray(tinfo.position_moved)
+        return data
 
     def get_tuning_times(self) -> Option[Array]:
         """
@@ -230,6 +298,31 @@ class SamplingResults:
         time: Array = next(iter(opt_tis.values())).time
 
         return Option(time)
+
+    def get_warmup_kernel_states(
+        self, process_state: Callable[[KernelState], Any] = asdict
+    ) -> dict[str, Any]:
+        """
+        If available, returns a dictionary of kernel states recorded during
+        warmup, organized by kernel.
+
+        The argument ``process_state`` is a callable that is used to process the kernel
+        states. The default kernel states in Liesel are dataclasses, which is why the
+        default here is ``dataclasses.asdict``.
+        """
+        kernels = list(self.tuning_infos.expect("none").get().expect("none"))
+        states = (
+            self.kernel_states.expect("Kernel states not recorded.")
+            .combine_filtered(lambda config: EpochType.is_warmup(config.type))
+            .expect("none")
+        )
+
+        assert len(kernels) == len(states)
+
+        out = {}
+        for kernel, state in zip(kernels, states):
+            out[kernel] = process_state(state)
+        return out
 
     def get_error_log(self, posterior_only=False) -> Option[ErrorLog]:
         """

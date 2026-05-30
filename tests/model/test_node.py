@@ -1,7 +1,10 @@
 import logging
 
+import jax
 import numpy as np
+import pandas as pd
 import pytest
+import tensorflow_probability.substrates.jax.distributions as jtfd
 import tensorflow_probability.substrates.numpy.distributions as tfd
 
 from liesel.model.model import Model
@@ -32,7 +35,7 @@ def test_data_init() -> None:
 
     assert x.value == pytest.approx(0.0)
     assert x.name == "node"
-    assert isinstance(x.value, float)
+    assert isinstance(x.value, jax.Array)
     assert not x.model
     assert x.state.value == pytest.approx(0.0)
     assert not x.state.outdated
@@ -73,9 +76,14 @@ def test_frozen_data_name_manipulation() -> None:
     x = Value(2.0, _name="x")
     x.update()
 
+    model = Model([x])
+    x.name = "a"
+    model.pop_vars()
+
     with pytest.raises(RuntimeError):
-        _ = Model([x])
-        x.name = "a"
+        model = Model([x])
+        model.locked = True
+        x.name = "b"
 
 
 def test_frozen_data_needs_seed_manipulation() -> None:
@@ -85,6 +93,33 @@ def test_frozen_data_needs_seed_manipulation() -> None:
     with pytest.raises(RuntimeError):
         _ = Model([x])
         x.needs_seed = True
+
+
+def test_float64():
+    jax.config.update("jax_enable_x64", True)
+
+    x = Value(2.0, _name="x")
+    assert x.value.dtype == "float64"
+
+    x = Var(1.0, Dist(jtfd.Normal, loc=0.0, scale=1.0))
+    x.update()
+
+    assert x.value.dtype == "float64"
+    assert x.dist_node["loc"].value.dtype == "float64"
+    assert x.dist_node["scale"].value.dtype == "float64"
+
+    jax.config.update("jax_enable_x64", False)
+
+
+def test_value_pandas_series():
+    series = pd.Series(np.array([1.0, 2.0]))
+    x = Value(series)
+    assert isinstance(x.value, jax.Array)
+
+
+def test_value_list():
+    x = Value([1.0, 2.0])
+    assert isinstance(x.value, jax.Array)
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -202,9 +237,14 @@ def test_frozen_calc_name_manipulation(Calc) -> None:
     calc = Calc(np.exp, x)
     calc.update()
 
+    model = Model([calc])
+    calc.name = "a"
+    model.pop_vars()
+
     with pytest.raises(RuntimeError):
-        _ = Model([calc])
-        calc.name = "a"
+        model = Model([calc])
+        model.locked = True
+        calc.name = "b"
 
 
 @pytest.mark.parametrize("Calc", [Calc, TransientCalc])
@@ -224,8 +264,13 @@ def test_frozen_calculator_function_manipulation(Calc) -> None:
     calc = Calc(np.exp, x)
     calc.update()
 
+    model = Model([calc])
+    calc.function = np.log
+    model.pop_vars()
+
     with pytest.raises(RuntimeError):
-        _ = Model([calc])
+        model = Model([calc])
+        model.locked = True
         calc.function = np.log
 
 
@@ -310,10 +355,6 @@ def test_calculator_error_in_update() -> None:
     with pytest.raises(RuntimeError):
         calc.update()
 
-    calc = Calc(lambda x: x / 0, x=x)
-    with pytest.raises(RuntimeError):
-        calc.update()
-
 
 def test_transient_calculator_error_in_update() -> None:
     x = Value(2.0, _name="x")
@@ -322,10 +363,6 @@ def test_transient_calculator_error_in_update() -> None:
         raise ValueError("Testing error message.")
 
     calc = TransientCalc(update_fn, x=x)
-    with pytest.raises(RuntimeError):
-        calc.value
-
-    calc = TransientCalc(lambda x: x / 0, x=x)
     with pytest.raises(RuntimeError):
         calc.value
 
@@ -505,8 +542,13 @@ def test_frozen_distribution_name_manipulation(Dist) -> None:
     dist.at = x
     dist.update()
 
+    model = Model([dist])
+    dist.name = "normal"
+    model.pop_vars()
+
     with pytest.raises(RuntimeError):
-        _ = Model([dist])
+        model = Model([dist])
+        model.locked = True
         dist.name = "normal"
 
 
@@ -533,8 +575,16 @@ def test_frozen_distribution_distribution_manipulation(Dist) -> None:
     dist.at = x
     dist.update()
 
-    with pytest.raises(RuntimeError):
-        _ = Model([dist])
+    model = Model([dist])
+    with pytest.raises(RuntimeWarning, match="divide by zero"):
+        dist.distribution = tfd.Exponential
+
+    dist.distribution = tfd.LogNormal
+    model.pop_vars()
+
+    with pytest.raises(RuntimeError, match="part of a locked model"):
+        model = Model([dist])
+        model.locked = True
         dist.distribution = tfd.Exponential
 
 
@@ -547,11 +597,19 @@ def test_frozen_distribution_inputs_manipulation(Dist) -> None:
     dist.at = x
     dist.update()
 
-    rate = Value(1.0, _name="rate")
-
-    with pytest.raises(RuntimeError):
+    with pytest.raises(TypeError):
         _ = Model([dist])
-        dist.set_inputs(rate)
+        dist.set_inputs()
+
+    with pytest.raises(TypeError):
+        dist.set_inputs(rate=Value(1.0))
+
+    dist.set_inputs(1.0, 2.0)
+    assert dist[0].value == pytest.approx(1.0)
+    assert dist[1].value == pytest.approx(2.0)
+
+    with pytest.raises(TypeError):
+        dist.set_inputs(2.0)
 
 
 @pytest.mark.parametrize("Dist", [Dist, TransientDist])
@@ -559,16 +617,23 @@ def test_frozen_distribution_kwinputs_manipulation(Dist) -> None:
     x = Value(1.0, _name="x")
     loc = Value(0.0, _name="loc")
     scale = Value(1.0, _name="scale")
-    dist = Dist(tfd.Normal, loc, scale)
+    dist = Dist(tfd.Normal, loc=loc, scale=scale)
     dist.at = x
     dist.update()
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(TypeError):
         _ = Model([dist])
         dist.set_inputs()
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(TypeError):
         dist.set_inputs(rate=Value(1.0))
+
+    dist.set_inputs(loc=1.0, scale=2.0)
+    assert dist["loc"].value == pytest.approx(1.0)
+    assert dist["scale"].value == pytest.approx(2.0)
+
+    with pytest.raises(TypeError):
+        dist.set_inputs(loc=2.0)
 
 
 @pytest.mark.parametrize("Dist", [Dist, TransientDist])
@@ -822,16 +887,13 @@ class TestDistSetitem:
         with pytest.raises(AttributeError):
             del x.dist_node[0]
 
-    def test_assign_none_works(self):
+    def test_assign_none(self):
         x = Var(
             0.0,
             Dist(tfd.Normal, loc=Var(0.0, name="loc"), scale=Var(1.0, name="scale")),
         ).update()
 
         x.dist_node["loc"] = None
-
-        assert isinstance(x.dist_node["loc"], Value)
-        assert x.dist_node["loc"].value is None
 
 
 class TestCalcGetitem:
