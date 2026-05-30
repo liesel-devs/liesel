@@ -14,6 +14,24 @@ from .types import Array, ModelInterface, ModelState, Position
 from .util import guess_n
 
 
+def _position_key_groups_from_model(
+    model: Model,
+    position_keys: Sequence[str],
+    axes: dict[str, int] | None,
+    default_axis: int,
+) -> dict[int, list[str]]:
+    axes = axes or {}
+    position = model.extract_position(position_keys)
+    groups: dict[int, list[str]] = {}
+
+    for key in position_keys:
+        axis = axes.get(key, default_axis)
+        n_key = int(jnp.shape(position[key])[axis])
+        groups.setdefault(n_key, []).append(key)
+
+    return groups
+
+
 @dataclass
 class Batches:
     """
@@ -121,7 +139,10 @@ class Batches:
         shuffle: bool = True,
         axes: dict[str, int] | None = None,
         default_axis: int = 0,
-    ) -> Batches:
+        multi_size: Literal["error", "manager"] = "error",
+        mode: Literal["strict", "resample"] = "resample",
+        epoch_size: Literal["max", "min"] | int = "max",
+    ) -> Batches | BatchManager:
         """
         Builds a :class:`Batches` object from a Liesel model.
 
@@ -145,11 +166,22 @@ class Batches:
             Optional mapping from position key to batching axis.
         default_axis
             Axis used for guessing ``n`` and for position keys missing from ``axes``.
+        multi_size
+            How to handle observed variables with different inferred sample sizes.
+            The default ``"error"`` keeps :class:`Batches` scalar and raises a
+            helpful error. Use ``"manager"`` to return a :class:`BatchManager`.
+        mode
+            Batch manager mode used only when ``multi_size="manager"``. The default
+            ``"resample"`` allows branches with fewer complete batches to sample
+            batch rows with replacement.
+        epoch_size
+            Batch manager epoch size used only when ``multi_size="manager"``.
 
         Returns
         -------
-        Batches
-            Batch configuration for the model's observed data.
+        Batches or BatchManager
+            Batch configuration for the model's observed data. A
+            :class:`BatchManager` is returned only when ``multi_size="manager"``.
 
         Examples
         --------
@@ -168,9 +200,51 @@ class Batches:
         >>> full_data = Batches.from_model(model, batch_size=None, position_keys=["y"])
         >>> full_data.shuffle, full_data.batch_indices.tolist()
         (False, [[0, 1, 2, 3, 4, 5]])
+
+        Multi-size observed data must opt into the manager API:
+
+        >>> x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
+        >>> z = lsl.Var.new_obs(jnp.arange(5.0), name="z")
+        >>> model = lsl.Model([x, z])
+        >>> manager = Batches.from_model(
+        ...     model,
+        ...     batch_size=2,
+        ...     position_keys=["x", "z"],
+        ...     multi_size="manager",
+        ... )
+        >>> type(manager).__name__, manager.n, manager.n_full_batches
+        ('BatchManager', (8, 5), 4)
         """
-        pos_keys = position_keys or list(model.observed)
-        n = n or guess_n(model, axis=default_axis)
+        if multi_size not in ("error", "manager"):
+            raise ValueError("multi_size must be 'error' or 'manager'.")
+
+        pos_keys = (
+            list(position_keys) if position_keys is not None else list(model.observed)
+        )
+        groups = _position_key_groups_from_model(model, pos_keys, axes, default_axis)
+
+        if len(groups) > 1:
+            if multi_size == "manager":
+                return BatchManager.from_model(
+                    model,
+                    batch_size=batch_size,
+                    position_keys=pos_keys,
+                    shuffle=shuffle,
+                    axes=axes,
+                    default_axis=default_axis,
+                    mode=mode,
+                    epoch_size=epoch_size,
+                )
+
+            raise ValueError(
+                "Batches.from_model() found observed variables with different "
+                f"sample sizes: {groups}. Use "
+                "Batches.from_model(..., multi_size='manager') or "
+                "BatchManager.from_model(...)."
+            )
+
+        if n is None:
+            n = next(iter(groups)) if groups else guess_n(model, axis=default_axis)
 
         if batch_size is None:
             shuffle = False
@@ -687,6 +761,108 @@ class BatchManager:
         self._validate_position_keys()
         self._validate_batch_counts()
         self.batch_numbers = self._default_batch_numbers()
+
+    @classmethod
+    def from_model(
+        cls,
+        model: Model,
+        batch_size: int | None,
+        position_keys: Sequence[str] | None = None,
+        shuffle: bool = True,
+        axes: dict[str, int] | None = None,
+        default_axis: int = 0,
+        mode: Literal["strict", "resample"] = "resample",
+        epoch_size: Literal["max", "min"] | int = "max",
+    ) -> BatchManager:
+        """
+        Builds a :class:`BatchManager` by grouping observed variables by size.
+
+        Observed variables are grouped by inferred length along their batching axis.
+        One child :class:`Batches` object is created for each sample-size group using
+        the same ``batch_size``. With the default ``mode="resample"`` and
+        ``epoch_size="max"``, branches with fewer complete batches sample batch rows
+        with replacement for the additional joint steps.
+
+        Parameters
+        ----------
+        model
+            Model containing the observed variables to batch.
+        batch_size
+            Common batch size for every child group. If ``None``, each child uses one
+            full-data batch and shuffling is disabled.
+        position_keys
+            Names of observed position entries to batch. If ``None``, all observed
+            variables in ``model`` are used.
+        shuffle
+            Whether each child should shuffle observation indices at epoch start.
+        axes
+            Optional mapping from position key to batching axis.
+        default_axis
+            Batching axis for all position keys not listed in ``axes``.
+        mode
+            Batch manager mode. ``"resample"`` allows unequal numbers of child
+            batches; ``"strict"`` requires all child groups to have the same number
+            of complete batches.
+        epoch_size
+            Epoch length in ``"resample"`` mode. ``"max"`` uses the longest child
+            epoch, ``"min"`` uses the shortest child epoch, and a positive integer
+            sets the epoch length manually.
+
+        Returns
+        -------
+        BatchManager
+            Batch manager with one child :class:`Batches` object per inferred sample
+            size.
+
+        Examples
+        --------
+        >>> import jax
+        >>> import jax.numpy as jnp
+        >>> import liesel.model as lsl
+        >>> from liesel.experimental.optim import BatchManager
+        >>> x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
+        >>> y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        >>> model = lsl.Model([x, y])
+        >>> manager = BatchManager.from_model(
+        ...     model,
+        ...     batch_size=2,
+        ...     position_keys=["x", "y"],
+        ... )
+        >>> manager.n, manager.batch_size, manager.n_full_batches
+        ((8, 5), (2, 2), 4)
+        >>> started = manager.start_epoch(jax.random.key(1))
+        >>> bool(jnp.all(started.batch_numbers[:, 1] < 2))
+        True
+
+        Passing ``batch_size=None`` creates one full-data child batch per group:
+
+        >>> full_data = BatchManager.from_model(
+        ...     model,
+        ...     batch_size=None,
+        ...     position_keys=["x", "y"],
+        ... )
+        >>> full_data.is_full_data, full_data.n_full_batches
+        (True, 1)
+        """
+        pos_keys = (
+            list(position_keys) if position_keys is not None else list(model.observed)
+        )
+        groups = _position_key_groups_from_model(model, pos_keys, axes, default_axis)
+        shuffle = False if batch_size is None else shuffle
+
+        batches = [
+            Batches(
+                position_keys=keys,
+                n=n,
+                batch_size=batch_size,
+                shuffle=shuffle,
+                axes=axes,
+                default_axis=default_axis,
+            )
+            for n, keys in groups.items()
+        ]
+
+        return cls(batches=batches, mode=mode, epoch_size=epoch_size)
 
     def _validate_position_keys(self) -> None:
         counts: dict[str, int] = {}

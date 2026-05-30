@@ -75,6 +75,36 @@ class TestBatches:
             batches.batch_share * state["_model_log_lik"].value,
         )
 
+    def test_from_model_rejects_multi_size_by_default(self):
+        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
+        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        model = lsl.Model([x, y])
+
+        with pytest.raises(ValueError, match="multi_size"):
+            Batches.from_model(model, batch_size=2, position_keys=["x", "y"])
+
+    def test_from_model_can_return_batch_manager_for_multi_size_data(self):
+        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
+        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        model = lsl.Model([x, y])
+
+        manager = Batches.from_model(
+            model,
+            batch_size=2,
+            position_keys=["x", "y"],
+            multi_size="manager",
+        )
+
+        assert isinstance(manager, BatchManager)
+        assert manager.mode == "resample"
+        assert manager.n == (8, 5)
+        assert manager.batch_size == (2, 2)
+        assert manager.n_full_batches == 4
+
+        started = manager.start_epoch(key(3))
+        assert jnp.all(started.batch_numbers[:, 0] < 4)
+        assert jnp.all(started.batch_numbers[:, 1] < 2)
+
 
 class TestBatchManager:
     def test_strict_combines_equal_count_batches(self):
@@ -161,6 +191,71 @@ class TestBatchManager:
         assert jnp.all(manager1.batch_numbers[:, 0] < 3)
         assert jnp.all(manager1.batch_numbers[:, 1] < 2)
         assert jnp.allclose(manager1.batch_numbers, manager2.batch_numbers)
+
+    def test_from_model_groups_observed_variables_by_sample_size(self):
+        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
+        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        model = lsl.Model([x, y])
+
+        manager = BatchManager.from_model(
+            model,
+            batch_size=2,
+            position_keys=["x", "y"],
+        )
+
+        assert manager.position_keys == ["x", "y"]
+        assert manager.n == (8, 5)
+        assert manager.batch_size == (2, 2)
+        assert manager.n_full_batches == 4
+
+    def test_from_model_supports_full_data_multi_size_batches(self):
+        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
+        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        model = lsl.Model([x, y])
+
+        manager = BatchManager.from_model(
+            model,
+            batch_size=None,
+            position_keys=["x", "y"],
+        )
+
+        assert manager.is_full_data
+        assert manager.n == (8, 5)
+        assert manager.batch_size == (8, 5)
+        assert manager.n_full_batches == 1
+        assert all(not batch.shuffle for batch in manager.batches)
+
+    def test_from_model_strict_mode_rejects_unequal_child_batch_counts(self):
+        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
+        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        model = lsl.Model([x, y])
+
+        with pytest.raises(ValueError, match="same n_full_batches"):
+            BatchManager.from_model(
+                model,
+                batch_size=2,
+                position_keys=["x", "y"],
+                mode="strict",
+            )
+
+    def test_from_model_uses_axes_when_grouping_observed_variables(self):
+        x = lsl.Var.new_obs(jnp.arange(16.0).reshape(2, 8), name="x")
+        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        model = lsl.Model([x, y])
+
+        manager = BatchManager.from_model(
+            model,
+            batch_size=2,
+            position_keys=["x", "y"],
+            axes={"x": 1},
+        )
+
+        position = model.extract_position(["x", "y"])
+        batched = manager.get_batched_position(position, batch_index=0)
+
+        assert manager.n == (8, 5)
+        assert batched["x"].shape == (2, 2)
+        assert batched["y"].shape == (2,)
 
     def test_axis_handling_is_independent_per_child(self):
         manager = BatchManager(
