@@ -13,11 +13,12 @@ import plotnine as p9
 from liesel.goose.types import ModelState
 
 from ...goose.pytree import register_dataclass_as_pytree
-from .batch import Batches
+from .batch import Batches, BatchManager
 from .optimizer import Optimizer
 from .types import Position
 
 Array = Any
+BatchConfig = Batches | BatchManager
 
 
 def position_df(
@@ -153,7 +154,7 @@ class OptimCarry:
     tracked: Position | None  # recorded position (for diagnosis)
 
     history: OptimHistory
-    batches: Batches
+    batches: BatchConfig
 
     optimizer_states: dict[str, optax.OptState]
     model_state: ModelState
@@ -176,7 +177,7 @@ class OptimCarry:
         epochs: int,
         position: Position,
         tracked: Position | None,
-        batches: Batches,
+        batches: BatchConfig,
         optimizers: Sequence[Optimizer],
         model_state: ModelState,
         save_position_history: bool,

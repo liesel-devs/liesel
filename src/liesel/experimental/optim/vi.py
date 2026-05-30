@@ -159,6 +159,7 @@ class Elbo(LossMixin):
         q_state: ModelState | None = None,
         obs: Position | None = None,
         scale_log_lik_p_by: float = 1.0,
+        batches=None,
         nsamples: int | None = None,
     ):
         obs = Position({}) if obs is None else obs
@@ -170,9 +171,12 @@ class Elbo(LossMixin):
         @partial(jax.vmap)
         def log_prob_of_p(sample):
             p_state_new = self.p.update_state(self.q_to_p(sample) | obs, p_state)
-            log_lik_p = p_state_new["_model_log_lik"].value
+            if batches is None:
+                log_lik_p = scale_log_lik_p_by * p_state_new["_model_log_lik"].value
+            else:
+                log_lik_p = batches.scaled_log_lik(self.p, p_state_new)
             log_prior_p = p_state_new["_model_log_prior"].value
-            log_prob_p = scale_log_lik_p_by * log_lik_p + log_prior_p
+            log_prob_p = log_lik_p + log_prior_p
 
             return log_prob_p
 
@@ -197,14 +201,13 @@ class Elbo(LossMixin):
         return jnp.mean(elbo_samples)
 
     def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
-        scale_log_lik_p_by = carry.batches.batch_share
         elbo = self.evaluate(
             Position(params | carry.fixed_position),
             carry.key,
             obs=Position(carry.batch),
             p_state=carry.model_state,
             q_state=self.q.state,
-            scale_log_lik_p_by=scale_log_lik_p_by,
+            batches=carry.batches,
             nsamples=self.nsamples,
         )
         return -elbo / self.scalar

@@ -1,7 +1,11 @@
+import jax
 import jax.numpy as jnp
+import pytest
+import tensorflow_probability.substrates.jax.distributions as tfd
 from jax.random import key, uniform
 
-from liesel.experimental.optim import Batches
+import liesel.model as lsl
+from liesel.experimental.optim import Batches, BatchManager
 
 
 class TestBatches:
@@ -54,3 +58,207 @@ class TestBatches:
         batched_pos = Bi.get_batched_position(pos, batch_index=0)
         assert batched_pos["x"].shape == (3, 4)
         assert batched_pos["y"].shape == (4, 6)
+
+    def test_scaled_log_lik_matches_old_all_observed_scaling(self):
+        y = lsl.Var.new_obs(
+            jnp.arange(6.0),
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="y",
+        )
+        model = lsl.Model([y])
+        batches = Batches(["y"], n=6, batch_size=2, shuffle=False)
+        batched = batches.get_batched_position(model.extract_position(["y"]), 0)
+        state = model.update_state(batched, model.state)
+
+        assert jnp.allclose(
+            batches.scaled_log_lik(model, state),
+            batches.batch_share * state["_model_log_lik"].value,
+        )
+
+
+class TestBatchManager:
+    def test_strict_combines_equal_count_batches(self):
+        manager = BatchManager(
+            [
+                Batches(["x"], n=6, batch_size=2, shuffle=False),
+                Batches(["y"], n=9, batch_size=3, shuffle=False),
+            ]
+        )
+        position = {"x": jnp.arange(6), "y": jnp.arange(9)}
+
+        batched = manager.get_batched_position(position, batch_index=1)
+
+        assert manager.position_keys == ["x", "y"]
+        assert manager.n == (6, 9)
+        assert manager.batch_size == (2, 3)
+        assert manager.n_full_batches == 3
+        assert batched["x"].tolist() == [2, 3]
+        assert batched["y"].tolist() == [3, 4, 5]
+
+    def test_duplicate_position_keys_raise(self):
+        with pytest.raises(ValueError, match="Position keys"):
+            BatchManager(
+                [
+                    Batches(["x"], n=6, batch_size=2),
+                    Batches(["x"], n=6, batch_size=2),
+                ]
+            )
+
+    def test_strict_rejects_unequal_number_of_batches(self):
+        with pytest.raises(ValueError, match="same n_full_batches"):
+            BatchManager(
+                [
+                    Batches(["x"], n=6, batch_size=2),
+                    Batches(["y"], n=8, batch_size=4),
+                ]
+            )
+
+    def test_resample_epoch_sizes(self):
+        max_manager = BatchManager(
+            [
+                Batches(["x"], n=6, batch_size=2, shuffle=False),
+                Batches(["y"], n=8, batch_size=4, shuffle=False),
+            ],
+            mode="resample",
+            epoch_size="max",
+        )
+        min_manager = BatchManager(
+            [
+                Batches(["x"], n=6, batch_size=2, shuffle=False),
+                Batches(["y"], n=8, batch_size=4, shuffle=False),
+            ],
+            mode="resample",
+            epoch_size="min",
+        )
+        manual_manager = BatchManager(
+            [
+                Batches(["x"], n=6, batch_size=2, shuffle=False),
+                Batches(["y"], n=8, batch_size=4, shuffle=False),
+            ],
+            mode="resample",
+            epoch_size=5,
+        )
+
+        assert max_manager.n_full_batches == 3
+        assert min_manager.n_full_batches == 2
+        assert manual_manager.n_full_batches == 5
+
+    def test_resampled_batch_numbers_are_bounded_and_deterministic(self):
+        def make_manager():
+            return BatchManager(
+                [
+                    Batches(["x"], n=6, batch_size=2, shuffle=False),
+                    Batches(["y"], n=8, batch_size=4, shuffle=False),
+                ],
+                mode="resample",
+                epoch_size=5,
+            ).start_epoch(key(17))
+
+        manager1 = make_manager()
+        manager2 = make_manager()
+
+        assert manager1.batch_numbers.shape == (5, 2)
+        assert jnp.all(manager1.batch_numbers[:, 0] < 3)
+        assert jnp.all(manager1.batch_numbers[:, 1] < 2)
+        assert jnp.allclose(manager1.batch_numbers, manager2.batch_numbers)
+
+    def test_axis_handling_is_independent_per_child(self):
+        manager = BatchManager(
+            [
+                Batches(["x"], n=4, batch_size=2, default_axis=1, shuffle=False),
+                Batches(["y"], n=6, batch_size=3, default_axis=0, shuffle=False),
+            ],
+            mode="resample",
+            epoch_size="min",
+        )
+        position = {
+            "x": jnp.arange(12).reshape(3, 4),
+            "y": jnp.arange(12).reshape(6, 2),
+        }
+
+        batched = manager.get_batched_position(position, batch_index=0)
+
+        assert batched["x"].shape == (3, 2)
+        assert batched["y"].shape == (3, 2)
+
+    def test_batch_share_requires_equal_shares(self):
+        equal_manager = BatchManager(
+            [
+                Batches(["x"], n=6, batch_size=2),
+                Batches(["y"], n=9, batch_size=3),
+            ]
+        )
+        unequal_manager = BatchManager(
+            [
+                Batches(["x"], n=10, batch_size=5),
+                Batches(["y"], n=9, batch_size=4),
+            ]
+        )
+
+        assert equal_manager.batch_share == 3.0
+        with pytest.raises(ValueError, match="per-branch scaling"):
+            _ = unequal_manager.batch_share
+
+    def test_scaled_log_lik_scales_each_branch(self):
+        y1 = lsl.Var.new_obs(
+            jnp.arange(6.0),
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="y1",
+        )
+        y2 = lsl.Var.new_obs(
+            jnp.arange(8.0),
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="y2",
+        )
+        model = lsl.Model([y1, y2])
+        manager = BatchManager(
+            [
+                Batches(["y1"], n=6, batch_size=2, shuffle=False),
+                Batches(["y2"], n=8, batch_size=4, shuffle=False),
+            ],
+            mode="resample",
+            epoch_size="max",
+        )
+        batch = manager.get_batched_position(model.extract_position(["y1", "y2"]), 0)
+        state = model.update_state(batch, model.state)
+
+        assert y1.dist_node is not None
+        assert y2.dist_node is not None
+        manual = (
+            3.0 * state[y1.dist_node.name].value.sum()
+            + 2.0 * state[y2.dist_node.name].value.sum()
+        )
+
+        assert jnp.allclose(manager.scaled_log_lik(model, state), manual)
+
+    def test_start_epoch_works_under_jit(self):
+        manager = BatchManager(
+            [
+                Batches(["x"], n=6, batch_size=2, shuffle=True),
+                Batches(["y"], n=8, batch_size=4, shuffle=True),
+            ],
+            mode="resample",
+            epoch_size="max",
+        )
+
+        started = jax.jit(lambda b: b.start_epoch(key(1)))(manager)
+
+        assert started.batch_numbers.shape == (3, 2)
+
+    def test_get_batched_position_accepts_traced_batch_index(self):
+        manager = BatchManager(
+            [
+                Batches(["x"], n=6, batch_size=2, shuffle=False),
+                Batches(["y"], n=9, batch_size=3, shuffle=False),
+            ]
+        )
+        position = {"x": jnp.arange(6), "y": jnp.arange(9)}
+
+        def loop(batch_manager, pos):
+            def body_fun(i, total):
+                batched = batch_manager.get_batched_position(pos, i)
+                return total + batched["x"].sum() + batched["y"].sum()
+
+            return jax.lax.fori_loop(0, batch_manager.n_full_batches, body_fun, 0)
+
+        assert jax.jit(loop)(manager, position) == 51

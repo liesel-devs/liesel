@@ -11,7 +11,7 @@ import optax
 from tqdm import tqdm
 
 from ...model import Model
-from .batch import Batches
+from .batch import Batches, BatchManager
 from .loss import Loss, NegLogProbLoss
 from .optimizer import LBFGS, Optimizer
 from .split import PositionSplit, Split
@@ -22,6 +22,7 @@ from .util import guess_n
 from .vi import Elbo
 
 Array = Any
+BatchConfig = Batches | BatchManager
 
 
 class LieselVI:
@@ -33,7 +34,7 @@ class LieselVI:
         self,
         model: Model,
         elbo: Literal["mvn_diag", "mvn_tril", "mvn_blocked"] | Elbo = "mvn_diag",
-        batches: Batches | None = None,
+        batches: BatchConfig | None = None,
         split: PositionSplit | None = None,
         optimizers: Sequence[Optimizer] | Literal["adam", "lbfgs"] = "adam",
         stopper: Stopper = Stopper(epochs=1000, patience=10, rtol=1e-6),
@@ -109,7 +110,7 @@ class QuickOptim:
         self,
         model: Model,
         loss: Loss | None = None,
-        batches: Batches | None = None,
+        batches: BatchConfig | None = None,
         split: PositionSplit | None = None,
         optimizers: Sequence[Optimizer] | Literal["adam", "lbfgs"] = "adam",
         stopper: Stopper = Stopper(epochs=1000, patience=10, rtol=1e-6),
@@ -133,8 +134,11 @@ class QuickOptim:
         return guess_n(self.model)
 
     @property
-    def batches(self) -> Batches:
+    def batches(self) -> BatchConfig:
         if self._batches is not None:
+            if isinstance(self._batches, BatchManager):
+                return self._batches
+
             self._batches.n = self.split.n_train
             self._batches.indices = jnp.arange(self.split.n_train)
             return self._batches
@@ -198,7 +202,7 @@ class QuickOptim:
 @dataclass
 class OptimEngine:
     loss: Loss
-    batches: Batches
+    batches: BatchConfig
     split: PositionSplit
     optimizers: Sequence[Optimizer]
     stopper: Stopper
@@ -373,7 +377,7 @@ class OptimEngine:
     def inner_loop_over_batches(self, j, carry: OptimCarry):
         Bi = carry.batches
 
-        if Bi.n != Bi.batch_size:
+        if not Bi.is_full_data:
             obs_batch = Bi.get_batched_position(self.split.train, batch_index=j)
         else:
             obs_batch = Position({})
@@ -395,13 +399,13 @@ class OptimEngine:
         key, subkey = jax.random.split(carry.key)
         carry.key = key
 
-        carry.batches.indices = carry.batches.permute_indices(subkey)
+        carry.batches = carry.batches.start_epoch(subkey)
 
         carry.loss_train = 0.0
         # run all full batches once
         carry = jax.lax.fori_loop(
             lower=0,
-            upper=self.batches.n_full_batches,
+            upper=carry.batches.n_full_batches,
             body_fun=self.inner_loop_over_batches,
             init_val=carry,
         )

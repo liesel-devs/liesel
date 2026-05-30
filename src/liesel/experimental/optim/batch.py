@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Literal
 
 import jax
 import jax.numpy as jnp
@@ -9,6 +10,81 @@ import jax.numpy as jnp
 from ...model import Model
 from .types import ModelInterface, ModelState, Position
 from .util import guess_n
+
+
+def _sum_value(value):
+    return value.sum() if hasattr(value, "sum") else value
+
+
+def _sum_state_value(model_state: ModelState, name: str):
+    return _sum_value(model_state[name].value)
+
+
+def _observed_log_lik_node_names(
+    model: Model, position_keys: Sequence[str]
+) -> list[str]:
+    keys = set(position_keys)
+    node_names: list[str] = []
+
+    for var in model.observed.values():
+        if var.dist_node is None:
+            continue
+
+        if var.name in keys or var.value_node.name in keys:
+            node_names.append(var.dist_node.name)
+
+    return node_names
+
+
+def _all_observed_log_lik_node_names(model: Model) -> list[str]:
+    node_names: list[str] = []
+
+    for var in model.observed.values():
+        if var.dist_node is not None:
+            node_names.append(var.dist_node.name)
+
+    return node_names
+
+
+def _scaled_liesel_log_lik(
+    model: Model,
+    model_state: ModelState,
+    groups: Sequence[tuple[Sequence[str], float]],
+):
+    scaled_log_lik = 0.0
+    covered_nodes: set[str] = set()
+
+    for position_keys, scale in groups:
+        node_names = _observed_log_lik_node_names(model, position_keys)
+
+        for node_name in node_names:
+            if node_name in covered_nodes:
+                raise ValueError(
+                    f"The observed log-likelihood node {node_name!r} is covered by "
+                    "more than one batch group."
+                )
+
+            scaled_log_lik += scale * _sum_state_value(model_state, node_name)
+            covered_nodes.add(node_name)
+
+    for node_name in _all_observed_log_lik_node_names(model):
+        if node_name not in covered_nodes:
+            scaled_log_lik += _sum_state_value(model_state, node_name)
+
+    return scaled_log_lik
+
+
+def _scaled_common_log_lik(model_state: ModelState, scale: float):
+    try:
+        log_lik = model_state["_model_log_lik"].value
+    except (KeyError, TypeError, AttributeError) as error:
+        raise TypeError(
+            "Per-branch likelihood scaling requires a liesel.model.Model. For a "
+            "generic model interface, the model state must expose "
+            "'_model_log_lik'."
+        ) from error
+
+    return scale * log_lik
 
 
 @dataclass
@@ -203,6 +279,24 @@ class Batches:
         return self.n / self.batch_size
 
     @property
+    def batch_shares(self) -> tuple[float]:
+        """
+        Batch likelihood scaling factors.
+
+        Returns
+        -------
+        tuple[float]
+            A one-element tuple containing :attr:`batch_share`.
+
+        Examples
+        --------
+        >>> from liesel.experimental.optim import Batches
+        >>> Batches(["y"], n=10, batch_size=4).batch_shares
+        (2.5,)
+        """
+        return (self.batch_share,)
+
+    @property
     def n_full_batches(self) -> int:
         """
         Number of complete batches.
@@ -239,6 +333,19 @@ class Batches:
         """
         assert self.batch_size is not None
         return float(self.n / self.batch_size)
+
+    @property
+    def is_full_data(self) -> bool:
+        """
+        Whether the object represents one full-data batch.
+
+        Examples
+        --------
+        >>> from liesel.experimental.optim import Batches
+        >>> Batches(["y"], n=5, batch_size=None).is_full_data
+        True
+        """
+        return self.n == self.batch_size
 
     def permute_indices(self, key: jax.Array) -> jax.Array:
         """
@@ -278,6 +385,31 @@ class Batches:
             all_indices = self.indices
 
         return all_indices
+
+    def start_epoch(self, key: jax.Array) -> Batches:
+        """
+        Starts a new epoch by updating the observation order.
+
+        Parameters
+        ----------
+        key
+            JAX pseudo-random key passed to :meth:`permute_indices`.
+
+        Returns
+        -------
+        Batches
+            This object with freshly assigned :attr:`indices`.
+
+        Examples
+        --------
+        >>> import jax
+        >>> from liesel.experimental.optim import Batches
+        >>> batches = Batches(["y"], n=5, batch_size=2, shuffle=False)
+        >>> batches.start_epoch(jax.random.key(0)).indices.tolist()
+        [0, 1, 2, 3, 4]
+        """
+        self.indices = self.permute_indices(key)
+        return self
 
     @property
     def batch_indices(self) -> jax.Array:
@@ -397,6 +529,59 @@ class Batches:
         obs = interface.extract_position(self.position_keys, model_state)
         return self.get_batched_position(obs, batch_number)
 
+    def scaled_log_lik(
+        self, model: Model | ModelInterface, model_state: ModelState
+    ) -> jax.Array:
+        """
+        Returns the log likelihood with this batch group's likelihood scaled.
+
+        For a :class:`.Model`, observed likelihood terms belonging to
+        :attr:`position_keys` are multiplied by :attr:`batch_share`. Other observed
+        likelihood terms are left unscaled.
+
+        Parameters
+        ----------
+        model
+            Liesel model or compatible model interface.
+        model_state
+            Updated model state containing the current log-likelihood values.
+
+        Returns
+        -------
+        jax.Array
+            Scaled log likelihood.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> import liesel.model as lsl
+        >>> import tensorflow_probability.substrates.jax.distributions as tfd
+        >>> from liesel.experimental.optim import Batches
+
+        >>> y = lsl.Var.new_obs(
+        ...     jnp.arange(6.0),
+        ...     lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+        ...     name="y",
+        ... )
+        >>> model = lsl.Model([y])
+        >>> batches = Batches(["y"], n=6, batch_size=2, shuffle=False)
+        >>> batched = batches.get_batched_position(model.extract_position(["y"]), 0)
+        >>> state = model.update_state(batched, model.state)
+        >>> bool(
+        ...     jnp.allclose(
+        ...         batches.scaled_log_lik(model, state),
+        ...         batches.batch_share * state["_model_log_lik"].value,
+        ...     )
+        ... )
+        True
+        """
+        if isinstance(model, Model):
+            return _scaled_liesel_log_lik(
+                model, model_state, [(self.position_keys, self.batch_share)]
+            )
+
+        return _scaled_common_log_lik(model_state, self.batch_share)
+
     def _tree_flatten(self):
         children = (self.indices,)
         aux_data = {
@@ -424,6 +609,804 @@ class Batches:
         return out
 
 
+@dataclass
+class BatchManager:
+    """
+    Coordinates multiple :class:`Batches` objects as one batching interface.
+
+    A ``BatchManager`` is useful when a model contains observed branches with
+    different observation sizes. Each contained :class:`Batches` object owns the
+    slicing rules for one branch. The manager combines them into one joint batched
+    position for every optimizer step.
+
+    Parameters
+    ----------
+    batches
+        Non-empty sequence of :class:`Batches` objects. Their ``position_keys`` must
+        not overlap.
+    mode
+        If ``"strict"``, all contained batch objects must have the same
+        :attr:`Batches.n_full_batches`. If ``"resample"``, unequal numbers of batches
+        are allowed and child batch rows are selected for the joint epoch.
+    epoch_size
+        Epoch length in ``"resample"`` mode. ``"max"`` uses the longest child
+        epoch, ``"min"`` uses the shortest child epoch, and a positive integer sets
+        the epoch length manually. ``"max"`` and ``"min"`` are accepted in
+        ``"strict"`` mode but do not change the strict epoch length.
+
+    Attributes
+    ----------
+    batches
+        Tuple of contained :class:`Batches` objects.
+    batch_numbers
+        Integer array with shape ``(n_full_batches, len(batches))``. Row ``i`` maps
+        the manager's joint batch ``i`` to one batch row in each contained
+        :class:`Batches` object.
+
+    Raises
+    ------
+    ValueError
+        If ``batches`` is empty, if any ``position_keys`` are claimed by more than
+        one child, if ``mode`` or ``epoch_size`` are invalid, or if ``mode="strict"``
+        is used with unequal child :attr:`Batches.n_full_batches`.
+
+    Notes
+    -----
+    The properties :attr:`n`, :attr:`batch_size`, and :attr:`batch_shares` return
+    tuples in child-batch order. The scalar aliases :attr:`batch_share` and
+    :attr:`likelihood_scalar` are available only when all children have the same
+    likelihood scale. With unequal scales, use :meth:`scaled_log_lik` so each
+    branch is scaled by its own ``n / batch_size``.
+
+    Like :class:`Batches`, :meth:`start_epoch` mutates and returns ``self``.
+
+    Examples
+    --------
+    Combine two equally long batch sequences in strict mode:
+
+    >>> import jax.numpy as jnp
+    >>> from liesel.experimental.optim import BatchManager, Batches
+
+    >>> manager = BatchManager(
+    ...     [
+    ...         Batches(["x"], n=6, batch_size=2, shuffle=False),
+    ...         Batches(["y"], n=9, batch_size=3, shuffle=False),
+    ...     ]
+    ... )
+    >>> manager.n_full_batches
+    3
+    >>> position = {"x": jnp.arange(6), "y": jnp.arange(9)}
+    >>> batched = manager.get_batched_position(position, 1)
+    >>> batched["x"].tolist(), batched["y"].tolist()
+    ([2, 3], [3, 4, 5])
+
+    In ``"resample"`` mode, branches with fewer batches can be sampled with
+    replacement to match a chosen epoch length:
+
+    >>> import jax
+    >>> manager = BatchManager(
+    ...     [
+    ...         Batches(["x"], n=6, batch_size=2, shuffle=False),
+    ...         Batches(["y"], n=8, batch_size=4, shuffle=False),
+    ...     ],
+    ...     mode="resample",
+    ...     epoch_size="max",
+    ... ).start_epoch(jax.random.key(0))
+    >>> manager.n_full_batches
+    3
+    >>> manager.batch_numbers.shape
+    (3, 2)
+
+    Per-branch scaling agrees with a manual scaled log-likelihood calculation:
+
+    >>> import liesel.model as lsl
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+    >>> y1 = lsl.Var.new_obs(
+    ...     jnp.arange(6.0),
+    ...     lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+    ...     name="y1",
+    ... )
+    >>> y2 = lsl.Var.new_obs(
+    ...     jnp.arange(8.0),
+    ...     lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+    ...     name="y2",
+    ... )
+    >>> model = lsl.Model([y1, y2])
+    >>> manager = BatchManager(
+    ...     [
+    ...         Batches(["y1"], n=6, batch_size=2, shuffle=False),
+    ...         Batches(["y2"], n=8, batch_size=4, shuffle=False),
+    ...     ],
+    ...     mode="resample",
+    ...     epoch_size="max",
+    ... )
+    >>> batch = manager.get_batched_position(model.extract_position(["y1", "y2"]), 0)
+    >>> state = model.update_state(batch, model.state)
+    >>> manual = (
+    ...     3.0 * state["y1_log_prob"].value.sum()
+    ...     + 2.0 * state["y2_log_prob"].value.sum()
+    ... )
+    >>> bool(jnp.allclose(manager.scaled_log_lik(model, state), manual))
+    True
+    """
+
+    batches: Sequence[Batches]
+    mode: Literal["strict", "resample"] = "strict"
+    epoch_size: Literal["max", "min"] | int = "max"
+
+    def __post_init__(self):
+        self.batches = tuple(self.batches)
+
+        if len(self.batches) == 0:
+            raise ValueError("BatchManager requires at least one Batches object.")
+
+        if self.mode not in ("strict", "resample"):
+            raise ValueError(f"Unrecognized {self.mode=}.")
+
+        if isinstance(self.epoch_size, bool) or (
+            not isinstance(self.epoch_size, int)
+            and self.epoch_size not in ("max", "min")
+        ):
+            raise ValueError("epoch_size must be 'max', 'min', or a positive integer.")
+
+        if isinstance(self.epoch_size, int) and self.epoch_size < 1:
+            raise ValueError("Manual epoch_size must be a positive integer.")
+
+        if self.mode == "strict" and isinstance(self.epoch_size, int):
+            raise ValueError(
+                "Manual epoch_size is only supported with mode='resample'."
+            )
+
+        self._validate_position_keys()
+        self._validate_batch_counts()
+        self.batch_numbers = self._default_batch_numbers()
+
+    def _validate_position_keys(self) -> None:
+        counts: dict[str, int] = {}
+
+        for batch in self.batches:
+            for key in batch.position_keys:
+                counts[key] = counts.get(key, 0) + 1
+
+        duplicates = [key for key, count in counts.items() if count > 1]
+        if duplicates:
+            raise ValueError(f"Position keys claimed by multiple batches: {duplicates}")
+
+    def _validate_batch_counts(self) -> None:
+        if self.mode == "resample":
+            return
+
+        counts = [batch.n_full_batches for batch in self.batches]
+        if len(set(counts)) != 1:
+            raise ValueError(
+                "mode='strict' requires all contained Batches objects to have the "
+                f"same n_full_batches, but got {counts}."
+            )
+
+    @property
+    def position_keys(self) -> list[str]:
+        """
+        Position keys claimed by all contained batch objects.
+
+        Returns
+        -------
+        list[str]
+            Concatenated ``position_keys`` in child-batch order.
+
+        Examples
+        --------
+        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> manager = BatchManager(
+        ...     [
+        ...         Batches(["x"], n=6, batch_size=2),
+        ...         Batches(["y", "z"], n=9, batch_size=3),
+        ...     ]
+        ... )
+        >>> manager.position_keys
+        ['x', 'y', 'z']
+        """
+        keys: list[str] = []
+        for batch in self.batches:
+            keys.extend(batch.position_keys)
+        return keys
+
+    @property
+    def n(self) -> tuple[int, ...]:
+        """
+        Number of observations for each contained batch object.
+
+        Returns
+        -------
+        tuple[int, ...]
+            One sample size per child :class:`Batches` object.
+
+        Examples
+        --------
+        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> BatchManager(
+        ...     [
+        ...         Batches(["x"], n=6, batch_size=2),
+        ...         Batches(["y"], n=9, batch_size=3),
+        ...     ]
+        ... ).n
+        (6, 9)
+        """
+        return tuple(batch.n for batch in self.batches)
+
+    @property
+    def batch_size(self) -> tuple[int, ...]:
+        """
+        Batch size for each contained batch object.
+
+        Returns
+        -------
+        tuple[int, ...]
+            One batch size per child :class:`Batches` object.
+
+        Examples
+        --------
+        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> BatchManager(
+        ...     [
+        ...         Batches(["x"], n=6, batch_size=2),
+        ...         Batches(["y"], n=9, batch_size=3),
+        ...     ]
+        ... ).batch_size
+        (2, 3)
+        """
+        return tuple(int(batch.batch_size) for batch in self.batches)
+
+    @property
+    def batch_shares(self) -> tuple[float, ...]:
+        """
+        Likelihood scaling factors for each contained batch object.
+
+        Returns
+        -------
+        tuple[float, ...]
+            The child-specific ratios ``n / batch_size``.
+
+        Examples
+        --------
+        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> BatchManager(
+        ...     [
+        ...         Batches(["x"], n=6, batch_size=2),
+        ...         Batches(["y"], n=8, batch_size=4),
+        ...     ],
+        ...     mode="resample",
+        ... ).batch_shares
+        (3.0, 2.0)
+        """
+        return tuple(batch.batch_share for batch in self.batches)
+
+    @property
+    def batch_share(self) -> float:
+        """
+        Common likelihood scaling factor.
+
+        Returns
+        -------
+        float
+            The common child ratio ``n / batch_size``.
+
+        Raises
+        ------
+        ValueError
+            If the contained batch objects have unequal values in
+            :attr:`batch_shares`.
+
+        Examples
+        --------
+        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> manager = BatchManager(
+        ...     [
+        ...         Batches(["x"], n=6, batch_size=2),
+        ...         Batches(["y"], n=9, batch_size=3),
+        ...     ]
+        ... )
+        >>> manager.batch_share
+        3.0
+
+        With unequal child scales, use :meth:`scaled_log_lik` instead:
+
+        >>> unequal = BatchManager(
+        ...     [
+        ...         Batches(["x"], n=6, batch_size=2),
+        ...         Batches(["y"], n=8, batch_size=4),
+        ...     ],
+        ...     mode="resample",
+        ... )
+        >>> try:
+        ...     unequal.batch_share
+        ... except ValueError as error:
+        ...     print("scaled_log_lik" in str(error))
+        True
+        """
+        if not self._has_common_batch_share:
+            raise ValueError(
+                "BatchManager.batch_share is only available when all contained "
+                "Batches objects have the same n / batch_size. Use per-branch "
+                "scaling via BatchManager.scaled_log_lik() instead."
+            )
+
+        return self.batch_shares[0]
+
+    @property
+    def likelihood_scalar(self) -> float:
+        """
+        Alias for :attr:`batch_share`.
+
+        Returns
+        -------
+        float
+            The common child ratio ``n / batch_size``.
+
+        Raises
+        ------
+        ValueError
+            If the contained batch objects have unequal values in
+            :attr:`batch_shares`.
+
+        Examples
+        --------
+        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> BatchManager(
+        ...     [
+        ...         Batches(["x"], n=6, batch_size=2),
+        ...         Batches(["y"], n=9, batch_size=3),
+        ...     ]
+        ... ).likelihood_scalar
+        3.0
+        """
+        return self.batch_share
+
+    @property
+    def _has_common_batch_share(self) -> bool:
+        first = self.batch_shares[0]
+        return all(abs(share - first) <= 1e-12 for share in self.batch_shares)
+
+    @property
+    def n_full_batches(self) -> int:
+        """
+        Number of joint batch steps in one epoch.
+
+        In ``"strict"`` mode, this is the common child
+        :attr:`Batches.n_full_batches`. In ``"resample"`` mode, it is determined by
+        :attr:`epoch_size`.
+
+        Returns
+        -------
+        int
+            Joint epoch length.
+
+        Examples
+        --------
+        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> BatchManager(
+        ...     [
+        ...         Batches(["x"], n=6, batch_size=2),
+        ...         Batches(["y"], n=8, batch_size=4),
+        ...     ],
+        ...     mode="resample",
+        ...     epoch_size="max",
+        ... ).n_full_batches
+        3
+        >>> BatchManager(
+        ...     [
+        ...         Batches(["x"], n=6, batch_size=2),
+        ...         Batches(["y"], n=8, batch_size=4),
+        ...     ],
+        ...     mode="resample",
+        ...     epoch_size="min",
+        ... ).n_full_batches
+        2
+        >>> BatchManager(
+        ...     [
+        ...         Batches(["x"], n=6, batch_size=2),
+        ...         Batches(["y"], n=8, batch_size=4),
+        ...     ],
+        ...     mode="resample",
+        ...     epoch_size=5,
+        ... ).n_full_batches
+        5
+        """
+        counts = [batch.n_full_batches for batch in self.batches]
+
+        if self.mode == "strict":
+            return counts[0]
+
+        if self.epoch_size == "max":
+            return max(counts)
+
+        if self.epoch_size == "min":
+            return min(counts)
+
+        assert isinstance(self.epoch_size, int)
+        return self.epoch_size
+
+    @property
+    def is_full_data(self) -> bool:
+        """
+        Whether every child represents one full-data batch.
+
+        Returns
+        -------
+        bool
+            ``True`` if all contained :class:`Batches` objects have
+            :attr:`Batches.is_full_data`.
+
+        Examples
+        --------
+        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> BatchManager(
+        ...     [
+        ...         Batches(["x"], n=6, batch_size=None),
+        ...         Batches(["y"], n=8, batch_size=None),
+        ...     ]
+        ... ).is_full_data
+        True
+        >>> BatchManager(
+        ...     [
+        ...         Batches(["x"], n=6, batch_size=None),
+        ...         Batches(["y"], n=8, batch_size=4),
+        ...     ],
+        ...     mode="resample",
+        ... ).is_full_data
+        False
+        """
+        return all(batch.is_full_data for batch in self.batches)
+
+    def _default_batch_numbers(self) -> jax.Array:
+        rows = []
+
+        for batch in self.batches:
+            rows.append(jnp.arange(self.n_full_batches) % batch.n_full_batches)
+
+        return jnp.stack(rows, axis=1)
+
+    def _draw_batch_numbers(self, batch: Batches, key: jax.Array) -> jax.Array:
+        n_manager_batches = self.n_full_batches
+        n_child_batches = batch.n_full_batches
+
+        if self.mode == "strict":
+            return jnp.arange(n_manager_batches)
+
+        key_base, key_extra = jax.random.split(key)
+        shuffled = jax.random.permutation(key_base, jnp.arange(n_child_batches))
+
+        if n_manager_batches <= n_child_batches:
+            return shuffled[:n_manager_batches]
+
+        extra = jax.random.randint(
+            key_extra,
+            shape=(n_manager_batches - n_child_batches,),
+            minval=0,
+            maxval=n_child_batches,
+        )
+        return jnp.concatenate([shuffled, extra])
+
+    def permute_indices(self, key: jax.Array) -> tuple[jax.Array, ...]:
+        """
+        Returns fresh epoch indices for every contained batch object.
+
+        This method mirrors :meth:`Batches.permute_indices` for each child. It does
+        not mutate the manager or the child ``indices``. Use :meth:`start_epoch` to
+        update the manager in place.
+
+        Parameters
+        ----------
+        key
+            JAX pseudo-random key split across children.
+
+        Returns
+        -------
+        tuple[jax.Array, ...]
+            One index vector per contained :class:`Batches` object.
+
+        Examples
+        --------
+        >>> import jax
+        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> manager = BatchManager(
+        ...     [
+        ...         Batches(["x"], n=4, batch_size=2, shuffle=False),
+        ...         Batches(["y"], n=6, batch_size=3, shuffle=False),
+        ...     ]
+        ... )
+        >>> tuple(idx.tolist() for idx in manager.permute_indices(jax.random.key(0)))
+        ([0, 1, 2, 3], [0, 1, 2, 3, 4, 5])
+        """
+        keys = jax.random.split(key, len(self.batches))
+        return tuple(
+            batch.permute_indices(subkey)
+            for batch, subkey in zip(self.batches, keys, strict=True)
+        )
+
+    def start_epoch(self, key: jax.Array) -> BatchManager:
+        """
+        Starts a new joint epoch.
+
+        The manager updates every child via :meth:`Batches.start_epoch` and
+        recomputes :attr:`batch_numbers`. In ``"strict"`` mode, joint batch ``i``
+        uses child batch row ``i`` for every child. In ``"resample"`` mode, each
+        child uses shuffled rows without replacement where possible and samples
+        additional rows with replacement if the joint epoch is longer than that
+        child's own epoch.
+
+        Parameters
+        ----------
+        key
+            JAX pseudo-random key used for child permutations and, in
+            ``"resample"`` mode, row selection.
+
+        Returns
+        -------
+        BatchManager
+            This object with updated child ``indices`` and :attr:`batch_numbers`.
+
+        Examples
+        --------
+        >>> import jax
+        >>> import jax.numpy as jnp
+        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> manager = BatchManager(
+        ...     [
+        ...         Batches(["x"], n=4, batch_size=2, shuffle=True),
+        ...         Batches(["y"], n=6, batch_size=3, shuffle=True),
+        ...     ],
+        ...     mode="resample",
+        ...     epoch_size=4,
+        ... ).start_epoch(jax.random.key(1))
+        >>> manager.batch_numbers.shape
+        (4, 2)
+        >>> bool(jnp.all(manager.batch_numbers[:, 0] < 2))
+        True
+        >>> bool(jnp.all(manager.batch_numbers[:, 1] < 2))
+        True
+        """
+        keys = jax.random.split(key, len(self.batches) * 2)
+        batches = []
+        batch_numbers = []
+
+        for i, batch in enumerate(self.batches):
+            index_key = keys[2 * i]
+            row_key = keys[2 * i + 1]
+            batch = batch.start_epoch(index_key)
+            batches.append(batch)
+            batch_numbers.append(self._draw_batch_numbers(batch, row_key))
+
+        self.batches = tuple(batches)
+        self.batch_numbers = jnp.stack(batch_numbers, axis=1)
+        return self
+
+    @property
+    def batch_indices(self) -> tuple[jax.Array, ...]:
+        """
+        Batch index matrices selected for the joint epoch.
+
+        Returns
+        -------
+        tuple[jax.Array, ...]
+            One integer array per child. The ``i``-th array has shape
+            ``(n_full_batches, child_batch_size)`` and contains the observation
+            indices selected for that child at each joint batch step.
+
+        Examples
+        --------
+        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> manager = BatchManager(
+        ...     [
+        ...         Batches(["x"], n=6, batch_size=2, shuffle=False),
+        ...         Batches(["y"], n=9, batch_size=3, shuffle=False),
+        ...     ]
+        ... )
+        >>> tuple(idx.tolist() for idx in manager.batch_indices)
+        ([[0, 1], [2, 3], [4, 5]], [[0, 1, 2], [3, 4, 5], [6, 7, 8]])
+        """
+        return tuple(
+            batch.batch_indices[self.batch_numbers[:, i]]
+            for i, batch in enumerate(self.batches)
+        )
+
+    def get_batched_position(self, position: Position, batch_index: int) -> Position:
+        """
+        Returns the joint batched position for one optimizer step.
+
+        Each child :class:`Batches` object slices the entries named in its own
+        ``position_keys``. The resulting partial positions are merged into a single
+        :class:`Position`.
+
+        Parameters
+        ----------
+        position
+            Mapping containing every key in :attr:`position_keys`.
+        batch_index
+            Joint batch row in ``0, ..., n_full_batches - 1``.
+
+        Returns
+        -------
+        Position
+            Batched entries from all contained batch objects.
+
+        Raises
+        ------
+        ValueError
+            If any child finds an incompatible observation size along its batching
+            axis.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> manager = BatchManager(
+        ...     [
+        ...         Batches(["x"], n=4, batch_size=2, default_axis=1, shuffle=False),
+        ...         Batches(["y"], n=6, batch_size=3, shuffle=False),
+        ...     ]
+        ... )
+        >>> position = {
+        ...     "x": jnp.arange(8).reshape(2, 4),
+        ...     "y": jnp.arange(6),
+        ... }
+        >>> batch = manager.get_batched_position(position, batch_index=1)
+        >>> batch["x"].tolist(), batch["y"].tolist()
+        ([[2, 3], [6, 7]], [3, 4, 5])
+        """
+        batched_position = {}
+
+        for i, batch in enumerate(self.batches):
+            child_batch_index = self.batch_numbers[batch_index, i]
+            batched_position |= batch.get_batched_position(position, child_batch_index)
+
+        return Position(batched_position)
+
+    def extract_batched_position(
+        self,
+        interface: ModelInterface | Model,
+        model_state: ModelState,
+        batch_number: int,
+    ) -> Position:
+        """
+        Extracts observed data from a model state and returns one joint batch.
+
+        Parameters
+        ----------
+        interface
+            Model or model interface used to extract the observed position entries.
+        model_state
+            State from which :attr:`position_keys` are extracted.
+        batch_number
+            Joint batch row in ``0, ..., n_full_batches - 1``.
+
+        Returns
+        -------
+        Position
+            Batched observed position entries from ``model_state``.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> import liesel.model as lsl
+        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> x = lsl.Var.new_obs(jnp.arange(4.0), name="x")
+        >>> y = lsl.Var.new_obs(jnp.arange(6.0), name="y")
+        >>> model = lsl.Model([x, y])
+        >>> manager = BatchManager(
+        ...     [
+        ...         Batches(["x"], n=4, batch_size=2, shuffle=False),
+        ...         Batches(["y"], n=6, batch_size=3, shuffle=False),
+        ...     ]
+        ... )
+        >>> batch = manager.extract_batched_position(model, model.state, 1)
+        >>> batch["x"].tolist(), batch["y"].tolist()
+        ([2.0, 3.0], [3.0, 4.0, 5.0])
+        """
+        obs = interface.extract_position(self.position_keys, model_state)
+        return self.get_batched_position(obs, batch_number)
+
+    def scaled_log_lik(
+        self, model: Model | ModelInterface, model_state: ModelState
+    ) -> jax.Array:
+        """
+        Returns a log likelihood with per-child batch scaling.
+
+        For a :class:`.Model`, each child group scales the observed likelihood terms
+        belonging to its ``position_keys`` by that child's :attr:`Batches.batch_share`.
+        Observed likelihood terms not covered by any child are left unscaled.
+
+        For a generic :class:`.ModelInterface`, per-branch decomposition is not
+        available. In that case, this method can only use the old scalar path and
+        therefore requires a common :attr:`batch_share`.
+
+        Parameters
+        ----------
+        model
+            Liesel model or compatible model interface.
+        model_state
+            Updated model state containing the current log-likelihood values.
+
+        Returns
+        -------
+        jax.Array
+            Scaled log likelihood.
+
+        Raises
+        ------
+        ValueError
+            If ``model`` is a generic interface and the child batch shares differ.
+        TypeError
+            If ``model`` is a generic interface and ``model_state`` does not expose
+            ``"_model_log_lik"``.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> import liesel.model as lsl
+        >>> import tensorflow_probability.substrates.jax.distributions as tfd
+        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> x = lsl.Var.new_obs(
+        ...     jnp.arange(6.0),
+        ...     lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+        ...     name="x",
+        ... )
+        >>> y = lsl.Var.new_obs(
+        ...     jnp.arange(8.0),
+        ...     lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+        ...     name="y",
+        ... )
+        >>> model = lsl.Model([x, y])
+        >>> manager = BatchManager(
+        ...     [
+        ...         Batches(["x"], n=6, batch_size=2, shuffle=False),
+        ...         Batches(["y"], n=8, batch_size=4, shuffle=False),
+        ...     ],
+        ...     mode="resample",
+        ... )
+        >>> batch = manager.get_batched_position(model.extract_position(["x", "y"]), 0)
+        >>> state = model.update_state(batch, model.state)
+        >>> manual = (
+        ...     manager.batches[0].batch_share * state["x_log_prob"].value.sum()
+        ...     + manager.batches[1].batch_share * state["y_log_prob"].value.sum()
+        ... )
+        >>> bool(jnp.allclose(manager.scaled_log_lik(model, state), manual))
+        True
+        """
+        if isinstance(model, Model):
+            groups = [
+                (batch.position_keys, batch.batch_share) for batch in self.batches
+            ]
+            return _scaled_liesel_log_lik(model, model_state, groups)
+
+        return _scaled_common_log_lik(model_state, self.batch_share)
+
+    def _tree_flatten(self):
+        children = (tuple(self.batches), self.batch_numbers)
+        aux_data = {
+            "mode": self.mode,
+            "epoch_size": self.epoch_size,
+        }
+        return (children, aux_data)
+
+    @classmethod
+    def _tree_unflatten(cls, aux_data, children):
+        batches, batch_numbers = children
+        bm = cls(batches=batches, **aux_data)
+        bm.batch_numbers = batch_numbers
+        return bm
+
+    def __repr__(self) -> str:
+        name = type(self).__name__
+        return (
+            f"{name}(n={self.n}, batch_size={self.batch_size}, "
+            f"mode={self.mode!r}, n_full_batches={self.n_full_batches})"
+        )
+
+
 jax.tree_util.register_pytree_node(
     Batches, Batches._tree_flatten, Batches._tree_unflatten
+)
+
+jax.tree_util.register_pytree_node(
+    BatchManager, BatchManager._tree_flatten, BatchManager._tree_unflatten
 )
