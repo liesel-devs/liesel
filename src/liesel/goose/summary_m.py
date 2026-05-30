@@ -20,9 +20,6 @@ from liesel.goose.pytree import slice_leaves, stack_leaves
 from liesel.goose.types import Array, Position, TransitionInfo
 from liesel.option import Option
 
-# can be removed once arviz has been upgrade to v1.0
-az.Numba.disable_numba()
-
 
 class ErrorSummaryForOneCode(NamedTuple):
     error_code: int
@@ -157,12 +154,12 @@ def summarize_acceptance_probabilities(
 
 class Summary:
     """
-    A summary object.
+    Posterior summary and diagnostics for :class:`.SamplingResults`.
 
     Offers two main use cases:
 
     1. View an overall summary by printing a summary instance, including a summary table
-       of the posterior samples and a summary of sammpling errors.
+       of the posterior samples and a summary of sampling errors.
     2. Programmatically access summary statistics via
        ``quantities[quantity_name][var_name]``. Please refer to the documentation of the
        attribute :attr:`.quantities` for details.
@@ -170,21 +167,58 @@ class Summary:
     Additionally, the summary object can be turned into a :class:`~pandas.DataFrame`
     using :meth:`.to_dataframe`.
 
+    If ``per_chain=False``, statistics are computed over all posterior chains and
+    draws. If ``per_chain=True``, each chain is summarized separately.
+
+    The low-level computations for HDIs, effective sample sizes, R-hat, and Monte
+    Carlo standard errors are delegated to `ArviZ <https://python.arviz.org/>`_.
+
+    By default, the summary contains the following statistics:
+
+    - ``mean``: Posterior mean.
+    - ``sd``: Posterior standard deviation.
+    - ``var``: Posterior variance.
+    - ``quantiles``: Posterior quantiles at the probabilities given by
+      ``quantiles``. These are stored as ``"quantile"`` in :attr:`.quantities`
+      and become columns named ``q_<probability>`` in :meth:`.to_dataframe`.
+    - ``hdi``: Highest density interval with probability mass ``hdi_prob``. This is
+      the narrowest posterior interval reported by ArviZ at that probability level.
+      In :meth:`.to_dataframe`, it becomes ``hdi_low`` and ``hdi_high``.
+    - ``ess_bulk``: Bulk effective sample size, a diagnostic for Monte Carlo
+      precision in the central part of the posterior distribution.
+    - ``ess_tail``: Tail effective sample size, a diagnostic for Monte Carlo
+      precision in the posterior tails.
+    - ``rhat``: Rank-normalized split R-hat, a between-chain convergence diagnostic.
+      Values close to 1 indicate better agreement between chains. This statistic is
+      only computed when more than one chain is summarized together.
+    - ``mcse_mean``: Monte Carlo standard error of the posterior mean.
+    - ``mcse_sd``: Monte Carlo standard error of the posterior standard deviation.
+
+    Use ``which`` to compute only a subset of these statistics.
+
     Parameters
     ----------
     results
         The sampling results to summarize.
     additional_chain
-        can be supplied to add more parameters to the summary output. Must be a position
+        Can be supplied to add more parameters to the summary output. Must be a position
         chain which matches chain and time dimension of the posterior chain as returned
         by :meth:`~.goose.SamplingResults.get_posterior_samples`.
+    quantiles
+        Posterior quantile probabilities to compute when ``"quantiles"`` is included
+        in ``which``.
     hdi_prob
-        Level on which to return posterior highest density intervals.
+        Posterior probability mass of the highest density interval to compute when
+        ``"hdi"`` is included in ``which``.
     selected, deselected
         Allow to get a summary only for a subset of the position keys.
     per_chain
         If *True*, the summary is calculated on a per-chain basis. Certain measures like
         ``rhat`` are not available if ``per_chain`` is *True*.
+    which
+        Names of the summary statistics to compute. Supported values are ``"mean"``,
+        ``"sd"``, ``"var"``, ``"quantiles"``, ``"hdi"``, ``"ess_bulk"``,
+        ``"ess_tail"``, ``"rhat"``, ``"mcse_mean"``, and ``"mcse_sd"``.
 
     Notes
     -----
@@ -201,10 +235,15 @@ class Summary:
     """
     Dict of summarizing quantities.
 
-    Built up in hierarchies as. Let ``summary`` be a :class:`.Summary` instance. The
-    hierarchy is::
+    Let ``summary`` be a :class:`.Summary` instance. The hierarchy is::
 
         q = summary.quantities["quantity_name"]["parameter_name"]
+
+    Available quantity names are ``"mean"``, ``"sd"``, ``"var"``, ``"quantile"``,
+    ``"hdi"``, ``"ess_bulk"``, ``"ess_tail"``, ``"rhat"``, ``"mcse_mean"``, and
+    ``"mcse_sd"``, depending on the ``which`` argument. Note that ``which`` uses
+    ``"quantiles"`` to request quantiles, while :attr:`.quantities` stores the
+    result under ``"quantile"``.
 
     The extracted object is an ``np.ndarray``. If ``per_chain=True``, the arrays for
     the ``"quantile"`` and ``"hdi"`` quantities have the following dimensions:
@@ -213,7 +252,7 @@ class Summary:
     2. Second index refers to the quantile/interval
     3. Third and subsequent indices refer to individual parameters.
 
-    If ``per_chain=True``, the arrays for the other quantiles have the dimensions:
+    If ``per_chain=True``, the arrays for the other quantities have the dimensions:
 
     1. First index refers to the chain
     2. Second and subsequent indices refer to individual parameters.
@@ -699,7 +738,7 @@ def _create_quantity_dict(
     hdi_prob: float,
     which: Sequence[SummaryQuantities] = summary_quantities,
 ) -> dict[str, dict[str, np.ndarray]]:
-    azchain = az.convert_to_inference_data(chain).posterior
+    azchain = az.from_dict({"posterior": chain})["posterior"].dataset
 
     quantities = {}
     # calculate quantities
@@ -712,7 +751,7 @@ def _create_quantity_dict(
     if "quantiles" in which:
         quantities["quantile"] = azchain.quantile(q=quantiles, dim=["chain", "draw"])
     if "hdi" in which:
-        quantities["hdi"] = az.hdi(azchain, hdi_prob=hdi_prob)
+        quantities["hdi"] = az.hdi(azchain, prob=hdi_prob)
 
     if "ess_bulk" in which:
         quantities["ess_bulk"] = az.ess(azchain, method="bulk")
@@ -726,31 +765,32 @@ def _create_quantity_dict(
     if "mcse_sd" in which:
         quantities["mcse_sd"] = az.mcse(azchain, method="sd")
 
-    if "rhat" in which and azchain.chain.size > 1:
+    if "rhat" in which and azchain.sizes["chain"] > 1:
         quantities["rhat"] = az.rhat(azchain)
 
     # convert to simple dict[str, np.ndarray]
     for key, val in quantities.items():
-        quantities[key] = {k: v.values for k, v in val.data_vars.items()}
-
-    # hdi shape BEFORE
-    # VarIDX --- HDI
-
-    # special treatment for hdi since the function uses the last axis to refer
-    # to the quantile
-    if "hdi" in quantities:
-        for k, v in quantities["hdi"].items():
-            quantities["hdi"][k] = np.moveaxis(v, -1, 0)
-
-    # hdi shape AFTER
-    # HDI --- VarIDX
+        quantity = {}
+        for k, v in val.data_vars.items():
+            if key == "hdi":
+                remaining_dims = [dim for dim in v.dims if dim != "ci_bound"]
+                v = v.transpose("ci_bound", *remaining_dims)
+            quantity[k] = v.values
+        quantities[key] = quantity
 
     return quantities
 
 
 class SamplesSummary:
     """
-    A summary object based on a dictionary of samples.
+    Posterior summary and diagnostics for a dictionary of sample arrays.
+
+    See :class:`.Summary` for the full description of the computed statistics, their
+    interpretation, the ``quantities`` layout, and the behavior of ``quantiles``,
+    ``hdi_prob``, ``per_chain``, and ``which``. This class computes the same
+    sample-based statistics as :class:`.Summary`, but takes a plain dictionary of
+    sample arrays instead of a :class:`.SamplingResults` object and does not include
+    sampling-error or acceptance-probability diagnostics.
 
     Offers two main use cases:
 
@@ -763,14 +803,22 @@ class SamplesSummary:
     Parameters
     ----------
     samples
-        The dictionary of samples to summarize.
+        The dictionary of samples to summarize. Each array is expected to have leading
+        dimensions ``(nchains, ndraws, ...)``.
+    quantiles
+        Posterior quantile probabilities to compute when ``"quantiles"`` is included
+        in ``which``.
     hdi_prob
-        Level on which to return posterior highest density intervals.
+        Posterior probability mass of the highest density interval to compute when
+        ``"hdi"`` is included in ``which``.
     selected, deselected
         Allow to get a summary only for a subset of the position keys.
     per_chain
         If *True*, the summary is calculated on a per-chain basis. Certain measures like
         ``rhat`` are not available if ``per_chain`` is *True*.
+    which
+        Names of the summary statistics to compute. Supported values are the same as
+        for :class:`.Summary`.
 
     Notes
     -----
@@ -879,9 +927,14 @@ class SamplesSummary:
         Parameters
         ----------
         a
-            The array of samples to summarize.
+            The array of samples to summarize. Expected to have leading dimensions
+            ``(nchains, ndraws, ...)``.
+        quantiles
+            Posterior quantile probabilities to compute when ``"quantiles"`` is
+            included in ``which``.
         hdi_prob
-            Level on which to return posterior highest density intervals.
+            Posterior probability mass of the highest density interval to compute when
+            ``"hdi"`` is included in ``which``.
         selected, deselected
             Allow to get a summary only for a subset of the position keys.
         per_chain
@@ -889,12 +942,15 @@ class SamplesSummary:
             measures like ``rhat`` are not available if ``per_chain`` is *True*.
         name
             Variable name to use for labelling in :meth:`.to_dataframe`.
+        which
+            Names of the summary statistics to compute. Supported values are the same
+            as for :class:`.Summary`.
         """
         samples = {name: a}
         return cls(samples, quantiles, hdi_prob, selected, deselected, per_chain, which)
 
     def to_dataframe(self) -> pd.DataFrame:
-        """Turns Summary object into a :class:`~pandas.DataFrame` object."""
+        """Turns SamplesSummary object into a :class:`~pandas.DataFrame` object."""
 
         # don't change the original data
         quants = self.quantities.copy()
@@ -1087,6 +1143,22 @@ def concatenate_arrays_in_dict(
     return out_array
 
 
+def _apply_loo_scale(
+    result: az.ELPDData,
+    scale: Literal["log", "negative_log", "deviance"],
+) -> az.ELPDData:
+    if scale != "log":
+        multiplier = -1 if scale == "negative_log" else -2
+        result.elpd = multiplier * result.elpd
+        result.se = abs(multiplier) * result.se
+        result.elpd_i = multiplier * result.elpd_i
+        result.scale = scale
+
+    result.elpd_loo = result.elpd
+    result.p_loo = result.p
+    return result
+
+
 def loo(
     lpp: dict[str, jax.typing.ArrayLike] | jax.typing.ArrayLike,
     samples: dict[str, jax.typing.ArrayLike] | None,
@@ -1147,7 +1219,8 @@ def loo(
     except Exception:  # assume its a dict now
         lpp_array = concatenate_arrays_in_dict(lpp)
 
-    idat = az.convert_to_inference_data({"observed": lpp_array}, group="log_likelihood")
+    lpp_array = np.asarray(lpp_array)
+    idat = az.from_dict({"log_likelihood": {"observed": lpp_array}})
     if reff is None and samples is not None:
         avg_ess = (
             SamplesSummary(samples, which=["ess_bulk"])
@@ -1158,5 +1231,4 @@ def loo(
         reff = avg_ess / nsamples
     # now we assume reff is not None
 
-    arviz_loo = az.loo(idat, reff=reff, scale=scale)
-    return arviz_loo
+    return _apply_loo_scale(az.loo(idat, reff=reff), scale)

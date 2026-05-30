@@ -109,7 +109,7 @@ ax1.legend()
 ax1.grid(True, alpha=0.3)
 ```
 
-We simulate the response as done in the [linear regression tutorial](01-lin-reg.md#linear-regression) from the model $y_i | x_i \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \;\sigma^{2}_y)$ given our true covariate.
+We simulate the response as done in the [linear regression tutorial](01a-lin-reg.md#linear-regression) from the model $y_i | x_i \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \;\sigma^{2}_y)$ given our true covariate.
 
 ```{python}
 # | label: Create response

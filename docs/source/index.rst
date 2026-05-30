@@ -106,7 +106,7 @@ The central classes for handling your sampling results are:
 
 You can obtain your posterior samples as a dictionary via
 :meth:`~.goose.SamplingResults.get_posterior_samples`. There is also experimental support
-for turning your samples into an ``arviz.InferenceData`` object via
+for turning your samples into an ArviZ data object via
 :func:`.to_arviz_inference_data`.
 
 Goose also comes with a number of plotting functions that give you quick
@@ -159,7 +159,6 @@ Model (Advanced)
     ~liesel.model.Node
     ~liesel.model.Value
     ~liesel.model.PIT
-    ~liesel.distributions.GaussianCopula
     ~liesel.model.TransientCalc
     ~liesel.model.TransientDist
     ~liesel.model.TransientIdentity
@@ -197,6 +196,18 @@ P-Splines
     ~liesel.contrib.splines.basis_matrix
     ~liesel.contrib.splines.equidistant_knots
     ~liesel.contrib.splines.pspline_penalty
+
+
+Custom Distributions
+********************
+
+.. autosummary::
+    :toctree: generated
+    :caption: Custom Distributions
+    :template: autosummary/class-without-inheritance-strict.rst
+    :nosignatures:
+
+    ~liesel.distributions.GaussianCopula
     ~liesel.distributions.MultivariateNormalDegenerate
 
 
@@ -213,6 +224,8 @@ Advanced MCMC functionality
     ~liesel.goose.EpochConfig
     ~liesel.goose.EpochState
     ~liesel.goose.EpochType
+    ~liesel.goose.KernelState
+    ~liesel.goose.ModelState
     ~liesel.goose.Kernel
     ~liesel.goose.TransitionInfo
     ~liesel.goose.TuningInfo

@@ -1,4 +1,5 @@
 import arviz as az
+from xarray import DataTree
 
 from .. import __version__
 from ..goose.engine import SamplingResults
@@ -6,13 +7,13 @@ from ..goose.engine import SamplingResults
 
 def to_arviz_inference_data(
     results: SamplingResults, include_warmup: bool = False
-) -> az.InferenceData:
+) -> DataTree:
     """
-    Converts goose's SamplingResults into InferenceData from arviz.
+    Converts goose's SamplingResults into an ArviZ ``DataTree``.
 
-    Arviz' InferenceData seperates samples from the posterior and the warmup in
-    the groups 'posterior' and 'warmup_posterior'. By default, all summaries and
-    plots use only the data in the group 'posterior'.
+    Posterior and warmup samples are stored in the groups ``"posterior"`` and
+    ``"warmup_posterior"``. By default, all summaries and plots use only the data
+    in the group ``"posterior"``.
 
     Parameters
     ----------
@@ -24,32 +25,19 @@ def to_arviz_inference_data(
 
     Returns
     -------
-    The inference data.
+    The ArviZ ``DataTree``.
 
 
     Notes
     -----
-    The inference data has a variable for each position key included in the
+    The returned object has a variable for each position key included in the
     SamplingResult object. These are usually the position keys of the sampled
     parameters. Goose can track more values if specified in the field
     ``position_included``. This might be helpful to let arviz calculate
     information criteria like WAIC. Assuming that the position key
-    ``loglik_pointwise`` corresponds to the point-wise evaluated log-likelihood
-    then the inference data can be slightly changed so that arviz interprets
-    these values as intended.
-
-    .. code-block:: python
-
-        # re-interpret the data
-        llpw_extracted = idat.posterior["loglik_pointwise"]
-        idat.posterior = idat.posterior.drop("loglik_pointwise")
-        idat.add_groups({"log_likelihood": {"observed": llpw_extracted}})
-        az.waic(idat)
-
-        # Computed from 300 posterior samples and 10 observations log-likelihood matrix.
-        #              Estimate     SE
-        # elpd_waic.     -17.43   3.40
-        # p_waic           0.16      -
+    ``loglik_pointwise`` corresponds to the point-wise evaluated log-likelihood,
+    move it into an ArviZ ``"log_likelihood"`` group before computing
+    information criteria such as WAIC.
 
     """
 
@@ -62,13 +50,17 @@ def to_arviz_inference_data(
         ).expect("No warmup samples found.")
 
     inference_data = az.from_dict(
-        posterior=posterior_samples,
-        warmup_posterior=warmup_posterior_samples,
-        posterior_attrs={
-            "inference_library": "liesel",
-            "inference_library_version": __version__,
-            "creation_library": "liesel",
-            "creation_library_version": __version__,
+        {
+            "posterior": posterior_samples,
+            "warmup_posterior": warmup_posterior_samples,
+        },
+        attrs={
+            "posterior": {
+                "inference_library": "liesel",
+                "inference_library_version": __version__,
+                "creation_library": "liesel",
+                "creation_library_version": __version__,
+            }
         },
         save_warmup=include_warmup,
     )

@@ -614,5 +614,10 @@ def test_loo(model):
     assert loo_.p_loo == pytest.approx(5.829, abs=0.01)
     assert loo_.se == pytest.approx(15.777, abs=0.01)
 
+    loo_deviance = loo(lpp, samples, scale="deviance")
+    assert loo_deviance.elpd_loo == pytest.approx(2 * 727.999, abs=0.01)
+    assert loo_deviance.p_loo == pytest.approx(5.829, abs=0.01)
+    assert loo_deviance.se == pytest.approx(2 * 15.777, abs=0.01)
+
     with pytest.raises(ValueError, match="relative MCMC efficiency"):
         loo(lpp, None)

@@ -5,19 +5,16 @@ Diagnostic plots of the posterior samples.
 from collections.abc import Sequence
 from typing import Any
 
-import arviz
 import jax
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from arviz_stats.base import array_stats
 
 from liesel.goose.engine import SamplingResults
 
 from .types import Array
-
-# can be removed once arviz has been upgrade to v1.0
-arviz.Numba.disable_numba()
 
 
 def _raise_chain_indices_error(
@@ -746,7 +743,7 @@ def plot_cor(
 
     def do_acor_plot(x, maxlags, **kwargs):
         x = np.asarray(x)
-        acor = arviz.autocorr(x)[..., 0:maxlags]
+        acor = array_stats.autocorr(x)[..., 0:maxlags]
         return sns.lineplot(x=range(maxlags), y=acor, **kwargs)
 
     if color_palette is None:
@@ -869,7 +866,7 @@ def _add_corplot(
 
     for chain_index, col in zip(plot_df["chain_index"].unique(), color_list):
         x = np.asarray(plot_df.loc[plot_df["chain_index"] == chain_index]["value"])
-        acor = arviz.autocorr(x)[0:max_lags]
+        acor = array_stats.autocorr(x)[0:max_lags]
 
         sns.lineplot(
             x=range(max_lags),

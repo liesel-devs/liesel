@@ -185,7 +185,7 @@ class Node(ABC):
         Whether the node needs a seed / PRNG key.
     convert
         A function used to process the value of this node. The default uses the
-        function stored in :attr:`.convert_value`, which is
+        function stored in :meth:`.Node.convert_value`, which is
         ``jax.numpy.asarray``.
 
     See Also
@@ -673,7 +673,7 @@ class Value(Node):
         be automatically generated upon initialization of a :class:`.Model`.
     convert
         A function used to process the value of this node. The default uses the
-        function stored in :attr:`.convert_value`, which is
+        function stored in :meth:`.Node.convert_value`, which is
         ``jax.numpy.asarray``.
 
 
@@ -814,7 +814,7 @@ class Calc(Node):
         initialization.
     convert_inputs
         A function used to process the values of this node's inputs.
-        The default uses the function stored in :attr:`.convert_value`, which is
+        The default uses the function stored in :meth:`.Node.convert_value`, which is
         ``jax.numpy.asarray``.
     **kwinputs
         Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
@@ -989,7 +989,7 @@ class Dist(Node):
         formats and behavior.
     convert_inputs
         A function used to process the values of this node's inputs.
-        The default uses the function stored in :attr:`.convert_value`, which is
+        The default uses the function stored in :meth:`.Node.convert_value`, which is
         ``jax.numpy.asarray``.
     **kwinputs
         Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
@@ -1629,7 +1629,7 @@ class Var:
         variable.
     convert
         A function used to process the value of this variable. The default uses the
-        function stored in :attr:`.convert_value`, which is ``jax.numpy.asarray``.
+        function stored in :meth:`.Var.convert_value`, which is ``jax.numpy.asarray``.
 
     distribution
         Deprecated argument name for the probability distribution of the variable,
@@ -1787,7 +1787,7 @@ class Var:
             variable.
         convert
             A function used to process the value of this variable. The default uses the
-            function stored in :attr:`.convert_value`, which is
+            function stored in :meth:`.Var.convert_value`, which is
             ``jax.numpy.asarray``.
         distribution
             Deprecated argument name for the probability distribution of the variable,
@@ -1861,7 +1861,7 @@ class Var:
             be automatically generated upon initialization of a :class:`.Model`.
         convert
             A function used to process the value of this variable. The default uses the
-            function stored in :attr:`.convert_value`, which is
+            function stored in :meth:`.Var.convert_value`, which is
             ``jax.numpy.asarray``.
         distribution
             Deprecated argument name for the probability distribution of the variable,
@@ -1944,7 +1944,7 @@ class Var:
             initialization.
         convert_inputs
             A function used to process the values of this variable's inputs.
-            The default uses the function stored in :attr:`.convert_value`,
+            The default uses the function stored in :meth:`.Var.convert_value`,
             which is ``jax.numpy.asarray``.
         cache
             If ``False``, this variable will not store a cache of its value. This means,
@@ -2055,7 +2055,7 @@ class Var:
             Additional information that can be used to set up inference algorithms.
         convert
             A function used to process the value of this variable. The default uses the
-            function stored in :attr:`.convert_value`, which is
+            function stored in :meth:`.Var.convert_value`, which is
             ``jax.numpy.asarray``.
 
         See Also
