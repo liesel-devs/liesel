@@ -91,3 +91,37 @@ class TestSplit:
                 share_validate=-0.3,
                 share_test=0.5,
             )
+
+        with pytest.raises(ValueError):
+            Split.from_share(
+                position_keys=["x"],
+                n=2,
+                share_validate=0.6,
+                share_test=0.6,
+            )
+
+        with pytest.raises(ValueError):
+            Split.from_share(
+                position_keys=["x"],
+                n=0,
+                share_validate=0.0,
+                share_test=0.0,
+            )
+
+        with pytest.raises(ValueError):
+            Split(
+                position_keys=["x"],
+                n=10,
+                n_train=5,
+                n_validate=2,
+                n_test=1,
+            )
+
+        with pytest.raises(ValueError):
+            Split(
+                position_keys=["x"],
+                n=10,
+                n_train=-1,
+                n_validate=10,
+                n_test=1,
+            )

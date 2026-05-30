@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import time
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import jax
 import jax.numpy as jnp
 
 from ...model import Model
-from .types import ModelInterface, ModelState, Position
+from .types import Position
 from .util import guess_n
 
 
@@ -136,7 +136,8 @@ class PositionSplit:
         [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
         """
         pos_keys = position_keys or list(model.observed)
-        n = n or guess_n(model, axis=default_axis)
+        if n is None:
+            n = guess_n(model, axis=default_axis)
         splitter = Split.from_share(
             position_keys=pos_keys,
             n=n,
@@ -150,64 +151,6 @@ class PositionSplit:
 
         pos = model.extract_position(pos_keys)
         return splitter.split_position(pos)
-
-
-@dataclass
-class StateSplit:
-    """
-    Container for a split model state and held-out observed positions.
-
-    ``StateSplit`` is returned by :meth:`Split.split_state`. The training
-    observations are written back into ``train_state``; validation and test
-    observations are kept as positions so they can be inserted later.
-
-    Parameters
-    ----------
-    train_state
-        Model state updated with training observations.
-    pos_validate
-        Validation observed position entries.
-    pos_test
-        Test observed position entries.
-    n_train
-        Number of training observations.
-    n_validate
-        Number of validation observations.
-    n_test
-        Number of test observations.
-
-    Examples
-    --------
-    >>> import jax.numpy as jnp
-    >>> from liesel.experimental.optim.split import StateSplit
-    >>> from liesel.experimental.optim.types import Position
-    >>> split = StateSplit(
-    ...     train_state={},
-    ...     pos_validate=Position({"x": jnp.arange(2)}),
-    ...     pos_test=Position({"x": jnp.arange(0)}),
-    ...     n_train=4,
-    ...     n_validate=2,
-    ...     n_test=0,
-    ... )
-    >>> split
-    StateSplit(train=4, validate=2, test=0)
-    """
-
-    train_state: ModelState
-    pos_validate: Position
-    pos_test: Position
-
-    n_train: int
-    n_validate: int
-    n_test: int
-
-    def __repr__(self) -> str:
-        name = type(self).__name__
-        out = (
-            f"{name}(train={self.n_train}, "
-            f"validate={self.n_validate}, test={self.n_test})"
-        )
-        return out
 
 
 @dataclass
@@ -225,13 +168,13 @@ class Split:
     position_keys
         Names of position entries that should be split.
     n
-        Number of observations along each split axis.
+        Number of observations along each split axis. Must be positive.
     n_validate
         Number of validation observations.
     n_test
         Number of test observations.
     n_train
-        Number of training observations. If left at ``-1``, it is computed as
+        Number of training observations. If left at ``None``, it is computed as
         ``n - n_validate - n_test``.
     axes
         Optional mapping from position key to split axis. Keys missing from this
@@ -253,9 +196,8 @@ class Split:
     Raises
     ------
     ValueError
-        If the requested split sizes imply a negative number of training
-        observations, if their sum exceeds ``n``, or if validation or test shares are
-        negative.
+        If ``n`` is not positive, if any split size is negative, or if
+        ``n_train + n_validate + n_test`` is not exactly equal to ``n``.
 
     Examples
     --------
@@ -301,8 +243,8 @@ class Split:
     n: int
     n_validate: int = 0
     n_test: int = 0
-    n_train: int = -1
-    axes: dict[str, int] | None = None
+    n_train: int | None = None
+    axes: dict[str, int] | None = field(default_factory=dict)
     default_axis: int = 0
     shuffle: bool = False
     seed: jax.Array | int | None = None
@@ -311,28 +253,26 @@ class Split:
         if self.axes is None:
             self.axes = {}
 
-        if self.n_train == -1:
+        if self.n <= 0:
+            raise ValueError(f"{self.n=} is <= 0, which is not allowed.")
+
+        if self.n_train is None:
             self.n_train = self.n - self.n_validate - self.n_test
 
+        assert self.n_train is not None
         self.indices = jnp.arange(self.n)
 
-        if self.n_train < 0:
+        if self.n_train < 0 or self.n_validate < 0 or self.n_test < 0:
             raise ValueError(
-                f"The given {self.n_validate=} and {self.n_test=} imply "
-                f"a total of {self.n_train=}, which < 0."
+                f"Split sizes must be non-negative, but got {self.n_train=}, "
+                f"{self.n_validate=}, and {self.n_test=}."
             )
 
-        n = self.n_train + self.n_validate + self.n_test
-        if n > self.n:
+        n_split = self.n_train + self.n_validate + self.n_test
+        if n_split != self.n:
             raise ValueError(
                 f"The given {self.n_train=}, {self.n_validate=}, and {self.n_test=} "
-                f"imply a total of {n=}, which is > the provided {self.n=}."
-            )
-
-        if self.share_validate < 0.0 or self.share_test < 0.0:
-            raise ValueError(
-                f"One of {self.share_validate=} or {self.share_test=} is negative, "
-                "which is not allowed."
+                f"sum to {n_split}, but must sum exactly to {self.n=}."
             )
 
         if self.shuffle:
@@ -342,6 +282,11 @@ class Split:
                 seed = int(time.time()) if self.seed is None else self.seed
                 key = jax.random.key(seed)
             self.indices = self.permute_indices(key)
+
+    @property
+    def _n_train(self) -> int:
+        assert self.n_train is not None
+        return self.n_train
 
     @property
     def share_validate(self) -> float:
@@ -395,7 +340,8 @@ class Split:
         Builds a :class:`Split` from validation and test proportions.
 
         The number of validation and test observations is computed with
-        ``int(n * share)``. Any fractional remainder is therefore truncated.
+        ``int(n * share)``. Any fractional remainder is assigned to the training
+        split, so the resulting split sizes always sum to ``n``.
 
         Parameters
         ----------
@@ -435,14 +381,31 @@ class Split:
         >>> splitter.share_validate, splitter.share_test
         (0.2, 0.2)
         """
+        if n <= 0:
+            raise ValueError(f"{n=} is <= 0, which is not allowed.")
+
+        if share_validate < 0.0 or share_test < 0.0:
+            raise ValueError(
+                f"Shares must be non-negative, but got {share_validate=} "
+                f"and {share_test=}."
+            )
+
+        share_observed = share_validate + share_test
+        if share_observed > 1.0:
+            raise ValueError(
+                f"Validation and test shares sum to {share_observed}, which is > 1.0."
+            )
+
         n_validate = int(n * share_validate)
         n_test = int(n * share_test)
+        n_train = n - n_validate - n_test
 
         return cls(
             position_keys=position_keys,
             n=n,
             n_validate=n_validate,
             n_test=n_test,
+            n_train=n_train,
             axes=axes,
             default_axis=default_axis,
             shuffle=shuffle,
@@ -489,7 +452,7 @@ class Split:
         >>> Split(["x"], n=6, n_validate=2, n_test=1).indices_train.tolist()
         [0, 1, 2]
         """
-        return self.indices[: self.n_train]
+        return self.indices[: self._n_train]
 
     @property
     def indices_validate(self) -> jax.Array:
@@ -502,8 +465,8 @@ class Split:
         >>> Split(["x"], n=6, n_validate=2, n_test=1).indices_validate.tolist()
         [3, 4]
         """
-        start = self.n_train
-        end = self.n_train + self.n_validate
+        start = self._n_train
+        end = self._n_train + self.n_validate
         return self.indices[start:end]
 
     @property
@@ -517,8 +480,8 @@ class Split:
         >>> Split(["x"], n=6, n_validate=2, n_test=1).indices_test.tolist()
         [5]
         """
-        start = self.n_train + self.n_validate
-        end = self.n_train + self.n_validate + self.n_test
+        start = self._n_train + self.n_validate
+        end = self._n_train + self.n_validate + self.n_test
         return self.indices[start:end]
 
     def split_position(self, position: Position) -> PositionSplit:
@@ -566,7 +529,7 @@ class Split:
         validation_position = {}
         test_position = {}
 
-        assert isinstance(self.axes, dict)
+        assert self.axes is not None
         for key in self.position_keys:
             axis = self.axes.get(key, self.default_axis)
 
@@ -591,59 +554,11 @@ class Split:
             train=Position(train_position),
             validate=Position(validation_position),
             test=Position(test_position),
-            n_train=self.n_train,
+            n_train=self._n_train,
             n_validate=self.n_validate,
             n_test=self.n_test,
         )
         return split
-
-    def split_state(
-        self, interface: ModelInterface | Model, model_state: ModelState
-    ) -> StateSplit:
-        """
-        Splits observed entries from a model state.
-
-        The training observations are written into a new model state. Validation and
-        test observations are returned separately as positions.
-
-        Parameters
-        ----------
-        interface
-            Model or model interface used to extract and update observed position
-            entries.
-        model_state
-            Model state containing the full observed data.
-
-        Returns
-        -------
-        StateSplit
-            Training state plus validation and test positions.
-
-        Examples
-        --------
-        >>> import jax.numpy as jnp
-        >>> import liesel.model as lsl
-        >>> from liesel.experimental.optim import Split
-        >>> y = lsl.Var.new_obs(jnp.arange(6.0), name="y")
-        >>> model = lsl.Model([y])
-        >>> splitter = Split(["y"], n=6, n_validate=2, n_test=1)
-        >>> split = splitter.split_state(model, model.state)
-        >>> model.extract_position(["y"], split.train_state)["y"].tolist()
-        [0.0, 1.0, 2.0]
-        >>> split.pos_validate["y"].tolist(), split.pos_test["y"].tolist()
-        ([3.0, 4.0], [5.0])
-        """
-        obs = interface.extract_position(self.position_keys, model_state)
-        split = self.split_position(obs)
-        train_state = interface.update_state(split.train, model_state)
-        return StateSplit(
-            train_state,
-            split.validate,
-            split.test,
-            n_train=self.n_train,
-            n_validate=self.n_validate,
-            n_test=self.n_test,
-        )
 
     def __repr__(self) -> str:
         name = type(self).__name__
