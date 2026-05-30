@@ -286,6 +286,22 @@ class TestSplitManager:
         assert isinstance(split, PositionSplitManager)
         assert split.n_validates == (2, 1)
 
+    def test_position_split_from_model_manager_mode_returns_scalar_for_one_size(self):
+        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
+        y = lsl.Var.new_obs(jnp.arange(8.0), name="y")
+        model = lsl.Model([x, y])
+
+        split = PositionSplit.from_model(
+            model,
+            position_keys=["x", "y"],
+            share_validate=0.25,
+            multi_size="manager",
+        )
+
+        assert isinstance(split, PositionSplit)
+        assert split.n_train == 6
+        assert split.n_validate == 2
+
     def test_position_split_manager_scaled_log_lik_matches_manual_calculation(self):
         model, y1, y2 = _two_branch_model()
         position = model.extract_position(["y1", "y2"])

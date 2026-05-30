@@ -12,6 +12,7 @@ import jax.numpy as jnp
 
 from ...model import Model
 from ._log_lik import scaled_common_log_lik, scaled_liesel_log_lik
+from ._model_utils import position_key_groups_from_model
 from .types import Array, ModelInterface, ModelState, Position
 from .util import guess_n
 
@@ -60,24 +61,6 @@ def _validate_unique_position_keys(groups: Sequence[Sequence[str]], owner: str) 
     duplicates = [key for key, count in counts.items() if count > 1]
     if duplicates:
         raise ValueError(f"Position keys claimed by multiple {owner}: {duplicates}")
-
-
-def _position_key_groups_from_model(
-    model: Model,
-    position_keys: Sequence[str],
-    axes: dict[str, int] | None,
-    default_axis: int,
-) -> dict[int, list[str]]:
-    axes = axes or {}
-    position = model.extract_position(position_keys)
-    groups: dict[int, list[str]] = {}
-
-    for key in position_keys:
-        axis = axes.get(key, default_axis)
-        n_key = int(jnp.shape(position[key])[axis])
-        groups.setdefault(n_key, []).append(key)
-
-    return groups
 
 
 def _child_seeds(
@@ -386,7 +369,7 @@ class PositionSplit:
             How to handle observed variables with different inferred sample sizes.
             The default ``"error"`` keeps :class:`PositionSplit` scalar and raises
             a helpful error. Use ``"manager"`` to return a
-            :class:`PositionSplitManager` with one split per sample-size group.
+            :class:`PositionSplitManager` when multiple sample sizes are detected.
 
         Returns
         -------
@@ -428,10 +411,14 @@ class PositionSplit:
         if multi_size not in ("error", "manager"):
             raise ValueError("multi_size must be 'error' or 'manager'.")
 
-        if multi_size == "manager":
+        pos_keys = (
+            list(position_keys) if position_keys is not None else list(model.observed)
+        )
+        groups = position_key_groups_from_model(model, pos_keys, axes, default_axis)
+        if len(groups) > 1 and multi_size == "manager":
             return PositionSplitManager.from_model(
                 model,
-                position_keys=position_keys,
+                position_keys=pos_keys,
                 share_validate=share_validate,
                 share_test=share_test,
                 axes=axes,
@@ -440,10 +427,6 @@ class PositionSplit:
                 seed=seed,
             )
 
-        pos_keys = (
-            list(position_keys) if position_keys is not None else list(model.observed)
-        )
-        groups = _position_key_groups_from_model(model, pos_keys, axes, default_axis)
         if len(groups) > 1:
             raise ValueError(
                 "PositionSplit.from_model() found observed variables with different "
@@ -1048,7 +1031,7 @@ class SplitManager:
         pos_keys = (
             list(position_keys) if position_keys is not None else list(model.observed)
         )
-        groups = _position_key_groups_from_model(model, pos_keys, axes, default_axis)
+        groups = position_key_groups_from_model(model, pos_keys, axes, default_axis)
         seeds = _child_seeds(seed, len(groups))
         splits = []
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
@@ -10,26 +11,9 @@ import jax.numpy as jnp
 from ...model import Model
 from ._log_lik import scaled_common_log_lik as _scaled_common_log_lik
 from ._log_lik import scaled_liesel_log_lik as _scaled_liesel_log_lik
+from ._model_utils import position_key_groups_from_model
 from .types import Array, ModelInterface, ModelState, Position
 from .util import guess_n
-
-
-def _position_key_groups_from_model(
-    model: Model,
-    position_keys: Sequence[str],
-    axes: dict[str, int] | None,
-    default_axis: int,
-) -> dict[int, list[str]]:
-    axes = axes or {}
-    position = model.extract_position(position_keys)
-    groups: dict[int, list[str]] = {}
-
-    for key in position_keys:
-        axis = axes.get(key, default_axis)
-        n_key = int(jnp.shape(position[key])[axis])
-        groups.setdefault(n_key, []).append(key)
-
-    return groups
 
 
 @dataclass
@@ -60,6 +44,11 @@ class Batches:
         mapping use ``default_axis``.
     default_axis
         Batching axis for all position keys not listed in ``axes``.
+    sample_with_replacement
+        Whether an oversized batch may be filled by sampling observations with
+        replacement. This is mainly used by :meth:`BatchManager.from_model` when
+        ``mode="resample"`` and a common ``batch_size`` is larger than a branch's
+        observation count.
 
     Attributes
     ----------
@@ -111,23 +100,45 @@ class Batches:
     shuffle: bool = True
     axes: dict[str, int] | None = None
     default_axis: int = 0
+    sample_with_replacement: bool = False
 
     def __post_init__(self):
+        if self.n < 1:
+            raise ValueError(f"{self.n=} is < 1, which is not allowed.")
+
         if self.batch_size is None:
             self.batch_size = self.n
 
         if self.batch_size < 1:
             raise ValueError(f"{self.batch_size=} is < 1, which is not allowed.")
 
-        if self.n < self.batch_size:
+        if self.n < self.batch_size and not self.sample_with_replacement:
             raise ValueError(
-                f"{self.n=} is < {self.batch_size=}, which is not allowed."
+                f"{self.n=} is < {self.batch_size=}. This is only allowed with "
+                "sample_with_replacement=True."
+            )
+
+        if len(set(self.position_keys)) != len(self.position_keys):
+            raise ValueError(
+                f"Duplicate position_keys are not allowed: {list(self.position_keys)}"
             )
 
         if self.axes is None:
             self.axes = {}
 
-        self.indices = jnp.arange(self.n)
+        self.indices = self._default_indices()
+
+    @property
+    def _uses_replacement(self) -> bool:
+        assert self.batch_size is not None
+        return self.sample_with_replacement and self.n < self.batch_size
+
+    def _default_indices(self) -> jax.Array:
+        if self._uses_replacement:
+            assert self.batch_size is not None
+            return jnp.arange(self.n_full_batches * self.batch_size) % self.n
+
+        return jnp.arange(self.n)
 
     @classmethod
     def from_model(
@@ -169,7 +180,8 @@ class Batches:
         multi_size
             How to handle observed variables with different inferred sample sizes.
             The default ``"error"`` keeps :class:`Batches` scalar and raises a
-            helpful error. Use ``"manager"`` to return a :class:`BatchManager`.
+            helpful error. Use ``"manager"`` to return a :class:`BatchManager` when
+            multiple sample sizes are detected.
         mode
             Batch manager mode used only when ``multi_size="manager"``. The default
             ``"resample"`` allows branches with fewer complete batches to sample
@@ -181,7 +193,8 @@ class Batches:
         -------
         Batches or BatchManager
             Batch configuration for the model's observed data. A
-            :class:`BatchManager` is returned only when ``multi_size="manager"``.
+            :class:`BatchManager` is returned only when ``multi_size="manager"`` and
+            multiple sample sizes are detected.
 
         Examples
         --------
@@ -221,10 +234,16 @@ class Batches:
         pos_keys = (
             list(position_keys) if position_keys is not None else list(model.observed)
         )
-        groups = _position_key_groups_from_model(model, pos_keys, axes, default_axis)
+        groups = position_key_groups_from_model(model, pos_keys, axes, default_axis)
 
         if len(groups) > 1:
             if multi_size == "manager":
+                if n is not None:
+                    raise ValueError(
+                        "A single n value cannot configure multiple sample-size "
+                        "groups. Omit n when using multi_size='manager'."
+                    )
+
                 return BatchManager.from_model(
                     model,
                     batch_size=batch_size,
@@ -314,6 +333,9 @@ class Batches:
         2
         """
         assert self.batch_size is not None
+        if self._uses_replacement:
+            return 1
+
         return int(self.n // self.batch_size)
 
     @property
@@ -380,6 +402,14 @@ class Batches:
         >>> sorted(shuffled.batch_indices.ravel().tolist())
         [0, 1, 2, 3, 4, 5]
         """
+        if self._uses_replacement:
+            assert self.batch_size is not None
+            n_indices = self.n_full_batches * self.batch_size
+            if self.shuffle:
+                return jax.random.randint(key, (n_indices,), 0, self.n)
+
+            return self._default_indices()
+
         if self.shuffle:
             all_indices = jax.random.permutation(key, self.indices)
         else:
@@ -592,6 +622,7 @@ class Batches:
             "shuffle": self.shuffle,
             "axes": self.axes,
             "default_axis": self.default_axis,
+            "sample_with_replacement": self.sample_with_replacement,
         }
         return (children, aux_data)
 
@@ -847,8 +878,18 @@ class BatchManager:
         pos_keys = (
             list(position_keys) if position_keys is not None else list(model.observed)
         )
-        groups = _position_key_groups_from_model(model, pos_keys, axes, default_axis)
+        groups = position_key_groups_from_model(model, pos_keys, axes, default_axis)
         shuffle = False if batch_size is None else shuffle
+
+        if mode == "resample" and batch_size is not None and not shuffle:
+            warnings.warn(
+                "BatchManager.from_model(..., mode='resample', shuffle=False) "
+                "resamples child batch rows but leaves observations within each "
+                "child in deterministic order. Set shuffle=True for stochastic "
+                "observation-level batches.",
+                UserWarning,
+                stacklevel=2,
+            )
 
         batches = [
             Batches(
@@ -858,6 +899,9 @@ class BatchManager:
                 shuffle=shuffle,
                 axes=axes,
                 default_axis=default_axis,
+                sample_with_replacement=(
+                    mode == "resample" and batch_size is not None and batch_size > n
+                ),
             )
             for n, keys in groups.items()
         ]

@@ -59,6 +59,10 @@ class TestBatches:
         assert batched_pos["x"].shape == (3, 4)
         assert batched_pos["y"].shape == (4, 6)
 
+    def test_duplicate_position_keys_raise(self):
+        with pytest.raises(ValueError, match="Duplicate position_keys"):
+            Batches(["x", "x"], n=10, batch_size=2)
+
     def test_scaled_log_lik_matches_old_all_observed_scaling(self):
         y = lsl.Var.new_obs(
             jnp.arange(6.0),
@@ -104,6 +108,48 @@ class TestBatches:
         started = manager.start_epoch(key(3))
         assert jnp.all(started.batch_numbers[:, 0] < 4)
         assert jnp.all(started.batch_numbers[:, 1] < 2)
+
+    def test_from_model_multi_size_manager_returns_batches_for_one_size(self):
+        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
+        y = lsl.Var.new_obs(jnp.arange(8.0), name="y")
+        model = lsl.Model([x, y])
+
+        batches = Batches.from_model(
+            model,
+            batch_size=2,
+            position_keys=["x", "y"],
+            multi_size="manager",
+        )
+
+        assert isinstance(batches, Batches)
+        assert batches.position_keys == ["x", "y"]
+
+    def test_from_model_rejects_scalar_n_for_multi_size_manager(self):
+        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
+        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        model = lsl.Model([x, y])
+
+        with pytest.raises(ValueError, match="single n"):
+            Batches.from_model(
+                model,
+                batch_size=2,
+                position_keys=["x", "y"],
+                n=8,
+                multi_size="manager",
+            )
+
+    def test_sample_with_replacement_allows_oversized_batch(self):
+        batches = Batches(
+            ["x"],
+            n=5,
+            batch_size=8,
+            shuffle=True,
+            sample_with_replacement=True,
+        ).start_epoch(key(1))
+
+        assert batches.n_full_batches == 1
+        assert batches.batch_indices.shape == (1, 8)
+        assert jnp.all(batches.batch_indices < 5)
 
 
 class TestBatchManager:
@@ -236,6 +282,40 @@ class TestBatchManager:
                 batch_size=2,
                 position_keys=["x", "y"],
                 mode="strict",
+            )
+
+    def test_from_model_allows_oversized_child_batch_in_resample_mode(self):
+        x = lsl.Var.new_obs(jnp.arange(12.0), name="x")
+        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        model = lsl.Model([x, y])
+
+        manager = BatchManager.from_model(
+            model,
+            batch_size=6,
+            position_keys=["x", "y"],
+        ).start_epoch(key(2))
+        position = model.extract_position(["x", "y"])
+        batched = manager.get_batched_position(position, batch_index=0)
+
+        assert manager.n == (12, 5)
+        assert manager.batch_size == (6, 6)
+        assert manager.n_full_batches == 2
+        assert manager.batches[1].sample_with_replacement
+        assert batched["x"].shape == (6,)
+        assert batched["y"].shape == (6,)
+        assert jnp.all(batched["y"] < 5)
+
+    def test_from_model_warns_for_resample_without_shuffle(self):
+        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
+        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        model = lsl.Model([x, y])
+
+        with pytest.warns(UserWarning, match="shuffle=True"):
+            BatchManager.from_model(
+                model,
+                batch_size=2,
+                position_keys=["x", "y"],
+                shuffle=False,
             )
 
     def test_from_model_uses_axes_when_grouping_observed_variables(self):
