@@ -8,83 +8,10 @@ import jax
 import jax.numpy as jnp
 
 from ...model import Model
-from .types import ModelInterface, ModelState, Position
+from ._log_lik import scaled_common_log_lik as _scaled_common_log_lik
+from ._log_lik import scaled_liesel_log_lik as _scaled_liesel_log_lik
+from .types import Array, ModelInterface, ModelState, Position
 from .util import guess_n
-
-
-def _sum_value(value):
-    return value.sum() if hasattr(value, "sum") else value
-
-
-def _sum_state_value(model_state: ModelState, name: str):
-    return _sum_value(model_state[name].value)
-
-
-def _observed_log_lik_node_names(
-    model: Model, position_keys: Sequence[str]
-) -> list[str]:
-    keys = set(position_keys)
-    node_names: list[str] = []
-
-    for var in model.observed.values():
-        if var.dist_node is None:
-            continue
-
-        if var.name in keys or var.value_node.name in keys:
-            node_names.append(var.dist_node.name)
-
-    return node_names
-
-
-def _all_observed_log_lik_node_names(model: Model) -> list[str]:
-    node_names: list[str] = []
-
-    for var in model.observed.values():
-        if var.dist_node is not None:
-            node_names.append(var.dist_node.name)
-
-    return node_names
-
-
-def _scaled_liesel_log_lik(
-    model: Model,
-    model_state: ModelState,
-    groups: Sequence[tuple[Sequence[str], float]],
-):
-    scaled_log_lik = 0.0
-    covered_nodes: set[str] = set()
-
-    for position_keys, scale in groups:
-        node_names = _observed_log_lik_node_names(model, position_keys)
-
-        for node_name in node_names:
-            if node_name in covered_nodes:
-                raise ValueError(
-                    f"The observed log-likelihood node {node_name!r} is covered by "
-                    "more than one batch group."
-                )
-
-            scaled_log_lik += scale * _sum_state_value(model_state, node_name)
-            covered_nodes.add(node_name)
-
-    for node_name in _all_observed_log_lik_node_names(model):
-        if node_name not in covered_nodes:
-            scaled_log_lik += _sum_state_value(model_state, node_name)
-
-    return scaled_log_lik
-
-
-def _scaled_common_log_lik(model_state: ModelState, scale: float):
-    try:
-        log_lik = model_state["_model_log_lik"].value
-    except (KeyError, TypeError, AttributeError) as error:
-        raise TypeError(
-            "Per-branch likelihood scaling requires a liesel.model.Model. For a "
-            "generic model interface, the model state must expose "
-            "'_model_log_lik'."
-        ) from error
-
-    return scale * log_lik
 
 
 @dataclass
@@ -854,7 +781,12 @@ class BatchManager:
         ... ).batch_size
         (2, 3)
         """
-        return tuple(int(batch.batch_size) for batch in self.batches)
+        sizes: list[int] = []
+        for batch in self.batches:
+            assert batch.batch_size is not None
+            sizes.append(batch.batch_size)
+
+        return tuple(sizes)
 
     @property
     def batch_shares(self) -> tuple[float, ...]:
@@ -1253,7 +1185,7 @@ class BatchManager:
         >>> batch["x"].tolist(), batch["y"].tolist()
         ([[2, 3], [6, 7]], [3, 4, 5])
         """
-        batched_position = {}
+        batched_position: dict[str, Array] = {}
 
         for i, batch in enumerate(self.batches):
             child_batch_index = self.batch_numbers[batch_index, i]

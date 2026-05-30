@@ -4,13 +4,15 @@ from typing import Literal, Protocol
 import jax
 
 from ...model import Model
-from .split import PositionSplit
+from .split import PositionSplit, PositionSplitManager
 from .state import OptimCarry
 from .types import ModelInterface, Position
 
+SplitConfig = PositionSplit | PositionSplitManager
+
 
 class Loss(Protocol):
-    split: PositionSplit
+    split: SplitConfig
 
     @property
     def obs_validate(self) -> Position: ...
@@ -38,26 +40,26 @@ class Loss(Protocol):
 
 
 class LossMixin:
-    split: PositionSplit
+    split: SplitConfig
     loss_train_batched: Callable[[Position, OptimCarry], jax.Array]
 
     @property
     def obs_validate(self) -> Position:
-        if self.split.n_validate == 0:
+        if not self.split.has_validation:
             return self.split.train
 
         return self.split.validate
 
     @property
     def scale_validate(self) -> float:
-        if self.split.n_validate == 0:
+        if not self.split.has_validation:
             return 1.0
 
-        return self.split.n_train / self.n_validate
+        return self.split.scale_validate
 
     @property
     def n_validate(self) -> int:
-        if self.split.n_validate == 0:
+        if not self.split.has_validation:
             return self.split.n_train
 
         return self.split.n_validate
@@ -77,7 +79,7 @@ class NegLogProbLoss(LossMixin):
     def __init__(
         self,
         model: Model,
-        split: PositionSplit,
+        split: SplitConfig,
         validation_strategy: Literal["log_lik", "log_prob"] = "log_lik",
         scale: bool = False,
     ):
@@ -85,7 +87,14 @@ class NegLogProbLoss(LossMixin):
         self.split = split
         self.validation_strategy = validation_strategy
         self.scale = scale
-        self.scalar = self.split.n_train if self.scale else 1.0
+        try:
+            self.scalar = self.split.n_train if self.scale else 1.0
+        except ValueError as error:
+            raise ValueError(
+                "scale=True requires a common training sample size. For "
+                "multi-branch splits with unequal training sizes, use scale=False "
+                "or a custom normalized loss."
+            ) from error
 
     @property
     def model(self) -> Model:
@@ -111,9 +120,9 @@ class NegLogProbLoss(LossMixin):
         return -(log_lik + log_prior) / self.scalar
 
     def loss_validate(self, params: Position, carry: OptimCarry) -> jax.Array:
-        position = Position(params | self.split.validate | carry.fixed_position)
+        position = Position(params | self.obs_validate | carry.fixed_position)
         new_state = self.model.update_state(position, carry.model_state)
-        loss = -self.scale_validate * new_state["_model_log_lik"].value
+        loss = -self.split.scaled_log_lik(self.model, new_state, part="validate")
         if self.validation_strategy == "log_prob":
             loss -= new_state["_model_log_prior"].value
 

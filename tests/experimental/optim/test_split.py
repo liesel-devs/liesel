@@ -1,9 +1,35 @@
+from types import SimpleNamespace
+
 import jax.numpy as jnp
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.model as lsl
-from liesel.experimental.optim import Split
+from liesel.experimental.optim import (
+    Batches,
+    BatchManager,
+    NegLogProbLoss,
+    PositionSplit,
+    PositionSplitManager,
+    QuickOptim,
+    Split,
+    SplitManager,
+)
+from liesel.experimental.optim.types import Position
+
+
+def _two_branch_model():
+    y1 = lsl.Var.new_obs(
+        jnp.arange(10.0),
+        lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+        name="y1",
+    )
+    y2 = lsl.Var.new_obs(
+        jnp.arange(6.0),
+        lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+        name="y2",
+    )
+    return lsl.Model([y1, y2]), y1, y2
 
 
 class TestSplit:
@@ -125,3 +151,221 @@ class TestSplit:
                 n_validate=10,
                 n_test=1,
             )
+
+
+class TestSplitManager:
+    def test_combines_different_size_branches(self):
+        manager = SplitManager(
+            [
+                Split(["x"], n=10, n_validate=2, n_test=1),
+                Split(["y"], n=6, n_validate=1, n_test=1),
+            ]
+        )
+        position = {"x": jnp.arange(10), "y": jnp.arange(6)}
+
+        split = manager.split_position(position)
+
+        assert split.position_keys == ["x", "y"]
+        assert split.n_trains == (7, 4)
+        assert split.n_validates == (2, 1)
+        assert split.n_tests == (1, 1)
+        assert split.train["x"].tolist() == list(range(7))
+        assert split.validate["y"].tolist() == [4]
+        assert split.test["x"].tolist() == [9]
+
+    def test_duplicate_position_keys_raise(self):
+        with pytest.raises(ValueError, match="Position keys"):
+            SplitManager([Split(["x"], n=3), Split(["x"], n=3)])
+
+    def test_mixed_validation_and_test_availability_raise(self):
+        with pytest.raises(ValueError, match="validation data"):
+            SplitManager(
+                [
+                    Split(["x"], n=5, n_validate=1),
+                    Split(["y"], n=5, n_validate=0),
+                ]
+            )
+
+        with pytest.raises(ValueError, match="test data"):
+            SplitManager(
+                [
+                    Split(["x"], n=5, n_test=1),
+                    Split(["y"], n=5, n_test=0),
+                ]
+            )
+
+    def test_axis_handling_is_independent_per_child(self):
+        manager = SplitManager(
+            [
+                Split(["x"], n=4, n_validate=1, axes={"x": 1}),
+                Split(["y"], n=6, n_validate=2),
+            ]
+        )
+        position = {
+            "x": jnp.arange(8).reshape(2, 4),
+            "y": jnp.arange(12).reshape(6, 2),
+        }
+
+        split = manager.split_position(position)
+
+        assert split.train["x"].shape == (2, 3)
+        assert split.validate["x"].shape == (2, 1)
+        assert split.train["y"].shape == (4, 2)
+        assert split.validate["y"].shape == (2, 2)
+
+    def test_shuffling_is_deterministic_with_fixed_seed(self):
+        model, _, _ = _two_branch_model()
+
+        manager1 = SplitManager.from_model(
+            model,
+            position_keys=["y1", "y2"],
+            share_validate=0.2,
+            shuffle=True,
+            seed=7,
+        )
+        manager2 = SplitManager.from_model(
+            model,
+            position_keys=["y1", "y2"],
+            share_validate=0.2,
+            shuffle=True,
+            seed=7,
+        )
+
+        assert len(manager1.splits) == 2
+        for split1, split2 in zip(manager1.splits, manager2.splits, strict=True):
+            assert jnp.allclose(split1.indices, split2.indices)
+            assert jnp.all(split1.indices < split1.n)
+
+    def test_scalar_aliases_work_for_equal_sizes_and_raise_for_unequal_sizes(self):
+        equal_position = {"x": jnp.arange(10), "y": jnp.arange(10)}
+        equal = SplitManager(
+            [
+                Split(["x"], n=10, n_validate=2),
+                Split(["y"], n=10, n_validate=2),
+            ]
+        ).split_position(equal_position)
+
+        assert equal.n_train == 8
+        assert equal.n_validate == 2
+        assert equal.scale_validate == 4.0
+
+        unequal = SplitManager(
+            [
+                Split(["x"], n=10, n_validate=2),
+                Split(["y"], n=6, n_validate=1),
+            ]
+        ).split_position({"x": jnp.arange(10), "y": jnp.arange(6)})
+
+        with pytest.raises(ValueError, match="n_trains"):
+            _ = unequal.n_train
+
+    def test_from_model_groups_observed_variables_by_sample_size(self):
+        model, _, _ = _two_branch_model()
+
+        manager = SplitManager.from_model(
+            model, position_keys=["y1", "y2"], share_validate=0.2
+        )
+
+        assert manager.position_keys == ["y1", "y2"]
+        assert manager.ns == (10, 6)
+        assert manager.n_validates == (2, 1)
+
+    def test_position_split_from_model_multi_size_modes(self):
+        model, _, _ = _two_branch_model()
+
+        with pytest.raises(ValueError, match="multi_size"):
+            PositionSplit.from_model(model)
+
+        split = PositionSplit.from_model(
+            model,
+            position_keys=["y1", "y2"],
+            share_validate=0.2,
+            multi_size="manager",
+        )
+
+        assert isinstance(split, PositionSplitManager)
+        assert split.n_validates == (2, 1)
+
+    def test_position_split_manager_scaled_log_lik_matches_manual_calculation(self):
+        model, y1, y2 = _two_branch_model()
+        position = model.extract_position(["y1", "y2"])
+        split = SplitManager(
+            [
+                Split(["y1"], n=10, n_validate=2),
+                Split(["y2"], n=6, n_validate=1),
+            ]
+        ).split_position(position)
+        state = model.update_state(split.validate, model.state)
+
+        assert y1.dist_node is not None
+        assert y2.dist_node is not None
+        manual = (
+            split.splits[0].scale_validate * state[y1.dist_node.name].value.sum()
+            + split.splits[1].scale_validate * state[y2.dist_node.name].value.sum()
+        )
+
+        assert jnp.allclose(split.scaled_log_lik(model, state), manual)
+
+    def test_scalar_position_split_scaled_log_lik_matches_current_behavior(self):
+        y = lsl.Var.new_obs(
+            jnp.arange(10.0),
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="y",
+        )
+        model = lsl.Model([y])
+        split = Split(["y"], n=10, n_validate=2).split_position(
+            model.extract_position(["y"])
+        )
+        state = model.update_state(split.validate, model.state)
+
+        assert jnp.allclose(
+            split.scaled_log_lik(model, state),
+            split.scale_validate * state["_model_log_lik"].value,
+        )
+
+    def test_neg_log_prob_loss_validate_uses_per_branch_scaling(self):
+        model, _, _ = _two_branch_model()
+        split = PositionSplit.from_model(
+            model,
+            position_keys=["y1", "y2"],
+            share_validate=0.2,
+            multi_size="manager",
+        )
+        loss = NegLogProbLoss(model, split)
+        carry = SimpleNamespace(model_state=model.state, fixed_position=Position({}))
+
+        value = loss.loss_validate(Position({}), carry)
+        state = model.update_state(split.validate, model.state)
+        manual = -split.scaled_log_lik(model, state)
+
+        assert jnp.allclose(value, manual)
+
+    def test_quickoptim_builds_full_data_batch_manager_for_position_split_manager(self):
+        model, _, _ = _two_branch_model()
+        split = PositionSplit.from_model(
+            model,
+            position_keys=["y1", "y2"],
+            share_validate=0.2,
+            multi_size="manager",
+        )
+
+        quick = QuickOptim(model, split=split)
+
+        assert isinstance(quick.batches, BatchManager)
+        assert quick.batches.n == split.n_trains
+        batch = quick.batches.get_batched_position(split.train, batch_index=0)
+        assert batch["y1"].shape == (8,)
+        assert batch["y2"].shape == (5,)
+
+    def test_quickoptim_rejects_single_batches_for_position_split_manager(self):
+        model, _, _ = _two_branch_model()
+        split = PositionSplit.from_model(
+            model,
+            position_keys=["y1", "y2"],
+            share_validate=0.2,
+            multi_size="manager",
+        )
+        batches = Batches(["y1"], n=8, batch_size=None)
+
+        with pytest.raises(ValueError, match="BatchManager"):
+            _ = QuickOptim(model, split=split, batches=batches).batches

@@ -14,7 +14,7 @@ from ...model import Model
 from .batch import Batches, BatchManager
 from .loss import Loss, NegLogProbLoss
 from .optimizer import LBFGS, Optimizer
-from .split import PositionSplit, Split
+from .split import PositionSplit, PositionSplitManager
 from .state import OptimCarry, OptimHistory, OptimResult
 from .stop import Stopper
 from .types import ModelState, Position
@@ -23,6 +23,33 @@ from .vi import Elbo
 
 Array = Any
 BatchConfig = Batches | BatchManager
+SplitConfig = PositionSplit | PositionSplitManager
+
+
+def _full_data_batches_for_split(model: Model, split: SplitConfig) -> BatchConfig:
+    if isinstance(split, PositionSplitManager):
+        return BatchManager(
+            [
+                Batches(
+                    position_keys=child.position_keys,
+                    n=child.n_train,
+                    batch_size=None,
+                    axes=None,
+                    default_axis=0,
+                    shuffle=False,
+                )
+                for child in split.splits
+            ]
+        )
+
+    return Batches(
+        position_keys=split.position_keys or list(model.observed),
+        n=split.n_train,
+        batch_size=None,
+        axes=None,
+        default_axis=0,
+        shuffle=False,
+    )
 
 
 class LieselVI:
@@ -35,7 +62,7 @@ class LieselVI:
         model: Model,
         elbo: Literal["mvn_diag", "mvn_tril", "mvn_blocked"] | Elbo = "mvn_diag",
         batches: BatchConfig | None = None,
-        split: PositionSplit | None = None,
+        split: SplitConfig | None = None,
         optimizers: Sequence[Optimizer] | Literal["adam", "lbfgs"] = "adam",
         stopper: Stopper = Stopper(epochs=1000, patience=10, rtol=1e-6),
         seed: int | None = None,
@@ -44,9 +71,17 @@ class LieselVI:
         self.model = model
         self._n = n
         self.stopper = stopper
-        self.batches = batches or Batches.from_model(model, batch_size=None)
         self.seed = int(time.time()) if seed is None else seed
         self.split = split or PositionSplit.from_model(model)
+        if isinstance(self.split, PositionSplitManager) and isinstance(
+            batches, Batches
+        ):
+            raise ValueError(
+                "LieselVI requires a BatchManager when used with a "
+                "PositionSplitManager. Pass batches=None for full-data batches or "
+                "provide a matching BatchManager."
+            )
+        self.batches = batches or _full_data_batches_for_split(model, self.split)
         self._optimizers = optimizers
         if isinstance(elbo, str):
             match elbo:
@@ -111,7 +146,7 @@ class QuickOptim:
         model: Model,
         loss: Loss | None = None,
         batches: BatchConfig | None = None,
-        split: PositionSplit | None = None,
+        split: SplitConfig | None = None,
         optimizers: Sequence[Optimizer] | Literal["adam", "lbfgs"] = "adam",
         stopper: Stopper = Stopper(epochs=1000, patience=10, rtol=1e-6),
         seed: int | None = None,
@@ -136,6 +171,15 @@ class QuickOptim:
     @property
     def batches(self) -> BatchConfig:
         if self._batches is not None:
+            if isinstance(self.split, PositionSplitManager) and isinstance(
+                self._batches, Batches
+            ):
+                raise ValueError(
+                    "QuickOptim requires a BatchManager when used with a "
+                    "PositionSplitManager. Pass batches=None for full-data batches "
+                    "or provide a matching BatchManager."
+                )
+
             if isinstance(self._batches, BatchManager):
                 return self._batches
 
@@ -143,26 +187,14 @@ class QuickOptim:
             self._batches.indices = jnp.arange(self.split.n_train)
             return self._batches
 
-        b = Batches(
-            position_keys=list(self.model.observed),
-            n=self.split.n_train,
-            batch_size=None,
-            axes=None,
-            default_axis=0,
-            shuffle=False,
-        )
-
-        return b
+        return _full_data_batches_for_split(self.model, self.split)
 
     @property
-    def split(self) -> PositionSplit:
+    def split(self) -> SplitConfig:
         if self._split:
             return self._split
 
-        splitter = Split(list(self.model.observed), n=self.n)
-        pos = self.model.extract_position(list(self.model.observed))
-        split = splitter.split_position(pos)
-        return split
+        return PositionSplit.from_model(self.model, n=self._n)
 
     @property
     def optimizers(self) -> Sequence[Optimizer]:
@@ -203,7 +235,7 @@ class QuickOptim:
 class OptimEngine:
     loss: Loss
     batches: BatchConfig
-    split: PositionSplit
+    split: SplitConfig
     optimizers: Sequence[Optimizer]
     stopper: Stopper
     seed: int | jax.Array
@@ -377,7 +409,7 @@ class OptimEngine:
     def inner_loop_over_batches(self, j, carry: OptimCarry):
         Bi = carry.batches
 
-        if not Bi.is_full_data:
+        if not Bi.is_full_data or self.split.has_validation or self.split.has_test:
             obs_batch = Bi.get_batched_position(self.split.train, batch_index=j)
         else:
             obs_batch = Position({})
@@ -414,7 +446,7 @@ class OptimEngine:
         loss_i = carry.loss_train
         carry.history.loss_train = carry.history.loss_train.at[i].set(loss_i)
 
-        if self.split.n_validate > 0:
+        if self.split.has_validation:
             key, subkey = jax.random.split(carry.key)
             carry.key = subkey
 

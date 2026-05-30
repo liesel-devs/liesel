@@ -7,7 +7,9 @@ from .loss import NegLogProbLoss as NegLogProbLoss
 from .optimizer import LBFGS as LBFGS
 from .optimizer import Optimizer as Optimizer
 from .split import PositionSplit as PositionSplit
+from .split import PositionSplitManager as PositionSplitManager
 from .split import Split as Split
+from .split import SplitManager as SplitManager
 from .stop import Stopper as Stopper
 from .vi import CompositeVDist as CompositeVDist
 from .vi import Elbo as Elbo

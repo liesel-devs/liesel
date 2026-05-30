@@ -15,9 +15,11 @@ from ...model import Dist, Model, Var
 from ...model.logprob import FlatLogProb
 from ...model.model import TemporaryModel
 from .loss import LossMixin
-from .split import PositionSplit
+from .split import PositionSplit, PositionSplitManager
 from .state import OptimCarry
 from .types import ModelState, Position
+
+SplitConfig = PositionSplit | PositionSplitManager
 
 
 class Elbo(LossMixin):
@@ -25,7 +27,7 @@ class Elbo(LossMixin):
         self,
         p: Model,
         q: Model,
-        split: PositionSplit | None = None,
+        split: SplitConfig | None = None,
         nsamples: int = 10,
         nsamples_validate: int = 50,
         q_to_p: Callable[[Position], Position] = lambda x: x,
@@ -39,14 +41,21 @@ class Elbo(LossMixin):
         self.nsamples_validate = nsamples_validate
         self._q_to_p = q_to_p
         self.scale = scale
-        self.scalar = self.split.n_train if self.scale else 1.0
+        try:
+            self.scalar = self.split.n_train if self.scale else 1.0
+        except ValueError as error:
+            raise ValueError(
+                "scale=True requires a common training sample size. For "
+                "multi-branch splits with unequal training sizes, use scale=False "
+                "or a custom normalized ELBO."
+            ) from error
         self.vdist = vdist
 
     @classmethod
     def from_vdist(
         cls,
         vdist: VDist | CompositeVDist,
-        split: PositionSplit,
+        split: SplitConfig,
         nsamples: int = 10,
         nsamples_validate: int = 50,
         scale: bool = False,
@@ -67,7 +76,7 @@ class Elbo(LossMixin):
     def mvn_diag(
         cls,
         p: Model,
-        split: PositionSplit | None = None,
+        split: SplitConfig | None = None,
         nsamples: int = 10,
         nsamples_validate: int = 50,
         scale: bool = False,
@@ -91,7 +100,7 @@ class Elbo(LossMixin):
     def mvn_tril(
         cls,
         p: Model,
-        split: PositionSplit | None = None,
+        split: SplitConfig | None = None,
         nsamples: int = 10,
         nsamples_validate: int = 50,
         scale: bool = False,
@@ -114,7 +123,7 @@ class Elbo(LossMixin):
     def mvn_blocked(
         cls,
         p: Model,
-        split: PositionSplit | None = None,
+        split: SplitConfig | None = None,
         nsamples: int = 10,
         nsamples_validate: int = 50,
         scale: bool = False,
@@ -159,6 +168,7 @@ class Elbo(LossMixin):
         q_state: ModelState | None = None,
         obs: Position | None = None,
         scale_log_lik_p_by: float = 1.0,
+        split: SplitConfig | None = None,
         batches=None,
         nsamples: int | None = None,
     ):
@@ -172,7 +182,12 @@ class Elbo(LossMixin):
         def log_prob_of_p(sample):
             p_state_new = self.p.update_state(self.q_to_p(sample) | obs, p_state)
             if batches is None:
-                log_lik_p = scale_log_lik_p_by * p_state_new["_model_log_lik"].value
+                if split is None:
+                    log_lik_p = scale_log_lik_p_by * p_state_new["_model_log_lik"].value
+                else:
+                    log_lik_p = split.scaled_log_lik(
+                        self.p, p_state_new, part="validate"
+                    )
             else:
                 log_lik_p = batches.scaled_log_lik(self.p, p_state_new)
             log_prior_p = p_state_new["_model_log_prior"].value
@@ -227,10 +242,10 @@ class Elbo(LossMixin):
         elbo = self.evaluate(
             Position(params | carry.fixed_position),
             carry.key,
-            obs=Position(self.split.validate),
+            obs=Position(self.obs_validate),
             p_state=carry.model_state,
             q_state=self.q.state,
-            scale_log_lik_p_by=self.scale_validate,
+            split=self.split,
             nsamples=self.nsamples_validate,
         )
         return -elbo / self.scalar
