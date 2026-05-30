@@ -29,8 +29,8 @@ if os.environ.get("READTHEDOCS", "") == "True":
 # -- Project information -----------------------------------------------------
 
 project = "liesel"
-copyright = "2022, Hannes Riebl & Paul Wiemann"
-author = "Hannes Riebl & Paul Wiemann"
+copyright = "2022-2026, Liesel Developers"
+author = "Liesel Developers"
 
 
 # -- General configuration ---------------------------------------------------
