@@ -67,10 +67,46 @@ def _child_seeds(
     seed: jax.Array | int | None, n_children: int
 ) -> tuple[jax.Array | int | None, ...]:
     if seed is None:
-        return (None,) * n_children
+        key = jax.random.key(int(time.time()))
+    else:
+        key = seed if isinstance(seed, jax.Array) else jax.random.key(seed)
 
-    key = seed if isinstance(seed, jax.Array) else jax.random.key(seed)
     return tuple(jax.random.split(key, n_children))
+
+
+def _validate_child_split_availability(
+    splits: Sequence[Split],
+    share_validate: float,
+    share_test: float,
+) -> None:
+    if share_validate > 0.0:
+        n_validates = [split.n_validate for split in splits]
+        if any(n == 0 for n in n_validates) and any(n > 0 for n in n_validates):
+            ns_with_zero = [split.n for split in splits if split.n_validate == 0]
+            raise ValueError(
+                f"{share_validate=} produced zero validation observations for "
+                f"sample sizes {ns_with_zero}, while other split groups received "
+                "validation data. Increase share_validate, set share_validate=0.0, "
+                "or construct SplitManager manually."
+            )
+
+    if share_test > 0.0:
+        n_tests = [split.n_test for split in splits]
+        if any(n == 0 for n in n_tests) and any(n > 0 for n in n_tests):
+            ns_with_zero = [split.n for split in splits if split.n_test == 0]
+            raise ValueError(
+                f"{share_test=} produced zero test observations for sample sizes "
+                f"{ns_with_zero}, while other split groups received test data. "
+                "Increase share_test, set share_test=0.0, or construct "
+                "SplitManager manually."
+            )
+
+
+def _position_size_is_compatible(value: Array, n: int) -> bool:
+    shape = jnp.shape(value)
+    if len(shape) == 0:
+        return n == 1
+    return n in shape
 
 
 @dataclass
@@ -124,6 +160,60 @@ class PositionSplit:
     n_validate: int
     n_test: int
 
+    def __post_init__(self):
+        if self.n_train < 0 or self.n_validate < 0 or self.n_test < 0:
+            raise ValueError(
+                f"Split sizes must be non-negative, but got {self.n_train=}, "
+                f"{self.n_validate=}, and {self.n_test=}."
+            )
+
+        if self.n <= 0:
+            raise ValueError(
+                "PositionSplit must contain at least one observation, but got "
+                f"{self.n=}."
+            )
+
+        expected_keys = set(self.position_keys)
+        if not expected_keys:
+            for part, n_part in (
+                ("train", self.n_train),
+                ("validate", self.n_validate),
+                ("test", self.n_test),
+            ):
+                if n_part > 0:
+                    raise ValueError(
+                        f"PositionSplit.{part} must contain position entries when "
+                        f"n_{part} > 0."
+                    )
+
+            raise ValueError("PositionSplit must contain position entries.")
+
+        for part, position, n_part in (
+            ("train", self.train, self.n_train),
+            ("validate", self.validate, self.n_validate),
+            ("test", self.test, self.n_test),
+        ):
+            keys = set(position)
+            if n_part > 0 and not keys:
+                raise ValueError(
+                    f"PositionSplit.{part} must contain position entries when "
+                    f"n_{part} > 0."
+                )
+
+            if keys and keys != expected_keys:
+                raise ValueError(
+                    f"PositionSplit.{part} must contain the same position keys as "
+                    "the other non-empty split parts."
+                )
+
+            for key, value in position.items():
+                if not _position_size_is_compatible(value, n_part):
+                    raise ValueError(
+                        f"PositionSplit.{part}[{key!r}] has shape {jnp.shape(value)}, "
+                        f"which is incompatible with the declared split size "
+                        f"{n_part}."
+                    )
+
     @property
     def position_keys(self) -> list[str]:
         """
@@ -145,7 +235,11 @@ class PositionSplit:
         >>> split.position_keys
         ['x']
         """
-        return list(self.train)
+        for position in (self.train, self.validate, self.test):
+            if position:
+                return list(position)
+
+        return []
 
     @property
     def n(self) -> int:
@@ -154,9 +248,13 @@ class PositionSplit:
 
         Examples
         --------
+        >>> import jax.numpy as jnp
         >>> from liesel.experimental.optim import PositionSplit
         >>> from liesel.experimental.optim.types import Position
-        >>> PositionSplit(Position({}), Position({}), Position({}), 7, 2, 1).n
+        >>> train = Position({"x": jnp.arange(7)})
+        >>> validate = Position({"x": jnp.arange(2)})
+        >>> test = Position({"x": jnp.arange(1)})
+        >>> PositionSplit(train, validate, test, 7, 2, 1).n
         10
         """
         return self.n_train + self.n_validate + self.n_test
@@ -168,11 +266,13 @@ class PositionSplit:
 
         Examples
         --------
+        >>> import jax.numpy as jnp
         >>> from liesel.experimental.optim import PositionSplit
         >>> from liesel.experimental.optim.types import Position
-        >>> PositionSplit(
-        ...     Position({}), Position({}), Position({}), 7, 2, 1
-        ... ).has_validation
+        >>> train = Position({"x": jnp.arange(7)})
+        >>> validate = Position({"x": jnp.arange(2)})
+        >>> test = Position({"x": jnp.arange(1)})
+        >>> PositionSplit(train, validate, test, 7, 2, 1).has_validation
         True
         """
         return self.n_validate > 0
@@ -184,9 +284,11 @@ class PositionSplit:
 
         Examples
         --------
+        >>> import jax.numpy as jnp
         >>> from liesel.experimental.optim import PositionSplit
         >>> from liesel.experimental.optim.types import Position
-        >>> PositionSplit(Position({}), Position({}), Position({}), 7, 0, 0).has_test
+        >>> train = Position({"x": jnp.arange(7)})
+        >>> PositionSplit(train, Position({}), Position({}), 7, 0, 0).has_test
         False
         """
         return self.n_test > 0
@@ -198,11 +300,13 @@ class PositionSplit:
 
         Examples
         --------
+        >>> import jax.numpy as jnp
         >>> from liesel.experimental.optim import PositionSplit
         >>> from liesel.experimental.optim.types import Position
-        >>> PositionSplit(
-        ...     Position({}), Position({}), Position({}), 7, 2, 1
-        ... ).share_validate
+        >>> train = Position({"x": jnp.arange(7)})
+        >>> validate = Position({"x": jnp.arange(2)})
+        >>> test = Position({"x": jnp.arange(1)})
+        >>> PositionSplit(train, validate, test, 7, 2, 1).share_validate
         0.2
         """
         return self.n_validate / self.n
@@ -214,9 +318,13 @@ class PositionSplit:
 
         Examples
         --------
+        >>> import jax.numpy as jnp
         >>> from liesel.experimental.optim import PositionSplit
         >>> from liesel.experimental.optim.types import Position
-        >>> PositionSplit(Position({}), Position({}), Position({}), 7, 2, 1).share_test
+        >>> train = Position({"x": jnp.arange(7)})
+        >>> validate = Position({"x": jnp.arange(2)})
+        >>> test = Position({"x": jnp.arange(1)})
+        >>> PositionSplit(train, validate, test, 7, 2, 1).share_test
         0.1
         """
         return self.n_test / self.n
@@ -230,11 +338,12 @@ class PositionSplit:
 
         Examples
         --------
+        >>> import jax.numpy as jnp
         >>> from liesel.experimental.optim import PositionSplit
         >>> from liesel.experimental.optim.types import Position
-        >>> PositionSplit(
-        ...     Position({}), Position({}), Position({}), 8, 2, 0
-        ... ).scale_validate
+        >>> train = Position({"x": jnp.arange(8)})
+        >>> validate = Position({"x": jnp.arange(2)})
+        >>> PositionSplit(train, validate, Position({}), 8, 2, 0).scale_validate
         4.0
         """
         return self._scale_for_part("validate")
@@ -416,6 +525,12 @@ class PositionSplit:
         )
         groups = position_key_groups_from_model(model, pos_keys, axes, default_axis)
         if len(groups) > 1 and multi_size == "manager":
+            if n is not None:
+                raise ValueError(
+                    "A single n value cannot configure multiple sample-size groups. "
+                    "Omit n when using multi_size='manager'."
+                )
+
             return PositionSplitManager.from_model(
                 model,
                 position_keys=pos_keys,
@@ -523,6 +638,9 @@ class PositionSplitManager:
     """
 
     splits: Sequence[PositionSplit]
+    _train: Position = field(init=False, repr=False)
+    _validate: Position = field(init=False, repr=False)
+    _test: Position = field(init=False, repr=False)
 
     def __post_init__(self):
         self.splits = tuple(self.splits)
@@ -537,6 +655,9 @@ class PositionSplitManager:
         )
         self._validate_split_availability("validation")
         self._validate_split_availability("test")
+        self._train = _merge_positions([split.train for split in self.splits])
+        self._validate = _merge_positions([split.validate for split in self.splits])
+        self._test = _merge_positions([split.test for split in self.splits])
 
     def _validate_split_availability(self, part: Literal["validation", "test"]):
         if part == "validation":
@@ -639,7 +760,7 @@ class PositionSplitManager:
         >>> sorted(manager.train)
         ['x', 'y']
         """
-        return _merge_positions([split.train for split in self.splits])
+        return self._train
 
     @property
     def validate(self) -> Position:
@@ -660,7 +781,7 @@ class PositionSplitManager:
         >>> sorted(manager.validate)
         ['x', 'y']
         """
-        return _merge_positions([split.validate for split in self.splits])
+        return self._validate
 
     @property
     def test(self) -> Position:
@@ -681,7 +802,7 @@ class PositionSplitManager:
         >>> sorted(manager.test)
         ['x', 'y']
         """
-        return _merge_positions([split.test for split in self.splits])
+        return self._test
 
     @property
     def ns(self) -> tuple[int, ...]:
@@ -690,15 +811,26 @@ class PositionSplitManager:
 
         Examples
         --------
+        >>> import jax.numpy as jnp
         >>> from liesel.experimental.optim import PositionSplitManager, PositionSplit
         >>> from liesel.experimental.optim.types import Position
         >>> manager = PositionSplitManager(
         ...     [
         ...         PositionSplit(
-        ...             Position({"x": 1}), Position({}), Position({}), 2, 0, 0
+        ...             Position({"x": jnp.arange(2)}),
+        ...             Position({}),
+        ...             Position({}),
+        ...             2,
+        ...             0,
+        ...             0,
         ...         ),
         ...         PositionSplit(
-        ...             Position({"y": 1}), Position({}), Position({}), 3, 0, 0
+        ...             Position({"y": jnp.arange(3)}),
+        ...             Position({}),
+        ...             Position({}),
+        ...             3,
+        ...             0,
+        ...             0,
         ...         ),
         ...     ]
         ... )
@@ -1032,7 +1164,7 @@ class SplitManager:
             list(position_keys) if position_keys is not None else list(model.observed)
         )
         groups = position_key_groups_from_model(model, pos_keys, axes, default_axis)
-        seeds = _child_seeds(seed, len(groups))
+        seeds = _child_seeds(seed, len(groups)) if shuffle else (seed,) * len(groups)
         splits = []
 
         for (n, keys), child_seed in zip(groups.items(), seeds, strict=True):
@@ -1048,6 +1180,8 @@ class SplitManager:
                     seed=child_seed,
                 )
             )
+
+        _validate_child_split_availability(splits, share_validate, share_test)
 
         return cls(splits)
 
@@ -1244,6 +1378,11 @@ class Split:
 
         if self.n <= 0:
             raise ValueError(f"{self.n=} is <= 0, which is not allowed.")
+
+        if len(set(self.position_keys)) != len(self.position_keys):
+            raise ValueError(
+                f"Duplicate position_keys are not allowed: {list(self.position_keys)}"
+            )
 
         if self.n_train is None:
             self.n_train = self.n - self.n_validate - self.n_test

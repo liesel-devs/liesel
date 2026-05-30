@@ -4,6 +4,7 @@ import jax.numpy as jnp
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
+import liesel.experimental.optim.split as split_module
 import liesel.model as lsl
 from liesel.experimental.optim import (
     Batches,
@@ -152,6 +153,31 @@ class TestSplit:
                 n_test=1,
             )
 
+        with pytest.raises(ValueError, match="Duplicate position_keys"):
+            Split(position_keys=["x", "x"], n=10)
+
+
+class TestPositionSplit:
+    def test_integrity_checks(self):
+        pos = Position({"x": jnp.arange(1)})
+
+        with pytest.raises(ValueError, match="non-negative"):
+            PositionSplit(pos, Position({}), Position({}), -1, 0, 0)
+
+        with pytest.raises(ValueError, match="train"):
+            PositionSplit(Position({}), Position({}), Position({}), 1, 0, 0)
+
+        with pytest.raises(ValueError, match="declared split size"):
+            PositionSplit(
+                Position({"x": jnp.arange(1)}), Position({}), Position({}), 2, 0, 0
+            )
+
+        with pytest.raises(ValueError, match="validate"):
+            PositionSplit(pos, Position({"y": jnp.arange(1)}), Position({}), 1, 1, 0)
+
+        with pytest.raises(ValueError, match="test"):
+            PositionSplit(pos, Position({}), Position({"y": jnp.arange(1)}), 1, 0, 1)
+
 
 class TestSplitManager:
     def test_combines_different_size_branches(self):
@@ -236,6 +262,42 @@ class TestSplitManager:
             assert jnp.allclose(split1.indices, split2.indices)
             assert jnp.all(split1.indices < split1.n)
 
+    def test_from_model_with_seed_none_fans_out_child_seeds(self, monkeypatch):
+        model, _, _ = _two_branch_model()
+        monkeypatch.setattr(split_module.time, "time", lambda: 1234.0)
+
+        manager_none = SplitManager.from_model(
+            model,
+            position_keys=["y1", "y2"],
+            share_validate=0.2,
+            shuffle=True,
+            seed=None,
+        )
+        manager_int = SplitManager.from_model(
+            model,
+            position_keys=["y1", "y2"],
+            share_validate=0.2,
+            shuffle=True,
+            seed=1234,
+        )
+
+        assert len(manager_none.splits) == 2
+        assert len(manager_int.splits) == 2
+        for split1, split2 in zip(manager_none.splits, manager_int.splits, strict=True):
+            assert jnp.allclose(split1.indices, split2.indices)
+
+    def test_from_model_rejects_mixed_availability_from_share_rounding(self):
+        y1 = lsl.Var.new_obs(jnp.arange(10.0), name="y1")
+        y2 = lsl.Var.new_obs(jnp.arange(4.0), name="y2")
+        model = lsl.Model([y1, y2])
+
+        with pytest.raises(ValueError, match="zero validation observations"):
+            SplitManager.from_model(
+                model,
+                position_keys=["y1", "y2"],
+                share_validate=0.2,
+            )
+
     def test_scalar_aliases_work_for_equal_sizes_and_raise_for_unequal_sizes(self):
         equal_position = {"x": jnp.arange(10), "y": jnp.arange(10)}
         equal = SplitManager(
@@ -285,6 +347,15 @@ class TestSplitManager:
 
         assert isinstance(split, PositionSplitManager)
         assert split.n_validates == (2, 1)
+
+        with pytest.raises(ValueError, match="single n value"):
+            PositionSplit.from_model(
+                model,
+                position_keys=["y1", "y2"],
+                n=10,
+                share_validate=0.2,
+                multi_size="manager",
+            )
 
     def test_position_split_from_model_manager_mode_returns_scalar_for_one_size(self):
         x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
@@ -372,6 +443,7 @@ class TestSplitManager:
         batch = quick.batches.get_batched_position(split.train, batch_index=0)
         assert batch["y1"].shape == (8,)
         assert batch["y2"].shape == (5,)
+        assert split.train is split.train
 
     def test_quickoptim_rejects_single_batches_for_position_split_manager(self):
         model, _, _ = _two_branch_model()
