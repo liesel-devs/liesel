@@ -29,6 +29,16 @@ Array = Any
 BatchConfig = Batches | BatchManager
 
 
+def _plot_window_start(n_iter: int, window: int | None) -> int:
+    if window is None:
+        return 0
+
+    if isinstance(window, bool) or window < 1:
+        raise ValueError("window must be None or a positive integer.")
+
+    return max(n_iter - window, 0)
+
+
 def position_df(
     position: Position, subset: Sequence[str] | None = None
 ) -> pd.DataFrame:
@@ -69,14 +79,46 @@ def position_df(
     >>> position_df(history, subset=["sigma"]).columns.tolist()
     ['epoch', 'sigma']
     """
+    items = [
+        (name, value)
+        for name, value in position.items()
+        if subset is None or name in subset
+    ]
+
+    if not items:
+        first = next(iter(position.values()), None)
+        if first is None:
+            hdim = 0
+        else:
+            first = jnp.asarray(first)
+            if first.ndim == 0:
+                raise ValueError(
+                    "Position history entries must have a leading epoch dimension."
+                )
+            hdim = first.shape[0]
+
+        df = pd.DataFrame(index=range(hdim))
+        df = df.reset_index(names="epoch")
+        return df.astype(float)
+
     data: dict[str, Array] = dict()
-    for name, value in position.items():
-        if subset and name not in subset:
-            continue
-        pdim = int(jnp.prod(jnp.array(value.shape[1:])))
+    for name, value in items:
+        value = jnp.asarray(value)
+        original_ndim = value.ndim
+        if value.ndim == 0:
+            raise ValueError(
+                "Position history entries must have a leading epoch dimension, "
+                f"but entry {name!r} has shape {value.shape}."
+            )
+
         hdim = value.shape[0]
+        pdim = int(jnp.prod(jnp.array(value.shape[1:])))
         value = jnp.reshape(value, (hdim, pdim))
-        data |= array_to_dict(value.squeeze(), names_prefix=name)
+
+        if pdim == 1 and original_ndim == 1:
+            data[name] = value[:, 0]
+        else:
+            data |= array_to_dict(value, names_prefix=name)
 
     df = pd.DataFrame(data)
     df = df.reset_index(names="epoch")
@@ -276,16 +318,7 @@ class OptimHistory:
         if self.tracked is None:
             raise ValueError(f"{self.tracked=}")
 
-        data: dict[str, Array] = dict()
-        for name, value in self.tracked.items():
-            if subset and name not in subset:
-                continue
-            data |= array_to_dict(value.squeeze(), names_prefix=name)
-
-        df = pd.DataFrame(data)
-        df = df.reset_index(names="epoch")
-
-        return df.astype(float)
+        return position_df(self.tracked, subset)
 
     @staticmethod
     def init_position_history(position: Position, epochs: int) -> Position:
@@ -382,6 +415,8 @@ def array_to_dict(
     --------
     >>> import jax.numpy as jnp
     >>> from liesel.experimental.optim.state import array_to_dict
+    >>> array_to_dict(jnp.array(1.0, dtype=jnp.float32), names_prefix="x")
+    {'x': Array(1., dtype=float32)}
     >>> array_to_dict(jnp.array([1.0, 2.0]), names_prefix="loss")
     {'loss': Array([1., 2.], dtype=float32)}
     >>> array_to_dict(jnp.array([[1.0, 2.0], [3.0, 4.0]]), names_prefix="theta")
@@ -390,7 +425,14 @@ def array_to_dict(
     {'x0': Array([1., 2.], dtype=float32)}
     """
 
-    if isinstance(x, float) or x.ndim == 1:
+    x = jnp.asarray(x)
+
+    if x.ndim == 0:
+        if prefix_1d:
+            return {f"{names_prefix}0": x}
+        else:
+            return {names_prefix: x}
+    elif x.ndim == 1:
         if prefix_1d:
             return {f"{names_prefix}0": x}
         else:
@@ -514,6 +556,20 @@ class OptimCarry:
         >>> carry.best_position == position
         True
         """
+        identifiers = [opt.identifier for opt in optimizers]
+        duplicate_identifiers = sorted(
+            {
+                identifier
+                for identifier in identifiers
+                if identifiers.count(identifier) > 1
+            }
+        )
+        if duplicate_identifiers:
+            raise ValueError(
+                "Optimizer identifiers must be unique, but got duplicates: "
+                f"{duplicate_identifiers}."
+            )
+
         opt_states = {opt.identifier: opt.init(position) for opt in optimizers}
         if save_position_history:
             history = OptimHistory.from_epochs(epochs, position, tracked)
@@ -607,20 +663,15 @@ class OptimResult:
         """
         history = self.history.loss_df()
         n_iter = history.shape[0]
-        if window is None:
-            window = n_iter
-
-        i = n_iter - window
+        i = _plot_window_start(n_iter, window)
         history = history.iloc[i:, :]
 
-        plot_data = history[["loss_validate", "loss_train", "epoch"]]
-        plot_data.rename(
+        plot_data = history[["loss_validate", "loss_train", "epoch"]].rename(
             columns={
                 "loss_validate": "Validation",
                 "loss_train": "Training",
                 "epoch": "Epoch",
-            },
-            inplace=True,
+            }
         )
 
         plot_data = plot_data.melt(
@@ -633,7 +684,7 @@ class OptimResult:
             + p9.geom_line()
         )
 
-        if self.best_epoch >= i:
+        if i <= self.best_epoch < n_iter:
             p = p + p9.geom_vline(xintercept=self.best_epoch)
 
         if title is not None:
@@ -688,16 +739,13 @@ class OptimResult:
             )
         history = position_df(position, subset)
         n_iter = history.shape[0]
-        if window is None:
-            window = n_iter
-
-        i = n_iter - window
+        i = _plot_window_start(n_iter, window)
         history = history.iloc[i:, :]
 
         plot_data = history.melt(
             id_vars="epoch", var_name="Parameter", value_name="Value"
         )
-        plot_data.rename(columns={"epoch": "Epoch"}, inplace=True)
+        plot_data = plot_data.rename(columns={"epoch": "Epoch"})
 
         p = (
             p9.ggplot(plot_data)
@@ -709,7 +757,7 @@ class OptimResult:
             )
             + p9.geom_line()
         )
-        if self.best_epoch >= i:
+        if i <= self.best_epoch < n_iter:
             p = p + p9.geom_vline(xintercept=self.best_epoch)
 
         if title is not None:

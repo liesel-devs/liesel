@@ -205,7 +205,7 @@ class Elbo(LossMixin):
             # The intention here is to allow priors in the variational distribution
             # to be used for regularization.
             # Since the Elbo is maximized, and the variational log prob is subtracted
-            # form the Elbo, the variational log prob is minimized. Adding the prior
+            # from the Elbo, the variational log prob is minimized. Adding the prior
             # to the log lik of the variational dist would have the opposite of the
             # intended effect, since it would also be minimized. You could say we are
             # treating any priors in the variational model as parts of the main model
