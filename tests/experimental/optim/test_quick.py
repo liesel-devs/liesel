@@ -128,9 +128,11 @@ def test_unknown_optimizer_string_raises():
 def test_train_monitor_is_passed_to_engine():
     model = _normal_model()
 
-    engine = LieselOptim(model, train_monitor="full_data", seed=1).build_engine()
+    engine = LieselOptim(
+        model, train_monitor="weighted_epoch_average", seed=1
+    ).build_engine()
 
-    assert engine.train_monitor == "full_data"
+    assert engine.train_monitor == "weighted_epoch_average"
 
 
 def test_fit_returns_optim_result():

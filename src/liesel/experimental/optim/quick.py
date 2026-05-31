@@ -75,7 +75,8 @@ class LieselOptim:
     train_monitor
         Training-data monitor used by :class:`.OptimEngine` when no validation split
         exists. The default ``"auto"`` avoids extra full-data evaluations for
-        mini-batch runs.
+        mini-batch runs. Use ``"weighted_epoch_average"`` for a cheap linearly
+        weighted monitor that gives later batches in each epoch more weight.
 
     Examples
     --------
@@ -114,7 +115,9 @@ class LieselOptim:
         epoch_size: Literal["max", "min"] | int = "max",
         validation_strategy: Literal["log_lik", "log_prob"] = "log_lik",
         scale_loss: bool = False,
-        train_monitor: Literal["auto", "epoch_average", "full_data"] = "auto",
+        train_monitor: Literal[
+            "auto", "epoch_average", "weighted_epoch_average", "full_data"
+        ] = "auto",
     ) -> None:
         if batches is not None and batch_size is not None:
             raise ValueError("Pass either batches or batch_size, not both.")

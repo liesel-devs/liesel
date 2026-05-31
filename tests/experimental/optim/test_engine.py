@@ -298,6 +298,25 @@ def test_no_validation_full_data_monitor_uses_exact_training_loss():
     assert result.history.loss_validate.tolist() == pytest.approx([4.0])
 
 
+def test_no_validation_weighted_epoch_average_weights_later_batches():
+    split = _monitor_split()
+    engine = OptimEngine(
+        loss=BatchSensitiveLoss(split),
+        batches=Batches(["y"], n=2, batch_size=1, shuffle=False),
+        optimizers=[_optimizer()],
+        stopper=Stopper(epochs=1, patience=1),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+        train_monitor="weighted_epoch_average",
+    )
+
+    result = engine.fit()
+
+    assert result.history.loss_train.tolist() == pytest.approx([2.0])
+    assert result.history.loss_validate.tolist() == pytest.approx([7.0 / 3.0])
+
+
 def test_split_manager_requires_batch_manager():
     split = PositionSplitManager(
         [

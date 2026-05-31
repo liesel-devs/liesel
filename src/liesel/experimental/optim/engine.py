@@ -28,7 +28,7 @@ from .types import ModelState, Position
 
 __all__ = ["OptimEngine"]
 
-TrainMonitor = Literal["auto", "epoch_average", "full_data"]
+TrainMonitor = Literal["auto", "epoch_average", "weighted_epoch_average", "full_data"]
 
 
 def _progress_print_rate(epochs: int, progress_n_updates: int) -> int:
@@ -88,7 +88,9 @@ class OptimEngine:
         Training-data monitor used when no validation split is available.
         ``"auto"`` reuses the epoch-average mini-batch loss for mini-batch runs and
         the exact full-batch loss for full-data runs. ``"epoch_average"`` always
-        uses the cheap epoch average. ``"full_data"`` evaluates the full training
+        uses the cheap arithmetic epoch average. ``"weighted_epoch_average"`` uses a
+        cheap linearly weighted epoch average for the early-stopping monitor, giving
+        later batches higher weight. ``"full_data"`` evaluates the full training
         loss at the end of each epoch, except when the existing full-batch epoch
         loss can be reused.
 
@@ -245,10 +247,16 @@ class OptimEngine:
         ValueError
             If ``train_monitor`` is not one of the supported strategies.
         """
-        if self.train_monitor not in ("auto", "epoch_average", "full_data"):
+        if self.train_monitor not in (
+            "auto",
+            "epoch_average",
+            "weighted_epoch_average",
+            "full_data",
+        ):
             raise ValueError(
-                "train_monitor must be 'auto', 'epoch_average', or 'full_data', "
-                f"but got {self.train_monitor!r}."
+                "train_monitor must be 'auto', 'epoch_average', "
+                "'weighted_epoch_average', or 'full_data', but got "
+                f"{self.train_monitor!r}."
             )
 
     def _validate_batch_split_compatibility(self) -> None:
@@ -495,6 +503,10 @@ class OptimEngine:
 
         loss = self.loss.loss_train_batched(carry.position, carry)
         carry.loss_train += loss / carry.batches.n_full_batches
+        if self.train_monitor == "weighted_epoch_average":
+            n_batches = jnp.asarray(carry.batches.n_full_batches)
+            weight = 2.0 * (jnp.asarray(j) + 1.0) / (n_batches * (n_batches + 1.0))
+            carry.loss_validate += weight * loss
 
         carry.i_batch = j
         carry.batch = Position({})
@@ -512,11 +524,14 @@ class OptimEngine:
         full-data training loss, so it is reused even when ``train_monitor`` asks for
         full-data monitoring.
         """
-        if self.train_monitor == "epoch_average" or carry.batches.is_full_data:
+        if carry.batches.is_full_data:
             return epoch_average_loss
 
-        if self.train_monitor == "auto":
+        if self.train_monitor in ("auto", "epoch_average"):
             return epoch_average_loss
+
+        if self.train_monitor == "weighted_epoch_average":
+            return carry.loss_validate
 
         return self.loss.loss_train(carry.position, carry)
 
@@ -545,6 +560,7 @@ class OptimEngine:
         carry.batches = carry.batches.start_epoch(subkey)
 
         carry.loss_train = 0.0
+        carry.loss_validate = 0.0
         # run all full batches once
         carry = jax.lax.fori_loop(
             lower=0,
