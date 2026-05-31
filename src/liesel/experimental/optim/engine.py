@@ -426,10 +426,10 @@ class OptimEngine:
             Updated carry with ``carry.position`` modified by ``opt``.
         """
         # subset of the position handled by this optimizer
-        pos = Position(opt.position(carry.position))
+        pos = opt.position(carry.position)
 
         # parameters handled by other optimizers
-        carry.fixed_position = Position(opt.not_position(carry.position))
+        carry.fixed_position = opt.not_position(carry.position)
 
         key, subkey = jax.random.split(carry.key)
         carry.key = subkey

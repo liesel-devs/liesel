@@ -6,14 +6,21 @@ optimizer owns a subset of parameter keys and updates only that subset during an
 engine step.
 """
 
+from __future__ import annotations
+
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
 import optax
 
 from .types import Position
+
+if TYPE_CHECKING:
+    from .loss import Loss
+    from .state import OptimCarry
 
 
 @dataclass
@@ -42,6 +49,7 @@ class Optimizer:
     -----
     Multiple optimizers can be used in the same engine, but their
     :attr:`position_keys` and identifiers must be disjoint after automatic naming.
+    ``position_keys`` are normalized to a tuple during initialization.
 
     Examples
     --------
@@ -56,14 +64,34 @@ class Optimizer:
     >>> sorted(optimizer.not_position(position))
     ['y']
     >>> repr(optimizer)
-    "Optimizer(['x'], identifier=x_opt)"
+    "Optimizer(('x',), identifier=x_opt)"
     """
 
     position_keys: Sequence[str]
     optimizer: optax.GradientTransformation
     identifier: str = ""
 
-    def position(self, position: Position) -> dict[str, jax.Array]:
+    def __post_init__(self) -> None:
+        """
+        Validates and normalizes :attr:`position_keys`.
+
+        Raises
+        ------
+        ValueError
+            If no position keys are supplied or if any key is duplicated.
+        """
+        self.position_keys = tuple(self.position_keys)
+
+        if len(self.position_keys) == 0:
+            raise ValueError("position_keys must not be empty.")
+
+        duplicates = sorted(
+            {key for key in self.position_keys if self.position_keys.count(key) > 1}
+        )
+        if duplicates:
+            raise ValueError(f"Duplicate position_keys are not allowed: {duplicates}.")
+
+    def position(self, position: Position) -> Position:
         """
         Extracts the subset of ``position`` owned by this optimizer.
 
@@ -74,17 +102,24 @@ class Optimizer:
 
         Returns
         -------
-        dict[str, jax.Array]
+        Position
             Mapping containing only keys listed in :attr:`position_keys`. Values are
             converted with :func:`jax.numpy.asarray`.
+
+        Raises
+        ------
+        KeyError
+            If any key listed in :attr:`position_keys` is missing from ``position``.
         """
-        pos = {
-            k: jnp.asarray(v) for k, v in position.items() if k in self.position_keys
-        }
+        missing = [key for key in self.position_keys if key not in position]
+        if missing:
+            raise KeyError(f"Position is missing keys claimed by optimizer: {missing}.")
+
+        pos = Position({k: jnp.asarray(position[k]) for k in self.position_keys})
 
         return pos
 
-    def not_position(self, position: Position) -> dict[str, jax.Array]:
+    def not_position(self, position: Position) -> Position:
         """
         Extracts the subset of ``position`` not owned by this optimizer.
 
@@ -95,12 +130,14 @@ class Optimizer:
 
         Returns
         -------
-        dict[str, jax.Array]
+        Position
             Mapping containing entries whose keys are not in :attr:`position_keys`.
             During engine updates, this subset is exposed as
             ``carry.fixed_position`` so losses can still evaluate the full position.
         """
-        pos = {k: v for k, v in position.items() if k not in self.position_keys}
+        pos = Position(
+            {k: v for k, v in position.items() if k not in self.position_keys}
+        )
         return pos
 
     def init(self, position: Position) -> optax.OptState:
@@ -121,7 +158,7 @@ class Optimizer:
         pos = self.position(position)
         return self.optimizer.init(pos)
 
-    def step(self, position: Position, loss, carry):
+    def step(self, position: Position, loss: Loss, carry: OptimCarry) -> OptimCarry:
         """
         Runs one optimizer step on ``position``.
 
@@ -146,9 +183,9 @@ class Optimizer:
         opt_state = carry.optimizer_states[self.identifier]
         grad = loss.grad(pos, carry)
         updates, opt_state = self.optimizer.update(grad, opt_state, params=pos)
-        updated_position = optax.apply_updates(pos, updates)
+        updated_position = Position(optax.apply_updates(pos, updates))
 
-        carry.position = carry.position | updated_position
+        carry.position = Position(carry.position | updated_position)
         carry.optimizer_states[self.identifier] = opt_state
         return carry
 
@@ -180,7 +217,7 @@ jax.tree_util.register_pytree_node(
 )
 
 
-@dataclass
+@dataclass(repr=False)
 class LBFGS(Optimizer):
     """
     Optimizer wrapper using Optax L-BFGS.
@@ -204,16 +241,18 @@ class LBFGS(Optimizer):
     >>> from liesel.experimental.optim import LBFGS
     >>> lbfgs = LBFGS(["loc"], identifier="loc_lbfgs")
     >>> lbfgs.position_keys
-    ['loc']
+    ('loc',)
     >>> lbfgs.identifier
     'loc_lbfgs'
+    >>> repr(lbfgs)
+    "LBFGS(('loc',), identifier=loc_lbfgs)"
     """
 
     position_keys: Sequence[str]
     optimizer: optax.GradientTransformation = optax.lbfgs()
     identifier: str = ""
 
-    def step(self, position: Position, loss, carry):
+    def step(self, position: Position, loss: Loss, carry: OptimCarry) -> OptimCarry:
         """
         Runs one L-BFGS optimizer step on ``position``.
 
@@ -236,7 +275,7 @@ class LBFGS(Optimizer):
         pos = position
         opt_state = carry.optimizer_states[self.identifier]
 
-        def loss_fn(pos):
+        def loss_fn(pos: Position) -> jax.Array:
             return loss.loss_train_batched(pos, carry)
 
         value_and_grad = optax.value_and_grad_from_state(loss_fn)
@@ -245,9 +284,9 @@ class LBFGS(Optimizer):
             grad, opt_state, params=pos, value=value, grad=grad, value_fn=loss_fn
         )
 
-        updated_position = optax.apply_updates(pos, updates)
+        updated_position = Position(optax.apply_updates(pos, updates))
 
-        carry.position = carry.position | updated_position
+        carry.position = Position(carry.position | updated_position)
         carry.optimizer_states[self.identifier] = opt_state
         return carry
 
