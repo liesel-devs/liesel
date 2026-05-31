@@ -23,7 +23,7 @@ from liesel.experimental.optim.engine import (
     _should_update_progress,
 )
 from liesel.experimental.optim.liesel_vi import LieselVI
-from liesel.experimental.optim.quick import LieselOptim as LieselOptimFromQuick
+from liesel.experimental.optim.liesel_optim import LieselOptim as LieselOptimFromQuick
 from liesel.experimental.optim.state import OptimCarry
 from liesel.experimental.optim.types import Position
 
