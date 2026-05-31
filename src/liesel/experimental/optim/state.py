@@ -29,6 +29,26 @@ Array = Any
 BatchConfig = Batches | BatchManager
 
 
+def _first_floating_dtype(*trees) -> jnp.dtype | None:
+    for tree in trees:
+        if tree is None:
+            continue
+
+        for leaf in jax.tree_util.tree_leaves(tree):
+            arr = jnp.asarray(leaf)
+            if jnp.issubdtype(arr.dtype, jnp.floating):
+                return arr.dtype
+
+    return None
+
+
+def _inf_with_dtype(dtype: jnp.dtype | None) -> jax.Array:
+    if dtype is None:
+        return jnp.asarray(jnp.inf)
+
+    return jnp.asarray(jnp.inf, dtype=dtype)
+
+
 def _plot_window_start(n_iter: int, window: int | None) -> int:
     if window is None:
         return 0
@@ -170,7 +190,11 @@ class OptimHistory:
 
     @classmethod
     def from_epochs(
-        cls, epochs: int, position: Position | None, tracked: Position | None
+        cls,
+        epochs: int,
+        position: Position | None,
+        tracked: Position | None,
+        loss_dtype: jnp.dtype | None = None,
     ) -> OptimHistory:
         """
         Allocates an empty optimizer history for a fixed number of epochs.
@@ -185,6 +209,9 @@ class OptimHistory:
         tracked
             Initial tracked position used to infer the shape of tracked history. If
             ``None``, no tracked history is allocated.
+        loss_dtype
+            Optional dtype for the loss history. If omitted, the first floating dtype
+            in ``position`` or ``tracked`` is used, falling back to JAX's default.
 
         Returns
         -------
@@ -214,9 +241,12 @@ class OptimHistory:
             else None
         )
 
+        if loss_dtype is None:
+            loss_dtype = _first_floating_dtype(position, tracked)
+
         inst = cls(
-            loss_train=jnp.full((epochs,), fill_value=jnp.inf),
-            loss_validate=jnp.full((epochs,), fill_value=jnp.inf),
+            loss_train=jnp.full((epochs,), fill_value=jnp.inf, dtype=loss_dtype),
+            loss_validate=jnp.full((epochs,), fill_value=jnp.inf, dtype=loss_dtype),
             position=position_init,
             tracked=tracked_init,
         )
@@ -340,10 +370,10 @@ class OptimHistory:
         Array(0., dtype=float32)
         """
         # initialize arrays of zeros
-        pos = {
-            name: jnp.zeros((epochs,) + jnp.shape(value))
-            for name, value in position.items()
-        }
+        pos = {}
+        for name, value in position.items():
+            value_arr = jnp.asarray(value)
+            pos[name] = jnp.zeros((epochs,) + value_arr.shape, dtype=value_arr.dtype)
         # fill in initial values
         # pos = jax.tree.map(lambda d, pos: d.at[0].set(pos), pos, position)
         return Position(pos)
@@ -574,10 +604,13 @@ class OptimCarry:
             )
 
         opt_states = {opt.identifier: opt.init(position) for opt in optimizers}
+        loss_dtype = _first_floating_dtype(position)
         if save_position_history:
-            history = OptimHistory.from_epochs(epochs, position, tracked)
+            history = OptimHistory.from_epochs(epochs, position, tracked, loss_dtype)
         else:
-            history = OptimHistory.from_epochs(epochs, None, tracked)
+            history = OptimHistory.from_epochs(epochs, None, tracked, loss_dtype)
+
+        inf = _inf_with_dtype(loss_dtype)
 
         inst = cls(
             key=key,
@@ -588,6 +621,9 @@ class OptimCarry:
             optimizer_states=opt_states,
             model_state=model_state,
             best_position=position,
+            best_loss=inf,
+            loss_train=inf,
+            loss_validate=inf,
         )
         return inst
 

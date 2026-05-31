@@ -99,6 +99,14 @@ def test_elbo_mvn_blocked_forwards_shared_scale_initialization():
     assert jnp.allclose(scale_trils[1], 0.2 * jnp.eye(2))
 
 
+def test_elbo_mvn_diag_inherits_target_model_to_float32():
+    p = _laplace_model()
+
+    elbo = opt.Elbo.mvn_diag(p)
+
+    assert elbo.q.to_float32 is p.to_float32
+
+
 def test_vdist_float64():
     x = lsl.Var.new_obs(
         0.0,
@@ -108,6 +116,65 @@ def test_vdist_float64():
     q = opt.VDist(["x"], model).normal(0.0, 1.0)
 
     assert not q.p.to_float32
+    assert q._to_float32 is False
+
+
+def test_vdist_default_inherits_target_model_to_float32():
+    x = lsl.Var.new_obs(
+        jnp.array(0.0),
+        name="x",
+    )
+    model = lsl.Model([x], to_float32=True)
+
+    q = opt.VDist(["x"], model).normal(0.0, 1.0).build()
+
+    assert q.p.to_float32 is True
+    assert q.q is not None
+    assert q.q.to_float32 is True
+
+
+def test_vdist_can_override_target_model_to_float32():
+    x = lsl.Var.new_obs(
+        jnp.array(0.0),
+        name="x",
+    )
+    model = lsl.Model([x], to_float32=True)
+
+    q = opt.VDist(["x"], model, to_float32=False).normal(0.0, 1.0).build()
+
+    assert q.p.to_float32 is True
+    assert q.q is not None
+    assert q.q.to_float32 is False
+
+
+def test_vdist_can_still_force_variational_model_to_float32():
+    with jax.enable_x64(True):
+        x = lsl.Var.new_obs(
+            jnp.array(0.0),
+            name="x",
+        )
+        model = lsl.Model([x], to_float32=False)
+
+        q = opt.VDist(["x"], model, to_float32=True).normal(0.0, 1.0).build()
+
+    assert q.q is not None
+    assert q.q.to_float32 is True
+    assert q.q.extract_position(q.parameters)["(x)_loc"].dtype == jnp.float32
+
+
+def test_vdist_uses_float64_under_x64_when_not_converting():
+    with jax.enable_x64(True):
+        x = lsl.Var.new_obs(
+            jnp.array(0.0),
+            name="x",
+        )
+        model = lsl.Model([x], to_float32=False)
+
+        q = opt.VDist(["x"], model).normal().build()
+
+    assert q.q is not None
+    assert q.q.to_float32 is False
+    assert q.q.extract_position(q.parameters)["(x)_loc"].dtype == jnp.float64
 
 
 def test_compositevdist_float64():

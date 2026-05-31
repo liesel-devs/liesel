@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import jax
 import jax.numpy as jnp
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
@@ -197,3 +198,25 @@ def test_fit_returns_optim_result():
     ).fit()
 
     assert isinstance(result, OptimResult)
+
+
+def test_fit_handles_float64_model_with_x64_enabled():
+    with jax.enable_x64(True):
+        loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
+        y = lsl.Var.new_obs(
+            jnp.arange(6.0),
+            lsl.Dist(tfd.Normal, loc=loc, scale=1.0),
+            name="y",
+        )
+        model = lsl.Model([y], to_float32=False)
+
+        result = LieselVI(
+            model,
+            stopper=Stopper(epochs=1, patience=1),
+            nsamples=1,
+            nsamples_validate=1,
+            seed=1,
+        ).fit()
+
+    assert isinstance(result, OptimResult)
+    assert result.history.loss_train.dtype == jnp.float64

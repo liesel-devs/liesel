@@ -66,6 +66,29 @@ class TestOptimHistory:
 
 
 class TestOptimCarry:
+    def test_new_uses_position_dtype_for_losses_and_history(self):
+        position = Position({"theta": jnp.array(0.0, dtype=jnp.float32)})
+
+        with jax.enable_x64(True):
+            carry = OptimCarry.new(
+                key=jax.random.key(0),
+                epochs=2,
+                position=position,
+                tracked=None,
+                batches=Batches(["y"], n=4, batch_size=2),
+                optimizers=[Optimizer(["theta"], optax.sgd(0.1))],
+                model_state={},
+                save_position_history=True,
+            )
+
+        assert carry.best_loss.dtype == jnp.float32
+        assert carry.loss_train.dtype == jnp.float32
+        assert carry.loss_validate.dtype == jnp.float32
+        assert carry.history.loss_train.dtype == jnp.float32
+        assert carry.history.loss_validate.dtype == jnp.float32
+        assert carry.history.position is not None
+        assert carry.history.position["theta"].dtype == jnp.float32
+
     def test_new_rejects_duplicate_optimizer_identifiers(self):
         position = Position({"theta": jnp.array(0.0)})
         optimizers = [

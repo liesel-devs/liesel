@@ -502,10 +502,14 @@ class OptimEngine:
             carry = self._run_optimizer_step(opt, carry)
 
         loss = self.loss.loss_train_batched(carry.position, carry)
-        carry.loss_train += loss / carry.batches.n_full_batches
+        loss_dtype = jnp.asarray(loss).dtype
+        n_batches = jnp.asarray(carry.batches.n_full_batches, dtype=loss_dtype)
+        carry.loss_train += loss / n_batches
         if self.train_monitor in ("auto", "weighted_epoch_average"):
-            n_batches = jnp.asarray(carry.batches.n_full_batches)
-            weight = 2.0 * (jnp.asarray(j) + 1.0) / (n_batches * (n_batches + 1.0))
+            i_batch = jnp.asarray(j, dtype=loss_dtype)
+            one = jnp.asarray(1.0, dtype=loss_dtype)
+            two = jnp.asarray(2.0, dtype=loss_dtype)
+            weight = two * (i_batch + one) / (n_batches * (n_batches + one))
             carry.loss_validate += weight * loss
 
         carry.i_batch = j
@@ -559,8 +563,8 @@ class OptimEngine:
 
         carry.batches = carry.batches.start_epoch(subkey)
 
-        carry.loss_train = 0.0
-        carry.loss_validate = 0.0
+        carry.loss_train = jnp.zeros_like(carry.loss_train)
+        carry.loss_validate = jnp.zeros_like(carry.loss_validate)
         # run all full batches once
         carry = jax.lax.fori_loop(
             lower=0,

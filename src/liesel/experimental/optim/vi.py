@@ -113,6 +113,16 @@ def _distribution_sample_shape(distribution, value_shape: tuple[int, ...]):
     return value_shape[: len(value_shape) - n_distribution_dims]
 
 
+def _asarray_with_float_dtype(value, dtype: jnp.dtype):
+    arr = jnp.asarray(value)
+    if jnp.issubdtype(arr.dtype, jnp.floating) and jnp.issubdtype(
+        dtype, jnp.floating
+    ):
+        return arr.astype(dtype)
+
+    return arr
+
+
 class Elbo(LossMixin):
     """
     Monte Carlo evidence lower bound loss.
@@ -305,6 +315,7 @@ class Elbo(LossMixin):
         loc: jax.typing.ArrayLike | None = None,
         scale_diag: Literal["laplace"] | jax.typing.ArrayLike = 0.01,
         scale_diag_bijector: ScaleBijectorConfig = "auto",
+        to_float32: bool | None = None,
     ) -> Self:
         """
         Builds a diagonal multivariate normal ELBO over all parameters of ``p``.
@@ -342,6 +353,9 @@ class Elbo(LossMixin):
             Bijector applied to the diagonal scale parameter. ``"auto"`` delegates
             the choice to :meth:`liesel.model.Dist.biject_parameters`; ``None``
             leaves the scale parameter untransformed.
+        to_float32
+            Whether to convert values in the variational model to ``float32``. If
+            ``None``, inherits ``p.to_float32``.
 
         Returns
         -------
@@ -350,7 +364,7 @@ class Elbo(LossMixin):
             distribution.
         """
         vi_dist = (
-            VDist(list(p.parameters), p)
+            VDist(list(p.parameters), p, to_float32=to_float32)
             .mvn_diag(
                 loc=loc,
                 scale_diag=scale_diag,
@@ -385,6 +399,7 @@ class Elbo(LossMixin):
         loc: jax.typing.ArrayLike | None = None,
         scale_tril: Literal["laplace"] | jax.typing.ArrayLike = 0.01,
         scale_tril_bijector: ScaleBijectorConfig = "auto",
+        to_float32: bool | None = None,
     ) -> Self:
         """
         Builds a dense multivariate normal ELBO over all parameters of ``p``.
@@ -422,6 +437,9 @@ class Elbo(LossMixin):
             Bijector applied to the lower-triangular scale parameter. ``"auto"``
             delegates the choice to :meth:`liesel.model.Dist.biject_parameters`;
             ``None`` leaves the scale parameter untransformed.
+        to_float32
+            Whether to convert values in the variational model to ``float32``. If
+            ``None``, inherits ``p.to_float32``.
 
         Returns
         -------
@@ -430,7 +448,7 @@ class Elbo(LossMixin):
             distribution.
         """
         vi_dist = (
-            VDist(list(p.parameters), p)
+            VDist(list(p.parameters), p, to_float32=to_float32)
             .mvn_tril(
                 loc=loc,
                 scale_tril=scale_tril,
@@ -463,6 +481,7 @@ class Elbo(LossMixin):
         regularize_q_prior: bool = True,
         scale_tril: Literal["laplace"] | jax.typing.ArrayLike = 0.01,
         scale_tril_bijector: ScaleBijectorConfig = "auto",
+        to_float32: bool | None = None,
     ) -> Self:
         """
         Builds an ELBO with one dense normal variational block per parameter.
@@ -499,6 +518,9 @@ class Elbo(LossMixin):
             ``"auto"`` delegates the choice to
             :meth:`liesel.model.Dist.biject_parameters`; ``None`` leaves the scale
             parameter untransformed.
+        to_float32
+            Whether to convert values in the variational model to ``float32``. If
+            ``None``, inherits ``p.to_float32``.
 
         Returns
         -------
@@ -507,7 +529,7 @@ class Elbo(LossMixin):
         """
         vi_dists = []
         for param_name in p.parameters:
-            vi_dist = VDist([param_name], p).mvn_tril(
+            vi_dist = VDist([param_name], p, to_float32=to_float32).mvn_tril(
                 scale_tril=scale_tril,
                 scale_tril_bijector=scale_tril_bijector,
             )
@@ -735,6 +757,9 @@ class VDist:
     p
         The :class:`.Model` whose posterior is to be approximated by this
         :class:`.VDist`.
+    to_float32
+        Whether to convert values in the variational model to ``float32``. If
+        ``None``, inherits ``p.to_float32``.
 
     See Also
     --------
@@ -809,7 +834,9 @@ class VDist:
 
     """
 
-    def __init__(self, position_keys: Sequence[str], p: Model):
+    def __init__(
+        self, position_keys: Sequence[str], p: Model, to_float32: bool | None = None
+    ):
         self.position_keys = position_keys
         self._p = p
 
@@ -821,7 +848,7 @@ class VDist:
         self.var: Var | None = None
         self.q: Model | None = None
 
-        self._to_float32 = p.to_float32
+        self._to_float32 = p.to_float32 if to_float32 is None else to_float32
 
     @property
     def p(self) -> Model:
@@ -1050,16 +1077,20 @@ class VDist:
             loc_value = jnp.asarray(self._flat_pos)
         else:
             loc_value = jnp.asarray(loc)
+        if self._to_float32 and jnp.issubdtype(loc_value.dtype, jnp.floating):
+            loc_value = loc_value.astype(jnp.float32)
+        loc_dtype = loc_value.dtype
 
         if _is_laplace_init(scale, "scale"):
             cov_matrix = _laplace_covariance(self.p, self.position_keys, loc_value)
             scale_value = jnp.sqrt(jnp.clip(jnp.diag(cov_matrix), min=1e-12))
         else:
-            scale_arr = jnp.asarray(scale)
+            scale_arr = _asarray_with_float_dtype(scale, loc_dtype)
             if scale_arr.size == 1:
                 scale_value = scale_arr * jnp.ones_like(self._flat_pos)
             else:
                 scale_value = scale_arr
+        scale_value = _asarray_with_float_dtype(scale_value, loc_dtype)
 
         loc_var = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
         scale_var = Var.new_param(scale_value, name=self._flat_pos_name + "_scale")
@@ -1130,17 +1161,21 @@ class VDist:
         if loc is None:
             loc_value = jnp.asarray(self._flat_pos)
         else:
-            loc_value = loc
+            loc_value = jnp.asarray(loc)
+        if self._to_float32 and jnp.issubdtype(loc_value.dtype, jnp.floating):
+            loc_value = loc_value.astype(jnp.float32)
+        loc_dtype = loc_value.dtype
 
         if _is_laplace_init(scale_diag, "scale_diag"):
             cov_matrix = _laplace_covariance(self.p, self.position_keys, loc_value)
             scale_diag_value = jnp.sqrt(jnp.clip(jnp.diag(cov_matrix), min=1e-12))
         else:
-            scale_diag_arr = jnp.asarray(scale_diag)
+            scale_diag_arr = _asarray_with_float_dtype(scale_diag, loc_dtype)
             if scale_diag_arr.size == 1:
                 scale_diag_value = scale_diag_arr * jnp.ones_like(self._flat_pos)
             else:
                 scale_diag_value = scale_diag_arr
+        scale_diag_value = _asarray_with_float_dtype(scale_diag_value, loc_dtype)
 
         loc_var = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
         scale_diag_var = Var.new_param(
@@ -1218,18 +1253,22 @@ class VDist:
         if loc is None:
             loc_value = jnp.asarray(self._flat_pos)
         else:
-            loc_value = loc
+            loc_value = jnp.asarray(loc)
+        if self._to_float32 and jnp.issubdtype(loc_value.dtype, jnp.floating):
+            loc_value = loc_value.astype(jnp.float32)
+        loc_dtype = loc_value.dtype
 
         if _is_laplace_init(scale_tril, "scale_tril"):
             cov_matrix = _laplace_covariance(self.p, self.position_keys, loc_value)
             scale_tril_value = jnp.linalg.cholesky(cov_matrix)
         else:
-            scale_tril_value_arr = jnp.asarray(scale_tril)
+            scale_tril_value_arr = _asarray_with_float_dtype(scale_tril, loc_dtype)
             if scale_tril_value_arr.size == 1:
                 n = self._flat_pos.size
-                scale_tril_value = scale_tril_value_arr * jnp.eye(n)
+                scale_tril_value = scale_tril_value_arr * jnp.eye(n, dtype=loc_dtype)
             else:
                 scale_tril_value = scale_tril_value_arr
+        scale_tril_value = _asarray_with_float_dtype(scale_tril_value, loc_dtype)
 
         loc_var = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
         scale_tril_var = Var.new_param(
@@ -1267,7 +1306,7 @@ class VDist:
         """
         if self.var is None:
             raise ValueError("The .var attribute must be set, but is currently None.")
-        self.q = Model([self.var], to_float32=self.p.to_float32)
+        self.q = Model([self.var], to_float32=self._to_float32)
         return self
 
     def sample(
@@ -1578,10 +1617,10 @@ class CompositeVDist:
         """
         Whether variational model values should be converted to ``float32``.
 
-        All component distributions must agree on their target model's
+        All component distributions must agree on their variational model
         ``to_float32`` setting.
         """
-        f32 = [dist.p.to_float32 for dist in self.vi_dists]
+        f32 = [dist._to_float32 for dist in self.vi_dists]
         if len(set(f32)) > 1:
             raise ValueError(
                 "Some variational distributions seem to have to_float32=True, "

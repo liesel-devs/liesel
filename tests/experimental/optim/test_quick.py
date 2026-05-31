@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import jax
 import jax.numpy as jnp
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
@@ -19,14 +20,17 @@ from liesel.experimental.optim import (
 from liesel.experimental.optim.state import OptimResult
 
 
-def _normal_model(n: int = 6):
+def _normal_model(n: int = 6, *, to_float32: bool | None = None):
     loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
     y = lsl.Var.new_obs(
         jnp.arange(float(n)),
         lsl.Dist(tfd.Normal, loc=loc, scale=1.0),
         name="y",
     )
-    return lsl.Model([y])
+    if to_float32 is None:
+        return lsl.Model([y])
+
+    return lsl.Model([y], to_float32=to_float32)
 
 
 def _two_branch_model():
@@ -172,3 +176,49 @@ def test_fit_returns_optim_result():
     ).fit()
 
     assert isinstance(result, OptimResult)
+
+
+def test_fit_handles_float32_model_with_x64_enabled():
+    with jax.enable_x64(True):
+        model = _normal_model(to_float32=True)
+        result = LieselOptim(
+            model,
+            stopper=Stopper(epochs=1, patience=1),
+            seed=1,
+        ).fit()
+
+    assert isinstance(result, OptimResult)
+    assert result.history.loss_train.dtype == jnp.float32
+
+
+def test_batched_fit_handles_float32_model_with_x64_enabled():
+    with jax.enable_x64(True):
+        model = _normal_model(to_float32=True)
+        result = LieselOptim(
+            model,
+            batch_size=2,
+            stopper=Stopper(epochs=1, patience=1),
+            seed=1,
+        ).fit()
+
+    assert isinstance(result, OptimResult)
+    assert result.history.loss_train.dtype == jnp.float32
+
+
+def test_fit_handles_float64_model_with_x64_enabled():
+    with jax.enable_x64(True):
+        loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
+        y = lsl.Var.new_obs(
+            jnp.arange(6.0),
+            lsl.Dist(tfd.Normal, loc=loc, scale=1.0),
+            name="y",
+        )
+        model = lsl.Model([y], to_float32=False)
+        result = LieselOptim(
+            model,
+            stopper=Stopper(epochs=1, patience=1),
+            seed=1,
+        ).fit()
+
+    assert isinstance(result, OptimResult)
+    assert result.history.loss_train.dtype == jnp.float64
