@@ -63,6 +63,15 @@ class Loss(Protocol):
         """
         ...
 
+    def loss_train(self, params: Position, carry: "OptimCarry") -> jax.Array:
+        """
+        Computes the full-data training loss at ``params``.
+
+        The engine calls this method only for exact training-data monitoring when no
+        validation split is available.
+        """
+        ...
+
     def loss_validate(self, params: Position, carry: "OptimCarry") -> jax.Array:
         """Computes the validation loss at ``params``."""
         ...
@@ -82,9 +91,10 @@ class LossMixin:
     """
     Shared convenience implementation for differentiable losses.
 
-    Subclasses must define :attr:`split` and :meth:`loss_train_batched`. The mixin
-    provides validation-position helpers and JAX gradient methods used by
-    :class:`.Optimizer`.
+    Subclasses must define :attr:`split` and :meth:`loss_train_batched`. They should
+    also define :meth:`loss_train` if they support exact full-data monitoring when
+    no validation split is available. The mixin provides validation-position helpers
+    and JAX gradient methods used by :class:`.Optimizer`.
 
     Attributes
     ----------
@@ -126,6 +136,20 @@ class LossMixin:
 
     split: SplitConfig
     loss_train_batched: Callable[[Position, "OptimCarry"], jax.Array]
+
+    def loss_train(self, params: Position, carry: "OptimCarry") -> jax.Array:
+        """
+        Computes the full-data training loss.
+
+        The base mixin does not know how to assemble full training data for arbitrary
+        custom losses. Subclasses can implement this method to support
+        ``OptimEngine(train_monitor="full_data")`` without a validation split.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement loss_train(). Use "
+            "OptimEngine(train_monitor='epoch_average') or implement loss_train() "
+            "on the custom loss."
+        )
 
     @property
     def obs_validate(self) -> Position:

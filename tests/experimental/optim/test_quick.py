@@ -64,6 +64,7 @@ def test_default_build_engine_uses_opinionated_defaults():
     assert engine.batches.n == engine.split.n_train
     assert engine.optimizers[0].position_keys == tuple(model.parameters)
     assert engine.stopper == Stopper(epochs=1000, patience=10, rtol=1e-6)
+    assert engine.train_monitor == "auto"
 
 
 def test_batch_size_shortcut_builds_training_batches():
@@ -122,6 +123,14 @@ def test_unknown_optimizer_string_raises():
 
     with pytest.raises(ValueError, match="optimizers"):
         LieselOptim(model, optimizers="sgd")
+
+
+def test_train_monitor_is_passed_to_engine():
+    model = _normal_model()
+
+    engine = LieselOptim(model, train_monitor="full_data", seed=1).build_engine()
+
+    assert engine.train_monitor == "full_data"
 
 
 def test_fit_returns_optim_result():

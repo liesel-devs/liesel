@@ -70,11 +70,42 @@ class SequenceLoss:
         del carry
         return params["theta"]
 
+    def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
+        del carry
+        return params["theta"]
+
     def loss_validate(self, params: Position, carry: OptimCarry) -> jax.Array:
         del carry
         return params["theta"]
 
     def grad(self, params: Position, carry: OptimCarry):
+        return {key: jnp.zeros_like(value) for key, value in params.items()}
+
+    def value_and_grad(self, params: Position, carry: OptimCarry):
+        return self.loss_train_batched(params, carry), self.grad(params, carry)
+
+
+@dataclass
+class BatchSensitiveLoss:
+    split: PositionSplit
+
+    def position(self, position_keys) -> Position:
+        return Position({key: jnp.array(0.0) for key in position_keys})
+
+    def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
+        obs = carry.batch if carry.batch else self.split.train
+        return params["theta"] + jnp.sum(obs["y"])
+
+    def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
+        del carry
+        return params["theta"] + jnp.sum(self.split.train["y"])
+
+    def loss_validate(self, params: Position, carry: OptimCarry) -> jax.Array:
+        del params, carry
+        return jnp.array(-999.0)
+
+    def grad(self, params: Position, carry: OptimCarry):
+        del carry
         return {key: jnp.zeros_like(value) for key, value in params.items()}
 
     def value_and_grad(self, params: Position, carry: OptimCarry):
@@ -94,6 +125,17 @@ def _split() -> PositionSplit:
 
 def _loss() -> SequenceLoss:
     return SequenceLoss(_split())
+
+
+def _monitor_split() -> PositionSplit:
+    return PositionSplit(
+        train=Position({"y": jnp.array([1.0, 3.0])}),
+        validate=Position({}),
+        test=Position({}),
+        n_train=2,
+        n_validate=0,
+        n_test=0,
+    )
 
 
 def _optimizer(
@@ -201,6 +243,59 @@ def test_invalid_progress_n_updates_raises():
             show_progress=False,
             progress_n_updates=0,
         )
+
+
+def test_invalid_train_monitor_raises():
+    with pytest.raises(ValueError, match="train_monitor"):
+        OptimEngine(
+            loss=_loss(),
+            batches=Batches(["y"], n=1, batch_size=None, shuffle=False),
+            optimizers=[_optimizer()],
+            stopper=Stopper(epochs=4, patience=2),
+            seed=1,
+            initial_state={},
+            show_progress=False,
+            train_monitor="sometimes",  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.parametrize("train_monitor", ["auto", "epoch_average"])
+def test_no_validation_minibatches_default_to_epoch_average_monitor(train_monitor):
+    split = _monitor_split()
+    engine = OptimEngine(
+        loss=BatchSensitiveLoss(split),
+        batches=Batches(["y"], n=2, batch_size=1, shuffle=False),
+        optimizers=[_optimizer()],
+        stopper=Stopper(epochs=1, patience=1),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+        train_monitor=train_monitor,
+    )
+
+    result = engine.fit()
+
+    assert result.history.loss_train.tolist() == pytest.approx([2.0])
+    assert result.history.loss_validate.tolist() == pytest.approx([2.0])
+
+
+def test_no_validation_full_data_monitor_uses_exact_training_loss():
+    split = _monitor_split()
+    engine = OptimEngine(
+        loss=BatchSensitiveLoss(split),
+        batches=Batches(["y"], n=2, batch_size=1, shuffle=False),
+        optimizers=[_optimizer()],
+        stopper=Stopper(epochs=1, patience=1),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+        train_monitor="full_data",
+    )
+
+    result = engine.fit()
+
+    assert result.history.loss_train.tolist() == pytest.approx([2.0])
+    assert result.history.loss_validate.tolist() == pytest.approx([4.0])
 
 
 def test_split_manager_requires_batch_manager():

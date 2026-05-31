@@ -72,6 +72,10 @@ class LieselOptim:
     scale_loss
         Whether the default :class:`.NegLogProbLoss` should divide losses by the
         common training sample size.
+    train_monitor
+        Training-data monitor used by :class:`.OptimEngine` when no validation split
+        exists. The default ``"auto"`` avoids extra full-data evaluations for
+        mini-batch runs.
 
     Examples
     --------
@@ -110,6 +114,7 @@ class LieselOptim:
         epoch_size: Literal["max", "min"] | int = "max",
         validation_strategy: Literal["log_lik", "log_prob"] = "log_lik",
         scale_loss: bool = False,
+        train_monitor: Literal["auto", "epoch_average", "full_data"] = "auto",
     ) -> None:
         if batches is not None and batch_size is not None:
             raise ValueError("Pass either batches or batch_size, not both.")
@@ -131,6 +136,7 @@ class LieselOptim:
             epoch_size=epoch_size,
         )
         self.optimizers = self._resolve_optimizers(optimizers)
+        self.train_monitor = train_monitor
 
     def _resolve_split(
         self,
@@ -257,6 +263,7 @@ class LieselOptim:
             stopper=self.stopper,
             initial_state=self.model.state,
             seed=self.seed,
+            train_monitor=self.train_monitor,
         )
 
     def fit(self) -> OptimResult:
