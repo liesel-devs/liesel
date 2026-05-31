@@ -291,19 +291,11 @@ class OptimEngine:
         start = time.time()
         carry = self._fit()
         end = time.time()
-        ibest = self.stopper.which_best_in_recent_history(
-            i=carry.epoch, loss_history=carry.history.loss_validate
-        )
         history = self.process_history(carry.epoch, carry.history)
+        best_epoch = int(carry.best_epoch)
 
         if self.restore_best_position:
-            if self.save_position_history:
-                assert carry.history.position is not None
-                final_position: Position = Position(
-                    {name: pos[ibest] for name, pos in carry.history.position.items()}
-                )
-            else:
-                final_position = carry.best_position
+            final_position = carry.best_position
         else:
             final_position = carry.position
 
@@ -311,7 +303,7 @@ class OptimEngine:
             history=history,
             final_epoch=int(carry.epoch),
             best_position=final_position,
-            best_epoch=int(ibest),
+            best_epoch=best_epoch,
             duration=end - start,
         )
         return result
@@ -471,19 +463,18 @@ class OptimEngine:
                     carry.epoch, carry.history.tracked, carry.tracked
                 )
 
-        else:
+        def update_carry(carry: OptimCarry):
+            carry.best_loss = carry.loss_validate
+            carry.best_position = carry.position
+            carry.best_epoch = carry.epoch
+            return carry
 
-            def update_carry(carry: OptimCarry):
-                carry.best_loss = carry.loss_validate
-                carry.best_position = carry.position
-                return carry
-
-            carry = jax.lax.cond(
-                carry.loss_validate < carry.best_loss,
-                update_carry,
-                lambda carry: carry,
-                carry,
-            )
+        carry = jax.lax.cond(
+            carry.loss_validate < carry.best_loss,
+            update_carry,
+            lambda carry: carry,
+            carry,
+        )
 
         carry.epoch += 1
 

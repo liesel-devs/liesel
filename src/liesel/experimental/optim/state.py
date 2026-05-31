@@ -480,6 +480,8 @@ class OptimCarry:
         Best parameter position found so far.
     best_loss
         Best validation loss found so far.
+    best_epoch
+        Epoch at which the best validation loss was found.
     loss_train
         Most recent training loss.
     loss_validate
@@ -505,6 +507,7 @@ class OptimCarry:
     fixed_position: Position = field(default_factory=lambda: Position({}))
     best_position: Position = field(default_factory=lambda: Position({}))
     best_loss: jax.Array | float = jnp.inf
+    best_epoch: jax.Array | int = 0
 
     loss_train: jax.Array | float = jnp.inf
     loss_validate: jax.Array | float = jnp.inf
@@ -598,7 +601,7 @@ class OptimResult:
     """
     Result returned by an optimizer run.
 
-    ``OptimResult`` bundles the processed history, the best parameter position, and
+    ``OptimResult`` bundles the processed history, the selected result position, and
     small metadata about the run. It also provides convenience plotting methods for
     losses and saved parameter histories.
 
@@ -609,9 +612,11 @@ class OptimResult:
     final_epoch
         Last epoch index included in the processed history.
     best_position
-        Best parameter position selected by the optimizer.
+        Parameter position selected by the optimizer. With
+        ``restore_best_position=True``, this is the global best position found during
+        the run. Otherwise, this is the final position.
     best_epoch
-        Epoch at which ``best_position`` was found.
+        Epoch at which the global best validation loss was found.
     duration
         Wall-clock runtime in seconds.
 
