@@ -74,9 +74,8 @@ class LieselOptim:
         common training sample size.
     train_monitor
         Training-data monitor used by :class:`.OptimEngine` when no validation split
-        exists. The default ``"auto"`` avoids extra full-data evaluations for
-        mini-batch runs. Use ``"weighted_epoch_average"`` for a cheap linearly
-        weighted monitor that gives later batches in each epoch more weight.
+        exists. The default ``"auto"`` uses exact full-data monitoring when batches
+        are full-data and ``"weighted_epoch_average"`` for mini-batch runs.
 
     Examples
     --------

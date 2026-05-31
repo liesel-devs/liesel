@@ -86,9 +86,9 @@ class OptimEngine:
         Approximate maximum number of progress-bar updates.
     train_monitor
         Training-data monitor used when no validation split is available.
-        ``"auto"`` reuses the epoch-average mini-batch loss for mini-batch runs and
-        the exact full-batch loss for full-data runs. ``"epoch_average"`` always
-        uses the cheap arithmetic epoch average. ``"weighted_epoch_average"`` uses a
+        ``"auto"`` uses ``"weighted_epoch_average"`` for mini-batch runs and the
+        exact full-batch loss for full-data runs. ``"epoch_average"`` always uses
+        the cheap arithmetic epoch average. ``"weighted_epoch_average"`` uses a
         cheap linearly weighted epoch average for the early-stopping monitor, giving
         later batches higher weight. ``"full_data"`` evaluates the full training
         loss at the end of each epoch, except when the existing full-batch epoch
@@ -503,7 +503,7 @@ class OptimEngine:
 
         loss = self.loss.loss_train_batched(carry.position, carry)
         carry.loss_train += loss / carry.batches.n_full_batches
-        if self.train_monitor == "weighted_epoch_average":
+        if self.train_monitor in ("auto", "weighted_epoch_average"):
             n_batches = jnp.asarray(carry.batches.n_full_batches)
             weight = 2.0 * (jnp.asarray(j) + 1.0) / (n_batches * (n_batches + 1.0))
             carry.loss_validate += weight * loss
@@ -527,10 +527,10 @@ class OptimEngine:
         if carry.batches.is_full_data:
             return epoch_average_loss
 
-        if self.train_monitor in ("auto", "epoch_average"):
+        if self.train_monitor == "epoch_average":
             return epoch_average_loss
 
-        if self.train_monitor == "weighted_epoch_average":
+        if self.train_monitor in ("auto", "weighted_epoch_average"):
             return carry.loss_validate
 
         return self.loss.loss_train(carry.position, carry)
