@@ -60,6 +60,7 @@ from .state import OptimCarry
 from .types import ModelState, Position
 
 SplitConfig = PositionSplit | PositionSplitManager
+type ScaleBijectorConfig = type[jb.Bijector] | jb.Bijector | None | Literal["auto"]
 
 
 def _validate_positive_int(value: int, name: str) -> None:
@@ -301,6 +302,9 @@ class Elbo(LossMixin):
         nsamples_validate: int = 50,
         scale: bool = False,
         regularize_q_prior: bool = True,
+        loc: jax.typing.ArrayLike | None = None,
+        scale_diag: Literal["laplace"] | jax.typing.ArrayLike = 0.01,
+        scale_diag_bijector: ScaleBijectorConfig = "auto",
     ) -> Self:
         """
         Builds a diagonal multivariate normal ELBO over all parameters of ``p``.
@@ -326,6 +330,18 @@ class Elbo(LossMixin):
         regularize_q_prior
             Whether priors in the variational model should be added to the ELBO as
             regularization terms.
+        loc
+            Initial location of the variational distribution. If ``None``, the
+            current flattened target position is used.
+        scale_diag
+            Initial marginal standard deviations. A scalar is broadcast to all flat
+            components. The special value ``"laplace"`` initializes from local
+            curvature at ``loc`` and assumes that ``loc`` is already a useful
+            approximation to the posterior mode.
+        scale_diag_bijector
+            Bijector applied to the diagonal scale parameter. ``"auto"`` delegates
+            the choice to :meth:`liesel.model.Dist.biject_parameters`; ``None``
+            leaves the scale parameter untransformed.
 
         Returns
         -------
@@ -333,7 +349,15 @@ class Elbo(LossMixin):
             ELBO loss with a built diagonal multivariate normal variational
             distribution.
         """
-        vi_dist = VDist(list(p.parameters), p).mvn_diag().build()
+        vi_dist = (
+            VDist(list(p.parameters), p)
+            .mvn_diag(
+                loc=loc,
+                scale_diag=scale_diag,
+                scale_diag_bijector=scale_diag_bijector,
+            )
+            .build()
+        )
         if vi_dist.q is None:
             raise ValueError
 
@@ -358,6 +382,9 @@ class Elbo(LossMixin):
         nsamples_validate: int = 50,
         scale: bool = False,
         regularize_q_prior: bool = True,
+        loc: jax.typing.ArrayLike | None = None,
+        scale_tril: Literal["laplace"] | jax.typing.ArrayLike = 0.01,
+        scale_tril_bijector: ScaleBijectorConfig = "auto",
     ) -> Self:
         """
         Builds a dense multivariate normal ELBO over all parameters of ``p``.
@@ -383,6 +410,18 @@ class Elbo(LossMixin):
         regularize_q_prior
             Whether priors in the variational model should be added to the ELBO as
             regularization terms.
+        loc
+            Initial location of the variational distribution. If ``None``, the
+            current flattened target position is used.
+        scale_tril
+            Initial lower Cholesky factor. A scalar is interpreted as a multiple of
+            the identity matrix. The special value ``"laplace"`` initializes from
+            local curvature at ``loc`` and assumes that ``loc`` is already a useful
+            approximation to the posterior mode.
+        scale_tril_bijector
+            Bijector applied to the lower-triangular scale parameter. ``"auto"``
+            delegates the choice to :meth:`liesel.model.Dist.biject_parameters`;
+            ``None`` leaves the scale parameter untransformed.
 
         Returns
         -------
@@ -390,7 +429,15 @@ class Elbo(LossMixin):
             ELBO loss with a built dense multivariate normal variational
             distribution.
         """
-        vi_dist = VDist(list(p.parameters), p).mvn_tril().build()
+        vi_dist = (
+            VDist(list(p.parameters), p)
+            .mvn_tril(
+                loc=loc,
+                scale_tril=scale_tril,
+                scale_tril_bijector=scale_tril_bijector,
+            )
+            .build()
+        )
         if vi_dist.q is None:
             raise ValueError
         return cls(
@@ -414,6 +461,8 @@ class Elbo(LossMixin):
         nsamples_validate: int = 50,
         scale: bool = False,
         regularize_q_prior: bool = True,
+        scale_tril: Literal["laplace"] | jax.typing.ArrayLike = 0.01,
+        scale_tril_bijector: ScaleBijectorConfig = "auto",
     ) -> Self:
         """
         Builds an ELBO with one dense normal variational block per parameter.
@@ -439,6 +488,17 @@ class Elbo(LossMixin):
         regularize_q_prior
             Whether priors in the variational model should be added to the ELBO as
             regularization terms.
+        scale_tril
+            Shared initial lower Cholesky factor passed to each parameter block. A
+            scalar is interpreted as a multiple of each block's identity matrix. The
+            special value ``"laplace"`` initializes each block from local curvature
+            at the current parameter position. Custom per-block locations are
+            intentionally left to manual :class:`CompositeVDist` construction.
+        scale_tril_bijector
+            Bijector applied to each block's lower-triangular scale parameter.
+            ``"auto"`` delegates the choice to
+            :meth:`liesel.model.Dist.biject_parameters`; ``None`` leaves the scale
+            parameter untransformed.
 
         Returns
         -------
@@ -447,7 +507,10 @@ class Elbo(LossMixin):
         """
         vi_dists = []
         for param_name in p.parameters:
-            vi_dist = VDist([param_name], p).mvn_tril()
+            vi_dist = VDist([param_name], p).mvn_tril(
+                scale_tril=scale_tril,
+                scale_tril_bijector=scale_tril_bijector,
+            )
             vi_dists.append(vi_dist)
 
         vi_dist = CompositeVDist(*vi_dists).build()

@@ -37,6 +37,17 @@ def _two_branch_param_model():
     return lsl.Model([y1, y2])
 
 
+def _two_parameter_model():
+    alpha = lsl.Var.new_param(jnp.array(0.0), name="alpha")
+    beta = lsl.Var.new_param(jnp.array([0.0, 1.0]), name="beta")
+    y = lsl.Var.new_obs(
+        jnp.zeros(2),
+        lsl.Dist(tfp.distributions.Normal, loc=alpha, scale=1.0),
+        name="y",
+    )
+    return lsl.Model([y, beta])
+
+
 def test_elbo_from_vdist_scale_uses_total_branch_training_size():
     model = _two_branch_param_model()
     split = opt.PositionSplitManager.from_model(model, position_keys=["y1", "y2"])
@@ -45,6 +56,47 @@ def test_elbo_from_vdist_scale_uses_total_branch_training_size():
     elbo = opt.Elbo.from_vdist(vdist, split, scale=True)
 
     assert elbo.scalar == sum(split.n_trains)
+
+
+def test_elbo_mvn_diag_forwards_custom_initialization():
+    p = _laplace_model()
+
+    elbo = opt.Elbo.mvn_diag(
+        p,
+        loc=jnp.array([1.5]),
+        scale_diag=0.2,
+        scale_diag_bijector=None,
+    )
+
+    params = elbo.vdist.var.dist_node.kwinputs
+    assert jnp.allclose(params["loc"].value, jnp.array([1.5]))
+    assert jnp.allclose(params["scale_diag"].value, jnp.array([0.2]))
+
+
+def test_elbo_mvn_tril_forwards_laplace_initialization():
+    p = _laplace_model()
+
+    elbo = opt.Elbo.mvn_tril(
+        p,
+        scale_tril="laplace",
+        scale_tril_bijector=None,
+    )
+
+    scale_tril = elbo.vdist.var.dist_node.kwinputs["scale_tril"].value
+    assert jnp.allclose(scale_tril, jnp.sqrt(jnp.array([[1.0 / 3.0]])), rtol=1e-5)
+
+
+def test_elbo_mvn_blocked_forwards_shared_scale_initialization():
+    p = _two_parameter_model()
+
+    elbo = opt.Elbo.mvn_blocked(p, scale_tril=0.2, scale_tril_bijector=None)
+
+    scale_trils = [
+        vdist.var.dist_node.kwinputs["scale_tril"].value
+        for vdist in elbo.vdist.vi_dists
+    ]
+    assert jnp.allclose(scale_trils[0], jnp.array([[0.2]]))
+    assert jnp.allclose(scale_trils[1], 0.2 * jnp.eye(2))
 
 
 def test_vdist_float64():
