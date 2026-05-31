@@ -89,7 +89,6 @@ class LieselVI:
         engine = OptimEngine(
             loss=self.elbo,
             batches=self.batches,
-            split=self.split,
             optimizers=self.optimizers,
             stopper=self.stopper,
             initial_state=self.model.state,

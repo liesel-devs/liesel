@@ -115,7 +115,6 @@ class QuickOptim:
         engine = OptimEngine(
             loss=self.loss,
             batches=self.batches,
-            split=self.split,
             optimizers=self.optimizers,
             stopper=self.stopper,
             initial_state=self.model.state,

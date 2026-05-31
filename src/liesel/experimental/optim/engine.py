@@ -10,40 +10,34 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
 
 import jax
 import jax.numpy as jnp
 from tqdm import tqdm
 
 from ._engine_utils import BatchConfig, SplitConfig
+from .batch import Batches
 from .loss import Loss
 from .optimizer import Optimizer
+from .split import PositionSplitManager
 from .state import OptimCarry, OptimHistory, OptimResult
 from .stop import Stopper
 from .types import ModelState, Position
 
-if TYPE_CHECKING:
-    from .liesel_vi import LieselVI
-    from .quick import QuickOptim
-
-__all__ = ["LieselVI", "OptimEngine", "QuickOptim"]
+__all__ = ["OptimEngine"]
 
 
-def __getattr__(name: str) -> object:
-    """Lazily provide compatibility imports for moved convenience wrappers."""
-    if name == "LieselVI":
-        from .liesel_vi import LieselVI
+def _progress_print_rate(epochs: int, progress_n_updates: int) -> int:
+    return max(int(epochs / progress_n_updates), 1)
 
-        return LieselVI
 
-    if name == "QuickOptim":
-        from .quick import QuickOptim
+def _should_update_progress(completed_epochs: int | jax.Array, print_rate: int):
+    return completed_epochs % print_rate == 0
 
-        return QuickOptim
 
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+def _progress_remainder(completed_epochs: int | jax.Array, print_rate: int) -> int:
+    return int(completed_epochs % print_rate)
 
 
 @dataclass
@@ -66,10 +60,6 @@ class OptimEngine:
         Batch configuration used for the training data. Use :class:`.Batches` for a
         single observation size and :class:`.BatchManager` for multi-branch models
         with different observation sizes.
-    split
-        Train/validation/test split used by the loss and batching logic. Use
-        :class:`.PositionSplit` for a single observation size and
-        :class:`.PositionSplitManager` for multi-branch models.
     optimizers
         Sequence of optimizers. Each optimizer must claim a disjoint set of position
         keys.
@@ -91,14 +81,13 @@ class OptimEngine:
         tracked independently of this setting.
     progress_n_updates
         Approximate maximum number of progress-bar updates.
-    track_keys
-        Optional model-state entries to track. This is currently not operational and
-        must be empty.
 
     Attributes
     ----------
     position_keys
         Flattened list of all parameter keys claimed by the optimizers.
+    split
+        Train/validation/test split provided by ``loss.split``.
 
     Notes
     -----
@@ -113,17 +102,10 @@ class OptimEngine:
     >>> from liesel.experimental.optim import QuickOptim
     >>> QuickOptim.__name__
     'QuickOptim'
-
-    Direct imports from ``liesel.experimental.optim.engine`` remain available:
-
-    >>> from liesel.experimental.optim.engine import LieselVI, QuickOptim
-    >>> LieselVI.__name__, QuickOptim.__name__
-    ('LieselVI', 'QuickOptim')
     """
 
     loss: Loss
     batches: BatchConfig
-    split: SplitConfig
     optimizers: Sequence[Optimizer]
     stopper: Stopper
     seed: int | jax.Array
@@ -133,30 +115,42 @@ class OptimEngine:
     show_progress: bool = True
     save_position_history: bool = True
     progress_n_updates: int = 100
-    track_keys: Sequence[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         """
-        Validates optimizer ownership and normalizes integer seeds.
+        Validates engine configuration and normalizes integer seeds.
 
         Raises
         ------
         ValueError
-            If multiple optimizers claim the same position key.
-        NotImplementedError
-            If ``track_keys`` is non-empty.
+            If optimizer ownership, batching, split, or progress settings are
+            invalid.
         """
-        self.validate_position_keys()
-        self.name_optimizers()
+        self.optimizers = tuple(self.optimizers)
+
+        if len(self.optimizers) == 0:
+            raise ValueError("OptimEngine requires at least one optimizer.")
+
+        self._name_optimizers()
+        self._validate_optimizer_identifiers()
+        self._validate_position_keys()
+        self._validate_progress_settings()
+        self._validate_batch_split_compatibility()
 
         if isinstance(self.seed, int):
             self.seed = jax.random.key(self.seed)
 
-        if len(self.track_keys) > 0:
-            raise NotImplementedError(
-                "The argument track_keys=True is currently not operational. "
-                "Please set to []."
-            )
+    @property
+    def split(self) -> SplitConfig:
+        """
+        Train/validation/test split supplied by :attr:`loss`.
+
+        Returns
+        -------
+        PositionSplit | PositionSplitManager
+            The split object stored on ``self.loss.split``.
+        """
+        return self.loss.split
 
     @property
     def position_keys(self) -> list[str]:
@@ -173,7 +167,7 @@ class OptimEngine:
             keys += optim.position_keys
         return keys
 
-    def validate_position_keys(self) -> None:
+    def _validate_position_keys(self) -> None:
         """
         Validates that each optimized position key is owned by one optimizer.
 
@@ -195,7 +189,69 @@ class OptimEngine:
                 f"Position keys claimed by multiple optimizers: {list(duplicates)}"
             )
 
-    def name_optimizers(self) -> Sequence[Optimizer]:
+    def _validate_optimizer_identifiers(self) -> None:
+        """
+        Validates that optimizer identifiers are unique.
+
+        Raises
+        ------
+        ValueError
+            If two or more optimizers have the same identifier.
+        """
+        identifiers = [opt.identifier for opt in self.optimizers]
+        duplicates = sorted(
+            {
+                identifier
+                for identifier in identifiers
+                if identifiers.count(identifier) > 1
+            }
+        )
+        if duplicates:
+            raise ValueError(
+                "Optimizer identifiers must be unique, but got duplicates: "
+                f"{duplicates}."
+            )
+
+    def _validate_progress_settings(self) -> None:
+        """
+        Validates progress-bar configuration.
+
+        Raises
+        ------
+        ValueError
+            If ``progress_n_updates`` is not a positive integer.
+        """
+        if isinstance(self.progress_n_updates, bool) or self.progress_n_updates < 1:
+            raise ValueError("progress_n_updates must be a positive integer.")
+
+    def _validate_batch_split_compatibility(self) -> None:
+        """
+        Validates that batch and split configurations can be used together.
+
+        Raises
+        ------
+        ValueError
+            If a multi-size split is paired with single-size batches, or if batches
+            reference keys missing from the training split.
+        """
+        if isinstance(self.split, PositionSplitManager) and isinstance(
+            self.batches, Batches
+        ):
+            raise ValueError(
+                "OptimEngine requires a BatchManager when used with a "
+                "PositionSplitManager."
+            )
+
+        missing = sorted(
+            key for key in self.batches.position_keys if key not in self.split.train
+        )
+        if missing:
+            raise ValueError(
+                "Batch position keys must be present in split.train, but these keys "
+                f"are missing: {missing}."
+            )
+
+    def _name_optimizers(self) -> Sequence[Optimizer]:
         """
         Fills missing optimizer identifiers with stable numeric names.
 
@@ -234,7 +290,7 @@ class OptimEngine:
         start = time.time()
         carry = self._fit()
         end = time.time()
-        history = self.process_history(carry.epoch, carry.history)
+        history = self._process_history(carry.epoch, carry.history)
         best_epoch = int(carry.best_epoch)
 
         if self.restore_best_position:
@@ -251,7 +307,7 @@ class OptimEngine:
         )
         return result
 
-    def process_history(self, i: int, history: OptimHistory) -> OptimHistory:
+    def _process_history(self, i: int, history: OptimHistory) -> OptimHistory:
         """
         Marks unused history entries and optionally prunes them.
 
@@ -297,7 +353,7 @@ class OptimEngine:
 
         return history
 
-    def get_tqdm_callback(self, stopper: Stopper) -> tuple[Callable, Callable]:
+    def _get_tqdm_callback(self, stopper: Stopper) -> tuple[Callable, Callable]:
         """
         Creates progress-bar update and close callbacks.
 
@@ -312,10 +368,7 @@ class OptimEngine:
             A pair ``(update_progress, close_progress_bar)``. Both callbacks accept an
             :class:`.OptimCarry`.
         """
-        if stopper.epochs > self.progress_n_updates:
-            print_rate = int(stopper.epochs / self.progress_n_updates)
-        else:
-            print_rate = 1
+        print_rate = _progress_print_rate(stopper.epochs, self.progress_n_updates)
 
         progress_bar_inst = tqdm(
             total=stopper.epochs, desc=("Initializing"), position=0, leave=True
@@ -331,7 +384,7 @@ class OptimEngine:
             progress_bar_inst.set_description(desc)
 
         def tqdm_callback(carry: OptimCarry):
-            iter_num = carry.epoch + 1
+            completed_epochs = carry.epoch
 
             loss_train, loss_validate = carry.loss_train, carry.loss_validate
             losses = (loss_train, loss_validate)
@@ -341,14 +394,14 @@ class OptimEngine:
                 return losses
 
             _ = jax.lax.cond(
-                (iter_num % print_rate == 0),
+                _should_update_progress(completed_epochs, print_rate),
                 true_fn,
                 lambda _: losses,
                 operand=None,
             )
 
         def close_progress_bar(carry: OptimCarry):
-            print_remainder = int((carry.epoch + 1) % print_rate)
+            print_remainder = _progress_remainder(carry.epoch, print_rate)
             loss_train, loss_validate = carry.loss_train, carry.loss_validate
             losses = (loss_train, loss_validate)
             tqdm_update(losses, print_remainder)
@@ -356,9 +409,7 @@ class OptimEngine:
 
         return tqdm_callback, close_progress_bar
 
-    def inner_loop_over_optimizers(
-        self, opt: Optimizer, carry: OptimCarry
-    ) -> OptimCarry:
+    def _run_optimizer_step(self, opt: Optimizer, carry: OptimCarry) -> OptimCarry:
         """
         Runs one optimizer update for the current batch.
 
@@ -388,9 +439,7 @@ class OptimEngine:
 
         return carry
 
-    def inner_loop_over_batches(
-        self, j: int | jax.Array, carry: OptimCarry
-    ) -> OptimCarry:
+    def _run_batch(self, j: int | jax.Array, carry: OptimCarry) -> OptimCarry:
         """
         Runs all optimizer updates and records training loss for one batch.
 
@@ -415,7 +464,7 @@ class OptimEngine:
         carry.batch = obs_batch
 
         for opt in self.optimizers:
-            carry = self.inner_loop_over_optimizers(opt, carry)
+            carry = self._run_optimizer_step(opt, carry)
 
         loss = self.loss.loss_train_batched(carry.position, carry)
         carry.loss_train += loss / carry.batches.n_full_batches
@@ -425,7 +474,7 @@ class OptimEngine:
 
         return carry
 
-    def outer_loop_over_epochs(self, carry: OptimCarry) -> OptimCarry:
+    def _run_epoch(self, carry: OptimCarry) -> OptimCarry:
         """
         Runs one full epoch over the configured batches.
 
@@ -454,7 +503,7 @@ class OptimEngine:
         carry = jax.lax.fori_loop(
             lower=0,
             upper=carry.batches.n_full_batches,
-            body_fun=self.inner_loop_over_batches,
+            body_fun=self._run_batch,
             init_val=carry,
         )
 
@@ -521,19 +570,13 @@ class OptimEngine:
         key = self.seed
 
         initial_position = self.loss.position(self.position_keys)
-        if self.track_keys:
-            initial_tracked = self.loss.model.extract_position(
-                self.track_keys, self.initial_state
-            )
-        else:
-            initial_tracked = Position({})
 
         carry = OptimCarry.new(
             batches=self.batches,
             key=key,
             epochs=epochs,
             position=initial_position,
-            tracked=initial_tracked,
+            tracked=None,
             optimizers=self.optimizers,
             model_state=self.initial_state,
             save_position_history=self.save_position_history,
@@ -553,10 +596,10 @@ class OptimEngine:
         stopper = self.stopper
 
         if self.show_progress:
-            update_progress, close_progress_bar = self.get_tqdm_callback(stopper)
+            update_progress, close_progress_bar = self._get_tqdm_callback(stopper)
 
         def while_body(carry: OptimCarry) -> OptimCarry:
-            carry = self.outer_loop_over_epochs(carry)
+            carry = self._run_epoch(carry)
 
             if self.show_progress:
                 update_progress(carry)
