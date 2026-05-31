@@ -54,7 +54,7 @@ from ...docs import usedocs
 from ...model import Dist, Model, Var
 from ...model.logprob import FlatLogProb
 from ...model.model import TemporaryModel
-from .loss import LossMixin
+from .loss import LossMixin, _training_loss_scalar
 from .split import PositionSplit, PositionSplitManager
 from .state import OptimCarry
 from .types import ModelState, Position
@@ -140,9 +140,9 @@ class Elbo(LossMixin):
         Function mapping a sampled position from ``q`` to a position accepted by
         ``p``. Builders such as :class:`VDist` provide this mapping automatically.
     scale
-        If ``True``, divide losses by ``split.n_train``. This requires a common
-        scalar training sample size and raises for multi-branch splits with unequal
-        train sizes.
+        If ``True``, divide losses by the training sample size. For
+        :class:`.PositionSplitManager`, the scalar is the sum of all branch-specific
+        training sizes.
     vdist
         Optional variational distribution builder that created ``q``. Stored for
         introspection and convenience; it is not required for evaluating the loss.
@@ -215,14 +215,7 @@ class Elbo(LossMixin):
         self.nsamples_validate = nsamples_validate
         self._q_to_p = q_to_p
         self.scale = scale
-        try:
-            self.scalar = self.split.n_train if self.scale else 1.0
-        except ValueError as error:
-            raise ValueError(
-                "scale=True requires a common training sample size. For "
-                "multi-branch splits with unequal training sizes, use scale=False "
-                "or a custom normalized ELBO."
-            ) from error
+        self.scalar = _training_loss_scalar(self.split) if self.scale else 1.0
         self.vdist = vdist
         self.regularize_q_prior = regularize_q_prior
 
@@ -252,7 +245,8 @@ class Elbo(LossMixin):
         nsamples_validate
             Number of Monte Carlo samples used for validation losses.
         scale
-            Whether to normalize losses by the common training sample size.
+            Whether to normalize losses by the training sample size. For
+            :class:`.PositionSplitManager`, this is the total branch training size.
         regularize_q_prior
             Whether priors in ``vdist.q`` should be added to the ELBO as
             regularization terms.
@@ -327,7 +321,8 @@ class Elbo(LossMixin):
         nsamples_validate
             Number of Monte Carlo samples used for validation losses.
         scale
-            Whether to normalize losses by the common training sample size.
+            Whether to normalize losses by the training sample size. For
+            :class:`.PositionSplitManager`, this is the total branch training size.
         regularize_q_prior
             Whether priors in the variational model should be added to the ELBO as
             regularization terms.
@@ -383,7 +378,8 @@ class Elbo(LossMixin):
         nsamples_validate
             Number of Monte Carlo samples used for validation losses.
         scale
-            Whether to normalize losses by the common training sample size.
+            Whether to normalize losses by the training sample size. For
+            :class:`.PositionSplitManager`, this is the total branch training size.
         regularize_q_prior
             Whether priors in the variational model should be added to the ELBO as
             regularization terms.
@@ -438,7 +434,8 @@ class Elbo(LossMixin):
         nsamples_validate
             Number of Monte Carlo samples used for validation losses.
         scale
-            Whether to normalize losses by the common training sample size.
+            Whether to normalize losses by the training sample size. For
+            :class:`.PositionSplitManager`, this is the total branch training size.
         regularize_q_prior
             Whether priors in the variational model should be added to the ELBO as
             regularization terms.

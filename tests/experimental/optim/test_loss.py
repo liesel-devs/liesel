@@ -5,7 +5,13 @@ import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.model as lsl
-from liesel.experimental.optim import Elbo, NegLogProbLoss, PositionSplit, Split
+from liesel.experimental.optim import (
+    Elbo,
+    NegLogProbLoss,
+    PositionSplit,
+    PositionSplitManager,
+    Split,
+)
 from liesel.experimental.optim.types import Position
 
 
@@ -16,6 +22,28 @@ def _normal_obs_model():
         name="y",
     )
     return lsl.Model([y])
+
+
+def _two_branch_model(n1: int = 8, n2: int = 5):
+    y1 = lsl.Var.new_obs(
+        jnp.arange(float(n1)),
+        lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+        name="y1",
+    )
+    y2 = lsl.Var.new_obs(
+        jnp.arange(float(n2)),
+        lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+        name="y2",
+    )
+    return lsl.Model([y1, y2])
+
+
+def _empty_carry(model):
+    return SimpleNamespace(
+        batch=Position({}),
+        fixed_position=Position({}),
+        model_state=model.state,
+    )
 
 
 def test_neg_log_prob_loss_train_uses_full_training_split_not_current_batch():
@@ -36,6 +64,56 @@ def test_neg_log_prob_loss_train_uses_full_training_split_not_current_batch():
     manual -= train_state["_model_log_prior"].value
 
     assert jnp.allclose(value, manual)
+
+
+def test_neg_log_prob_loss_scale_uses_scalar_training_size():
+    model = _normal_obs_model()
+    split = Split(["y"], n=6, n_validate=2, shuffle=False).split_position(
+        model.extract_position(["y"])
+    )
+    carry = _empty_carry(model)
+
+    unscaled = NegLogProbLoss(model, split).loss_train(Position({}), carry)
+    scaled_loss = NegLogProbLoss(model, split, scale=True)
+    scaled = scaled_loss.loss_train(Position({}), carry)
+
+    assert scaled_loss.scalar == split.n_train
+    assert jnp.allclose(scaled, unscaled / split.n_train)
+
+
+def test_neg_log_prob_loss_scale_uses_total_unequal_branch_training_size():
+    model = _two_branch_model()
+    split = PositionSplitManager.from_model(model, position_keys=["y1", "y2"])
+    carry = _empty_carry(model)
+
+    unscaled = NegLogProbLoss(model, split).loss_train(Position({}), carry)
+    scaled_loss = NegLogProbLoss(model, split, scale=True)
+    scaled = scaled_loss.loss_train(Position({}), carry)
+    scalar = sum(split.n_trains)
+
+    assert scaled_loss.scalar == scalar
+    assert jnp.allclose(scaled, unscaled / scalar)
+
+
+def test_neg_log_prob_loss_scale_uses_total_equal_branch_training_size():
+    model = _two_branch_model(n1=4, n2=4)
+    position = model.extract_position(["y1", "y2"])
+    split = PositionSplitManager(
+        [
+            Split(["y1"], n=4).split_position(position),
+            Split(["y2"], n=4).split_position(position),
+        ]
+    )
+    carry = _empty_carry(model)
+
+    unscaled = NegLogProbLoss(model, split).loss_train(Position({}), carry)
+    scaled_loss = NegLogProbLoss(model, split, scale=True)
+    scaled = scaled_loss.loss_train(Position({}), carry)
+    scalar = sum(split.n_trains)
+
+    assert split.n_train == 4
+    assert scaled_loss.scalar == scalar
+    assert jnp.allclose(scaled, unscaled / scalar)
 
 
 def test_neg_log_prob_loss_rejects_unknown_validation_strategy():
@@ -74,3 +152,12 @@ def test_elbo_loss_train_uses_full_training_split_not_current_batch():
     assert value == -5.0
     assert seen["nsamples"] == 7
     assert jnp.array_equal(seen["obs"]["y"], train["y"])
+
+
+def test_elbo_scale_uses_total_branch_training_size():
+    model = _two_branch_model()
+    split = PositionSplitManager.from_model(model, position_keys=["y1", "y2"])
+
+    elbo = Elbo(model, model, split=split, scale=True)
+
+    assert elbo.scalar == sum(split.n_trains)

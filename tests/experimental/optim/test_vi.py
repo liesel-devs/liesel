@@ -22,6 +22,31 @@ def _laplace_model():
     return lsl.Model([y])
 
 
+def _two_branch_param_model():
+    loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
+    y1 = lsl.Var.new_obs(
+        jnp.arange(8.0),
+        lsl.Dist(tfp.distributions.Normal, loc=loc, scale=1.0),
+        name="y1",
+    )
+    y2 = lsl.Var.new_obs(
+        jnp.arange(5.0),
+        lsl.Dist(tfp.distributions.Normal, loc=loc, scale=1.0),
+        name="y2",
+    )
+    return lsl.Model([y1, y2])
+
+
+def test_elbo_from_vdist_scale_uses_total_branch_training_size():
+    model = _two_branch_param_model()
+    split = opt.PositionSplitManager.from_model(model, position_keys=["y1", "y2"])
+    vdist = opt.VDist(["loc"], model).mvn_diag().build()
+
+    elbo = opt.Elbo.from_vdist(vdist, split, scale=True)
+
+    assert elbo.scalar == sum(split.n_trains)
+
+
 def test_vdist_float64():
     x = lsl.Var.new_obs(
         0.0,

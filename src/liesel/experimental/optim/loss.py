@@ -20,6 +20,13 @@ if TYPE_CHECKING:
 SplitConfig = PositionSplit | PositionSplitManager
 
 
+def _training_loss_scalar(split: SplitConfig) -> int:
+    if isinstance(split, PositionSplitManager):
+        return sum(split.n_trains)
+
+    return split.n_train
+
+
 class Loss(Protocol):
     """
     Protocol for optimizer losses.
@@ -253,8 +260,8 @@ class NegLogProbLoss(LossMixin):
         Validation objective. ``"log_lik"`` uses the scaled log-likelihood only.
         ``"log_prob"`` also includes the model log-prior.
     scale
-        If ``True``, divide losses by ``split.n_train``. This requires a common
-        scalar training sample size and raises for multi-branch splits with unequal
+        If ``True``, divide losses by the training sample size. For
+        :class:`.PositionSplitManager`, the scalar is the sum of all branch-specific
         training sizes.
 
     Examples
@@ -295,14 +302,7 @@ class NegLogProbLoss(LossMixin):
             )
         self.validation_strategy = validation_strategy
         self.scale = scale
-        try:
-            self.scalar = self.split.n_train if self.scale else 1.0
-        except ValueError as error:
-            raise ValueError(
-                "scale=True requires a common training sample size. For "
-                "multi-branch splits with unequal training sizes, use scale=False "
-                "or a custom normalized loss."
-            ) from error
+        self.scalar = _training_loss_scalar(self.split) if self.scale else 1.0
 
     @property
     def model(self) -> Model:

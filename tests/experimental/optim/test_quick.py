@@ -59,6 +59,7 @@ def test_default_build_engine_uses_opinionated_defaults():
 
     assert isinstance(engine, OptimEngine)
     assert isinstance(engine.loss, NegLogProbLoss)
+    assert engine.loss.scale is True
     assert isinstance(engine.batches, Batches)
     assert engine.batches.is_full_data
     assert engine.batches.n == engine.split.n_train
@@ -106,6 +107,30 @@ def test_multi_size_default_split_builds_batch_manager():
     assert isinstance(engine.split, PositionSplitManager)
     assert isinstance(engine.batches, BatchManager)
     assert engine.batches.n == engine.split.n_trains
+    assert isinstance(engine.loss, NegLogProbLoss)
+    assert engine.loss.scale is True
+    assert engine.loss.scalar == sum(engine.split.n_trains)
+
+
+def test_scale_loss_false_builds_unscaled_default_loss():
+    model = _normal_model()
+
+    engine = LieselOptim(model, scale_loss=False, seed=1).build_engine()
+
+    assert isinstance(engine.loss, NegLogProbLoss)
+    assert engine.loss.scale is False
+    assert engine.loss.scalar == 1.0
+
+
+def test_scale_loss_is_ignored_for_custom_loss():
+    model = _normal_model()
+    split = PositionSplit.from_model(model)
+    loss = NegLogProbLoss(model, split, scale=False)
+
+    engine = LieselOptim(model, loss=loss, scale_loss=True, seed=1).build_engine()
+
+    assert engine.loss is loss
+    assert loss.scale is False
 
 
 def test_custom_loss_and_conflicting_split_raise():
