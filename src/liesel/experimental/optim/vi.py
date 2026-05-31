@@ -955,7 +955,10 @@ class VDist:
         scale
             Initial scale. A scalar is broadcast to all flat components. The special
             value ``"laplace"`` initializes the scale from the diagonal of a
-            Laplace-approximation covariance.
+            Laplace-style covariance computed from the local curvature of the target
+            model's log probability at ``loc``. This assumes that ``loc`` is already
+            a useful approximation to the posterior mode; no optimization to the mode
+            is performed.
         scale_bijector
             Bijector applied to the scale parameter. ``"auto"`` delegates the choice
             to :meth:`liesel.model.Dist.biject_parameters`; ``None`` leaves the scale
@@ -1039,7 +1042,10 @@ class VDist:
             variational distribution's covariance matrix. In other words: The marginal
             standard deviations/scales. A scalar is broadcast to all flat components.
             The special value ``"laplace"`` initializes the diagonal scale from a
-            Laplace-approximation covariance.
+            Laplace-style covariance computed from the local curvature of the target
+            model's log probability at ``loc``. This assumes that ``loc`` is already
+            a useful approximation to the posterior mode; no optimization to the mode
+            is performed.
         scale_diag_bijector
             Bijector applied to the diagonal scale parameter. ``"auto"`` delegates
             to :meth:`liesel.model.Dist.biject_parameters`; ``None`` leaves the
@@ -1121,7 +1127,10 @@ class VDist:
             Initial value for the lower Cholesky factor, must have non-zero diagonal
             elements. A scalar is interpreted as a multiple of the identity matrix.
             The special value ``"laplace"`` initializes the lower Cholesky factor
-            from a Laplace-approximation covariance.
+            from a Laplace-style covariance computed from the local curvature of the
+            target model's log probability at ``loc``. This assumes that ``loc`` is
+            already a useful approximation to the posterior mode; no optimization to
+            the mode is performed.
         scale_tril_bijector
             Bijector applied to the lower-triangular scale parameter. ``"auto"``
             delegates to :meth:`liesel.model.Dist.biject_parameters`; ``None`` leaves
