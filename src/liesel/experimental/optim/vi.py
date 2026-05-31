@@ -231,7 +231,7 @@ class Elbo(LossMixin):
         elbo = self.evaluate(
             Position(params | carry.fixed_position),
             carry.key,
-            obs=Position(carry.batch),
+            obs=Position(self.split.train),
             p_state=carry.model_state,
             q_state=self.q.state,
             nsamples=self.nsamples,

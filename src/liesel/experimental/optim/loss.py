@@ -6,14 +6,16 @@ also implemented by variational losses such as :class:`.Elbo`.
 """
 
 from collections.abc import Callable, Sequence
-from typing import Literal, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
 
 import jax
 
 from ...model import Model
 from .split import PositionSplit, PositionSplitManager
-from .state import OptimCarry
-from .types import ModelInterface, Position
+from .types import Position
+
+if TYPE_CHECKING:
+    from .state import OptimCarry
 
 SplitConfig = PositionSplit | PositionSplitManager
 
@@ -41,26 +43,6 @@ class Loss(Protocol):
 
     split: SplitConfig
 
-    @property
-    def obs_validate(self) -> Position:
-        """Observed position used for validation loss evaluation."""
-        ...
-
-    @property
-    def scale_validate(self) -> float:
-        """Validation likelihood scaling factor for scalar split configurations."""
-        ...
-
-    @property
-    def n_validate(self) -> int:
-        """Number of observations used by the validation objective."""
-        ...
-
-    @property
-    def model(self) -> Model | ModelInterface:
-        """Model or model interface evaluated by the loss."""
-        ...
-
     def position(self, position_keys: Sequence[str]) -> Position:
         """
         Extracts an initial optimizer position.
@@ -72,16 +54,7 @@ class Loss(Protocol):
         """
         ...
 
-    def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
-        """
-        Computes the unbatched training loss at ``params``.
-
-        This method is useful for diagnostics and implementations that do not need
-        mini-batching.
-        """
-        ...
-
-    def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train_batched(self, params: Position, carry: "OptimCarry") -> jax.Array:
         """
         Computes the training loss for the current mini-batch.
 
@@ -90,15 +63,17 @@ class Loss(Protocol):
         """
         ...
 
-    def loss_validate(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_validate(self, params: Position, carry: "OptimCarry") -> jax.Array:
         """Computes the validation loss at ``params``."""
         ...
 
-    def value_and_grad(self, params: Position, carry: OptimCarry):
+    def value_and_grad(
+        self, params: Position, carry: "OptimCarry"
+    ) -> tuple[jax.Array, Position]:
         """Returns ``(loss_train_batched(params, carry), grad)``."""
         ...
 
-    def grad(self, params: Position, carry: OptimCarry):
+    def grad(self, params: Position, carry: "OptimCarry") -> Position:
         """Returns the gradient of :meth:`loss_train_batched` with respect to params."""
         ...
 
@@ -150,7 +125,7 @@ class LossMixin:
     """
 
     split: SplitConfig
-    loss_train_batched: Callable[[Position, OptimCarry], jax.Array]
+    loss_train_batched: Callable[[Position, "OptimCarry"], jax.Array]
 
     @property
     def obs_validate(self) -> Position:
@@ -190,7 +165,9 @@ class LossMixin:
 
         return self.split.n_validate
 
-    def value_and_grad(self, params: Position, carry: OptimCarry):
+    def value_and_grad(
+        self, params: Position, carry: "OptimCarry"
+    ) -> tuple[jax.Array, Position]:
         """
         Evaluates :meth:`loss_train_batched` and its gradient.
 
@@ -208,9 +185,9 @@ class LossMixin:
         """
         grad_ = jax.value_and_grad(self.loss_train_batched, argnums=0)
         value, grad_tree = grad_(params, carry)
-        return value, grad_tree
+        return value, Position(grad_tree)
 
-    def grad(self, params: Position, carry: OptimCarry):
+    def grad(self, params: Position, carry: "OptimCarry") -> Position:
         """
         Computes the gradient of :meth:`loss_train_batched`.
 
@@ -223,12 +200,12 @@ class LossMixin:
 
         Returns
         -------
-        dict
+        Position
             Gradient tree with the same keys as ``params``.
         """
         grad_ = jax.grad(self.loss_train_batched, argnums=0)
         grad_tree = grad_(params, carry)
-        return grad_tree
+        return Position(grad_tree)
 
 
 class NegLogProbLoss(LossMixin):
@@ -287,6 +264,11 @@ class NegLogProbLoss(LossMixin):
     ):
         self._model = model
         self.split = split
+        if validation_strategy not in ("log_lik", "log_prob"):
+            raise ValueError(
+                "validation_strategy must be 'log_lik' or 'log_prob', but got "
+                f"{validation_strategy!r}."
+            )
         self.validation_strategy = validation_strategy
         self.scale = scale
         try:
@@ -326,7 +308,7 @@ class NegLogProbLoss(LossMixin):
         """
         return self.model.extract_position(position_keys)
 
-    def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train_batched(self, params: Position, carry: "OptimCarry") -> jax.Array:
         """
         Computes mini-batch negative log posterior.
 
@@ -352,7 +334,7 @@ class NegLogProbLoss(LossMixin):
         log_prior = new_state["_model_log_prior"].value
         return -(log_lik + log_prior) / self.scalar
 
-    def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train(self, params: Position, carry: "OptimCarry") -> jax.Array:
         """
         Computes full-data negative log posterior.
 
@@ -369,14 +351,14 @@ class NegLogProbLoss(LossMixin):
             Negative full-data log-likelihood plus log-prior, optionally normalized
             by ``self.scalar``.
         """
-        position = Position(params | carry.batch | carry.fixed_position)
+        position = Position(params | self.split.train | carry.fixed_position)
         new_state = self.model.update_state(position, carry.model_state)
 
-        log_lik = new_state["_model_log_lik"].value
+        log_lik = self.split.scaled_log_lik(self.model, new_state, part="train")
         log_prior = new_state["_model_log_prior"].value
         return -(log_lik + log_prior) / self.scalar
 
-    def loss_validate(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_validate(self, params: Position, carry: "OptimCarry") -> jax.Array:
         """
         Computes validation loss.
 
