@@ -1,11 +1,11 @@
 from .batch import Batches as Batches
 from .batch import BatchManager as BatchManager
 from .engine import OptimEngine as OptimEngine
+from .liesel_optim import LieselOptim as LieselOptim
 from .liesel_vi import LieselVI as LieselVI
 from .loss import NegLogProbLoss as NegLogProbLoss
 from .optimizer import LBFGS as LBFGS
 from .optimizer import Optimizer as Optimizer
-from .liesel_optim import LieselOptim as LieselOptim
 from .split import PositionSplit as PositionSplit
 from .split import PositionSplitManager as PositionSplitManager
 from .split import Split as Split

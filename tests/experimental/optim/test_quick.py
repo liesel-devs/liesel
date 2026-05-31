@@ -45,7 +45,9 @@ def _two_branch_model():
 
 
 def test_lieseloptim_imports():
-    from liesel.experimental.optim.liesel_optim import LieselOptim as LieselOptimFromQuick
+    from liesel.experimental.optim.liesel_optim import (
+        LieselOptim as LieselOptimFromQuick,
+    )
 
     assert opt.LieselOptim is LieselOptim
     assert LieselOptimFromQuick is LieselOptim
