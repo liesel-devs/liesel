@@ -11,6 +11,7 @@ import liesel.experimental.optim.engine as engine_module
 from liesel.experimental.optim import (
     Batches,
     BatchManager,
+    LieselOptim,
     OptimEngine,
     PositionSplit,
     PositionSplitManager,
@@ -22,7 +23,7 @@ from liesel.experimental.optim.engine import (
     _should_update_progress,
 )
 from liesel.experimental.optim.liesel_vi import LieselVI
-from liesel.experimental.optim.quick import QuickOptim
+from liesel.experimental.optim.quick import LieselOptim as LieselOptimFromQuick
 from liesel.experimental.optim.state import OptimCarry
 from liesel.experimental.optim.types import Position
 
@@ -256,8 +257,10 @@ def test_batch_manager_keys_must_be_present_in_training_split():
 
 def test_api_imports_after_engine_refactor():
     assert opt.OptimEngine is OptimEngine
-    assert opt.QuickOptim is QuickOptim
+    assert opt.LieselOptim is LieselOptim
+    assert LieselOptimFromQuick is LieselOptim
     assert opt.LieselVI is LieselVI
+    assert not hasattr(opt, "QuickOptim")
     assert not hasattr(engine_module, "QuickOptim")
     assert not hasattr(engine_module, "LieselVI")
 

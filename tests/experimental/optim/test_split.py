@@ -9,10 +9,10 @@ import liesel.model as lsl
 from liesel.experimental.optim import (
     Batches,
     BatchManager,
+    LieselOptim,
     NegLogProbLoss,
     PositionSplit,
     PositionSplitManager,
-    QuickOptim,
     Split,
     SplitManager,
 )
@@ -20,14 +20,15 @@ from liesel.experimental.optim.types import Position
 
 
 def _two_branch_model():
+    loc = lsl.Var.new_param(0.0, name="loc")
     y1 = lsl.Var.new_obs(
         jnp.arange(10.0),
-        lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+        lsl.Dist(tfd.Normal, loc=loc, scale=1.0),
         name="y1",
     )
     y2 = lsl.Var.new_obs(
         jnp.arange(6.0),
-        lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+        lsl.Dist(tfd.Normal, loc=loc, scale=1.0),
         name="y2",
     )
     return lsl.Model([y1, y2]), y1, y2
@@ -427,7 +428,9 @@ class TestSplitManager:
 
         assert jnp.allclose(value, manual)
 
-    def test_quickoptim_builds_full_data_batch_manager_for_position_split_manager(self):
+    def test_lieseloptim_builds_full_data_batch_manager_for_position_split_manager(
+        self,
+    ):
         model, _, _ = _two_branch_model()
         split = PositionSplit.from_model(
             model,
@@ -436,7 +439,7 @@ class TestSplitManager:
             multi_size="manager",
         )
 
-        quick = QuickOptim(model, split=split)
+        quick = LieselOptim(model, split=split)
 
         assert isinstance(quick.batches, BatchManager)
         assert quick.batches.n == split.n_trains
@@ -445,7 +448,7 @@ class TestSplitManager:
         assert batch["y2"].shape == (5,)
         assert split.train is split.train
 
-    def test_quickoptim_rejects_single_batches_for_position_split_manager(self):
+    def test_lieseloptim_rejects_single_batches_for_position_split_manager(self):
         model, _, _ = _two_branch_model()
         split = PositionSplit.from_model(
             model,
@@ -456,4 +459,4 @@ class TestSplitManager:
         batches = Batches(["y1"], n=8, batch_size=None)
 
         with pytest.raises(ValueError, match="BatchManager"):
-            _ = QuickOptim(model, split=split, batches=batches).batches
+            LieselOptim(model, split=split, batches=batches).build_engine()

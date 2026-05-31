@@ -2,7 +2,7 @@
 
 The :class:`OptimEngine` class coordinates losses, optimizers, mini-batches,
 train/validation/test splits, early stopping, and optimizer history recording. Most
-users will usually construct it through :class:`.QuickOptim` or :class:`.LieselVI`,
+users will usually construct it through :class:`.LieselOptim` or :class:`.LieselVI`,
 but direct construction is useful for custom losses or optimizer schedules.
 """
 
@@ -99,9 +99,9 @@ class OptimEngine:
     --------
     ``OptimEngine`` is usually constructed through a convenience wrapper:
 
-    >>> from liesel.experimental.optim import QuickOptim
-    >>> QuickOptim.__name__
-    'QuickOptim'
+    >>> from liesel.experimental.optim import LieselOptim
+    >>> LieselOptim.__name__
+    'LieselOptim'
     """
 
     loss: Loss
