@@ -1,10 +1,25 @@
 import jax
 import jax.numpy as jnp
+import pytest
 import tensorflow_probability.substrates.jax as tfp
 import tensorflow_probability.substrates.jax.bijectors as tfb
 
 import liesel.experimental.optim as opt
 import liesel.model as lsl
+
+
+def _laplace_model():
+    loc = lsl.Var.new_param(
+        jnp.array(0.0),
+        lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=1.0),
+        name="loc",
+    )
+    y = lsl.Var.new_obs(
+        jnp.zeros(2),
+        lsl.Dist(tfp.distributions.Normal, loc=loc, scale=1.0),
+        name="y",
+    )
+    return lsl.Model([y])
 
 
 def test_vdist_float64():
@@ -56,6 +71,49 @@ def test_compositevdist_exp_bijector_float64():
 
 
 class TestVDist:
+    def test_normal_laplace_uses_standard_deviation(self):
+        p = _laplace_model()
+        q = opt.VDist(["loc"], p).normal(scale="laplace", scale_bijector=None)
+        scale = q.var.dist_node.kwinputs["scale"].value
+
+        assert jnp.allclose(scale, jnp.sqrt(jnp.array([1.0 / 3.0])), rtol=1e-5)
+
+    def test_mvn_diag_laplace_uses_standard_deviation(self):
+        p = _laplace_model()
+        q = opt.VDist(["loc"], p).mvn_diag(
+            scale_diag="laplace", scale_diag_bijector=None
+        )
+        scale_diag = q.var.dist_node.kwinputs["scale_diag"].value
+
+        assert jnp.allclose(scale_diag, jnp.sqrt(jnp.array([1.0 / 3.0])), rtol=1e-5)
+
+    def test_mvn_tril_laplace_uses_cholesky_factor(self):
+        p = _laplace_model()
+        q = opt.VDist(["loc"], p).mvn_tril(
+            scale_tril="laplace", scale_tril_bijector=None
+        )
+        scale_tril = q.var.dist_node.kwinputs["scale_tril"].value
+
+        assert jnp.allclose(scale_tril, jnp.sqrt(jnp.array([[1.0 / 3.0]])), rtol=1e-5)
+
+    def test_rejects_non_reparameterized_custom_distribution(self):
+        p = _laplace_model()
+        dist = lsl.Dist(tfp.distributions.Categorical, probs=jnp.ones(2) / 2)
+
+        with pytest.raises(ValueError, match="fully reparameterized"):
+            opt.VDist(["loc"], p).init(dist)
+
+    def test_rejects_shape_incompatible_custom_distribution(self):
+        p = _laplace_model()
+        dist = lsl.Dist(
+            tfp.distributions.MultivariateNormalDiag,
+            loc=jnp.zeros(2),
+            scale_diag=jnp.ones(2),
+        )
+
+        with pytest.raises(ValueError, match="shape"):
+            opt.VDist(["loc"], p).init(dist)
+
     def test_sample_shapes(self):
         loc = lsl.Var.new_param(jnp.array([0.0]), name="loc")
         scale = lsl.Var.new_param(0.0, name="scale", bijector=tfp.bijectors.Exp())
@@ -116,6 +174,27 @@ class TestVDist:
 
 
 class TestCompositeVDist:
+    def test_rejects_empty_composite(self):
+        with pytest.raises(ValueError, match="at least one"):
+            opt.CompositeVDist()
+
+    def test_rejects_overlapping_position_keys(self):
+        p = _laplace_model()
+        q1 = opt.VDist(["loc"], p).mvn_diag()
+        q2 = opt.VDist(["loc"], p).mvn_diag()
+
+        with pytest.raises(ValueError, match="duplicates"):
+            opt.CompositeVDist(q1, q2)
+
+    def test_rejects_different_target_models(self):
+        p1 = _laplace_model()
+        p2 = _laplace_model()
+        q1 = opt.VDist(["loc"], p1).mvn_diag()
+        q2 = opt.VDist(["loc"], p2).mvn_diag()
+
+        with pytest.raises(ValueError, match="share one p"):
+            opt.CompositeVDist(q1, q2)
+
     def test_sample_shapes(self):
         loc = lsl.Var.new_param(jnp.array([0.0]), name="loc")
         scale = lsl.Var.new_param(1.0, name="scale", bijector=tfp.bijectors.Exp())
@@ -145,3 +224,55 @@ class TestCompositeVDist:
         samples = q.sample(key, (1, 2, 3))
         assert samples["loc"].shape == (1, 2, 3, 1)
         assert samples["h(scale)"].shape == (1, 2, 3)
+
+
+class TestElbo:
+    def test_rejects_non_positive_sample_counts(self):
+        p = _laplace_model()
+
+        with pytest.raises(ValueError, match="nsamples"):
+            opt.Elbo.mvn_diag(p, nsamples=0)
+
+        with pytest.raises(ValueError, match="nsamples_validate"):
+            opt.Elbo.mvn_diag(p, nsamples_validate=0)
+
+    def test_from_vdist_requires_built_distribution(self):
+        p = _laplace_model()
+        split = opt.PositionSplit.from_model(p)
+        vdist = opt.VDist(["loc"], p).mvn_diag()
+
+        with pytest.raises(ValueError, match="build"):
+            opt.Elbo.from_vdist(vdist, split)
+
+    def test_regularize_q_prior_controls_variational_prior_contribution(self):
+        p = _laplace_model()
+        split = opt.PositionSplit.from_model(p)
+        q_loc = lsl.Var.new_param(
+            jnp.zeros(1),
+            lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=1.0),
+            name="q_loc",
+        )
+        q_scale = lsl.Var.new_param(jnp.ones(1), name="q_scale")
+        dist = lsl.Dist(
+            tfp.distributions.MultivariateNormalDiag,
+            loc=q_loc,
+            scale_diag=q_scale,
+        )
+        vdist = opt.VDist(["loc"], p).init(dist).build()
+        params = vdist.q.extract_position(vdist.parameters)
+        key = jax.random.key(1)
+
+        elbo_with_prior = opt.Elbo.from_vdist(
+            vdist, split, nsamples=2, regularize_q_prior=True
+        )
+        elbo_without_prior = opt.Elbo.from_vdist(
+            vdist, split, nsamples=2, regularize_q_prior=False
+        )
+        value_with_prior = elbo_with_prior.evaluate(params, key, p.state)
+        value_without_prior = elbo_without_prior.evaluate(params, key, p.state)
+        q_state = vdist.q.update_state(params, vdist.q.state)
+
+        assert jnp.allclose(
+            value_with_prior - value_without_prior,
+            q_state["_model_log_prior"].value,
+        )

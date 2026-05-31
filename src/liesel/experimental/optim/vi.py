@@ -62,6 +62,56 @@ from .types import ModelState, Position
 SplitConfig = PositionSplit | PositionSplitManager
 
 
+def _validate_positive_int(value: int, name: str) -> None:
+    if isinstance(value, bool) or value < 1:
+        raise ValueError(f"{name} must be a positive integer, but got {value!r}.")
+
+
+def _is_laplace_init(value, name: str) -> bool:
+    if not isinstance(value, str):
+        return False
+
+    if value != "laplace":
+        raise ValueError(f"{name} must be 'laplace' or an array-like value.")
+
+    return True
+
+
+def _laplace_covariance(model: Model, position_keys: Sequence[str], loc: jax.Array):
+    info_matrix = -FlatLogProb(model, position_keys).hessian(loc)
+    diag = jnp.diag(info_matrix)
+    ridge = 1e-6 * jnp.maximum(jnp.mean(jnp.abs(diag)), 1.0)
+    info_matrix += ridge * jnp.eye(jnp.shape(info_matrix)[-1])
+
+    eigvals, eigvecs = jnp.linalg.eigh(info_matrix)
+    inv_eigvals_clipped = 1 / jnp.clip(eigvals, min=1e-5)
+    cov_matrix = eigvecs @ (inv_eigvals_clipped[..., None, :] * eigvecs.T)
+    return cov_matrix
+
+
+def _distribution_sample_shape(distribution, value_shape: tuple[int, ...]):
+    event_shape = tuple(distribution.event_shape)
+    batch_shape = tuple(distribution.batch_shape)
+    distribution_shape = batch_shape + event_shape
+    n_distribution_dims = len(distribution_shape)
+
+    if len(value_shape) < n_distribution_dims:
+        raise ValueError(
+            "The variational distribution's event and batch shape "
+            f"{distribution_shape} is incompatible with flattened position shape "
+            f"{value_shape}."
+        )
+
+    if n_distribution_dims and value_shape[-n_distribution_dims:] != distribution_shape:
+        raise ValueError(
+            "The variational distribution's event and batch shape "
+            f"{distribution_shape} does not match the trailing dimensions of the "
+            f"flattened position shape {value_shape}."
+        )
+
+    return value_shape[: len(value_shape) - n_distribution_dims]
+
+
 class Elbo(LossMixin):
     """
     Monte Carlo evidence lower bound loss.
@@ -96,6 +146,10 @@ class Elbo(LossMixin):
     vdist
         Optional variational distribution builder that created ``q``. Stored for
         introspection and convenience; it is not required for evaluating the loss.
+    regularize_q_prior
+        Whether priors in ``q`` should be added to the ELBO as regularization terms.
+        The default preserves the historical behavior of this class. Set to
+        ``False`` to subtract only the variational likelihood term.
 
     Attributes
     ----------
@@ -150,7 +204,10 @@ class Elbo(LossMixin):
         q_to_p: Callable[[Position], Position] = lambda x: x,
         scale: bool = False,
         vdist: VDist | CompositeVDist | None = None,
+        regularize_q_prior: bool = True,
     ):
+        _validate_positive_int(nsamples, "nsamples")
+        _validate_positive_int(nsamples_validate, "nsamples_validate")
         self.p = p
         self.q = q
         self.split = split or PositionSplit.from_model(self.p)
@@ -167,6 +224,7 @@ class Elbo(LossMixin):
                 "or a custom normalized ELBO."
             ) from error
         self.vdist = vdist
+        self.regularize_q_prior = regularize_q_prior
 
     @classmethod
     def from_vdist(
@@ -176,6 +234,7 @@ class Elbo(LossMixin):
         nsamples: int = 10,
         nsamples_validate: int = 50,
         scale: bool = False,
+        regularize_q_prior: bool = True,
     ) -> Elbo:
         """
         Constructs an ELBO loss from a built variational distribution.
@@ -194,6 +253,9 @@ class Elbo(LossMixin):
             Number of Monte Carlo samples used for validation losses.
         scale
             Whether to normalize losses by the common training sample size.
+        regularize_q_prior
+            Whether priors in ``vdist.q`` should be added to the ELBO as
+            regularization terms.
 
         Returns
         -------
@@ -218,7 +280,12 @@ class Elbo(LossMixin):
         >>> opt.Elbo.from_vdist(vdist, split).vdist is vdist
         True
         """
-        assert vdist.q is not None
+        if vdist.q is None:
+            raise ValueError(
+                "vdist.q is None. Call .build() on the variational distribution "
+                "before constructing an Elbo."
+            )
+
         return cls(
             vdist.p,
             vdist.q,
@@ -228,6 +295,7 @@ class Elbo(LossMixin):
             scale=scale,
             q_to_p=vdist.q_to_p,
             vdist=vdist,
+            regularize_q_prior=regularize_q_prior,
         )
 
     @classmethod
@@ -238,6 +306,7 @@ class Elbo(LossMixin):
         nsamples: int = 10,
         nsamples_validate: int = 50,
         scale: bool = False,
+        regularize_q_prior: bool = True,
     ) -> Self:
         """
         Builds a diagonal multivariate normal ELBO over all parameters of ``p``.
@@ -259,6 +328,9 @@ class Elbo(LossMixin):
             Number of Monte Carlo samples used for validation losses.
         scale
             Whether to normalize losses by the common training sample size.
+        regularize_q_prior
+            Whether priors in the variational model should be added to the ELBO as
+            regularization terms.
 
         Returns
         -------
@@ -279,6 +351,7 @@ class Elbo(LossMixin):
             scale=scale,
             q_to_p=vi_dist.q_to_p,
             vdist=vi_dist,
+            regularize_q_prior=regularize_q_prior,
         )
 
     @classmethod
@@ -289,6 +362,7 @@ class Elbo(LossMixin):
         nsamples: int = 10,
         nsamples_validate: int = 50,
         scale: bool = False,
+        regularize_q_prior: bool = True,
     ) -> Self:
         """
         Builds a dense multivariate normal ELBO over all parameters of ``p``.
@@ -310,6 +384,9 @@ class Elbo(LossMixin):
             Number of Monte Carlo samples used for validation losses.
         scale
             Whether to normalize losses by the common training sample size.
+        regularize_q_prior
+            Whether priors in the variational model should be added to the ELBO as
+            regularization terms.
 
         Returns
         -------
@@ -329,6 +406,7 @@ class Elbo(LossMixin):
             scale=scale,
             q_to_p=vi_dist.q_to_p,
             vdist=vi_dist,
+            regularize_q_prior=regularize_q_prior,
         )
 
     @classmethod
@@ -339,6 +417,7 @@ class Elbo(LossMixin):
         nsamples: int = 10,
         nsamples_validate: int = 50,
         scale: bool = False,
+        regularize_q_prior: bool = True,
     ) -> Self:
         """
         Builds an ELBO with one dense normal variational block per parameter.
@@ -360,6 +439,9 @@ class Elbo(LossMixin):
             Number of Monte Carlo samples used for validation losses.
         scale
             Whether to normalize losses by the common training sample size.
+        regularize_q_prior
+            Whether priors in the variational model should be added to the ELBO as
+            regularization terms.
 
         Returns
         -------
@@ -383,6 +465,7 @@ class Elbo(LossMixin):
             scale=scale,
             q_to_p=vi_dist.q_to_p,
             vdist=vi_dist,
+            regularize_q_prior=regularize_q_prior,
         )
 
     @property
@@ -509,7 +592,10 @@ class Elbo(LossMixin):
             # to the log lik of the variational dist would have the opposite of the
             # intended effect, since it would also be minimized. You could say we are
             # treating any priors in the variational model as parts of the main model
-            return log_lik_q - log_prior_q
+            if self.regularize_q_prior:
+                return log_lik_q - log_prior_q
+
+            return log_lik_q
 
         elbo_samples = log_prob_of_p(samples) - log_prob_of_q(samples)
 
@@ -781,9 +867,33 @@ class VDist:
 
         return params
 
-    def _validate(self, dist: Dist): ...
+    def _validate(self, dist: Dist) -> None:
+        distribution = dist.init_dist()
+        if distribution.reparameterization_type != tfd.FULLY_REPARAMETERIZED:
+            raise ValueError(
+                "Variational distributions must be fully reparameterized, but "
+                f"{distribution!r} has "
+                f"{distribution.reparameterization_type!r}."
+            )
 
-    def _reparameterize(self, dist: Dist): ...
+        value_shape = tuple(jnp.shape(self._flat_pos))
+        try:
+            sample_shape = _distribution_sample_shape(distribution, value_shape)
+            sample = distribution.sample(sample_shape, seed=jax.random.key(0))
+            if tuple(jnp.shape(sample)) != value_shape:
+                raise ValueError(
+                    "Sampling from the variational distribution with inferred "
+                    f"{sample_shape=} returned shape {jnp.shape(sample)}, but the "
+                    f"flattened position has shape {value_shape}."
+                )
+            distribution.log_prob(self._flat_pos)
+        except Exception as error:
+            if isinstance(error, ValueError):
+                raise
+            raise ValueError(
+                "The variational distribution is incompatible with the flattened "
+                f"position shape {value_shape}."
+            ) from error
 
     def init(self, dist: Dist) -> Self:
         """
@@ -808,7 +918,6 @@ class VDist:
             This ``VDist`` instance, allowing chained calls to :meth:`build`.
         """
         self._validate(dist)
-        self._reparameterize(dist)
 
         flat_pos_var = Var.new_obs(
             self._flat_pos,
@@ -879,19 +988,9 @@ class VDist:
         else:
             loc_value = jnp.asarray(loc)
 
-        if scale == "laplace":
-            info_matrix = -FlatLogProb(self.p, self.position_keys).hessian(loc_value)
-            info_matrix += (
-                1e-6
-                * jnp.mean(jnp.diag(info_matrix))
-                * jnp.eye(jnp.shape(info_matrix)[-1])
-            )
-            eigvals, eigvecs = jnp.linalg.eigh(info_matrix)
-
-            # ensure eigenvalue positivity
-            inv_eigvals_clipped = 1 / jnp.clip(eigvals, min=1e-5)
-            cov_matrix = eigvecs @ (inv_eigvals_clipped[..., None, :] * eigvecs.T)
-            scale = jnp.diag(cov_matrix)
+        if _is_laplace_init(scale, "scale"):
+            cov_matrix = _laplace_covariance(self.p, self.position_keys, loc_value)
+            scale_value = jnp.sqrt(jnp.clip(jnp.diag(cov_matrix), min=1e-12))
         else:
             scale_arr = jnp.asarray(scale)
             if scale_arr.size == 1:
@@ -967,19 +1066,9 @@ class VDist:
         else:
             loc_value = loc
 
-        if scale_diag == "laplace":
-            info_matrix = -FlatLogProb(self.p, self.position_keys).hessian(loc_value)
-            info_matrix += (
-                1e-6
-                * jnp.mean(jnp.diag(info_matrix))
-                * jnp.eye(jnp.shape(info_matrix)[-1])
-            )
-            eigvals, eigvecs = jnp.linalg.eigh(info_matrix)
-
-            # ensure eigenvalue positivity
-            inv_eigvals_clipped = 1 / jnp.clip(eigvals, min=1e-5)
-            cov_matrix = eigvecs @ (inv_eigvals_clipped[..., None, :] * eigvecs.T)
-            scale_diag_value = jnp.diag(cov_matrix)
+        if _is_laplace_init(scale_diag, "scale_diag"):
+            cov_matrix = _laplace_covariance(self.p, self.position_keys, loc_value)
+            scale_diag_value = jnp.sqrt(jnp.clip(jnp.diag(cov_matrix), min=1e-12))
         else:
             scale_diag_arr = jnp.asarray(scale_diag)
             if scale_diag_arr.size == 1:
@@ -1062,18 +1151,8 @@ class VDist:
         else:
             loc_value = loc
 
-        if scale_tril == "laplace":
-            info_matrix = -FlatLogProb(self.p, self.position_keys).hessian(loc_value)
-            info_matrix += (
-                1e-6
-                * jnp.mean(jnp.diag(info_matrix))
-                * jnp.eye(jnp.shape(info_matrix)[-1])
-            )
-            eigvals, eigvecs = jnp.linalg.eigh(info_matrix)
-
-            # ensure eigenvalue positivity
-            inv_eigvals_clipped = 1 / jnp.clip(eigvals, min=1e-5)
-            cov_matrix = eigvecs @ (inv_eigvals_clipped[..., None, :] * eigvecs.T)
+        if _is_laplace_init(scale_tril, "scale_tril"):
+            cov_matrix = _laplace_covariance(self.p, self.position_keys, loc_value)
             scale_tril_value = jnp.linalg.cholesky(cov_matrix)
         else:
             scale_tril_value_arr = jnp.asarray(scale_tril)
@@ -1388,6 +1467,29 @@ class CompositeVDist:
     """
 
     def __init__(self, *vdists: VDist):
+        if not vdists:
+            raise ValueError("CompositeVDist requires at least one VDist.")
+
+        first_model = vdists[0].p
+        if any(vdist.p is not first_model for vdist in vdists):
+            raise ValueError("All VDist objects in a CompositeVDist must share one p.")
+
+        all_position_keys = [
+            position_key for vdist in vdists for position_key in vdist.position_keys
+        ]
+        duplicate_position_keys = sorted(
+            {
+                position_key
+                for position_key in all_position_keys
+                if all_position_keys.count(position_key) > 1
+            }
+        )
+        if duplicate_position_keys:
+            raise ValueError(
+                "Each target position key can be governed by at most one VDist. "
+                f"Got duplicates: {duplicate_position_keys}."
+            )
+
         self.vi_dists = vdists
         self.q: Model | None = None
 
