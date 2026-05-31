@@ -51,7 +51,9 @@ class RWKernelState:
         if error_sum is None and log_avg_step_size is None and mu is None:
             da_init(self)
         elif error_sum is None or log_avg_step_size is None or mu is None:
-            raise ValueError("Dual averaging fields must either all be set or all be None.")
+            raise ValueError(
+                "Dual averaging fields must either all be set or all be None."
+            )
         else:
             self.error_sum = error_sum
             self.log_avg_step_size = log_avg_step_size
