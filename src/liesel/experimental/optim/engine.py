@@ -3,232 +3,38 @@ from __future__ import annotations
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
-import optax
 from tqdm import tqdm
 
-from ...model import Model
-from .batch import Batches, BatchManager
-from .loss import Loss, NegLogProbLoss
-from .optimizer import LBFGS, Optimizer
-from .split import PositionSplit, PositionSplitManager
+from ._engine_utils import BatchConfig, SplitConfig
+from .loss import Loss
+from .optimizer import Optimizer
 from .state import OptimCarry, OptimHistory, OptimResult
 from .stop import Stopper
 from .types import ModelState, Position
-from .util import guess_n
-from .vi import Elbo
 
-Array = Any
-BatchConfig = Batches | BatchManager
-SplitConfig = PositionSplit | PositionSplitManager
+if TYPE_CHECKING:
+    from .liesel_vi import LieselVI
+    from .quick import QuickOptim
 
-
-def _full_data_batches_for_split(model: Model, split: SplitConfig) -> BatchConfig:
-    if isinstance(split, PositionSplitManager):
-        return BatchManager(
-            [
-                Batches(
-                    position_keys=child.position_keys,
-                    n=child.n_train,
-                    batch_size=None,
-                    axes=None,
-                    default_axis=0,
-                    shuffle=False,
-                )
-                for child in split.splits
-            ]
-        )
-
-    return Batches(
-        position_keys=split.position_keys or list(model.observed),
-        n=split.n_train,
-        batch_size=None,
-        axes=None,
-        default_axis=0,
-        shuffle=False,
-    )
+__all__ = ["LieselVI", "OptimEngine", "QuickOptim"]
 
 
-class LieselVI:
-    """
-    Enables quick optimizer setup by providing strong defaults.
-    """
+def __getattr__(name: str) -> object:
+    if name == "LieselVI":
+        from .liesel_vi import LieselVI
 
-    def __init__(
-        self,
-        model: Model,
-        elbo: Literal["mvn_diag", "mvn_tril", "mvn_blocked"] | Elbo = "mvn_diag",
-        batches: BatchConfig | None = None,
-        split: SplitConfig | None = None,
-        optimizers: Sequence[Optimizer] | Literal["adam", "lbfgs"] = "adam",
-        stopper: Stopper = Stopper(epochs=1000, patience=10, rtol=1e-6),
-        seed: int | None = None,
-        n: int | None = None,
-    ) -> None:
-        self.model = model
-        self._n = n
-        self.stopper = stopper
-        self.seed = int(time.time()) if seed is None else seed
-        self.split = split or PositionSplit.from_model(model)
-        if isinstance(self.split, PositionSplitManager) and isinstance(
-            batches, Batches
-        ):
-            raise ValueError(
-                "LieselVI requires a BatchManager when used with a "
-                "PositionSplitManager. Pass batches=None for full-data batches or "
-                "provide a matching BatchManager."
-            )
-        self.batches = batches or _full_data_batches_for_split(model, self.split)
-        self._optimizers = optimizers
-        if isinstance(elbo, str):
-            match elbo:
-                case "mvn_diag":
-                    self.elbo = Elbo.mvn_diag(model, self.split)
-                case "mvn_tril":
-                    self.elbo = Elbo.mvn_tril(model, self.split)
-                case "mvn_blocked":
-                    self.elbo = Elbo.mvn_blocked(model, self.split)
-        else:
-            self.elbo = elbo
+        return LieselVI
 
-    @property
-    def n(self) -> int:
-        if self._n is not None:
-            return self._n
+    if name == "QuickOptim":
+        from .quick import QuickOptim
 
-        return guess_n(self.model)
+        return QuickOptim
 
-    @property
-    def optimizers(self) -> Sequence[Optimizer]:
-        if isinstance(self._optimizers, str):
-            match self._optimizers:
-                case "lbfgs":
-                    return [LBFGS(list(self.elbo.q.parameters))]
-                case "adam":
-                    opt = Optimizer(
-                        list(self.elbo.q.parameters),
-                        optimizer=optax.adam(learning_rate=1e-3),
-                    )
-                    return [opt]
-
-        return self._optimizers
-
-    def build_engine(self) -> OptimEngine:
-        engine = OptimEngine(
-            loss=self.elbo,
-            batches=self.batches,
-            split=self.split,
-            optimizers=self.optimizers,
-            stopper=self.stopper,
-            initial_state=self.model.state,
-            seed=self.seed,
-        )
-        return engine
-
-
-class QuickOptim:
-    """
-    Enables quick optimizer setup by providing strong defaults.
-
-    1. Default loss: Unnornalized negative log posterior
-    2. Default batching: None
-    3. Default stopping: ``Stopper(epochs=1000, patience=10, rtol=1e-6)``
-    4. Default Train/Validation/Test split: None (use all data for training)
-    5. Default optimizer: Adam(learning_rate=1e-3), jointly optimizing all parameter
-       variables in the model.
-    """
-
-    def __init__(
-        self,
-        model: Model,
-        loss: Loss | None = None,
-        batches: BatchConfig | None = None,
-        split: SplitConfig | None = None,
-        optimizers: Sequence[Optimizer] | Literal["adam", "lbfgs"] = "adam",
-        stopper: Stopper = Stopper(epochs=1000, patience=10, rtol=1e-6),
-        seed: int | None = None,
-        n: int | None = None,
-    ) -> None:
-        self.model = model
-        self._n = n
-        self._loss = loss
-        self.stopper = stopper
-        self._batches = batches
-        self.seed = int(time.time()) if seed is None else seed
-        self._split = split
-        self._optimizers = optimizers
-
-    @property
-    def n(self) -> int:
-        if self._n is not None:
-            return self._n
-
-        return guess_n(self.model)
-
-    @property
-    def batches(self) -> BatchConfig:
-        if self._batches is not None:
-            if isinstance(self.split, PositionSplitManager) and isinstance(
-                self._batches, Batches
-            ):
-                raise ValueError(
-                    "QuickOptim requires a BatchManager when used with a "
-                    "PositionSplitManager. Pass batches=None for full-data batches "
-                    "or provide a matching BatchManager."
-                )
-
-            if isinstance(self._batches, BatchManager):
-                return self._batches
-
-            self._batches.n = self.split.n_train
-            self._batches.indices = jnp.arange(self.split.n_train)
-            return self._batches
-
-        return _full_data_batches_for_split(self.model, self.split)
-
-    @property
-    def split(self) -> SplitConfig:
-        if self._split:
-            return self._split
-
-        return PositionSplit.from_model(self.model, n=self._n)
-
-    @property
-    def optimizers(self) -> Sequence[Optimizer]:
-        if isinstance(self._optimizers, str):
-            match self._optimizers:
-                case "lbfgs":
-                    return [LBFGS(list(self.model.parameters))]
-                case "adam":
-                    opt = Optimizer(
-                        list(self.model.parameters),
-                        optimizer=optax.adam(learning_rate=1e-3),
-                    )
-                    return [opt]
-
-        return self._optimizers
-
-    @property
-    def loss(self) -> Loss:
-        if self._loss is not None:
-            return self._loss
-
-        return NegLogProbLoss(self.model, self.split)
-
-    def build_engine(self) -> OptimEngine:
-        engine = OptimEngine(
-            loss=self.loss,
-            batches=self.batches,
-            split=self.split,
-            optimizers=self.optimizers,
-            stopper=self.stopper,
-            initial_state=self.model.state,
-            seed=self.seed,
-        )
-        return engine
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 @dataclass
