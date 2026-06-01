@@ -12,7 +12,12 @@ import jax.numpy.linalg as jnpla
 from jax import grad, jacfwd
 from jax.flatten_util import ravel_pytree
 
-from .da import da_finalize, da_init, da_step
+from .da import (
+    DualAvgState,
+    da_finalize,
+    da_init,
+    da_step,
+)
 from .epoch import EpochState
 from .iwls_utils import mvn_log_prob, mvn_sample, solve
 from .kernel import (
@@ -31,7 +36,7 @@ from .types import Array, KeyArray, ModelState, Position
 
 
 @register_dataclass_as_pytree
-@dataclass(init=False)
+@dataclass
 class IWLSKernelState:
     """
     A dataclass for the state of a :class:`.IWLSKernel`, implementing the
@@ -39,29 +44,11 @@ class IWLSKernelState:
     """
 
     step_size: float
-    error_sum: float
-    log_avg_step_size: float
-    mu: float
+    da_state: DualAvgState | None = None
 
-    def __init__(
-        self,
-        step_size: float,
-        *,
-        error_sum: float | None = None,
-        log_avg_step_size: float | None = None,
-        mu: float | None = None,
-    ):
-        self.step_size = step_size
-        if error_sum is None and log_avg_step_size is None and mu is None:
-            da_init(self)
-        elif error_sum is None or log_avg_step_size is None or mu is None:
-            raise ValueError(
-                "Dual averaging fields must either all be set or all be None."
-            )
-        else:
-            self.error_sum = error_sum
-            self.log_avg_step_size = log_avg_step_size
-            self.mu = mu
+    def __post_init__(self):
+        if self.da_state is None:
+            self.da_state = DualAvgState.from_step_size(self.step_size)
 
 
 IWLSTransitionInfo = DefaultTransitionInfo

@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import jax
 import pytest
 
+from liesel.goose.da import DualAvgState, da_step
 from liesel.goose.pytree import register_dataclass_as_pytree
 from liesel.goose.rw import RWKernelState
 
@@ -18,6 +19,13 @@ class NoPytree:
 class Pytree:
     foo: float
     bar: int
+
+
+@register_dataclass_as_pytree
+@dataclass
+class CustomDAKernelState:
+    step_size: float
+    da_state: DualAvgState | None = None
 
 
 @jax.jit
@@ -45,9 +53,11 @@ def test_registered_dataclass_is_working():
 def test_kernel_state_internal_fields_are_leaves():
     state = RWKernelState(
         step_size=1.0,
-        error_sum=2.0,
-        log_avg_step_size=3.0,
-        mu=4.0,
+        da_state=DualAvgState(
+            error_sum=2.0,
+            log_avg_step_size=3.0,
+            mu=4.0,
+        ),
     )
 
     leaves, treedef = jax.tree_util.tree_flatten(state)
@@ -56,7 +66,30 @@ def test_kernel_state_internal_fields_are_leaves():
     assert leaves == [1.0, 2.0, 3.0, 4.0]
     assert restored == RWKernelState(
         step_size=5.0,
-        error_sum=6.0,
-        log_avg_step_size=7.0,
-        mu=8.0,
+        da_state=DualAvgState(
+            error_sum=6.0,
+            log_avg_step_size=7.0,
+            mu=8.0,
+        ),
     )
+
+
+def test_dual_avg_state_must_be_initialized():
+    state = RWKernelState.__new__(RWKernelState)
+    state.step_size = 1.0
+    state.da_state = None
+
+    with pytest.raises(RuntimeError, match="Dual averaging state"):
+        da_step(state, acceptance_prob=0.5, time_in_epoch=0)
+
+
+def test_custom_dual_avg_state_must_be_initialized_under_jit():
+    state = CustomDAKernelState(step_size=1.0)
+
+    @jax.jit
+    def step(state):
+        da_step(state, acceptance_prob=0.5, time_in_epoch=0)
+        return state
+
+    with pytest.raises(RuntimeError, match="Dual averaging state"):
+        step(state)
