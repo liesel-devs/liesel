@@ -78,7 +78,7 @@ model = lsl.Model(y)
 model.plot()
 ```
 
-    liesel.model.model - WARNING - Inconsistent log prob decomposition: Model.log_prob=-1177.35 ≠ (Model.log_lik=0.00 + Model.log_prior=-15.72). 
+    liesel.model.model - WARNING - Inconsistent log prob decomposition: Model.log_prob=-1177.35 ≠ (Model.log_lik=0.00 + Model.log_prior=-15.72).
     liesel.model.model - WARNING - Var(name="y") has a distribution but Var.parameter=False and Var.observed=False.
 
 <img
