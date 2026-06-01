@@ -6,7 +6,7 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.model as lsl
 from liesel.experimental.optim import (
-    Elbo,
+    NegElboLoss,
     NegLogProbLoss,
     PositionSplit,
     PositionSplitManager,
@@ -124,22 +124,22 @@ def test_neg_log_prob_loss_rejects_unknown_validation_strategy():
         NegLogProbLoss(model, split, validation_strategy="deviance")
 
 
-def test_elbo_loss_train_uses_full_training_split_not_current_batch():
+def test_neg_elbo_loss_train_uses_full_training_split_not_current_batch():
     train = Position({"y": jnp.array([1.0, 2.0, 3.0])})
-    elbo = object.__new__(Elbo)
+    elbo = object.__new__(NegElboLoss)
     elbo.split = SimpleNamespace(train=train)
     elbo.q = SimpleNamespace(state={})
     elbo.nsamples = 7
     elbo.scalar = 1.0
     seen = {}
 
-    def evaluate(params, key, p_state, q_state, obs=None, nsamples=None):
+    def estimate_elbo(params, key, p_state, q_state, obs=None, nsamples=None):
         del params, key, p_state, q_state
         seen["obs"] = obs
         seen["nsamples"] = nsamples
         return jnp.array(5.0)
 
-    elbo.evaluate = evaluate
+    elbo.estimate_elbo = estimate_elbo
     carry = SimpleNamespace(
         key=None,
         batch=Position({"y": jnp.array([1000.0])}),
@@ -154,10 +154,10 @@ def test_elbo_loss_train_uses_full_training_split_not_current_batch():
     assert jnp.array_equal(seen["obs"]["y"], train["y"])
 
 
-def test_elbo_scale_uses_total_branch_training_size():
+def test_neg_elbo_scale_uses_total_branch_training_size():
     model = _two_branch_model()
     split = PositionSplitManager.from_model(model, position_keys=["y1", "y2"])
 
-    elbo = Elbo(model, model, split=split, scale=True)
+    elbo = NegElboLoss(model, model, split=split, scale=True)
 
     assert elbo.scalar == sum(split.n_trains)

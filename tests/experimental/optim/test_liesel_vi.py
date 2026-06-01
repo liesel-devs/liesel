@@ -11,8 +11,8 @@ from liesel.experimental.optim import (
     LBFGS,
     Batches,
     BatchManager,
-    Elbo,
     LieselVI,
+    NegElboLoss,
     OptimEngine,
     PositionSplit,
     PositionSplitManager,
@@ -59,7 +59,7 @@ def test_default_build_engine_uses_opinionated_defaults():
     engine = LieselVI(model, seed=1).build_engine()
 
     assert isinstance(engine, OptimEngine)
-    assert isinstance(engine.loss, Elbo)
+    assert isinstance(engine.loss, NegElboLoss)
     assert engine.loss.scale is True
     assert engine.loss.scalar == engine.split.n_train
     assert engine.loss.nsamples == 10
@@ -112,50 +112,50 @@ def test_multi_size_default_split_builds_batch_manager():
     assert isinstance(engine.split, PositionSplitManager)
     assert isinstance(engine.batches, BatchManager)
     assert engine.batches.n == engine.split.n_trains
-    assert isinstance(engine.loss, Elbo)
+    assert isinstance(engine.loss, NegElboLoss)
     assert engine.loss.scale is True
     assert engine.loss.scalar == sum(engine.split.n_trains)
 
 
-def test_scale_loss_false_builds_unscaled_default_elbo():
+def test_scale_loss_false_builds_unscaled_default_loss():
     model = _normal_model()
 
     engine = LieselVI(model, scale_loss=False, seed=1).build_engine()
 
-    assert isinstance(engine.loss, Elbo)
+    assert isinstance(engine.loss, NegElboLoss)
     assert engine.loss.scale is False
     assert engine.loss.scalar == 1.0
 
 
-def test_custom_elbo_and_conflicting_split_raise():
+def test_custom_loss_and_conflicting_split_raise():
     model = _normal_model()
     split = PositionSplit.from_model(model)
     other_split = PositionSplit.from_model(model)
-    elbo = Elbo.mvn_diag(model, split=split)
+    loss = NegElboLoss.mvn_diag(model, split=split)
 
-    with pytest.raises(ValueError, match="elbo.split"):
-        LieselVI(model, elbo=elbo, split=other_split)
+    with pytest.raises(ValueError, match="loss.split"):
+        LieselVI(model, loss=loss, split=other_split)
 
 
-def test_custom_elbo_is_passed_through_unchanged():
+def test_custom_loss_is_passed_through_unchanged():
     model = _normal_model()
     split = PositionSplit.from_model(model)
-    elbo = Elbo.mvn_diag(model, split=split, nsamples=3, scale=False)
+    loss = NegElboLoss.mvn_diag(model, split=split, nsamples=3, scale=False)
 
     engine = LieselVI(
-        model, elbo=elbo, nsamples=99, scale_loss=True, seed=1
+        model, loss=loss, nsamples=99, scale_loss=True, seed=1
     ).build_engine()
 
-    assert engine.loss is elbo
-    assert elbo.nsamples == 3
-    assert elbo.scale is False
+    assert engine.loss is loss
+    assert loss.nsamples == 3
+    assert loss.scale is False
 
 
-def test_unknown_elbo_string_raises():
+def test_unknown_loss_string_raises():
     model = _normal_model()
 
-    with pytest.raises(ValueError, match="elbo"):
-        LieselVI(model, elbo="mean_field")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="loss"):
+        LieselVI(model, loss="mean_field")  # type: ignore[arg-type]
 
 
 def test_lbfgs_string_shortcut_raises_with_vi_specific_message():
@@ -168,10 +168,10 @@ def test_lbfgs_string_shortcut_raises_with_vi_specific_message():
 def test_explicit_lbfgs_optimizer_sequence_is_accepted():
     model = _normal_model()
     split = PositionSplit.from_model(model)
-    elbo = Elbo.mvn_diag(model, split=split)
-    optimizer = LBFGS(list(elbo.q.parameters))
+    loss = NegElboLoss.mvn_diag(model, split=split)
+    optimizer = LBFGS(list(loss.q.parameters))
 
-    engine = LieselVI(model, elbo=elbo, optimizers=[optimizer], seed=1).build_engine()
+    engine = LieselVI(model, loss=loss, optimizers=[optimizer], seed=1).build_engine()
 
     assert engine.optimizers[0] is optimizer
 

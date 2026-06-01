@@ -14,7 +14,7 @@ from .batch import Batches, BatchManager
 from .optimizer import Optimizer
 from .split import PositionSplit, PositionSplitManager
 from .stop import Stopper
-from .vi import Elbo
+from .vi import NegElboLoss
 
 if TYPE_CHECKING:
     from .engine import OptimEngine
@@ -26,19 +26,21 @@ class LieselVI:
     Builds an :class:`.OptimEngine` for variational inference.
 
     ``LieselVI`` is the quick-start wrapper for ELBO optimization. It constructs one
-    of the standard :class:`.Elbo` variational families, default training batches,
-    and an Adam optimizer over the variational parameters unless these pieces are
-    supplied explicitly. Variational-family initialization belongs to
-    :class:`.Elbo` and :class:`.VDist`; pass a custom ``Elbo`` when you need Laplace
-    or custom initialization.
+    of the standard :class:`.NegElboLoss` variational families, default training
+    batches, and an Adam optimizer over the variational parameters unless these
+    pieces are supplied explicitly. Variational-family initialization belongs to
+    :class:`.NegElboLoss` and :class:`.VDist`; pass a custom ``NegElboLoss`` when you
+    need Laplace or custom initialization.
 
     Parameters
     ----------
     model
         Target Liesel model.
-    elbo
+    loss
         Either one of ``"mvn_diag"``, ``"mvn_tril"``, and ``"mvn_blocked"``, or an
-        explicit :class:`.Elbo` instance.
+        explicit :class:`.NegElboLoss` instance.
+    elbo
+        Deprecated alias for ``loss``.
     batches
         Optional explicit batch configuration. Cannot be combined with
         ``batch_size``.
@@ -46,7 +48,8 @@ class LieselVI:
         Mini-batch size used to construct default batches. ``None`` means full-data
         batches.
     split
-        Optional split. If omitted and ``elbo`` is not an explicit :class:`.Elbo`,
+        Optional split. If omitted and ``loss`` is not an explicit
+        :class:`.NegElboLoss`,
         all observed data is used for training. Multi-size observed data
         automatically uses :class:`.PositionSplitManager`.
     optimizers
@@ -76,7 +79,7 @@ class LieselVI:
     scale_loss
         Whether internally constructed ELBO losses should be divided by the training
         sample size. ``"auto"`` scales the loss. This setting has no effect when
-        ``elbo`` is an explicit :class:`.Elbo`.
+        ``loss`` is an explicit :class:`.NegElboLoss`.
     regularize_q_prior
         Whether internally constructed ELBOs should include priors in the
         variational model as regularization terms.
@@ -101,14 +104,18 @@ class LieselVI:
     >>> type(engine).__name__
     'OptimEngine'
     >>> type(engine.loss).__name__
-    'Elbo'
+    'NegElboLoss'
     """
 
     def __init__(
         self,
         model: Model,
         *,
-        elbo: Literal["mvn_diag", "mvn_tril", "mvn_blocked"] | Elbo = "mvn_diag",
+        loss: Literal["mvn_diag", "mvn_tril", "mvn_blocked"]
+        | NegElboLoss = "mvn_diag",
+        elbo: Literal["mvn_diag", "mvn_tril", "mvn_blocked"]
+        | NegElboLoss
+        | None = None,
         batches: BatchConfig | None = None,
         batch_size: int | None = None,
         split: SplitConfig | None = None,
@@ -132,12 +139,17 @@ class LieselVI:
         if batches is not None and batch_size is not None:
             raise ValueError("Pass either batches or batch_size, not both.")
 
+        if elbo is not None:
+            if loss != "mvn_diag":
+                raise ValueError("Pass either loss or elbo, not both.")
+            loss = elbo
+
         self.model = model
         self.seed = int(time.time()) if seed is None else seed
         self.stopper = stopper
-        self.split = self._resolve_split(elbo, split, n, axes, default_axis)
-        self.elbo = self._resolve_elbo(
-            elbo,
+        self.split = self._resolve_split(loss, split, n, axes, default_axis)
+        self.loss = self._resolve_loss(
+            loss,
             nsamples=nsamples,
             nsamples_validate=nsamples_validate,
             scale_loss=scale_loss,
@@ -157,19 +169,19 @@ class LieselVI:
 
     def _resolve_split(
         self,
-        elbo: Literal["mvn_diag", "mvn_tril", "mvn_blocked"] | Elbo,
+        loss: Literal["mvn_diag", "mvn_tril", "mvn_blocked"] | NegElboLoss,
         split: SplitConfig | None,
         n: int | None,
         axes: dict[str, int] | None,
         default_axis: int,
     ) -> SplitConfig:
-        if isinstance(elbo, Elbo):
-            if split is not None and split is not elbo.split:
+        if isinstance(loss, NegElboLoss):
+            if split is not None and split is not loss.split:
                 raise ValueError(
-                    "When both elbo and split are provided, split must be elbo.split."
+                    "When both loss and split are provided, split must be loss.split."
                 )
 
-            return elbo.split
+            return loss.split
 
         if split is not None:
             return split
@@ -182,16 +194,16 @@ class LieselVI:
             multi_size="manager",
         )
 
-    def _resolve_elbo(
+    def _resolve_loss(
         self,
-        elbo: Literal["mvn_diag", "mvn_tril", "mvn_blocked"] | Elbo,
+        loss: Literal["mvn_diag", "mvn_tril", "mvn_blocked"] | NegElboLoss,
         nsamples: int,
         nsamples_validate: int,
         scale_loss: bool | Literal["auto"],
         regularize_q_prior: bool,
-    ) -> Elbo:
-        if isinstance(elbo, Elbo):
-            return elbo
+    ) -> NegElboLoss:
+        if isinstance(loss, NegElboLoss):
+            return loss
 
         if scale_loss == "auto":
             scale = True
@@ -200,9 +212,9 @@ class LieselVI:
         else:
             raise ValueError("scale_loss must be True, False, or 'auto'.")
 
-        match elbo:
+        match loss:
             case "mvn_diag":
-                return Elbo.mvn_diag(
+                return NegElboLoss.mvn_diag(
                     self.model,
                     split=self.split,
                     nsamples=nsamples,
@@ -211,7 +223,7 @@ class LieselVI:
                     regularize_q_prior=regularize_q_prior,
                 )
             case "mvn_tril":
-                return Elbo.mvn_tril(
+                return NegElboLoss.mvn_tril(
                     self.model,
                     split=self.split,
                     nsamples=nsamples,
@@ -220,7 +232,7 @@ class LieselVI:
                     regularize_q_prior=regularize_q_prior,
                 )
             case "mvn_blocked":
-                return Elbo.mvn_blocked(
+                return NegElboLoss.mvn_blocked(
                     self.model,
                     split=self.split,
                     nsamples=nsamples,
@@ -230,8 +242,8 @@ class LieselVI:
                 )
             case _:
                 raise ValueError(
-                    "elbo must be 'mvn_diag', 'mvn_tril', 'mvn_blocked', or an "
-                    "Elbo instance."
+                    "loss must be 'mvn_diag', 'mvn_tril', 'mvn_blocked', or a "
+                    "NegElboLoss instance."
                 )
 
     def _resolve_batches(
@@ -286,7 +298,7 @@ class LieselVI:
         if optimizers == "adam":
             return [
                 Optimizer(
-                    list(self.elbo.q.parameters),
+                    list(self.loss.q.parameters),
                     optimizer=optax.adam(learning_rate=1e-3),
                 )
             ]
@@ -299,6 +311,11 @@ class LieselVI:
             )
 
         raise ValueError("optimizers must be 'adam' or a sequence.")
+
+    @property
+    def elbo(self) -> NegElboLoss:
+        """Alias for :attr:`loss`."""
+        return self.loss
 
     def build_engine(self) -> OptimEngine:
         """
@@ -313,7 +330,7 @@ class LieselVI:
         from .engine import OptimEngine
 
         return OptimEngine(
-            loss=self.elbo,
+            loss=self.loss,
             batches=self.batches,
             optimizers=self.optimizers,
             stopper=self.stopper,

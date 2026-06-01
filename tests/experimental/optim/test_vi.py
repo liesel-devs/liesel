@@ -48,20 +48,20 @@ def _two_parameter_model():
     return lsl.Model([y, beta])
 
 
-def test_elbo_from_vdist_scale_uses_total_branch_training_size():
+def test_neg_elbo_from_vdist_scale_uses_total_branch_training_size():
     model = _two_branch_param_model()
     split = opt.PositionSplitManager.from_model(model, position_keys=["y1", "y2"])
     vdist = opt.VDist(["loc"], model).mvn_diag().build()
 
-    elbo = opt.Elbo.from_vdist(vdist, split, scale=True)
+    elbo = opt.NegElboLoss.from_vdist(vdist, split, scale=True)
 
     assert elbo.scalar == sum(split.n_trains)
 
 
-def test_elbo_mvn_diag_forwards_custom_initialization():
+def test_neg_elbo_mvn_diag_forwards_custom_initialization():
     p = _laplace_model()
 
-    elbo = opt.Elbo.mvn_diag(
+    elbo = opt.NegElboLoss.mvn_diag(
         p,
         loc=jnp.array([1.5]),
         scale_diag=0.2,
@@ -73,10 +73,10 @@ def test_elbo_mvn_diag_forwards_custom_initialization():
     assert jnp.allclose(params["scale_diag"].value, jnp.array([0.2]))
 
 
-def test_elbo_mvn_tril_forwards_laplace_initialization():
+def test_neg_elbo_mvn_tril_forwards_laplace_initialization():
     p = _laplace_model()
 
-    elbo = opt.Elbo.mvn_tril(
+    elbo = opt.NegElboLoss.mvn_tril(
         p,
         scale_tril="laplace",
         scale_tril_bijector=None,
@@ -86,10 +86,10 @@ def test_elbo_mvn_tril_forwards_laplace_initialization():
     assert jnp.allclose(scale_tril, jnp.sqrt(jnp.array([[1.0 / 3.0]])), rtol=1e-5)
 
 
-def test_elbo_mvn_blocked_forwards_shared_scale_initialization():
+def test_neg_elbo_mvn_blocked_forwards_shared_scale_initialization():
     p = _two_parameter_model()
 
-    elbo = opt.Elbo.mvn_blocked(p, scale_tril=0.2, scale_tril_bijector=None)
+    elbo = opt.NegElboLoss.mvn_blocked(p, scale_tril=0.2, scale_tril_bijector=None)
 
     scale_trils = [
         vdist.var.dist_node.kwinputs["scale_tril"].value
@@ -99,10 +99,10 @@ def test_elbo_mvn_blocked_forwards_shared_scale_initialization():
     assert jnp.allclose(scale_trils[1], 0.2 * jnp.eye(2))
 
 
-def test_elbo_mvn_diag_inherits_target_model_to_float32():
+def test_neg_elbo_mvn_diag_inherits_target_model_to_float32():
     p = _laplace_model()
 
-    elbo = opt.Elbo.mvn_diag(p)
+    elbo = opt.NegElboLoss.mvn_diag(p)
 
     assert elbo.q.to_float32 is p.to_float32
 
@@ -370,15 +370,15 @@ class TestCompositeVDist:
         assert samples["h(scale)"].shape == (1, 2, 3)
 
 
-class TestElbo:
+class TestNegElboLoss:
     def test_rejects_non_positive_sample_counts(self):
         p = _laplace_model()
 
         with pytest.raises(ValueError, match="nsamples"):
-            opt.Elbo.mvn_diag(p, nsamples=0)
+            opt.NegElboLoss.mvn_diag(p, nsamples=0)
 
         with pytest.raises(ValueError, match="nsamples_validate"):
-            opt.Elbo.mvn_diag(p, nsamples_validate=0)
+            opt.NegElboLoss.mvn_diag(p, nsamples_validate=0)
 
     def test_from_vdist_requires_built_distribution(self):
         p = _laplace_model()
@@ -386,7 +386,7 @@ class TestElbo:
         vdist = opt.VDist(["loc"], p).mvn_diag()
 
         with pytest.raises(ValueError, match="build"):
-            opt.Elbo.from_vdist(vdist, split)
+            opt.NegElboLoss.from_vdist(vdist, split)
 
     def test_regularize_q_prior_controls_variational_prior_contribution(self):
         p = _laplace_model()
@@ -406,14 +406,14 @@ class TestElbo:
         params = vdist.q.extract_position(vdist.parameters)
         key = jax.random.key(1)
 
-        elbo_with_prior = opt.Elbo.from_vdist(
+        elbo_with_prior = opt.NegElboLoss.from_vdist(
             vdist, split, nsamples=2, regularize_q_prior=True
         )
-        elbo_without_prior = opt.Elbo.from_vdist(
+        elbo_without_prior = opt.NegElboLoss.from_vdist(
             vdist, split, nsamples=2, regularize_q_prior=False
         )
-        value_with_prior = elbo_with_prior.evaluate(params, key, p.state)
-        value_without_prior = elbo_without_prior.evaluate(params, key, p.state)
+        value_with_prior = elbo_with_prior.estimate_elbo(params, key, p.state)
+        value_without_prior = elbo_without_prior.estimate_elbo(params, key, p.state)
         q_state = vdist.q.update_state(params, vdist.q.state)
 
         assert jnp.allclose(

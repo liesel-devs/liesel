@@ -13,4 +13,5 @@ from .split import SplitManager as SplitManager
 from .stop import Stopper as Stopper
 from .vi import CompositeVDist as CompositeVDist
 from .vi import Elbo as Elbo
+from .vi import NegElboLoss as NegElboLoss
 from .vi import VDist as VDist

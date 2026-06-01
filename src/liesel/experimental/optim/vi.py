@@ -3,9 +3,9 @@
 This module provides the pieces used by :class:`.LieselVI` and by custom
 variational workflows:
 
-``Elbo``
+``NegElboLoss``
     A :class:`.LossMixin` implementation that evaluates a Monte Carlo estimate of
-    the evidence lower bound (ELBO).
+    the negative evidence lower bound (ELBO) loss.
 ``VDist``
     A builder for one variational block. The block governs one or more parameters
     from a target Liesel model and turns them into a flattened observed variable in
@@ -31,9 +31,11 @@ ELBO loss:
 ... )
 >>> p = lsl.Model([y])
 >>> vdist = opt.VDist(["mu"], p).mvn_diag().build()
->>> elbo = opt.Elbo.from_vdist(vdist, opt.PositionSplit.from_model(p), nsamples=2)
+>>> elbo = opt.NegElboLoss.from_vdist(
+...     vdist, opt.PositionSplit.from_model(p), nsamples=2
+... )
 >>> repr(elbo)
-'Elbo(nsamples=2)'
+'NegElboLoss(nsamples=2)'
 >>> elbo.position(vdist.parameters).keys()
 dict_keys(['(mu)_loc', 'h((mu)_scale)'])
 """
@@ -123,11 +125,11 @@ def _asarray_with_float_dtype(value, dtype: jnp.dtype):
     return arr
 
 
-class Elbo(LossMixin):
+class NegElboLoss(LossMixin):
     """
-    Monte Carlo evidence lower bound loss.
+    Monte Carlo negative evidence lower bound loss.
 
-    ``Elbo`` connects a target model ``p`` and a variational model ``q``. The
+    ``NegElboLoss`` connects a target model ``p`` and a variational model ``q``. The
     variational model must be able to sample parameter positions, and ``q_to_p`` must
     map those sampled positions into the parameter names expected by ``p``. The loss
     is minimized by the experimental optimization engine, so the public loss methods
@@ -190,12 +192,12 @@ class Elbo(LossMixin):
     ...     name="y",
     ... )
     >>> p = lsl.Model([y])
-    >>> elbo = opt.Elbo.mvn_diag(p, nsamples=2, nsamples_validate=3)
+    >>> elbo = opt.NegElboLoss.mvn_diag(p, nsamples=2, nsamples_validate=3)
     >>> repr(elbo)
-    'Elbo(nsamples=2)'
+    'NegElboLoss(nsamples=2)'
     >>> sorted(elbo.position(elbo.vdist.parameters))
     ['(mu)_loc', 'h((mu)_scale)']
-    >>> value = elbo.evaluate(
+    >>> value = elbo.estimate_elbo(
     ...     elbo.position(elbo.vdist.parameters),
     ...     jax.random.key(1),
     ...     p.state,
@@ -239,9 +241,9 @@ class Elbo(LossMixin):
         nsamples_validate: int = 50,
         scale: bool = False,
         regularize_q_prior: bool = True,
-    ) -> Elbo:
+    ) -> NegElboLoss:
         """
-        Constructs an ELBO loss from a built variational distribution.
+        Constructs a negative ELBO loss from a built variational distribution.
 
         Parameters
         ----------
@@ -264,7 +266,7 @@ class Elbo(LossMixin):
 
         Returns
         -------
-        Elbo
+        NegElboLoss
             Loss object using ``vdist.q`` and ``vdist.q_to_p``.
 
         Examples
@@ -282,13 +284,13 @@ class Elbo(LossMixin):
         >>> p = lsl.Model([y])
         >>> split = opt.PositionSplit.from_model(p)
         >>> vdist = opt.VDist(["mu"], p).mvn_diag().build()
-        >>> opt.Elbo.from_vdist(vdist, split).vdist is vdist
+        >>> opt.NegElboLoss.from_vdist(vdist, split).vdist is vdist
         True
         """
         if vdist.q is None:
             raise ValueError(
                 "vdist.q is None. Call .build() on the variational distribution "
-                "before constructing an Elbo."
+                "before constructing a NegElboLoss."
             )
 
         return cls(
@@ -330,7 +332,7 @@ class Elbo(LossMixin):
             Target model.
         split
             Optional data split. If omitted, :meth:`PositionSplit.from_model` is
-            used by :class:`Elbo`.
+            used by :class:`NegElboLoss`.
         nsamples
             Number of Monte Carlo samples used for training losses.
         nsamples_validate
@@ -359,8 +361,8 @@ class Elbo(LossMixin):
 
         Returns
         -------
-        Elbo
-            ELBO loss with a built diagonal multivariate normal variational
+        NegElboLoss
+            Negative ELBO loss with a built diagonal multivariate normal variational
             distribution.
         """
         vi_dist = (
@@ -414,7 +416,7 @@ class Elbo(LossMixin):
             Target model.
         split
             Optional data split. If omitted, :meth:`PositionSplit.from_model` is
-            used by :class:`Elbo`.
+            used by :class:`NegElboLoss`.
         nsamples
             Number of Monte Carlo samples used for training losses.
         nsamples_validate
@@ -443,8 +445,8 @@ class Elbo(LossMixin):
 
         Returns
         -------
-        Elbo
-            ELBO loss with a built dense multivariate normal variational
+        NegElboLoss
+            Negative ELBO loss with a built dense multivariate normal variational
             distribution.
         """
         vi_dist = (
@@ -496,7 +498,7 @@ class Elbo(LossMixin):
             Target model.
         split
             Optional data split. If omitted, :meth:`PositionSplit.from_model` is
-            used by :class:`Elbo`.
+            used by :class:`NegElboLoss`.
         nsamples
             Number of Monte Carlo samples used for training losses.
         nsamples_validate
@@ -524,8 +526,8 @@ class Elbo(LossMixin):
 
         Returns
         -------
-        Elbo
-            ELBO loss with a built blocked variational distribution.
+        NegElboLoss
+            Negative ELBO loss with a built blocked variational distribution.
         """
         vi_dists = []
         for param_name in p.parameters:
@@ -587,7 +589,7 @@ class Elbo(LossMixin):
         """
         return self._q_to_p(q_position)
 
-    def evaluate(
+    def estimate_elbo(
         self,
         params: Position,
         key: jax.Array,
@@ -669,8 +671,8 @@ class Elbo(LossMixin):
             # surprising.
             # The intention here is to allow priors in the variational distribution
             # to be used for regularization.
-            # Since the Elbo is maximized, and the variational log prob is subtracted
-            # from the Elbo, the variational log prob is minimized. Adding the prior
+            # Since the ELBO is maximized, and the variational log prob is subtracted
+            # from the ELBO, the variational log prob is minimized. Adding the prior
             # to the log lik of the variational dist would have the opposite of the
             # intended effect, since it would also be minimized. You could say we are
             # treating any priors in the variational model as parts of the main model
@@ -683,6 +685,10 @@ class Elbo(LossMixin):
 
         return jnp.mean(elbo_samples)
 
+    def evaluate(self, *args, **kwargs) -> jax.Array:
+        """Alias for :meth:`estimate_elbo`."""
+        return self.estimate_elbo(*args, **kwargs)
+
     def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
         """
         Computes the negative mini-batch ELBO used by optimizer updates.
@@ -691,7 +697,7 @@ class Elbo(LossMixin):
         supplies the corresponding likelihood scaling, including per-branch scaling
         for :class:`.BatchManager`.
         """
-        elbo = self.evaluate(
+        elbo = self.estimate_elbo(
             Position(params | carry.fixed_position),
             carry.key,
             obs=Position(carry.batch),
@@ -710,7 +716,7 @@ class Elbo(LossMixin):
         current mini-batch in ``carry.batch``. It is useful for diagnostics or
         full-data optimization.
         """
-        elbo = self.evaluate(
+        elbo = self.estimate_elbo(
             Position(params | carry.fixed_position),
             carry.key,
             obs=Position(self.split.train),
@@ -728,7 +734,7 @@ class Elbo(LossMixin):
         validation-scaled likelihoods are used. If no validation part exists,
         :class:`.LossMixin` falls back to the training observations.
         """
-        elbo = self.evaluate(
+        elbo = self.estimate_elbo(
             Position(params | carry.fixed_position),
             carry.key,
             obs=Position(self.obs_validate),
@@ -743,6 +749,9 @@ class Elbo(LossMixin):
         """Returns a compact representation showing the training Monte Carlo count."""
         name = type(self).__name__
         return f"{name}(nsamples={self.nsamples})"
+
+
+Elbo = NegElboLoss
 
 
 class VDist:
