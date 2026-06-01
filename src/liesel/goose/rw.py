@@ -3,13 +3,18 @@ Random walk sampler.
 """
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import ClassVar
 
 import jax
 import jax.flatten_util
 
-from .da import da_finalize, da_init, da_step
+from .da import (
+    DualAvgState,
+    da_finalize,
+    da_init,
+    da_step,
+)
 from .epoch import EpochState
 from .kernel import (
     DefaultTransitionInfo,
@@ -35,12 +40,11 @@ class RWKernelState:
     """
 
     step_size: float
-    error_sum: float = field(default=0.0, init=False)
-    log_avg_step_size: float = field(default=0.0, init=False)
-    mu: float = field(init=False)
+    da_state: DualAvgState | None = None
 
     def __post_init__(self):
-        da_init(self)
+        if self.da_state is None:
+            self.da_state = DualAvgState.from_step_size(self.step_size)
 
 
 RWTransitionInfo = DefaultTransitionInfo
