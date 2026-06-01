@@ -1,5 +1,6 @@
 # Defining a custom MCMC kernel
 
+
 ## Custom Metropolis-Hastings kernel
 
 The easiest way to use a custom MCMC kernel in `liesel.goose` is to
@@ -626,199 +627,349 @@ gs.Summary(results)
     liesel.goose.engine - INFO - Initializing kernels...
     liesel.goose.engine - INFO - Done
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s] 50%|█████████████████████                     | 1/2 [00:00<00:00,  2.28chunk/s]100%|██████████████████████████████████████████| 2/2 [00:00<00:00,  4.55chunk/s]
+
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
+     50%|█████████████████████                     | 1/2 [00:00<00:00,  1.05chunk/s]
+    100%|██████████████████████████████████████████| 2/2 [00:00<00:00,  2.09chunk/s]
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
-      0%|                                                  | 0/1 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 1/1 [00:00<00:00, 1720.39chunk/s]
+
+      0%|                                                  | 0/1 [00:00<?, ?chunk/s]
+    100%|█████████████████████████████████████████| 1/1 [00:00<00:00, 981.58chunk/s]
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 2/2 [00:00<00:00, 2407.06chunk/s]
+
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
+    100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1318.96chunk/s]
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 275 transitions, 25 jitted together
-      0%|                                                 | 0/11 [00:00<?, ?chunk/s]100%|██████████████████████████████████████| 11/11 [00:00<00:00, 4387.76chunk/s]
+
+      0%|                                                 | 0/11 [00:00<?, ?chunk/s]
+    100%|██████████████████████████████████████| 11/11 [00:00<00:00, 1687.79chunk/s]
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 100 transitions, 25 jitted together
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 4/4 [00:00<00:00, 2699.04chunk/s]
+
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
+    100%|████████████████████████████████████████| 4/4 [00:00<00:00, 1499.84chunk/s]
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Finished warmup
     liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 500 transitions, 25 jitted together
-      0%|                                                 | 0/20 [00:00<?, ?chunk/s]100%|██████████████████████████████████████| 20/20 [00:00<00:00, 4102.61chunk/s]
+
+      0%|                                                 | 0/20 [00:00<?, ?chunk/s]
+    100%|██████████████████████████████████████| 20/20 [00:00<00:00, 1924.17chunk/s]
     liesel.goose.engine - INFO - Finished epoch
 
 <p>
+
 <strong>Parameter summary:</strong>
 </p>
+
 <table border="0" class="dataframe">
+
 <thead>
+
 <tr style="text-align: right;">
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 kernel
 </th>
+
 <th>
+
 mean
 </th>
+
 <th>
+
 sd
 </th>
+
 <th>
+
 q_0.05
 </th>
+
 <th>
+
 q_0.5
 </th>
+
 <th>
+
 q_0.95
 </th>
+
 <th>
+
 sample_size
 </th>
+
 <th>
+
 ess_bulk
 </th>
+
 <th>
+
 ess_tail
 </th>
+
 <th>
+
 rhat
 </th>
+
 </tr>
+
 <tr>
+
 <th>
+
 parameter
 </th>
+
 <th>
+
 index
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 </tr>
+
 </thead>
+
 <tbody>
+
 <tr>
+
 <th>
+
 mu
 </th>
+
 <th>
+
 ()
 </th>
+
 <td>
+
 kernel_00
 </td>
+
 <td>
+
 0.457
 </td>
+
 <td>
+
 0.098
 </td>
+
 <td>
+
 0.278
 </td>
+
 <td>
+
 0.464
 </td>
+
 <td>
+
 0.609
 </td>
+
 <td>
+
 2000
 </td>
+
 <td>
+
 313.054
 </td>
+
 <td>
-280.319
+
+271.839
 </td>
+
 <td>
+
 1.013
 </td>
+
 </tr>
+
 </tbody>
+
 </table>
+
 <p>
+
 <strong>Acceptance probabilities:</strong>
 </p>
+
 <table border="0" class="dataframe">
+
 <thead>
+
 <tr style="text-align: right;">
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 acceptance_probability
 </th>
+
 <th>
+
 position_moved
 </th>
+
 </tr>
+
 <tr>
+
 <th>
+
 kernel
 </th>
+
 <th>
+
 positions
 </th>
+
 <th>
+
 phase
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 </tr>
+
 </thead>
+
 <tbody>
+
 <tr>
+
 <th rowspan="2" valign="top">
+
 kernel_00
 </th>
+
 <th rowspan="2" valign="top">
+
 mu
 </th>
+
 <th>
+
 posterior
 </th>
+
 <td>
+
 0.206
 </td>
+
 <td>
+
 0.205
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 warmup
 </th>
+
 <td>
+
 0.221
 </td>
+
 <td>
+
 0.220
 </td>
+
 </tr>
+
 </tbody>
+
 </table>
