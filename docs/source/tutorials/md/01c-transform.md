@@ -1,5 +1,6 @@
 # Parameter transformations
 
+
 This tutorial builds on the [linear regression
 tutorial](01a-lin-reg.md#linear-regression). Here, we demonstrate how to
 transform a positive-valued parameter so that it can be sampled with a
@@ -77,7 +78,7 @@ model = lsl.Model(y)
 model.plot()
 ```
 
-    liesel.model.model - WARNING - Inconsistent log prob decomposition: Model.log_prob=-1177.35 ≠ (Model.log_lik=0.00 + Model.log_prior=-15.72).
+    liesel.model.model - WARNING - Inconsistent log prob decomposition: Model.log_prob=-1177.35 ≠ (Model.log_lik=0.00 + Model.log_prior=-15.72). 
     liesel.model.model - WARNING - Var(name="y") has a distribution but Var.parameter=False and Var.observed=False.
 
 <img
@@ -111,32 +112,48 @@ results = gs.LieselMCMC(model).run_for_epochs(
     liesel.goose.engine - INFO - Initializing kernels...
     liesel.goose.engine - INFO - Done
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 100 transitions, 25 jitted together
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s] 25%|██████████▌                               | 1/4 [00:01<00:04,  1.38s/chunk]100%|██████████████████████████████████████████| 4/4 [00:01<00:00,  2.89chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 2, 4 / 100 transitions
+
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
+     25%|██████████▌                               | 1/4 [00:03<00:11,  3.77s/chunk]
+    100%|██████████████████████████████████████████| 4/4 [00:03<00:00,  1.06chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 3, 3, 3 / 100 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
-      0%|                                                  | 0/1 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 1/1 [00:00<00:00, 1240.55chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 1, 2, 1 / 25 transitions
+
+      0%|                                                  | 0/1 [00:00<?, ?chunk/s]
+    100%|█████████████████████████████████████████| 1/1 [00:00<00:00, 691.22chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 25 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1683.78chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 3, 1, 2 / 50 transitions
+
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
+    100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1458.38chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 4, 2 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 4/4 [00:00<00:00, 2899.12chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 2, 2 / 100 transitions
+
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
+    100%|████████████████████████████████████████| 4/4 [00:00<00:00, 1215.04chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 3, 1, 2 / 100 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 525 transitions, 25 jitted together
-      0%|                                                 | 0/21 [00:00<?, ?chunk/s]100%|███████████████████████████████████████| 21/21 [00:00<00:00, 303.84chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 3, 3, 3 / 525 transitions
+
+      0%|                                                 | 0/21 [00:00<?, ?chunk/s]
+    100%|███████████████████████████████████████| 21/21 [00:00<00:00, 215.74chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 3, 1, 2 / 525 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 200 transitions, 25 jitted together
-      0%|                                                  | 0/8 [00:00<?, ?chunk/s]100%|█████████████████████████████████████████| 8/8 [00:00<00:00, 895.45chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 4, 3, 1 / 200 transitions
+
+      0%|                                                  | 0/8 [00:00<?, ?chunk/s]
+    100%|█████████████████████████████████████████| 8/8 [00:00<00:00, 588.58chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 2, 2, 3 / 200 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Finished warmup
     liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
-      0%|                                                 | 0/40 [00:00<?, ?chunk/s] 80%|███████████████████████████████▏       | 32/40 [00:00<00:00, 307.02chunk/s]100%|███████████████████████████████████████| 40/40 [00:00<00:00, 291.56chunk/s]
+
+      0%|                                                 | 0/40 [00:00<?, ?chunk/s]
+     62%|████████████████████████▍              | 25/40 [00:00<00:00, 243.33chunk/s]
+    100%|███████████████████████████████████████| 40/40 [00:00<00:00, 212.13chunk/s]
     liesel.goose.engine - INFO - Finished epoch
 
 Judging from the trace plots, it seems that all chains have converged.
@@ -156,396 +173,689 @@ gs.Summary(results)
 ```
 
 <p>
+
 <strong>Parameter summary:</strong>
 </p>
+
 <table border="0" class="dataframe">
+
 <thead>
+
 <tr style="text-align: right;">
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 kernel
 </th>
+
 <th>
+
 mean
 </th>
+
 <th>
+
 sd
 </th>
+
 <th>
+
 q_0.05
 </th>
+
 <th>
+
 q_0.5
 </th>
+
 <th>
+
 q_0.95
 </th>
+
 <th>
+
 sample_size
 </th>
+
 <th>
+
 ess_bulk
 </th>
+
 <th>
+
 ess_tail
 </th>
+
 <th>
+
 rhat
 </th>
+
 </tr>
+
 <tr>
+
 <th>
+
 parameter
 </th>
+
 <th>
+
 index
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 </tr>
+
 </thead>
+
 <tbody>
+
 <tr>
+
 <th rowspan="2" valign="top">
+
 beta
 </th>
+
 <th>
+
 (0,)
 </th>
+
 <td>
+
 kernel_00
 </td>
+
 <td>
-0.981
-</td>
-<td>
-0.091
-</td>
-<td>
-0.833
-</td>
-<td>
+
 0.980
 </td>
+
 <td>
-1.130
+
+0.090
 </td>
+
 <td>
+
+0.830
+</td>
+
+<td>
+
+0.982
+</td>
+
+<td>
+
+1.127
+</td>
+
+<td>
+
 4000
 </td>
+
 <td>
-816.958
+
+841.545
 </td>
+
 <td>
-1116.378
+
+986.330
 </td>
+
 <td>
+
 1.002
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 (1,)
 </th>
+
 <td>
+
 kernel_00
 </td>
+
 <td>
-1.914
+
+1.915
 </td>
+
 <td>
-0.159
+
+0.158
 </td>
+
 <td>
-1.656
+
+1.661
 </td>
+
 <td>
-1.916
+
+1.915
 </td>
+
 <td>
-2.173
+
+2.178
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
-772.001
+
+750.169
 </td>
+
 <td>
-917.470
+
+986.009
 </td>
+
 <td>
-1.001
+
+1.002
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 h(sigma_sq)
 </th>
+
 <th>
+
 ()
 </th>
+
 <td>
+
 kernel_00
 </td>
+
 <td>
-0.042
-</td>
-<td>
-0.062
-</td>
-<td>
--0.058
-</td>
-<td>
+
 0.040
 </td>
+
 <td>
+
+0.063
+</td>
+
+<td>
+
+-0.060
+</td>
+
+<td>
+
+0.039
+</td>
+
+<td>
+
 0.145
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
-5406.551
+
+5414.602
 </td>
+
 <td>
-3299.936
+
+3247.635
 </td>
+
 <td>
+
 1.001
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 sigma_sq
 </th>
+
 <th>
+
 ()
 </th>
+
 <td>
+
 \-
 </td>
+
 <td>
-1.045
+
+1.043
 </td>
+
 <td>
-0.065
+
+0.066
 </td>
+
 <td>
-0.943
+
+0.941
 </td>
+
 <td>
-1.041
+
+1.040
 </td>
+
 <td>
+
 1.156
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
-5406.532
+
+5414.611
 </td>
+
 <td>
-3299.936
+
+3247.635
 </td>
+
 <td>
+
 1.001
 </td>
+
 </tr>
+
 </tbody>
+
 </table>
+
 <p>
+
 <strong>Acceptance probabilities:</strong>
 </p>
+
 <table border="0" class="dataframe">
+
 <thead>
+
 <tr style="text-align: right;">
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 acceptance_probability
 </th>
+
 <th>
+
 position_moved
 </th>
+
 </tr>
+
 <tr>
+
 <th>
+
 kernel
 </th>
+
 <th>
+
 positions
 </th>
+
 <th>
+
 phase
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 </tr>
+
 </thead>
+
 <tbody>
+
 <tr>
+
 <th rowspan="2" valign="top">
+
 kernel_00
 </th>
+
 <th rowspan="2" valign="top">
+
 h(sigma_sq), beta
 </th>
+
 <th>
+
 posterior
 </th>
+
 <td>
-0.870
+
+0.868
 </td>
+
 <td>
+
 NaN
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 warmup
 </th>
+
 <td>
-0.791
+
+0.792
 </td>
+
 <td>
+
 NaN
 </td>
+
 </tr>
+
 </tbody>
+
 </table>
+
 <p>
+
 <strong>Error summary:</strong>
 </p>
+
 <table border="0" class="dataframe">
+
 <thead>
+
 <tr style="text-align: right;">
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 count
 </th>
+
 <th>
+
 sample_size
 </th>
+
 <th>
+
 sample_size_total
 </th>
+
 <th>
+
 relative
 </th>
+
 </tr>
+
 <tr>
+
 <th>
+
 kernel
 </th>
+
 <th>
+
 positions
 </th>
+
 <th>
+
 error_code
 </th>
+
 <th>
+
 error_msg
 </th>
+
 <th>
+
 phase
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 </tr>
+
 </thead>
+
 <tbody>
+
 <tr>
+
 <th rowspan="2" valign="top">
+
 kernel_00
 </th>
+
 <th rowspan="2" valign="top">
+
 h(sigma_sq), beta
 </th>
+
 <th rowspan="2" valign="top">
+
 1
 </th>
+
 <th rowspan="2" valign="top">
+
 divergent transition
 </th>
+
 <th>
+
 warmup
 </th>
+
 <td>
-50
+
+47
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
-0.013
+
+0.012
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 posterior
 </th>
+
 <td>
+
 0
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
+
 0.000
 </td>
+
 </tr>
+
 </tbody>
+
 </table>
 
 Finally, let’s check the autocorrelation of the samples.
