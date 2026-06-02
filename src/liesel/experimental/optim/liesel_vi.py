@@ -51,7 +51,8 @@ class LieselVI:
         Optional split. If omitted and ``loss`` is not an explicit
         :class:`.NegElboLoss`,
         all observed data is used for training. Multi-size observed data
-        automatically uses :class:`.PositionSplitManager`.
+        automatically uses :class:`.PositionSplitManager`. Validation data is not
+        supported for ELBO losses.
     optimizers
         Either explicit optimizers or the string shortcut ``"adam"``. L-BFGS is not
         provided as a string shortcut because ELBO estimates are usually stochastic.
@@ -74,8 +75,6 @@ class LieselVI:
         ``mode="resample"``.
     nsamples
         Monte Carlo sample count for internally constructed training ELBOs.
-    nsamples_validate
-        Monte Carlo sample count for internally constructed validation ELBOs.
     scale_loss
         Whether internally constructed ELBO losses should be divided by the training
         sample size. ``"auto"`` scales the loss. This setting has no effect when
@@ -128,7 +127,6 @@ class LieselVI:
         batch_mode: Literal["strict", "resample"] = "resample",
         epoch_size: Literal["max", "min"] | int = "max",
         nsamples: int = 10,
-        nsamples_validate: int = 50,
         scale_loss: bool | Literal["auto"] = "auto",
         regularize_q_prior: bool = True,
         train_monitor: Literal[
@@ -150,7 +148,6 @@ class LieselVI:
         self.loss = self._resolve_loss(
             loss,
             nsamples=nsamples,
-            nsamples_validate=nsamples_validate,
             scale_loss=scale_loss,
             regularize_q_prior=regularize_q_prior,
         )
@@ -197,7 +194,6 @@ class LieselVI:
         self,
         loss: Literal["mvn_diag", "mvn_tril", "mvn_blocked"] | NegElboLoss,
         nsamples: int,
-        nsamples_validate: int,
         scale_loss: bool | Literal["auto"],
         regularize_q_prior: bool,
     ) -> NegElboLoss:
@@ -217,7 +213,6 @@ class LieselVI:
                     self.model,
                     split=self.split,
                     nsamples=nsamples,
-                    nsamples_validate=nsamples_validate,
                     scale=scale,
                     regularize_q_prior=regularize_q_prior,
                 )
@@ -226,7 +221,6 @@ class LieselVI:
                     self.model,
                     split=self.split,
                     nsamples=nsamples,
-                    nsamples_validate=nsamples_validate,
                     scale=scale,
                     regularize_q_prior=regularize_q_prior,
                 )
@@ -235,7 +229,6 @@ class LieselVI:
                     self.model,
                     split=self.split,
                     nsamples=nsamples,
-                    nsamples_validate=nsamples_validate,
                     scale=scale,
                     regularize_q_prior=regularize_q_prior,
                 )

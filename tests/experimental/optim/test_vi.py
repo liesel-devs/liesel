@@ -377,9 +377,6 @@ class TestNegElboLoss:
         with pytest.raises(ValueError, match="nsamples"):
             opt.NegElboLoss.mvn_diag(p, nsamples=0)
 
-        with pytest.raises(ValueError, match="nsamples_validate"):
-            opt.NegElboLoss.mvn_diag(p, nsamples_validate=0)
-
     def test_from_vdist_requires_built_distribution(self):
         p = _laplace_model()
         split = opt.PositionSplit.from_model(p)
@@ -387,6 +384,13 @@ class TestNegElboLoss:
 
         with pytest.raises(ValueError, match="build"):
             opt.NegElboLoss.from_vdist(vdist, split)
+
+    def test_rejects_split_with_validation_data(self):
+        p = _laplace_model()
+        split = opt.PositionSplit.from_model(p, share_validate=0.5)
+
+        with pytest.raises(ValueError, match="validation data"):
+            opt.NegElboLoss.mvn_diag(p, split=split)
 
     def test_regularize_q_prior_controls_variational_prior_contribution(self):
         p = _laplace_model()

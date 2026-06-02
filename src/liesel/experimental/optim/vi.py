@@ -70,6 +70,15 @@ def _validate_positive_int(value: int, name: str) -> None:
         raise ValueError(f"{name} must be a positive integer, but got {value!r}.")
 
 
+def _validate_no_validation_split(split: SplitConfig) -> None:
+    if split.has_validation:
+        raise ValueError(
+            "NegElboLoss does not support data splits with validation data. "
+            "For variational inference, use a split without validation data "
+            "(for example share_validate=0.0) and choose a training-data monitor."
+        )
+
+
 def _is_laplace_init(value, name: str) -> bool:
     if not isinstance(value, str):
         return False
@@ -141,12 +150,11 @@ class NegElboLoss(LossMixin):
         Variational Liesel model. Its observed variables are sampled as
         reparameterized variational draws.
     split
-        Train/validation/test split for observed data in ``p``. If omitted,
-        :meth:`.PositionSplit.from_model` is used.
+        Train/test split for observed data in ``p``. Validation data is not
+        supported for ELBO losses. If omitted, :meth:`.PositionSplit.from_model` is
+        used.
     nsamples
         Number of Monte Carlo samples used for training losses.
-    nsamples_validate
-        Number of Monte Carlo samples used for validation losses.
     q_to_p
         Function mapping a sampled position from ``q`` to a position accepted by
         ``p``. Builders such as :class:`VDist` provide this mapping automatically.
@@ -169,7 +177,7 @@ class NegElboLoss(LossMixin):
     q
         Variational model.
     split
-        Data split used for training and validation observations.
+        Data split used for training observations.
     scalar
         Normalization constant used when ``scale=True``.
 
@@ -190,7 +198,7 @@ class NegElboLoss(LossMixin):
     ...     name="y",
     ... )
     >>> p = lsl.Model([y])
-    >>> elbo = opt.NegElboLoss.mvn_diag(p, nsamples=2, nsamples_validate=3)
+    >>> elbo = opt.NegElboLoss.mvn_diag(p, nsamples=2)
     >>> repr(elbo)
     'NegElboLoss(nsamples=2)'
     >>> sorted(elbo.position(elbo.vdist.parameters))
@@ -211,19 +219,17 @@ class NegElboLoss(LossMixin):
         q: Model,
         split: SplitConfig | None = None,
         nsamples: int = 10,
-        nsamples_validate: int = 50,
         q_to_p: Callable[[Position], Position] = lambda x: x,
         scale: bool = False,
         vdist: VDist | CompositeVDist | None = None,
         regularize_q_prior: bool = True,
     ):
         _validate_positive_int(nsamples, "nsamples")
-        _validate_positive_int(nsamples_validate, "nsamples_validate")
         self.p = p
         self.q = q
         self.split = split or PositionSplit.from_model(self.p)
+        _validate_no_validation_split(self.split)
         self.nsamples = nsamples
-        self.nsamples_validate = nsamples_validate
         self._q_to_p = q_to_p
         self.scale = scale
         self.scalar = _training_loss_scalar(self.split) if self.scale else 1.0
@@ -236,7 +242,6 @@ class NegElboLoss(LossMixin):
         vdist: VDist | CompositeVDist,
         split: SplitConfig,
         nsamples: int = 10,
-        nsamples_validate: int = 50,
         scale: bool = False,
         regularize_q_prior: bool = True,
     ) -> NegElboLoss:
@@ -250,11 +255,9 @@ class NegElboLoss(LossMixin):
             already be available, usually by calling :meth:`VDist.build` or
             :meth:`CompositeVDist.build`.
         split
-            Data split for the target model.
+            Data split for the target model. Must not contain validation data.
         nsamples
             Number of Monte Carlo samples used for training losses.
-        nsamples_validate
-            Number of Monte Carlo samples used for validation losses.
         scale
             Whether to normalize losses by the training sample size. For
             :class:`.PositionSplitManager`, this is the total branch training size.
@@ -296,7 +299,6 @@ class NegElboLoss(LossMixin):
             vdist.q,
             split=split,
             nsamples=nsamples,
-            nsamples_validate=nsamples_validate,
             scale=scale,
             q_to_p=vdist.q_to_p,
             vdist=vdist,
@@ -309,7 +311,6 @@ class NegElboLoss(LossMixin):
         p: Model,
         split: SplitConfig | None = None,
         nsamples: int = 10,
-        nsamples_validate: int = 50,
         scale: bool = False,
         regularize_q_prior: bool = True,
         loc: jax.typing.ArrayLike | None = None,
@@ -329,12 +330,10 @@ class NegElboLoss(LossMixin):
         p
             Target model.
         split
-            Optional data split. If omitted, :meth:`PositionSplit.from_model` is
-            used by :class:`NegElboLoss`.
+            Optional data split. Must not contain validation data. If omitted,
+            :meth:`PositionSplit.from_model` is used by :class:`NegElboLoss`.
         nsamples
             Number of Monte Carlo samples used for training losses.
-        nsamples_validate
-            Number of Monte Carlo samples used for validation losses.
         scale
             Whether to normalize losses by the training sample size. For
             :class:`.PositionSplitManager`, this is the total branch training size.
@@ -380,7 +379,6 @@ class NegElboLoss(LossMixin):
             vi_dist.q,
             split=split,
             nsamples=nsamples,
-            nsamples_validate=nsamples_validate,
             scale=scale,
             q_to_p=vi_dist.q_to_p,
             vdist=vi_dist,
@@ -393,7 +391,6 @@ class NegElboLoss(LossMixin):
         p: Model,
         split: SplitConfig | None = None,
         nsamples: int = 10,
-        nsamples_validate: int = 50,
         scale: bool = False,
         regularize_q_prior: bool = True,
         loc: jax.typing.ArrayLike | None = None,
@@ -413,12 +410,10 @@ class NegElboLoss(LossMixin):
         p
             Target model.
         split
-            Optional data split. If omitted, :meth:`PositionSplit.from_model` is
-            used by :class:`NegElboLoss`.
+            Optional data split. Must not contain validation data. If omitted,
+            :meth:`PositionSplit.from_model` is used by :class:`NegElboLoss`.
         nsamples
             Number of Monte Carlo samples used for training losses.
-        nsamples_validate
-            Number of Monte Carlo samples used for validation losses.
         scale
             Whether to normalize losses by the training sample size. For
             :class:`.PositionSplitManager`, this is the total branch training size.
@@ -463,7 +458,6 @@ class NegElboLoss(LossMixin):
             vi_dist.q,
             split=split,
             nsamples=nsamples,
-            nsamples_validate=nsamples_validate,
             scale=scale,
             q_to_p=vi_dist.q_to_p,
             vdist=vi_dist,
@@ -476,7 +470,6 @@ class NegElboLoss(LossMixin):
         p: Model,
         split: SplitConfig | None = None,
         nsamples: int = 10,
-        nsamples_validate: int = 50,
         scale: bool = False,
         regularize_q_prior: bool = True,
         scale_tril: Literal["laplace"] | jax.typing.ArrayLike = 0.01,
@@ -495,12 +488,10 @@ class NegElboLoss(LossMixin):
         p
             Target model.
         split
-            Optional data split. If omitted, :meth:`PositionSplit.from_model` is
-            used by :class:`NegElboLoss`.
+            Optional data split. Must not contain validation data. If omitted,
+            :meth:`PositionSplit.from_model` is used by :class:`NegElboLoss`.
         nsamples
             Number of Monte Carlo samples used for training losses.
-        nsamples_validate
-            Number of Monte Carlo samples used for validation losses.
         scale
             Whether to normalize losses by the training sample size. For
             :class:`.PositionSplitManager`, this is the total branch training size.
@@ -543,7 +534,6 @@ class NegElboLoss(LossMixin):
             vi_dist.q,
             split=split,
             nsamples=nsamples,
-            nsamples_validate=nsamples_validate,
             scale=scale,
             q_to_p=vi_dist.q_to_p,
             vdist=vi_dist,
@@ -605,8 +595,8 @@ class NegElboLoss(LossMixin):
         The method draws ``nsamples`` samples from ``q`` at ``params`` and computes
         ``E_q[log p(theta, y) - log q(theta)]``. Mini-batch training passes
         ``batches`` so observed log-likelihood terms can be scaled by the active
-        batch configuration. Validation passes ``split`` so validation likelihoods
-        can be scaled branch by branch.
+        batch configuration. ``NegElboLoss`` rejects validation splits, so any
+        ``split`` supplied here is expected to have no validation part.
 
         Parameters
         ----------
@@ -626,7 +616,7 @@ class NegElboLoss(LossMixin):
             Scalar multiplier for ``p``'s log-likelihood when neither ``split`` nor
             ``batches`` is supplied.
         split
-            Optional split object used to compute validation-scaled log likelihoods.
+            Optional split object used to compute split-aware log likelihoods.
         batches
             Optional batch object used to compute mini-batch-scaled log likelihoods.
         nsamples
@@ -650,9 +640,7 @@ class NegElboLoss(LossMixin):
                 if split is None:
                     log_lik_p = scale_log_lik_p_by * p_state_new["_model_log_lik"].value
                 else:
-                    log_lik_p = split.scaled_log_lik(
-                        self.p, p_state_new, part="validate"
-                    )
+                    log_lik_p = split.scaled_log_lik(self.p, p_state_new, part="train")
             else:
                 log_lik_p = batches.scaled_log_lik(self.p, p_state_new)
             log_prior_p = p_state_new["_model_log_prior"].value
@@ -726,11 +714,11 @@ class NegElboLoss(LossMixin):
 
     def loss_validate(self, params: Position, carry: OptimCarry) -> jax.Array:
         """
-        Computes the negative validation ELBO.
+        Computes the negative monitoring ELBO.
 
-        If the split has a validation part, validation observations and
-        validation-scaled likelihoods are used. If no validation part exists,
-        :class:`.LossMixin` falls back to the training observations.
+        ``NegElboLoss`` rejects splits with validation data during initialization.
+        This method therefore uses the training observations returned by
+        :class:`.LossMixin` and the same Monte Carlo sample count as training.
         """
         elbo = self.estimate_elbo(
             Position(params | carry.fixed_position),
@@ -739,7 +727,7 @@ class NegElboLoss(LossMixin):
             p_state=carry.model_state,
             q_state=self.q.state,
             split=self.split,
-            nsamples=self.nsamples_validate,
+            nsamples=self.nsamples,
         )
         return -elbo / self.scalar
 

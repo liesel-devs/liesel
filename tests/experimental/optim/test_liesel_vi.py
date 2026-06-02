@@ -63,7 +63,6 @@ def test_default_build_engine_uses_opinionated_defaults():
     assert engine.loss.scale is True
     assert engine.loss.scalar == engine.split.n_train
     assert engine.loss.nsamples == 10
-    assert engine.loss.nsamples_validate == 50
     assert engine.loss.vdist.var.dist_node.distribution is tfd.MultivariateNormalDiag
     assert isinstance(engine.batches, Batches)
     assert engine.batches.is_full_data
@@ -75,13 +74,21 @@ def test_default_build_engine_uses_opinionated_defaults():
 
 def test_batch_size_shortcut_builds_training_batches():
     model = _normal_model()
-    split = PositionSplit.from_model(model, share_validate=0.25)
+    split = PositionSplit.from_model(model, share_test=0.25)
 
     engine = LieselVI(model, split=split, batch_size=2, seed=1).build_engine()
 
     assert isinstance(engine.batches, Batches)
     assert engine.batches.n == split.n_train
     assert engine.batches.batch_size == 2
+
+
+def test_validation_split_raises():
+    model = _normal_model()
+    split = PositionSplit.from_model(model, share_validate=0.25)
+
+    with pytest.raises(ValueError, match="validation data"):
+        LieselVI(model, split=split)
 
 
 def test_batches_and_batch_size_are_mutually_exclusive():
@@ -193,7 +200,6 @@ def test_fit_returns_optim_result():
         model,
         stopper=Stopper(epochs=1, patience=1),
         nsamples=1,
-        nsamples_validate=1,
         seed=1,
     ).fit()
 
@@ -214,7 +220,6 @@ def test_fit_handles_float64_model_with_x64_enabled():
             model,
             stopper=Stopper(epochs=1, patience=1),
             nsamples=1,
-            nsamples_validate=1,
             seed=1,
         ).fit()
 
