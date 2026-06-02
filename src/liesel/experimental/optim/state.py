@@ -161,7 +161,8 @@ class OptimHistory:
     loss_train
         Training loss history with shape ``(epochs,)``.
     loss_validate
-        Validation loss history with shape ``(epochs,)``.
+        Monitoring loss history with shape ``(epochs,)``. This can be a validation
+        loss or another loss monitored for stopping and result selection.
     position
         Optional parameter position history. Each array has a leading epoch
         dimension.
@@ -254,7 +255,7 @@ class OptimHistory:
 
     def loss_df(self) -> pd.DataFrame:
         """
-        Converts training and validation losses into a ``pandas.DataFrame``.
+        Converts training and monitoring losses into a ``pandas.DataFrame``.
 
         Returns
         -------
@@ -509,13 +510,13 @@ class OptimCarry:
     best_position
         Best parameter position found so far.
     best_loss
-        Best validation loss found so far.
+        Best monitoring loss found so far.
     best_epoch
-        Epoch at which the best validation loss was found.
+        Epoch at which the best monitoring loss was found.
     loss_train
         Most recent training loss.
     loss_validate
-        Most recent validation loss.
+        Most recent monitoring loss.
     epoch
         Current epoch index.
     i_batch
@@ -652,7 +653,7 @@ class OptimResult:
         ``restore_best_position=True``, this is the global best position found during
         the run. Otherwise, this is the final position.
     best_epoch
-        Epoch at which the global best validation loss was found.
+        Epoch at which the global best monitoring loss was found.
     duration
         Wall-clock runtime in seconds.
 
@@ -684,7 +685,7 @@ class OptimResult:
         self, legend: bool = True, title: str | None = None, window: int | None = None
     ):
         """
-        Plots training and validation loss histories.
+        Plots training and monitoring loss histories.
 
         Parameters
         ----------
@@ -699,7 +700,7 @@ class OptimResult:
         Returns
         -------
         plotnine.ggplot
-            Plot object with training and validation loss curves. A vertical line
+            Plot object with training and monitoring loss curves. A vertical line
             marks :attr:`best_epoch` when it is inside the displayed window.
         """
         history = self.history.loss_df()
@@ -709,7 +710,7 @@ class OptimResult:
 
         plot_data = history[["loss_validate", "loss_train", "epoch"]].rename(
             columns={
-                "loss_validate": "Validation",
+                "loss_validate": "Monitoring",
                 "loss_train": "Training",
                 "epoch": "Epoch",
             }

@@ -11,7 +11,7 @@ class Stopper:
     """
     Handles maximum-epoch and early stopping decisions.
 
-    ``Stopper`` uses a rolling patience window over the recorded validation loss.
+    ``Stopper`` uses a rolling patience window over the recorded monitoring loss.
     In the experimental optimizer engine, the argument ``i`` passed to the stopper is
     the number of completed epochs, which is also the next epoch index to be written.
     Therefore, the recent patience window is ``loss_history[i - patience : i]`` once

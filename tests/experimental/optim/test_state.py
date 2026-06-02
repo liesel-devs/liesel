@@ -110,6 +110,22 @@ class TestOptimCarry:
 
 
 class TestOptimResult:
+    def test_plot_loss_labels_monitoring_loss(self):
+        history = OptimHistory.from_epochs(epochs=2, position=None, tracked=None)
+        history.loss_train = jnp.array([1.0, 0.5])
+        history.loss_validate = jnp.array([1.2, 0.7])
+        result = OptimResult(
+            history=history,
+            final_epoch=1,
+            best_position=Position({}),
+            best_epoch=1,
+            duration=0.0,
+        )
+
+        plot = result.plot_loss()
+
+        assert set(plot.data["Loss Type"].unique()) == {"Training", "Monitoring"}
+
     def test_plot_methods_reject_invalid_window(self):
         position = Position({"theta": jnp.array(0.0)})
         history = OptimHistory.from_epochs(epochs=2, position=position, tracked=None)

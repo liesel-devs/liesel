@@ -52,7 +52,7 @@ class OptimEngine:
     optimization API. Each epoch starts by asking ``batches`` for fresh batch indices,
     then iterates over all full batches. For each batch, each optimizer gets a turn
     to update the subset of parameters named in its ``position_keys``. At the end of
-    the epoch, the engine records training and validation losses, updates the global
+    the epoch, the engine records training and monitoring losses, updates the global
     best position, and asks ``stopper`` whether to continue.
 
     Parameters
@@ -316,7 +316,7 @@ class OptimEngine:
 
         Notes
         -----
-        ``OptimResult.best_epoch`` always refers to the global best validation loss
+        ``OptimResult.best_epoch`` always refers to the global best monitoring loss
         seen during the run. With ``restore_best_position=True``,
         ``OptimResult.best_position`` is the corresponding global best position. With
         ``restore_best_position=False``, ``best_position`` contains the final
@@ -413,7 +413,7 @@ class OptimEngine:
             loss_train = float(jnp.squeeze(losses[0]))
             loss_validate = float(jnp.squeeze(losses[1]))
             desc = (
-                f"Training loss: {loss_train:.3f}, Validation loss: {loss_validate:.3f}"
+                f"Training loss: {loss_train:.3f}, Monitoring loss: {loss_validate:.3f}"
             )
             progress_bar_inst.update(update)
             progress_bar_inst.set_description(desc)
@@ -544,7 +544,7 @@ class OptimEngine:
         Runs one full epoch over the configured batches.
 
         The method starts a new batch epoch, runs the batch loop, records train and
-        validation losses, updates position/tracked histories, updates the global best
+        monitoring losses, updates position/tracked histories, updates the global best
         position, and increments ``carry.epoch``.
 
         Parameters
