@@ -209,6 +209,7 @@ class OptimEngine:
     show_progress: bool = True
     save_position_history: bool = True
     progress_n_updates: int = 100
+    rho: float = 0.05
     track_keys: Sequence[str] = field(default_factory=list)
 
     def __post_init__(self):
@@ -383,7 +384,8 @@ class OptimEngine:
             carry = self.inner_loop_over_optimizers(opt, carry)
 
         loss = self.loss.loss_train_batched(carry.position, carry)
-        carry.loss_train += loss / carry.batches.n_full_batches
+        # carry.loss_train += loss / carry.batches.n_full_batches
+        carry.loss_train = (1 - self.rho) * carry.loss_train + self.rho * loss
 
         carry.i_batch = j
         carry.batch = Position({})
@@ -397,7 +399,7 @@ class OptimEngine:
 
         carry.batches.indices = carry.batches.permute_indices(subkey)
 
-        carry.loss_train = 0.0
+        # carry.loss_train = 0.0
         # run all full batches once
         carry = jax.lax.fori_loop(
             lower=0,
@@ -474,6 +476,7 @@ class OptimEngine:
             model_state=self.initial_state,
             save_position_history=self.save_position_history,
         )
+
         return carry
 
     def _fit(self) -> OptimCarry:
@@ -497,6 +500,8 @@ class OptimEngine:
             return jnp.logical_and(no_nan_loss, continue_)
 
         carry = self._init_carry(stopper.epochs)
+
+        carry.loss_train = self.loss.loss_train(carry.position, carry)
 
         result = jax.lax.while_loop(
             cond_fun=cont,
