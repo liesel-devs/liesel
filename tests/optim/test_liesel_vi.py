@@ -61,67 +61,67 @@ def test_default_build_engine_uses_opinionated_defaults():
     assert isinstance(engine, OptimEngine)
     assert isinstance(engine.loss, NegElboLoss)
     assert engine.loss.scale is True
-    assert engine.loss.scalar == engine.split.n_train
+    assert engine.loss.scalar == engine.split.train_axis_size
     assert engine.loss.nsamples == 10
     assert engine.loss.vdist.var.dist_node.distribution is tfd.MultivariateNormalDiag
     assert isinstance(engine.batches, Batches)
     assert engine.batches.is_full_data
-    assert engine.batches.n == engine.split.n_train
+    assert engine.batches.axis_size == engine.split.train_axis_size
     assert engine.optimizers[0].position_keys == tuple(engine.loss.q.parameters)
     assert engine.stopper == Stopper(epochs=1000, patience=10, rtol=1e-6)
     assert engine.train_monitor == "auto"
 
 
-def test_batch_size_shortcut_builds_training_batches():
+def test_batch_axis_size_shortcut_builds_training_batches():
     model = _normal_model()
-    split = PositionSplit.from_model(model, share_test=0.25)
+    split = PositionSplit.from_model(model, test_axis_share=0.25)
 
-    engine = LieselVI(model, split=split, batch_size=2, seed=1).build_engine()
+    engine = LieselVI(model, split=split, batch_axis_size=2, seed=1).build_engine()
 
     assert isinstance(engine.batches, Batches)
-    assert engine.batches.n == split.n_train
-    assert engine.batches.batch_size == 2
+    assert engine.batches.axis_size == split.train_axis_size
+    assert engine.batches.batch_axis_size == 2
 
 
 def test_validation_split_raises():
     model = _normal_model()
-    split = PositionSplit.from_model(model, share_validate=0.25)
+    split = PositionSplit.from_model(model, validate_axis_share=0.25)
 
     with pytest.raises(ValueError, match="validation data"):
         LieselVI(model, split=split)
 
 
-def test_batches_and_batch_size_are_mutually_exclusive():
+def test_batches_and_batch_axis_size_are_mutually_exclusive():
     model = _normal_model()
-    batches = Batches(["y"], n=6, batch_size=None)
+    batches = Batches(["y"], axis_size=6, batch_axis_size=None)
 
-    with pytest.raises(ValueError, match="batches or batch_size"):
-        LieselVI(model, batches=batches, batch_size=2)
+    with pytest.raises(ValueError, match="batches or batch_axis_size"):
+        LieselVI(model, batches=batches, batch_axis_size=2)
 
 
 def test_user_provided_batches_are_not_mutated():
     model = _normal_model()
-    batches = Batches(["y"], n=2, batch_size=None)
+    batches = Batches(["y"], axis_size=2, batch_axis_size=None)
 
     vi = LieselVI(model, batches=batches, seed=1)
     engine = vi.build_engine()
 
     assert vi.batches is batches
     assert engine.batches is batches
-    assert batches.n == 2
+    assert batches.axis_size == 2
 
 
 def test_multi_size_default_split_builds_batch_manager():
     model = _two_branch_model()
 
-    engine = LieselVI(model, batch_size=None, seed=1).build_engine()
+    engine = LieselVI(model, batch_axis_size=None, seed=1).build_engine()
 
     assert isinstance(engine.split, PositionSplitManager)
     assert isinstance(engine.batches, BatchManager)
-    assert engine.batches.n == engine.split.n_trains
+    assert engine.batches.axis_size == engine.split.train_axis_sizes
     assert isinstance(engine.loss, NegElboLoss)
     assert engine.loss.scale is True
-    assert engine.loss.scalar == sum(engine.split.n_trains)
+    assert engine.loss.scalar == sum(engine.split.train_axis_sizes)
 
 
 def test_scale_loss_false_builds_unscaled_default_loss():

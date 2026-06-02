@@ -38,6 +38,15 @@ def _two_branch_model(n1: int = 8, n2: int = 5):
     return lsl.Model([y1, y2])
 
 
+def _matrix_obs_model():
+    y = lsl.Var.new_obs(
+        jnp.arange(32.0).reshape(4, 8),
+        lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+        name="y",
+    )
+    return lsl.Model([y])
+
+
 def _empty_carry(model):
     return SimpleNamespace(
         batch=Position({}),
@@ -48,9 +57,9 @@ def _empty_carry(model):
 
 def test_neg_log_prob_loss_train_uses_full_training_split_not_current_batch():
     model = _normal_obs_model()
-    split = Split(["y"], n=6, n_validate=2, shuffle=False).split_position(
-        model.extract_position(["y"])
-    )
+    split = Split(
+        ["y"], axis_size=6, validate_axis_size=2, shuffle=False
+    ).split_position(model.extract_position(["y"]))
     loss = NegLogProbLoss(model, split)
     carry = SimpleNamespace(
         batch=Position({"y": jnp.array([1000.0, 2000.0])}),
@@ -68,8 +77,26 @@ def test_neg_log_prob_loss_train_uses_full_training_split_not_current_batch():
 
 def test_neg_log_prob_loss_scale_uses_scalar_training_size():
     model = _normal_obs_model()
-    split = Split(["y"], n=6, n_validate=2, shuffle=False).split_position(
-        model.extract_position(["y"])
+    split = Split(
+        ["y"], axis_size=6, validate_axis_size=2, shuffle=False
+    ).split_position(model.extract_position(["y"]))
+    carry = _empty_carry(model)
+
+    unscaled = NegLogProbLoss(model, split).loss_train(Position({}), carry)
+    scaled_loss = NegLogProbLoss(model, split, scale=True)
+    scaled = scaled_loss.loss_train(Position({}), carry)
+
+    assert scaled_loss.scalar == split.train_axis_size
+    assert jnp.allclose(scaled, unscaled / split.train_axis_size)
+
+
+def test_neg_log_prob_loss_scale_uses_inferred_training_sample_size():
+    model = _matrix_obs_model()
+    split = PositionSplit.from_model(
+        model,
+        position_keys=["y"],
+        validate_axis_share=0.25,
+        split_axes={"y": 1},
     )
     carry = _empty_carry(model)
 
@@ -77,8 +104,10 @@ def test_neg_log_prob_loss_scale_uses_scalar_training_size():
     scaled_loss = NegLogProbLoss(model, split, scale=True)
     scaled = scaled_loss.loss_train(Position({}), carry)
 
-    assert scaled_loss.scalar == split.n_train
-    assert jnp.allclose(scaled, unscaled / split.n_train)
+    assert split.train_axis_size == 6
+    assert split.train_sample_size == 24.0
+    assert scaled_loss.scalar == 24.0
+    assert jnp.allclose(scaled, unscaled / 24.0)
 
 
 def test_neg_log_prob_loss_scale_uses_total_unequal_branch_training_size():
@@ -89,7 +118,7 @@ def test_neg_log_prob_loss_scale_uses_total_unequal_branch_training_size():
     unscaled = NegLogProbLoss(model, split).loss_train(Position({}), carry)
     scaled_loss = NegLogProbLoss(model, split, scale=True)
     scaled = scaled_loss.loss_train(Position({}), carry)
-    scalar = sum(split.n_trains)
+    scalar = sum(split.train_axis_sizes)
 
     assert scaled_loss.scalar == scalar
     assert jnp.allclose(scaled, unscaled / scalar)
@@ -100,8 +129,8 @@ def test_neg_log_prob_loss_scale_uses_total_equal_branch_training_size():
     position = model.extract_position(["y1", "y2"])
     split = PositionSplitManager(
         [
-            Split(["y1"], n=4).split_position(position),
-            Split(["y2"], n=4).split_position(position),
+            Split(["y1"], axis_size=4).split_position(position),
+            Split(["y2"], axis_size=4).split_position(position),
         ]
     )
     carry = _empty_carry(model)
@@ -109,9 +138,9 @@ def test_neg_log_prob_loss_scale_uses_total_equal_branch_training_size():
     unscaled = NegLogProbLoss(model, split).loss_train(Position({}), carry)
     scaled_loss = NegLogProbLoss(model, split, scale=True)
     scaled = scaled_loss.loss_train(Position({}), carry)
-    scalar = sum(split.n_trains)
+    scalar = sum(split.train_axis_sizes)
 
-    assert split.n_train == 4
+    assert split.train_axis_size == 4
     assert scaled_loss.scalar == scalar
     assert jnp.allclose(scaled, unscaled / scalar)
 
@@ -133,9 +162,20 @@ def test_neg_elbo_loss_train_uses_full_training_split_not_current_batch():
     elbo.scalar = 1.0
     seen = {}
 
-    def estimate_elbo(params, key, p_state, q_state, obs=None, nsamples=None):
+    def estimate_elbo(
+        params,
+        key,
+        p_state,
+        q_state,
+        obs=None,
+        split=None,
+        split_part=None,
+        nsamples=None,
+    ):
         del params, key, p_state, q_state
         seen["obs"] = obs
+        seen["split"] = split
+        seen["split_part"] = split_part
         seen["nsamples"] = nsamples
         return jnp.array(5.0)
 
@@ -151,6 +191,50 @@ def test_neg_elbo_loss_train_uses_full_training_split_not_current_batch():
 
     assert value == -5.0
     assert seen["nsamples"] == 7
+    assert seen["split"] is elbo.split
+    assert seen["split_part"] == "train"
+    assert jnp.array_equal(seen["obs"]["y"], train["y"])
+
+
+def test_neg_elbo_loss_monitoring_uses_training_split_scaling():
+    train = Position({"y": jnp.array([1.0, 2.0, 3.0])})
+    elbo = object.__new__(NegElboLoss)
+    elbo.split = SimpleNamespace(train=train, has_validation=False)
+    elbo.q = SimpleNamespace(state={})
+    elbo.nsamples = 5
+    elbo.scalar = 1.0
+    seen = {}
+
+    def estimate_elbo(
+        params,
+        key,
+        p_state,
+        q_state,
+        obs=None,
+        split=None,
+        split_part=None,
+        nsamples=None,
+    ):
+        del params, key, p_state, q_state
+        seen["obs"] = obs
+        seen["split"] = split
+        seen["split_part"] = split_part
+        seen["nsamples"] = nsamples
+        return jnp.array(9.0)
+
+    elbo.estimate_elbo = estimate_elbo
+    carry = SimpleNamespace(
+        key=None,
+        fixed_position=Position({}),
+        model_state={},
+    )
+
+    value = elbo.loss_validate(Position({}), carry)
+
+    assert value == -9.0
+    assert seen["nsamples"] == 5
+    assert seen["split"] is elbo.split
+    assert seen["split_part"] == "train"
     assert jnp.array_equal(seen["obs"]["y"], train["y"])
 
 
@@ -160,4 +244,19 @@ def test_neg_elbo_scale_uses_total_branch_training_size():
 
     elbo = NegElboLoss(model, model, split=split, scale=True)
 
-    assert elbo.scalar == sum(split.n_trains)
+    assert elbo.scalar == sum(split.train_axis_sizes)
+
+
+def test_neg_elbo_scale_uses_inferred_training_sample_size():
+    model = _matrix_obs_model()
+    split = PositionSplit.from_model(
+        model,
+        position_keys=["y"],
+        split_axes={"y": 1},
+    )
+
+    elbo = NegElboLoss(model, model, split=split, scale=True)
+
+    assert split.train_axis_size == 8
+    assert split.train_sample_size == 32.0
+    assert elbo.scalar == 32.0

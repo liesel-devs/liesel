@@ -55,7 +55,7 @@ def test_neg_elbo_from_vdist_scale_uses_total_branch_training_size():
 
     elbo = opt.NegElboLoss.from_vdist(vdist, split, scale=True)
 
-    assert elbo.scalar == sum(split.n_trains)
+    assert elbo.scalar == sum(split.train_axis_sizes)
 
 
 def test_neg_elbo_mvn_diag_forwards_custom_initialization():
@@ -387,7 +387,7 @@ class TestNegElboLoss:
 
     def test_rejects_split_with_validation_data(self):
         p = _laplace_model()
-        split = opt.PositionSplit.from_model(p, share_validate=0.5)
+        split = opt.PositionSplit.from_model(p, validate_axis_share=0.5)
 
         with pytest.raises(ValueError, match="validation data"):
             opt.NegElboLoss.mvn_diag(p, split=split)

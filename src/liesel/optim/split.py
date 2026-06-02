@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import math
 import time
-from collections.abc import Sequence
-from dataclasses import dataclass, field
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from typing import Literal
 
 import jax
@@ -15,6 +16,10 @@ from ._log_lik import scaled_common_log_lik, scaled_liesel_log_lik
 from ._model_utils import position_key_groups_from_model
 from .types import Array, ModelInterface, ModelState, Position
 from .util import guess_n
+
+SplitPart = Literal["train", "validate", "test"]
+SampleSizes = Mapping[SplitPart, int | float]
+_SPLIT_PARTS: tuple[SplitPart, ...] = ("train", "validate", "test")
 
 
 def _merge_positions(positions: Sequence[Position]) -> Position:
@@ -76,37 +81,169 @@ def _child_seeds(
 
 def _validate_child_split_availability(
     splits: Sequence[Split],
-    share_validate: float,
-    share_test: float,
+    validate_axis_share: float,
+    test_axis_share: float,
 ) -> None:
-    if share_validate > 0.0:
-        n_validates = [split.n_validate for split in splits]
-        if any(n == 0 for n in n_validates) and any(n > 0 for n in n_validates):
-            ns_with_zero = [split.n for split in splits if split.n_validate == 0]
+    if validate_axis_share > 0.0:
+        validate_axis_sizes = [split.validate_axis_size for split in splits]
+        if any(size == 0 for size in validate_axis_sizes) and any(
+            size > 0 for size in validate_axis_sizes
+        ):
+            axis_sizes_with_zero = [
+                split.axis_size for split in splits if split.validate_axis_size == 0
+            ]
             raise ValueError(
-                f"{share_validate=} produced zero validation observations for "
-                f"sample sizes {ns_with_zero}, while other split groups received "
-                "validation data. Increase share_validate, set share_validate=0.0, "
-                "or construct SplitManager manually."
+                f"{validate_axis_share=} produced zero validation observations for "
+                f"axis sizes {axis_sizes_with_zero}, while other split groups "
+                "received validation data. Increase validate_axis_share, set "
+                "validate_axis_share=0.0, or construct SplitManager manually."
             )
 
-    if share_test > 0.0:
-        n_tests = [split.n_test for split in splits]
-        if any(n == 0 for n in n_tests) and any(n > 0 for n in n_tests):
-            ns_with_zero = [split.n for split in splits if split.n_test == 0]
+    if test_axis_share > 0.0:
+        test_axis_sizes = [split.test_axis_size for split in splits]
+        if any(size == 0 for size in test_axis_sizes) and any(
+            size > 0 for size in test_axis_sizes
+        ):
+            axis_sizes_with_zero = [
+                split.axis_size for split in splits if split.test_axis_size == 0
+            ]
             raise ValueError(
-                f"{share_test=} produced zero test observations for sample sizes "
-                f"{ns_with_zero}, while other split groups received test data. "
-                "Increase share_test, set share_test=0.0, or construct "
+                f"{test_axis_share=} produced zero test observations for axis sizes "
+                f"{axis_sizes_with_zero}, while other split groups received test data. "
+                "Increase test_axis_share, set test_axis_share=0.0, or construct "
                 "SplitManager manually."
             )
 
 
-def _position_size_is_compatible(value: Array, n: int) -> bool:
+def _position_size_is_compatible(value: Array, axis_size: int) -> bool:
     shape = jnp.shape(value)
     if len(shape) == 0:
-        return n == 1
-    return n in shape
+        return axis_size == 1
+    return axis_size in shape
+
+
+def _normalize_sample_sizes(
+    sample_sizes: SampleSizes | None,
+) -> dict[SplitPart, float] | None:
+    if sample_sizes is None:
+        return None
+
+    normalized: dict[SplitPart, float] = {}
+    for part, size in sample_sizes.items():
+        if part not in _SPLIT_PARTS:
+            raise ValueError(
+                "sample_sizes keys must be 'train', 'validate', or 'test', "
+                f"but got {part!r}."
+            )
+
+        size_float = float(size)
+        if not math.isfinite(size_float) or size_float < 0.0:
+            raise ValueError(
+                "sample_sizes values must be finite and non-negative, "
+                f"but got {size!r} for {part!r}."
+            )
+
+        normalized[part] = size_float
+
+    return normalized
+
+
+def _count_likelihood_contributions(value) -> int:
+    shape = jnp.shape(value)
+    if len(shape) == 0:
+        return 1
+
+    return math.prod(shape)
+
+
+def _observed_dist_infos(
+    model: Model, position_keys: Sequence[str]
+) -> list[tuple[str, str, bool]]:
+    keys = set(position_keys)
+    infos: list[tuple[str, str, bool]] = []
+
+    for var in model.observed.values():
+        if var.dist_node is None:
+            continue
+
+        if var.name in keys or var.value_node.name in keys:
+            infos.append((var.name, var.dist_node.name, var.dist_node.per_obs))
+
+    return infos
+
+
+def _has_custom_model_log_lik(model: Model) -> bool:
+    model_log_lik = model.nodes.get("_model_log_lik")
+    if model_log_lik is None:
+        return False
+
+    direct_inputs = model_log_lik.inputs + tuple(model_log_lik.kwinputs.values())
+    direct_input_names = {node.name for node in direct_inputs}
+    observed_log_prob_names = {
+        var.dist_node.name
+        for var in model.observed.values()
+        if var.dist_node is not None
+    }
+
+    return direct_input_names != observed_log_prob_names
+
+
+def _infer_sample_size_for_part(
+    model: Model,
+    model_state: ModelState,
+    split: PositionSplit,
+    part: SplitPart,
+) -> int:
+    infos = _observed_dist_infos(model, split.position_keys)
+    sizes: dict[str, int] = {}
+
+    for var_name, node_name, per_obs in infos:
+        if not per_obs:
+            raise ValueError(
+                "Cannot infer sample sizes because "
+                f"{var_name!r} has Var.dist_node.per_obs=False. Set "
+                "infer_sample_sizes=False or provide sample_sizes manually."
+            )
+
+        sizes[var_name] = _count_likelihood_contributions(model_state[node_name].value)
+
+    if not sizes:
+        return split._axis_size_for_part(part)
+
+    unique_sizes = set(sizes.values())
+    if len(unique_sizes) != 1:
+        raise ValueError(
+            "Cannot infer a scalar sample size because observed variables in one "
+            f"PositionSplit imply incompatible pointwise sample sizes: {sizes}. "
+            "Use PositionSplitManager, provide sample_sizes manually, or set "
+            "infer_sample_sizes=False."
+        )
+
+    return unique_sizes.pop()
+
+
+def _with_inferred_sample_sizes_from_model(
+    model: Model, split: PositionSplit
+) -> PositionSplit:
+    if _has_custom_model_log_lik(model):
+        raise ValueError(
+            "Cannot infer sample sizes for a model with a custom log_lik_node. "
+            "Set infer_sample_sizes=False or provide sample_sizes manually."
+        )
+
+    sizes: dict[SplitPart, int] = {}
+    for part, position, n_part in (
+        ("train", split.train, split.train_axis_size),
+        ("validate", split.validate, split.validate_axis_size),
+        ("test", split.test, split.test_axis_size),
+    ):
+        if n_part == 0:
+            continue
+
+        state = model.update_state(position, model.state)
+        sizes[part] = _infer_sample_size_for_part(model, state, split, part)
+
+    return replace(split, sample_sizes=sizes)
 
 
 @dataclass
@@ -126,12 +263,15 @@ class PositionSplit:
         Position entries used for validation or early stopping.
     test
         Position entries reserved for testing.
-    n_train
+    train_axis_size
         Number of training observations.
-    n_validate
+    validate_axis_size
         Number of validation observations.
-    n_test
+    test_axis_size
         Number of test observations.
+    sample_sizes
+        Optional effective sample sizes for train, validation, and test scaling.
+        If omitted, split-axis counts are used.
 
     Examples
     --------
@@ -142,9 +282,9 @@ class PositionSplit:
     ...     train=Position({"x": jnp.arange(3)}),
     ...     validate=Position({"x": jnp.arange(3, 5)}),
     ...     test=Position({"x": jnp.arange(5, 6)}),
-    ...     n_train=3,
-    ...     n_validate=2,
-    ...     n_test=1,
+    ...     train_axis_size=3,
+    ...     validate_axis_size=2,
+    ...     test_axis_size=1,
     ... )
     >>> split
     PositionSplit(train=3, validate=2, test=1)
@@ -156,48 +296,55 @@ class PositionSplit:
     validate: Position
     test: Position
 
-    n_train: int
-    n_validate: int
-    n_test: int
+    train_axis_size: int
+    validate_axis_size: int
+    test_axis_size: int
+    sample_sizes: SampleSizes | None = None
 
     def __post_init__(self):
-        if self.n_train < 0 or self.n_validate < 0 or self.n_test < 0:
+        self.sample_sizes = _normalize_sample_sizes(self.sample_sizes)
+
+        if (
+            self.train_axis_size < 0
+            or self.validate_axis_size < 0
+            or self.test_axis_size < 0
+        ):
             raise ValueError(
-                f"Split sizes must be non-negative, but got {self.n_train=}, "
-                f"{self.n_validate=}, and {self.n_test=}."
+                f"Split sizes must be non-negative, but got {self.train_axis_size=}, "
+                f"{self.validate_axis_size=}, and {self.test_axis_size=}."
             )
 
-        if self.n <= 0:
+        if self.axis_size <= 0:
             raise ValueError(
                 "PositionSplit must contain at least one observation, but got "
-                f"{self.n=}."
+                f"{self.axis_size=}."
             )
 
         expected_keys = set(self.position_keys)
         if not expected_keys:
             for part, n_part in (
-                ("train", self.n_train),
-                ("validate", self.n_validate),
-                ("test", self.n_test),
+                ("train", self.train_axis_size),
+                ("validate", self.validate_axis_size),
+                ("test", self.test_axis_size),
             ):
                 if n_part > 0:
                     raise ValueError(
                         f"PositionSplit.{part} must contain position entries when "
-                        f"n_{part} > 0."
+                        f"{part}_axis_size > 0."
                     )
 
             raise ValueError("PositionSplit must contain position entries.")
 
         for part, position, n_part in (
-            ("train", self.train, self.n_train),
-            ("validate", self.validate, self.n_validate),
-            ("test", self.test, self.n_test),
+            ("train", self.train, self.train_axis_size),
+            ("validate", self.validate, self.validate_axis_size),
+            ("test", self.test, self.test_axis_size),
         ):
             keys = set(position)
             if n_part > 0 and not keys:
                 raise ValueError(
                     f"PositionSplit.{part} must contain position entries when "
-                    f"n_{part} > 0."
+                    f"{part}_axis_size > 0."
                 )
 
             if keys and keys != expected_keys:
@@ -214,6 +361,20 @@ class PositionSplit:
                         f"{n_part}."
                     )
 
+        for part, n_part in (
+            ("validate", self.validate_axis_size),
+            ("test", self.test_axis_size),
+        ):
+            if (
+                n_part > 0
+                and self.sample_sizes is not None
+                and self.sample_sizes.get(part, n_part) == 0.0
+            ):
+                raise ValueError(
+                    f"sample_sizes[{part!r}] must be positive when "
+                    f"{part}_axis_size > 0."
+                )
+
     @property
     def position_keys(self) -> list[str]:
         """
@@ -228,9 +389,9 @@ class PositionSplit:
         ...     Position({"x": jnp.arange(2)}),
         ...     Position({}),
         ...     Position({}),
-        ...     n_train=2,
-        ...     n_validate=0,
-        ...     n_test=0,
+        ...     train_axis_size=2,
+        ...     validate_axis_size=0,
+        ...     test_axis_size=0,
         ... )
         >>> split.position_keys
         ['x']
@@ -242,9 +403,9 @@ class PositionSplit:
         return []
 
     @property
-    def n(self) -> int:
+    def axis_size(self) -> int:
         """
-        Total number of observations represented by the split.
+        Total axis size represented by the split.
 
         Examples
         --------
@@ -254,10 +415,10 @@ class PositionSplit:
         >>> train = Position({"x": jnp.arange(7)})
         >>> validate = Position({"x": jnp.arange(2)})
         >>> test = Position({"x": jnp.arange(1)})
-        >>> PositionSplit(train, validate, test, 7, 2, 1).n
+        >>> PositionSplit(train, validate, test, 7, 2, 1).axis_size
         10
         """
-        return self.n_train + self.n_validate + self.n_test
+        return self.train_axis_size + self.validate_axis_size + self.test_axis_size
 
     @property
     def has_validation(self) -> bool:
@@ -275,7 +436,7 @@ class PositionSplit:
         >>> PositionSplit(train, validate, test, 7, 2, 1).has_validation
         True
         """
-        return self.n_validate > 0
+        return self.validate_axis_size > 0
 
     @property
     def has_test(self) -> bool:
@@ -291,10 +452,10 @@ class PositionSplit:
         >>> PositionSplit(train, Position({}), Position({}), 7, 0, 0).has_test
         False
         """
-        return self.n_test > 0
+        return self.test_axis_size > 0
 
     @property
-    def share_validate(self) -> float:
+    def validate_axis_share(self) -> float:
         """
         Share of observations assigned to validation.
 
@@ -306,13 +467,13 @@ class PositionSplit:
         >>> train = Position({"x": jnp.arange(7)})
         >>> validate = Position({"x": jnp.arange(2)})
         >>> test = Position({"x": jnp.arange(1)})
-        >>> PositionSplit(train, validate, test, 7, 2, 1).share_validate
+        >>> PositionSplit(train, validate, test, 7, 2, 1).validate_axis_share
         0.2
         """
-        return self.n_validate / self.n
+        return self.validate_axis_size / self.axis_size
 
     @property
-    def share_test(self) -> float:
+    def test_axis_share(self) -> float:
         """
         Share of observations assigned to testing.
 
@@ -324,13 +485,13 @@ class PositionSplit:
         >>> train = Position({"x": jnp.arange(7)})
         >>> validate = Position({"x": jnp.arange(2)})
         >>> test = Position({"x": jnp.arange(1)})
-        >>> PositionSplit(train, validate, test, 7, 2, 1).share_test
+        >>> PositionSplit(train, validate, test, 7, 2, 1).test_axis_share
         0.1
         """
-        return self.n_test / self.n
+        return self.test_axis_size / self.axis_size
 
     @property
-    def scale_validate(self) -> float:
+    def validate_sample_scale(self) -> float:
         """
         Likelihood scale for validation data.
 
@@ -343,24 +504,64 @@ class PositionSplit:
         >>> from liesel.optim.types import Position
         >>> train = Position({"x": jnp.arange(8)})
         >>> validate = Position({"x": jnp.arange(2)})
-        >>> PositionSplit(train, validate, Position({}), 8, 2, 0).scale_validate
+        >>> PositionSplit(train, validate, Position({}), 8, 2, 0).validate_sample_scale
         4.0
         """
-        return self._scale_for_part("validate")
+        return self.sample_scale("validate")
 
-    def _scale_for_part(self, part: Literal["train", "validate", "test"]) -> float:
+    def _axis_size_for_part(self, part: SplitPart) -> int:
+        if part == "train":
+            return self.train_axis_size
+
+        if part == "validate":
+            return self.validate_axis_size
+
+        if part == "test":
+            return self.test_axis_size
+
+        raise ValueError(f"Unrecognized {part=}.")
+
+    def sample_size(self, part: SplitPart) -> float:
+        """
+        Effective likelihood sample size for one split part.
+
+        Directly constructed splits fall back to the corresponding axis size when
+        explicit or inferred sample sizes are unavailable.
+        """
+        if self.sample_sizes is not None and part in self.sample_sizes:
+            return self.sample_sizes[part]
+
+        return float(self._axis_size_for_part(part))
+
+    @property
+    def train_sample_size(self) -> float:
+        """Effective training likelihood sample size."""
+        return self.sample_size("train")
+
+    @property
+    def validate_sample_size(self) -> float:
+        """Effective validation likelihood sample size."""
+        return self.sample_size("validate")
+
+    @property
+    def test_sample_size(self) -> float:
+        """Effective test likelihood sample size."""
+        return self.sample_size("test")
+
+    def sample_scale(self, part: SplitPart) -> float:
+        """Scale a part likelihood to the training sample size."""
         if part == "train":
             return 1.0
 
         if part == "validate":
             if not self.has_validation:
                 return 1.0
-            return self.n_train / self.n_validate
+            return self.train_sample_size / self.validate_sample_size
 
         if part == "test":
             if not self.has_test:
                 return 1.0
-            return self.n_train / self.n_test
+            return self.train_sample_size / self.test_sample_size
 
         raise ValueError(f"Unrecognized {part=}.")
 
@@ -368,7 +569,7 @@ class PositionSplit:
         self,
         model: Model | ModelInterface,
         model_state: ModelState,
-        part: Literal["train", "validate", "test"] = "validate",
+        part: SplitPart = "validate",
     ) -> jax.Array:
         """
         Returns the log likelihood scaled for one split part.
@@ -387,7 +588,7 @@ class PositionSplit:
             split part.
         part
             Split part whose scale should be applied. Validation uses
-            ``n_train / n_validate``.
+            ``train_axis_size / validate_axis_size``.
 
         Returns
         -------
@@ -406,19 +607,19 @@ class PositionSplit:
         ...     name="y",
         ... )
         >>> model = lsl.Model([y])
-        >>> split = Split(["y"], n=10, n_validate=2).split_position(
+        >>> split = Split(["y"], axis_size=10, validate_axis_size=2).split_position(
         ...     model.extract_position(["y"])
         ... )
         >>> state = model.update_state(split.validate, model.state)
         >>> bool(
         ...     jnp.allclose(
         ...         split.scaled_log_lik(model, state),
-        ...         split.scale_validate * state["_model_log_lik"].value,
+        ...         split.validate_sample_scale * state["_model_log_lik"].value,
         ...     )
         ... )
         True
         """
-        scale = self._scale_for_part(part)
+        scale = self.sample_scale(part)
 
         if isinstance(model, Model):
             return scaled_liesel_log_lik(
@@ -430,8 +631,8 @@ class PositionSplit:
     def __repr__(self) -> str:
         name = type(self).__name__
         out = (
-            f"{name}(train={self.n_train}, "
-            f"validate={self.n_validate}, test={self.n_test})"
+            f"{name}(train={self.train_axis_size}, "
+            f"validate={self.validate_axis_size}, test={self.test_axis_size})"
         )
         return out
 
@@ -439,14 +640,16 @@ class PositionSplit:
     def from_model(
         model: Model,
         position_keys: Sequence[str] | None = None,
-        n: int | None = None,
-        share_validate: float = 0.0,
-        share_test: float = 0.0,
-        axes: dict[str, int] | None = None,
-        default_axis: int = 0,
+        axis_size: int | None = None,
+        validate_axis_share: float = 0.0,
+        test_axis_share: float = 0.0,
+        split_axes: dict[str, int] | None = None,
+        default_split_axis: int = 0,
         shuffle: bool = False,
         seed: jax.Array | int | None = None,
         multi_size: Literal["error", "manager"] = "error",
+        sample_sizes: SampleSizes | None = None,
+        infer_sample_sizes: bool = True,
     ) -> PositionSplit | PositionSplitManager:
         """
         Builds a :class:`PositionSplit` from the observed variables in a model.
@@ -458,27 +661,34 @@ class PositionSplit:
         position_keys
             Names of observed position entries to split. If ``None``, all observed
             variables in ``model`` are used.
-        n
+        axis_size
             Number of observations along the split axis. If ``None``, the number is
-            guessed from ``model`` along ``default_axis``.
-        share_validate
+            guessed from ``model`` along ``default_split_axis``.
+        validate_axis_share
             Share of observations assigned to the validation split.
-        share_test
+        test_axis_share
             Share of observations assigned to the test split.
-        axes
+        split_axes
             Optional mapping from position key to split axis. Keys missing from this
-            mapping use ``default_axis``.
-        default_axis
-            Split axis for all position keys not listed in ``axes``.
+            mapping use ``default_split_axis``.
+        default_split_axis
+            Split axis for all position keys not listed in ``split_axes``.
         shuffle
             Whether observations are shuffled before splitting.
         seed
             Seed or JAX pseudo-random key used when ``shuffle=True``.
         multi_size
-            How to handle observed variables with different inferred sample sizes.
+            How to handle observed variables with different inferred axis sizes.
             The default ``"error"`` keeps :class:`PositionSplit` scalar and raises
             a helpful error. Use ``"manager"`` to return a
-            :class:`PositionSplitManager` when multiple sample sizes are detected.
+            :class:`PositionSplitManager` when multiple axis sizes are detected.
+        sample_sizes
+            Optional effective sample sizes for train, validation, and test
+            scaling. If supplied, these values are used instead of automatic
+            inference.
+        infer_sample_sizes
+            Whether to infer effective sample sizes from pointwise observed
+            log-probability arrays.
 
         Returns
         -------
@@ -495,10 +705,10 @@ class PositionSplit:
         >>> split = PositionSplit.from_model(
         ...     model,
         ...     position_keys=["y"],
-        ...     share_validate=0.2,
-        ...     share_test=0.1,
+        ...     validate_axis_share=0.2,
+        ...     test_axis_share=0.1,
         ... )
-        >>> split.n_train, split.n_validate, split.n_test
+        >>> split.train_axis_size, split.validate_axis_size, split.test_axis_size
         (7, 2, 1)
         >>> split.train["y"].tolist()
         [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
@@ -511,7 +721,7 @@ class PositionSplit:
         >>> managed = PositionSplit.from_model(
         ...     model,
         ...     position_keys=["y1_multi", "y2_multi"],
-        ...     share_validate=0.2,
+        ...     validate_axis_share=0.2,
         ...     multi_size="manager",
         ... )
         >>> type(managed).__name__
@@ -523,48 +733,61 @@ class PositionSplit:
         pos_keys = (
             list(position_keys) if position_keys is not None else list(model.observed)
         )
-        groups = position_key_groups_from_model(model, pos_keys, axes, default_axis)
+        groups = position_key_groups_from_model(
+            model, pos_keys, split_axes, default_split_axis
+        )
         if len(groups) > 1 and multi_size == "manager":
-            if n is not None:
+            if axis_size is not None:
                 raise ValueError(
-                    "A single n value cannot configure multiple sample-size groups. "
-                    "Omit n when using multi_size='manager'."
+                    "A single axis_size value cannot configure multiple axis-size "
+                    "groups. Omit axis_size when using multi_size='manager'."
                 )
 
             return PositionSplitManager.from_model(
                 model,
                 position_keys=pos_keys,
-                share_validate=share_validate,
-                share_test=share_test,
-                axes=axes,
-                default_axis=default_axis,
+                validate_axis_share=validate_axis_share,
+                test_axis_share=test_axis_share,
+                split_axes=split_axes,
+                default_split_axis=default_split_axis,
                 shuffle=shuffle,
                 seed=seed,
+                sample_sizes=sample_sizes,
+                infer_sample_sizes=infer_sample_sizes,
             )
 
         if len(groups) > 1:
             raise ValueError(
                 "PositionSplit.from_model() found observed variables with different "
-                f"sample sizes: {groups}. Use "
+                f"axis sizes: {groups}. Use "
                 "PositionSplit.from_model(..., multi_size='manager') or "
                 "PositionSplitManager.from_model(...)."
             )
 
-        if n is None:
-            n = next(iter(groups)) if groups else guess_n(model, axis=default_axis)
-        splitter = Split.from_share(
+        if axis_size is None:
+            axis_size = (
+                next(iter(groups))
+                if groups
+                else guess_n(model, axis=default_split_axis)
+            )
+        splitter = Split.from_axis_shares(
             position_keys=pos_keys,
-            n=n,
-            share_validate=share_validate,
-            share_test=share_test,
-            axes=axes,
-            default_axis=default_axis,
+            axis_size=axis_size,
+            validate_axis_share=validate_axis_share,
+            test_axis_share=test_axis_share,
+            split_axes=split_axes,
+            default_split_axis=default_split_axis,
             shuffle=shuffle,
             seed=seed,
+            sample_sizes=sample_sizes,
         )
 
         pos = model.extract_position(pos_keys)
-        return splitter.split_position(pos)
+        split = splitter.split_position(pos)
+        if infer_sample_sizes and sample_sizes is None:
+            split = _with_inferred_sample_sizes_from_model(model, split)
+
+        return split
 
 
 @dataclass
@@ -574,7 +797,7 @@ class PositionSplitManager:
 
     ``PositionSplitManager`` is the split-side counterpart to
     :class:`.BatchManager`. It is useful when a model has observed branches with
-    different sample sizes. Each child :class:`PositionSplit` stores the split data
+    different axis sizes. Each child :class:`PositionSplit` stores the split data
     for one branch, while the manager exposes merged ``train``, ``validate``, and
     ``test`` positions.
 
@@ -594,24 +817,29 @@ class PositionSplitManager:
 
     Notes
     -----
-    Branch-specific sizes are available as :attr:`ns`, :attr:`n_trains`,
-    :attr:`n_validates`, and :attr:`n_tests`. Scalar aliases such as
-    :attr:`n_train`, :attr:`share_validate`, and :attr:`scale_validate` are available
+    Branch-specific sizes are available as :attr:`axis_sizes`,
+    :attr:`train_axis_sizes`, :attr:`validate_axis_sizes`, and
+    :attr:`test_axis_sizes`. Scalar aliases such as :attr:`train_axis_size`,
+    :attr:`validate_axis_share`, and :attr:`validate_sample_scale` are available
     only when all children have the same value.
 
     Examples
     --------
-    Merge two branches with different sample sizes:
+    Merge two branches with different axis sizes:
 
     >>> import jax.numpy as jnp
     >>> from liesel.optim import PositionSplitManager, Split
     >>> position = {"x": jnp.arange(10), "y": jnp.arange(6)}
-    >>> split_x = Split(["x"], n=10, n_validate=2).split_position(position)
-    >>> split_y = Split(["y"], n=6, n_validate=1).split_position(position)
+    >>> split_x = Split(["x"], axis_size=10, validate_axis_size=2).split_position(
+    ...     position
+    ... )
+    >>> split_y = Split(["y"], axis_size=6, validate_axis_size=1).split_position(
+    ...     position
+    ... )
     >>> manager = PositionSplitManager([split_x, split_y])
     >>> manager.position_keys
     ['x', 'y']
-    >>> manager.n_trains
+    >>> manager.train_axis_sizes
     (8, 5)
     >>> manager.train["x"].shape, manager.train["y"].shape
     ((8,), (5,))
@@ -619,9 +847,9 @@ class PositionSplitManager:
     Unequal scalar aliases raise and direct users to the plural property:
 
     >>> try:
-    ...     manager.n_train
+    ...     manager.train_axis_size
     ... except ValueError as error:
-    ...     print("n_trains" in str(error))
+    ...     print("train_axis_sizes" in str(error))
     True
 
     Build a manager directly from a model with two observation sizes:
@@ -631,9 +859,9 @@ class PositionSplitManager:
     >>> y2 = lsl.Var.new_obs(jnp.arange(6.0), name="y2")
     >>> model = lsl.Model([y1, y2])
     >>> managed = PositionSplitManager.from_model(
-    ...     model, position_keys=["y1", "y2"], share_validate=0.2
+    ...     model, position_keys=["y1", "y2"], validate_axis_share=0.2
     ... )
-    >>> managed.n_validates
+    >>> managed.validate_axis_sizes
     (2, 1)
     """
 
@@ -676,17 +904,19 @@ class PositionSplitManager:
         cls,
         model: Model,
         position_keys: Sequence[str] | None = None,
-        share_validate: float = 0.0,
-        share_test: float = 0.0,
-        axes: dict[str, int] | None = None,
-        default_axis: int = 0,
+        validate_axis_share: float = 0.0,
+        test_axis_share: float = 0.0,
+        split_axes: dict[str, int] | None = None,
+        default_split_axis: int = 0,
         shuffle: bool = False,
         seed: jax.Array | int | None = None,
+        sample_sizes: SampleSizes | None = None,
+        infer_sample_sizes: bool = True,
     ) -> PositionSplitManager:
         """
         Builds grouped position splits from a model.
 
-        Observed variables are grouped by inferred sample size along their split
+        Observed variables are grouped by inferred axis size along their split
         axes. One :class:`Split` is constructed for each group and immediately
         applied to the model's observed position.
 
@@ -701,9 +931,9 @@ class PositionSplitManager:
         >>> y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
         >>> model = lsl.Model([x, y])
         >>> split = PositionSplitManager.from_model(
-        ...     model, position_keys=["x", "y"], share_validate=0.2
+        ...     model, position_keys=["x", "y"], validate_axis_share=0.2
         ... )
-        >>> split.ns
+        >>> split.axis_sizes
         (8, 5)
         >>> split.validate["x"].shape, split.validate["y"].shape
         ((1,), (1,))
@@ -711,15 +941,30 @@ class PositionSplitManager:
         splitter = SplitManager.from_model(
             model,
             position_keys=position_keys,
-            share_validate=share_validate,
-            share_test=share_test,
-            axes=axes,
-            default_axis=default_axis,
+            validate_axis_share=validate_axis_share,
+            test_axis_share=test_axis_share,
+            split_axes=split_axes,
+            default_split_axis=default_split_axis,
             shuffle=shuffle,
             seed=seed,
         )
         position = model.extract_position(splitter.position_keys)
-        return splitter.split_position(position)
+        split = splitter.split_position(position)
+
+        if sample_sizes is not None:
+            return PositionSplitManager(
+                [replace(child, sample_sizes=sample_sizes) for child in split.splits]
+            )
+
+        if infer_sample_sizes:
+            return PositionSplitManager(
+                [
+                    _with_inferred_sample_sizes_from_model(model, child)
+                    for child in split.splits
+                ]
+            )
+
+        return split
 
     @property
     def position_keys(self) -> list[str]:
@@ -753,8 +998,8 @@ class PositionSplitManager:
         >>> pos = {"x": jnp.arange(3), "y": jnp.arange(4)}
         >>> manager = PositionSplitManager(
         ...     [
-        ...         Split(["x"], n=3).split_position(pos),
-        ...         Split(["y"], n=4).split_position(pos),
+        ...         Split(["x"], axis_size=3).split_position(pos),
+        ...         Split(["y"], axis_size=4).split_position(pos),
         ...     ]
         ... )
         >>> sorted(manager.train)
@@ -774,8 +1019,8 @@ class PositionSplitManager:
         >>> pos = {"x": jnp.arange(5), "y": jnp.arange(6)}
         >>> manager = PositionSplitManager(
         ...     [
-        ...         Split(["x"], n=5, n_validate=1).split_position(pos),
-        ...         Split(["y"], n=6, n_validate=1).split_position(pos),
+        ...         Split(["x"], axis_size=5, validate_axis_size=1).split_position(pos),
+        ...         Split(["y"], axis_size=6, validate_axis_size=1).split_position(pos),
         ...     ]
         ... )
         >>> sorted(manager.validate)
@@ -795,8 +1040,8 @@ class PositionSplitManager:
         >>> pos = {"x": jnp.arange(5), "y": jnp.arange(6)}
         >>> manager = PositionSplitManager(
         ...     [
-        ...         Split(["x"], n=5, n_test=1).split_position(pos),
-        ...         Split(["y"], n=6, n_test=1).split_position(pos),
+        ...         Split(["x"], axis_size=5, test_axis_size=1).split_position(pos),
+        ...         Split(["y"], axis_size=6, test_axis_size=1).split_position(pos),
         ...     ]
         ... )
         >>> sorted(manager.test)
@@ -805,9 +1050,9 @@ class PositionSplitManager:
         return self._test
 
     @property
-    def ns(self) -> tuple[int, ...]:
+    def axis_sizes(self) -> tuple[int, ...]:
         """
-        Total sample sizes for each contained split.
+        Total axis sizes for each contained split.
 
         Examples
         --------
@@ -834,45 +1079,49 @@ class PositionSplitManager:
         ...         ),
         ...     ]
         ... )
-        >>> manager.ns
+        >>> manager.axis_sizes
         (2, 3)
         """
-        return tuple(split.n for split in self.splits)
+        return tuple(split.axis_size for split in self.splits)
 
     @property
-    def n_trains(self) -> tuple[int, ...]:
-        """Training sample sizes for each contained split."""
-        return tuple(split.n_train for split in self.splits)
+    def train_axis_sizes(self) -> tuple[int, ...]:
+        """Training axis sizes for each contained split."""
+        return tuple(split.train_axis_size for split in self.splits)
 
     @property
-    def n_validates(self) -> tuple[int, ...]:
-        """Validation sample sizes for each contained split."""
-        return tuple(split.n_validate for split in self.splits)
+    def validate_axis_sizes(self) -> tuple[int, ...]:
+        """Validation axis sizes for each contained split."""
+        return tuple(split.validate_axis_size for split in self.splits)
 
     @property
-    def n_tests(self) -> tuple[int, ...]:
-        """Test sample sizes for each contained split."""
-        return tuple(split.n_test for split in self.splits)
+    def test_axis_sizes(self) -> tuple[int, ...]:
+        """Test axis sizes for each contained split."""
+        return tuple(split.test_axis_size for split in self.splits)
 
     @property
-    def n(self) -> int:
-        """Common total sample size, available only when all branches agree."""
-        return _common_value(self.ns, "n", "ns")
+    def axis_size(self) -> int:
+        """Common total axis size, available only when all branches agree."""
+        return _common_value(self.axis_sizes, "axis_size", "axis_sizes")
 
     @property
-    def n_train(self) -> int:
-        """Common training sample size, available only when all branches agree."""
-        return _common_value(self.n_trains, "n_train", "n_trains")
+    def train_axis_size(self) -> int:
+        """Common training axis size, available only when all branches agree."""
+        return _common_value(
+            self.train_axis_sizes, "train_axis_size", "train_axis_sizes"
+        )
 
     @property
-    def n_validate(self) -> int:
-        """Common validation sample size, available only when all branches agree."""
-        return _common_value(self.n_validates, "n_validate", "n_validates")
+    def validate_axis_size(self) -> int:
+        """Common validation axis size, available only when all branches agree."""
+        return _common_value(
+            self.validate_axis_sizes, "validate_axis_size", "validate_axis_sizes"
+        )
 
     @property
-    def n_test(self) -> int:
-        """Common test sample size, available only when all branches agree."""
-        return _common_value(self.n_tests, "n_test", "n_tests")
+    def test_axis_size(self) -> int:
+        """Common test axis size, available only when all branches agree."""
+        return _common_value(self.test_axis_sizes, "test_axis_size", "test_axis_sizes")
 
     @property
     def has_validation(self) -> bool:
@@ -886,8 +1135,8 @@ class PositionSplitManager:
         >>> pos = {"x": jnp.arange(5), "y": jnp.arange(6)}
         >>> manager = PositionSplitManager(
         ...     [
-        ...         Split(["x"], n=5, n_validate=1).split_position(pos),
-        ...         Split(["y"], n=6, n_validate=1).split_position(pos),
+        ...         Split(["x"], axis_size=5, validate_axis_size=1).split_position(pos),
+        ...         Split(["y"], axis_size=6, validate_axis_size=1).split_position(pos),
         ...     ]
         ... )
         >>> manager.has_validation
@@ -901,32 +1150,36 @@ class PositionSplitManager:
         return self.splits[0].has_test
 
     @property
-    def share_validates(self) -> tuple[float, ...]:
+    def validate_axis_shares(self) -> tuple[float, ...]:
         """Validation shares for each contained split."""
-        return tuple(split.share_validate for split in self.splits)
+        return tuple(split.validate_axis_share for split in self.splits)
 
     @property
-    def share_tests(self) -> tuple[float, ...]:
+    def test_axis_shares(self) -> tuple[float, ...]:
         """Test shares for each contained split."""
-        return tuple(split.share_test for split in self.splits)
+        return tuple(split.test_axis_share for split in self.splits)
 
     @property
-    def share_validate(self) -> float:
+    def validate_axis_share(self) -> float:
         """Common validation share, available only when all branches agree."""
-        return _common_value(self.share_validates, "share_validate", "share_validates")
+        return _common_value(
+            self.validate_axis_shares, "validate_axis_share", "validate_axis_shares"
+        )
 
     @property
-    def share_test(self) -> float:
+    def test_axis_share(self) -> float:
         """Common test share, available only when all branches agree."""
-        return _common_value(self.share_tests, "share_test", "share_tests")
+        return _common_value(
+            self.test_axis_shares, "test_axis_share", "test_axis_shares"
+        )
 
     @property
-    def validation_scales(self) -> tuple[float, ...]:
+    def validate_sample_scales(self) -> tuple[float, ...]:
         """Validation likelihood scales for each contained split."""
-        return tuple(split.scale_validate for split in self.splits)
+        return tuple(split.validate_sample_scale for split in self.splits)
 
     @property
-    def scale_validate(self) -> float:
+    def validate_sample_scale(self) -> float:
         """
         Common validation likelihood scale.
 
@@ -937,19 +1190,62 @@ class PositionSplitManager:
             per-branch scaling with a Liesel :class:`.Model`.
         """
         return _common_value(
-            self.validation_scales, "scale_validate", "validation_scales"
+            self.validate_sample_scales,
+            "validate_sample_scale",
+            "validate_sample_scales",
         )
 
-    def _scales_for_part(
-        self, part: Literal["train", "validate", "test"]
-    ) -> tuple[float, ...]:
-        return tuple(split._scale_for_part(part) for split in self.splits)
+    @property
+    def train_sample_sizes(self) -> tuple[float, ...]:
+        """Training sample sizes for each contained split."""
+        return tuple(split.train_sample_size for split in self.splits)
+
+    @property
+    def validate_sample_sizes(self) -> tuple[float, ...]:
+        """Validation sample sizes for each contained split."""
+        return tuple(split.validate_sample_size for split in self.splits)
+
+    @property
+    def test_sample_sizes(self) -> tuple[float, ...]:
+        """Test sample sizes for each contained split."""
+        return tuple(split.test_sample_size for split in self.splits)
+
+    @property
+    def train_sample_size(self) -> float:
+        """Common training sample size, available only when all branches agree."""
+        return _common_value(
+            self.train_sample_sizes, "train_sample_size", "train_sample_sizes"
+        )
+
+    @property
+    def validate_sample_size(self) -> float:
+        """Common validation sample size, available only when all branches agree."""
+        return _common_value(
+            self.validate_sample_sizes, "validate_sample_size", "validate_sample_sizes"
+        )
+
+    @property
+    def test_sample_size(self) -> float:
+        """Common test sample size, available only when all branches agree."""
+        return _common_value(
+            self.test_sample_sizes, "test_sample_size", "test_sample_sizes"
+        )
+
+    def sample_scales(self, part: SplitPart) -> tuple[float, ...]:
+        """Sample scaling factors for each contained split."""
+        return tuple(split.sample_scale(part) for split in self.splits)
+
+    def sample_scale(self, part: SplitPart) -> float:
+        """Common sample scale, available only when all branches agree."""
+        return _common_value(
+            self.sample_scales(part), f"{part}_sample_scale", f"{part}_sample_scales"
+        )
 
     def scaled_log_lik(
         self,
         model: Model | ModelInterface,
         model_state: ModelState,
-        part: Literal["train", "validate", "test"] = "validate",
+        part: SplitPart = "validate",
     ) -> jax.Array:
         """
         Returns the log likelihood with branch-specific split scaling.
@@ -993,8 +1289,12 @@ class PositionSplitManager:
         >>> pos = model.extract_position(["y1", "y2"])
         >>> split = PositionSplitManager(
         ...     [
-        ...         Split(["y1"], n=10, n_validate=2).split_position(pos),
-        ...         Split(["y2"], n=6, n_validate=1).split_position(pos),
+        ...         Split(["y1"], axis_size=10, validate_axis_size=2).split_position(
+        ...             pos
+        ...         ),
+        ...         Split(["y2"], axis_size=6, validate_axis_size=1).split_position(
+        ...             pos
+        ...         ),
         ...     ]
         ... )
         >>> state = model.update_state(split.validate, model.state)
@@ -1005,7 +1305,7 @@ class PositionSplitManager:
         >>> bool(jnp.allclose(split.scaled_log_lik(model, state), manual))
         True
         """
-        scales = self._scales_for_part(part)
+        scales = self.sample_scales(part)
 
         if isinstance(model, Model):
             groups = [
@@ -1028,8 +1328,8 @@ class PositionSplitManager:
     def __repr__(self) -> str:
         name = type(self).__name__
         return (
-            f"{name}(n={self.ns}, train={self.n_trains}, "
-            f"validate={self.n_validates}, test={self.n_tests})"
+            f"{name}(axis_size={self.axis_sizes}, train={self.train_axis_sizes}, "
+            f"validate={self.validate_axis_sizes}, test={self.test_axis_sizes})"
         )
 
 
@@ -1038,7 +1338,7 @@ class SplitManager:
     """
     Wraps multiple :class:`Split` objects for multi-branch splitting.
 
-    ``Split`` stays scalar: each instance assumes one sample size. ``SplitManager``
+    ``Split`` stays scalar: each instance assumes one axis size. ``SplitManager``
     coordinates several such scalar splitters and returns a
     :class:`PositionSplitManager` with merged train/validation/test positions.
 
@@ -1055,26 +1355,26 @@ class SplitManager:
     >>> from liesel.optim import SplitManager, Split
     >>> manager = SplitManager(
     ...     [
-    ...         Split(["x"], n=10, n_validate=2),
-    ...         Split(["y"], n=6, n_validate=1),
+    ...         Split(["x"], axis_size=10, validate_axis_size=2),
+    ...         Split(["y"], axis_size=6, validate_axis_size=1),
     ...     ]
     ... )
     >>> split = manager.split_position({"x": jnp.arange(10), "y": jnp.arange(6)})
-    >>> split.n_trains
+    >>> split.train_axis_sizes
     (8, 5)
     >>> split.validate["x"].tolist(), split.validate["y"].tolist()
     ([8, 9], [5])
 
-    Automatically group model observations by sample size:
+    Automatically group model observations by axis size:
 
     >>> import liesel.model as lsl
     >>> x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
     >>> y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
     >>> model = lsl.Model([x, y])
     >>> manager = SplitManager.from_model(
-    ...     model, position_keys=["x", "y"], share_validate=0.2
+    ...     model, position_keys=["x", "y"], validate_axis_share=0.2
     ... )
-    >>> manager.ns
+    >>> manager.axis_sizes
     (8, 5)
     """
 
@@ -1109,10 +1409,10 @@ class SplitManager:
         cls,
         model: Model,
         position_keys: Sequence[str] | None = None,
-        share_validate: float = 0.0,
-        share_test: float = 0.0,
-        axes: dict[str, int] | None = None,
-        default_axis: int = 0,
+        validate_axis_share: float = 0.0,
+        test_axis_share: float = 0.0,
+        split_axes: dict[str, int] | None = None,
+        default_split_axis: int = 0,
         shuffle: bool = False,
         seed: jax.Array | int | None = None,
     ) -> SplitManager:
@@ -1126,14 +1426,14 @@ class SplitManager:
         position_keys
             Names of observed position entries to split. If ``None``, all observed
             variables in ``model`` are used.
-        share_validate
+        validate_axis_share
             Share of observations assigned to validation in every child split.
-        share_test
+        test_axis_share
             Share of observations assigned to testing in every child split.
-        axes
+        split_axes
             Optional mapping from position key to split axis.
-        default_axis
-            Split axis for all position keys not listed in ``axes``.
+        default_split_axis
+            Split axis for all position keys not listed in ``split_axes``.
         shuffle
             Whether each child split shuffles observations.
         seed
@@ -1142,7 +1442,7 @@ class SplitManager:
         Returns
         -------
         SplitManager
-            Split manager with one child :class:`Split` per inferred sample size.
+            Split manager with one child :class:`Split` per inferred axis size.
 
         Examples
         --------
@@ -1153,35 +1453,37 @@ class SplitManager:
         >>> y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
         >>> model = lsl.Model([x, y])
         >>> manager = SplitManager.from_model(
-        ...     model, position_keys=["x", "y"], share_validate=0.2
+        ...     model, position_keys=["x", "y"], validate_axis_share=0.2
         ... )
         >>> manager.position_keys
         ['x', 'y']
-        >>> manager.n_validates
+        >>> manager.validate_axis_sizes
         (1, 1)
         """
         pos_keys = (
             list(position_keys) if position_keys is not None else list(model.observed)
         )
-        groups = position_key_groups_from_model(model, pos_keys, axes, default_axis)
+        groups = position_key_groups_from_model(
+            model, pos_keys, split_axes, default_split_axis
+        )
         seeds = _child_seeds(seed, len(groups)) if shuffle else (seed,) * len(groups)
         splits = []
 
-        for (n, keys), child_seed in zip(groups.items(), seeds, strict=True):
+        for (axis_size, keys), child_seed in zip(groups.items(), seeds, strict=True):
             splits.append(
-                Split.from_share(
+                Split.from_axis_shares(
                     position_keys=keys,
-                    n=n,
-                    share_validate=share_validate,
-                    share_test=share_test,
-                    axes=axes,
-                    default_axis=default_axis,
+                    axis_size=axis_size,
+                    validate_axis_share=validate_axis_share,
+                    test_axis_share=test_axis_share,
+                    split_axes=split_axes,
+                    default_split_axis=default_split_axis,
                     shuffle=shuffle,
                     seed=child_seed,
                 )
             )
 
-        _validate_child_split_availability(splits, share_validate, share_test)
+        _validate_child_split_availability(splits, validate_axis_share, test_axis_share)
 
         return cls(splits)
 
@@ -1193,7 +1495,9 @@ class SplitManager:
         Examples
         --------
         >>> from liesel.optim import SplitManager, Split
-        >>> SplitManager([Split(["x"], n=3), Split(["y"], n=4)]).position_keys
+        >>> SplitManager(
+        ...     [Split(["x"], axis_size=3), Split(["y"], axis_size=4)]
+        ... ).position_keys
         ['x', 'y']
         """
         keys: list[str] = []
@@ -1202,24 +1506,24 @@ class SplitManager:
         return keys
 
     @property
-    def ns(self) -> tuple[int, ...]:
-        """Total sample sizes for each contained split."""
-        return tuple(split.n for split in self.splits)
+    def axis_sizes(self) -> tuple[int, ...]:
+        """Total axis sizes for each contained split."""
+        return tuple(split.axis_size for split in self.splits)
 
     @property
-    def n_trains(self) -> tuple[int, ...]:
-        """Training sample sizes for each contained split."""
-        return tuple(split._n_train for split in self.splits)
+    def train_axis_sizes(self) -> tuple[int, ...]:
+        """Training axis sizes for each contained split."""
+        return tuple(split._train_axis_size for split in self.splits)
 
     @property
-    def n_validates(self) -> tuple[int, ...]:
-        """Validation sample sizes for each contained split."""
-        return tuple(split.n_validate for split in self.splits)
+    def validate_axis_sizes(self) -> tuple[int, ...]:
+        """Validation axis sizes for each contained split."""
+        return tuple(split.validate_axis_size for split in self.splits)
 
     @property
-    def n_tests(self) -> tuple[int, ...]:
-        """Test sample sizes for each contained split."""
-        return tuple(split.n_test for split in self.splits)
+    def test_axis_sizes(self) -> tuple[int, ...]:
+        """Test axis sizes for each contained split."""
+        return tuple(split.test_axis_size for split in self.splits)
 
     @property
     def has_validation(self) -> bool:
@@ -1251,8 +1555,10 @@ class SplitManager:
         >>> from liesel.optim import SplitManager, Split
         >>> manager = SplitManager(
         ...     [
-        ...         Split(["x"], n=4, n_validate=1, default_axis=1),
-        ...         Split(["y"], n=6, n_validate=2),
+        ...         Split(
+        ...             ["x"], axis_size=4, validate_axis_size=1, default_split_axis=1
+        ...         ),
+        ...         Split(["y"], axis_size=6, validate_axis_size=2),
         ...     ]
         ... )
         >>> split = manager.split_position(
@@ -1271,8 +1577,8 @@ class SplitManager:
     def __repr__(self) -> str:
         name = type(self).__name__
         return (
-            f"{name}(n={self.ns}, train={self.n_trains}, "
-            f"validate={self.n_validates}, test={self.n_tests})"
+            f"{name}(axis_size={self.axis_sizes}, train={self.train_axis_sizes}, "
+            f"validate={self.validate_axis_sizes}, test={self.test_axis_sizes})"
         )
 
 
@@ -1281,46 +1587,51 @@ class Split:
     """
     Defines how observed position entries are split into train, validation, and test.
 
-    ``Split`` stores a vector of observation indices. The first ``n_train`` indices
-    become the training split, the next ``n_validate`` indices become the validation
-    split, and the final ``n_test`` indices become the test split. If ``shuffle=True``,
-    the index vector is permuted once during initialization.
+    ``Split`` stores a vector of observation indices. The first
+    ``train_axis_size`` indices become the training split, the next
+    ``validate_axis_size`` indices become the validation split, and the final
+    ``test_axis_size`` indices become the test split. If ``shuffle=True``, the
+    index vector is permuted once during initialization.
 
     Parameters
     ----------
     position_keys
         Names of position entries that should be split.
-    n
+    axis_size
         Number of observations along each split axis. Must be positive.
-    n_validate
+    validate_axis_size
         Number of validation observations.
-    n_test
+    test_axis_size
         Number of test observations.
-    n_train
+    train_axis_size
         Number of training observations. If left at ``None``, it is computed as
-        ``n - n_validate - n_test``.
-    axes
+        ``axis_size - validate_axis_size - test_axis_size``.
+    split_axes
         Optional mapping from position key to split axis. Keys missing from this
-        mapping use ``default_axis``.
-    default_axis
-        Split axis for all position keys not listed in ``axes``.
+        mapping use ``default_split_axis``.
+    default_split_axis
+        Split axis for all position keys not listed in ``split_axes``.
     shuffle
         Whether to shuffle observations during initialization.
     seed
         Seed or JAX pseudo-random key used when ``shuffle=True``. If ``None``, the
         current time is used.
+    sample_sizes
+        Optional effective sample sizes passed to the resulting
+        :class:`PositionSplit`.
 
     Attributes
     ----------
     indices
-        Current observation order. Initialized as ``jnp.arange(n)`` and optionally
-        shuffled in :meth:`__post_init__`.
+        Current observation order. Initialized as ``jnp.arange(axis_size)`` and
+        optionally shuffled in :meth:`__post_init__`.
 
     Raises
     ------
     ValueError
-        If ``n`` is not positive, if any split size is negative, or if
-        ``n_train + n_validate + n_test`` is not exactly equal to ``n``.
+        If ``axis_size`` is not positive, if any split size is negative, or if
+        ``train_axis_size + validate_axis_size + test_axis_size`` is not exactly
+        equal to ``axis_size``.
 
     Examples
     --------
@@ -1328,7 +1639,9 @@ class Split:
 
     >>> import jax.numpy as jnp
     >>> from liesel.optim import Split
-    >>> splitter = Split(["x"], n=10, n_validate=2, n_test=1, shuffle=False)
+    >>> splitter = Split(
+    ...     ["x"], axis_size=10, validate_axis_size=2, test_axis_size=1, shuffle=False
+    ... )
     >>> splitter
     Split(train=7, validate=2, test=1)
     >>> splitter.indices_train.tolist()
@@ -1341,14 +1654,14 @@ class Split:
     ... )
     ([0, 1, 2, 3, 4, 5, 6], [7, 8], [9])
 
-    Split different entries along different axes:
+    Split different entries along different split_axes:
 
     >>> splitter = Split(
     ...     ["x", "y"],
-    ...     n=4,
-    ...     n_validate=1,
-    ...     n_test=1,
-    ...     axes={"x": 1},
+    ...     axis_size=4,
+    ...     validate_axis_size=1,
+    ...     test_axis_size=1,
+    ...     split_axes={"x": 1},
     ...     shuffle=False,
     ... )
     >>> position = {
@@ -1363,44 +1676,54 @@ class Split:
     """
 
     position_keys: Sequence[str]
-    n: int
-    n_validate: int = 0
-    n_test: int = 0
-    n_train: int | None = None
-    axes: dict[str, int] | None = field(default_factory=dict)
-    default_axis: int = 0
+    axis_size: int
+    validate_axis_size: int = 0
+    test_axis_size: int = 0
+    train_axis_size: int | None = None
+    split_axes: dict[str, int] | None = field(default_factory=dict)
+    default_split_axis: int = 0
     shuffle: bool = False
     seed: jax.Array | int | None = None
+    sample_sizes: SampleSizes | None = None
 
     def __post_init__(self):
-        if self.axes is None:
-            self.axes = {}
+        if self.split_axes is None:
+            self.split_axes = {}
 
-        if self.n <= 0:
-            raise ValueError(f"{self.n=} is <= 0, which is not allowed.")
+        self.sample_sizes = _normalize_sample_sizes(self.sample_sizes)
+
+        if self.axis_size <= 0:
+            raise ValueError(f"{self.axis_size=} is <= 0, which is not allowed.")
 
         if len(set(self.position_keys)) != len(self.position_keys):
             raise ValueError(
                 f"Duplicate position_keys are not allowed: {list(self.position_keys)}"
             )
 
-        if self.n_train is None:
-            self.n_train = self.n - self.n_validate - self.n_test
-
-        assert self.n_train is not None
-        self.indices = jnp.arange(self.n)
-
-        if self.n_train < 0 or self.n_validate < 0 or self.n_test < 0:
-            raise ValueError(
-                f"Split sizes must be non-negative, but got {self.n_train=}, "
-                f"{self.n_validate=}, and {self.n_test=}."
+        if self.train_axis_size is None:
+            self.train_axis_size = (
+                self.axis_size - self.validate_axis_size - self.test_axis_size
             )
 
-        n_split = self.n_train + self.n_validate + self.n_test
-        if n_split != self.n:
+        assert self.train_axis_size is not None
+        self.indices = jnp.arange(self.axis_size)
+
+        if (
+            self.train_axis_size < 0
+            or self.validate_axis_size < 0
+            or self.test_axis_size < 0
+        ):
             raise ValueError(
-                f"The given {self.n_train=}, {self.n_validate=}, and {self.n_test=} "
-                f"sum to {n_split}, but must sum exactly to {self.n=}."
+                f"Split sizes must be non-negative, but got {self.train_axis_size=}, "
+                f"{self.validate_axis_size=}, and {self.test_axis_size=}."
+            )
+
+        n_split = self.train_axis_size + self.validate_axis_size + self.test_axis_size
+        if n_split != self.axis_size:
+            raise ValueError(
+                f"The given {self.train_axis_size=}, {self.validate_axis_size=}, "
+                f"and {self.test_axis_size=} sum to {n_split}, but must sum "
+                f"exactly to {self.axis_size=}."
             )
 
         if self.shuffle:
@@ -1412,9 +1735,9 @@ class Split:
             self.indices = self.permute_indices(key)
 
     @property
-    def _n_train(self) -> int:
-        assert self.n_train is not None
-        return self.n_train
+    def _train_axis_size(self) -> int:
+        assert self.train_axis_size is not None
+        return self.train_axis_size
 
     @property
     def has_validation(self) -> bool:
@@ -1424,10 +1747,10 @@ class Split:
         Examples
         --------
         >>> from liesel.optim import Split
-        >>> Split(["x"], n=10, n_validate=2).has_validation
+        >>> Split(["x"], axis_size=10, validate_axis_size=2).has_validation
         True
         """
-        return self.n_validate > 0
+        return self.validate_axis_size > 0
 
     @property
     def has_test(self) -> bool:
@@ -1437,84 +1760,88 @@ class Split:
         Examples
         --------
         >>> from liesel.optim import Split
-        >>> Split(["x"], n=10).has_test
+        >>> Split(["x"], axis_size=10).has_test
         False
         """
-        return self.n_test > 0
+        return self.test_axis_size > 0
 
     @property
-    def share_validate(self) -> float:
+    def validate_axis_share(self) -> float:
         """
         Share of observations assigned to validation.
 
         Returns
         -------
         float
-            The ratio ``n_validate / n``.
+            The ratio ``validate_axis_size / axis_size``.
 
         Examples
         --------
         >>> from liesel.optim import Split
-        >>> Split(["x"], n=10, n_validate=2).share_validate
+        >>> Split(["x"], axis_size=10, validate_axis_size=2).validate_axis_share
         0.2
         """
-        return self.n_validate / self.n
+        return self.validate_axis_size / self.axis_size
 
     @property
-    def share_test(self) -> float:
+    def test_axis_share(self) -> float:
         """
         Share of observations assigned to testing.
 
         Returns
         -------
         float
-            The ratio ``n_test / n``.
+            The ratio ``test_axis_size / axis_size``.
 
         Examples
         --------
         >>> from liesel.optim import Split
-        >>> Split(["x"], n=10, n_test=3).share_test
+        >>> Split(["x"], axis_size=10, test_axis_size=3).test_axis_share
         0.3
         """
-        return self.n_test / self.n
+        return self.test_axis_size / self.axis_size
 
     @classmethod
-    def from_share(
+    def from_axis_shares(
         cls,
         position_keys: Sequence[str],
-        n: int,
-        share_validate: float = 0.0,
-        share_test: float = 0.0,
-        axes: dict[str, int] | None = None,
-        default_axis: int = 0,
+        axis_size: int,
+        validate_axis_share: float = 0.0,
+        test_axis_share: float = 0.0,
+        split_axes: dict[str, int] | None = None,
+        default_split_axis: int = 0,
         shuffle: bool = False,
         seed: jax.Array | int | None = None,
+        sample_sizes: SampleSizes | None = None,
     ) -> Split:
         """
         Builds a :class:`Split` from validation and test proportions.
 
         The number of validation and test observations is computed with
-        ``int(n * share)``. Any fractional remainder is assigned to the training
-        split, so the resulting split sizes always sum to ``n``.
+        ``int(axis_size * share)``. Any fractional remainder is assigned to the training
+        split, so the resulting split sizes always sum to ``axis_size``.
 
         Parameters
         ----------
         position_keys
             Names of position entries that should be split.
-        n
+        axis_size
             Number of observations along each split axis.
-        share_validate
+        validate_axis_share
             Share of observations assigned to validation.
-        share_test
+        test_axis_share
             Share of observations assigned to testing.
-        axes
+        split_axes
             Optional mapping from position key to split axis.
-        default_axis
-            Split axis for all position keys not listed in ``axes``.
+        default_split_axis
+            Split axis for all position keys not listed in ``split_axes``.
         shuffle
             Whether to shuffle observations during initialization.
         seed
             Seed or JAX pseudo-random key used when ``shuffle=True``.
+        sample_sizes
+            Optional effective sample sizes passed to the resulting
+            :class:`PositionSplit`.
 
         Returns
         -------
@@ -1524,46 +1851,51 @@ class Split:
         Examples
         --------
         >>> from liesel.optim import Split
-        >>> splitter = Split.from_share(
+        >>> splitter = Split.from_axis_shares(
         ...     ["x"],
-        ...     n=10,
-        ...     share_validate=0.25,
-        ...     share_test=0.25,
+        ...     axis_size=10,
+        ...     validate_axis_share=0.25,
+        ...     test_axis_share=0.25,
         ... )
-        >>> splitter.n_train, splitter.n_validate, splitter.n_test
+        >>> (
+        ...     splitter.train_axis_size,
+        ...     splitter.validate_axis_size,
+        ...     splitter.test_axis_size,
+        ... )
         (6, 2, 2)
-        >>> splitter.share_validate, splitter.share_test
+        >>> splitter.validate_axis_share, splitter.test_axis_share
         (0.2, 0.2)
         """
-        if n <= 0:
-            raise ValueError(f"{n=} is <= 0, which is not allowed.")
+        if axis_size <= 0:
+            raise ValueError(f"{axis_size=} is <= 0, which is not allowed.")
 
-        if share_validate < 0.0 or share_test < 0.0:
+        if validate_axis_share < 0.0 or test_axis_share < 0.0:
             raise ValueError(
-                f"Shares must be non-negative, but got {share_validate=} "
-                f"and {share_test=}."
+                f"Shares must be non-negative, but got {validate_axis_share=} "
+                f"and {test_axis_share=}."
             )
 
-        share_observed = share_validate + share_test
+        share_observed = validate_axis_share + test_axis_share
         if share_observed > 1.0:
             raise ValueError(
                 f"Validation and test shares sum to {share_observed}, which is > 1.0."
             )
 
-        n_validate = int(n * share_validate)
-        n_test = int(n * share_test)
-        n_train = n - n_validate - n_test
+        validate_axis_size = int(axis_size * validate_axis_share)
+        test_axis_size = int(axis_size * test_axis_share)
+        train_axis_size = axis_size - validate_axis_size - test_axis_size
 
         return cls(
             position_keys=position_keys,
-            n=n,
-            n_validate=n_validate,
-            n_test=n_test,
-            n_train=n_train,
-            axes=axes,
-            default_axis=default_axis,
+            axis_size=axis_size,
+            validate_axis_size=validate_axis_size,
+            test_axis_size=test_axis_size,
+            train_axis_size=train_axis_size,
+            split_axes=split_axes,
+            default_split_axis=default_split_axis,
             shuffle=shuffle,
             seed=seed,
+            sample_sizes=sample_sizes,
         )
 
     def permute_indices(self, key: jax.Array) -> jax.Array:
@@ -1586,7 +1918,7 @@ class Split:
         --------
         >>> import jax
         >>> from liesel.optim import Split
-        >>> splitter = Split(["x"], n=5)
+        >>> splitter = Split(["x"], axis_size=5)
         >>> permuted = splitter.permute_indices(jax.random.key(0))
         >>> sorted(permuted.tolist())
         [0, 1, 2, 3, 4]
@@ -1603,10 +1935,12 @@ class Split:
         Examples
         --------
         >>> from liesel.optim import Split
-        >>> Split(["x"], n=6, n_validate=2, n_test=1).indices_train.tolist()
+        >>> Split(
+        ...     ["x"], axis_size=6, validate_axis_size=2, test_axis_size=1
+        ... ).indices_train.tolist()
         [0, 1, 2]
         """
-        return self.indices[: self._n_train]
+        return self.indices[: self._train_axis_size]
 
     @property
     def indices_validate(self) -> jax.Array:
@@ -1616,11 +1950,13 @@ class Split:
         Examples
         --------
         >>> from liesel.optim import Split
-        >>> Split(["x"], n=6, n_validate=2, n_test=1).indices_validate.tolist()
+        >>> Split(
+        ...     ["x"], axis_size=6, validate_axis_size=2, test_axis_size=1
+        ... ).indices_validate.tolist()
         [3, 4]
         """
-        start = self._n_train
-        end = self._n_train + self.n_validate
+        start = self._train_axis_size
+        end = self._train_axis_size + self.validate_axis_size
         return self.indices[start:end]
 
     @property
@@ -1631,11 +1967,13 @@ class Split:
         Examples
         --------
         >>> from liesel.optim import Split
-        >>> Split(["x"], n=6, n_validate=2, n_test=1).indices_test.tolist()
+        >>> Split(
+        ...     ["x"], axis_size=6, validate_axis_size=2, test_axis_size=1
+        ... ).indices_test.tolist()
         [5]
         """
-        start = self._n_train + self.n_validate
-        end = self._n_train + self.n_validate + self.n_test
+        start = self._train_axis_size + self.validate_axis_size
+        end = self._train_axis_size + self.validate_axis_size + self.test_axis_size
         return self.indices[start:end]
 
     def split_position(self, position: Position) -> PositionSplit:
@@ -1646,7 +1984,7 @@ class Split:
         ----------
         position
             Mapping containing every key in :attr:`position_keys`. Each selected
-            entry must have length ``n`` along its split axis.
+            entry must have length ``axis_size`` along its split axis.
 
         Returns
         -------
@@ -1663,16 +2001,18 @@ class Split:
         --------
         >>> import jax.numpy as jnp
         >>> from liesel.optim import Split
-        >>> splitter = Split(["x"], n=5, n_validate=1, n_test=1)
+        >>> splitter = Split(["x"], axis_size=5, validate_axis_size=1, test_axis_size=1)
         >>> split = splitter.split_position({"x": jnp.arange(5)})
         >>> split.train["x"].tolist()
         [0, 1, 2]
         >>> split.validate["x"].tolist(), split.test["x"].tolist()
         ([3], [4])
 
-        Use ``axes`` to split an array along a non-leading axis:
+        Use ``split_axes`` to split an array along a non-leading axis:
 
-        >>> splitter = Split(["x"], n=4, n_validate=1, axes={"x": 1})
+        >>> splitter = Split(
+        ...     ["x"], axis_size=4, validate_axis_size=1, split_axes={"x": 1}
+        ... )
         >>> split = splitter.split_position({"x": jnp.arange(8).reshape(2, 4)})
         >>> split.train["x"].tolist()
         [[0, 1, 2], [4, 5, 6]]
@@ -1683,15 +2023,15 @@ class Split:
         validation_position = {}
         test_position = {}
 
-        assert self.axes is not None
+        assert self.split_axes is not None
         for key in self.position_keys:
-            axis = self.axes.get(key, self.default_axis)
+            axis = self.split_axes.get(key, self.default_split_axis)
 
             n_this_key = jnp.shape(position[key])[axis]
-            if not jnp.shape(position[key])[axis] == self.n:
+            if not jnp.shape(position[key])[axis] == self.axis_size:
                 raise ValueError(
-                    f"{key} has n={n_this_key}, which is incompatible with the "
-                    f"given sample size of n={self.n}."
+                    f"{key} has axis_size={n_this_key}, which is incompatible with the "
+                    f"given axis_size={self.axis_size}."
                 )
 
             train_values = jnp.take(position[key], self.indices_train, axis=axis)
@@ -1708,16 +2048,17 @@ class Split:
             train=Position(train_position),
             validate=Position(validation_position),
             test=Position(test_position),
-            n_train=self._n_train,
-            n_validate=self.n_validate,
-            n_test=self.n_test,
+            train_axis_size=self._train_axis_size,
+            validate_axis_size=self.validate_axis_size,
+            test_axis_size=self.test_axis_size,
+            sample_sizes=self.sample_sizes,
         )
         return split
 
     def __repr__(self) -> str:
         name = type(self).__name__
         out = (
-            f"{name}(train={self.n_train}, "
-            f"validate={self.n_validate}, test={self.n_test})"
+            f"{name}(train={self.train_axis_size}, "
+            f"validate={self.validate_axis_size}, test={self.test_axis_size})"
         )
         return out

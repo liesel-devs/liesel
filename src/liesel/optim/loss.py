@@ -20,11 +20,11 @@ if TYPE_CHECKING:
 SplitConfig = PositionSplit | PositionSplitManager
 
 
-def _training_loss_scalar(split: SplitConfig) -> int:
+def _training_loss_scalar(split: SplitConfig) -> float:
     if isinstance(split, PositionSplitManager):
-        return sum(split.n_trains)
+        return sum(split.train_sample_sizes)
 
-    return split.n_train
+    return split.train_sample_size
 
 
 class Loss(Protocol):
@@ -171,7 +171,7 @@ class LossMixin:
         return self.split.validate
 
     @property
-    def scale_validate(self) -> float:
+    def validate_sample_scale(self) -> float:
         """
         Scalar validation likelihood scale.
 
@@ -182,19 +182,19 @@ class LossMixin:
         if not self.split.has_validation:
             return 1.0
 
-        return self.split.scale_validate
+        return self.split.validate_sample_scale
 
     @property
-    def n_validate(self) -> int:
+    def validate_axis_size(self) -> int:
         """
         Number of observations used by validation.
 
-        If no validation split exists, this returns the training sample size.
+        If no validation split exists, this returns the training axis size.
         """
         if not self.split.has_validation:
-            return self.split.n_train
+            return self.split.train_axis_size
 
-        return self.split.n_validate
+        return self.split.validate_axis_size
 
     def value_and_grad(
         self, params: Position, carry: "OptimCarry"

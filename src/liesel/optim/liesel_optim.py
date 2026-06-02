@@ -39,8 +39,8 @@ class LieselOptim:
         Optional custom loss. If supplied, ``loss.split`` is used as the split.
     batches
         Optional explicit batch configuration. Cannot be combined with
-        ``batch_size``.
-    batch_size
+        ``batch_axis_size``.
+    batch_axis_size
         Mini-batch size used to construct default batches. ``None`` means full-data
         batches.
     split
@@ -53,12 +53,12 @@ class LieselOptim:
         Maximum-epoch and early-stopping configuration.
     seed
         Integer seed. If ``None``, the current Unix time is used.
-    n
+    axis_size
         Optional scalar observation count for scalar default splitting.
-    axes
+    split_axes
         Optional mapping from observed position key to split/batch axis.
-    default_axis
-        Split/batch axis for observed keys missing from ``axes``.
+    default_split_axis
+        Split/batch axis for observed keys missing from ``split_axes``.
     shuffle_batches
         Whether default mini-batches should shuffle observations.
     batch_mode
@@ -102,14 +102,14 @@ class LieselOptim:
         *,
         loss: Loss | None = None,
         batches: BatchConfig | None = None,
-        batch_size: int | None = None,
+        batch_axis_size: int | None = None,
         split: SplitConfig | None = None,
         optimizers: Sequence[Optimizer] | Literal["adam", "lbfgs"] = "adam",
         stopper: Stopper = Stopper(epochs=1000, patience=10, rtol=1e-6),
         seed: int | None = None,
-        n: int | None = None,
-        axes: dict[str, int] | None = None,
-        default_axis: int = 0,
+        axis_size: int | None = None,
+        split_axes: dict[str, int] | None = None,
+        default_split_axis: int = 0,
         shuffle_batches: bool = True,
         batch_mode: Literal["strict", "resample"] = "resample",
         epoch_size: Literal["max", "min"] | int = "max",
@@ -119,21 +119,23 @@ class LieselOptim:
             "auto", "epoch_average", "weighted_epoch_average", "full_data"
         ] = "auto",
     ) -> None:
-        if batches is not None and batch_size is not None:
-            raise ValueError("Pass either batches or batch_size, not both.")
+        if batches is not None and batch_axis_size is not None:
+            raise ValueError("Pass either batches or batch_axis_size, not both.")
 
         self.model = model
         self.seed = int(time.time()) if seed is None else seed
         self.stopper = stopper
-        self.split = self._resolve_split(loss, split, n, axes, default_axis)
+        self.split = self._resolve_split(
+            loss, split, axis_size, split_axes, default_split_axis
+        )
         self.loss = self._resolve_loss(
             loss, validation_strategy=validation_strategy, scale_loss=scale_loss
         )
         self.batches = self._resolve_batches(
             batches=batches,
-            batch_size=batch_size,
-            axes=axes,
-            default_axis=default_axis,
+            batch_axis_size=batch_axis_size,
+            split_axes=split_axes,
+            default_split_axis=default_split_axis,
             shuffle=shuffle_batches,
             mode=batch_mode,
             epoch_size=epoch_size,
@@ -145,9 +147,9 @@ class LieselOptim:
         self,
         loss: Loss | None,
         split: SplitConfig | None,
-        n: int | None,
-        axes: dict[str, int] | None,
-        default_axis: int,
+        axis_size: int | None,
+        split_axes: dict[str, int] | None,
+        default_split_axis: int,
     ) -> SplitConfig:
         if loss is not None:
             if split is not None and split is not loss.split:
@@ -162,9 +164,9 @@ class LieselOptim:
 
         return PositionSplit.from_model(
             self.model,
-            n=n,
-            axes=axes,
-            default_axis=default_axis,
+            axis_size=axis_size,
+            split_axes=split_axes,
+            default_split_axis=default_split_axis,
             multi_size="manager",
         )
 
@@ -194,9 +196,9 @@ class LieselOptim:
     def _resolve_batches(
         self,
         batches: BatchConfig | None,
-        batch_size: int | None,
-        axes: dict[str, int] | None,
-        default_axis: int,
+        batch_axis_size: int | None,
+        split_axes: dict[str, int] | None,
+        default_split_axis: int,
         shuffle: bool,
         mode: Literal["strict", "resample"],
         epoch_size: Literal["max", "min"] | int,
@@ -204,20 +206,21 @@ class LieselOptim:
         if batches is not None:
             return batches
 
-        shuffle = False if batch_size is None else shuffle
+        shuffle = False if batch_axis_size is None else shuffle
         if isinstance(self.split, PositionSplitManager):
             children = [
                 Batches(
                     position_keys=child.position_keys,
-                    n=child.n_train,
-                    batch_size=batch_size,
+                    axis_size=child.train_axis_size,
+                    batch_axis_size=batch_axis_size,
                     shuffle=shuffle,
-                    axes=axes,
-                    default_axis=default_axis,
+                    split_axes=split_axes,
+                    default_split_axis=default_split_axis,
+                    sample_size=child.train_sample_size,
                     sample_with_replacement=(
                         mode == "resample"
-                        and batch_size is not None
-                        and batch_size > child.n_train
+                        and batch_axis_size is not None
+                        and batch_axis_size > child.train_axis_size
                     ),
                 )
                 for child in self.split.splits
@@ -227,11 +230,12 @@ class LieselOptim:
         position_keys = self.split.position_keys or list(self.model.observed)
         return Batches(
             position_keys=position_keys,
-            n=self.split.n_train,
-            batch_size=batch_size,
+            axis_size=self.split.train_axis_size,
+            batch_axis_size=batch_axis_size,
             shuffle=shuffle,
-            axes=axes,
-            default_axis=default_axis,
+            split_axes=split_axes,
+            default_split_axis=default_split_axis,
+            sample_size=self.split.train_sample_size,
         )
 
     def _resolve_optimizers(

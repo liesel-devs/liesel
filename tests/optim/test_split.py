@@ -1,3 +1,4 @@
+import math
 from types import SimpleNamespace
 
 import jax.numpy as jnp
@@ -34,6 +35,15 @@ def _two_branch_model():
     return lsl.Model([y1, y2]), y1, y2
 
 
+def _matrix_obs_model(shape=(4, 8)):
+    y = lsl.Var.new_obs(
+        jnp.arange(math.prod(shape), dtype=float).reshape(shape),
+        lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+        name="y",
+    )
+    return lsl.Model([y]), y
+
+
 class TestSplit:
     def test_no_split(self):
         m = lsl.Var.new_param(0.0, name="m")
@@ -44,11 +54,11 @@ class TestSplit:
         )
         model = lsl.Model([x])
 
-        split = Split.from_share(
+        split = Split.from_axis_shares(
             position_keys=["x"],
-            n=x.value.size,
-            share_validate=0.0,
-            share_test=0.0,
+            axis_size=x.value.size,
+            validate_axis_share=0.0,
+            test_axis_share=0.0,
         )
 
         assert split.indices_train.size == x.value.size
@@ -70,11 +80,11 @@ class TestSplit:
         )
         model = lsl.Model([x])
 
-        split = Split.from_share(
+        split = Split.from_axis_shares(
             position_keys=["x"],
-            n=x.value.size,
-            share_validate=0.2,
-            share_test=0.2,
+            axis_size=x.value.size,
+            validate_axis_share=0.2,
+            test_axis_share=0.2,
         )
 
         assert split.indices_train.size == 60
@@ -89,73 +99,73 @@ class TestSplit:
 
     def test_split_incoherent(self):
         with pytest.raises(ValueError):
-            Split.from_share(
+            Split.from_axis_shares(
                 position_keys=["x"],
-                n=100,
-                share_validate=0.9,
-                share_test=0.2,
+                axis_size=100,
+                validate_axis_share=0.9,
+                test_axis_share=0.2,
             )
 
         with pytest.raises(ValueError):
-            Split.from_share(
+            Split.from_axis_shares(
                 position_keys=["x"],
-                n=100,
-                share_validate=1.1,
-                share_test=0.0,
+                axis_size=100,
+                validate_axis_share=1.1,
+                test_axis_share=0.0,
             )
 
         with pytest.raises(ValueError):
-            Split.from_share(
+            Split.from_axis_shares(
                 position_keys=["x"],
-                n=100,
-                share_validate=0.0,
-                share_test=1.1,
+                axis_size=100,
+                validate_axis_share=0.0,
+                test_axis_share=1.1,
             )
 
         with pytest.raises(ValueError):
-            Split.from_share(
+            Split.from_axis_shares(
                 position_keys=["x"],
-                n=100,
-                share_validate=-0.3,
-                share_test=0.5,
+                axis_size=100,
+                validate_axis_share=-0.3,
+                test_axis_share=0.5,
             )
 
         with pytest.raises(ValueError):
-            Split.from_share(
+            Split.from_axis_shares(
                 position_keys=["x"],
-                n=2,
-                share_validate=0.6,
-                share_test=0.6,
+                axis_size=2,
+                validate_axis_share=0.6,
+                test_axis_share=0.6,
             )
 
         with pytest.raises(ValueError):
-            Split.from_share(
+            Split.from_axis_shares(
                 position_keys=["x"],
-                n=0,
-                share_validate=0.0,
-                share_test=0.0,
-            )
-
-        with pytest.raises(ValueError):
-            Split(
-                position_keys=["x"],
-                n=10,
-                n_train=5,
-                n_validate=2,
-                n_test=1,
+                axis_size=0,
+                validate_axis_share=0.0,
+                test_axis_share=0.0,
             )
 
         with pytest.raises(ValueError):
             Split(
                 position_keys=["x"],
-                n=10,
-                n_train=-1,
-                n_validate=10,
-                n_test=1,
+                axis_size=10,
+                train_axis_size=5,
+                validate_axis_size=2,
+                test_axis_size=1,
+            )
+
+        with pytest.raises(ValueError):
+            Split(
+                position_keys=["x"],
+                axis_size=10,
+                train_axis_size=-1,
+                validate_axis_size=10,
+                test_axis_size=1,
             )
 
         with pytest.raises(ValueError, match="Duplicate position_keys"):
-            Split(position_keys=["x", "x"], n=10)
+            Split(position_keys=["x", "x"], axis_size=10)
 
 
 class TestPositionSplit:
@@ -179,13 +189,116 @@ class TestPositionSplit:
         with pytest.raises(ValueError, match="test"):
             PositionSplit(pos, Position({}), Position({"y": jnp.arange(1)}), 1, 0, 1)
 
+    def test_manual_sample_sizes_scale_position_split(self):
+        split = PositionSplit(
+            Position({"y": jnp.arange(6)}),
+            Position({"y": jnp.arange(2)}),
+            Position({}),
+            train_axis_size=6,
+            validate_axis_size=2,
+            test_axis_size=0,
+            sample_sizes={"train": 24, "validate": 4},
+        )
+
+        assert split.validate_sample_scale == 6.0
+
+    def test_manual_sample_sizes_pass_through_split(self):
+        split = Split(
+            ["y"],
+            axis_size=8,
+            validate_axis_size=2,
+            sample_sizes={"train": 18, "validate": 3},
+        ).split_position({"y": jnp.arange(8)})
+
+        assert split.validate_sample_scale == 6.0
+
+    def test_from_model_infers_sample_sizes_from_pointwise_log_probs(self):
+        model, _ = _matrix_obs_model(shape=(4, 8))
+
+        split = PositionSplit.from_model(
+            model,
+            position_keys=["y"],
+            validate_axis_share=0.25,
+            split_axes={"y": 1},
+        )
+
+        assert split.train_axis_size == 6
+        assert split.validate_axis_size == 2
+        assert split.sample_sizes == {"train": 24.0, "validate": 8.0}
+        assert split.validate_sample_scale == 3.0
+
+    def test_from_model_can_disable_likelihood_size_inference(self):
+        model, _ = _matrix_obs_model(shape=(4, 8))
+
+        split = PositionSplit.from_model(
+            model,
+            position_keys=["y"],
+            validate_axis_share=0.25,
+            split_axes={"y": 1},
+            infer_sample_sizes=False,
+        )
+
+        assert split.sample_sizes is None
+        assert split.validate_sample_scale == 3.0
+
+    def test_from_model_rejects_per_obs_false_for_likelihood_size_inference(self):
+        dist = lsl.Dist(tfd.Normal, loc=0.0, scale=1.0)
+        dist.per_obs = False
+        y = lsl.Var.new_obs(jnp.arange(8.0), dist, name="y")
+        model = lsl.Model([y])
+
+        with pytest.raises(ValueError, match="per_obs=False"):
+            PositionSplit.from_model(model, position_keys=["y"])
+
+    def test_from_model_rejects_custom_log_lik_node_for_likelihood_size_inference(
+        self,
+    ):
+        y = lsl.Var.new_obs(
+            jnp.arange(8.0),
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="y",
+        )
+        assert y.dist_node is not None
+        gb = lsl.GraphBuilder()
+        gb.add(y)
+        gb.log_lik_node = lsl.Calc(
+            lambda log_prob: log_prob.sum(),
+            y.dist_node,
+            _name="custom_log_lik",
+        )
+        model = gb.build_model()
+
+        with pytest.raises(ValueError, match="custom log_lik_node"):
+            PositionSplit.from_model(model, position_keys=["y"])
+
+    def test_from_model_rejects_incompatible_pointwise_sizes(self):
+        y1 = lsl.Var.new_obs(
+            jnp.arange(32.0).reshape(4, 8),
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="y1",
+        )
+        y2 = lsl.Var.new_obs(
+            jnp.arange(8.0),
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="y2",
+        )
+        model = lsl.Model([y1, y2])
+
+        with pytest.raises(ValueError, match="incompatible pointwise"):
+            PositionSplit.from_model(
+                model,
+                position_keys=["y1", "y2"],
+                validate_axis_share=0.25,
+                split_axes={"y1": 1, "y2": 0},
+            )
+
 
 class TestSplitManager:
     def test_combines_different_size_branches(self):
         manager = SplitManager(
             [
-                Split(["x"], n=10, n_validate=2, n_test=1),
-                Split(["y"], n=6, n_validate=1, n_test=1),
+                Split(["x"], axis_size=10, validate_axis_size=2, test_axis_size=1),
+                Split(["y"], axis_size=6, validate_axis_size=1, test_axis_size=1),
             ]
         )
         position = {"x": jnp.arange(10), "y": jnp.arange(6)}
@@ -193,39 +306,39 @@ class TestSplitManager:
         split = manager.split_position(position)
 
         assert split.position_keys == ["x", "y"]
-        assert split.n_trains == (7, 4)
-        assert split.n_validates == (2, 1)
-        assert split.n_tests == (1, 1)
+        assert split.train_axis_sizes == (7, 4)
+        assert split.validate_axis_sizes == (2, 1)
+        assert split.test_axis_sizes == (1, 1)
         assert split.train["x"].tolist() == list(range(7))
         assert split.validate["y"].tolist() == [4]
         assert split.test["x"].tolist() == [9]
 
     def test_duplicate_position_keys_raise(self):
         with pytest.raises(ValueError, match="Position keys"):
-            SplitManager([Split(["x"], n=3), Split(["x"], n=3)])
+            SplitManager([Split(["x"], axis_size=3), Split(["x"], axis_size=3)])
 
     def test_mixed_validation_and_test_availability_raise(self):
         with pytest.raises(ValueError, match="validation data"):
             SplitManager(
                 [
-                    Split(["x"], n=5, n_validate=1),
-                    Split(["y"], n=5, n_validate=0),
+                    Split(["x"], axis_size=5, validate_axis_size=1),
+                    Split(["y"], axis_size=5, validate_axis_size=0),
                 ]
             )
 
         with pytest.raises(ValueError, match="test data"):
             SplitManager(
                 [
-                    Split(["x"], n=5, n_test=1),
-                    Split(["y"], n=5, n_test=0),
+                    Split(["x"], axis_size=5, test_axis_size=1),
+                    Split(["y"], axis_size=5, test_axis_size=0),
                 ]
             )
 
     def test_axis_handling_is_independent_per_child(self):
         manager = SplitManager(
             [
-                Split(["x"], n=4, n_validate=1, axes={"x": 1}),
-                Split(["y"], n=6, n_validate=2),
+                Split(["x"], axis_size=4, validate_axis_size=1, split_axes={"x": 1}),
+                Split(["y"], axis_size=6, validate_axis_size=2),
             ]
         )
         position = {
@@ -246,14 +359,14 @@ class TestSplitManager:
         manager1 = SplitManager.from_model(
             model,
             position_keys=["y1", "y2"],
-            share_validate=0.2,
+            validate_axis_share=0.2,
             shuffle=True,
             seed=7,
         )
         manager2 = SplitManager.from_model(
             model,
             position_keys=["y1", "y2"],
-            share_validate=0.2,
+            validate_axis_share=0.2,
             shuffle=True,
             seed=7,
         )
@@ -261,7 +374,7 @@ class TestSplitManager:
         assert len(manager1.splits) == 2
         for split1, split2 in zip(manager1.splits, manager2.splits, strict=True):
             assert jnp.allclose(split1.indices, split2.indices)
-            assert jnp.all(split1.indices < split1.n)
+            assert jnp.all(split1.indices < split1.axis_size)
 
     def test_from_model_with_seed_none_fans_out_child_seeds(self, monkeypatch):
         model, _, _ = _two_branch_model()
@@ -270,14 +383,14 @@ class TestSplitManager:
         manager_none = SplitManager.from_model(
             model,
             position_keys=["y1", "y2"],
-            share_validate=0.2,
+            validate_axis_share=0.2,
             shuffle=True,
             seed=None,
         )
         manager_int = SplitManager.from_model(
             model,
             position_keys=["y1", "y2"],
-            share_validate=0.2,
+            validate_axis_share=0.2,
             shuffle=True,
             seed=1234,
         )
@@ -287,7 +400,7 @@ class TestSplitManager:
         for split1, split2 in zip(manager_none.splits, manager_int.splits, strict=True):
             assert jnp.allclose(split1.indices, split2.indices)
 
-    def test_from_model_rejects_mixed_availability_from_share_rounding(self):
+    def test_from_model_rejects_mixed_availability_from_axis_shares_rounding(self):
         y1 = lsl.Var.new_obs(jnp.arange(10.0), name="y1")
         y2 = lsl.Var.new_obs(jnp.arange(4.0), name="y2")
         model = lsl.Model([y1, y2])
@@ -296,42 +409,42 @@ class TestSplitManager:
             SplitManager.from_model(
                 model,
                 position_keys=["y1", "y2"],
-                share_validate=0.2,
+                validate_axis_share=0.2,
             )
 
     def test_scalar_aliases_work_for_equal_sizes_and_raise_for_unequal_sizes(self):
         equal_position = {"x": jnp.arange(10), "y": jnp.arange(10)}
         equal = SplitManager(
             [
-                Split(["x"], n=10, n_validate=2),
-                Split(["y"], n=10, n_validate=2),
+                Split(["x"], axis_size=10, validate_axis_size=2),
+                Split(["y"], axis_size=10, validate_axis_size=2),
             ]
         ).split_position(equal_position)
 
-        assert equal.n_train == 8
-        assert equal.n_validate == 2
-        assert equal.scale_validate == 4.0
+        assert equal.train_axis_size == 8
+        assert equal.validate_axis_size == 2
+        assert equal.validate_sample_scale == 4.0
 
         unequal = SplitManager(
             [
-                Split(["x"], n=10, n_validate=2),
-                Split(["y"], n=6, n_validate=1),
+                Split(["x"], axis_size=10, validate_axis_size=2),
+                Split(["y"], axis_size=6, validate_axis_size=1),
             ]
         ).split_position({"x": jnp.arange(10), "y": jnp.arange(6)})
 
-        with pytest.raises(ValueError, match="n_trains"):
-            _ = unequal.n_train
+        with pytest.raises(ValueError, match="train_axis_sizes"):
+            _ = unequal.train_axis_size
 
     def test_from_model_groups_observed_variables_by_sample_size(self):
         model, _, _ = _two_branch_model()
 
         manager = SplitManager.from_model(
-            model, position_keys=["y1", "y2"], share_validate=0.2
+            model, position_keys=["y1", "y2"], validate_axis_share=0.2
         )
 
         assert manager.position_keys == ["y1", "y2"]
-        assert manager.ns == (10, 6)
-        assert manager.n_validates == (2, 1)
+        assert manager.axis_sizes == (10, 6)
+        assert manager.validate_axis_sizes == (2, 1)
 
     def test_position_split_from_model_multi_size_modes(self):
         model, _, _ = _two_branch_model()
@@ -342,19 +455,19 @@ class TestSplitManager:
         split = PositionSplit.from_model(
             model,
             position_keys=["y1", "y2"],
-            share_validate=0.2,
+            validate_axis_share=0.2,
             multi_size="manager",
         )
 
         assert isinstance(split, PositionSplitManager)
-        assert split.n_validates == (2, 1)
+        assert split.validate_axis_sizes == (2, 1)
 
-        with pytest.raises(ValueError, match="single n value"):
+        with pytest.raises(ValueError, match="single axis_size value"):
             PositionSplit.from_model(
                 model,
                 position_keys=["y1", "y2"],
-                n=10,
-                share_validate=0.2,
+                axis_size=10,
+                validate_axis_share=0.2,
                 multi_size="manager",
             )
 
@@ -366,21 +479,21 @@ class TestSplitManager:
         split = PositionSplit.from_model(
             model,
             position_keys=["x", "y"],
-            share_validate=0.25,
+            validate_axis_share=0.25,
             multi_size="manager",
         )
 
         assert isinstance(split, PositionSplit)
-        assert split.n_train == 6
-        assert split.n_validate == 2
+        assert split.train_axis_size == 6
+        assert split.validate_axis_size == 2
 
     def test_position_split_manager_scaled_log_lik_matches_manual_calculation(self):
         model, y1, y2 = _two_branch_model()
         position = model.extract_position(["y1", "y2"])
         split = SplitManager(
             [
-                Split(["y1"], n=10, n_validate=2),
-                Split(["y2"], n=6, n_validate=1),
+                Split(["y1"], axis_size=10, validate_axis_size=2),
+                Split(["y2"], axis_size=6, validate_axis_size=1),
             ]
         ).split_position(position)
         state = model.update_state(split.validate, model.state)
@@ -388,8 +501,9 @@ class TestSplitManager:
         assert y1.dist_node is not None
         assert y2.dist_node is not None
         manual = (
-            split.splits[0].scale_validate * state[y1.dist_node.name].value.sum()
-            + split.splits[1].scale_validate * state[y2.dist_node.name].value.sum()
+            split.splits[0].validate_sample_scale * state[y1.dist_node.name].value.sum()
+            + split.splits[1].validate_sample_scale
+            * state[y2.dist_node.name].value.sum()
         )
 
         assert jnp.allclose(split.scaled_log_lik(model, state), manual)
@@ -401,14 +515,14 @@ class TestSplitManager:
             name="y",
         )
         model = lsl.Model([y])
-        split = Split(["y"], n=10, n_validate=2).split_position(
+        split = Split(["y"], axis_size=10, validate_axis_size=2).split_position(
             model.extract_position(["y"])
         )
         state = model.update_state(split.validate, model.state)
 
         assert jnp.allclose(
             split.scaled_log_lik(model, state),
-            split.scale_validate * state["_model_log_lik"].value,
+            split.validate_sample_scale * state["_model_log_lik"].value,
         )
 
     def test_neg_log_prob_loss_validate_uses_per_branch_scaling(self):
@@ -416,7 +530,7 @@ class TestSplitManager:
         split = PositionSplit.from_model(
             model,
             position_keys=["y1", "y2"],
-            share_validate=0.2,
+            validate_axis_share=0.2,
             multi_size="manager",
         )
         loss = NegLogProbLoss(model, split)
@@ -435,14 +549,14 @@ class TestSplitManager:
         split = PositionSplit.from_model(
             model,
             position_keys=["y1", "y2"],
-            share_validate=0.2,
+            validate_axis_share=0.2,
             multi_size="manager",
         )
 
         quick = LieselOptim(model, split=split)
 
         assert isinstance(quick.batches, BatchManager)
-        assert quick.batches.n == split.n_trains
+        assert quick.batches.axis_size == split.train_axis_sizes
         batch = quick.batches.get_batched_position(split.train, batch_index=0)
         assert batch["y1"].shape == (8,)
         assert batch["y2"].shape == (5,)
@@ -453,10 +567,10 @@ class TestSplitManager:
         split = PositionSplit.from_model(
             model,
             position_keys=["y1", "y2"],
-            share_validate=0.2,
+            validate_axis_share=0.2,
             multi_size="manager",
         )
-        batches = Batches(["y1"], n=8, batch_size=None)
+        batches = Batches(["y1"], axis_size=8, batch_axis_size=None)
 
         with pytest.raises(ValueError, match="BatchManager"):
             LieselOptim(model, split=split, batches=batches).build_engine()

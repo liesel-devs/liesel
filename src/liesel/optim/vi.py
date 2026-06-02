@@ -75,7 +75,7 @@ def _validate_no_validation_split(split: SplitConfig) -> None:
         raise ValueError(
             "NegElboLoss does not support data splits with validation data. "
             "For variational inference, use a split without validation data "
-            "(for example share_validate=0.0) and choose a training-data monitor."
+            "(for example validate_axis_share=0.0) and choose a training-data monitor."
         )
 
 
@@ -586,6 +586,7 @@ class NegElboLoss(LossMixin):
         obs: Position | None = None,
         scale_log_lik_p_by: float = 1.0,
         split: SplitConfig | None = None,
+        split_part: Literal["train", "validate", "test"] = "train",
         batches=None,
         nsamples: int | None = None,
     ) -> jax.Array:
@@ -617,6 +618,8 @@ class NegElboLoss(LossMixin):
             ``batches`` is supplied.
         split
             Optional split object used to compute split-aware log likelihoods.
+        split_part
+            Split part used when ``split`` is supplied.
         batches
             Optional batch object used to compute mini-batch-scaled log likelihoods.
         nsamples
@@ -640,7 +643,9 @@ class NegElboLoss(LossMixin):
                 if split is None:
                     log_lik_p = scale_log_lik_p_by * p_state_new["_model_log_lik"].value
                 else:
-                    log_lik_p = split.scaled_log_lik(self.p, p_state_new, part="train")
+                    log_lik_p = split.scaled_log_lik(
+                        self.p, p_state_new, part=split_part
+                    )
             else:
                 log_lik_p = batches.scaled_log_lik(self.p, p_state_new)
             log_prior_p = p_state_new["_model_log_prior"].value
@@ -708,6 +713,8 @@ class NegElboLoss(LossMixin):
             obs=Position(self.split.train),
             p_state=carry.model_state,
             q_state=self.q.state,
+            split=self.split,
+            split_part="train",
             nsamples=self.nsamples,
         )
         return -elbo / self.scalar
@@ -727,6 +734,7 @@ class NegElboLoss(LossMixin):
             p_state=carry.model_state,
             q_state=self.q.state,
             split=self.split,
+            split_part="train",
             nsamples=self.nsamples,
         )
         return -elbo / self.scalar
