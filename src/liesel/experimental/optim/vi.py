@@ -117,9 +117,7 @@ def _distribution_sample_shape(distribution, value_shape: tuple[int, ...]):
 
 def _asarray_with_float_dtype(value, dtype: jnp.dtype):
     arr = jnp.asarray(value)
-    if jnp.issubdtype(arr.dtype, jnp.floating) and jnp.issubdtype(
-        dtype, jnp.floating
-    ):
+    if jnp.issubdtype(arr.dtype, jnp.floating) and jnp.issubdtype(dtype, jnp.floating):
         return arr.astype(dtype)
 
     return arr

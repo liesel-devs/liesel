@@ -111,8 +111,7 @@ class LieselVI:
         self,
         model: Model,
         *,
-        loss: Literal["mvn_diag", "mvn_tril", "mvn_blocked"]
-        | NegElboLoss = "mvn_diag",
+        loss: Literal["mvn_diag", "mvn_tril", "mvn_blocked"] | NegElboLoss = "mvn_diag",
         elbo: Literal["mvn_diag", "mvn_tril", "mvn_blocked"]
         | NegElboLoss
         | None = None,
