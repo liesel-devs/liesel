@@ -6,9 +6,9 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-import liesel.experimental.optim as opt
-import liesel.experimental.optim.engine as engine_module
-from liesel.experimental.optim import (
+import liesel.optim as opt
+import liesel.optim.engine as engine_module
+from liesel.optim import (
     Batches,
     BatchManager,
     LieselOptim,
@@ -17,15 +17,15 @@ from liesel.experimental.optim import (
     PositionSplitManager,
     Stopper,
 )
-from liesel.experimental.optim.engine import (
+from liesel.optim.engine import (
     _progress_print_rate,
     _progress_remainder,
     _should_update_progress,
 )
-from liesel.experimental.optim.liesel_optim import LieselOptim as LieselOptimFromQuick
-from liesel.experimental.optim.liesel_vi import LieselVI
-from liesel.experimental.optim.state import OptimCarry
-from liesel.experimental.optim.types import Position
+from liesel.optim.liesel_optim import LieselOptim as LieselOptimFromQuick
+from liesel.optim.liesel_vi import LieselVI
+from liesel.optim.state import OptimCarry
+from liesel.optim.types import Position
 
 
 @dataclass

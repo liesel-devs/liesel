@@ -21,7 +21,7 @@ ELBO loss:
 
 >>> import jax.numpy as jnp
 >>> import liesel.model as lsl
->>> import liesel.experimental.optim as opt
+>>> import liesel.optim as opt
 >>> import tensorflow_probability.substrates.jax as tfp
 >>> loc = lsl.Var.new_param(jnp.array(0.0), name="mu")
 >>> y = lsl.Var.new_obs(
@@ -52,10 +52,10 @@ import jax.numpy as jnp
 import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as tfd
 
-from ...docs import usedocs
-from ...model import Dist, Model, Var
-from ...model.logprob import FlatLogProb
-from ...model.model import TemporaryModel
+from ..docs import usedocs
+from ..model import Dist, Model, Var
+from ..model.logprob import FlatLogProb
+from ..model.model import TemporaryModel
 from .loss import LossMixin, _training_loss_scalar
 from .split import PositionSplit, PositionSplitManager
 from .state import OptimCarry
@@ -189,7 +189,7 @@ class NegElboLoss(LossMixin):
     >>> import jax
     >>> import jax.numpy as jnp
     >>> import liesel.model as lsl
-    >>> import liesel.experimental.optim as opt
+    >>> import liesel.optim as opt
     >>> import tensorflow_probability.substrates.jax as tfp
     >>> loc = lsl.Var.new_param(jnp.array(0.0), name="mu")
     >>> y = lsl.Var.new_obs(
@@ -274,7 +274,7 @@ class NegElboLoss(LossMixin):
         --------
         >>> import jax.numpy as jnp
         >>> import liesel.model as lsl
-        >>> import liesel.experimental.optim as opt
+        >>> import liesel.optim as opt
         >>> import tensorflow_probability.substrates.jax as tfp
         >>> loc = lsl.Var.new_param(jnp.array(0.0), name="mu")
         >>> y = lsl.Var.new_obs(
@@ -778,7 +778,7 @@ class VDist:
 
     >>> import jax.numpy as jnp
     >>> import liesel.model as lsl
-    >>> import liesel.experimental.optim as opt
+    >>> import liesel.optim as opt
     >>> import tensorflow_probability.substrates.jax as tfp
 
     >>> loc = lsl.Var.new_param(jnp.array(0.0), name="mu")
@@ -880,7 +880,7 @@ class VDist:
         --------
         >>> import jax.numpy as jnp
         >>> import liesel.model as lsl
-        >>> import liesel.experimental.optim as opt
+        >>> import liesel.optim as opt
         >>> theta = lsl.Var.new_param(jnp.array([1.0, 2.0]), name="theta")
         >>> p = lsl.Model([theta])
         >>> vdist = opt.VDist(["theta"], p)
@@ -927,7 +927,7 @@ class VDist:
         --------
         >>> import jax.numpy as jnp
         >>> import liesel.model as lsl
-        >>> import liesel.experimental.optim as opt
+        >>> import liesel.optim as opt
         >>> theta = lsl.Var.new_param(jnp.array(0.0), name="theta")
         >>> p = lsl.Model([theta])
         >>> vdist = opt.VDist(["theta"], p)
@@ -1062,7 +1062,7 @@ class VDist:
         --------
         >>> import jax.numpy as jnp
         >>> import liesel.model as lsl
-        >>> import liesel.experimental.optim as opt
+        >>> import liesel.optim as opt
         >>> theta = lsl.Var.new_param(jnp.array(0.0), name="theta")
         >>> p = lsl.Model([theta])
         >>> opt.VDist(["theta"], p).normal(scale=0.5)
@@ -1335,7 +1335,7 @@ class VDist:
         >>> import jax
         >>> import jax.numpy as jnp
         >>> import liesel.model as lsl
-        >>> import liesel.experimental.optim as opt
+        >>> import liesel.optim as opt
         >>> theta = lsl.Var.new_param(jnp.array([0.0]), name="theta")
         >>> p = lsl.Model([theta])
         >>> vdist = opt.VDist(["theta"], p).mvn_diag().build()
@@ -1396,7 +1396,7 @@ def flatten_leading_batch(pytree, batch_ndim: int):
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from liesel.experimental.optim.vi import flatten_leading_batch
+    >>> from liesel.optim.vi import flatten_leading_batch
     >>> out = flatten_leading_batch({"x": jnp.zeros((2, 3, 4))}, batch_ndim=2)
     >>> out["x"].shape
     (6, 4)
@@ -1429,7 +1429,7 @@ def unflatten_leading_batch(pytree, batch_shape):
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from liesel.experimental.optim.vi import unflatten_leading_batch
+    >>> from liesel.optim.vi import unflatten_leading_batch
     >>> out = unflatten_leading_batch({"x": jnp.zeros((6, 4))}, batch_shape=(2, 3))
     >>> out["x"].shape
     (2, 3, 4)
@@ -1470,8 +1470,8 @@ def vmap_batched(
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from liesel.experimental.optim.types import Position
-    >>> from liesel.experimental.optim.vi import vmap_batched
+    >>> from liesel.optim.types import Position
+    >>> from liesel.optim.vi import vmap_batched
     >>> pos = Position({"x": jnp.arange(6).reshape(2, 3)})
     >>> out = vmap_batched(pos, lambda p: Position({"y": p["x"] + 1}), (2,))
     >>> out["y"].tolist()
@@ -1528,7 +1528,7 @@ class CompositeVDist:
 
     >>> import jax.numpy as jnp
     >>> import liesel.model as lsl
-    >>> import liesel.experimental.optim as opt
+    >>> import liesel.optim as opt
     >>> import tensorflow_probability.substrates.jax as tfp
 
     >>> loc = lsl.Var.new_param(jnp.array(0.0), name="mu")

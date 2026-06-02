@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ...model import Model
+from ..model import Model
 from .batch import Batches, BatchManager
 from .split import PositionSplit, PositionSplitManager
 

@@ -5,7 +5,7 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 from jax.random import key, uniform
 
 import liesel.model as lsl
-from liesel.experimental.optim import Batches, BatchManager
+from liesel.optim import Batches, BatchManager
 
 
 class TestBatches:

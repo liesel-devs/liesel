@@ -3,9 +3,9 @@ import jax.numpy as jnp
 import optax
 import pytest
 
-from liesel.experimental.optim import Batches, Optimizer
-from liesel.experimental.optim.state import OptimCarry, OptimHistory, OptimResult
-from liesel.experimental.optim.types import Position
+from liesel.optim import Batches, Optimizer
+from liesel.optim.state import OptimCarry, OptimHistory, OptimResult
+from liesel.optim.types import Position
 
 
 class TestOptimHistory:

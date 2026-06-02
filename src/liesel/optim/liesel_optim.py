@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Literal
 
 import optax
 
-from ...model import Model
+from ..model import Model
 from ._engine_utils import BatchConfig, SplitConfig
 from .batch import Batches, BatchManager
 from .loss import Loss, NegLogProbLoss
@@ -83,7 +83,7 @@ class LieselOptim:
     >>> import jax.numpy as jnp
     >>> import liesel.model as lsl
     >>> import tensorflow_probability.substrates.jax.distributions as tfd
-    >>> from liesel.experimental.optim import LieselOptim
+    >>> from liesel.optim import LieselOptim
     >>> loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
     >>> y = lsl.Var.new_obs(
     ...     jnp.array([0.0, 1.0]),

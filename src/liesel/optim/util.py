@@ -1,6 +1,6 @@
 import jax.numpy as jnp
 
-from ...model import Model
+from ..model import Model
 
 
 def guess_n(model: Model, axis: int = 0) -> int:

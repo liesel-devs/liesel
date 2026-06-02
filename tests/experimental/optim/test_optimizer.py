@@ -4,8 +4,8 @@ import jax.numpy as jnp
 import optax
 import pytest
 
-from liesel.experimental.optim import LBFGS, Optimizer
-from liesel.experimental.optim.types import Position
+from liesel.optim import LBFGS, Optimizer
+from liesel.optim.types import Position
 
 
 class QuadraticLoss:

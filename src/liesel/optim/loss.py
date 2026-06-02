@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Literal, Protocol
 
 import jax
 
-from ...model import Model
+from ..model import Model
 from .split import PositionSplit, PositionSplitManager
 from .types import Position
 
@@ -117,9 +117,9 @@ class LossMixin:
     gradient helpers:
 
     >>> import jax.numpy as jnp
-    >>> from liesel.experimental.optim import PositionSplit
-    >>> from liesel.experimental.optim.loss import LossMixin
-    >>> from liesel.experimental.optim.types import Position
+    >>> from liesel.optim import PositionSplit
+    >>> from liesel.optim.loss import LossMixin
+    >>> from liesel.optim.types import Position
     >>> class Quadratic(LossMixin):
     ...     def __init__(self):
     ...         self.split = PositionSplit(
@@ -271,7 +271,7 @@ class NegLogProbLoss(LossMixin):
     >>> import jax.numpy as jnp
     >>> import liesel.model as lsl
     >>> import tensorflow_probability.substrates.jax.distributions as tfd
-    >>> from liesel.experimental.optim import NegLogProbLoss, PositionSplit
+    >>> from liesel.optim import NegLogProbLoss, PositionSplit
     >>> y = lsl.Var.new_obs(
     ...     jnp.arange(3.0),
     ...     lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),

@@ -10,7 +10,7 @@ from typing import Literal
 import jax
 import jax.numpy as jnp
 
-from ...model import Model
+from ..model import Model
 from ._log_lik import scaled_common_log_lik, scaled_liesel_log_lik
 from ._model_utils import position_key_groups_from_model
 from .types import Array, ModelInterface, ModelState, Position
@@ -136,8 +136,8 @@ class PositionSplit:
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from liesel.experimental.optim import PositionSplit
-    >>> from liesel.experimental.optim.types import Position
+    >>> from liesel.optim import PositionSplit
+    >>> from liesel.optim.types import Position
     >>> split = PositionSplit(
     ...     train=Position({"x": jnp.arange(3)}),
     ...     validate=Position({"x": jnp.arange(3, 5)}),
@@ -222,8 +222,8 @@ class PositionSplit:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.experimental.optim import PositionSplit
-        >>> from liesel.experimental.optim.types import Position
+        >>> from liesel.optim import PositionSplit
+        >>> from liesel.optim.types import Position
         >>> split = PositionSplit(
         ...     Position({"x": jnp.arange(2)}),
         ...     Position({}),
@@ -249,8 +249,8 @@ class PositionSplit:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.experimental.optim import PositionSplit
-        >>> from liesel.experimental.optim.types import Position
+        >>> from liesel.optim import PositionSplit
+        >>> from liesel.optim.types import Position
         >>> train = Position({"x": jnp.arange(7)})
         >>> validate = Position({"x": jnp.arange(2)})
         >>> test = Position({"x": jnp.arange(1)})
@@ -267,8 +267,8 @@ class PositionSplit:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.experimental.optim import PositionSplit
-        >>> from liesel.experimental.optim.types import Position
+        >>> from liesel.optim import PositionSplit
+        >>> from liesel.optim.types import Position
         >>> train = Position({"x": jnp.arange(7)})
         >>> validate = Position({"x": jnp.arange(2)})
         >>> test = Position({"x": jnp.arange(1)})
@@ -285,8 +285,8 @@ class PositionSplit:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.experimental.optim import PositionSplit
-        >>> from liesel.experimental.optim.types import Position
+        >>> from liesel.optim import PositionSplit
+        >>> from liesel.optim.types import Position
         >>> train = Position({"x": jnp.arange(7)})
         >>> PositionSplit(train, Position({}), Position({}), 7, 0, 0).has_test
         False
@@ -301,8 +301,8 @@ class PositionSplit:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.experimental.optim import PositionSplit
-        >>> from liesel.experimental.optim.types import Position
+        >>> from liesel.optim import PositionSplit
+        >>> from liesel.optim.types import Position
         >>> train = Position({"x": jnp.arange(7)})
         >>> validate = Position({"x": jnp.arange(2)})
         >>> test = Position({"x": jnp.arange(1)})
@@ -319,8 +319,8 @@ class PositionSplit:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.experimental.optim import PositionSplit
-        >>> from liesel.experimental.optim.types import Position
+        >>> from liesel.optim import PositionSplit
+        >>> from liesel.optim.types import Position
         >>> train = Position({"x": jnp.arange(7)})
         >>> validate = Position({"x": jnp.arange(2)})
         >>> test = Position({"x": jnp.arange(1)})
@@ -339,8 +339,8 @@ class PositionSplit:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.experimental.optim import PositionSplit
-        >>> from liesel.experimental.optim.types import Position
+        >>> from liesel.optim import PositionSplit
+        >>> from liesel.optim.types import Position
         >>> train = Position({"x": jnp.arange(8)})
         >>> validate = Position({"x": jnp.arange(2)})
         >>> PositionSplit(train, validate, Position({}), 8, 2, 0).scale_validate
@@ -399,7 +399,7 @@ class PositionSplit:
         >>> import jax.numpy as jnp
         >>> import liesel.model as lsl
         >>> import tensorflow_probability.substrates.jax.distributions as tfd
-        >>> from liesel.experimental.optim import Split
+        >>> from liesel.optim import Split
         >>> y = lsl.Var.new_obs(
         ...     jnp.arange(10.0),
         ...     lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
@@ -489,7 +489,7 @@ class PositionSplit:
         --------
         >>> import jax.numpy as jnp
         >>> import liesel.model as lsl
-        >>> from liesel.experimental.optim import PositionSplit
+        >>> from liesel.optim import PositionSplit
         >>> y = lsl.Var.new_obs(jnp.arange(10.0), name="y")
         >>> model = lsl.Model([y])
         >>> split = PositionSplit.from_model(
@@ -604,7 +604,7 @@ class PositionSplitManager:
     Merge two branches with different sample sizes:
 
     >>> import jax.numpy as jnp
-    >>> from liesel.experimental.optim import PositionSplitManager, Split
+    >>> from liesel.optim import PositionSplitManager, Split
     >>> position = {"x": jnp.arange(10), "y": jnp.arange(6)}
     >>> split_x = Split(["x"], n=10, n_validate=2).split_position(position)
     >>> split_y = Split(["y"], n=6, n_validate=1).split_position(position)
@@ -696,7 +696,7 @@ class PositionSplitManager:
         --------
         >>> import jax.numpy as jnp
         >>> import liesel.model as lsl
-        >>> from liesel.experimental.optim import PositionSplitManager
+        >>> from liesel.optim import PositionSplitManager
         >>> x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
         >>> y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
         >>> model = lsl.Model([x, y])
@@ -728,8 +728,8 @@ class PositionSplitManager:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import PositionSplitManager, PositionSplit
-        >>> from liesel.experimental.optim.types import Position
+        >>> from liesel.optim import PositionSplitManager, PositionSplit
+        >>> from liesel.optim.types import Position
         >>> split = PositionSplitManager(
         ...     [PositionSplit(Position({"x": 1}), Position({}), Position({}), 1, 0, 0)]
         ... )
@@ -749,7 +749,7 @@ class PositionSplitManager:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.experimental.optim import PositionSplitManager, Split
+        >>> from liesel.optim import PositionSplitManager, Split
         >>> pos = {"x": jnp.arange(3), "y": jnp.arange(4)}
         >>> manager = PositionSplitManager(
         ...     [
@@ -770,7 +770,7 @@ class PositionSplitManager:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.experimental.optim import PositionSplitManager, Split
+        >>> from liesel.optim import PositionSplitManager, Split
         >>> pos = {"x": jnp.arange(5), "y": jnp.arange(6)}
         >>> manager = PositionSplitManager(
         ...     [
@@ -791,7 +791,7 @@ class PositionSplitManager:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.experimental.optim import PositionSplitManager, Split
+        >>> from liesel.optim import PositionSplitManager, Split
         >>> pos = {"x": jnp.arange(5), "y": jnp.arange(6)}
         >>> manager = PositionSplitManager(
         ...     [
@@ -812,8 +812,8 @@ class PositionSplitManager:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.experimental.optim import PositionSplitManager, PositionSplit
-        >>> from liesel.experimental.optim.types import Position
+        >>> from liesel.optim import PositionSplitManager, PositionSplit
+        >>> from liesel.optim.types import Position
         >>> manager = PositionSplitManager(
         ...     [
         ...         PositionSplit(
@@ -882,7 +882,7 @@ class PositionSplitManager:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.experimental.optim import PositionSplitManager, Split
+        >>> from liesel.optim import PositionSplitManager, Split
         >>> pos = {"x": jnp.arange(5), "y": jnp.arange(6)}
         >>> manager = PositionSplitManager(
         ...     [
@@ -978,7 +978,7 @@ class PositionSplitManager:
         >>> import jax.numpy as jnp
         >>> import liesel.model as lsl
         >>> import tensorflow_probability.substrates.jax.distributions as tfd
-        >>> from liesel.experimental.optim import PositionSplitManager, Split
+        >>> from liesel.optim import PositionSplitManager, Split
         >>> y1 = lsl.Var.new_obs(
         ...     jnp.arange(10.0),
         ...     lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
@@ -1052,7 +1052,7 @@ class SplitManager:
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from liesel.experimental.optim import SplitManager, Split
+    >>> from liesel.optim import SplitManager, Split
     >>> manager = SplitManager(
     ...     [
     ...         Split(["x"], n=10, n_validate=2),
@@ -1148,7 +1148,7 @@ class SplitManager:
         --------
         >>> import jax.numpy as jnp
         >>> import liesel.model as lsl
-        >>> from liesel.experimental.optim import SplitManager
+        >>> from liesel.optim import SplitManager
         >>> x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
         >>> y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
         >>> model = lsl.Model([x, y])
@@ -1192,7 +1192,7 @@ class SplitManager:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import SplitManager, Split
+        >>> from liesel.optim import SplitManager, Split
         >>> SplitManager([Split(["x"], n=3), Split(["y"], n=4)]).position_keys
         ['x', 'y']
         """
@@ -1248,7 +1248,7 @@ class SplitManager:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.experimental.optim import SplitManager, Split
+        >>> from liesel.optim import SplitManager, Split
         >>> manager = SplitManager(
         ...     [
         ...         Split(["x"], n=4, n_validate=1, default_axis=1),
@@ -1327,7 +1327,7 @@ class Split:
     Split one vector without shuffling:
 
     >>> import jax.numpy as jnp
-    >>> from liesel.experimental.optim import Split
+    >>> from liesel.optim import Split
     >>> splitter = Split(["x"], n=10, n_validate=2, n_test=1, shuffle=False)
     >>> splitter
     Split(train=7, validate=2, test=1)
@@ -1423,7 +1423,7 @@ class Split:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import Split
+        >>> from liesel.optim import Split
         >>> Split(["x"], n=10, n_validate=2).has_validation
         True
         """
@@ -1436,7 +1436,7 @@ class Split:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import Split
+        >>> from liesel.optim import Split
         >>> Split(["x"], n=10).has_test
         False
         """
@@ -1454,7 +1454,7 @@ class Split:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import Split
+        >>> from liesel.optim import Split
         >>> Split(["x"], n=10, n_validate=2).share_validate
         0.2
         """
@@ -1472,7 +1472,7 @@ class Split:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import Split
+        >>> from liesel.optim import Split
         >>> Split(["x"], n=10, n_test=3).share_test
         0.3
         """
@@ -1523,7 +1523,7 @@ class Split:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import Split
+        >>> from liesel.optim import Split
         >>> splitter = Split.from_share(
         ...     ["x"],
         ...     n=10,
@@ -1585,7 +1585,7 @@ class Split:
         Examples
         --------
         >>> import jax
-        >>> from liesel.experimental.optim import Split
+        >>> from liesel.optim import Split
         >>> splitter = Split(["x"], n=5)
         >>> permuted = splitter.permute_indices(jax.random.key(0))
         >>> sorted(permuted.tolist())
@@ -1602,7 +1602,7 @@ class Split:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import Split
+        >>> from liesel.optim import Split
         >>> Split(["x"], n=6, n_validate=2, n_test=1).indices_train.tolist()
         [0, 1, 2]
         """
@@ -1615,7 +1615,7 @@ class Split:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import Split
+        >>> from liesel.optim import Split
         >>> Split(["x"], n=6, n_validate=2, n_test=1).indices_validate.tolist()
         [3, 4]
         """
@@ -1630,7 +1630,7 @@ class Split:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import Split
+        >>> from liesel.optim import Split
         >>> Split(["x"], n=6, n_validate=2, n_test=1).indices_test.tolist()
         [5]
         """
@@ -1662,7 +1662,7 @@ class Split:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.experimental.optim import Split
+        >>> from liesel.optim import Split
         >>> splitter = Split(["x"], n=5, n_validate=1, n_test=1)
         >>> split = splitter.split_position({"x": jnp.arange(5)})
         >>> split.train["x"].tolist()

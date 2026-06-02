@@ -3,7 +3,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from liesel.experimental.optim import Stopper
+from liesel.optim import Stopper
 
 
 class TestStopper:

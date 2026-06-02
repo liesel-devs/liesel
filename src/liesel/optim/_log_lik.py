@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ...model import Model
+from ..model import Model
 from .types import ModelState
 
 

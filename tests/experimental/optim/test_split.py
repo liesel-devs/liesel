@@ -4,9 +4,9 @@ import jax.numpy as jnp
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
-import liesel.experimental.optim.split as split_module
 import liesel.model as lsl
-from liesel.experimental.optim import (
+import liesel.optim.split as split_module
+from liesel.optim import (
     Batches,
     BatchManager,
     LieselOptim,
@@ -16,7 +16,7 @@ from liesel.experimental.optim import (
     Split,
     SplitManager,
 )
-from liesel.experimental.optim.types import Position
+from liesel.optim.types import Position
 
 
 def _two_branch_model():

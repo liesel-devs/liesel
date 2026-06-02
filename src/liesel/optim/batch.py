@@ -8,7 +8,7 @@ from typing import Literal
 import jax
 import jax.numpy as jnp
 
-from ...model import Model
+from ..model import Model
 from ._log_lik import scaled_common_log_lik as _scaled_common_log_lik
 from ._log_lik import scaled_liesel_log_lik as _scaled_liesel_log_lik
 from ._model_utils import position_key_groups_from_model
@@ -66,7 +66,7 @@ class Batches:
     --------
     Create two batches of size four from ten observations:
 
-    >>> from liesel.experimental.optim import Batches
+    >>> from liesel.optim import Batches
     >>> batches = Batches(["y"], n=10, batch_size=4, shuffle=False)
     >>> batches.batch_indices.tolist()
     [[0, 1, 2, 3], [4, 5, 6, 7]]
@@ -200,7 +200,7 @@ class Batches:
         --------
         >>> import jax.numpy as jnp
         >>> import liesel.model as lsl
-        >>> from liesel.experimental.optim import Batches
+        >>> from liesel.optim import Batches
 
         >>> y = lsl.Var.new_obs(jnp.arange(6.0), name="y")
         >>> model = lsl.Model([y])
@@ -291,7 +291,7 @@ class Batches:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import Batches
+        >>> from liesel.optim import Batches
         >>> Batches(["y"], n=10, batch_size=4).batch_share
         2.5
         """
@@ -310,7 +310,7 @@ class Batches:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import Batches
+        >>> from liesel.optim import Batches
         >>> Batches(["y"], n=10, batch_size=4).batch_shares
         (2.5,)
         """
@@ -328,7 +328,7 @@ class Batches:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import Batches
+        >>> from liesel.optim import Batches
         >>> Batches(["y"], n=10, batch_size=4).n_full_batches
         2
         """
@@ -350,7 +350,7 @@ class Batches:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import Batches
+        >>> from liesel.optim import Batches
         >>> Batches(["y"], n=10, batch_size=4).likelihood_scalar
         2.5
         """
@@ -364,7 +364,7 @@ class Batches:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import Batches
+        >>> from liesel.optim import Batches
         >>> Batches(["y"], n=5, batch_size=None).is_full_data
         True
         """
@@ -391,7 +391,7 @@ class Batches:
         Examples
         --------
         >>> import jax
-        >>> from liesel.experimental.optim import Batches
+        >>> from liesel.optim import Batches
 
         >>> batches = Batches(["y"], n=6, batch_size=3, shuffle=False)
         >>> batches.permute_indices(jax.random.key(0)).tolist()
@@ -434,7 +434,7 @@ class Batches:
         Examples
         --------
         >>> import jax
-        >>> from liesel.experimental.optim import Batches
+        >>> from liesel.optim import Batches
         >>> batches = Batches(["y"], n=5, batch_size=2, shuffle=False)
         >>> batches.start_epoch(jax.random.key(0)).indices.tolist()
         [0, 1, 2, 3, 4]
@@ -455,7 +455,7 @@ class Batches:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import Batches
+        >>> from liesel.optim import Batches
         >>> Batches(["y"], n=7, batch_size=3, shuffle=False).batch_indices.tolist()
         [[0, 1, 2], [3, 4, 5]]
         """
@@ -490,7 +490,7 @@ class Batches:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.experimental.optim import Batches
+        >>> from liesel.optim import Batches
 
         >>> batches = Batches(["y"], n=6, batch_size=2, shuffle=False)
         >>> position = {"y": jnp.arange(6)}
@@ -549,7 +549,7 @@ class Batches:
         --------
         >>> import jax.numpy as jnp
         >>> import liesel.model as lsl
-        >>> from liesel.experimental.optim import Batches
+        >>> from liesel.optim import Batches
 
         >>> y = lsl.Var.new_obs(jnp.arange(6.0), name="y")
         >>> model = lsl.Model([y])
@@ -587,7 +587,7 @@ class Batches:
         >>> import jax.numpy as jnp
         >>> import liesel.model as lsl
         >>> import tensorflow_probability.substrates.jax.distributions as tfd
-        >>> from liesel.experimental.optim import Batches
+        >>> from liesel.optim import Batches
 
         >>> y = lsl.Var.new_obs(
         ...     jnp.arange(6.0),
@@ -697,7 +697,7 @@ class BatchManager:
     Combine two equally long batch sequences in strict mode:
 
     >>> import jax.numpy as jnp
-    >>> from liesel.experimental.optim import BatchManager, Batches
+    >>> from liesel.optim import BatchManager, Batches
 
     >>> manager = BatchManager(
     ...     [
@@ -850,7 +850,7 @@ class BatchManager:
         >>> import jax
         >>> import jax.numpy as jnp
         >>> import liesel.model as lsl
-        >>> from liesel.experimental.optim import BatchManager
+        >>> from liesel.optim import BatchManager
         >>> x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
         >>> y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
         >>> model = lsl.Model([x, y])
@@ -942,7 +942,7 @@ class BatchManager:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> from liesel.optim import BatchManager, Batches
         >>> manager = BatchManager(
         ...     [
         ...         Batches(["x"], n=6, batch_size=2),
@@ -969,7 +969,7 @@ class BatchManager:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> from liesel.optim import BatchManager, Batches
         >>> BatchManager(
         ...     [
         ...         Batches(["x"], n=6, batch_size=2),
@@ -992,7 +992,7 @@ class BatchManager:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> from liesel.optim import BatchManager, Batches
         >>> BatchManager(
         ...     [
         ...         Batches(["x"], n=6, batch_size=2),
@@ -1020,7 +1020,7 @@ class BatchManager:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> from liesel.optim import BatchManager, Batches
         >>> BatchManager(
         ...     [
         ...         Batches(["x"], n=6, batch_size=2),
@@ -1050,7 +1050,7 @@ class BatchManager:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> from liesel.optim import BatchManager, Batches
         >>> manager = BatchManager(
         ...     [
         ...         Batches(["x"], n=6, batch_size=2),
@@ -1102,7 +1102,7 @@ class BatchManager:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> from liesel.optim import BatchManager, Batches
         >>> BatchManager(
         ...     [
         ...         Batches(["x"], n=6, batch_size=2),
@@ -1134,7 +1134,7 @@ class BatchManager:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> from liesel.optim import BatchManager, Batches
         >>> BatchManager(
         ...     [
         ...         Batches(["x"], n=6, batch_size=2),
@@ -1190,7 +1190,7 @@ class BatchManager:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> from liesel.optim import BatchManager, Batches
         >>> BatchManager(
         ...     [
         ...         Batches(["x"], n=6, batch_size=None),
@@ -1259,7 +1259,7 @@ class BatchManager:
         Examples
         --------
         >>> import jax
-        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> from liesel.optim import BatchManager, Batches
         >>> manager = BatchManager(
         ...     [
         ...         Batches(["x"], n=4, batch_size=2, shuffle=False),
@@ -1301,7 +1301,7 @@ class BatchManager:
         --------
         >>> import jax
         >>> import jax.numpy as jnp
-        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> from liesel.optim import BatchManager, Batches
         >>> manager = BatchManager(
         ...     [
         ...         Batches(["x"], n=4, batch_size=2, shuffle=True),
@@ -1346,7 +1346,7 @@ class BatchManager:
 
         Examples
         --------
-        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> from liesel.optim import BatchManager, Batches
         >>> manager = BatchManager(
         ...     [
         ...         Batches(["x"], n=6, batch_size=2, shuffle=False),
@@ -1390,7 +1390,7 @@ class BatchManager:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> from liesel.optim import BatchManager, Batches
         >>> manager = BatchManager(
         ...     [
         ...         Batches(["x"], n=4, batch_size=2, default_axis=1, shuffle=False),
@@ -1440,7 +1440,7 @@ class BatchManager:
         --------
         >>> import jax.numpy as jnp
         >>> import liesel.model as lsl
-        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> from liesel.optim import BatchManager, Batches
         >>> x = lsl.Var.new_obs(jnp.arange(4.0), name="x")
         >>> y = lsl.Var.new_obs(jnp.arange(6.0), name="y")
         >>> model = lsl.Model([x, y])
@@ -1496,7 +1496,7 @@ class BatchManager:
         >>> import jax.numpy as jnp
         >>> import liesel.model as lsl
         >>> import tensorflow_probability.substrates.jax.distributions as tfd
-        >>> from liesel.experimental.optim import BatchManager, Batches
+        >>> from liesel.optim import BatchManager, Batches
         >>> x = lsl.Var.new_obs(
         ...     jnp.arange(6.0),
         ...     lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),

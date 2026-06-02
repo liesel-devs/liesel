@@ -55,8 +55,8 @@ class Optimizer:
     --------
     >>> import jax.numpy as jnp
     >>> import optax
-    >>> from liesel.experimental.optim import Optimizer
-    >>> from liesel.experimental.optim.types import Position
+    >>> from liesel.optim import Optimizer
+    >>> from liesel.optim.types import Position
     >>> optimizer = Optimizer(["x"], optax.sgd(0.1), identifier="x_opt")
     >>> position = Position({"x": jnp.array(1.0), "y": jnp.array(2.0)})
     >>> optimizer.position(position)["x"].tolist()
@@ -238,7 +238,7 @@ class LBFGS(Optimizer):
 
     Examples
     --------
-    >>> from liesel.experimental.optim import LBFGS
+    >>> from liesel.optim import LBFGS
     >>> lbfgs = LBFGS(["loc"], identifier="loc_lbfgs")
     >>> lbfgs.position_keys
     ('loc',)

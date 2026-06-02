@@ -4,8 +4,8 @@ import pytest
 import tensorflow_probability.substrates.jax as tfp
 import tensorflow_probability.substrates.jax.bijectors as tfb
 
-import liesel.experimental.optim as opt
 import liesel.model as lsl
+import liesel.optim as opt
 
 
 def _laplace_model():

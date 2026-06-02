@@ -20,7 +20,7 @@ import plotnine as p9
 
 from liesel.goose.types import ModelState
 
-from ...goose.pytree import register_dataclass_as_pytree
+from ..goose.pytree import register_dataclass_as_pytree
 from .batch import Batches, BatchManager
 from .optimizer import Optimizer
 from .types import Position
@@ -85,8 +85,8 @@ def position_df(
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from liesel.experimental.optim.state import position_df
-    >>> from liesel.experimental.optim.types import Position
+    >>> from liesel.optim.state import position_df
+    >>> from liesel.optim.types import Position
     >>> history = Position(
     ...     {
     ...         "theta": jnp.array([[1.0, 2.0], [3.0, 4.0]]),
@@ -172,8 +172,8 @@ class OptimHistory:
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from liesel.experimental.optim.state import OptimHistory
-    >>> from liesel.experimental.optim.types import Position
+    >>> from liesel.optim.state import OptimHistory
+    >>> from liesel.optim.types import Position
     >>> position = Position({"theta": jnp.array([1.0, 2.0])})
     >>> history = OptimHistory.from_epochs(epochs=3, position=position, tracked=None)
     >>> history.loss_train.shape
@@ -222,8 +222,8 @@ class OptimHistory:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.experimental.optim.state import OptimHistory
-        >>> from liesel.experimental.optim.types import Position
+        >>> from liesel.optim.state import OptimHistory
+        >>> from liesel.optim.types import Position
         >>> history = OptimHistory.from_epochs(
         ...     2, Position({"theta": jnp.array(1.0)}), tracked=None
         ... )
@@ -266,7 +266,7 @@ class OptimHistory:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.experimental.optim.state import OptimHistory
+        >>> from liesel.optim.state import OptimHistory
         >>> history = OptimHistory.from_epochs(epochs=2, position=None, tracked=None)
         >>> history.loss_train = history.loss_train.at[0].set(1.5)
         >>> history.loss_validate = history.loss_validate.at[0].set(2.5)
@@ -299,8 +299,8 @@ class OptimHistory:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.experimental.optim.state import OptimHistory
-        >>> from liesel.experimental.optim.types import Position
+        >>> from liesel.optim.state import OptimHistory
+        >>> from liesel.optim.types import Position
         >>> history = OptimHistory.from_epochs(
         ...     2, Position({"theta": jnp.array([1.0, 2.0])}), tracked=None
         ... )
@@ -336,8 +336,8 @@ class OptimHistory:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.experimental.optim.state import OptimHistory
-        >>> from liesel.experimental.optim.types import Position
+        >>> from liesel.optim.state import OptimHistory
+        >>> from liesel.optim.types import Position
         >>> tracked = Position({"mean": jnp.array(0.0)})
         >>> history = OptimHistory.from_epochs(epochs=2, position=None, tracked=tracked)
         >>> history.tracked = OptimHistory.update_position_history(
@@ -361,8 +361,8 @@ class OptimHistory:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.experimental.optim.state import OptimHistory
-        >>> from liesel.experimental.optim.types import Position
+        >>> from liesel.optim.state import OptimHistory
+        >>> from liesel.optim.types import Position
         >>> position = Position({"theta": jnp.ones((2,))})
         >>> history = OptimHistory.init_position_history(position, epochs=3)
         >>> history["theta"].shape
@@ -403,8 +403,8 @@ class OptimHistory:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.experimental.optim.state import OptimHistory
-        >>> from liesel.experimental.optim.types import Position
+        >>> from liesel.optim.state import OptimHistory
+        >>> from liesel.optim.types import Position
         >>> position = Position({"theta": jnp.array([1.0, 2.0])})
         >>> history = OptimHistory.init_position_history(position, epochs=2)
         >>> updated = OptimHistory.update_position_history(1, history, position)
@@ -445,7 +445,7 @@ def array_to_dict(
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from liesel.experimental.optim.state import array_to_dict
+    >>> from liesel.optim.state import array_to_dict
     >>> array_to_dict(jnp.array(1.0, dtype=jnp.float32), names_prefix="x")
     {'x': Array(1., dtype=float32)}
     >>> array_to_dict(jnp.array([1.0, 2.0]), names_prefix="loss")
@@ -569,9 +569,9 @@ class OptimCarry:
         >>> import jax
         >>> import jax.numpy as jnp
         >>> import optax
-        >>> from liesel.experimental.optim import Batches, Optimizer
-        >>> from liesel.experimental.optim.state import OptimCarry
-        >>> from liesel.experimental.optim.types import Position
+        >>> from liesel.optim import Batches, Optimizer
+        >>> from liesel.optim.state import OptimCarry
+        >>> from liesel.optim.types import Position
         >>> position = Position({"theta": jnp.array(0.0)})
         >>> carry = OptimCarry.new(
         ...     key=jax.random.key(0),
@@ -660,8 +660,8 @@ class OptimResult:
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from liesel.experimental.optim.state import OptimHistory, OptimResult
-    >>> from liesel.experimental.optim.types import Position
+    >>> from liesel.optim.state import OptimHistory, OptimResult
+    >>> from liesel.optim.types import Position
     >>> history = OptimHistory.from_epochs(epochs=2, position=None, tracked=None)
     >>> result = OptimResult(
     ...     history=history,

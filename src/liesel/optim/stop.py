@@ -71,7 +71,7 @@ class Stopper:
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from liesel.experimental.optim import Stopper
+    >>> from liesel.optim import Stopper
     >>> stopper = Stopper(epochs=10, patience=3)
     >>> loss_history = jnp.array([3.0, 2.0, 1.0, 1.5, 1.6, 1.7])
     >>> bool(stopper.stop_early(i=5, loss_history=loss_history))

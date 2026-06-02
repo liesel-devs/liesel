@@ -5,14 +5,14 @@ import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.model as lsl
-from liesel.experimental.optim import (
+from liesel.optim import (
     NegElboLoss,
     NegLogProbLoss,
     PositionSplit,
     PositionSplitManager,
     Split,
 )
-from liesel.experimental.optim.types import Position
+from liesel.optim.types import Position
 
 
 def _normal_obs_model():

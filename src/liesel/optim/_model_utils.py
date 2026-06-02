@@ -6,7 +6,7 @@ from collections.abc import Sequence
 
 import jax.numpy as jnp
 
-from ...model import Model
+from ..model import Model
 
 
 def position_key_groups_from_model(

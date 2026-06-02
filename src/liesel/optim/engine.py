@@ -111,7 +111,7 @@ class OptimEngine:
     --------
     ``OptimEngine`` is usually constructed through a convenience wrapper:
 
-    >>> from liesel.experimental.optim import LieselOptim
+    >>> from liesel.optim import LieselOptim
     >>> LieselOptim.__name__
     'LieselOptim'
     """

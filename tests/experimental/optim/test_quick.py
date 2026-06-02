@@ -5,9 +5,9 @@ import jax.numpy as jnp
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
-import liesel.experimental.optim as opt
 import liesel.model as lsl
-from liesel.experimental.optim import (
+import liesel.optim as opt
+from liesel.optim import (
     Batches,
     BatchManager,
     LieselOptim,
@@ -17,7 +17,7 @@ from liesel.experimental.optim import (
     PositionSplitManager,
     Stopper,
 )
-from liesel.experimental.optim.state import OptimResult
+from liesel.optim.state import OptimResult
 
 
 def _normal_model(n: int = 6, *, to_float32: bool | None = None):
@@ -49,7 +49,7 @@ def _two_branch_model():
 
 
 def test_lieseloptim_imports():
-    from liesel.experimental.optim.liesel_optim import (
+    from liesel.optim.liesel_optim import (
         LieselOptim as LieselOptimFromQuick,
     )
 
