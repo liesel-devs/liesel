@@ -461,6 +461,12 @@ class TestSplitManager:
 
         assert isinstance(split, PositionSplitManager)
         assert split.validate_axis_sizes == (2, 1)
+        assert split.sample_sizes == (
+            {"train": 8.0, "validate": 2.0},
+            {"train": 5.0, "validate": 1.0},
+        )
+        assert split.sample_size("train") == 13.0
+        assert split.sample_size("validate") == 3.0
 
         with pytest.raises(ValueError, match="single axis_size value"):
             PositionSplit.from_model(
@@ -486,6 +492,34 @@ class TestSplitManager:
         assert isinstance(split, PositionSplit)
         assert split.train_axis_size == 6
         assert split.validate_axis_size == 2
+
+    def test_position_split_manager_exposes_manual_sample_sizes(self):
+        position = {"x": jnp.arange(8), "y": jnp.arange(6)}
+        split = SplitManager(
+            [
+                Split(
+                    ["x"],
+                    axis_size=8,
+                    validate_axis_size=2,
+                    sample_sizes={"train": 30, "validate": 10},
+                ),
+                Split(
+                    ["y"],
+                    axis_size=6,
+                    validate_axis_size=1,
+                    sample_sizes={"train": 15, "validate": 3},
+                ),
+            ]
+        ).split_position(position)
+
+        assert split.sample_sizes == (
+            {"train": 30.0, "validate": 10.0},
+            {"train": 15.0, "validate": 3.0},
+        )
+        assert split.train_sample_sizes == (30.0, 15.0)
+        assert split.validate_sample_sizes == (10.0, 3.0)
+        assert split.sample_size("train") == 45.0
+        assert split.sample_size("validate") == 13.0
 
     def test_position_split_manager_scaled_log_lik_matches_manual_calculation(self):
         model, y1, y2 = _two_branch_model()

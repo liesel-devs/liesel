@@ -819,9 +819,13 @@ class PositionSplitManager:
     -----
     Branch-specific sizes are available as :attr:`axis_sizes`,
     :attr:`train_axis_sizes`, :attr:`validate_axis_sizes`, and
-    :attr:`test_axis_sizes`. Scalar aliases such as :attr:`train_axis_size`,
-    :attr:`validate_axis_share`, and :attr:`validate_sample_scale` are available
-    only when all children have the same value.
+    :attr:`test_axis_sizes`. Branch-specific likelihood sizes are available as
+    :attr:`sample_sizes`, :attr:`train_sample_sizes`,
+    :attr:`validate_sample_sizes`, and :attr:`test_sample_sizes`. Scalar aliases
+    such as :attr:`train_axis_size`, :attr:`validate_axis_share`, and
+    :attr:`validate_sample_scale` are available only when all children have the
+    same value. Use :meth:`sample_size` for the total likelihood sample size of a
+    split part across all branches.
 
     Examples
     --------
@@ -1194,6 +1198,18 @@ class PositionSplitManager:
             "validate_sample_scale",
             "validate_sample_scales",
         )
+
+    @property
+    def sample_sizes(self) -> tuple[dict[SplitPart, float] | None, ...]:
+        """Raw effective sample-size mappings for each contained split."""
+        return tuple(
+            None if split.sample_sizes is None else dict(split.sample_sizes)
+            for split in self.splits
+        )
+
+    def sample_size(self, part: SplitPart) -> float:
+        """Total effective likelihood sample size for one split part."""
+        return sum(split.sample_size(part) for split in self.splits)
 
     @property
     def train_sample_sizes(self) -> tuple[float, ...]:
