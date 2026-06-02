@@ -1,5 +1,6 @@
 # Model building with Liesel
 
+
 In this tutorial, we go into more depth regarding the model building
 functionality in Liesel.
 
@@ -30,9 +31,9 @@ hyperparameters, contribute zero to the model log-probability. The
 following table shows the different variable types and some examples of
 their use cases.
 
-|                          | **Strong variable**          | **Weak variable**                                  |
-|--------------------------|------------------------------|----------------------------------------------------|
-| **With distribution**    | Response, parameter, …       | Copula, …                                          |
+|  | **Strong variable** | **Weak variable** |
+|----|----|----|
+| **With distribution** | Response, parameter, … | Copula, … |
 | **Without distribution** | Covariate, hyperparameter, … | Inverse link function, parameter transformation, … |
 
 A PGM is a directed acyclic graph of connected variables. Two variables
@@ -42,9 +43,7 @@ second variable. Variables *without* an edge between them are assumed to
 be conditionally independent, allowing us to factorize the model
 log-probability as
 
-$$
-\log p(\text{Model}) = \sum_{\text{Var $\in$ Model}} \log p(\text{Var} \mid \text{Inputs}(\text{Var})).
-$$
+$$\log p(\text{Model}) = \sum_{\text{Var $\in$ Model}} \log p(\text{Var} \mid \text{Inputs}(\text{Var})).$$
 
 So let us consider the same model and data from the [linear regression
 tutorial](01a-lin-reg.md), where we had the underlying model

@@ -1,5 +1,6 @@
 # Bayesian Measurement Error Correction
 
+
 In this tutorial, we implement a regression model with Bayesian
 measurement error correction in Liesel. The model should capture the
 effect of a continuous covariate $x$, which is assumed to be affected by
@@ -11,16 +12,12 @@ distribution of the model parameters and the latent covariate.
 Assuming a total number of $M$ replicates of the covariate $x$ affected
 by measurement error, we can write the measurement error model as
 
-$$
-\tilde{x}_i^{(m)} = x_i + u_i^{(m)}, \quad m = 1, \ldots, M.
-$$
+$$\tilde{x}_i^{(m)} = x_i + u_i^{(m)}, \quad m = 1, \ldots, M.$$
 
 In this tutorial, the replicates are assumed to be independent with
 constant variance
 
-$$
-\mathbf{u}_i \sim N_M(\mathbf{0}, \mathbf{\sigma}^{2}_u\mathbf{I}_M).
-$$
+$$\mathbf{u}_i \sim N_M(\mathbf{0}, \mathbf{\sigma}^{2}_u\mathbf{I}_M).$$
 
 The fundamental concept behind Bayesian measurement error correction is
 to treat the true, unknown covariate values $x_i$ as additional latent
@@ -28,9 +25,9 @@ variables. These values are then imputed using MCMC simulations while
 simultaneously estimating all other parameters of the model. To achieve
 this, we assign a simple prior distribution to $x_i$. We further add
 hyperpriors with assigned prior distributions to the distribution
-parameters of $x_i$, to achieve further flexibility. $$
-x_i \sim N(\mu_x,\tau^2_x), \quad \mu_x \sim N(0, \tau^2_{\mu}), \quad \tau^2_x \sim IG(a_x,b_x)
-$$ These priors correspond to being relatively uninformative about the
+parameters of $x_i$, to achieve further flexibility.
+$$x_i \sim N(\mu_x,\tau^2_x), \quad \mu_x \sim N(0, \tau^2_{\mu}), \quad \tau^2_x \sim IG(a_x,b_x)$$
+These priors correspond to being relatively uninformative about the
 distribution of $x_i$.
 
 ## Imports
@@ -261,12 +258,10 @@ to sample our x-values. To draw from $\mu_x$ and $\tau^2_x$ we use Gibbs
 kernels ({class}`~.goose.GibbsKernel`), as this allows us to use custom
 transition functions for our parameters. The full conditionals are:
 
-$$
-\begin{aligned}
+$$\begin{aligned}
 \mu_x \mid \cdot &\sim N \left(\frac{n\bar{x}\tau^2_\mu}{n\tau^2_\mu+\tau^2_x},\frac{\tau^2_x\tau^2_\mu}{n\tau^2_\mu+\tau^2_x}\right)\\
 \tau^2_x \mid \cdot &\sim IG \left( a_x + \frac{n}{2}, b_x + \frac{1}{2}\sum_{i=1}^{n}(x_i - \mu_x)^2   \right)\\
-\end{aligned}.
-$$
+\end{aligned}.$$
 
 Let us implement these
 
@@ -373,50 +368,88 @@ engine.sample_all_epochs()
     liesel.goose.engine - INFO - Initializing kernels...
     liesel.goose.engine - INFO - Done
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 75 transitions, 25 jitted together
-      0%|                                                  | 0/3 [00:00<?, ?chunk/s] 33%|██████████████                            | 1/3 [00:04<00:09,  4.77s/chunk]100%|██████████████████████████████████████████| 3/3 [00:04<00:00,  1.59s/chunk]
+
+      0%|                                                  | 0/3 [00:00<?, ?chunk/s]
+     33%|██████████████                            | 1/3 [00:11<00:22, 11.32s/chunk]
+    100%|██████████████████████████████████████████| 3/3 [00:11<00:00,  3.78s/chunk]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 0, 1, 1, 0 / 75 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 4, 4, 2, 4 / 75 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 3, 2, 4, 2 / 75 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_05: 4, 3, 4, 4 / 75 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 2, 6, 2, 3 / 75 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 4, 3, 6, 2 / 75 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_05: 2, 2, 3, 4 / 75 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
-      0%|                                                  | 0/1 [00:00<?, ?chunk/s]100%|█████████████████████████████████████████| 1/1 [00:00<00:00, 858.26chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 25 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 2, 3, 1, 2 / 25 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 2, 2, 2, 1 / 25 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_05: 1, 1, 1, 1 / 25 transitions
+
+      0%|                                                  | 0/1 [00:00<?, ?chunk/s]
+    100%|█████████████████████████████████████████| 1/1 [00:00<00:00, 501.95chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 1, 1 / 25 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 1, 2, 1, 2 / 25 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 1, 2, 1, 1 / 25 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_05: 1, 1, 2, 1 / 25 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1156.73chunk/s]
+
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
+    100%|█████████████████████████████████████████| 2/2 [00:00<00:00, 664.39chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 50 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 3, 1, 1, 1 / 50 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 2, 2, 3, 1 / 50 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_05: 1, 1, 1, 3 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 1, 2, 1, 3 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 3, 1, 2, 1 / 50 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_05: 2, 1, 2, 1 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 4/4 [00:00<00:00, 1563.14chunk/s]
+
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
+    100%|████████████████████████████████████████| 4/4 [00:00<00:00, 1001.45chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 100 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 4, 1, 2, 4 / 100 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 2, 1, 2, 1 / 100 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_05: 3, 2, 2, 2 / 100 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 3, 3, 3, 2 / 100 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 3, 3, 1, 1 / 100 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_05: 2, 1, 2, 2 / 100 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 550 transitions, 25 jitted together
-      0%|                                                 | 0/22 [00:00<?, ?chunk/s] 41%|████████████████▊                        | 9/22 [00:00<00:00, 88.47chunk/s] 82%|████████████████████████████████▋       | 18/22 [00:00<00:00, 36.98chunk/s]100%|████████████████████████████████████████| 22/22 [00:00<00:00, 36.99chunk/s]
+
+      0%|                                                 | 0/22 [00:00<?, ?chunk/s]
+     41%|████████████████▊                        | 9/22 [00:00<00:00, 70.20chunk/s]
+     77%|██████████████████████████████▉         | 17/22 [00:00<00:00, 31.30chunk/s]
+    100%|████████████████████████████████████████| 22/22 [00:00<00:00, 27.77chunk/s]
+    100%|████████████████████████████████████████| 22/22 [00:00<00:00, 30.68chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 550 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 3, 3, 3, 4 / 550 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 1, 3, 3, 2 / 550 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_05: 2, 1, 3, 3 / 550 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 2, 3, 5, 6 / 550 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 3, 3, 3, 4 / 550 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_05: 2, 4, 3, 1 / 550 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 200 transitions, 25 jitted together
-      0%|                                                  | 0/8 [00:00<?, ?chunk/s]100%|█████████████████████████████████████████| 8/8 [00:00<00:00, 143.74chunk/s]
+
+      0%|                                                  | 0/8 [00:00<?, ?chunk/s]
+    100%|██████████████████████████████████████████| 8/8 [00:00<00:00, 98.67chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 200 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 3, 3, 3, 2 / 200 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 3, 3, 1, 2 / 200 transitions
-    liesel.goose.engine - WARNING - Errors per chain for kernel_05: 2, 3, 3, 1 / 200 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_03: 1, 3, 5, 3 / 200 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_04: 1, 1, 0, 2 / 200 transitions
+    liesel.goose.engine - WARNING - Errors per chain for kernel_05: 1, 2, 2, 2 / 200 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Finished warmup
     liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 2000 transitions, 25 jitted together
-      0%|                                                 | 0/80 [00:00<?, ?chunk/s] 14%|█████▌                                  | 11/80 [00:00<00:00, 94.32chunk/s] 26%|██████████▌                             | 21/80 [00:00<00:01, 47.87chunk/s] 34%|█████████████▌                          | 27/80 [00:00<00:01, 42.37chunk/s] 40%|████████████████                        | 32/80 [00:00<00:01, 40.56chunk/s] 46%|██████████████████▌                     | 37/80 [00:00<00:01, 38.56chunk/s] 52%|█████████████████████                   | 42/80 [00:01<00:01, 37.36chunk/s] 57%|███████████████████████                 | 46/80 [00:01<00:00, 36.91chunk/s] 62%|█████████████████████████               | 50/80 [00:01<00:00, 36.82chunk/s] 68%|███████████████████████████             | 54/80 [00:01<00:00, 36.83chunk/s] 72%|█████████████████████████████           | 58/80 [00:01<00:00, 36.80chunk/s] 78%|███████████████████████████████         | 62/80 [00:01<00:00, 36.73chunk/s] 82%|█████████████████████████████████       | 66/80 [00:01<00:00, 36.59chunk/s] 88%|███████████████████████████████████     | 70/80 [00:01<00:00, 36.48chunk/s] 92%|█████████████████████████████████████   | 74/80 [00:01<00:00, 31.71chunk/s] 98%|███████████████████████████████████████ | 78/80 [00:02<00:00, 32.79chunk/s]100%|████████████████████████████████████████| 80/80 [00:02<00:00, 37.90chunk/s]
+
+      0%|                                                 | 0/80 [00:00<?, ?chunk/s]
+     12%|█████                                   | 10/80 [00:00<00:00, 86.03chunk/s]
+     24%|█████████▌                              | 19/80 [00:00<00:01, 38.29chunk/s]
+     31%|████████████▌                           | 25/80 [00:00<00:01, 33.27chunk/s]
+     38%|███████████████                         | 30/80 [00:00<00:01, 30.89chunk/s]
+     42%|█████████████████                       | 34/80 [00:01<00:01, 29.61chunk/s]
+     48%|███████████████████                     | 38/80 [00:01<00:01, 28.63chunk/s]
+     51%|████████████████████▌                   | 41/80 [00:01<00:01, 28.11chunk/s]
+     55%|██████████████████████                  | 44/80 [00:01<00:01, 27.65chunk/s]
+     59%|███████████████████████▌                | 47/80 [00:01<00:01, 27.27chunk/s]
+     62%|█████████████████████████               | 50/80 [00:01<00:01, 26.98chunk/s]
+     66%|██████████████████████████▌             | 53/80 [00:01<00:01, 26.83chunk/s]
+     70%|████████████████████████████            | 56/80 [00:01<00:00, 26.70chunk/s]
+     74%|█████████████████████████████▌          | 59/80 [00:01<00:00, 26.51chunk/s]
+     78%|███████████████████████████████         | 62/80 [00:02<00:00, 26.36chunk/s]
+     81%|████████████████████████████████▌       | 65/80 [00:02<00:00, 26.41chunk/s]
+     85%|██████████████████████████████████      | 68/80 [00:02<00:00, 25.89chunk/s]
+     89%|███████████████████████████████████▌    | 71/80 [00:02<00:00, 25.91chunk/s]
+     92%|█████████████████████████████████████   | 74/80 [00:02<00:00, 26.02chunk/s]
+     96%|██████████████████████████████████████▌ | 77/80 [00:02<00:00, 25.15chunk/s]
+    100%|████████████████████████████████████████| 80/80 [00:02<00:00, 25.54chunk/s]
+    100%|████████████████████████████████████████| 80/80 [00:02<00:00, 28.65chunk/s]
     liesel.goose.engine - INFO - Finished epoch
 
 Now we can take a look at the results for our parameters
@@ -428,750 +461,1359 @@ gs.Summary(results, deselected=["x_estimated"])
 ```
 
 <p>
+
 <strong>Parameter summary:</strong>
 </p>
+
 <table border="0" class="dataframe">
+
 <thead>
+
 <tr style="text-align: right;">
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 kernel
 </th>
+
 <th>
+
 mean
 </th>
+
 <th>
+
 sd
 </th>
+
 <th>
+
 q_0.05
 </th>
+
 <th>
+
 q_0.5
 </th>
+
 <th>
+
 q_0.95
 </th>
+
 <th>
+
 sample_size
 </th>
+
 <th>
+
 ess_bulk
 </th>
+
 <th>
+
 ess_tail
 </th>
+
 <th>
+
 rhat
 </th>
+
 </tr>
+
 <tr>
+
 <th>
+
 parameter
 </th>
+
 <th>
+
 index
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 </tr>
+
 </thead>
+
 <tbody>
+
 <tr>
+
 <th rowspan="2" valign="top">
+
 beta
 </th>
+
 <th>
+
 (0,)
 </th>
+
 <td>
+
 kernel_03
 </td>
+
 <td>
-1.244
+
+1.241
 </td>
+
 <td>
-0.150
+
+0.151
 </td>
+
 <td>
-0.999
+
+0.995
 </td>
+
 <td>
-1.243
+
+1.240
 </td>
+
 <td>
+
 1.489
 </td>
+
 <td>
+
 8000
 </td>
+
 <td>
-605.709
+
+569.091
 </td>
+
 <td>
-985.838
+
+933.972
 </td>
+
 <td>
-1.008
+
+1.007
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 (1,)
 </th>
+
 <td>
+
 kernel_03
 </td>
+
 <td>
+
 1.975
 </td>
+
 <td>
+
 0.013
 </td>
+
 <td>
+
 1.953
 </td>
+
 <td>
+
 1.975
 </td>
+
 <td>
+
 1.997
 </td>
+
 <td>
+
 8000
 </td>
+
 <td>
-664.635
+
+649.981
 </td>
+
 <td>
-1402.286
+
+1004.927
 </td>
+
 <td>
+
 1.006
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 mu_x
 </th>
+
 <th>
+
 ()
 </th>
+
 <td>
+
 kernel_01
 </td>
+
 <td>
+
 10.070
 </td>
+
 <td>
-0.236
+
+0.235
 </td>
+
 <td>
-9.683
+
+9.686
 </td>
+
 <td>
-10.070
+
+10.071
 </td>
+
 <td>
-10.450
+
+10.457
 </td>
+
 <td>
+
 8000
 </td>
+
 <td>
-7285.445
+
+7337.531
 </td>
+
 <td>
-7687.278
+
+7434.558
 </td>
+
 <td>
+
+1.000
+</td>
+
+</tr>
+
+<tr>
+
+<th>
+
+sigma_sq_u_transformed
+</th>
+
+<th>
+
+()
+</th>
+
+<td>
+
+kernel_05
+</td>
+
+<td>
+
+-0.015
+</td>
+
+<td>
+
+0.046
+</td>
+
+<td>
+
+-0.089
+</td>
+
+<td>
+
+-0.016
+</td>
+
+<td>
+
+0.059
+</td>
+
+<td>
+
+8000
+</td>
+
+<td>
+
+1371.552
+</td>
+
+<td>
+
+2384.836
+</td>
+
+<td>
+
 1.001
 </td>
+
 </tr>
+
 <tr>
+
 <th>
-sigma_sq_u_transformed
-</th>
-<th>
-()
-</th>
-<td>
-kernel_05
-</td>
-<td>
--0.014
-</td>
-<td>
-0.045
-</td>
-<td>
--0.086
-</td>
-<td>
--0.014
-</td>
-<td>
-0.062
-</td>
-<td>
-8000
-</td>
-<td>
-1124.470
-</td>
-<td>
-1776.611
-</td>
-<td>
-1.004
-</td>
-</tr>
-<tr>
-<th>
+
 sigma_sq_y_transformed
 </th>
+
 <th>
+
 ()
 </th>
+
 <td>
+
 kernel_04
 </td>
+
 <td>
-0.014
+
+0.019
 </td>
+
 <td>
-0.163
+
+0.158
 </td>
+
 <td>
--0.267
+
+-0.254
 </td>
+
 <td>
-0.024
+
+0.029
 </td>
+
 <td>
-0.266
+
+0.262
 </td>
+
 <td>
+
 8000
 </td>
+
 <td>
-341.030
+
+386.460
 </td>
+
 <td>
-640.067
+
+590.875
 </td>
+
 <td>
-1.015
+
+1.008
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 tau2_x
 </th>
+
 <th>
+
 ()
 </th>
+
 <td>
+
 kernel_02
 </td>
+
 <td>
-27.407
+
+27.401
 </td>
+
 <td>
-1.774
+
+1.773
 </td>
+
 <td>
-24.626
+
+24.666
 </td>
+
 <td>
-27.321
+
+27.308
 </td>
+
 <td>
-30.410
+
+30.402
 </td>
+
 <td>
+
 8000
 </td>
+
 <td>
-7956.460
+
+7908.989
 </td>
+
 <td>
-7898.732
+
+7676.281
 </td>
+
 <td>
+
 1.000
 </td>
+
 </tr>
+
 </tbody>
+
 </table>
+
 <p>
+
 <strong>Acceptance probabilities:</strong>
 </p>
+
 <table border="0" class="dataframe">
+
 <thead>
+
 <tr style="text-align: right;">
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 acceptance_probability
 </th>
+
 <th>
+
 position_moved
 </th>
+
 </tr>
+
 <tr>
+
 <th>
+
 kernel
 </th>
+
 <th>
+
 positions
 </th>
+
 <th>
+
 phase
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 </tr>
+
 </thead>
+
 <tbody>
+
 <tr>
+
 <th rowspan="2" valign="top">
+
 kernel_00
 </th>
+
 <th rowspan="2" valign="top">
+
 x_estimated
 </th>
+
 <th>
+
 posterior
 </th>
+
 <td>
+
 0.811
 </td>
+
 <td>
+
 NaN
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 warmup
 </th>
+
 <td>
+
 0.791
 </td>
+
 <td>
+
 NaN
 </td>
+
 </tr>
+
 <tr>
+
 <th rowspan="2" valign="top">
+
 kernel_01
 </th>
+
 <th rowspan="2" valign="top">
+
 mu_x
 </th>
+
 <th>
+
 posterior
 </th>
+
 <td>
+
 1.000
 </td>
+
 <td>
+
 1.000
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 warmup
 </th>
+
 <td>
+
 1.000
 </td>
+
 <td>
+
 1.000
 </td>
+
 </tr>
+
 <tr>
+
 <th rowspan="2" valign="top">
+
 kernel_02
 </th>
+
 <th rowspan="2" valign="top">
+
 tau2_x
 </th>
+
 <th>
+
 posterior
 </th>
+
 <td>
+
 1.000
 </td>
+
 <td>
+
 1.000
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 warmup
 </th>
+
 <td>
+
 1.000
 </td>
+
 <td>
+
 1.000
 </td>
+
 </tr>
+
 <tr>
+
 <th rowspan="2" valign="top">
+
 kernel_03
 </th>
+
 <th rowspan="2" valign="top">
+
 beta
 </th>
+
 <th>
+
 posterior
 </th>
+
 <td>
+
 0.887
 </td>
+
 <td>
+
 NaN
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 warmup
 </th>
+
 <td>
-0.792
-</td>
-<td>
-NaN
-</td>
-</tr>
-<tr>
-<th rowspan="2" valign="top">
-kernel_04
-</th>
-<th rowspan="2" valign="top">
-sigma_sq_y_transformed
-</th>
-<th>
-posterior
-</th>
-<td>
-0.869
-</td>
-<td>
-NaN
-</td>
-</tr>
-<tr>
-<th>
-warmup
-</th>
-<td>
-0.792
-</td>
-<td>
-NaN
-</td>
-</tr>
-<tr>
-<th rowspan="2" valign="top">
-kernel_05
-</th>
-<th rowspan="2" valign="top">
-sigma_sq_u_transformed
-</th>
-<th>
-posterior
-</th>
-<td>
-0.882
-</td>
-<td>
-NaN
-</td>
-</tr>
-<tr>
-<th>
-warmup
-</th>
-<td>
+
 0.791
 </td>
+
 <td>
+
 NaN
 </td>
+
 </tr>
-</tbody>
-</table>
-<p>
-<strong>Error summary:</strong>
-</p>
-<table border="0" class="dataframe">
-<thead>
-<tr style="text-align: right;">
-<th>
-</th>
-<th>
-</th>
-<th>
-</th>
-<th>
-</th>
-<th>
-</th>
-<th>
-count
-</th>
-<th>
-sample_size
-</th>
-<th>
-sample_size_total
-</th>
-<th>
-relative
-</th>
-</tr>
+
 <tr>
-<th>
-kernel
-</th>
-<th>
-positions
-</th>
-<th>
-error_code
-</th>
-<th>
-error_msg
-</th>
-<th>
-phase
-</th>
-<th>
-</th>
-<th>
-</th>
-<th>
-</th>
-<th>
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
+
 <th rowspan="2" valign="top">
-kernel_00
-</th>
-<th rowspan="2" valign="top">
-x_estimated
-</th>
-<th rowspan="2" valign="top">
-1
-</th>
-<th rowspan="2" valign="top">
-divergent transition
-</th>
-<th>
-warmup
-</th>
-<td>
-22
-</td>
-<td>
-4000
-</td>
-<td>
-4000
-</td>
-<td>
-0.005
-</td>
-</tr>
-<tr>
-<th>
-posterior
-</th>
-<td>
-0
-</td>
-<td>
-8000
-</td>
-<td>
-8000
-</td>
-<td>
-0.000
-</td>
-</tr>
-<tr>
-<th rowspan="2" valign="top">
-kernel_03
-</th>
-<th rowspan="2" valign="top">
-beta
-</th>
-<th rowspan="2" valign="top">
-1
-</th>
-<th rowspan="2" valign="top">
-divergent transition
-</th>
-<th>
-warmup
-</th>
-<td>
-63
-</td>
-<td>
-4000
-</td>
-<td>
-4000
-</td>
-<td>
-0.016
-</td>
-</tr>
-<tr>
-<th>
-posterior
-</th>
-<td>
-0
-</td>
-<td>
-8000
-</td>
-<td>
-8000
-</td>
-<td>
-0.000
-</td>
-</tr>
-<tr>
-<th rowspan="2" valign="top">
+
 kernel_04
 </th>
+
 <th rowspan="2" valign="top">
+
 sigma_sq_y_transformed
 </th>
-<th rowspan="2" valign="top">
-1
-</th>
-<th rowspan="2" valign="top">
-divergent transition
-</th>
+
 <th>
-warmup
-</th>
-<td>
-50
-</td>
-<td>
-4000
-</td>
-<td>
-4000
-</td>
-<td>
-0.013
-</td>
-</tr>
-<tr>
-<th>
+
 posterior
 </th>
+
 <td>
-0
+
+0.878
 </td>
+
 <td>
-8000
+
+NaN
 </td>
-<td>
-8000
-</td>
-<td>
-0.000
-</td>
+
 </tr>
+
 <tr>
+
+<th>
+
+warmup
+</th>
+
+<td>
+
+0.792
+</td>
+
+<td>
+
+NaN
+</td>
+
+</tr>
+
+<tr>
+
 <th rowspan="2" valign="top">
+
 kernel_05
 </th>
+
 <th rowspan="2" valign="top">
+
 sigma_sq_u_transformed
 </th>
-<th rowspan="2" valign="top">
-1
-</th>
-<th rowspan="2" valign="top">
-divergent transition
-</th>
+
 <th>
-warmup
-</th>
-<td>
-52
-</td>
-<td>
-4000
-</td>
-<td>
-4000
-</td>
-<td>
-0.013
-</td>
-</tr>
-<tr>
-<th>
+
 posterior
 </th>
+
 <td>
+
+0.882
+</td>
+
+<td>
+
+NaN
+</td>
+
+</tr>
+
+<tr>
+
+<th>
+
+warmup
+</th>
+
+<td>
+
+0.791
+</td>
+
+<td>
+
+NaN
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<p>
+
+<strong>Error summary:</strong>
+</p>
+
+<table border="0" class="dataframe">
+
+<thead>
+
+<tr style="text-align: right;">
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+count
+</th>
+
+<th>
+
+sample_size
+</th>
+
+<th>
+
+sample_size_total
+</th>
+
+<th>
+
+relative
+</th>
+
+</tr>
+
+<tr>
+
+<th>
+
+kernel
+</th>
+
+<th>
+
+positions
+</th>
+
+<th>
+
+error_code
+</th>
+
+<th>
+
+error_msg
+</th>
+
+<th>
+
+phase
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+<th>
+
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<th rowspan="4" valign="top">
+
+kernel_00
+</th>
+
+<th rowspan="4" valign="top">
+
+x_estimated
+</th>
+
+<th rowspan="2" valign="top">
+
+1
+</th>
+
+<th rowspan="2" valign="top">
+
+divergent transition
+</th>
+
+<th>
+
+warmup
+</th>
+
+<td>
+
+22
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
+0.005
+</td>
+
+</tr>
+
+<tr>
+
+<th>
+
+posterior
+</th>
+
+<td>
+
 0
 </td>
+
 <td>
+
 8000
 </td>
+
 <td>
+
 8000
 </td>
+
 <td>
+
 0.000
 </td>
+
 </tr>
+
+<tr>
+
+<th rowspan="2" valign="top">
+
+2
+</th>
+
+<th rowspan="2" valign="top">
+
+maximum tree depth
+</th>
+
+<th>
+
+warmup
+</th>
+
+<td>
+
+1
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
+0.000
+</td>
+
+</tr>
+
+<tr>
+
+<th>
+
+posterior
+</th>
+
+<td>
+
+0
+</td>
+
+<td>
+
+8000
+</td>
+
+<td>
+
+8000
+</td>
+
+<td>
+
+0.000
+</td>
+
+</tr>
+
+<tr>
+
+<th rowspan="2" valign="top">
+
+kernel_03
+</th>
+
+<th rowspan="2" valign="top">
+
+beta
+</th>
+
+<th rowspan="2" valign="top">
+
+1
+</th>
+
+<th rowspan="2" valign="top">
+
+divergent transition
+</th>
+
+<th>
+
+warmup
+</th>
+
+<td>
+
+65
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
+0.016
+</td>
+
+</tr>
+
+<tr>
+
+<th>
+
+posterior
+</th>
+
+<td>
+
+0
+</td>
+
+<td>
+
+8000
+</td>
+
+<td>
+
+8000
+</td>
+
+<td>
+
+0.000
+</td>
+
+</tr>
+
+<tr>
+
+<th rowspan="2" valign="top">
+
+kernel_04
+</th>
+
+<th rowspan="2" valign="top">
+
+sigma_sq_y_transformed
+</th>
+
+<th rowspan="2" valign="top">
+
+1
+</th>
+
+<th rowspan="2" valign="top">
+
+divergent transition
+</th>
+
+<th>
+
+warmup
+</th>
+
+<td>
+
+52
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
+0.013
+</td>
+
+</tr>
+
+<tr>
+
+<th>
+
+posterior
+</th>
+
+<td>
+
+0
+</td>
+
+<td>
+
+8000
+</td>
+
+<td>
+
+8000
+</td>
+
+<td>
+
+0.000
+</td>
+
+</tr>
+
+<tr>
+
+<th rowspan="2" valign="top">
+
+kernel_05
+</th>
+
+<th rowspan="2" valign="top">
+
+sigma_sq_u_transformed
+</th>
+
+<th rowspan="2" valign="top">
+
+1
+</th>
+
+<th rowspan="2" valign="top">
+
+divergent transition
+</th>
+
+<th>
+
+warmup
+</th>
+
+<td>
+
+46
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
+4000
+</td>
+
+<td>
+
+0.012
+</td>
+
+</tr>
+
+<tr>
+
+<th>
+
+posterior
+</th>
+
+<td>
+
+0
+</td>
+
+<td>
+
+8000
+</td>
+
+<td>
+
+8000
+</td>
+
+<td>
+
+0.000
+</td>
+
+</tr>
+
 </tbody>
+
 </table>
 
 And the traceplots for $\beta$, $\log(\sigma_y)$ and $\log(\sigma_u)$.

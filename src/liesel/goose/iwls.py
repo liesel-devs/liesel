@@ -3,7 +3,7 @@ Iteratively weighted least squares (IWLS) sampler
 """
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import ClassVar, Literal, Self, get_args
 
 import jax
@@ -12,7 +12,12 @@ import jax.numpy.linalg as jnpla
 from jax import grad, jacfwd
 from jax.flatten_util import ravel_pytree
 
-from .da import da_finalize, da_init, da_step
+from .da import (
+    DualAvgState,
+    da_finalize,
+    da_init,
+    da_step,
+)
 from .epoch import EpochState
 from .iwls_utils import mvn_log_prob, mvn_sample, solve
 from .kernel import (
@@ -39,12 +44,11 @@ class IWLSKernelState:
     """
 
     step_size: float
-    error_sum: float = field(init=False)
-    log_avg_step_size: float = field(init=False)
-    mu: float = field(init=False)
+    da_state: DualAvgState | None = None
 
     def __post_init__(self):
-        da_init(self)
+        if self.da_state is None:
+            self.da_state = DualAvgState.from_step_size(self.step_size)
 
 
 IWLSTransitionInfo = DefaultTransitionInfo
