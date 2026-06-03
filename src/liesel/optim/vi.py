@@ -842,6 +842,19 @@ class VDist:
     def __init__(
         self, position_keys: Sequence[str], p: Model, to_float32: bool | None = None
     ):
+        position_keys = list(position_keys)
+        if not position_keys:
+            raise ValueError("VDist requires at least one position_key.")
+
+        duplicate_keys = sorted(
+            {key for key in position_keys if position_keys.count(key) > 1}
+        )
+        if duplicate_keys:
+            raise ValueError(
+                "Duplicate position_keys are not allowed: "
+                f"{duplicate_keys}."
+            )
+
         self.position_keys = position_keys
         self._p = p
 

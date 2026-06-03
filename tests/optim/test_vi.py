@@ -215,6 +215,23 @@ def test_compositevdist_exp_bijector_float64():
 
 
 class TestVDist:
+    def test_normalizes_tuple_position_keys(self):
+        p = _laplace_model()
+
+        vdist = opt.VDist(("loc",), p)
+
+        assert vdist.position_keys == ["loc"]
+        assert jnp.allclose(
+            vdist.p_to_q_array({"loc": jnp.array(1.5)}), jnp.array([1.5])
+        )
+
+    @pytest.mark.parametrize("position_keys", [[], ["loc", "loc"]])
+    def test_rejects_empty_or_duplicate_position_keys(self, position_keys):
+        p = _laplace_model()
+
+        with pytest.raises(ValueError, match="position_key"):
+            opt.VDist(position_keys, p)
+
     def test_normal_laplace_uses_standard_deviation(self):
         p = _laplace_model()
         q = opt.VDist(["loc"], p).normal(scale="laplace", scale_bijector=None)
