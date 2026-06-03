@@ -20,6 +20,8 @@ if TYPE_CHECKING:
     from .engine import OptimEngine
     from .state import OptimResult
 
+_MISSING = object()
+
 
 class LieselVI:
     """
@@ -43,10 +45,12 @@ class LieselVI:
         Deprecated alias for ``loss``.
     batches
         Optional explicit batch configuration. Cannot be combined with
-        ``batch_axis_size``.
-    batch_axis_size
+        ``batch_size``.
+    batch_size
         Mini-batch size used to construct default batches. ``None`` means full-data
         batches.
+    batch_axis_size
+        Deprecated alias for ``batch_size``.
     split
         Optional split. If omitted and ``loss`` is not an explicit
         :class:`.NegElboLoss`,
@@ -115,7 +119,8 @@ class LieselVI:
         | NegElboLoss
         | None = None,
         batches: BatchConfig | None = None,
-        batch_axis_size: int | None = None,
+        batch_size: int | None = None,
+        batch_axis_size: int | None | object = _MISSING,
         split: SplitConfig | None = None,
         optimizers: Sequence[Optimizer] | Literal["adam"] = "adam",
         stopper: Stopper = Stopper(epochs=1000, patience=10, rtol=1e-6),
@@ -133,8 +138,13 @@ class LieselVI:
             "auto", "epoch_average", "weighted_epoch_average", "full_data"
         ] = "auto",
     ) -> None:
-        if batches is not None and batch_axis_size is not None:
-            raise ValueError("Pass either batches or batch_axis_size, not both.")
+        if batch_axis_size is not _MISSING:
+            if batch_size is not None:
+                raise ValueError("Pass either batch_size or batch_axis_size, not both.")
+            batch_size = batch_axis_size  # type: ignore[assignment]
+
+        if batches is not None and batch_size is not None:
+            raise ValueError("Pass either batches or batch_size, not both.")
 
         if elbo is not None:
             if loss != "mvn_diag":
@@ -155,7 +165,7 @@ class LieselVI:
         )
         self.batches = self._resolve_batches(
             batches=batches,
-            batch_axis_size=batch_axis_size,
+            batch_size=batch_size,
             split_axes=split_axes,
             default_split_axis=default_split_axis,
             shuffle=shuffle_batches,
@@ -243,7 +253,7 @@ class LieselVI:
     def _resolve_batches(
         self,
         batches: BatchConfig | None,
-        batch_axis_size: int | None,
+        batch_size: int | None,
         split_axes: dict[str, int] | None,
         default_split_axis: int,
         shuffle: bool,
@@ -253,21 +263,21 @@ class LieselVI:
         if batches is not None:
             return batches
 
-        shuffle = False if batch_axis_size is None else shuffle
+        shuffle = False if batch_size is None else shuffle
         if isinstance(self.split, PositionSplitManager):
             children = [
                 Batches(
                     position_keys=child.position_keys,
                     axis_size=child.train_axis_size,
-                    batch_size=batch_axis_size,
+                    batch_size=batch_size,
                     shuffle=shuffle,
                     split_axes=split_axes,
                     default_split_axis=default_split_axis,
                     sample_size=child.train_sample_size,
                     sample_with_replacement=(
                         mode == "resample"
-                        and batch_axis_size is not None
-                        and batch_axis_size > child.train_axis_size
+                        and batch_size is not None
+                        and batch_size > child.train_axis_size
                     ),
                 )
                 for child in self.split.splits
@@ -278,7 +288,7 @@ class LieselVI:
         return Batches(
             position_keys=position_keys,
             axis_size=self.split.train_axis_size,
-            batch_size=batch_axis_size,
+            batch_size=batch_size,
             shuffle=shuffle,
             split_axes=split_axes,
             default_split_axis=default_split_axis,
