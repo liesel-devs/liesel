@@ -264,6 +264,29 @@ class TestPositionSplit:
         assert split.sample_sizes == {"train": 24.0, "validate": 8.0}
         assert split.validate_sample_scale == 3.0
 
+    def test_from_model_infers_sample_sizes_from_multivariate_log_probs(self):
+        y = lsl.Var.new_obs(
+            jnp.arange(16.0).reshape(8, 2),
+            lsl.Dist(
+                tfd.MultivariateNormalDiag,
+                loc=jnp.zeros(2),
+                scale_diag=jnp.ones(2),
+            ),
+            name="y",
+        )
+        model = lsl.Model([y])
+
+        split = PositionSplit.from_model(
+            model,
+            position_keys=["y"],
+            validate_axis_share=0.25,
+        )
+
+        assert split.train_axis_size == 6
+        assert split.validate_axis_size == 2
+        assert split.sample_sizes == {"train": 6.0, "validate": 2.0}
+        assert split.validate_sample_scale == 3.0
+
     def test_add_inferred_sample_sizes_from_model_mutates_split(self):
         model, _ = _matrix_obs_model(shape=(4, 8))
         splitter = Split(["y"], axis_size=8, validate_axis_size=2, split_axes={"y": 1})

@@ -150,7 +150,9 @@ class Batches:
         observation count.
     sample_size
         Optional effective likelihood sample size represented by the full data. If
-        omitted, likelihood scaling falls back to ``axis_size``.
+        omitted, likelihood scaling falls back to ``axis_size``. Use
+        :meth:`from_model` to infer this value from pointwise observed
+        log-probability arrays.
     batch_sample_size
         Optional effective likelihood sample size represented by one batch. If
         ``sample_size`` is supplied and ``batch_sample_size`` is omitted, it is
@@ -364,7 +366,10 @@ class Batches:
         sample_size
             Optional effective likelihood sample size represented by the full
             observed data. If omitted and ``infer_sample_size=True``, it is inferred
-            from pointwise observed log-probability values when possible.
+            from pointwise observed log-probability values when possible. Inference
+            counts log-probability scalars, not observed value elements; for
+            multivariate observation distributions, one observed event may have
+            several value dimensions but one pointwise log-probability scalar.
         batch_sample_size
             Optional effective likelihood sample size represented by one batch. If
             omitted and ``infer_sample_size=True``, it is inferred from the first
@@ -1087,6 +1092,12 @@ class BatchManager:
             Epoch length in ``"resample"`` mode. ``"max"`` uses the longest child
             epoch, ``"min"`` uses the shortest child epoch, and a positive integer
             sets the epoch length manually.
+        infer_sample_size
+            Whether child batches should infer missing effective sample sizes from
+            observed log-probability values. Inference counts log-probability
+            scalars, not observed value elements; for multivariate observation
+            distributions, one observed event may have several value dimensions but
+            one pointwise log-probability scalar.
 
         Returns
         -------

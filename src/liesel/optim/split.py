@@ -242,7 +242,12 @@ def _normalize_sample_sizes(
 
 def _count_likelihood_contributions(value) -> int:
     """
-    Count scalar likelihood contributions in a log-probability value.
+    Count scalar terms in a pointwise log-probability value.
+
+    The count is based on the log-probability value, not on the observed value.
+    This matters for multivariate observation distributions, where each
+    observed event may have several value dimensions but contributes one
+    pointwise log-probability scalar.
 
     Examples
     --------
@@ -419,7 +424,9 @@ class PositionSplit:
         Number of test observations.
     sample_sizes
         Optional effective sample sizes for train, validation, and test scaling.
-        If omitted, split-axis counts are used.
+        If omitted, split-axis counts are used. Use :meth:`from_model` or
+        :meth:`add_inferred_sample_sizes_from_model` to infer these values from
+        pointwise observed log-probability arrays.
 
     Examples
     --------
@@ -586,7 +593,10 @@ class PositionSplit:
         Infer effective sample sizes from ``model`` and attach them to this split.
 
         Empty validation or test parts are omitted from the inferred mapping. The
-        method mutates and returns ``self``.
+        method mutates and returns ``self``. Inference counts log-probability
+        scalars, not observed value elements; for multivariate observation
+        distributions, one observed event may have several value dimensions but one
+        pointwise log-probability scalar.
 
         Examples
         --------
@@ -926,7 +936,10 @@ class PositionSplit:
             inference.
         infer_sample_sizes
             Whether to infer effective sample sizes from pointwise observed
-            log-probability arrays.
+            log-probability arrays. Inference counts log-probability scalars, not
+            observed value elements; for multivariate observation distributions,
+            one observed event may have several value dimensions but one pointwise
+            log-probability scalar.
 
         Returns
         -------
@@ -1208,7 +1221,10 @@ class PositionSplitManager:
         sizes for the whole manager. The totals are distributed to contained
         splits in proportion to their axis sizes for the corresponding split
         part. For custom per-child sample sizes, construct the child
-        :class:`PositionSplit` objects manually.
+        :class:`PositionSplit` objects manually. When ``infer_sample_sizes=True``,
+        inference counts pointwise log-probability scalars, not observed value
+        elements; for multivariate observation distributions, one observed event
+        may have several value dimensions but one pointwise log-probability scalar.
 
         Examples
         --------
