@@ -224,8 +224,8 @@ class LieselOptim:
                     axis_size=child.train_axis_size,
                     batch_size=batch_size,
                     shuffle=shuffle,
-                    split_axes=split_axes,
-                    default_split_axis=default_split_axis,
+                    batch_axes=split_axes,
+                    default_batch_axis=default_split_axis,
                     sample_size=child.train_sample_size,
                     sample_with_replacement=(
                         mode == "resample"
@@ -243,8 +243,8 @@ class LieselOptim:
             axis_size=self.split.train_axis_size,
             batch_size=batch_size,
             shuffle=shuffle,
-            split_axes=split_axes,
-            default_split_axis=default_split_axis,
+            batch_axes=split_axes,
+            default_batch_axis=default_split_axis,
             sample_size=self.split.train_sample_size,
         )
 

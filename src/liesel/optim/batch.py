@@ -95,7 +95,7 @@ class Batches:
     ``Batches`` stores an index vector of length ``axis_size`` and reshapes the first
     complete part of that vector into batches. The observed position entries named in
     ``position_keys`` are sliced with these indices. By default, every entry is
-    sliced along axis ``0``; use ``default_split_axis`` or ``split_axes`` for
+    sliced along axis ``0``; use ``default_batch_axis`` or ``batch_axes`` for
     arrays where observations live on another axis.
 
     Parameters
@@ -110,11 +110,11 @@ class Batches:
     shuffle
         Whether :meth:`permute_indices` should return a random permutation of the
         indices. If ``False``, :meth:`permute_indices` returns the indices unchanged.
-    split_axes
+    batch_axes
         Optional mapping from position key to batching axis. Keys missing from this
-        mapping use ``default_split_axis``.
-    default_split_axis
-        Batching axis for all position keys not listed in ``split_axes``.
+        mapping use ``default_batch_axis``.
+    default_batch_axis
+        Batching axis for all position keys not listed in ``batch_axes``.
     sample_with_replacement
         Whether an oversized batch may be filled by sampling observations with
         replacement. This is mainly used by :meth:`BatchManager.from_model` when
@@ -152,14 +152,14 @@ class Batches:
     >>> full_data.batch_indices.tolist()
     [[0, 1, 2, 3, 4]]
 
-    ``split_axes`` can batch different entries along different split_axes:
+    ``batch_axes`` can batch different entries along different batch_axes:
 
     >>> import jax.numpy as jnp
     >>> batches = Batches(
     ...     ["x", "y"],
     ...     axis_size=5,
     ...     batch_size=2,
-    ...     split_axes={"x": 1},
+    ...     batch_axes={"x": 1},
     ...     shuffle=False,
     ... )
     >>> position = {
@@ -175,8 +175,8 @@ class Batches:
     axis_size: int
     batch_size: int | None
     shuffle: bool = True
-    split_axes: dict[str, int] | None = None
-    default_split_axis: int = 0
+    batch_axes: dict[str, int] | None = None
+    default_batch_axis: int = 0
     sample_with_replacement: bool = False
     sample_size: int | float | None = None
     batch_sample_size: int | float | None = None
@@ -187,8 +187,8 @@ class Batches:
         axis_size: int,
         batch_size: int | None | object = _MISSING,
         shuffle: bool = True,
-        split_axes: dict[str, int] | None = None,
-        default_split_axis: int = 0,
+        batch_axes: dict[str, int] | None = None,
+        default_batch_axis: int = 0,
         sample_with_replacement: bool = False,
         sample_size: int | float | None = None,
         batch_sample_size: int | float | None = None,
@@ -199,8 +199,8 @@ class Batches:
         self.axis_size = axis_size
         self.batch_size = _resolve_batch_size(batch_size, batch_axis_size)
         self.shuffle = shuffle
-        self.split_axes = split_axes
-        self.default_split_axis = default_split_axis
+        self.batch_axes = batch_axes
+        self.default_batch_axis = default_batch_axis
         self.sample_with_replacement = sample_with_replacement
         self.sample_size = sample_size
         self.batch_sample_size = batch_sample_size
@@ -227,8 +227,8 @@ class Batches:
                 f"Duplicate position_keys are not allowed: {list(self.position_keys)}"
             )
 
-        if self.split_axes is None:
-            self.split_axes = {}
+        if self.batch_axes is None:
+            self.batch_axes = {}
 
         self.sample_size = _normalize_positive_size(self.sample_size, "sample_size")
         self.batch_sample_size = _normalize_positive_size(
@@ -261,8 +261,8 @@ class Batches:
         position_keys: Sequence[str] | None = None,
         axis_size: int | None = None,
         shuffle: bool = True,
-        split_axes: dict[str, int] | None = None,
-        default_split_axis: int = 0,
+        batch_axes: dict[str, int] | None = None,
+        default_batch_axis: int = 0,
         multi_size: Literal["error", "manager"] = "error",
         mode: Literal["strict", "resample"] = "resample",
         epoch_size: Literal["max", "min"] | int = "max",
@@ -288,15 +288,15 @@ class Batches:
             variables in ``model`` are used.
         axis_size
             Number of observations. If ``None``, the number is guessed from the model's
-            observed variables along ``default_split_axis``.
+            observed variables along ``default_batch_axis``.
         shuffle
             Whether epoch-wise calls to :meth:`permute_indices` should shuffle the
             indices. This is forced to ``False`` when ``batch_size`` is ``None``.
-        split_axes
+        batch_axes
             Optional mapping from position key to batching axis.
-        default_split_axis
+        default_batch_axis
             Axis used for guessing ``axis_size`` and for position keys missing
-            from ``split_axes``.
+            from ``batch_axes``.
         multi_size
             How to handle observed variables with different inferred axis sizes.
             The default ``"error"`` keeps :class:`Batches` scalar and raises a
@@ -357,7 +357,7 @@ class Batches:
             list(position_keys) if position_keys is not None else list(model.observed)
         )
         groups = position_key_groups_from_model(
-            model, pos_keys, split_axes, default_split_axis
+            model, pos_keys, batch_axes, default_batch_axis
         )
 
         if len(groups) > 1:
@@ -378,8 +378,8 @@ class Batches:
                     batch_size=batch_size,
                     position_keys=pos_keys,
                     shuffle=shuffle,
-                    split_axes=split_axes,
-                    default_split_axis=default_split_axis,
+                    batch_axes=batch_axes,
+                    default_batch_axis=default_batch_axis,
                     mode=mode,
                     epoch_size=epoch_size,
                     infer_sample_size=infer_sample_size,
@@ -396,7 +396,7 @@ class Batches:
             axis_size = (
                 next(iter(groups))
                 if groups
-                else guess_n(model, axis=default_split_axis)
+                else guess_n(model, axis=default_batch_axis)
             )
 
         if batch_size is None:
@@ -407,8 +407,8 @@ class Batches:
             batch_size=batch_size,
             axis_size=axis_size,
             shuffle=shuffle,
-            split_axes=split_axes,
-            default_split_axis=default_split_axis,
+            batch_axes=batch_axes,
+            default_batch_axis=default_batch_axis,
             sample_size=sample_size,
             batch_sample_size=batch_sample_size,
             sample_with_replacement=sample_with_replacement,
@@ -654,7 +654,7 @@ class Batches:
         ...     ["x"],
         ...     axis_size=4,
         ...     batch_size=2,
-        ...     default_split_axis=1,
+        ...     default_batch_axis=1,
         ...     shuffle=False,
         ... )
         >>> position = {"x": jnp.arange(12).reshape(3, 4)}
@@ -663,9 +663,9 @@ class Batches:
         """
         idx = self.batch_indices[batch_index]
         batched_position = {}
-        assert isinstance(self.split_axes, dict)
+        assert isinstance(self.batch_axes, dict)
         for key in self.position_keys:
-            axis = self.split_axes.get(key, self.default_split_axis)
+            axis = self.batch_axes.get(key, self.default_batch_axis)
 
             n_this_key = jnp.shape(position[key])[axis]
             if not jnp.shape(position[key])[axis] == self.axis_size:
@@ -777,8 +777,8 @@ class Batches:
             "axis_size": self.axis_size,
             "batch_size": self.batch_size,
             "shuffle": self.shuffle,
-            "split_axes": self.split_axes,
-            "default_split_axis": self.default_split_axis,
+            "batch_axes": self.batch_axes,
+            "default_batch_axis": self.default_batch_axis,
             "sample_with_replacement": self.sample_with_replacement,
             "sample_size": self.sample_size,
             "batch_sample_size": self.batch_sample_size,
@@ -796,7 +796,7 @@ class Batches:
         out = (
             f"{name}(axis_size={self.axis_size}, "
             f"batch_size={self.batch_size}, "
-            f"default_split_axis={self.default_split_axis})"
+            f"default_batch_axis={self.default_batch_axis})"
         )
         return out
 
@@ -960,8 +960,8 @@ class BatchManager:
         batch_size: int | None | object = _MISSING,
         position_keys: Sequence[str] | None = None,
         shuffle: bool = True,
-        split_axes: dict[str, int] | None = None,
-        default_split_axis: int = 0,
+        batch_axes: dict[str, int] | None = None,
+        default_batch_axis: int = 0,
         mode: Literal["strict", "resample"] = "resample",
         epoch_size: Literal["max", "min"] | int = "max",
         infer_sample_size: bool = True,
@@ -989,10 +989,10 @@ class BatchManager:
             variables in ``model`` are used.
         shuffle
             Whether each child should shuffle observation indices at epoch start.
-        split_axes
+        batch_axes
             Optional mapping from position key to batching axis.
-        default_split_axis
-            Batching axis for all position keys not listed in ``split_axes``.
+        default_batch_axis
+            Batching axis for all position keys not listed in ``batch_axes``.
         mode
             Batch manager mode. ``"resample"`` allows unequal numbers of child
             batches; ``"strict"`` requires all child groups to have the same number
@@ -1043,7 +1043,7 @@ class BatchManager:
             list(position_keys) if position_keys is not None else list(model.observed)
         )
         groups = position_key_groups_from_model(
-            model, pos_keys, split_axes, default_split_axis
+            model, pos_keys, batch_axes, default_batch_axis
         )
         shuffle = False if batch_size is None else shuffle
 
@@ -1065,8 +1065,8 @@ class BatchManager:
                 position_keys=keys,
                 axis_size=axis_size,
                 shuffle=shuffle,
-                split_axes=split_axes,
-                default_split_axis=default_split_axis,
+                batch_axes=batch_axes,
+                default_batch_axis=default_batch_axis,
                 infer_sample_size=infer_sample_size,
                 sample_with_replacement=(
                     mode == "resample"
@@ -1549,7 +1549,7 @@ class BatchManager:
         ...             ["x"],
         ...             axis_size=4,
         ...             batch_size=2,
-        ...             default_split_axis=1,
+        ...             default_batch_axis=1,
         ...             shuffle=False,
         ...         ),
         ...         Batches(["y"], axis_size=6, batch_size=3, shuffle=False),

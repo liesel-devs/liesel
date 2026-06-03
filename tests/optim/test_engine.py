@@ -364,9 +364,7 @@ def test_batch_keys_must_be_present_in_training_split():
     with pytest.raises(ValueError, match="split.train"):
         OptimEngine(
             loss=_loss(),
-            batches=Batches(
-                ["missing"], axis_size=1, batch_size=None, shuffle=False
-            ),
+            batches=Batches(["missing"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[_optimizer()],
             stopper=Stopper(epochs=4, patience=2),
             seed=1,

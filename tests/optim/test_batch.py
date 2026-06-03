@@ -47,7 +47,7 @@ class TestBatches:
 
     def test_batching_axis(self):
         Bi = Batches(
-            ["x"], axis_size=30, batch_size=4, shuffle=True, default_split_axis=1
+            ["x"], axis_size=30, batch_size=4, shuffle=True, default_batch_axis=1
         )
         Bi.indices = Bi.permute_indices(key(0))
 
@@ -63,7 +63,7 @@ class TestBatches:
             axis_size=30,
             batch_size=4,
             shuffle=True,
-            split_axes={"x": 1, "y": 0},
+            batch_axes={"x": 1, "y": 0},
         )
         Bi.indices = Bi.permute_indices(key(0))
 
@@ -201,7 +201,7 @@ class TestBatches:
             model,
             batch_size=2,
             position_keys=["y"],
-            split_axes={"y": 1},
+            batch_axes={"y": 1},
             shuffle=False,
         )
 
@@ -401,7 +401,7 @@ class TestBatchManager:
             model,
             batch_size=2,
             position_keys=["x", "y"],
-            split_axes={"x": 1},
+            batch_axes={"x": 1},
         )
 
         position = model.extract_position(["x", "y"])
@@ -418,14 +418,14 @@ class TestBatchManager:
                     ["x"],
                     axis_size=4,
                     batch_size=2,
-                    default_split_axis=1,
+                    default_batch_axis=1,
                     shuffle=False,
                 ),
                 Batches(
                     ["y"],
                     axis_size=6,
                     batch_size=3,
-                    default_split_axis=0,
+                    default_batch_axis=0,
                     shuffle=False,
                 ),
             ],

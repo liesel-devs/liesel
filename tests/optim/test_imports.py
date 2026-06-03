@@ -1,7 +1,6 @@
-from liesel.experimental.optim.state import OptimResult as ExperimentalOptimResult
-
 import liesel.experimental.optim as experimental_optim
 import liesel.optim as optim
+from liesel.experimental.optim.state import OptimResult as ExperimentalOptimResult
 from liesel.optim.state import OptimResult
 
 

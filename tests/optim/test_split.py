@@ -229,9 +229,7 @@ class TestPositionSplit:
 
     def test_add_inferred_sample_sizes_from_model_mutates_split(self):
         model, _ = _matrix_obs_model(shape=(4, 8))
-        splitter = Split(
-            ["y"], axis_size=8, validate_axis_size=2, split_axes={"y": 1}
-        )
+        splitter = Split(["y"], axis_size=8, validate_axis_size=2, split_axes={"y": 1})
         split = splitter.split_position(model.extract_position(["y"]))
 
         result = split.add_inferred_sample_sizes_from_model(model)
