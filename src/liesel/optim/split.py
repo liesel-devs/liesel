@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import time
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from typing import Literal
 
 import jax
@@ -15,7 +15,6 @@ from ..model import Model
 from ._log_lik import scaled_common_log_lik, scaled_liesel_log_lik
 from ._model_utils import position_key_groups_from_model
 from .types import Array, ModelInterface, ModelState, Position
-from .util import guess_n
 
 SplitPart = Literal["train", "validate", "test"]
 SampleSizes = Mapping[SplitPart, int | float]
@@ -23,6 +22,17 @@ _SPLIT_PARTS: tuple[SplitPart, ...] = ("train", "validate", "test")
 
 
 def _merge_positions(positions: Sequence[Position]) -> Position:
+    """
+    Merge split position dictionaries and reject duplicate keys.
+
+    Examples
+    --------
+    >>> from liesel.optim.split import _merge_positions
+    >>> from liesel.optim.types import Position
+    >>> merged = _merge_positions([Position({"x": 1}), Position({"y": 2})])
+    >>> sorted(merged.items())
+    [('x', 1), ('y', 2)]
+    """
     merged: dict[str, Array] = {}
 
     for position in positions:
@@ -37,6 +47,18 @@ def _merge_positions(positions: Sequence[Position]) -> Position:
 
 
 def _common_value(values: Sequence, name: str, plural_name: str):
+    """
+    Return a scalar value only when all branch values agree.
+
+    ``name`` and ``plural_name`` are used to build the error message when branch
+    values differ.
+
+    Examples
+    --------
+    >>> from liesel.optim.split import _common_value
+    >>> _common_value([3, 3, 3], "axis_size", "axis_sizes")
+    3
+    """
     values = tuple(values)
     first = values[0]
 
@@ -57,6 +79,22 @@ def _common_value(values: Sequence, name: str, plural_name: str):
 
 
 def _validate_unique_position_keys(groups: Sequence[Sequence[str]], owner: str) -> None:
+    """
+    Validate that position keys are claimed by at most one group.
+
+    Parameters
+    ----------
+    groups
+        Position-key groups to compare.
+    owner
+        Name used in the duplicate-key error message.
+
+    Examples
+    --------
+    >>> from liesel.optim.split import _validate_unique_position_keys
+    >>> _validate_unique_position_keys([["x"], ["y"]], "splits") is None
+    True
+    """
     counts: dict[str, int] = {}
 
     for group in groups:
@@ -71,6 +109,17 @@ def _validate_unique_position_keys(groups: Sequence[Sequence[str]], owner: str) 
 def _child_seeds(
     seed: jax.Array | int | None, n_children: int
 ) -> tuple[jax.Array | int | None, ...]:
+    """
+    Split one seed into deterministic child keys.
+
+    ``None`` is converted to a time-based key before splitting.
+
+    Examples
+    --------
+    >>> from liesel.optim.split import _child_seeds
+    >>> len(_child_seeds(0, 2))
+    2
+    """
     if seed is None:
         key = jax.random.key(int(time.time()))
     else:
@@ -84,6 +133,23 @@ def _validate_child_split_availability(
     validate_axis_share: float,
     test_axis_share: float,
 ) -> None:
+    """
+    Validate that requested validation/test shares produce data for every child.
+
+    This catches small branches where ``int(axis_size * share)`` would round to
+    zero while larger branches still receive validation or test observations.
+
+    Examples
+    --------
+    >>> from liesel.optim import Split
+    >>> from liesel.optim.split import _validate_child_split_availability
+    >>> splits = [
+    ...     Split(["x"], axis_size=5, validate_axis_size=1),
+    ...     Split(["y"], axis_size=4, validate_axis_size=1),
+    ... ]
+    >>> _validate_child_split_availability(splits, 0.2, 0.0) is None
+    True
+    """
     if validate_axis_share > 0.0:
         validate_axis_sizes = [split.validate_axis_size for split in splits]
         if any(size == 0 for size in validate_axis_sizes) and any(
@@ -116,6 +182,21 @@ def _validate_child_split_availability(
 
 
 def _position_size_is_compatible(value: Array, axis_size: int) -> bool:
+    """
+    Check whether a value can represent a split part of ``axis_size``.
+
+    Scalar values are compatible only with ``axis_size=1``. Non-scalar values
+    are compatible if one of their axes has the declared size.
+
+    Examples
+    --------
+    >>> import jax.numpy as jnp
+    >>> from liesel.optim.split import _position_size_is_compatible
+    >>> _position_size_is_compatible(jnp.ones((2, 3)), 3)
+    True
+    >>> _position_size_is_compatible(1.0, 2)
+    False
+    """
     shape = jnp.shape(value)
     if len(shape) == 0:
         return axis_size == 1
@@ -125,6 +206,17 @@ def _position_size_is_compatible(value: Array, axis_size: int) -> bool:
 def _normalize_sample_sizes(
     sample_sizes: SampleSizes | None,
 ) -> dict[SplitPart, float] | None:
+    """
+    Validate sample-size mappings and convert their values to floats.
+
+    Examples
+    --------
+    >>> from liesel.optim.split import _normalize_sample_sizes
+    >>> _normalize_sample_sizes({"train": 10, "validate": 2})
+    {'train': 10.0, 'validate': 2.0}
+    >>> _normalize_sample_sizes(None) is None
+    True
+    """
     if sample_sizes is None:
         return None
 
@@ -149,6 +241,18 @@ def _normalize_sample_sizes(
 
 
 def _count_likelihood_contributions(value) -> int:
+    """
+    Count scalar likelihood contributions in a log-probability value.
+
+    Examples
+    --------
+    >>> import jax.numpy as jnp
+    >>> from liesel.optim.split import _count_likelihood_contributions
+    >>> _count_likelihood_contributions(jnp.ones((2, 3)))
+    6
+    >>> _count_likelihood_contributions(0.0)
+    1
+    """
     shape = jnp.shape(value)
     if len(shape) == 0:
         return 1
@@ -159,6 +263,27 @@ def _count_likelihood_contributions(value) -> int:
 def _observed_dist_infos(
     model: Model, position_keys: Sequence[str]
 ) -> list[tuple[str, str, bool]]:
+    """
+    Return observed-variable names, log-prob node names, and ``per_obs`` flags.
+
+    Only observed variables whose variable name or value-node name appears in
+    ``position_keys`` are included.
+
+    Examples
+    --------
+    >>> import jax.numpy as jnp
+    >>> import liesel.model as lsl
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+    >>> from liesel.optim.split import _observed_dist_infos
+    >>> y = lsl.Var.new_obs(
+    ...     jnp.arange(2.0),
+    ...     lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+    ...     name="y",
+    ... )
+    >>> model = lsl.Model([y])
+    >>> _observed_dist_infos(model, ["y"])
+    [('y', 'y_log_prob', True)]
+    """
     keys = set(position_keys)
     infos: list[tuple[str, str, bool]] = []
 
@@ -173,6 +298,27 @@ def _observed_dist_infos(
 
 
 def _has_custom_model_log_lik(model: Model) -> bool:
+    """
+    Check whether a model uses a custom aggregate log-likelihood node.
+
+    The default model log likelihood depends directly on the observed log-prob
+    nodes. A different dependency structure indicates custom aggregation, for
+    which automatic split sample-size inference is ambiguous.
+
+    Examples
+    --------
+    >>> import jax.numpy as jnp
+    >>> import liesel.model as lsl
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+    >>> from liesel.optim.split import _has_custom_model_log_lik
+    >>> y = lsl.Var.new_obs(
+    ...     jnp.arange(2.0),
+    ...     lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+    ...     name="y",
+    ... )
+    >>> _has_custom_model_log_lik(lsl.Model([y]))
+    False
+    """
     model_log_lik = model.nodes.get("_model_log_lik")
     if model_log_lik is None:
         return False
@@ -194,6 +340,32 @@ def _infer_sample_size_for_part(
     split: PositionSplit,
     part: SplitPart,
 ) -> int:
+    """
+    Infer one split part's effective sample size from pointwise log likelihoods.
+
+    If a split group has no observed likelihood nodes, the declared split-axis
+    size is used as a fallback.
+
+    Examples
+    --------
+    >>> import jax.numpy as jnp
+    >>> import liesel.model as lsl
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+    >>> from liesel.optim import Split
+    >>> from liesel.optim.split import _infer_sample_size_for_part
+    >>> y = lsl.Var.new_obs(
+    ...     jnp.arange(4.0),
+    ...     lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+    ...     name="y",
+    ... )
+    >>> model = lsl.Model([y])
+    >>> split = Split(["y"], axis_size=4, validate_axis_size=1).split_position(
+    ...     model.extract_position(["y"])
+    ... )
+    >>> state = model.update_state(split.validate, model.state)
+    >>> _infer_sample_size_for_part(model, state, split, "validate")
+    1
+    """
     infos = _observed_dist_infos(model, split.position_keys)
     sizes: dict[str, int] = {}
 
@@ -220,30 +392,6 @@ def _infer_sample_size_for_part(
         )
 
     return unique_sizes.pop()
-
-
-def _with_inferred_sample_sizes_from_model(
-    model: Model, split: PositionSplit
-) -> PositionSplit:
-    if _has_custom_model_log_lik(model):
-        raise ValueError(
-            "Cannot infer sample sizes for a model with a custom log_lik_node. "
-            "Set infer_sample_sizes=False or provide sample_sizes manually."
-        )
-
-    sizes: dict[SplitPart, int] = {}
-    for part, position, n_part in (
-        ("train", split.train, split.train_axis_size),
-        ("validate", split.validate, split.validate_axis_size),
-        ("test", split.test, split.test_axis_size),
-    ):
-        if n_part == 0:
-            continue
-
-        state = model.update_state(position, model.state)
-        sizes[part] = _infer_sample_size_for_part(model, state, split, part)
-
-    return replace(split, sample_sizes=sizes)
 
 
 @dataclass
@@ -302,7 +450,7 @@ class PositionSplit:
     sample_sizes: SampleSizes | None = None
 
     def __post_init__(self):
-        self.sample_sizes = _normalize_sample_sizes(self.sample_sizes)
+        self.set_sample_sizes(self.sample_sizes)
 
         if (
             self.train_axis_size < 0
@@ -361,20 +509,6 @@ class PositionSplit:
                         f"{n_part}."
                     )
 
-        for part, n_part in (
-            ("validate", self.validate_axis_size),
-            ("test", self.test_axis_size),
-        ):
-            if (
-                n_part > 0
-                and self.sample_sizes is not None
-                and self.sample_sizes.get(part, n_part) == 0.0
-            ):
-                raise ValueError(
-                    f"sample_sizes[{part!r}] must be positive when "
-                    f"{part}_axis_size > 0."
-                )
-
     @property
     def position_keys(self) -> list[str]:
         """
@@ -401,6 +535,97 @@ class PositionSplit:
                 return list(position)
 
         return []
+
+    def set_sample_sizes(self, sample_sizes: SampleSizes | None) -> PositionSplit:
+        """
+        Set effective likelihood sample sizes on this split.
+
+        The supplied mapping is normalized to floats. The method mutates and
+        returns ``self``.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> from liesel.optim import PositionSplit
+        >>> from liesel.optim.types import Position
+        >>> split = PositionSplit(
+        ...     Position({"x": jnp.arange(3)}),
+        ...     Position({"x": jnp.arange(1)}),
+        ...     Position({}),
+        ...     train_axis_size=3,
+        ...     validate_axis_size=1,
+        ...     test_axis_size=0,
+        ... )
+        >>> split.set_sample_sizes({"train": 12, "validate": 3}) is split
+        True
+        >>> split.sample_sizes
+        {'train': 12.0, 'validate': 3.0}
+        """
+        normalized = _normalize_sample_sizes(sample_sizes)
+
+        for part, n_part in (
+            ("validate", self.validate_axis_size),
+            ("test", self.test_axis_size),
+        ):
+            if (
+                n_part > 0
+                and normalized is not None
+                and normalized.get(part, n_part) == 0.0
+            ):
+                raise ValueError(
+                    f"sample_sizes[{part!r}] must be positive when "
+                    f"{part}_axis_size > 0."
+                )
+
+        self.sample_sizes = normalized
+        return self
+
+    def add_inferred_sample_sizes_from_model(self, model: Model) -> PositionSplit:
+        """
+        Infer effective sample sizes from ``model`` and attach them to this split.
+
+        Empty validation or test parts are omitted from the inferred mapping. The
+        method mutates and returns ``self``.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> import liesel.model as lsl
+        >>> import tensorflow_probability.substrates.jax.distributions as tfd
+        >>> from liesel.optim import Split
+        >>> y = lsl.Var.new_obs(
+        ...     jnp.arange(4.0),
+        ...     lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+        ...     name="y",
+        ... )
+        >>> model = lsl.Model([y])
+        >>> split = Split(["y"], axis_size=4, validate_axis_size=1).split_position(
+        ...     model.extract_position(["y"])
+        ... )
+        >>> split.add_inferred_sample_sizes_from_model(model) is split
+        True
+        >>> split.sample_sizes
+        {'train': 3.0, 'validate': 1.0}
+        """
+        if _has_custom_model_log_lik(model):
+            raise ValueError(
+                "Cannot infer sample sizes for a model with a custom log_lik_node. "
+                "Set infer_sample_sizes=False or provide sample_sizes manually."
+            )
+
+        sizes: dict[SplitPart, int] = {}
+        for part, position, n_part in (
+            ("train", self.train, self.train_axis_size),
+            ("validate", self.validate, self.validate_axis_size),
+            ("test", self.test, self.test_axis_size),
+        ):
+            if n_part == 0:
+                continue
+
+            state = model.update_state(position, model.state)
+            sizes[part] = _infer_sample_size_for_part(model, state, self, part)
+
+        return self.set_sample_sizes(sizes)
 
     @property
     def axis_size(self) -> int:
@@ -733,6 +958,11 @@ class PositionSplit:
         pos_keys = (
             list(position_keys) if position_keys is not None else list(model.observed)
         )
+        if not pos_keys:
+            raise ValueError(
+                "PositionSplit.from_model() requires at least one position key."
+            )
+
         groups = position_key_groups_from_model(
             model, pos_keys, split_axes, default_split_axis
         )
@@ -765,11 +995,8 @@ class PositionSplit:
             )
 
         if axis_size is None:
-            axis_size = (
-                next(iter(groups))
-                if groups
-                else guess_n(model, axis=default_split_axis)
-            )
+            axis_size = next(iter(groups))
+
         splitter = Split.from_axis_shares(
             position_keys=pos_keys,
             axis_size=axis_size,
@@ -785,7 +1012,7 @@ class PositionSplit:
         pos = model.extract_position(pos_keys)
         split = splitter.split_position(pos)
         if infer_sample_sizes and sample_sizes is None:
-            split = _with_inferred_sample_sizes_from_model(model, split)
+            split.add_inferred_sample_sizes_from_model(model)
 
         return split
 
@@ -956,17 +1183,14 @@ class PositionSplitManager:
         split = splitter.split_position(position)
 
         if sample_sizes is not None:
-            return PositionSplitManager(
-                [replace(child, sample_sizes=sample_sizes) for child in split.splits]
-            )
+            for child in split.splits:
+                child.set_sample_sizes(sample_sizes)
+            return split
 
         if infer_sample_sizes:
-            return PositionSplitManager(
-                [
-                    _with_inferred_sample_sizes_from_model(model, child)
-                    for child in split.splits
-                ]
-            )
+            for child in split.splits:
+                child.add_inferred_sample_sizes_from_model(model)
+            return split
 
         return split
 

@@ -227,6 +227,18 @@ class TestPositionSplit:
         assert split.sample_sizes == {"train": 24.0, "validate": 8.0}
         assert split.validate_sample_scale == 3.0
 
+    def test_add_inferred_sample_sizes_from_model_mutates_split(self):
+        model, _ = _matrix_obs_model(shape=(4, 8))
+        splitter = Split(
+            ["y"], axis_size=8, validate_axis_size=2, split_axes={"y": 1}
+        )
+        split = splitter.split_position(model.extract_position(["y"]))
+
+        result = split.add_inferred_sample_sizes_from_model(model)
+
+        assert result is split
+        assert split.sample_sizes == {"train": 24.0, "validate": 8.0}
+
     def test_from_model_can_disable_likelihood_size_inference(self):
         model, _ = _matrix_obs_model(shape=(4, 8))
 
@@ -240,6 +252,12 @@ class TestPositionSplit:
 
         assert split.sample_sizes is None
         assert split.validate_sample_scale == 3.0
+
+    def test_from_model_rejects_empty_position_keys(self):
+        model, _ = _matrix_obs_model(shape=(4, 8))
+
+        with pytest.raises(ValueError, match="at least one position key"):
+            PositionSplit.from_model(model, position_keys=[], axis_size=8)
 
     def test_from_model_rejects_per_obs_false_for_likelihood_size_inference(self):
         dist = lsl.Dist(tfd.Normal, loc=0.0, scale=1.0)
