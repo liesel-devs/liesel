@@ -530,6 +530,38 @@ class TestSplitManager:
                 multi_size="manager",
             )
 
+    def test_position_split_from_model_manager_sample_sizes_are_totals(self):
+        model, _, _ = _two_branch_model()
+
+        split = PositionSplit.from_model(
+            model,
+            position_keys=["y1", "y2"],
+            validate_axis_share=0.2,
+            multi_size="manager",
+            sample_sizes={"train": 130, "validate": 30},
+        )
+
+        assert isinstance(split, PositionSplitManager)
+        assert split.sample_sizes == (
+            {"train": 80.0, "validate": 20.0},
+            {"train": 50.0, "validate": 10.0},
+        )
+        assert split.sample_size("train") == pytest.approx(130.0)
+        assert split.sample_size("validate") == pytest.approx(30.0)
+
+    def test_position_split_from_model_manager_rejects_sample_size_for_empty_part(
+        self,
+    ):
+        model, _, _ = _two_branch_model()
+
+        with pytest.raises(ValueError, match="validate_axis_size == 0"):
+            PositionSplit.from_model(
+                model,
+                position_keys=["y1", "y2"],
+                multi_size="manager",
+                sample_sizes={"validate": 1},
+            )
+
     def test_position_split_from_model_manager_mode_returns_scalar_for_one_size(self):
         x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
         y = lsl.Var.new_obs(jnp.arange(8.0), name="y")

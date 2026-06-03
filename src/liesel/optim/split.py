@@ -1028,6 +1028,45 @@ class PositionSplit:
         return split
 
 
+def _child_sample_sizes_from_totals(
+    splits: Sequence[PositionSplit],
+    sample_sizes: SampleSizes,
+) -> tuple[dict[SplitPart, float], ...]:
+    """
+    Allocate manager-level sample sizes to contained position splits.
+
+    Each explicitly supplied total is split in proportion to the child axis
+    sizes for the same split part. This keeps a single ``sample_sizes`` mapping
+    on grouped ``from_model()`` calls interpretable as totals for the whole
+    manager, while preserving branch-specific scales internally.
+    """
+    normalized = _normalize_sample_sizes(sample_sizes)
+    if normalized is None:
+        return tuple({} for _ in splits)
+
+    child_sample_sizes: list[dict[SplitPart, float]] = [{} for _ in splits]
+
+    for part, total_sample_size in normalized.items():
+        total_axis_size = sum(split._axis_size_for_part(part) for split in splits)
+        if total_axis_size == 0:
+            if total_sample_size != 0.0:
+                raise ValueError(
+                    f"sample_sizes[{part!r}] must be zero when "
+                    f"{part}_axis_size == 0."
+                )
+
+            for child_sizes in child_sample_sizes:
+                child_sizes[part] = 0.0
+            continue
+
+        for split, child_sizes in zip(splits, child_sample_sizes, strict=True):
+            child_sizes[part] = (
+                total_sample_size * split._axis_size_for_part(part) / total_axis_size
+            )
+
+    return tuple(child_sample_sizes)
+
+
 @dataclass
 class PositionSplitManager:
     """
@@ -1162,7 +1201,12 @@ class PositionSplitManager:
         axes. One :class:`Split` is constructed for each group and immediately
         applied to the model's observed position.
 
-        Parameters are the same as :meth:`SplitManager.from_model`.
+        Parameters are the same as :meth:`SplitManager.from_model`. When
+        ``sample_sizes`` is supplied, it is interpreted as total effective sample
+        sizes for the whole manager. The totals are distributed to contained
+        splits in proportion to their axis sizes for the corresponding split
+        part. For custom per-child sample sizes, construct the child
+        :class:`PositionSplit` objects manually.
 
         Examples
         --------
@@ -1194,8 +1238,13 @@ class PositionSplitManager:
         split = splitter.split_position(position)
 
         if sample_sizes is not None:
-            for child in split.splits:
-                child.set_sample_sizes(sample_sizes)
+            child_sample_sizes = _child_sample_sizes_from_totals(
+                split.splits, sample_sizes
+            )
+            for child, child_sizes in zip(
+                split.splits, child_sample_sizes, strict=True
+            ):
+                child.set_sample_sizes(child_sizes)
             return split
 
         if infer_sample_sizes:
