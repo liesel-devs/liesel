@@ -19,6 +19,9 @@ def sum_state_value(model_state: ModelState, name: str):
 def observed_log_lik_node_names(
     model: Model, position_keys: Sequence[str]
 ) -> list[str]:
+    """
+    Retrieve names of the log prob nodes of variables named in ``position_keys``.
+    """
     keys = set(position_keys)
     node_names: list[str] = []
 
@@ -47,6 +50,23 @@ def scaled_liesel_log_lik(
     model_state: ModelState,
     groups: Sequence[tuple[Sequence[str], float]],
 ):
+    """Return the model log likelihood with per-group scaling.
+
+    Each entry in ``groups`` describes observed variables or value nodes that
+    belong to one batched data group and the scaling factor for that group. The
+    corresponding observed log-likelihood nodes are summed and multiplied by the
+    group scale.
+
+    Observed likelihood contributions that are not covered by any group are
+    still included with scale 1.0. This supports partially batched models, where
+    some observed variables are evaluated on a batch while other observed
+    variables are evaluated on their full data.
+
+    Raises
+    ------
+    ValueError
+        If one observed log-likelihood node is covered by more than one group.
+    """
     scaled_log_lik = 0.0
     covered_nodes: set[str] = set()
 
@@ -65,6 +85,9 @@ def scaled_liesel_log_lik(
 
     for node_name in all_observed_log_lik_node_names(model):
         if node_name not in covered_nodes:
+            # Nodes not linked to a batched data group are assumed to be full-data
+            # likelihood terms. Include them unscaled so partial batching does not
+            # silently drop observed model branches.
             scaled_log_lik += sum_state_value(model_state, node_name)
 
     return scaled_log_lik
