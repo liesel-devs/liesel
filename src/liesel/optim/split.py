@@ -799,6 +799,10 @@ class PositionSplit:
         """
         Returns the log likelihood scaled for one split part.
 
+        The result is placed on the same effective likelihood scale as the
+        training split. Validation and test likelihoods are therefore multiplied
+        by ``train_sample_size / sample_size(part)``.
+
         For a :class:`.Model`, observed likelihood terms belonging to this split's
         :attr:`position_keys` are multiplied by the branch scale for ``part``.
         Other observed likelihood terms are left unscaled. For a generic model
@@ -847,8 +851,14 @@ class PositionSplit:
         scale = self.sample_scale(part)
 
         if isinstance(model, Model):
+            # A scalar split scale applies only to likelihood nodes covered by this
+            # split. Other observed model branches may still be evaluated on full
+            # data and must remain unscaled; scaling "_model_log_lik" would scale
+            # them too.
             return scaled_liesel_log_lik(
-                model, model_state, [(self.position_keys, scale)]
+                model=model,
+                model_state=model_state,
+                groups=[(self.position_keys, scale)],
             )
 
         return scaled_common_log_lik(model_state, scale)
@@ -1489,6 +1499,10 @@ class PositionSplitManager:
     ) -> jax.Array:
         """
         Returns the log likelihood with branch-specific split scaling.
+
+        The result is placed on the same effective likelihood scale as the
+        training split. Validation and test likelihoods are therefore multiplied
+        by each branch's ``train_sample_size / sample_size(part)``.
 
         For a Liesel :class:`.Model`, each child split scales the observed
         likelihood terms belonging to its own ``position_keys``. For a generic

@@ -237,9 +237,7 @@ class Batches:
 
         if self.sample_size is not None and self.batch_sample_size is None:
             assert self.batch_size is not None
-            self.batch_sample_size = (
-                self.sample_size * self.batch_size / self.axis_size
-            )
+            self.batch_sample_size = self.sample_size * self.batch_size / self.axis_size
 
         self.indices = self._default_indices()
 
@@ -251,9 +249,7 @@ class Batches:
     def _default_indices(self) -> jax.Array:
         if self._uses_replacement:
             assert self.batch_size is not None
-            return (
-                jnp.arange(self.n_full_batches * self.batch_size) % self.axis_size
-            )
+            return jnp.arange(self.n_full_batches * self.batch_size) % self.axis_size
 
         return jnp.arange(self.axis_size)
 
@@ -335,9 +331,7 @@ class Batches:
         Passing ``batch_size=None`` disables shuffling and creates one
         full-data batch:
 
-        >>> full_data = Batches.from_model(
-        ...     model, batch_size=None, position_keys=["y"]
-        ... )
+        >>> full_data = Batches.from_model(model, batch_size=None, position_keys=["y"])
         >>> full_data.shuffle, full_data.batch_indices.tolist()
         (False, [[0, 1, 2, 3, 4, 5]])
 
