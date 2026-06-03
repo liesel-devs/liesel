@@ -11,6 +11,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from math import ceil
 from typing import Literal
 
 import jax
@@ -32,7 +33,7 @@ TrainMonitor = Literal["auto", "epoch_average", "weighted_epoch_average", "full_
 
 
 def _progress_print_rate(epochs: int, progress_n_updates: int) -> int:
-    return max(int(epochs / progress_n_updates), 1)
+    return max(ceil(epochs / progress_n_updates), 1)
 
 
 def _should_update_progress(completed_epochs: int | jax.Array, print_rate: int):
@@ -235,7 +236,11 @@ class OptimEngine:
         ValueError
             If ``progress_n_updates`` is not a positive integer.
         """
-        if isinstance(self.progress_n_updates, bool) or self.progress_n_updates < 1:
+        if (
+            not isinstance(self.progress_n_updates, int)
+            or isinstance(self.progress_n_updates, bool)
+            or self.progress_n_updates < 1
+        ):
             raise ValueError("progress_n_updates must be a positive integer.")
 
     def _validate_train_monitor(self) -> None:

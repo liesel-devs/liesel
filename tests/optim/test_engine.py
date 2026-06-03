@@ -231,7 +231,8 @@ def test_duplicate_optimizer_identifiers_after_naming_raise():
         )
 
 
-def test_invalid_progress_n_updates_raises():
+@pytest.mark.parametrize("progress_n_updates", [0, True, 1.5, "100"])
+def test_invalid_progress_n_updates_raises(progress_n_updates):
     with pytest.raises(ValueError, match="progress_n_updates"):
         OptimEngine(
             loss=_loss(),
@@ -241,7 +242,7 @@ def test_invalid_progress_n_updates_raises():
             seed=1,
             initial_state={},
             show_progress=False,
-            progress_n_updates=0,
+            progress_n_updates=progress_n_updates,
         )
 
 
@@ -400,6 +401,15 @@ def test_api_imports_after_engine_refactor():
 
 def test_progress_helpers_use_completed_epochs():
     assert _progress_print_rate(100, 10) == 10
+    assert _progress_print_rate(101, 100) == 2
+    assert _progress_print_rate(201, 100) == 3
     assert bool(_should_update_progress(10, 10))
     assert not bool(_should_update_progress(9, 10))
     assert _progress_remainder(23, 10) == 3
+
+    print_rate = _progress_print_rate(101, 100)
+    updates = sum(
+        bool(_should_update_progress(completed_epochs, print_rate))
+        for completed_epochs in range(1, 102)
+    )
+    assert updates <= 100

@@ -172,14 +172,20 @@ def test_unknown_optimizer_string_raises():
         LieselOptim(model, optimizers="sgd")
 
 
-def test_train_monitor_is_passed_to_engine():
+def test_progress_and_train_monitor_are_passed_to_engine():
     model = _normal_model()
 
     engine = LieselOptim(
-        model, train_monitor="weighted_epoch_average", seed=1
+        model,
+        train_monitor="weighted_epoch_average",
+        show_progress=False,
+        progress_n_updates=7,
+        seed=1,
     ).build_engine()
 
     assert engine.train_monitor == "weighted_epoch_average"
+    assert engine.show_progress is False
+    assert engine.progress_n_updates == 7
 
 
 def test_fit_returns_optim_result():

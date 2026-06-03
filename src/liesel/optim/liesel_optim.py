@@ -81,6 +81,10 @@ class LieselOptim:
         Training-data monitor used by :class:`.OptimEngine` when no validation split
         exists. The default ``"auto"`` uses exact full-data monitoring when batches
         are full-data and ``"weighted_epoch_average"`` for mini-batch runs.
+    show_progress
+        Whether the built engine should show an epoch-level ``tqdm`` progress bar.
+    progress_n_updates
+        Approximate maximum number of epoch progress-bar updates.
 
     Examples
     --------
@@ -123,6 +127,8 @@ class LieselOptim:
         train_monitor: Literal[
             "auto", "epoch_average", "weighted_epoch_average", "full_data"
         ] = "auto",
+        show_progress: bool = True,
+        progress_n_updates: int = 100,
     ) -> None:
         if batch_axis_size is not _MISSING:
             if batch_size is not None:
@@ -152,6 +158,8 @@ class LieselOptim:
         )
         self.optimizers = self._resolve_optimizers(optimizers)
         self.train_monitor = train_monitor
+        self.show_progress = show_progress
+        self.progress_n_updates = progress_n_updates
 
     def _resolve_split(
         self,
@@ -288,6 +296,8 @@ class LieselOptim:
             initial_state=self.model.state,
             seed=self.seed,
             train_monitor=self.train_monitor,
+            show_progress=self.show_progress,
+            progress_n_updates=self.progress_n_updates,
         )
 
     def fit(self) -> OptimResult:
