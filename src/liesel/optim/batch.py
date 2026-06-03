@@ -19,7 +19,6 @@ from .split import (
     _observed_dist_infos,
 )
 from .types import Array, ModelInterface, ModelState, Position
-from .util import guess_n
 
 _MISSING = object()
 
@@ -85,6 +84,33 @@ def _infer_sample_size_from_state(
         )
 
     return float(unique_sizes.pop())
+
+
+def _axis_size_for_empty_position_keys(
+    model: Model,
+    batch_axes: dict[str, int] | None,
+    default_batch_axis: int,
+) -> int:
+    groups = position_key_groups_from_model(
+        model,
+        list(model.observed),
+        batch_axes,
+        default_batch_axis,
+    )
+
+    if not groups:
+        raise ValueError(
+            "Cannot infer axis_size for empty position_keys from a model without "
+            "observed variables. Provide axis_size manually."
+        )
+
+    if len(groups) != 1:
+        raise ValueError(
+            "Cannot infer a single axis_size for empty position_keys because "
+            "observed variables have different axis sizes. Provide axis_size manually."
+        )
+
+    return int(next(iter(groups)))
 
 
 @dataclass(init=False)
@@ -448,7 +474,9 @@ class Batches:
             axis_size = (
                 next(iter(groups))
                 if groups
-                else guess_n(model, axis=default_batch_axis)
+                else _axis_size_for_empty_position_keys(
+                    model, batch_axes, default_batch_axis
+                )
             )
 
         if batch_size is None:

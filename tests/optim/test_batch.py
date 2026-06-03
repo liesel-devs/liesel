@@ -144,6 +144,21 @@ class TestBatches:
         with pytest.raises(ValueError, match="position_keys"):
             Batches.from_model(model, batch_size=2, position_keys=[])
 
+    def test_from_model_empty_position_keys_multi_size_requires_axis_size(self):
+        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
+        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        model = lsl.Model([x, y])
+
+        with pytest.raises(ValueError, match="axis_size"):
+            Batches.from_model(model, batch_size=None, position_keys=[])
+
+        batches = Batches.from_model(
+            model, batch_size=None, position_keys=[], axis_size=8
+        )
+
+        assert batches.axis_size == 8
+        assert batches.is_full_data
+
     def test_from_model_can_return_batch_manager_for_multi_size_data(self):
         x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
         y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
