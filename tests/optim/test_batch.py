@@ -10,18 +10,28 @@ from liesel.optim import Batches, BatchManager
 
 class TestBatches:
     def test_runs(self):
-        Bi = Batches(["x"], axis_size=30, batch_axis_size=4, shuffle=True)
+        Bi = Batches(["x"], axis_size=30, batch_size=4, shuffle=True)
         assert Bi.batch_indices.shape == (7, 4)
         assert jnp.unique(Bi.batch_indices).size == 28
         assert jnp.unique(Bi.indices).size == 30
 
+    def test_old_batch_axis_size_keyword_still_works(self):
+        batches = Batches(["x"], axis_size=10, batch_axis_size=4, shuffle=False)
+
+        assert batches.batch_size == 4
+        assert batches.batch_indices.shape == (2, 4)
+
+    def test_batch_size_and_old_keyword_are_mutually_exclusive(self):
+        with pytest.raises(TypeError, match="batch_size or batch_axis_size"):
+            Batches(["x"], axis_size=10, batch_size=4, batch_axis_size=4)
+
     def test_no_batching(self):
-        Bi = Batches(["x"], axis_size=30, batch_axis_size=None, shuffle=False)
+        Bi = Batches(["x"], axis_size=30, batch_size=None, shuffle=False)
         Bi.indices = Bi.permute_indices(key(0))
         assert jnp.allclose(Bi.indices, jnp.arange(30))
         assert jnp.allclose(Bi.batch_indices, jnp.arange(30))
 
-        Bi = Batches(["x"], axis_size=30, batch_axis_size=None, shuffle=True)
+        Bi = Batches(["x"], axis_size=30, batch_size=None, shuffle=True)
         Bi.indices = Bi.permute_indices(key(0))
         idx = Bi.batch_indices
         assert idx.shape[0] == 1
@@ -29,7 +39,7 @@ class TestBatches:
         assert jnp.unique(idx).size == idx.size
 
     def test_batched_position(self):
-        Bi = Batches(["x"], axis_size=30, batch_axis_size=4, shuffle=True)
+        Bi = Batches(["x"], axis_size=30, batch_size=4, shuffle=True)
         Bi.indices = Bi.permute_indices(key(0))
         pos = {"x": jnp.arange(30)}
         batched_pos = Bi.get_batched_position(pos, batch_index=0)
@@ -37,7 +47,7 @@ class TestBatches:
 
     def test_batching_axis(self):
         Bi = Batches(
-            ["x"], axis_size=30, batch_axis_size=4, shuffle=True, default_split_axis=1
+            ["x"], axis_size=30, batch_size=4, shuffle=True, default_split_axis=1
         )
         Bi.indices = Bi.permute_indices(key(0))
 
@@ -51,7 +61,7 @@ class TestBatches:
         Bi = Batches(
             ["x", "y"],
             axis_size=30,
-            batch_axis_size=4,
+            batch_size=4,
             shuffle=True,
             split_axes={"x": 1, "y": 0},
         )
@@ -67,7 +77,7 @@ class TestBatches:
 
     def test_duplicate_position_keys_raise(self):
         with pytest.raises(ValueError, match="Duplicate position_keys"):
-            Batches(["x", "x"], axis_size=10, batch_axis_size=2)
+            Batches(["x", "x"], axis_size=10, batch_size=2)
 
     def test_scaled_log_lik_matches_old_all_observed_scaling(self):
         y = lsl.Var.new_obs(
@@ -76,7 +86,7 @@ class TestBatches:
             name="y",
         )
         model = lsl.Model([y])
-        batches = Batches(["y"], axis_size=6, batch_axis_size=2, shuffle=False)
+        batches = Batches(["y"], axis_size=6, batch_size=2, shuffle=False)
         batched = batches.get_batched_position(model.extract_position(["y"]), 0)
         state = model.update_state(batched, model.state)
 
@@ -91,7 +101,18 @@ class TestBatches:
         model = lsl.Model([x, y])
 
         with pytest.raises(ValueError, match="multi_size"):
-            Batches.from_model(model, batch_axis_size=2, position_keys=["x", "y"])
+            Batches.from_model(model, batch_size=2, position_keys=["x", "y"])
+
+    def test_from_model_accepts_old_batch_axis_size_keyword(self):
+        y = lsl.Var.new_obs(jnp.arange(6.0), name="y")
+        model = lsl.Model([y])
+
+        batches = Batches.from_model(
+            model, batch_axis_size=2, position_keys=["y"], shuffle=False
+        )
+
+        assert isinstance(batches, Batches)
+        assert batches.batch_size == 2
 
     def test_from_model_can_return_batch_manager_for_multi_size_data(self):
         x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
@@ -100,7 +121,7 @@ class TestBatches:
 
         manager = Batches.from_model(
             model,
-            batch_axis_size=2,
+            batch_size=2,
             position_keys=["x", "y"],
             multi_size="manager",
         )
@@ -108,7 +129,7 @@ class TestBatches:
         assert isinstance(manager, BatchManager)
         assert manager.mode == "resample"
         assert manager.axis_size == (8, 5)
-        assert manager.batch_axis_size == (2, 2)
+        assert manager.batch_size == (2, 2)
         assert manager.n_full_batches == 4
 
         started = manager.start_epoch(key(3))
@@ -122,7 +143,7 @@ class TestBatches:
 
         batches = Batches.from_model(
             model,
-            batch_axis_size=2,
+            batch_size=2,
             position_keys=["x", "y"],
             multi_size="manager",
         )
@@ -138,7 +159,7 @@ class TestBatches:
         with pytest.raises(ValueError, match="Single axis"):
             Batches.from_model(
                 model,
-                batch_axis_size=2,
+                batch_size=2,
                 position_keys=["x", "y"],
                 axis_size=8,
                 multi_size="manager",
@@ -148,7 +169,7 @@ class TestBatches:
         batches = Batches(
             ["x"],
             axis_size=5,
-            batch_axis_size=8,
+            batch_size=8,
             shuffle=True,
             sample_with_replacement=True,
         ).start_epoch(key(1))
@@ -161,7 +182,7 @@ class TestBatches:
         batches = Batches(
             ["y"],
             axis_size=6,
-            batch_axis_size=2,
+            batch_size=2,
             sample_size=30,
             batch_sample_size=5,
         )
@@ -178,7 +199,7 @@ class TestBatches:
 
         batches = Batches.from_model(
             model,
-            batch_axis_size=2,
+            batch_size=2,
             position_keys=["y"],
             split_axes={"y": 1},
             shuffle=False,
@@ -186,7 +207,7 @@ class TestBatches:
 
         assert isinstance(batches, Batches)
         assert batches.axis_size == 8
-        assert batches.batch_axis_size == 2
+        assert batches.batch_size == 2
         assert batches.sample_size == 32.0
         assert batches.batch_sample_size == 8.0
         assert batches.batch_sample_scale == 4.0
@@ -196,8 +217,8 @@ class TestBatchManager:
     def test_strict_combines_equal_count_batches(self):
         manager = BatchManager(
             [
-                Batches(["x"], axis_size=6, batch_axis_size=2, shuffle=False),
-                Batches(["y"], axis_size=9, batch_axis_size=3, shuffle=False),
+                Batches(["x"], axis_size=6, batch_size=2, shuffle=False),
+                Batches(["y"], axis_size=9, batch_size=3, shuffle=False),
             ]
         )
         position = {"x": jnp.arange(6), "y": jnp.arange(9)}
@@ -206,7 +227,7 @@ class TestBatchManager:
 
         assert manager.position_keys == ["x", "y"]
         assert manager.axis_size == (6, 9)
-        assert manager.batch_axis_size == (2, 3)
+        assert manager.batch_size == (2, 3)
         assert manager.n_full_batches == 3
         assert batched["x"].tolist() == [2, 3]
         assert batched["y"].tolist() == [3, 4, 5]
@@ -215,8 +236,8 @@ class TestBatchManager:
         with pytest.raises(ValueError, match="Position keys"):
             BatchManager(
                 [
-                    Batches(["x"], axis_size=6, batch_axis_size=2),
-                    Batches(["x"], axis_size=6, batch_axis_size=2),
+                    Batches(["x"], axis_size=6, batch_size=2),
+                    Batches(["x"], axis_size=6, batch_size=2),
                 ]
             )
 
@@ -224,32 +245,32 @@ class TestBatchManager:
         with pytest.raises(ValueError, match="same n_full_batches"):
             BatchManager(
                 [
-                    Batches(["x"], axis_size=6, batch_axis_size=2),
-                    Batches(["y"], axis_size=8, batch_axis_size=4),
+                    Batches(["x"], axis_size=6, batch_size=2),
+                    Batches(["y"], axis_size=8, batch_size=4),
                 ]
             )
 
     def test_resample_epoch_sizes(self):
         max_manager = BatchManager(
             [
-                Batches(["x"], axis_size=6, batch_axis_size=2, shuffle=False),
-                Batches(["y"], axis_size=8, batch_axis_size=4, shuffle=False),
+                Batches(["x"], axis_size=6, batch_size=2, shuffle=False),
+                Batches(["y"], axis_size=8, batch_size=4, shuffle=False),
             ],
             mode="resample",
             epoch_size="max",
         )
         min_manager = BatchManager(
             [
-                Batches(["x"], axis_size=6, batch_axis_size=2, shuffle=False),
-                Batches(["y"], axis_size=8, batch_axis_size=4, shuffle=False),
+                Batches(["x"], axis_size=6, batch_size=2, shuffle=False),
+                Batches(["y"], axis_size=8, batch_size=4, shuffle=False),
             ],
             mode="resample",
             epoch_size="min",
         )
         manual_manager = BatchManager(
             [
-                Batches(["x"], axis_size=6, batch_axis_size=2, shuffle=False),
-                Batches(["y"], axis_size=8, batch_axis_size=4, shuffle=False),
+                Batches(["x"], axis_size=6, batch_size=2, shuffle=False),
+                Batches(["y"], axis_size=8, batch_size=4, shuffle=False),
             ],
             mode="resample",
             epoch_size=5,
@@ -263,8 +284,8 @@ class TestBatchManager:
         def make_manager():
             return BatchManager(
                 [
-                    Batches(["x"], axis_size=6, batch_axis_size=2, shuffle=False),
-                    Batches(["y"], axis_size=8, batch_axis_size=4, shuffle=False),
+                    Batches(["x"], axis_size=6, batch_size=2, shuffle=False),
+                    Batches(["y"], axis_size=8, batch_size=4, shuffle=False),
                 ],
                 mode="resample",
                 epoch_size=5,
@@ -285,14 +306,27 @@ class TestBatchManager:
 
         manager = BatchManager.from_model(
             model,
-            batch_axis_size=2,
+            batch_size=2,
             position_keys=["x", "y"],
         )
 
         assert manager.position_keys == ["x", "y"]
         assert manager.axis_size == (8, 5)
-        assert manager.batch_axis_size == (2, 2)
+        assert manager.batch_size == (2, 2)
         assert manager.n_full_batches == 4
+
+    def test_from_model_accepts_old_batch_axis_size_keyword(self):
+        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
+        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        model = lsl.Model([x, y])
+
+        manager = BatchManager.from_model(
+            model,
+            batch_axis_size=2,
+            position_keys=["x", "y"],
+        )
+
+        assert manager.batch_size == (2, 2)
 
     def test_from_model_supports_full_data_multi_size_batches(self):
         x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
@@ -301,13 +335,13 @@ class TestBatchManager:
 
         manager = BatchManager.from_model(
             model,
-            batch_axis_size=None,
+            batch_size=None,
             position_keys=["x", "y"],
         )
 
         assert manager.is_full_data
         assert manager.axis_size == (8, 5)
-        assert manager.batch_axis_size == (8, 5)
+        assert manager.batch_size == (8, 5)
         assert manager.n_full_batches == 1
         assert all(not batch.shuffle for batch in manager.batches)
 
@@ -319,7 +353,7 @@ class TestBatchManager:
         with pytest.raises(ValueError, match="same n_full_batches"):
             BatchManager.from_model(
                 model,
-                batch_axis_size=2,
+                batch_size=2,
                 position_keys=["x", "y"],
                 mode="strict",
             )
@@ -331,14 +365,14 @@ class TestBatchManager:
 
         manager = BatchManager.from_model(
             model,
-            batch_axis_size=6,
+            batch_size=6,
             position_keys=["x", "y"],
         ).start_epoch(key(2))
         position = model.extract_position(["x", "y"])
         batched = manager.get_batched_position(position, batch_index=0)
 
         assert manager.axis_size == (12, 5)
-        assert manager.batch_axis_size == (6, 6)
+        assert manager.batch_size == (6, 6)
         assert manager.n_full_batches == 2
         assert manager.batches[1].sample_with_replacement
         assert batched["x"].shape == (6,)
@@ -353,7 +387,7 @@ class TestBatchManager:
         with pytest.warns(UserWarning, match="shuffle=True"):
             BatchManager.from_model(
                 model,
-                batch_axis_size=2,
+                batch_size=2,
                 position_keys=["x", "y"],
                 shuffle=False,
             )
@@ -365,7 +399,7 @@ class TestBatchManager:
 
         manager = BatchManager.from_model(
             model,
-            batch_axis_size=2,
+            batch_size=2,
             position_keys=["x", "y"],
             split_axes={"x": 1},
         )
@@ -383,14 +417,14 @@ class TestBatchManager:
                 Batches(
                     ["x"],
                     axis_size=4,
-                    batch_axis_size=2,
+                    batch_size=2,
                     default_split_axis=1,
                     shuffle=False,
                 ),
                 Batches(
                     ["y"],
                     axis_size=6,
-                    batch_axis_size=3,
+                    batch_size=3,
                     default_split_axis=0,
                     shuffle=False,
                 ),
@@ -411,14 +445,14 @@ class TestBatchManager:
     def test_batch_sample_scale_requires_equal_shares(self):
         equal_manager = BatchManager(
             [
-                Batches(["x"], axis_size=6, batch_axis_size=2),
-                Batches(["y"], axis_size=9, batch_axis_size=3),
+                Batches(["x"], axis_size=6, batch_size=2),
+                Batches(["y"], axis_size=9, batch_size=3),
             ]
         )
         unequal_manager = BatchManager(
             [
-                Batches(["x"], axis_size=10, batch_axis_size=5),
-                Batches(["y"], axis_size=9, batch_axis_size=4),
+                Batches(["x"], axis_size=10, batch_size=5),
+                Batches(["y"], axis_size=9, batch_size=4),
             ]
         )
 
@@ -440,8 +474,8 @@ class TestBatchManager:
         model = lsl.Model([y1, y2])
         manager = BatchManager(
             [
-                Batches(["y1"], axis_size=6, batch_axis_size=2, shuffle=False),
-                Batches(["y2"], axis_size=8, batch_axis_size=4, shuffle=False),
+                Batches(["y1"], axis_size=6, batch_size=2, shuffle=False),
+                Batches(["y2"], axis_size=8, batch_size=4, shuffle=False),
             ],
             mode="resample",
             epoch_size="max",
@@ -475,7 +509,7 @@ class TestBatchManager:
                 Batches(
                     ["y1"],
                     axis_size=6,
-                    batch_axis_size=2,
+                    batch_size=2,
                     shuffle=False,
                     sample_size=60,
                     batch_sample_size=10,
@@ -483,7 +517,7 @@ class TestBatchManager:
                 Batches(
                     ["y2"],
                     axis_size=8,
-                    batch_axis_size=4,
+                    batch_size=4,
                     shuffle=False,
                     sample_size=24,
                     batch_sample_size=6,
@@ -508,8 +542,8 @@ class TestBatchManager:
     def test_start_epoch_works_under_jit(self):
         manager = BatchManager(
             [
-                Batches(["x"], axis_size=6, batch_axis_size=2, shuffle=True),
-                Batches(["y"], axis_size=8, batch_axis_size=4, shuffle=True),
+                Batches(["x"], axis_size=6, batch_size=2, shuffle=True),
+                Batches(["y"], axis_size=8, batch_size=4, shuffle=True),
             ],
             mode="resample",
             epoch_size="max",
@@ -522,8 +556,8 @@ class TestBatchManager:
     def test_get_batched_position_accepts_traced_batch_index(self):
         manager = BatchManager(
             [
-                Batches(["x"], axis_size=6, batch_axis_size=2, shuffle=False),
-                Batches(["y"], axis_size=9, batch_axis_size=3, shuffle=False),
+                Batches(["x"], axis_size=6, batch_size=2, shuffle=False),
+                Batches(["y"], axis_size=9, batch_size=3, shuffle=False),
             ]
         )
         position = {"x": jnp.arange(6), "y": jnp.arange(9)}

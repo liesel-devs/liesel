@@ -604,7 +604,7 @@ class TestSplitManager:
             validate_axis_share=0.2,
             multi_size="manager",
         )
-        batches = Batches(["y1"], axis_size=8, batch_axis_size=None)
+        batches = Batches(["y1"], axis_size=8, batch_size=None)
 
         with pytest.raises(ValueError, match="BatchManager"):
             LieselOptim(model, split=split, batches=batches).build_engine()

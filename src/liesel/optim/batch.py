@@ -21,6 +21,21 @@ from .split import (
 from .types import Array, ModelInterface, ModelState, Position
 from .util import guess_n
 
+_MISSING = object()
+
+
+def _resolve_batch_size(
+    batch_size: int | None | object,
+    batch_axis_size: int | None | object,
+) -> int | None:
+    if batch_size is _MISSING and batch_axis_size is _MISSING:
+        raise TypeError("missing required argument: 'batch_size'")
+
+    if batch_size is not _MISSING and batch_axis_size is not _MISSING:
+        raise TypeError("Pass either batch_size or batch_axis_size, not both.")
+
+    return batch_axis_size if batch_size is _MISSING else batch_size  # type: ignore[return-value]
+
 
 def _normalize_positive_size(size: int | float | None, name: str) -> float | None:
     if size is None:
@@ -72,7 +87,7 @@ def _infer_sample_size_from_state(
     return float(unique_sizes.pop())
 
 
-@dataclass
+@dataclass(init=False)
 class Batches:
     """
     Defines mini-batches for observed entries in an optimizer position.
@@ -89,7 +104,7 @@ class Batches:
         Names of the position entries that should be batched.
     axis_size
         Number of observations along each batched axis.
-    batch_axis_size
+    batch_size
         Number of observations per batch. If ``None``, batching is disabled by using
         a single batch with all ``axis_size`` observations.
     shuffle
@@ -103,7 +118,7 @@ class Batches:
     sample_with_replacement
         Whether an oversized batch may be filled by sampling observations with
         replacement. This is mainly used by :meth:`BatchManager.from_model` when
-        ``mode="resample"`` and a common ``batch_axis_size`` is larger than a branch's
+        ``mode="resample"`` and a common ``batch_size`` is larger than a branch's
         observation count.
 
     Attributes
@@ -115,7 +130,7 @@ class Batches:
 
     Notes
     -----
-    If ``axis_size`` is not divisible by ``batch_axis_size``, only full batches
+    If ``axis_size`` is not divisible by ``batch_size``, only full batches
     are used and the final incomplete batch is dropped.
 
     Examples
@@ -123,16 +138,16 @@ class Batches:
     Create two batches of size four from ten observations:
 
     >>> from liesel.optim import Batches
-    >>> batches = Batches(["y"], axis_size=10, batch_axis_size=4, shuffle=False)
+    >>> batches = Batches(["y"], axis_size=10, batch_size=4, shuffle=False)
     >>> batches.batch_indices.tolist()
     [[0, 1, 2, 3], [4, 5, 6, 7]]
     >>> batches.n_full_batches
     2
 
-    With ``batch_axis_size=None``, the object represents one full-data batch:
+    With ``batch_size=None``, the object represents one full-data batch:
 
-    >>> full_data = Batches(["y"], axis_size=5, batch_axis_size=None)
-    >>> full_data.batch_axis_size
+    >>> full_data = Batches(["y"], axis_size=5, batch_size=None)
+    >>> full_data.batch_size
     5
     >>> full_data.batch_indices.tolist()
     [[0, 1, 2, 3, 4]]
@@ -143,7 +158,7 @@ class Batches:
     >>> batches = Batches(
     ...     ["x", "y"],
     ...     axis_size=5,
-    ...     batch_axis_size=2,
+    ...     batch_size=2,
     ...     split_axes={"x": 1},
     ...     shuffle=False,
     ... )
@@ -158,7 +173,7 @@ class Batches:
 
     position_keys: Sequence[str]
     axis_size: int
-    batch_axis_size: int | None
+    batch_size: int | None
     shuffle: bool = True
     split_axes: dict[str, int] | None = None
     default_split_axis: int = 0
@@ -166,19 +181,44 @@ class Batches:
     sample_size: int | float | None = None
     batch_sample_size: int | float | None = None
 
+    def __init__(
+        self,
+        position_keys: Sequence[str],
+        axis_size: int,
+        batch_size: int | None | object = _MISSING,
+        shuffle: bool = True,
+        split_axes: dict[str, int] | None = None,
+        default_split_axis: int = 0,
+        sample_with_replacement: bool = False,
+        sample_size: int | float | None = None,
+        batch_sample_size: int | float | None = None,
+        *,
+        batch_axis_size: int | None | object = _MISSING,
+    ) -> None:
+        self.position_keys = position_keys
+        self.axis_size = axis_size
+        self.batch_size = _resolve_batch_size(batch_size, batch_axis_size)
+        self.shuffle = shuffle
+        self.split_axes = split_axes
+        self.default_split_axis = default_split_axis
+        self.sample_with_replacement = sample_with_replacement
+        self.sample_size = sample_size
+        self.batch_sample_size = batch_sample_size
+        self.__post_init__()
+
     def __post_init__(self):
         if self.axis_size < 1:
             raise ValueError(f"{self.axis_size=} is < 1, which is not allowed.")
 
-        if self.batch_axis_size is None:
-            self.batch_axis_size = self.axis_size
+        if self.batch_size is None:
+            self.batch_size = self.axis_size
 
-        if self.batch_axis_size < 1:
-            raise ValueError(f"{self.batch_axis_size=} is < 1, which is not allowed.")
+        if self.batch_size < 1:
+            raise ValueError(f"{self.batch_size=} is < 1, which is not allowed.")
 
-        if self.axis_size < self.batch_axis_size and not self.sample_with_replacement:
+        if self.axis_size < self.batch_size and not self.sample_with_replacement:
             raise ValueError(
-                f"{self.axis_size=} is < {self.batch_axis_size=}. This is only "
+                f"{self.axis_size=} is < {self.batch_size=}. This is only "
                 "allowed with sample_with_replacement=True."
             )
 
@@ -196,23 +236,23 @@ class Batches:
         )
 
         if self.sample_size is not None and self.batch_sample_size is None:
-            assert self.batch_axis_size is not None
+            assert self.batch_size is not None
             self.batch_sample_size = (
-                self.sample_size * self.batch_axis_size / self.axis_size
+                self.sample_size * self.batch_size / self.axis_size
             )
 
         self.indices = self._default_indices()
 
     @property
     def _uses_replacement(self) -> bool:
-        assert self.batch_axis_size is not None
-        return self.sample_with_replacement and self.axis_size < self.batch_axis_size
+        assert self.batch_size is not None
+        return self.sample_with_replacement and self.axis_size < self.batch_size
 
     def _default_indices(self) -> jax.Array:
         if self._uses_replacement:
-            assert self.batch_axis_size is not None
+            assert self.batch_size is not None
             return (
-                jnp.arange(self.n_full_batches * self.batch_axis_size) % self.axis_size
+                jnp.arange(self.n_full_batches * self.batch_size) % self.axis_size
             )
 
         return jnp.arange(self.axis_size)
@@ -221,7 +261,7 @@ class Batches:
     def from_model(
         cls,
         model: Model,
-        batch_axis_size: int | None,
+        batch_size: int | None | object = _MISSING,
         position_keys: Sequence[str] | None = None,
         axis_size: int | None = None,
         shuffle: bool = True,
@@ -234,6 +274,8 @@ class Batches:
         batch_sample_size: int | float | None = None,
         infer_sample_size: bool = True,
         sample_with_replacement: bool = False,
+        *,
+        batch_axis_size: int | None | object = _MISSING,
     ) -> Batches | BatchManager:
         """
         Builds a :class:`Batches` object from a Liesel model.
@@ -242,7 +284,7 @@ class Batches:
         ----------
         model
             Model containing the observed variables to batch.
-        batch_axis_size
+        batch_size
             Number of observations per batch. If ``None``, batching is disabled and
             the returned object uses one full-data batch.
         position_keys
@@ -253,7 +295,7 @@ class Batches:
             observed variables along ``default_split_axis``.
         shuffle
             Whether epoch-wise calls to :meth:`permute_indices` should shuffle the
-            indices. This is forced to ``False`` when ``batch_axis_size`` is ``None``.
+            indices. This is forced to ``False`` when ``batch_size`` is ``None``.
         split_axes
             Optional mapping from position key to batching axis.
         default_split_axis
@@ -286,15 +328,15 @@ class Batches:
 
         >>> y = lsl.Var.new_obs(jnp.arange(6.0), name="y")
         >>> model = lsl.Model([y])
-        >>> batches = Batches.from_model(model, batch_axis_size=2, position_keys=["y"])
-        >>> batches.axis_size, batches.batch_axis_size, batches.position_keys
+        >>> batches = Batches.from_model(model, batch_size=2, position_keys=["y"])
+        >>> batches.axis_size, batches.batch_size, batches.position_keys
         (6, 2, ['y'])
 
-        Passing ``batch_axis_size=None`` disables shuffling and creates one
+        Passing ``batch_size=None`` disables shuffling and creates one
         full-data batch:
 
         >>> full_data = Batches.from_model(
-        ...     model, batch_axis_size=None, position_keys=["y"]
+        ...     model, batch_size=None, position_keys=["y"]
         ... )
         >>> full_data.shuffle, full_data.batch_indices.tolist()
         (False, [[0, 1, 2, 3, 4, 5]])
@@ -306,13 +348,14 @@ class Batches:
         >>> model = lsl.Model([x, z])
         >>> manager = Batches.from_model(
         ...     model,
-        ...     batch_axis_size=2,
+        ...     batch_size=2,
         ...     position_keys=["x", "z"],
         ...     multi_size="manager",
         ... )
         >>> type(manager).__name__, manager.axis_size, manager.n_full_batches
         ('BatchManager', (8, 5), 4)
         """
+        batch_size = _resolve_batch_size(batch_size, batch_axis_size)
         if multi_size not in ("error", "manager"):
             raise ValueError("multi_size must be 'error' or 'manager'.")
 
@@ -338,7 +381,7 @@ class Batches:
 
                 return BatchManager.from_model(
                     model,
-                    batch_axis_size=batch_axis_size,
+                    batch_size=batch_size,
                     position_keys=pos_keys,
                     shuffle=shuffle,
                     split_axes=split_axes,
@@ -362,12 +405,12 @@ class Batches:
                 else guess_n(model, axis=default_split_axis)
             )
 
-        if batch_axis_size is None:
+        if batch_size is None:
             shuffle = False
 
         batches = cls(
             pos_keys,
-            batch_axis_size=batch_axis_size,
+            batch_size=batch_size,
             axis_size=axis_size,
             shuffle=shuffle,
             split_axes=split_axes,
@@ -389,12 +432,12 @@ class Batches:
                 obs = model.extract_position(pos_keys)
                 batch = batches.get_batched_position(obs, 0)
                 batch_state = model.update_state(batch, model.state)
-                assert batches.batch_axis_size is not None
+                assert batches.batch_size is not None
                 batches.batch_sample_size = _infer_sample_size_from_state(
                     model,
                     batch_state,
                     pos_keys,
-                    batches.batch_axis_size,
+                    batches.batch_size,
                 )
 
         return batches
@@ -412,7 +455,7 @@ class Batches:
         Examples
         --------
         >>> from liesel.optim import Batches
-        >>> Batches(["y"], axis_size=10, batch_axis_size=4).batch_sample_scales
+        >>> Batches(["y"], axis_size=10, batch_size=4).batch_sample_scales
         (2.5,)
         """
         return (self.batch_sample_scale,)
@@ -425,19 +468,19 @@ class Batches:
         Returns
         -------
         int
-            The integer quotient ``axis_size // batch_axis_size``.
+            The integer quotient ``axis_size // batch_size``.
 
         Examples
         --------
         >>> from liesel.optim import Batches
-        >>> Batches(["y"], axis_size=10, batch_axis_size=4).n_full_batches
+        >>> Batches(["y"], axis_size=10, batch_size=4).n_full_batches
         2
         """
-        assert self.batch_axis_size is not None
+        assert self.batch_size is not None
         if self._uses_replacement:
             return 1
 
-        return int(self.axis_size // self.batch_axis_size)
+        return int(self.axis_size // self.batch_size)
 
     @property
     def batch_sample_scale(self) -> float:
@@ -449,20 +492,20 @@ class Batches:
         float
             The ratio ``sample_size / batch_sample_size``. Directly constructed
             batches without explicit sample sizes fall back to
-            ``axis_size / batch_axis_size``.
+            ``axis_size / batch_size``.
 
         Examples
         --------
         >>> from liesel.optim import Batches
-        >>> Batches(["y"], axis_size=10, batch_axis_size=4).batch_sample_scale
+        >>> Batches(["y"], axis_size=10, batch_size=4).batch_sample_scale
         2.5
         """
-        assert self.batch_axis_size is not None
+        assert self.batch_size is not None
         sample_size = (
             float(self.axis_size) if self.sample_size is None else self.sample_size
         )
         batch_sample_size = (
-            float(self.batch_axis_size)
+            float(self.batch_size)
             if self.batch_sample_size is None
             else self.batch_sample_size
         )
@@ -477,10 +520,10 @@ class Batches:
         Examples
         --------
         >>> from liesel.optim import Batches
-        >>> Batches(["y"], axis_size=5, batch_axis_size=None).is_full_data
+        >>> Batches(["y"], axis_size=5, batch_size=None).is_full_data
         True
         """
-        return self.axis_size == self.batch_axis_size
+        return self.axis_size == self.batch_size
 
     def permute_indices(self, key: jax.Array) -> jax.Array:
         """
@@ -505,18 +548,18 @@ class Batches:
         >>> import jax
         >>> from liesel.optim import Batches
 
-        >>> batches = Batches(["y"], axis_size=6, batch_axis_size=3, shuffle=False)
+        >>> batches = Batches(["y"], axis_size=6, batch_size=3, shuffle=False)
         >>> batches.permute_indices(jax.random.key(0)).tolist()
         [0, 1, 2, 3, 4, 5]
 
-        >>> shuffled = Batches(["y"], axis_size=6, batch_axis_size=3, shuffle=True)
+        >>> shuffled = Batches(["y"], axis_size=6, batch_size=3, shuffle=True)
         >>> shuffled.indices = shuffled.permute_indices(jax.random.key(0))
         >>> sorted(shuffled.batch_indices.ravel().tolist())
         [0, 1, 2, 3, 4, 5]
         """
         if self._uses_replacement:
-            assert self.batch_axis_size is not None
-            n_indices = self.n_full_batches * self.batch_axis_size
+            assert self.batch_size is not None
+            n_indices = self.n_full_batches * self.batch_size
             if self.shuffle:
                 return jax.random.randint(key, (n_indices,), 0, self.axis_size)
 
@@ -547,7 +590,7 @@ class Batches:
         --------
         >>> import jax
         >>> from liesel.optim import Batches
-        >>> batches = Batches(["y"], axis_size=5, batch_axis_size=2, shuffle=False)
+        >>> batches = Batches(["y"], axis_size=5, batch_size=2, shuffle=False)
         >>> batches.start_epoch(jax.random.key(0)).indices.tolist()
         [0, 1, 2, 3, 4]
         """
@@ -562,20 +605,20 @@ class Batches:
         Returns
         -------
         jax.Array
-            Integer array with shape ``(n_full_batches, batch_axis_size)``. Each
+            Integer array with shape ``(n_full_batches, batch_size)``. Each
             row gives the observation indices for one full batch.
 
         Examples
         --------
         >>> from liesel.optim import Batches
         >>> Batches(
-        ...     ["y"], axis_size=7, batch_axis_size=3, shuffle=False
+        ...     ["y"], axis_size=7, batch_size=3, shuffle=False
         ... ).batch_indices.tolist()
         [[0, 1, 2], [3, 4, 5]]
         """
-        assert self.batch_axis_size is not None
-        idx = self.indices[: self.n_full_batches * self.batch_axis_size]
-        batch_indices = jnp.reshape(idx, (self.n_full_batches, self.batch_axis_size))
+        assert self.batch_size is not None
+        idx = self.indices[: self.n_full_batches * self.batch_size]
+        batch_indices = jnp.reshape(idx, (self.n_full_batches, self.batch_size))
         return batch_indices
 
     def get_batched_position(self, position: Position, batch_index: int) -> Position:
@@ -606,7 +649,7 @@ class Batches:
         >>> import jax.numpy as jnp
         >>> from liesel.optim import Batches
 
-        >>> batches = Batches(["y"], axis_size=6, batch_axis_size=2, shuffle=False)
+        >>> batches = Batches(["y"], axis_size=6, batch_size=2, shuffle=False)
         >>> position = {"y": jnp.arange(6)}
         >>> batches.get_batched_position(position, batch_index=1)["y"].tolist()
         [2, 3]
@@ -616,7 +659,7 @@ class Batches:
         >>> batches = Batches(
         ...     ["x"],
         ...     axis_size=4,
-        ...     batch_axis_size=2,
+        ...     batch_size=2,
         ...     default_split_axis=1,
         ...     shuffle=False,
         ... )
@@ -673,7 +716,7 @@ class Batches:
 
         >>> y = lsl.Var.new_obs(jnp.arange(6.0), name="y")
         >>> model = lsl.Model([y])
-        >>> batches = Batches(["y"], axis_size=6, batch_axis_size=2, shuffle=False)
+        >>> batches = Batches(["y"], axis_size=6, batch_size=2, shuffle=False)
         >>> batches.extract_batched_position(model, model.state, 2)["y"].tolist()
         [4.0, 5.0]
         """
@@ -715,7 +758,7 @@ class Batches:
         ...     name="y",
         ... )
         >>> model = lsl.Model([y])
-        >>> batches = Batches(["y"], axis_size=6, batch_axis_size=2, shuffle=False)
+        >>> batches = Batches(["y"], axis_size=6, batch_size=2, shuffle=False)
         >>> batched = batches.get_batched_position(model.extract_position(["y"]), 0)
         >>> state = model.update_state(batched, model.state)
         >>> bool(
@@ -738,7 +781,7 @@ class Batches:
         aux_data = {
             "position_keys": self.position_keys,
             "axis_size": self.axis_size,
-            "batch_axis_size": self.batch_axis_size,
+            "batch_size": self.batch_size,
             "shuffle": self.shuffle,
             "split_axes": self.split_axes,
             "default_split_axis": self.default_split_axis,
@@ -758,7 +801,7 @@ class Batches:
         name = type(self).__name__
         out = (
             f"{name}(axis_size={self.axis_size}, "
-            f"batch_axis_size={self.batch_axis_size}, "
+            f"batch_size={self.batch_size}, "
             f"default_split_axis={self.default_split_axis})"
         )
         return out
@@ -807,7 +850,7 @@ class BatchManager:
 
     Notes
     -----
-    The properties :attr:`axis_size`, :attr:`batch_axis_size`, and
+    The properties :attr:`axis_size`, :attr:`batch_size`, and
     :attr:`batch_sample_scales` return tuples in child-batch order. The scalar
     aliases are available only when all children have the same likelihood scale.
     With unequal scales, use :meth:`scaled_log_lik` so each branch is scaled by
@@ -824,8 +867,8 @@ class BatchManager:
 
     >>> manager = BatchManager(
     ...     [
-    ...         Batches(["x"], axis_size=6, batch_axis_size=2, shuffle=False),
-    ...         Batches(["y"], axis_size=9, batch_axis_size=3, shuffle=False),
+    ...         Batches(["x"], axis_size=6, batch_size=2, shuffle=False),
+    ...         Batches(["y"], axis_size=9, batch_size=3, shuffle=False),
     ...     ]
     ... )
     >>> manager.n_full_batches
@@ -841,8 +884,8 @@ class BatchManager:
     >>> import jax
     >>> manager = BatchManager(
     ...     [
-    ...         Batches(["x"], axis_size=6, batch_axis_size=2, shuffle=False),
-    ...         Batches(["y"], axis_size=8, batch_axis_size=4, shuffle=False),
+    ...         Batches(["x"], axis_size=6, batch_size=2, shuffle=False),
+    ...         Batches(["y"], axis_size=8, batch_size=4, shuffle=False),
     ...     ],
     ...     mode="resample",
     ...     epoch_size="max",
@@ -869,8 +912,8 @@ class BatchManager:
     >>> model = lsl.Model([y1, y2])
     >>> manager = BatchManager(
     ...     [
-    ...         Batches(["y1"], axis_size=6, batch_axis_size=2, shuffle=False),
-    ...         Batches(["y2"], axis_size=8, batch_axis_size=4, shuffle=False),
+    ...         Batches(["y1"], axis_size=6, batch_size=2, shuffle=False),
+    ...         Batches(["y2"], axis_size=8, batch_size=4, shuffle=False),
     ...     ],
     ...     mode="resample",
     ...     epoch_size="max",
@@ -920,7 +963,7 @@ class BatchManager:
     def from_model(
         cls,
         model: Model,
-        batch_axis_size: int | None,
+        batch_size: int | None | object = _MISSING,
         position_keys: Sequence[str] | None = None,
         shuffle: bool = True,
         split_axes: dict[str, int] | None = None,
@@ -928,13 +971,15 @@ class BatchManager:
         mode: Literal["strict", "resample"] = "resample",
         epoch_size: Literal["max", "min"] | int = "max",
         infer_sample_size: bool = True,
+        *,
+        batch_axis_size: int | None | object = _MISSING,
     ) -> BatchManager:
         """
         Builds a :class:`BatchManager` by grouping observed variables by size.
 
         Observed variables are grouped by inferred length along their batching axis.
         One child :class:`Batches` object is created for each axis-size group using
-        the same ``batch_axis_size``. With the default ``mode="resample"`` and
+        the same ``batch_size``. With the default ``mode="resample"`` and
         ``epoch_size="max"``, branches with fewer complete batches sample batch rows
         with replacement for the additional joint steps.
 
@@ -942,7 +987,7 @@ class BatchManager:
         ----------
         model
             Model containing the observed variables to batch.
-        batch_axis_size
+        batch_size
             Common batch size for every child group. If ``None``, each child uses one
             full-data batch and shuffling is disabled.
         position_keys
@@ -980,34 +1025,35 @@ class BatchManager:
         >>> model = lsl.Model([x, y])
         >>> manager = BatchManager.from_model(
         ...     model,
-        ...     batch_axis_size=2,
+        ...     batch_size=2,
         ...     position_keys=["x", "y"],
         ... )
-        >>> manager.axis_size, manager.batch_axis_size, manager.n_full_batches
+        >>> manager.axis_size, manager.batch_size, manager.n_full_batches
         ((8, 5), (2, 2), 4)
         >>> started = manager.start_epoch(jax.random.key(1))
         >>> bool(jnp.all(started.batch_numbers[:, 1] < 2))
         True
 
-        Passing ``batch_axis_size=None`` creates one full-data child batch per group:
+        Passing ``batch_size=None`` creates one full-data child batch per group:
 
         >>> full_data = BatchManager.from_model(
         ...     model,
-        ...     batch_axis_size=None,
+        ...     batch_size=None,
         ...     position_keys=["x", "y"],
         ... )
         >>> full_data.is_full_data, full_data.n_full_batches
         (True, 1)
         """
+        batch_size = _resolve_batch_size(batch_size, batch_axis_size)
         pos_keys = (
             list(position_keys) if position_keys is not None else list(model.observed)
         )
         groups = position_key_groups_from_model(
             model, pos_keys, split_axes, default_split_axis
         )
-        shuffle = False if batch_axis_size is None else shuffle
+        shuffle = False if batch_size is None else shuffle
 
-        if mode == "resample" and batch_axis_size is not None and not shuffle:
+        if mode == "resample" and batch_size is not None and not shuffle:
             warnings.warn(
                 "BatchManager.from_model(..., mode='resample', shuffle=False) "
                 "resamples child batch rows but leaves observations within each "
@@ -1021,7 +1067,7 @@ class BatchManager:
         for axis_size, keys in groups.items():
             batch = Batches.from_model(
                 model,
-                batch_axis_size=batch_axis_size,
+                batch_size=batch_size,
                 position_keys=keys,
                 axis_size=axis_size,
                 shuffle=shuffle,
@@ -1030,8 +1076,8 @@ class BatchManager:
                 infer_sample_size=infer_sample_size,
                 sample_with_replacement=(
                     mode == "resample"
-                    and batch_axis_size is not None
-                    and batch_axis_size > axis_size
+                    and batch_size is not None
+                    and batch_size > axis_size
                 ),
             )
             assert isinstance(batch, Batches)
@@ -1076,8 +1122,8 @@ class BatchManager:
         >>> from liesel.optim import BatchManager, Batches
         >>> manager = BatchManager(
         ...     [
-        ...         Batches(["x"], axis_size=6, batch_axis_size=2),
-        ...         Batches(["y", "z"], axis_size=9, batch_axis_size=3),
+        ...         Batches(["x"], axis_size=6, batch_size=2),
+        ...         Batches(["y", "z"], axis_size=9, batch_size=3),
         ...     ]
         ... )
         >>> manager.position_keys
@@ -1103,8 +1149,8 @@ class BatchManager:
         >>> from liesel.optim import BatchManager, Batches
         >>> BatchManager(
         ...     [
-        ...         Batches(["x"], axis_size=6, batch_axis_size=2),
-        ...         Batches(["y"], axis_size=9, batch_axis_size=3),
+        ...         Batches(["x"], axis_size=6, batch_size=2),
+        ...         Batches(["y"], axis_size=9, batch_size=3),
         ...     ]
         ... ).axis_size
         (6, 9)
@@ -1122,7 +1168,7 @@ class BatchManager:
         return tuple(batch.batch_sample_size for batch in self.batches)
 
     @property
-    def batch_axis_size(self) -> tuple[int, ...]:
+    def batch_size(self) -> tuple[int, ...]:
         """
         Batch size for each contained batch object.
 
@@ -1136,16 +1182,16 @@ class BatchManager:
         >>> from liesel.optim import BatchManager, Batches
         >>> BatchManager(
         ...     [
-        ...         Batches(["x"], axis_size=6, batch_axis_size=2),
-        ...         Batches(["y"], axis_size=9, batch_axis_size=3),
+        ...         Batches(["x"], axis_size=6, batch_size=2),
+        ...         Batches(["y"], axis_size=9, batch_size=3),
         ...     ]
-        ... ).batch_axis_size
+        ... ).batch_size
         (2, 3)
         """
         sizes: list[int] = []
         for batch in self.batches:
-            assert batch.batch_axis_size is not None
-            sizes.append(batch.batch_axis_size)
+            assert batch.batch_size is not None
+            sizes.append(batch.batch_size)
 
         return tuple(sizes)
 
@@ -1157,15 +1203,15 @@ class BatchManager:
         Returns
         -------
         tuple[float, ...]
-            The child-specific ratios ``axis_size / batch_axis_size``.
+            The child-specific ratios ``axis_size / batch_size``.
 
         Examples
         --------
         >>> from liesel.optim import BatchManager, Batches
         >>> BatchManager(
         ...     [
-        ...         Batches(["x"], axis_size=6, batch_axis_size=2),
-        ...         Batches(["y"], axis_size=8, batch_axis_size=4),
+        ...         Batches(["x"], axis_size=6, batch_size=2),
+        ...         Batches(["y"], axis_size=8, batch_size=4),
         ...     ],
         ...     mode="resample",
         ... ).batch_sample_scales
@@ -1181,7 +1227,7 @@ class BatchManager:
         Returns
         -------
         float
-            The common child ratio ``axis_size / batch_axis_size``.
+            The common child ratio ``axis_size / batch_size``.
 
         Raises
         ------
@@ -1194,8 +1240,8 @@ class BatchManager:
         >>> from liesel.optim import BatchManager, Batches
         >>> manager = BatchManager(
         ...     [
-        ...         Batches(["x"], axis_size=6, batch_axis_size=2),
-        ...         Batches(["y"], axis_size=9, batch_axis_size=3),
+        ...         Batches(["x"], axis_size=6, batch_size=2),
+        ...         Batches(["y"], axis_size=9, batch_size=3),
         ...     ]
         ... )
         >>> manager.batch_sample_scale
@@ -1205,8 +1251,8 @@ class BatchManager:
 
         >>> unequal = BatchManager(
         ...     [
-        ...         Batches(["x"], axis_size=6, batch_axis_size=2),
-        ...         Batches(["y"], axis_size=8, batch_axis_size=4),
+        ...         Batches(["x"], axis_size=6, batch_size=2),
+        ...         Batches(["y"], axis_size=8, batch_size=4),
         ...     ],
         ...     mode="resample",
         ... )
@@ -1249,8 +1295,8 @@ class BatchManager:
         >>> from liesel.optim import BatchManager, Batches
         >>> BatchManager(
         ...     [
-        ...         Batches(["x"], axis_size=6, batch_axis_size=2),
-        ...         Batches(["y"], axis_size=8, batch_axis_size=4),
+        ...         Batches(["x"], axis_size=6, batch_size=2),
+        ...         Batches(["y"], axis_size=8, batch_size=4),
         ...     ],
         ...     mode="resample",
         ...     epoch_size="max",
@@ -1258,8 +1304,8 @@ class BatchManager:
         3
         >>> BatchManager(
         ...     [
-        ...         Batches(["x"], axis_size=6, batch_axis_size=2),
-        ...         Batches(["y"], axis_size=8, batch_axis_size=4),
+        ...         Batches(["x"], axis_size=6, batch_size=2),
+        ...         Batches(["y"], axis_size=8, batch_size=4),
         ...     ],
         ...     mode="resample",
         ...     epoch_size="min",
@@ -1267,8 +1313,8 @@ class BatchManager:
         2
         >>> BatchManager(
         ...     [
-        ...         Batches(["x"], axis_size=6, batch_axis_size=2),
-        ...         Batches(["y"], axis_size=8, batch_axis_size=4),
+        ...         Batches(["x"], axis_size=6, batch_size=2),
+        ...         Batches(["y"], axis_size=8, batch_size=4),
         ...     ],
         ...     mode="resample",
         ...     epoch_size=5,
@@ -1305,15 +1351,15 @@ class BatchManager:
         >>> from liesel.optim import BatchManager, Batches
         >>> BatchManager(
         ...     [
-        ...         Batches(["x"], axis_size=6, batch_axis_size=None),
-        ...         Batches(["y"], axis_size=8, batch_axis_size=None),
+        ...         Batches(["x"], axis_size=6, batch_size=None),
+        ...         Batches(["y"], axis_size=8, batch_size=None),
         ...     ]
         ... ).is_full_data
         True
         >>> BatchManager(
         ...     [
-        ...         Batches(["x"], axis_size=6, batch_axis_size=None),
-        ...         Batches(["y"], axis_size=8, batch_axis_size=4),
+        ...         Batches(["x"], axis_size=6, batch_size=None),
+        ...         Batches(["y"], axis_size=8, batch_size=4),
         ...     ],
         ...     mode="resample",
         ... ).is_full_data
@@ -1374,8 +1420,8 @@ class BatchManager:
         >>> from liesel.optim import BatchManager, Batches
         >>> manager = BatchManager(
         ...     [
-        ...         Batches(["x"], axis_size=4, batch_axis_size=2, shuffle=False),
-        ...         Batches(["y"], axis_size=6, batch_axis_size=3, shuffle=False),
+        ...         Batches(["x"], axis_size=4, batch_size=2, shuffle=False),
+        ...         Batches(["y"], axis_size=6, batch_size=3, shuffle=False),
         ...     ]
         ... )
         >>> tuple(idx.tolist() for idx in manager.permute_indices(jax.random.key(0)))
@@ -1416,8 +1462,8 @@ class BatchManager:
         >>> from liesel.optim import BatchManager, Batches
         >>> manager = BatchManager(
         ...     [
-        ...         Batches(["x"], axis_size=4, batch_axis_size=2, shuffle=True),
-        ...         Batches(["y"], axis_size=6, batch_axis_size=3, shuffle=True),
+        ...         Batches(["x"], axis_size=4, batch_size=2, shuffle=True),
+        ...         Batches(["y"], axis_size=6, batch_size=3, shuffle=True),
         ...     ],
         ...     mode="resample",
         ...     epoch_size=4,
@@ -1453,7 +1499,7 @@ class BatchManager:
         -------
         tuple[jax.Array, ...]
             One integer array per child. The ``i``-th array has shape
-            ``(n_full_batches, child_batch_axis_size)`` and contains the observation
+            ``(n_full_batches, child_batch_size)`` and contains the observation
             indices selected for that child at each joint batch step.
 
         Examples
@@ -1461,8 +1507,8 @@ class BatchManager:
         >>> from liesel.optim import BatchManager, Batches
         >>> manager = BatchManager(
         ...     [
-        ...         Batches(["x"], axis_size=6, batch_axis_size=2, shuffle=False),
-        ...         Batches(["y"], axis_size=9, batch_axis_size=3, shuffle=False),
+        ...         Batches(["x"], axis_size=6, batch_size=2, shuffle=False),
+        ...         Batches(["y"], axis_size=9, batch_size=3, shuffle=False),
         ...     ]
         ... )
         >>> tuple(idx.tolist() for idx in manager.batch_indices)
@@ -1508,11 +1554,11 @@ class BatchManager:
         ...         Batches(
         ...             ["x"],
         ...             axis_size=4,
-        ...             batch_axis_size=2,
+        ...             batch_size=2,
         ...             default_split_axis=1,
         ...             shuffle=False,
         ...         ),
-        ...         Batches(["y"], axis_size=6, batch_axis_size=3, shuffle=False),
+        ...         Batches(["y"], axis_size=6, batch_size=3, shuffle=False),
         ...     ]
         ... )
         >>> position = {
@@ -1564,8 +1610,8 @@ class BatchManager:
         >>> model = lsl.Model([x, y])
         >>> manager = BatchManager(
         ...     [
-        ...         Batches(["x"], axis_size=4, batch_axis_size=2, shuffle=False),
-        ...         Batches(["y"], axis_size=6, batch_axis_size=3, shuffle=False),
+        ...         Batches(["x"], axis_size=4, batch_size=2, shuffle=False),
+        ...         Batches(["y"], axis_size=6, batch_size=3, shuffle=False),
         ...     ]
         ... )
         >>> batch = manager.extract_batched_position(model, model.state, 1)
@@ -1629,8 +1675,8 @@ class BatchManager:
         >>> model = lsl.Model([x, y])
         >>> manager = BatchManager(
         ...     [
-        ...         Batches(["x"], axis_size=6, batch_axis_size=2, shuffle=False),
-        ...         Batches(["y"], axis_size=8, batch_axis_size=4, shuffle=False),
+        ...         Batches(["x"], axis_size=6, batch_size=2, shuffle=False),
+        ...         Batches(["y"], axis_size=8, batch_size=4, shuffle=False),
         ...     ],
         ...     mode="resample",
         ... )
@@ -1672,7 +1718,7 @@ class BatchManager:
         name = type(self).__name__
         return (
             f"{name}(axis_size={self.axis_size}, "
-            f"batch_axis_size={self.batch_axis_size}, "
+            f"batch_size={self.batch_size}, "
             f"mode={self.mode!r}, n_full_batches={self.n_full_batches})"
         )
 

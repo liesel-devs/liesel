@@ -578,7 +578,7 @@ class OptimCarry:
         ...     epochs=2,
         ...     position=position,
         ...     tracked=None,
-        ...     batches=Batches(["y"], axis_size=4, batch_axis_size=2),
+        ...     batches=Batches(["y"], axis_size=4, batch_size=2),
         ...     optimizers=[Optimizer(["theta"], optax.sgd(0.1))],
         ...     model_state={},
         ...     save_position_history=True,

@@ -154,7 +154,7 @@ def test_engine_restores_global_best_position(save_position_history):
     optimizer = _optimizer()
     engine = OptimEngine(
         loss=loss,
-        batches=Batches(["y"], axis_size=1, batch_axis_size=None, shuffle=False),
+        batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
         optimizers=[optimizer],
         stopper=Stopper(epochs=4, patience=2),
         seed=1,
@@ -175,7 +175,7 @@ def test_engine_uses_loss_split():
     loss = _loss()
     engine = OptimEngine(
         loss=loss,
-        batches=Batches(["y"], axis_size=1, batch_axis_size=None, shuffle=False),
+        batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
         optimizers=[_optimizer()],
         stopper=Stopper(epochs=4, patience=2),
         seed=1,
@@ -190,7 +190,7 @@ def test_empty_optimizers_raise():
     with pytest.raises(ValueError, match="at least one optimizer"):
         OptimEngine(
             loss=_loss(),
-            batches=Batches(["y"], axis_size=1, batch_axis_size=None, shuffle=False),
+            batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[],
             stopper=Stopper(epochs=4, patience=2),
             seed=1,
@@ -203,7 +203,7 @@ def test_duplicate_optimizer_position_keys_raise():
     with pytest.raises(ValueError, match="Position keys"):
         OptimEngine(
             loss=_loss(),
-            batches=Batches(["y"], axis_size=1, batch_axis_size=None, shuffle=False),
+            batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[
                 _optimizer(["theta"], identifier="a"),
                 _optimizer(["theta"], identifier="b"),
@@ -219,7 +219,7 @@ def test_duplicate_optimizer_identifiers_after_naming_raise():
     with pytest.raises(ValueError, match="identifiers"):
         OptimEngine(
             loss=_loss(),
-            batches=Batches(["y"], axis_size=1, batch_axis_size=None, shuffle=False),
+            batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[
                 _optimizer(["theta"], identifier=""),
                 _optimizer(["eta"], identifier="000"),
@@ -235,7 +235,7 @@ def test_invalid_progress_n_updates_raises():
     with pytest.raises(ValueError, match="progress_n_updates"):
         OptimEngine(
             loss=_loss(),
-            batches=Batches(["y"], axis_size=1, batch_axis_size=None, shuffle=False),
+            batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[_optimizer()],
             stopper=Stopper(epochs=4, patience=2),
             seed=1,
@@ -249,7 +249,7 @@ def test_invalid_train_monitor_raises():
     with pytest.raises(ValueError, match="train_monitor"):
         OptimEngine(
             loss=_loss(),
-            batches=Batches(["y"], axis_size=1, batch_axis_size=None, shuffle=False),
+            batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[_optimizer()],
             stopper=Stopper(epochs=4, patience=2),
             seed=1,
@@ -263,7 +263,7 @@ def test_no_validation_epoch_average_monitor_uses_arithmetic_average():
     split = _monitor_split()
     engine = OptimEngine(
         loss=BatchSensitiveLoss(split),
-        batches=Batches(["y"], axis_size=2, batch_axis_size=1, shuffle=False),
+        batches=Batches(["y"], axis_size=2, batch_size=1, shuffle=False),
         optimizers=[_optimizer()],
         stopper=Stopper(epochs=1, patience=1),
         seed=1,
@@ -282,7 +282,7 @@ def test_no_validation_full_data_monitor_uses_exact_training_loss():
     split = _monitor_split()
     engine = OptimEngine(
         loss=BatchSensitiveLoss(split),
-        batches=Batches(["y"], axis_size=2, batch_axis_size=1, shuffle=False),
+        batches=Batches(["y"], axis_size=2, batch_size=1, shuffle=False),
         optimizers=[_optimizer()],
         stopper=Stopper(epochs=1, patience=1),
         seed=1,
@@ -301,7 +301,7 @@ def test_no_validation_auto_monitor_uses_exact_loss_for_full_data_batches():
     split = _monitor_split()
     engine = OptimEngine(
         loss=BatchSensitiveLoss(split),
-        batches=Batches(["y"], axis_size=2, batch_axis_size=None, shuffle=False),
+        batches=Batches(["y"], axis_size=2, batch_size=None, shuffle=False),
         optimizers=[_optimizer()],
         stopper=Stopper(epochs=1, patience=1),
         seed=1,
@@ -321,7 +321,7 @@ def test_no_validation_weighted_epoch_average_weights_later_batches(train_monito
     split = _monitor_split()
     engine = OptimEngine(
         loss=BatchSensitiveLoss(split),
-        batches=Batches(["y"], axis_size=2, batch_axis_size=1, shuffle=False),
+        batches=Batches(["y"], axis_size=2, batch_size=1, shuffle=False),
         optimizers=[_optimizer()],
         stopper=Stopper(epochs=1, patience=1),
         seed=1,
@@ -351,7 +351,7 @@ def test_split_manager_requires_batch_manager():
     with pytest.raises(ValueError, match="BatchManager"):
         OptimEngine(
             loss=SequenceLoss(split),
-            batches=Batches(["y"], axis_size=1, batch_axis_size=None, shuffle=False),
+            batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[_optimizer()],
             stopper=Stopper(epochs=4, patience=2),
             seed=1,
@@ -365,7 +365,7 @@ def test_batch_keys_must_be_present_in_training_split():
         OptimEngine(
             loss=_loss(),
             batches=Batches(
-                ["missing"], axis_size=1, batch_axis_size=None, shuffle=False
+                ["missing"], axis_size=1, batch_size=None, shuffle=False
             ),
             optimizers=[_optimizer()],
             stopper=Stopper(epochs=4, patience=2),
@@ -380,7 +380,7 @@ def test_batch_manager_keys_must_be_present_in_training_split():
         OptimEngine(
             loss=_loss(),
             batches=BatchManager(
-                [Batches(["missing"], axis_size=1, batch_axis_size=None, shuffle=False)]
+                [Batches(["missing"], axis_size=1, batch_size=None, shuffle=False)]
             ),
             optimizers=[_optimizer()],
             stopper=Stopper(epochs=4, patience=2),

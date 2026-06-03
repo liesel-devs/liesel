@@ -212,7 +212,7 @@ class LieselOptim:
                 Batches(
                     position_keys=child.position_keys,
                     axis_size=child.train_axis_size,
-                    batch_axis_size=batch_axis_size,
+                    batch_size=batch_axis_size,
                     shuffle=shuffle,
                     split_axes=split_axes,
                     default_split_axis=default_split_axis,
@@ -231,7 +231,7 @@ class LieselOptim:
         return Batches(
             position_keys=position_keys,
             axis_size=self.split.train_axis_size,
-            batch_axis_size=batch_axis_size,
+            batch_size=batch_axis_size,
             shuffle=shuffle,
             split_axes=split_axes,
             default_split_axis=default_split_axis,

@@ -80,7 +80,7 @@ def test_batch_axis_size_shortcut_builds_training_batches():
 
     assert isinstance(engine.batches, Batches)
     assert engine.batches.axis_size == split.train_axis_size
-    assert engine.batches.batch_axis_size == 2
+    assert engine.batches.batch_size == 2
 
 
 def test_validation_split_raises():
@@ -93,7 +93,7 @@ def test_validation_split_raises():
 
 def test_batches_and_batch_axis_size_are_mutually_exclusive():
     model = _normal_model()
-    batches = Batches(["y"], axis_size=6, batch_axis_size=None)
+    batches = Batches(["y"], axis_size=6, batch_size=None)
 
     with pytest.raises(ValueError, match="batches or batch_axis_size"):
         LieselVI(model, batches=batches, batch_axis_size=2)
@@ -101,7 +101,7 @@ def test_batches_and_batch_axis_size_are_mutually_exclusive():
 
 def test_user_provided_batches_are_not_mutated():
     model = _normal_model()
-    batches = Batches(["y"], axis_size=2, batch_axis_size=None)
+    batches = Batches(["y"], axis_size=2, batch_size=None)
 
     vi = LieselVI(model, batches=batches, seed=1)
     engine = vi.build_engine()
