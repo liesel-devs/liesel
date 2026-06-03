@@ -564,6 +564,7 @@ class PositionSplit:
         normalized = _normalize_sample_sizes(sample_sizes)
 
         for part, n_part in (
+            ("train", self.train_axis_size),
             ("validate", self.validate_axis_size),
             ("test", self.test_axis_size),
         ):
@@ -1971,6 +1972,9 @@ class Split:
                 f"Split sizes must be non-negative, but got {self.train_axis_size=}, "
                 f"{self.validate_axis_size=}, and {self.test_axis_size=}."
             )
+
+        if self.train_axis_size == 0:
+            raise ValueError("train_axis_size must be positive.")
 
         n_split = self.train_axis_size + self.validate_axis_size + self.test_axis_size
         if n_split != self.axis_size:

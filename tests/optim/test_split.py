@@ -138,6 +138,14 @@ class TestSplit:
                 test_axis_share=0.6,
             )
 
+        with pytest.raises(ValueError, match="train_axis_size"):
+            Split.from_axis_shares(
+                position_keys=["x"],
+                axis_size=10,
+                validate_axis_share=1.0,
+                test_axis_share=0.0,
+            )
+
         with pytest.raises(ValueError):
             Split.from_axis_shares(
                 position_keys=["x"],
@@ -162,6 +170,15 @@ class TestSplit:
                 train_axis_size=-1,
                 validate_axis_size=10,
                 test_axis_size=1,
+            )
+
+        with pytest.raises(ValueError, match="train_axis_size"):
+            Split(
+                position_keys=["x"],
+                axis_size=10,
+                train_axis_size=0,
+                validate_axis_size=10,
+                test_axis_size=0,
             )
 
         with pytest.raises(ValueError, match="Duplicate position_keys"):
@@ -202,6 +219,18 @@ class TestPositionSplit:
 
         assert split.validate_sample_scale == 6.0
 
+    def test_manual_sample_sizes_reject_zero_train_size(self):
+        with pytest.raises(ValueError, match="train"):
+            PositionSplit(
+                Position({"y": jnp.arange(6)}),
+                Position({"y": jnp.arange(2)}),
+                Position({}),
+                train_axis_size=6,
+                validate_axis_size=2,
+                test_axis_size=0,
+                sample_sizes={"train": 0, "validate": 4},
+            )
+
     def test_manual_sample_sizes_pass_through_split(self):
         split = Split(
             ["y"],
@@ -211,6 +240,14 @@ class TestPositionSplit:
         ).split_position({"y": jnp.arange(8)})
 
         assert split.validate_sample_scale == 6.0
+
+        with pytest.raises(ValueError, match="train"):
+            Split(
+                ["y"],
+                axis_size=8,
+                validate_axis_size=2,
+                sample_sizes={"train": 0, "validate": 3},
+            ).split_position({"y": jnp.arange(8)})
 
     def test_from_model_infers_sample_sizes_from_pointwise_log_probs(self):
         model, _ = _matrix_obs_model(shape=(4, 8))
