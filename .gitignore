@@ -184,3 +184,4 @@ cython_debug/
 docs/source/tutorials/qmd/.Rprofile
 docs/render.sh
 doctests.py
+review-liesel-optim-prompt.md
