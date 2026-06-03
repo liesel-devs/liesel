@@ -56,7 +56,7 @@ from ..docs import usedocs
 from ..model import Dist, Model, Var
 from ..model.logprob import FlatLogProb
 from ..model.model import TemporaryModel
-from .loss import LossMixin, _training_loss_scalar
+from .loss import LossMixin, _training_loss_scalar, _validate_bool
 from .split import PositionSplit, PositionSplitManager
 from .state import OptimCarry
 from .types import ModelState, Position
@@ -66,7 +66,7 @@ type ScaleBijectorConfig = type[jb.Bijector] | jb.Bijector | None | Literal["aut
 
 
 def _validate_positive_int(value: int, name: str) -> None:
-    if isinstance(value, bool) or value < 1:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
         raise ValueError(f"{name} must be a positive integer, but got {value!r}.")
 
 
@@ -225,6 +225,7 @@ class NegElboLoss(LossMixin):
         regularize_q_prior: bool = True,
     ):
         _validate_positive_int(nsamples, "nsamples")
+        _validate_bool(scale, "scale")
         self.p = p
         self.q = q
         self.split = split or PositionSplit.from_model(self.p)
@@ -634,6 +635,7 @@ class NegElboLoss(LossMixin):
         q_state = self.q.state if q_state is None else q_state
 
         nsamples = nsamples if nsamples is not None else self.nsamples
+        _validate_positive_int(nsamples, "nsamples")
         samples = self.q.sample((nsamples,), seed=key, newdata=params)
 
         @partial(jax.vmap)

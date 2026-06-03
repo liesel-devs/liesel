@@ -27,6 +27,11 @@ def _training_loss_scalar(split: SplitConfig) -> float:
     return split.train_sample_size
 
 
+def _validate_bool(value: bool, name: str) -> None:
+    if not isinstance(value, bool):
+        raise ValueError(f"{name} must be True or False, but got {value!r}.")
+
+
 class Loss(Protocol):
     """
     Protocol for optimizer losses.
@@ -300,6 +305,7 @@ class NegLogProbLoss(LossMixin):
                 "validation_strategy must be 'log_lik' or 'log_prob', but got "
                 f"{validation_strategy!r}."
             )
+        _validate_bool(scale, "scale")
         self.validation_strategy = validation_strategy
         self.scale = scale
         self.scalar = _training_loss_scalar(self.split) if self.scale else 1.0

@@ -6,6 +6,11 @@ import jax.numpy as jnp
 from .types import Array
 
 
+def _validate_int_type(value: int, name: str) -> None:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError(f"{name} must be a positive integer.")
+
+
 @dataclass
 class Stopper:
     """
@@ -91,6 +96,8 @@ class Stopper:
     rtol: float = 0.0
 
     def __post_init__(self):
+        _validate_int_type(self.epochs, "epochs")
+        _validate_int_type(self.patience, "patience")
         if self.epochs < 1:
             raise ValueError("epochs must be at least 1.")
         if self.patience < 1:

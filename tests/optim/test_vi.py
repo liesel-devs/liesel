@@ -371,11 +371,28 @@ class TestCompositeVDist:
 
 
 class TestNegElboLoss:
-    def test_rejects_non_positive_sample_counts(self):
+    @pytest.mark.parametrize("nsamples", [0, True, 1.5, "2"])
+    def test_rejects_invalid_sample_counts(self, nsamples):
         p = _laplace_model()
 
         with pytest.raises(ValueError, match="nsamples"):
-            opt.NegElboLoss.mvn_diag(p, nsamples=0)
+            opt.NegElboLoss.mvn_diag(p, nsamples=nsamples)
+
+    def test_from_vdist_rejects_invalid_sample_count(self):
+        p = _laplace_model()
+        split = opt.PositionSplit.from_model(p)
+        vdist = opt.VDist(["loc"], p).mvn_diag().build()
+
+        with pytest.raises(ValueError, match="nsamples"):
+            opt.NegElboLoss.from_vdist(vdist, split, nsamples=1.5)
+
+    def test_estimate_elbo_rejects_invalid_sample_count_override(self):
+        p = _laplace_model()
+        elbo = opt.NegElboLoss.mvn_diag(p, nsamples=1)
+        params = elbo.position(elbo.vdist.parameters)
+
+        with pytest.raises(ValueError, match="nsamples"):
+            elbo.estimate_elbo(params, jax.random.key(1), p.state, nsamples=1.5)
 
     def test_from_vdist_requires_built_distribution(self):
         p = _laplace_model()

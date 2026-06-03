@@ -153,6 +153,14 @@ def test_neg_log_prob_loss_rejects_unknown_validation_strategy():
         NegLogProbLoss(model, split, validation_strategy="deviance")
 
 
+def test_neg_log_prob_loss_rejects_non_bool_scale():
+    model = _normal_obs_model()
+    split = PositionSplit.from_model(model, position_keys=["y"])
+
+    with pytest.raises(ValueError, match="scale"):
+        NegLogProbLoss(model, split, scale="yes")  # type: ignore[arg-type]
+
+
 def test_neg_elbo_loss_train_uses_full_training_split_not_current_batch():
     train = Position({"y": jnp.array([1.0, 2.0, 3.0])})
     elbo = object.__new__(NegElboLoss)
@@ -260,3 +268,11 @@ def test_neg_elbo_scale_uses_inferred_training_sample_size():
     assert split.train_axis_size == 8
     assert split.train_sample_size == 32.0
     assert elbo.scalar == 32.0
+
+
+def test_neg_elbo_rejects_non_bool_scale():
+    model = _normal_obs_model()
+    split = PositionSplit.from_model(model, position_keys=["y"])
+
+    with pytest.raises(ValueError, match="scale"):
+        NegElboLoss(model, model, split=split, scale="yes")  # type: ignore[arg-type]
