@@ -647,7 +647,8 @@ class OptimResult:
     history
         Processed optimizer history.
     final_epoch
-        Last epoch index included in the processed history.
+        Number of completed epochs included in the processed history. When at
+        least one epoch completed, the final history index is ``final_epoch - 1``.
     best_position
         Parameter position selected by the optimizer. With
         ``restore_best_position=True``, this is the global best position found during
@@ -665,13 +666,13 @@ class OptimResult:
     >>> history = OptimHistory.from_epochs(epochs=2, position=None, tracked=None)
     >>> result = OptimResult(
     ...     history=history,
-    ...     final_epoch=1,
+    ...     final_epoch=2,
     ...     best_position=Position({"theta": jnp.array(1.0)}),
     ...     best_epoch=0,
     ...     duration=0.25,
     ... )
     >>> result
-    OptimResult(final_epoch=1, best_epoch=0, duration=0.2s)
+    OptimResult(final_epoch=2, best_epoch=0, duration=0.2s)
     """
 
     history: OptimHistory

@@ -101,7 +101,9 @@ class Batches:
     Parameters
     ----------
     position_keys
-        Names of the position entries that should be batched.
+        Names of the position entries that should be batched. An empty sequence is
+        allowed only with ``batch_size=None``; in that case the object is a
+        full-data adapter that does not replace any observed entries.
     axis_size
         Number of observations along each batched axis.
     batch_size
@@ -120,6 +122,16 @@ class Batches:
         replacement. This is mainly used by :meth:`BatchManager.from_model` when
         ``mode="resample"`` and a common ``batch_size`` is larger than a branch's
         observation count.
+    sample_size
+        Optional effective likelihood sample size represented by the full data. If
+        omitted, likelihood scaling falls back to ``axis_size``.
+    batch_sample_size
+        Optional effective likelihood sample size represented by one batch. If
+        ``sample_size`` is supplied and ``batch_sample_size`` is omitted, it is
+        derived as ``sample_size * batch_size / axis_size``.
+    batch_axis_size
+        Backwards-compatible keyword-only alias for ``batch_size``. Pass only one
+        of ``batch_size`` and ``batch_axis_size``.
 
     Attributes
     ----------
@@ -132,6 +144,10 @@ class Batches:
     -----
     If ``axis_size`` is not divisible by ``batch_size``, only full batches
     are used and the final incomplete batch is dropped.
+
+    A no-key full-data adapter can be useful when an optimizer workflow expects a
+    :class:`Batches` object but the model should always be evaluated on the full
+    observed data. Use ``position_keys=[]`` and ``batch_size=None`` for this case.
 
     Examples
     --------
@@ -151,6 +167,12 @@ class Batches:
     5
     >>> full_data.batch_indices.tolist()
     [[0, 1, 2, 3, 4]]
+
+    An empty-key full-data adapter leaves observed entries untouched:
+
+    >>> no_key = Batches([], axis_size=5, batch_size=None)
+    >>> no_key.position_keys, no_key.is_full_data
+    ([], True)
 
     ``batch_axes`` can batch different entries along different batch_axes:
 
@@ -209,6 +231,9 @@ class Batches:
     def __post_init__(self):
         if self.axis_size < 1:
             raise ValueError(f"{self.axis_size=} is < 1, which is not allowed.")
+
+        if len(self.position_keys) == 0 and self.batch_size is not None:
+            raise ValueError("position_keys may be empty only when batch_size=None.")
 
         if self.batch_size is None:
             self.batch_size = self.axis_size
@@ -285,7 +310,9 @@ class Batches:
             the returned object uses one full-data batch.
         position_keys
             Names of the observed position entries to batch. If ``None``, all observed
-            variables in ``model`` are used.
+            variables in ``model`` are used. Pass an empty sequence only with
+            ``batch_size=None`` to build a full-data adapter that does not replace
+            observed entries.
         axis_size
             Number of observations. If ``None``, the number is guessed from the model's
             observed variables along ``default_batch_axis``.
@@ -308,6 +335,22 @@ class Batches:
             batch rows with replacement.
         epoch_size
             Batch manager epoch size used only when ``multi_size="manager"``.
+        sample_size
+            Optional effective likelihood sample size represented by the full
+            observed data. If omitted and ``infer_sample_size=True``, it is inferred
+            from pointwise observed log-probability values when possible.
+        batch_sample_size
+            Optional effective likelihood sample size represented by one batch. If
+            omitted and ``infer_sample_size=True``, it is inferred from the first
+            batch when possible.
+        infer_sample_size
+            Whether to infer missing effective sample sizes from observed
+            log-probability values.
+        sample_with_replacement
+            Whether an oversized scalar batch may be sampled with replacement.
+        batch_axis_size
+            Backwards-compatible keyword-only alias for ``batch_size``. Pass only
+            one of ``batch_size`` and ``batch_axis_size``.
 
         Returns
         -------
@@ -335,6 +378,12 @@ class Batches:
         >>> full_data.shuffle, full_data.batch_indices.tolist()
         (False, [[0, 1, 2, 3, 4, 5]])
 
+        An empty ``position_keys`` sequence creates a no-key full-data adapter:
+
+        >>> no_key = Batches.from_model(model, batch_size=None, position_keys=[])
+        >>> no_key.position_keys, no_key.is_full_data
+        ([], True)
+
         Multi-size observed data must opt into the manager API:
 
         >>> x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
@@ -356,6 +405,9 @@ class Batches:
         pos_keys = (
             list(position_keys) if position_keys is not None else list(model.observed)
         )
+        if not pos_keys and batch_size is not None:
+            raise ValueError("position_keys may be empty only when batch_size=None.")
+
         groups = position_key_groups_from_model(
             model, pos_keys, batch_axes, default_batch_axis
         )
@@ -850,6 +902,9 @@ class BatchManager:
     With unequal scales, use :meth:`scaled_log_lik` so each branch is scaled by
     its own sample-size ratio.
 
+    Use manual ``BatchManager([Batches(...)])`` construction when child groups need
+    custom per-branch ``sample_size`` or ``batch_sample_size`` values.
+
     Like :class:`Batches`, :meth:`start_epoch` mutates and returns ``self``.
 
     Examples
@@ -976,6 +1031,9 @@ class BatchManager:
         the same ``batch_size``. With the default ``mode="resample"`` and
         ``epoch_size="max"``, branches with fewer complete batches sample batch rows
         with replacement for the additional joint steps.
+
+        Use manual ``BatchManager([Batches(...)])`` construction when child groups
+        need custom per-branch ``sample_size`` or ``batch_sample_size`` values.
 
         Parameters
         ----------
@@ -1197,7 +1255,9 @@ class BatchManager:
         Returns
         -------
         tuple[float, ...]
-            The child-specific ratios ``axis_size / batch_size``.
+            The child-specific ratios ``sample_size / batch_sample_size``. Directly
+            constructed batches without explicit sample sizes fall back to
+            ``axis_size / batch_size``.
 
         Examples
         --------
@@ -1221,7 +1281,9 @@ class BatchManager:
         Returns
         -------
         float
-            The common child ratio ``axis_size / batch_size``.
+            The common child ratio ``sample_size / batch_sample_size``. Directly
+            constructed batches without explicit sample sizes fall back to
+            ``axis_size / batch_size``.
 
         Raises
         ------

@@ -818,7 +818,9 @@ class PositionSplit:
             split part.
         part
             Split part whose scale should be applied. Validation uses
-            ``train_axis_size / validate_axis_size``.
+            ``train_sample_size / validate_sample_size`` and test uses
+            ``train_sample_size / test_sample_size``. If no explicit or inferred
+            sample sizes are available, these sample sizes fall back to axis sizes.
 
         Returns
         -------

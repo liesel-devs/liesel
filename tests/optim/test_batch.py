@@ -38,6 +38,17 @@ class TestBatches:
         assert idx.shape[1] == 30
         assert jnp.unique(idx).size == idx.size
 
+    def test_empty_position_keys_allow_full_data_adapter(self):
+        batches = Batches([], axis_size=30, batch_size=None, shuffle=True)
+
+        assert batches.position_keys == []
+        assert batches.batch_size == 30
+        assert batches.is_full_data
+
+    def test_empty_position_keys_reject_mini_batches(self):
+        with pytest.raises(ValueError, match="position_keys"):
+            Batches([], axis_size=30, batch_size=4)
+
     def test_batched_position(self):
         Bi = Batches(["x"], axis_size=30, batch_size=4, shuffle=True)
         Bi.indices = Bi.permute_indices(key(0))
@@ -113,6 +124,25 @@ class TestBatches:
 
         assert isinstance(batches, Batches)
         assert batches.batch_size == 2
+
+    def test_from_model_empty_position_keys_allow_full_data_adapter(self):
+        y = lsl.Var.new_obs(jnp.arange(6.0), name="y")
+        model = lsl.Model([y])
+
+        batches = Batches.from_model(model, batch_size=None, position_keys=[])
+
+        assert isinstance(batches, Batches)
+        assert batches.position_keys == []
+        assert batches.axis_size == 6
+        assert batches.batch_size == 6
+        assert batches.is_full_data
+
+    def test_from_model_empty_position_keys_reject_mini_batches(self):
+        y = lsl.Var.new_obs(jnp.arange(6.0), name="y")
+        model = lsl.Model([y])
+
+        with pytest.raises(ValueError, match="position_keys"):
+            Batches.from_model(model, batch_size=2, position_keys=[])
 
     def test_from_model_can_return_batch_manager_for_multi_size_data(self):
         x = lsl.Var.new_obs(jnp.arange(8.0), name="x")

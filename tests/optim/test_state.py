@@ -110,6 +110,19 @@ class TestOptimCarry:
 
 
 class TestOptimResult:
+    def test_final_epoch_is_completed_epoch_count(self):
+        history = OptimHistory.from_epochs(epochs=2, position=None, tracked=None)
+        result = OptimResult(
+            history=history,
+            final_epoch=2,
+            best_position=Position({}),
+            best_epoch=1,
+            duration=0.0,
+        )
+
+        assert result.final_epoch == len(result.history.loss_train)
+        assert result.final_epoch - 1 == 1
+
     def test_plot_loss_labels_monitoring_loss(self):
         history = OptimHistory.from_epochs(epochs=2, position=None, tracked=None)
         history.loss_train = jnp.array([1.0, 0.5])
