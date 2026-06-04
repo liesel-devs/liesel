@@ -1,5 +1,6 @@
 # Linear Regression
 
+
 In this tutorial, we build a linear regression model with Liesel and
 estimate it with Goose. Our goal is to illustrate the most fundamental
 features of the software in a straight-forward context.
@@ -203,32 +204,48 @@ results = gs.LieselMCMC(model).run_for_epochs(
     liesel.goose.engine - INFO - Initializing kernels...
     liesel.goose.engine - INFO - Done
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 100 transitions, 25 jitted together
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s] 25%|██████████▌                               | 1/4 [00:01<00:03,  1.27s/chunk]100%|██████████████████████████████████████████| 4/4 [00:01<00:00,  3.15chunk/s]
+
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
+     25%|██████████▌                               | 1/4 [00:02<00:08,  2.71s/chunk]
+    100%|██████████████████████████████████████████| 4/4 [00:02<00:00,  1.47chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 2, 5, 4 / 100 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
-      0%|                                                  | 0/1 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 1/1 [00:00<00:00, 1300.16chunk/s]
+
+      0%|                                                  | 0/1 [00:00<?, ?chunk/s]
+    100%|█████████████████████████████████████████| 1/1 [00:00<00:00, 758.33chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 1, 2, 2 / 25 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1932.41chunk/s]
+
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
+    100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1365.78chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 2 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 4/4 [00:00<00:00, 2713.44chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 1, 1, 3 / 100 transitions
+
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
+    100%|████████████████████████████████████████| 4/4 [00:00<00:00, 1247.19chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 1, 1, 1 / 100 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 525 transitions, 25 jitted together
-      0%|                                                 | 0/21 [00:00<?, ?chunk/s]100%|███████████████████████████████████████| 21/21 [00:00<00:00, 455.04chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 4, 2, 1, 3 / 525 transitions
+
+      0%|                                                 | 0/21 [00:00<?, ?chunk/s]
+    100%|███████████████████████████████████████| 21/21 [00:00<00:00, 336.38chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 1, 1, 1 / 525 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 200 transitions, 25 jitted together
-      0%|                                                  | 0/8 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 8/8 [00:00<00:00, 1650.49chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 3, 4, 3 / 200 transitions
+
+      0%|                                                  | 0/8 [00:00<?, ?chunk/s]
+    100%|█████████████████████████████████████████| 8/8 [00:00<00:00, 986.31chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 4, 4, 1 / 200 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Finished warmup
     liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
-      0%|                                                 | 0/40 [00:00<?, ?chunk/s]100%|███████████████████████████████████████| 40/40 [00:00<00:00, 440.10chunk/s]
+
+      0%|                                                 | 0/40 [00:00<?, ?chunk/s]
+     85%|█████████████████████████████████▏     | 34/40 [00:00<00:00, 336.53chunk/s]
+    100%|███████████████████████████████████████| 40/40 [00:00<00:00, 319.77chunk/s]
     liesel.goose.engine - INFO - Finished epoch
 
 The call to {meth}`~.goose.LieselMCMC.run_for_epochs` builds the engine,
@@ -241,320 +258,561 @@ summary
 ```
 
 <p>
+
 <strong>Parameter summary:</strong>
 </p>
+
 <table border="0" class="dataframe">
+
 <thead>
+
 <tr style="text-align: right;">
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 kernel
 </th>
+
 <th>
+
 mean
 </th>
+
 <th>
+
 sd
 </th>
+
 <th>
+
 q_0.05
 </th>
+
 <th>
+
 q_0.5
 </th>
+
 <th>
+
 q_0.95
 </th>
+
 <th>
+
 sample_size
 </th>
+
 <th>
+
 ess_bulk
 </th>
+
 <th>
+
 ess_tail
 </th>
+
 <th>
+
 rhat
 </th>
+
 </tr>
+
 <tr>
+
 <th>
+
 parameter
 </th>
+
 <th>
+
 index
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 </tr>
+
 </thead>
+
 <tbody>
+
 <tr>
+
 <th rowspan="2" valign="top">
+
 beta
 </th>
+
 <th>
+
 (0,)
 </th>
+
 <td>
+
 kernel_00
 </td>
+
 <td>
+
 0.984
 </td>
+
 <td>
-0.088
+
+0.089
 </td>
+
 <td>
-0.838
+
+0.837
 </td>
+
 <td>
-0.985
+
+0.984
 </td>
+
 <td>
-1.126
+
+1.129
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
-1151.201
+
+1127.296
 </td>
+
 <td>
-1385.802
+
+1249.018
 </td>
+
 <td>
+
 1.002
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 (1,)
 </th>
+
 <td>
+
 kernel_00
 </td>
+
 <td>
-1.906
-</td>
-<td>
-0.154
-</td>
-<td>
-1.648
-</td>
-<td>
+
 1.907
 </td>
+
 <td>
-2.156
+
+0.155
 </td>
+
 <td>
+
+1.648
+</td>
+
+<td>
+
+1.908
+</td>
+
+<td>
+
+2.160
+</td>
+
+<td>
+
 4000
 </td>
+
 <td>
-1199.216
+
+1220.811
 </td>
+
 <td>
-1432.785
+
+1197.665
 </td>
+
 <td>
-1.003
+
+1.002
 </td>
+
 </tr>
+
 </tbody>
+
 </table>
+
 <p>
+
 <strong>Acceptance probabilities:</strong>
 </p>
+
 <table border="0" class="dataframe">
+
 <thead>
+
 <tr style="text-align: right;">
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 acceptance_probability
 </th>
+
 <th>
+
 position_moved
 </th>
+
 </tr>
+
 <tr>
+
 <th>
+
 kernel
 </th>
+
 <th>
+
 positions
 </th>
+
 <th>
+
 phase
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 </tr>
+
 </thead>
+
 <tbody>
+
 <tr>
+
 <th rowspan="2" valign="top">
+
 kernel_00
 </th>
+
 <th rowspan="2" valign="top">
+
 beta
 </th>
+
 <th>
+
 posterior
 </th>
+
 <td>
-0.877
+
+0.875
 </td>
+
 <td>
+
 NaN
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 warmup
 </th>
+
 <td>
+
 0.791
 </td>
+
 <td>
+
 NaN
 </td>
+
 </tr>
+
 </tbody>
+
 </table>
+
 <p>
+
 <strong>Error summary:</strong>
 </p>
+
 <table border="0" class="dataframe">
+
 <thead>
+
 <tr style="text-align: right;">
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 count
 </th>
+
 <th>
+
 sample_size
 </th>
+
 <th>
+
 sample_size_total
 </th>
+
 <th>
+
 relative
 </th>
+
 </tr>
+
 <tr>
+
 <th>
+
 kernel
 </th>
+
 <th>
+
 positions
 </th>
+
 <th>
+
 error_code
 </th>
+
 <th>
+
 error_msg
 </th>
+
 <th>
+
 phase
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 <th>
+
 </th>
+
 </tr>
+
 </thead>
+
 <tbody>
+
 <tr>
+
 <th rowspan="2" valign="top">
+
 kernel_00
 </th>
+
 <th rowspan="2" valign="top">
+
 beta
 </th>
+
 <th rowspan="2" valign="top">
+
 1
 </th>
+
 <th rowspan="2" valign="top">
+
 divergent transition
 </th>
+
 <th>
+
 warmup
 </th>
+
 <td>
-56
+
+47
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
-0.014
+
+0.012
 </td>
+
 </tr>
+
 <tr>
+
 <th>
+
 posterior
 </th>
+
 <td>
+
 0
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
+
 4000
 </td>
+
 <td>
+
 0.000
 </td>
+
 </tr>
+
 </tbody>
+
 </table>
 
 Here, we end this first tutorial. We have learned how to build a linear

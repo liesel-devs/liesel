@@ -123,6 +123,8 @@ class TestOptim:
     def test_optim_flat_train_validation(self, models):
         model, model_validation = models
         stopper = Stopper(max_iter=1_000, patience=30)
+        n_train = model.vars["y"].value.shape[0]
+        n_validation = model_validation.vars["y"].value.shape[0]
 
         result_train = optim_flat(
             model, ["coef", "log_sigma"], batch_size=None, stopper=stopper
@@ -134,10 +136,13 @@ class TestOptim:
             batch_size=None,
             stopper=stopper,
             model_validation=model_validation,
+            auto_n_obs=True,
         )
 
-        assert result_train.n_train == result_train.n_validation
-        assert result_train_validation.n_train == result_train_validation.n_validation
+        assert result_train.n_train == 1
+        assert result_train.n_validation == 1
+        assert result_train_validation.n_train == n_train
+        assert result_train_validation.n_validation == n_validation
 
         assert not jnp.allclose(
             result_train_validation.history["loss_train"],
@@ -146,6 +151,52 @@ class TestOptim:
         assert jnp.allclose(
             result_train.history["loss_train"], result_train.history["loss_validation"]
         )
+
+    def test_optim_flat_train_validation_requires_explicit_sample_size(self, models):
+        model, model_validation = models
+
+        with pytest.raises(ValueError, match="n_train and n_validation"):
+            optim_flat(
+                model,
+                ["coef", "log_sigma"],
+                batch_size=None,
+                stopper=Stopper(max_iter=10, patience=2),
+                model_validation=model_validation,
+                progress_bar=False,
+            )
+
+    def test_optim_flat_train_validation_accepts_manual_sample_size(self, models):
+        model, model_validation = models
+        n_train = model.vars["y"].value.shape[0]
+        n_validation = model_validation.vars["y"].value.shape[0]
+
+        result = optim_flat(
+            model,
+            ["coef", "log_sigma"],
+            batch_size=None,
+            stopper=Stopper(max_iter=10, patience=2),
+            model_validation=model_validation,
+            n_train=n_train,
+            n_validation=n_validation,
+            progress_bar=False,
+        )
+
+        assert result.n_train == n_train
+        assert result.n_validation == n_validation
+
+    def test_optim_flat_rejects_manual_sample_size_with_batching(self, models):
+        model, _ = models
+
+        with pytest.raises(ValueError, match="batch_size is None"):
+            optim_flat(
+                model,
+                ["coef", "log_sigma"],
+                batch_size=10,
+                stopper=Stopper(max_iter=10, patience=2),
+                n_train=100,
+                n_validation=100,
+                progress_bar=False,
+            )
 
     def test_track_keys(self, models):
         model, _ = models
