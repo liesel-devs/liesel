@@ -90,6 +90,15 @@ def _find_sample_size(model: Model) -> int:
     return n_set.pop()
 
 
+def _validate_sample_size(value: int | None, name: str) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise ValueError(f"{name} must be a positive integer or None.")
+
+    return value
+
+
 @dataclass
 class Stopper:
     """
@@ -260,6 +269,10 @@ def optim_flat(
     progress_bar: bool = True,
     progress_n_updates: int = 20,
     track_keys: list[str] | None = None,
+    scale_loss: bool = False,
+    n_train: int | None = None,
+    n_validation: int | None = None,
+    auto_n_obs: bool = False,
 ) -> OptimResult:
     """
     Optimize the parameters of a  Liesel :class:`.Model`.
@@ -292,7 +305,8 @@ def optim_flat(
         The batch size. If ``None``, batching is disabled and each optimization step\
         uses the full model log probability. In this case, the result stores\
         ``n_train == n_validation == 1`` because no observation count is needed for\
-        likelihood rescaling.
+        likelihood rescaling, unless explicit sample sizes are supplied or\
+        ``auto_n_obs=True``.
     batch-seed
         Batches are assembled randomly in each iteration. This is the seed used for \
         shuffling in this step.
@@ -323,6 +337,22 @@ def optim_flat(
         How many times to update the progress bar in total.
     track_keys
         List of position keys to track and include in the history.
+    scale_loss
+        Whether to divide the training and validation losses by ``n_train``.
+    n_train
+        Number of training observations used for likelihood rescaling when batching
+        is disabled. If ``None``, defaults to ``1`` unless ``auto_n_obs=True``.
+    n_validation
+        Number of validation observations used for likelihood rescaling when
+        batching is disabled. If ``None`` and no separate validation model is
+        supplied, defaults to ``n_train``. When a separate validation model is
+        supplied, pass both ``n_train`` and ``n_validation`` or set
+        ``auto_n_obs=True``.
+    auto_n_obs
+        Whether to discover ``n_train`` and ``n_validation`` from the leading
+        dimension of observed variables when batching is disabled. Batched
+        optimization always discovers sample sizes because they are needed to build
+        batches.
 
     Returns
     -------
@@ -349,6 +379,9 @@ def optim_flat(
     With batching enabled, the training loss rescales the batched log likelihood by
     ``n_train / batch_size``. The validation loss rescales the validation log likelihood
     by ``n_train / n_validation`` when a separate validation model is supplied.
+    With batching disabled, ``n_train`` and ``n_validation`` default to ``1``. When a
+    separate validation model is supplied, you must either pass both values explicitly
+    or set ``auto_n_obs=True``.
 
     Examples
     --------
@@ -401,6 +434,9 @@ def optim_flat(
         batch_seed if batch_seed is not None else np.random.randint(low=1, high=1000)
     )
 
+    n_train = _validate_sample_size(n_train, "n_train")
+    n_validation = _validate_sample_size(n_validation, "n_validation")
+
     if stopper is None:
         stopper = Stopper(max_iter=10_000, patience=10)
 
@@ -413,6 +449,10 @@ def optim_flat(
 
     do_batching = batch_size is not None
     if do_batching:
+        if n_train is not None or n_validation is not None:
+            raise ValueError(
+                "n_train and n_validation can only be supplied when batch_size is None."
+            )
         shuffle_batch_indices = True
         observed = _find_observed(model_train)
         n_train = _find_sample_size(model_train)
@@ -423,9 +463,22 @@ def optim_flat(
         # not because there are no observed, but because we don't need to update
         # observed with their batches
         observed = {}
-        n_train = 1
-        n_validation = 1
-        batch_size = 1
+
+        if auto_n_obs:
+            n_train = n_train or _find_sample_size(model_train)
+            n_validation = n_validation or _find_sample_size(model_validation)
+        elif model_validation is not model_train and (
+            n_train is None or n_validation is None
+        ):
+            raise ValueError(
+                "When batch_size is None and model_validation is a separate model, "
+                "pass both n_train and n_validation or set auto_n_obs=True."
+            )
+        else:
+            n_train = n_train or 1
+            n_validation = n_validation or n_train
+
+        batch_size = n_train
 
     interface_train = LieselInterface(model_train)
     position = interface_train.extract_position(params, model_train.state)
@@ -464,18 +517,31 @@ def optim_flat(
             log_lik = likelihood_scalar * updated_state["_model_log_lik"].value
             log_prior = updated_state["_model_log_prior"].value
             log_prob = log_lik + log_prior
-        return -log_prob
+
+        nlp = -log_prob
+        if scale_loss:
+            nlp = nlp / n_train
+
+        return nlp
 
     def _neg_log_prob_train(position: Position, model_state: ModelState):
         updated_state = interface_train.update_state(position, model_state)
-        return -updated_state["_model_log_prob"].value
+        nlp = -updated_state["_model_log_prob"].value
+        if scale_loss:
+            nlp = nlp / n_train
+
+        return nlp
 
     def _neg_log_prob_validation(position: Position, model_state: ModelState):
         updated_state = interface_validation.update_state(position, model_state)
         log_lik = likelihood_scalar_validation * updated_state["_model_log_lik"].value
         log_prior = updated_state["_model_log_prior"].value
         log_prob = log_lik + log_prior
-        return -log_prob
+        nlp = -log_prob
+        if scale_loss:
+            nlp = nlp / n_train
+
+        return nlp
 
     if model_validation is model_train:
         _neg_log_prob_validation = _neg_log_prob_train

@@ -1,5 +1,6 @@
 # PyMC and Liesel: Spike and Slab
 
+
 Liesel provides an interface for
 [PyMC](https://www.pymc.io/welcome.html), a popular Python library for
 Bayesian Models. In this tutorial, we see how to specify a model in PyMC
@@ -26,16 +27,14 @@ include all variables, while when it is close to 0, the model is more
 likely to select only a few variables. In our case, we assign a Beta
 hyperprior to $\theta$:
 
-$$
-\begin{aligned}
+$$\begin{aligned}
 \mathbf{y} &\sim \mathcal{N} \left( \mathbf{X}\boldsymbol{\beta}, \sigma^2 \mathbf{I} \right)\\
 \boldsymbol{\beta}_j &\sim \mathcal{N}\left(0, (1 - \delta_j)\nu + \delta_j\tau^2_j / \sigma^2 \right)\\
 \tau^2_j &\sim \mathcal{IG}(\text{a}_{\tau}, \text{b}_{\tau})\\
 \delta_j &\sim\text{Bernoulli}(\theta)\\
 \theta &\sim\text{Beta}(\text{a}_\theta, \text{b}_\theta)\\
 \sigma^2 &\sim \mathcal{IG}(\text{a}_{\sigma^2}, \text{b}_{\sigma^2})
-\end{aligned}.
-$$
+\end{aligned}.$$
 
 where $\nu$ is a hyperparameter that we set to a fixed small value. That
 way, when $\delta_j = 0$, the prior variance for $\beta_j$ is extremely
@@ -108,9 +107,8 @@ Let’s take a look at our model:
 spike_and_slab_model
 ```
 
-$$
-            \begin{array}{rcl}
-            \text{sigma2} &\sim & \operatorname{InverseGamma}(1,~1)\\\text{theta} &\sim & \operatorname{Beta}(8,~8)\\\text{delta} &\sim & \operatorname{Bernoulli}(\text{theta})\\\text{tau} &\sim & \operatorname{InverseGamma}(1,~1)\\\text{beta} &\sim & \operatorname{Normal}(0,~f(\text{delta},~\text{sigma2},~\text{tau}))\\\text{y} &\sim & \operatorname{Normal}(f(\text{beta}),~f(\text{sigma2}))
+$$            \begin{array}{rcl}
+            \text{X} &= &\operatorname{Data}(\text{<shared>})\\\text{sigma2} &\sim & \operatorname{InverseGamma}(1,~1)\\\text{theta} &\sim & \operatorname{Beta}(8,~8)\\\text{delta} &\sim & \operatorname{Bernoulli}(\text{theta})\\\text{tau} &\sim & \operatorname{InverseGamma}(1,~1)\\\text{beta} &\sim & \operatorname{Normal}(0,~f(\text{delta},~\text{sigma2},~\text{tau}))\\\text{y} &\sim & \operatorname{Normal}(f(\text{X},~\text{beta}),~f(\text{sigma2}))
             \end{array}
             $$
 
@@ -178,41 +176,61 @@ engine.sample_all_epochs()
 
     liesel.goose.builder - WARNING - No jitter functions provided. The initial values won't be jittered
     liesel.goose.engine - INFO - Initializing kernels...
-    /Users/johannesbrachem/Documents/git/liesel/.venv/lib/python3.13/site-packages/jax/_src/numpy/array_methods.py:125: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/jax-ml/jax#current-gotchas for more.
+    /home/runner/work/liesel/liesel/.venv/lib/python3.13/site-packages/jax/_src/numpy/array_methods.py:125: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/jax-ml/jax#current-gotchas for more.
       return lax_numpy.astype(self, dtype, copy=copy, device=device)
     liesel.goose.engine - INFO - Done
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 75 transitions, 25 jitted together
-      0%|                                                  | 0/3 [00:00<?, ?chunk/s]/var/folders/tn/j33340q16z763d6xp7mlcw4m0000gn/T/ipykernel_18448/3265445119.py:6: UserWarning: Explicitly requested dtype int64 requested in asarray is not available, and will be truncated to dtype int32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/jax-ml/jax#current-gotchas for more.
+
+      0%|                                                  | 0/3 [00:00<?, ?chunk/s]/tmp/ipykernel_6775/3265445119.py:6: UserWarning: Explicitly requested dtype int64 requested in asarray is not available, and will be truncated to dtype int32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/jax-ml/jax#current-gotchas for more.
       proposal = {"delta": jax.numpy.asarray(draw, dtype=np.int64)}
-     33%|██████████████                            | 1/3 [00:02<00:04,  2.24s/chunk]100%|██████████████████████████████████████████| 3/3 [00:02<00:00,  1.34chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 2, 3, 4 / 75 transitions
+
+     33%|██████████████                            | 1/3 [00:04<00:09,  4.98s/chunk]
+    100%|██████████████████████████████████████████| 3/3 [00:04<00:00,  1.66s/chunk]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 2, 2, 4 / 75 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
-      0%|                                                  | 0/1 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 1/1 [00:00<00:00, 1475.31chunk/s]
+
+      0%|                                                  | 0/1 [00:00<?, ?chunk/s]
+    100%|█████████████████████████████████████████| 1/1 [00:00<00:00, 843.58chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 25 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 2/2 [00:00<00:00, 2554.39chunk/s]
+
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
+    100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1395.78chunk/s]
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 4/4 [00:00<00:00, 3023.47chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 1, 1 / 100 transitions
+
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
+    100%|████████████████████████████████████████| 4/4 [00:00<00:00, 1858.97chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 1, 2, 1 / 100 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 200 transitions, 25 jitted together
-      0%|                                                  | 0/8 [00:00<?, ?chunk/s]100%|█████████████████████████████████████████| 8/8 [00:00<00:00, 978.61chunk/s]
+
+      0%|                                                  | 0/8 [00:00<?, ?chunk/s]
+    100%|█████████████████████████████████████████| 8/8 [00:00<00:00, 688.65chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 200 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 500 transitions, 25 jitted together
-      0%|                                                 | 0/20 [00:00<?, ?chunk/s]100%|███████████████████████████████████████| 20/20 [00:00<00:00, 348.66chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 3 / 500 transitions
+
+      0%|                                                 | 0/20 [00:00<?, ?chunk/s]
+    100%|███████████████████████████████████████| 20/20 [00:00<00:00, 244.10chunk/s]
+    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 500 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 2/2 [00:00<00:00, 2427.26chunk/s]
+
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
+    100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1183.83chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Finished warmup
     liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 2000 transitions, 25 jitted together
-      0%|                                                 | 0/80 [00:00<?, ?chunk/s] 41%|████████████████                       | 33/80 [00:00<00:00, 329.42chunk/s] 82%|████████████████████████████████▏      | 66/80 [00:00<00:00, 289.79chunk/s]100%|███████████████████████████████████████| 80/80 [00:00<00:00, 290.03chunk/s]
+
+      0%|                                                 | 0/80 [00:00<?, ?chunk/s]
+     31%|████████████▏                          | 25/80 [00:00<00:00, 245.78chunk/s]
+     62%|████████████████████████▍              | 50/80 [00:00<00:00, 203.08chunk/s]
+     89%|██████████████████████████████████▌    | 71/80 [00:00<00:00, 193.26chunk/s]
+    100%|███████████████████████████████████████| 80/80 [00:00<00:00, 196.45chunk/s]
     liesel.goose.engine - INFO - Finished epoch
 
 Now, we can take a look at the summary of the results and at the trace
@@ -223,76 +241,76 @@ results = engine.get_results()
 print(gs.Summary(results))
 ```
 
-    /Users/johannesbrachem/Documents/git/liesel/.venv/lib/python3.13/site-packages/arviz/stats/diagnostics.py:845: RuntimeWarning: invalid value encountered in scalar divide
+    /home/runner/work/liesel/liesel/.venv/lib/python3.13/site-packages/arviz_stats/base/diagnostics.py:313: RuntimeWarning: invalid value encountered in scalar divide
       varsd = varvar / evar / 4
-    /Users/johannesbrachem/Documents/git/liesel/.venv/lib/python3.13/site-packages/arviz/stats/diagnostics.py:845: RuntimeWarning: invalid value encountered in scalar divide
+    /home/runner/work/liesel/liesel/.venv/lib/python3.13/site-packages/arviz_stats/base/diagnostics.py:313: RuntimeWarning: invalid value encountered in scalar divide
       varsd = varvar / evar / 4
-    /Users/johannesbrachem/Documents/git/liesel/.venv/lib/python3.13/site-packages/arviz/stats/diagnostics.py:596: RuntimeWarning: invalid value encountered in scalar divide
+    /home/runner/work/liesel/liesel/.venv/lib/python3.13/site-packages/arviz_stats/base/diagnostics.py:90: RuntimeWarning: invalid value encountered in scalar divide
       (between_chain_variance / within_chain_variance + num_samples - 1) / (num_samples)
 
                              var_fqn     kernel var_index  sample_size      mean  \
     variable
-    beta                     beta[0]  kernel_00      (0,)         8000  3.037814
-    beta                     beta[1]  kernel_00      (1,)         8000 -0.010874
-    beta                     beta[2]  kernel_00      (2,)         8000  3.955981
-    beta                     beta[3]  kernel_00      (3,)         8000 -0.001599
+    beta                     beta[0]  kernel_00      (0,)         8000  3.037727
+    beta                     beta[1]  kernel_00      (1,)         8000 -0.010908
+    beta                     beta[2]  kernel_00      (2,)         8000  3.955964
+    beta                     beta[3]  kernel_00      (3,)         8000 -0.001761
     delta                   delta[0]  kernel_01      (0,)         8000  1.000000
-    delta                   delta[1]  kernel_01      (1,)         8000  0.076625
+    delta                   delta[1]  kernel_01      (1,)         8000  0.085125
     delta                   delta[2]  kernel_01      (2,)         8000  1.000000
-    delta                   delta[3]  kernel_01      (3,)         8000  0.052375
-    sigma2                    sigma2          -        ()         8000  1.014596
-    sigma2_log__        sigma2_log__  kernel_00        ()         8000  0.013453
-    tau                          tau          -        ()         8000  0.506953
-    tau_log__              tau_log__  kernel_00        ()         8000  2.154096
-    theta_logodds__  theta_logodds__  kernel_00        ()         8000  0.029387
+    delta                   delta[3]  kernel_01      (3,)         8000  0.063125
+    sigma2                    sigma2          -        ()         8000  1.014129
+    sigma2_log__        sigma2_log__  kernel_00        ()         8000  0.013033
+    tau                          tau          -        ()         8000  0.508712
+    tau_log__              tau_log__  kernel_00        ()         8000  2.156108
+    theta_logodds__  theta_logodds__  kernel_00        ()         8000  0.036925
 
                           var        sd      ess_bulk     ess_tail  mcse_mean  \
     variable
-    beta             0.001058  0.032525  12613.238337  6099.070961   0.000289
-    beta             0.000886  0.029769  12218.425015  6130.544738   0.000269
-    beta             0.000985  0.031387  13606.196293  6070.164816   0.000269
-    beta             0.000955  0.030897  13043.404768  6038.970396   0.000271
+    beta             0.001047  0.032364  12350.724123  6256.921075   0.000292
+    beta             0.000906  0.030099  13113.375119  6451.783328   0.000263
+    beta             0.000982  0.031343  14087.219211  5872.803421   0.000265
+    beta             0.000956  0.030924  13099.915481  5619.069861   0.000270
     delta            0.000000  0.000000   8000.000000  8000.000000   0.000000
-    delta            0.070754  0.265996    319.840916   319.840916   0.014874
+    delta            0.077879  0.279068    373.017695   373.017695   0.014450
     delta            0.000000  0.000000   8000.000000  8000.000000   0.000000
-    delta            0.049632  0.222782    562.970934   562.970934   0.009390
-    sigma2           0.002140  0.046265  11878.389693  5810.568129   0.000427
-    sigma2_log__     0.002073  0.045534  11878.392996  5810.568129   0.000418
-    tau              0.012417  0.111432   7248.664938  5306.853795   0.001313
-    tau_log__        0.623456  0.789592   7909.243715  4692.050581   0.009597
-    theta_logodds__  0.220301  0.469362   7248.663353  5306.853795   0.005503
+    delta            0.059140  0.243188    511.668790   511.668790   0.010752
+    sigma2           0.002056  0.045342  12679.989600  6471.143078   0.000404
+    sigma2_log__     0.001993  0.044640  12680.000414  6471.143078   0.000397
+    tau              0.012407  0.111386   6499.235557  4334.338046   0.001376
+    tau_log__        0.627498  0.792148   7418.998540  4600.136996   0.009974
+    theta_logodds__  0.219882  0.468916   6499.234703  4334.338046   0.005823
 
                       mcse_sd      rhat    q_0.05     q_0.5    q_0.95   hdi_low  \
     variable
-    beta             0.000386  1.000295  2.985235  3.037885  3.091991  2.984958
-    beta             0.000340  1.000364 -0.060268 -0.010704  0.037495 -0.062392
-    beta             0.000354  1.000310  3.904037  3.956081  4.007212  3.904486
-    beta             0.000362  1.000296 -0.052088 -0.001520  0.049825 -0.051128
+    beta             0.000207  1.002090  2.984296  3.037531  3.090531  2.985247
+    beta             0.000183  1.001970 -0.060500 -0.011142  0.038715 -0.060222
+    beta             0.000192  1.001343  3.904705  3.956123  4.007814  3.901984
+    beta             0.000192  1.001467 -0.052818 -0.001802  0.049597 -0.050066
     delta                 NaN       NaN  1.000000  1.000000  1.000000  1.000000
-    delta            0.023673  1.023458  0.000000  0.000000  1.000000  0.000000
+    delta            0.021481  1.013259  0.000000  0.000000  1.000000  0.000000
     delta                 NaN       NaN  1.000000  1.000000  1.000000  1.000000
-    delta            0.018866  1.010037  0.000000  0.000000  1.000000  0.000000
-    sigma2           0.000567  1.001344  0.940747  1.012874  1.094405  0.938549
-    sigma2_log__     0.000552  1.001313 -0.061081  0.012792  0.090210 -0.058979
-    tau              0.001279  1.001675  0.322230  0.506900  0.688730  0.323917
-    tau_log__        0.010454  1.001987  1.026337  2.054462  3.591636  0.875061
-    theta_logodds__  0.005829  1.001682 -0.743543  0.027600  0.794188 -0.735829
+    delta            0.019314  1.007246  0.000000  0.000000  1.000000  0.000000
+    sigma2           0.000291  0.999936  0.941998  1.012915  1.090738  0.942568
+    sigma2_log__     0.000281  0.999939 -0.059752  0.012833  0.086855 -0.056601
+    tau              0.000891  1.000694  0.325165  0.508691  0.692288  0.324628
+    tau_log__        0.009165  1.000442  1.041645  2.055873  3.599275  0.932972
+    theta_logodds__  0.004166  1.000686 -0.730136  0.034769  0.810836 -0.732583
 
                      hdi_high
     variable
-    beta             3.091510
-    beta             0.035103
-    beta             4.007542
-    beta             0.050621
+    beta             3.091338
+    beta             0.038947
+    beta             4.004807
+    beta             0.051560
     delta            1.000000
     delta            0.000000
     delta            1.000000
     delta            0.000000
-    sigma2           1.092050
-    sigma2_log__     0.092068
-    tau              0.689343
-    tau_log__        3.353702
-    theta_logodds__  0.797049
+    sigma2           1.090913
+    sigma2_log__     0.089524
+    tau              0.691743
+    tau_log__        3.418921
+    theta_logodds__  0.808280
 
 As we can see from the posterior means of the $\boldsymbol{\delta}$
 parameters, the model was able to recognize those variable with no

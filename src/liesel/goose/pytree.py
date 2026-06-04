@@ -3,13 +3,10 @@ Pytree utilities.
 """
 
 import dataclasses
-from typing import TypeVar
 
 import jax
 import jax.numpy as jnp
 import jax.tree_util
-
-T = TypeVar("T")
 
 
 def register_dataclass_as_pytree(cls):
@@ -18,21 +15,7 @@ def register_dataclass_as_pytree(cls):
     if not dataclasses.is_dataclass(cls):
         raise TypeError(f"{cls} must be a dataclass")
 
-    def flatten(cls_instance):
-        # don't use dataclasses.asdict() here, because it converts nested dataclasses
-        # to dicts recursively
-
-        return jax.tree_util.tree_flatten(cls_instance.__dict__)
-
-    def unflatten(aux_data, children):
-        d = jax.tree_util.tree_unflatten(aux_data, children)
-        rv = cls.__new__(cls)
-        rv.__dict__.update(d)
-        return rv
-
-    jax.tree_util.register_pytree_node(cls, flatten, unflatten)
-
-    return cls
+    return jax.tree_util.register_dataclass(cls)
 
 
 def slice_leaves(pytree, idx):
@@ -109,7 +92,7 @@ def split_and_transpose(pytree, axis=0):
     return jax.tree_util.tree_transpose(td_outer, td_inner, spytree)
 
 
-def as_strong_pytree(pytree: T) -> T:
+def as_strong_pytree[T](pytree: T) -> T:
     """
     Converts every leaf in a pytree to a non-weak :obj:`jax.numpy.DeviceArray`.
 

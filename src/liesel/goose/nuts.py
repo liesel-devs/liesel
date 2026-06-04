@@ -3,7 +3,7 @@ No U-Turn Sampler (NUTS).
 """
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import partial
 from typing import ClassVar
 
@@ -13,7 +13,12 @@ from blackjax.adaptation.step_size import find_reasonable_step_size
 from blackjax.mcmc import hmc, nuts
 from jax.flatten_util import ravel_pytree
 
-from .da import da_finalize, da_init, da_step
+from .da import (
+    DualAvgState,
+    da_finalize,
+    da_init,
+    da_step,
+)
 from .epoch import EpochState
 from .kernel import (
     DefaultTransitionInfo,
@@ -41,12 +46,11 @@ class NUTSKernelState:
 
     step_size: float
     inverse_mass_matrix: Array
-    error_sum: float = field(init=False)
-    log_avg_step_size: float = field(init=False)
-    mu: float = field(init=False)
+    da_state: DualAvgState | None = None
 
     def __post_init__(self):
-        da_init(self)
+        if self.da_state is None:
+            self.da_state = DualAvgState.from_step_size(self.step_size)
 
 
 @register_dataclass_as_pytree
