@@ -520,6 +520,26 @@ class TestModel:
         assert model.vars["y"].value == pytest.approx(2.0)
         assert model.vars["z"].value == pytest.approx(4.0)
 
+    def test_update_state_weak_var_update(self) -> None:
+        x = Var(1.0, name="x")
+        y = Var.new_calc(lambda x: x + 1.0, x, name="y")
+        z = Var.new_calc(lambda y: 2.0 * y, y, name="z")
+        model = Model([z])
+
+        model.update_state({"y": 10.0}, allow_weak_vars=True, inplace=True)
+        assert model.vars["y"].value == pytest.approx(10.0)
+        assert model.vars["z"].value == pytest.approx(20.0)
+
+        assert y.value_node.outdated
+        assert z.value_node.outdated
+
+        model.update()
+        assert model.vars["y"].value == pytest.approx(2.0)
+        assert model.vars["z"].value == pytest.approx(4.0)
+
+        assert not y.value_node.outdated
+        assert not z.value_node.outdated
+
     def test_update_state_weak_var_with_switch_supports_jax_transforms(self) -> None:
         x = Var(1.0, name="x")
         y = Var.new_calc(lambda x: x + 1.0, x, name="y")

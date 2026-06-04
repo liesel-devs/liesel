@@ -2808,6 +2808,8 @@ class Model:
         original_auto_update = model.auto_update
         model.auto_update = False
 
+        weak_var_names = []
+
         try:
             for key, value in position.items():
                 try:
@@ -2816,6 +2818,7 @@ class Model:
                     var = model.vars[key]
                     if allow_weak_vars and var.weak:
                         _set_weak_var_value(var, value)
+                        weak_var_names.append(var.name)
                     else:
                         var.value = value
         finally:
@@ -2823,6 +2826,11 @@ class Model:
             model.auto_update = original_auto_update
 
         model.update()
+
+        for name in weak_var_names:
+            model.vars[name].value_node.flag_outdated()
+            for node in model.vars[name].value_node.outputs:
+                node.flag_outdated()
         return model.state
 
     def predict(
