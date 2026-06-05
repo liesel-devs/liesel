@@ -32,6 +32,11 @@ class TestStopper:
         stopper = Stopper(epochs=10, patience=5)
         assert stopper.max_iter == stopper.epochs
 
+    def test_accepts_integral_configuration(self):
+        stopper = Stopper(epochs=np.int64(10), patience=np.int64(5))
+        assert stopper.epochs == 10
+        assert stopper.patience == 5
+
     def test_stopper_does_not_stop(self):
         stopper = Stopper(patience=5, epochs=100)
 

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from numbers import Integral
 
 import jax
 import jax.numpy as jnp
@@ -6,8 +7,8 @@ import jax.numpy as jnp
 from .types import Array
 
 
-def _validate_int_type(value: int, name: str) -> None:
-    if not isinstance(value, int) or isinstance(value, bool):
+def _validate_int_type(value: Integral, name: str) -> None:
+    if not isinstance(value, Integral) or isinstance(value, bool):
         raise ValueError(f"{name} must be a positive integer.")
 
 
