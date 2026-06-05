@@ -4,9 +4,38 @@ Dual averaging.
 This module uses the error codes 80-89.
 """
 
+from dataclasses import dataclass
 from typing import Protocol
 
 import jax.numpy as jnp
+
+from .pytree import register_dataclass_as_pytree
+
+
+@register_dataclass_as_pytree
+@dataclass
+class DualAvgState:
+    """
+    The state of the dual averaging algorithm.
+    """
+
+    error_sum: float
+    """The error sum of the acceptance probability."""
+
+    log_avg_step_size: float
+    """The logarithm of the average step size."""
+
+    mu: float
+    """The bias of the step size proposals."""
+
+    @classmethod
+    def from_step_size(cls, step_size: float) -> "DualAvgState":
+        """Initializes a dual averaging state for ``step_size``."""
+        return cls(
+            error_sum=0.0,
+            log_avg_step_size=jnp.log(step_size),
+            mu=jnp.log(10.0 * step_size),
+        )
 
 
 class DAKernelState(Protocol):
@@ -24,17 +53,8 @@ class DAKernelState(Protocol):
     step_size: float
     """The step size of the kernel."""
 
-    error_sum: float
-    """The error sum of the acceptance probability. Should not be set by the user,
-    but is used by the :func:`.da_step` function."""
-
-    log_avg_step_size: float
-    """The logarithm of the average step size. Should not be set by the user, but is
-    used by the :func:`.da_step` function."""
-
-    mu: float
-    """The bias of the step size proposals. Should not be set by the user, but is
-    used by the :func:`.da_step` function."""
+    da_state: DualAvgState | None
+    """The internal state of the dual averaging algorithm."""
 
 
 def da_init(kernel_state: DAKernelState) -> None:
@@ -43,9 +63,7 @@ def da_init(kernel_state: DAKernelState) -> None:
     called for the side effect on the ``kernel_state`` argument.
     """
 
-    kernel_state.error_sum = 0.0
-    kernel_state.log_avg_step_size = jnp.log(kernel_state.step_size)
-    kernel_state.mu = jnp.log(10.0 * kernel_state.step_size)
+    kernel_state.da_state = DualAvgState.from_step_size(kernel_state.step_size)
 
 
 def da_step(
@@ -95,11 +113,18 @@ def da_step(
     t = time_in_epoch + 1
     eta = t ** (-kappa)
 
-    ks.error_sum += target_accept - acceptance_prob
-    log_step_size = ks.mu - (ks.error_sum * jnp.sqrt(t)) / (gamma * (t0 + t))
+    da_state = ks.da_state
+    if da_state is None:
+        raise RuntimeError("Dual averaging state has not been initialized.")
+
+    da_state.error_sum += target_accept - acceptance_prob
+    log_step_size = da_state.mu - (da_state.error_sum * jnp.sqrt(t)) / (
+        gamma * (t0 + t)
+    )
     ks.step_size = jnp.exp(log_step_size)
 
-    ks.log_avg_step_size = (1 - eta) * ks.log_avg_step_size + eta * log_step_size
+    log_avg_step_size = (1 - eta) * da_state.log_avg_step_size + eta * log_step_size
+    da_state.log_avg_step_size = log_avg_step_size
 
 
 def da_finalize(kernel_state: DAKernelState) -> None:
@@ -108,4 +133,8 @@ def da_finalize(kernel_state: DAKernelState) -> None:
     called for the side effect on the ``kernel_state`` argument.
     """
 
-    kernel_state.step_size = jnp.exp(kernel_state.log_avg_step_size)
+    da_state = kernel_state.da_state
+    if da_state is None:
+        raise RuntimeError("Dual averaging state has not been initialized.")
+
+    kernel_state.step_size = jnp.exp(da_state.log_avg_step_size)
