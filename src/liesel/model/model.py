@@ -2006,7 +2006,9 @@ class Model:
         copy_of_nodes_to_include = [nodes_and_vars[n.name] for n in of_nv]
 
         stub = Value(0.0)
-        model = Model(stub)  # adding a stub node to avoid printing a warning
+        model = Model(
+            stub, to_float32=self._to_float32
+        )  # adding a stub node to avoid printing a warning
 
         # turning auto update off to avoid errors caused by the Nones
         model.auto_update = False
