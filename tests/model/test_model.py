@@ -576,6 +576,20 @@ class TestModel:
         with pytest.raises(RuntimeError, match="Ambiguous weak variable update"):
             model.update_state({"y": 10.0, "z": 20.0}, allow_weak_vars=True)
 
+    def test_update_state_allows_strong_var_depending_on_weak_var(self) -> None:
+        x = Var(1.0, name="x")
+        y = Var.new_calc(lambda x: x + 1.0, x, name="y")
+        obs = Var.new_obs(0.0, Dist(tfd.Normal, loc=y, scale=1.0), name="obs")
+        model = Model([obs])
+
+        state = model.update_state(
+            {"y": 10.0, "obs": 11.0}, allow_weak_vars=True
+        )
+        extracted_pos = model.extract_position(["y", "obs"], model_state=state)
+
+        assert extracted_pos["y"] == pytest.approx(10.0)
+        assert extracted_pos["obs"] == pytest.approx(11.0)
+
     def test_update_state_transient_weak_var_with_switch_fails(self) -> None:
         x = Var(1.0, name="x")
         y = Var.new_calc(lambda x: x + 1.0, x, name="y", cache=False)
