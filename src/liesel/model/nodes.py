@@ -917,7 +917,11 @@ class Calc(Node):
         try:
             self._value = self.function(*args, **kwargs)
         except Exception as e:
-            raise RuntimeError(f"Error while updating {self}.") from e
+            if self.var is not None:
+                msg = f"Error while updating {self} of {self.var}."
+            else:
+                msg = f"Error while updating {self}."
+            raise RuntimeError(msg) from e
         self._outdated = False
         return self
 
