@@ -231,7 +231,7 @@ class TestVarTransform:
 
         model = lsl.Model([tau])
 
-        with pytest.raises(AttributeError):
+        with pytest.raises((AttributeError, pickle.PicklingError)):
             with open(tmp_path / "model.pkl", "wb") as f:
                 pickle.dump(model, f)
 
