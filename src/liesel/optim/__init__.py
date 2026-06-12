@@ -10,6 +10,7 @@ from .split import PositionSplit as PositionSplit
 from .split import PositionSplitManager as PositionSplitManager
 from .split import Split as Split
 from .split import SplitManager as SplitManager
+from .state import OptimNaNDebugInfo as OptimNaNDebugInfo
 from .stop import Stopper as Stopper
 from .vi import CompositeVDist as CompositeVDist
 from .vi import Elbo as Elbo
@@ -27,6 +28,7 @@ __all__ = [
     "NegElboLoss",
     "NegLogProbLoss",
     "OptimEngine",
+    "OptimNaNDebugInfo",
     "Optimizer",
     "PositionSplit",
     "PositionSplitManager",

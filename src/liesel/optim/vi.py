@@ -851,8 +851,7 @@ class VDist:
         )
         if duplicate_keys:
             raise ValueError(
-                "Duplicate position_keys are not allowed: "
-                f"{duplicate_keys}."
+                f"Duplicate position_keys are not allowed: {duplicate_keys}."
             )
 
         self.position_keys = position_keys

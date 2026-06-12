@@ -112,6 +112,94 @@ class BatchSensitiveLoss:
         return self.loss_train_batched(params, carry), self.grad(params, carry)
 
 
+@dataclass
+class DebugNoOpOptimizer:
+    position_keys: list[str]
+    identifier: str = "noop"
+
+    def position(self, position: Position) -> Position:
+        return Position({key: position[key] for key in self.position_keys})
+
+    def not_position(self, position: Position) -> Position:
+        return Position(
+            {
+                key: value
+                for key, value in position.items()
+                if key not in self.position_keys
+            }
+        )
+
+    def init(self, position: Position):
+        del position
+        return jnp.array(0)
+
+    def step(self, position: Position, loss, carry: OptimCarry) -> OptimCarry:
+        del position, loss
+        carry.optimizer_states[self.identifier] += 1
+        return carry
+
+
+@dataclass
+class AddOneOptimizer(DebugNoOpOptimizer):
+    def step(self, position: Position, loss, carry: OptimCarry) -> OptimCarry:
+        del loss
+        key = self.position_keys[0]
+        carry.position = Position(carry.position | {key: position[key] + 1.0})
+        carry.optimizer_states[self.identifier] += 1
+        return carry
+
+
+@dataclass
+class NanOptimizer(DebugNoOpOptimizer):
+    def step(self, position: Position, loss, carry: OptimCarry) -> OptimCarry:
+        del loss
+        key = self.position_keys[0]
+        carry.position = Position(carry.position | {key: position[key] * jnp.nan})
+        carry.optimizer_states[self.identifier] += 1
+        return carry
+
+
+@dataclass
+class DebugNaNLoss:
+    split: PositionSplit
+    trigger_batch_value: float | None = None
+    initial_nan: bool = False
+
+    def position(self, position_keys) -> Position:
+        return Position(
+            {
+                key: jnp.array(jnp.nan if self.initial_nan else 0.0)
+                for key in position_keys
+            }
+        )
+
+    def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
+        param_sum = sum(jnp.sum(value) for value in params.values())
+        batch_sum = sum(jnp.sum(value) for value in carry.batch.values())
+        loss = param_sum + batch_sum
+        if self.trigger_batch_value is None:
+            return loss
+
+        trigger = jnp.asarray(False)
+        for value in carry.batch.values():
+            trigger = trigger | jnp.any(value == self.trigger_batch_value)
+        return jnp.where(trigger, jnp.nan, loss)
+
+    def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
+        del carry
+        return sum(jnp.sum(value) for value in params.values())
+
+    def loss_validate(self, params: Position, carry: OptimCarry) -> jax.Array:
+        return self.loss_train(params, carry)
+
+    def grad(self, params: Position, carry: OptimCarry):
+        del carry
+        return Position({key: jnp.zeros_like(value) for key, value in params.items()})
+
+    def value_and_grad(self, params: Position, carry: OptimCarry):
+        return self.loss_train_batched(params, carry), self.grad(params, carry)
+
+
 def _split() -> PositionSplit:
     return PositionSplit(
         train=Position({"y": jnp.array([0.0])}),
@@ -258,6 +346,154 @@ def test_invalid_train_monitor_raises():
             show_progress=False,
             train_monitor="sometimes",  # type: ignore[arg-type]
         )
+
+
+def test_debug_nans_loss_capture_reproduces_loss():
+    split = PositionSplit(
+        train=Position({"y": jnp.array([0.0, 1.0, 2.0])}),
+        validate=Position({}),
+        test=Position({}),
+        train_axis_size=3,
+        validate_axis_size=0,
+        test_axis_size=0,
+    )
+    engine = OptimEngine(
+        loss=DebugNaNLoss(split, trigger_batch_value=1.0),
+        batches=Batches(["y"], axis_size=3, batch_size=1, shuffle=False),
+        optimizers=[DebugNoOpOptimizer(["theta"])],
+        stopper=Stopper(epochs=3, patience=3),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+        debug_nans=True,
+    )
+
+    result = engine.fit()
+
+    info = result.nan_debug
+    assert info is not None
+    assert result.final_epoch == 0
+    assert info.kind == "loss"
+    assert info.batch == 1
+    assert info.optimizer_index is None
+    assert info.nan_position is None
+    assert info.obs_batch["y"].tolist() == pytest.approx([1.0])
+    assert info.last_non_nan_position["theta"] == pytest.approx(0.0)
+    assert bool(jnp.isnan(info.loss))
+    assert bool(jnp.isnan(info.reproduce_loss(engine)))
+    assert info.reproduction_carry.batch["y"].tolist() == pytest.approx([1.0])
+    assert info.reproduction_carry.fixed_position == {}
+
+    epoch_key, _ = jax.random.split(jax.random.key(1))
+    batch0_key, _ = jax.random.split(epoch_key)
+    expected_loss_key, _ = jax.random.split(batch0_key)
+    assert jnp.array_equal(
+        jax.random.key_data(info.reproduction_carry.key),
+        jax.random.key_data(expected_loss_key),
+    )
+
+
+def test_debug_nans_position_after_reproduces_second_optimizer_step():
+    split = PositionSplit(
+        train=Position({"y": jnp.array([0.0, 1.0])}),
+        validate=Position({}),
+        test=Position({}),
+        train_axis_size=2,
+        validate_axis_size=0,
+        test_axis_size=0,
+    )
+    engine = OptimEngine(
+        loss=DebugNaNLoss(split),
+        batches=Batches(["y"], axis_size=2, batch_size=1, shuffle=False),
+        optimizers=[
+            AddOneOptimizer(["theta"], identifier="add_theta"),
+            NanOptimizer(["eta"], identifier="nan_eta"),
+        ],
+        stopper=Stopper(epochs=3, patience=3),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+        debug_nans=True,
+    )
+
+    result = engine.fit()
+
+    info = result.nan_debug
+    assert info is not None
+    assert result.final_epoch == 0
+    assert info.kind == "position_after"
+    assert info.batch == 0
+    assert info.optimizer_index == 1
+    assert info.optimizer_identifier == "nan_eta"
+    assert info.optimizer_position_keys == ("eta",)
+    assert info.last_non_nan_position["theta"] == pytest.approx(1.0)
+    assert info.last_non_nan_position["eta"] == pytest.approx(0.0)
+    assert info.reproduction_position["theta"] == pytest.approx(1.0)
+    assert info.reproduction_position["eta"] == pytest.approx(0.0)
+    assert info.reproduction_carry.fixed_position["theta"] == pytest.approx(1.0)
+    assert "eta" not in info.reproduction_carry.fixed_position
+    assert bool(jnp.isnan(info.nan_position["eta"]))
+
+    carry_after = info.reproduce_step(engine)
+    assert bool(jnp.isnan(carry_after.position["eta"]))
+
+    epoch_key, _ = jax.random.split(jax.random.key(1))
+    after_first_optimizer_key, _ = jax.random.split(epoch_key)
+    _, expected_step_key = jax.random.split(after_first_optimizer_key)
+    assert jnp.array_equal(
+        jax.random.key_data(info.reproduction_carry.key),
+        jax.random.key_data(expected_step_key),
+    )
+
+
+def test_debug_nans_position_before_capture():
+    split = _split()
+    engine = OptimEngine(
+        loss=DebugNaNLoss(split, initial_nan=True),
+        batches=Batches(["y"], axis_size=1, batch_size=1, shuffle=False),
+        optimizers=[DebugNoOpOptimizer(["theta"])],
+        stopper=Stopper(epochs=3, patience=3),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+        debug_nans=True,
+    )
+
+    result = engine.fit()
+
+    info = result.nan_debug
+    assert info is not None
+    assert result.final_epoch == 0
+    assert info.kind == "position_before"
+    assert info.optimizer_index is None
+    assert bool(jnp.isnan(info.nan_position["theta"]))
+
+
+def test_debug_nans_disabled_keeps_existing_nan_loss_behavior():
+    split = PositionSplit(
+        train=Position({"y": jnp.array([0.0, 1.0])}),
+        validate=Position({}),
+        test=Position({}),
+        train_axis_size=2,
+        validate_axis_size=0,
+        test_axis_size=0,
+    )
+    engine = OptimEngine(
+        loss=DebugNaNLoss(split, trigger_batch_value=0.0),
+        batches=Batches(["y"], axis_size=2, batch_size=1, shuffle=False),
+        optimizers=[DebugNoOpOptimizer(["theta"])],
+        stopper=Stopper(epochs=3, patience=3),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+        debug_nans=False,
+    )
+
+    result = engine.fit()
+
+    assert result.nan_debug is None
+    assert result.final_epoch == 1
+    assert bool(jnp.isnan(result.history.loss_train[0]))
 
 
 def test_no_validation_epoch_average_monitor_uses_arithmetic_average():

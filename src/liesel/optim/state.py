@@ -9,8 +9,9 @@ user-facing pieces are :class:`OptimResult`, returned by optimizer runs, and
 from __future__ import annotations
 
 from collections.abc import Sequence
+from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import jax
 import jax.numpy as jnp
@@ -25,8 +26,24 @@ from .batch import Batches, BatchManager
 from .optimizer import Optimizer
 from .types import Position
 
+if TYPE_CHECKING:
+    from .engine import OptimEngine
+    from .optimizer import Optimizer
+
 Array = Any
 BatchConfig = Batches | BatchManager
+
+OptimNaNKind = Literal["position_before", "position_after", "loss"]
+
+_NAN_DEBUG_KIND_NONE = 0
+_NAN_DEBUG_KIND_POSITION_BEFORE = 1
+_NAN_DEBUG_KIND_POSITION_AFTER = 2
+_NAN_DEBUG_KIND_LOSS = 3
+_NAN_DEBUG_KIND_NAMES: dict[int, OptimNaNKind] = {
+    _NAN_DEBUG_KIND_POSITION_BEFORE: "position_before",
+    _NAN_DEBUG_KIND_POSITION_AFTER: "position_after",
+    _NAN_DEBUG_KIND_LOSS: "loss",
+}
 
 
 def _first_floating_dtype(*trees) -> jnp.dtype | None:
@@ -476,6 +493,67 @@ def array_to_dict(
 
 @register_dataclass_as_pytree
 @dataclass
+class OptimNaNDebugState:
+    """
+    Internal fixed-shape NaN debugging state carried through JAX loops.
+
+    The public debug object is constructed from this state after the optimization
+    loop returns. This class intentionally stores numeric codes instead of strings so
+    it can remain a JAX pytree.
+    """
+
+    has_nan: jax.Array
+    kind_code: jax.Array
+    epoch: jax.Array
+    batch: jax.Array
+    optimizer_index: jax.Array
+    obs_batch: Position
+    last_non_nan_position: Position
+    nan_position: Position
+    loss: jax.Array
+    reproduction_position: Position
+    reproduction_key: jax.Array
+    reproduction_optimizer_states: dict[str, optax.OptState]
+    reproduction_batches: BatchConfig
+    reproduction_model_state: ModelState
+
+    @classmethod
+    def new(
+        cls,
+        *,
+        key: jax.Array,
+        position: Position,
+        obs_batch: Position,
+        optimizer_states: dict[str, optax.OptState],
+        batches: BatchConfig,
+        model_state: ModelState,
+        loss_dtype: jnp.dtype | None = None,
+    ) -> OptimNaNDebugState:
+        if loss_dtype is None:
+            loss_dtype = _first_floating_dtype(position)
+
+        loss = jnp.asarray(jnp.nan, dtype=loss_dtype)
+
+        return cls(
+            has_nan=jnp.asarray(False),
+            kind_code=jnp.asarray(_NAN_DEBUG_KIND_NONE, dtype=jnp.int32),
+            epoch=jnp.asarray(0, dtype=jnp.int32),
+            batch=jnp.asarray(0, dtype=jnp.int32),
+            optimizer_index=jnp.asarray(-1, dtype=jnp.int32),
+            obs_batch=obs_batch,
+            last_non_nan_position=position,
+            nan_position=position,
+            loss=loss,
+            reproduction_position=position,
+            reproduction_key=key,
+            reproduction_optimizer_states=optimizer_states,
+            reproduction_batches=batches,
+            reproduction_model_state=model_state,
+        )
+
+
+@register_dataclass_as_pytree
+@dataclass
 class OptimCarry:
     """
     Mutable optimizer loop state used by :class:`.OptimEngine`.
@@ -521,6 +599,8 @@ class OptimCarry:
         Current epoch index.
     i_batch
         Current mini-batch index within the epoch.
+    nan_debug_state
+        Optional internal state for debug-only first-NaN capture.
     """
 
     key: jax.Array  # random number key
@@ -545,6 +625,7 @@ class OptimCarry:
 
     epoch: int = 0  # outer while-loop index over epochs
     i_batch: int = 0  # inner for-loop index over batches
+    nan_debug_state: OptimNaNDebugState | None = None
 
     @classmethod
     def new(
@@ -634,6 +715,68 @@ class OptimCarry:
 
 
 @dataclass
+class OptimNaNDebugInfo:
+    """
+    Reproduction data for the first NaN captured by :class:`.OptimEngine`.
+
+    Use :meth:`reproduce_step` for NaNs introduced by an optimizer update and
+    :meth:`reproduce_loss` for NaNs returned by the batched training loss.
+    """
+
+    kind: OptimNaNKind
+    epoch: int
+    batch: int
+    obs_batch: Position
+    last_non_nan_position: Position
+    nan_position: Position | None
+    loss: jax.Array | None
+    optimizer_index: int | None
+    optimizer_identifier: str | None
+    optimizer_position_keys: tuple[str, ...] | None
+    reproduction_position: Position
+    reproduction_carry: OptimCarry
+
+    @property
+    def position(self) -> Position:
+        """Position most directly associated with the captured NaN event."""
+        if self.nan_position is not None:
+            return self.nan_position
+
+        return self.reproduction_position
+
+    def optimizer(self, engine: OptimEngine) -> Optimizer | None:
+        """Returns the optimizer that introduced the NaN position, if known."""
+        if self.optimizer_index is None:
+            return None
+
+        return engine.optimizers[self.optimizer_index]
+
+    def reproduce_step(self, engine: OptimEngine) -> OptimCarry:
+        """
+        Re-runs the optimizer step that introduced a NaN position.
+
+        Raises
+        ------
+        ValueError
+            If the captured event was not an optimizer-step position NaN.
+        """
+        opt = self.optimizer(engine)
+        if self.kind != "position_after" or opt is None:
+            raise ValueError(
+                "reproduce_step() is available only for position_after NaN events."
+            )
+
+        carry = deepcopy(self.reproduction_carry)
+        position = opt.position(self.reproduction_position)
+        return opt.step(position, engine.loss, carry)
+
+    def reproduce_loss(self, engine: OptimEngine) -> jax.Array:
+        """Re-evaluates the batched training loss with the saved reproduction state."""
+        carry = deepcopy(self.reproduction_carry)
+        return engine.loss.loss_train_batched(self.reproduction_position, carry)
+
+
+@dataclass
 class OptimResult:
     """
     Result returned by an optimizer run.
@@ -657,6 +800,9 @@ class OptimResult:
         Epoch at which the global best monitoring loss was found.
     duration
         Wall-clock runtime in seconds.
+    nan_debug
+        Reproduction data for the first captured NaN when engine NaN debugging was
+        enabled, otherwise ``None``.
 
     Examples
     --------
@@ -681,6 +827,7 @@ class OptimResult:
     best_position: Position
     best_epoch: int
     duration: float
+    nan_debug: OptimNaNDebugInfo | None = None
 
     def plot_loss(
         self, legend: bool = True, title: str | None = None, window: int | None = None

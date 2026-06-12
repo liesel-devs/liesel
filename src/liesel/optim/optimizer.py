@@ -181,6 +181,7 @@ class Optimizer:
         pos = position
 
         opt_state = carry.optimizer_states[self.identifier]
+        loss.loss_train_batched(pos, carry)
         grad = loss.grad(pos, carry)
         updates, opt_state = self.optimizer.update(grad, opt_state, params=pos)
         updated_position = Position(optax.apply_updates(pos, updates))
