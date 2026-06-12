@@ -77,6 +77,19 @@ def _transform_back(var_transformed: Var) -> Calc:
 
 
 def _set_weak_var_value(var: Var, value: Array) -> None:
+    """
+    Sets the cached value of a weak variable's value node.
+
+    This is a low-level helper for temporarily overriding weak variable values. It
+    can put the graph into an inconsistent state: the cached value no longer
+    needs to match the value implied by the variable's inputs.
+
+    This helper calls :meth:`.Node.flag_outdated` on the value node's outputs
+    only. It does not call ``var.value_node.flag_outdated()`` on the value node
+    itself. Callers that want the weak variable to be recomputed from its inputs
+    after downstream updates should usually flag the value node itself as
+    outdated too.
+    """
     if isinstance(var.value_node, TransientNode):
         raise RuntimeError(
             f"{repr(var)} is weak and transient, cannot set cached value"
