@@ -582,9 +582,7 @@ class TestModel:
         obs = Var.new_obs(0.0, Dist(tfd.Normal, loc=y, scale=1.0), name="obs")
         model = Model([obs])
 
-        state = model.update_state(
-            {"y": 10.0, "obs": 11.0}, allow_weak_vars=True
-        )
+        state = model.update_state({"y": 10.0, "obs": 11.0}, allow_weak_vars=True)
         extracted_pos = model.extract_position(["y", "obs"], model_state=state)
 
         assert extracted_pos["y"] == pytest.approx(10.0)
