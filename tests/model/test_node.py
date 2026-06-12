@@ -356,6 +356,20 @@ def test_calculator_error_in_update() -> None:
         calc.update()
 
 
+def test_calculator_error_in_update_mentions_var() -> None:
+    x = Value(2.0, _name="x")
+
+    def update_fn(x):
+        raise ValueError("Testing error message.")
+
+    var = Var.new_calc(update_fn, x=x, name="broken", _update_on_init=False)
+    with pytest.raises(
+        RuntimeError,
+        match=r'while updating Calc\(name="broken_calc"\) of Var\(name="broken"\)\.',
+    ):
+        var.update()
+
+
 def test_transient_calculator_error_in_update() -> None:
     x = Value(2.0, _name="x")
 
