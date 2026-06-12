@@ -2740,6 +2740,22 @@ class Model:
             return self.vars[key].value_node
 
     def _validate_weak_var_position(self, position: dict[str, Array]) -> None:
+        """
+        Validates that weak variable updates in a position are unambiguous.
+
+        If ``position`` contains a weak variable, it must not also contain another
+        key targeting the weak variable's value node, one of its ancestors, or one
+        of its descendants. Updating related nodes together with the weak variable
+        would make it unclear which value should determine the resulting graph
+        state.
+
+        Raises
+        ------
+        RuntimeError
+            If a weak variable in ``position`` is updated together with another
+            position key targeting the weak variable's value node, one of its
+            ancestors, or one of its descendants.
+        """
         weak_vars = [
             (key, self.vars[key])
             for key in position
