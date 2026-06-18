@@ -43,7 +43,7 @@ jobs:
 
   notify-failure:
     needs: pytest-cron
-    if: failure()
+    if: failure() && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       issues: write
