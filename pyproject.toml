@@ -63,7 +63,7 @@ dev = [
     "liesel_gam>=0.1.3"
 ]
 
-pymc = ["pymc>=5.9"]
+pymc = ["pymc>=6.0"]
 
 
 [build-system]
