@@ -36,10 +36,10 @@ jobs:
         run: uv sync ${{ matrix.sync-args }}
 
       - name: Run pytest
-        run: uv run pytest --run-mcmc
+        run: uv run --no-sync pytest --run-mcmc
 
       - name: Run doctests
-        run: uv run pytest --doctest-modules src/liesel
+        run: uv run --no-sync pytest --doctest-modules src/liesel
 
   notify-failure:
     needs: pytest-cron
