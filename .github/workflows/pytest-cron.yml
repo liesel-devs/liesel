@@ -15,7 +15,13 @@ jobs:
 
     strategy:
       matrix:
-        python-version: ["3.13"]
+        include:
+          - python-version: "3.13"
+            resolution: upgrade
+            sync-args: "--upgrade --all-groups"
+          - python-version: "3.13"
+            resolution: lowest-direct
+            sync-args: "--resolution lowest-direct --all-groups"
 
     steps:
       - name: Check out repository
@@ -26,8 +32,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install liesel without lockfile
-        run: uv sync --upgrade --all-groups
+      - name: Install liesel (${{ matrix.resolution }})
+        run: uv sync ${{ matrix.sync-args }}
 
       - name: Run pytest
         run: uv run pytest --run-mcmc
