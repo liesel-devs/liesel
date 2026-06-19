@@ -590,7 +590,7 @@ def test_frozen_distribution_distribution_manipulation(Dist) -> None:
     dist.update()
 
     model = Model([dist])
-    with pytest.raises(RuntimeWarning, match="divide by zero"):
+    with pytest.warns(RuntimeWarning, match="divide by zero"):
         dist.distribution = tfd.Exponential
 
     dist.distribution = tfd.LogNormal
