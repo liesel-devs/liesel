@@ -23,7 +23,7 @@ jobs:
           - python-version: "3.13"
             resolution: lowest-direct
             sync-args: "--resolution lowest-direct --all-groups"
-            pytest-args: ""
+            pytest-args: "-W default"
 
     steps:
       - name: Check out repository
