@@ -34,9 +34,9 @@ dependencies = [
     "pandas>=1.4",
     "pydot>=3.0",
     "scipy>=1.14.1",
-    "seaborn>=0.13",
+    "seaborn>=0.13.2",
     "tfp-nightly>=0.26.0.dev20250811",
-    "tqdm>=4.62",
+    "tqdm>=4.67",
 ]
 
 [project.urls]
