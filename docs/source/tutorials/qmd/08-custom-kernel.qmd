@@ -53,7 +53,7 @@ As an example, a random walk kernel (like {class}`.RWKernel`) can be implemented
 It can then be attached to the coefficient variable with
 
 ```python
->>> model.vars[param_name].coef.inference = gs.MCMCSpec(
+>>> model.vars[param_name].inference = gs.MCMCSpec(
 ...     gs.MHKernel,
 ...     kernel_kwargs={"proposal_fn": rw_proposal, "da_tune_step_size": True},
 ... )
@@ -110,7 +110,7 @@ classes. A kernel state can be any pytree.
 
 
 **The tune method.**
-The {meth}`.Kernel.tune` method is updates the kernel hyperparameters at the end of an adaptation
+The {meth}`.Kernel.tune` method updates the kernel hyperparameters at the end of an adaptation
 epoch. The method receives the PRNG key, the model state, the kernel state, the epoch
 state, and (optionally) the *history*, i.e.~the samples from the previous epoch, as
 arguments. It returns a {class}`.TuningOutcome` object that wraps the new kernel state and some
@@ -145,11 +145,12 @@ step size tuning in this kernel class, we define a kernel state that follows the
 {class}`.DAKernelState` protocol.
 
 ```{python}
-from dataclasses import dataclass, field  # general dataclass functionalty
+from dataclasses import dataclass
+from liesel.goose import da  # dual averaging functionality
+from liesel.goose.da import DualAvgState
 from liesel.goose.pytree import (
     register_dataclass_as_pytree,  # dataclasses must be registered as pytrees with jax
 )
-from liesel.goose import da  # dual averaging functionality
 
 
 @register_dataclass_as_pytree
@@ -161,12 +162,11 @@ class RWKernelState:
     """
 
     step_size: float
-    error_sum: float = field(default=0.0, init=False)
-    log_avg_step_size: float = field(default=0.0, init=False)
-    mu: float = field(init=False)
+    da_state: DualAvgState | None = None
 
     def __post_init__(self):
-        da.da_init(self)
+        if self.da_state is None:
+            self.da_state = DualAvgState.from_step_size(self.step_size)
 ```
 
 #### The kernel class
@@ -184,7 +184,10 @@ dispatches to `_standard_transition` or `_adaptive_transition`, depending on the
 current epoch. This means that we only have to implement these two methods.
 
 ```python
+from collections.abc import Sequence
+
 import jax
+import jax.flatten_util
 import liesel.goose as gs
 
 
@@ -229,7 +232,7 @@ the {class}`.RWKernelState`.
 ```python
     def __init__(
         self,
-        position_keys: list[str] | tuple[str, ...],
+        position_keys: Sequence[str],
         initial_step_size: float = 1.0,
         da_target_accept: float = 0.234,
         da_gamma: float = 0.05,
@@ -442,7 +445,10 @@ probability.
 We now simply restate the full code-block here:
 
 ```{python}
+from collections.abc import Sequence
+
 import jax
+import jax.flatten_util
 import liesel.goose as gs
 
 
@@ -463,7 +469,7 @@ class RWKernel(
 
     def __init__(
         self,
-        position_keys: list[str] | tuple[str, ...],
+        position_keys: Sequence[str],
         initial_step_size: float = 1.0,
         da_target_accept: float = 0.234,
         da_gamma: float = 0.05,
