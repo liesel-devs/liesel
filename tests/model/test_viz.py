@@ -3,6 +3,7 @@ import tempfile
 import jax.numpy as jnp
 import jax.random as rnd
 import matplotlib
+import matplotlib.pyplot as plt
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
@@ -56,7 +57,7 @@ model = Model([y])
 def test_plot_nodes() -> None:
     fp = tempfile.TemporaryFile()
     plot_nodes(model, save_path=fp)
-    matplotlib.pyplot.close()
+    plt.close()
     fp.close()
 
 
@@ -66,7 +67,7 @@ def test_plot_nodes_negative_width() -> None:
     with pytest.raises(ValueError):
         plot_nodes(model, width=-1, save_path=fp)
 
-    matplotlib.pyplot.close()
+    plt.close()
     fp.close()
 
 
@@ -76,7 +77,7 @@ def test_plot_nodes_negative_height() -> None:
     with pytest.raises(ValueError):
         plot_nodes(model, height=-1, save_path=fp)
 
-    matplotlib.pyplot.close()
+    plt.close()
     fp.close()
 
 
@@ -84,7 +85,7 @@ def test_plot_nodes_negative_height() -> None:
 def test_plot_nodes_circo_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_nodes(model, save_path=fp, prog="circo")
-    matplotlib.pyplot.close()
+    plt.close()
     fp.close()
 
 
@@ -92,7 +93,7 @@ def test_plot_nodes_circo_prog() -> None:
 def test_plot_nodes_dot_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_nodes(model, save_path=fp, prog="dot")
-    matplotlib.pyplot.close()
+    plt.close()
     fp.close()
 
 
@@ -100,7 +101,7 @@ def test_plot_nodes_dot_prog() -> None:
 def test_plot_nodes_fdp_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_nodes(model, save_path=fp, prog="fdp")
-    matplotlib.pyplot.close()
+    plt.close()
     fp.close()
 
 
@@ -108,7 +109,7 @@ def test_plot_nodes_fdp_prog() -> None:
 def test_plot_nodes_neato_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_nodes(model, save_path=fp, prog="neato")
-    matplotlib.pyplot.close()
+    plt.close()
     fp.close()
 
 
@@ -116,7 +117,7 @@ def test_plot_nodes_neato_prog() -> None:
 def test_plot_nodes_osage_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_nodes(model, save_path=fp, prog="osage")
-    matplotlib.pyplot.close()
+    plt.close()
     fp.close()
 
 
@@ -124,7 +125,7 @@ def test_plot_nodes_osage_prog() -> None:
 def test_plot_nodes_patchwork_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_nodes(model, save_path=fp, prog="patchwork")
-    matplotlib.pyplot.close()
+    plt.close()
     fp.close()
 
 
@@ -132,7 +133,7 @@ def test_plot_nodes_patchwork_prog() -> None:
 def test_plot_nodes_twopi_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_nodes(model, save_path=fp, prog="twopi")
-    matplotlib.pyplot.close()
+    plt.close()
     fp.close()
 
 
@@ -140,7 +141,7 @@ def test_plot_nodes_twopi_prog() -> None:
 def test_plot_nodes_sfdp_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_nodes(model, save_path=fp, prog="sfdp")
-    matplotlib.pyplot.close()
+    plt.close()
     fp.close()
 
 
@@ -153,7 +154,7 @@ def test_plot_nodes_sfdp_prog() -> None:
 def test_plot_vars() -> None:
     fp = tempfile.TemporaryFile()
     plot_vars(model, save_path=fp)
-    matplotlib.pyplot.close()
+    plt.close()
     fp.close()
 
 
@@ -163,7 +164,7 @@ def test_plot_vars_negative_width() -> None:
     with pytest.raises(ValueError):
         plot_vars(model, width=-1, save_path=fp)
 
-    matplotlib.pyplot.close()
+    plt.close()
     fp.close()
 
 
@@ -173,7 +174,7 @@ def test_plot_vars_negative_height() -> None:
     with pytest.raises(ValueError):
         plot_vars(model, height=-1, save_path=fp)
 
-    matplotlib.pyplot.close()
+    plt.close()
     fp.close()
 
 
@@ -181,7 +182,7 @@ def test_plot_vars_negative_height() -> None:
 def test_plot_vars_circo_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_vars(model, save_path=fp, prog="circo")
-    matplotlib.pyplot.close()
+    plt.close()
     fp.close()
 
 
@@ -189,7 +190,7 @@ def test_plot_vars_circo_prog() -> None:
 def test_plot_vars_dot_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_vars(model, save_path=fp, prog="dot")
-    matplotlib.pyplot.close()
+    plt.close()
     fp.close()
 
 
@@ -197,7 +198,7 @@ def test_plot_vars_dot_prog() -> None:
 def test_plot_vars_fdp_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_vars(model, save_path=fp, prog="fdp")
-    matplotlib.pyplot.close()
+    plt.close()
     fp.close()
 
 
@@ -205,7 +206,7 @@ def test_plot_vars_fdp_prog() -> None:
 def test_plot_vars_neato_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_vars(model, save_path=fp, prog="neato")
-    matplotlib.pyplot.close()
+    plt.close()
     fp.close()
 
 
@@ -213,7 +214,7 @@ def test_plot_vars_neato_prog() -> None:
 def test_plot_vars_osage_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_vars(model, save_path=fp, prog="osage")
-    matplotlib.pyplot.close()
+    plt.close()
     fp.close()
 
 
@@ -221,7 +222,7 @@ def test_plot_vars_osage_prog() -> None:
 def test_plot_vars_patchwork_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_vars(model, save_path=fp, prog="patchwork")
-    matplotlib.pyplot.close()
+    plt.close()
     fp.close()
 
 
@@ -229,7 +230,7 @@ def test_plot_vars_patchwork_prog() -> None:
 def test_plot_vars_twopi_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_vars(model, save_path=fp, prog="twopi")
-    matplotlib.pyplot.close()
+    plt.close()
     fp.close()
 
 
@@ -237,5 +238,5 @@ def test_plot_vars_twopi_prog() -> None:
 def test_plot_vars_sfdp_prog() -> None:
     fp = tempfile.TemporaryFile()
     plot_vars(model, save_path=fp, prog="sfdp")
-    matplotlib.pyplot.close()
+    plt.close()
     fp.close()
