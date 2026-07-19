@@ -1359,7 +1359,7 @@ class Dist(Node):
 
             if isinstance(input_node, VarValue):
                 param_var = input_node.var
-                if param_var:
+                if param_var is not None:
                     if not param_var.parameter:
                         logger.warning(
                             f"{param_var} has parameter=False "
@@ -1382,7 +1382,7 @@ class Dist(Node):
 
             if isinstance(input_node, VarValue):
                 param_var = input_node.var
-                if param_var:
+                if param_var is not None:
                     if not param_var.parameter:
                         logger.warning(
                             f"{param_var} has parameter=False "
