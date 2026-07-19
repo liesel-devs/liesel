@@ -11,7 +11,17 @@ from collections.abc import Callable, Hashable, Iterable, Sequence
 from functools import wraps
 from itertools import chain
 from types import MappingProxyType
-from typing import IO, TYPE_CHECKING, Any, Literal, NamedTuple, Self, TypeGuard, TypeVar
+from typing import (
+    IO,
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    NamedTuple,
+    Self,
+    TypeGuard,
+    TypeVar,
+    cast,
+)
 
 import jax
 import jax.numpy as jnp
@@ -1282,6 +1292,7 @@ class Dist(Node):
     ) -> dict[str, tuple[Var, Bijector | Literal["auto"]]]:
         """Resolves bijector specs to parameter->(Var, Bijector) mappings."""
         result: dict[str, tuple[Var, Bijector | Literal["auto"]]] = {}
+        bijector_dict: dict[str, Bijector | None]
 
         # Get default bijectors once - validates parameter_properties()
         default_bijectors = self.find_default_parameter_bijectors()
@@ -1306,22 +1317,26 @@ class Dist(Node):
             bijector_dict = default_bijectors
 
         elif isinstance(bijectors, dict):
+            bijector_specs = cast(
+                dict[str, Bijector | Literal["auto"] | None], bijectors
+            )
+
             if self.inputs:
                 raise ValueError(
                     "When dist inputs are supplied as positional arguments, "
                     "bijectors have to be supplied positionally, too. Got inputs "
-                    f"{self.inputs} and bijectors {bijectors} for dist {self}."
+                    f"{self.inputs} and bijectors {bijector_specs} for dist {self}."
                 )
 
             # Validate that all keys are valid parameter names
-            invalid_keys = set(bijectors.keys()) - set(param_names)
+            invalid_keys = set(bijector_specs) - set(param_names)
             if invalid_keys:
                 raise ValueError(
                     f"Invalid parameter name(s) in bijectors dict: {invalid_keys}. "
                     f"Valid parameter names are: {', '.join(param_names)}."
                 )
             bijector_dict = {}
-            for param_name, bijector in bijectors.items():
+            for param_name, bijector in bijector_specs.items():
                 if bijector == "auto":
                     bijector_dict[param_name] = default_bijectors.get(param_name)
                 else:
