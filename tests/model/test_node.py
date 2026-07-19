@@ -18,6 +18,13 @@ from liesel.model.nodes import (
     Var,
 )
 
+
+def _require_dist_node(var: Var) -> Dist:
+    dist_node = var.dist_node
+    assert dist_node is not None
+    return dist_node
+
+
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Test Data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -105,8 +112,8 @@ def test_float64():
     x.update()
 
     assert x.value.dtype == "float64"
-    assert x.dist_node["loc"].value.dtype == "float64"
-    assert x.dist_node["scale"].value.dtype == "float64"
+    assert _require_dist_node(x)["loc"].value.dtype == "float64"
+    assert _require_dist_node(x)["scale"].value.dtype == "float64"
 
     jax.config.update("jax_enable_x64", False)
 
@@ -826,15 +833,15 @@ class TestDistSetitem:
             tfd.Normal(loc=0.0, scale=1.0).log_prob(x.value)
         )
 
-        x.dist_node["loc"] = 2.0
+        _require_dist_node(x)["loc"] = 2.0
         x.update()
 
         assert x.log_prob == pytest.approx(
             tfd.Normal(loc=2.0, scale=1.0).log_prob(x.value)
         )
-        assert len(x.dist_node._loc) == 2
+        assert len(_require_dist_node(x)._loc) == 2
 
-        x.dist_node["scale"] = 2.0
+        _require_dist_node(x)["scale"] = 2.0
         x.update()
 
         assert x.log_prob == pytest.approx(
@@ -844,7 +851,7 @@ class TestDistSetitem:
     def test_cannot_replace_dist_at(self):
         x = Var(0.0, Dist(tfd.Normal, loc=0.0, scale=1.0)).update()
         with pytest.raises(IndexError):
-            x.dist_node[2] = Var(1.0)
+            _require_dist_node(x)[2] = Var(1.0)
 
     def test_replacing_positional_input_leads_to_correct_log_prob(self):
         x = Var(0.0, Dist(tfd.Normal, 0.0, 1.0)).update()
@@ -853,7 +860,7 @@ class TestDistSetitem:
             tfd.Normal(loc=0.0, scale=1.0).log_prob(x.value)
         )
 
-        x.dist_node[0] = 2.0
+        _require_dist_node(x)[0] = 2.0
         x.update()
 
         assert x.log_prob == pytest.approx(
@@ -864,7 +871,7 @@ class TestDistSetitem:
         x = Var(0.0, Dist(tfd.Normal, 0.0, 1.0)).update()
 
         with pytest.raises(KeyError):
-            x.dist_node["loc"] = 2.0
+            _require_dist_node(x)["loc"] = 2.0
 
     def test_replacing_an_input_node_with_a_var_works(self):
         x = Var(0.0, Dist(tfd.Normal, 0.0, 1.0)).update()
@@ -873,7 +880,7 @@ class TestDistSetitem:
             tfd.Normal(loc=0.0, scale=1.0).log_prob(x.value)
         )
 
-        x.dist_node[0] = Var(2.0, name="loc")
+        _require_dist_node(x)[0] = Var(2.0, name="loc")
         x.update()
 
         assert x.log_prob == pytest.approx(
@@ -887,19 +894,19 @@ class TestDistSetitem:
         ).update()
 
         with pytest.raises(AttributeError):
-            del x.dist_node["loc"]
+            del _require_dist_node(x)["loc"]
 
         x = Var(
             0.0, Dist(tfd.Normal, Var(0.0, name="loc"), scale=Var(1.0, name="scale"))
         ).update()
 
         with pytest.raises(AttributeError):
-            del x.dist_node[0]
+            del _require_dist_node(x)[0]
 
         x = Var(0.0, Dist(tfd.Normal, 0.0, scale=Var(1.0, name="scale"))).update()
 
         with pytest.raises(AttributeError):
-            del x.dist_node[0]
+            del _require_dist_node(x)[0]
 
     def test_assign_none(self):
         x = Var(
@@ -907,7 +914,7 @@ class TestDistSetitem:
             Dist(tfd.Normal, loc=Var(0.0, name="loc"), scale=Var(1.0, name="scale")),
         ).update()
 
-        x.dist_node["loc"] = None
+        _require_dist_node(x)["loc"] = None
 
 
 class TestCalcGetitem:

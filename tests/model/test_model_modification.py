@@ -7,6 +7,18 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 import liesel.model as lsl
 
 
+def _require_dist_node(var: lsl.Var) -> lsl.Dist:
+    dist_node = var.dist_node
+    assert dist_node is not None
+    return dist_node
+
+
+def _require_bijected_var(var: lsl.Var) -> lsl.Var:
+    bijected_var = var.bijected_var
+    assert bijected_var is not None
+    return bijected_var
+
+
 class TestBasicModifyModel:
     def test_biject_variable(self):
         x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
@@ -25,8 +37,8 @@ class TestBasicModifyModel:
 
         scale.biject(tfb.Exp())
 
-        assert scale.bijected_var.name in model.vars
-        assert scale.bijected_var.name in model.parameters
+        assert _require_bijected_var(scale).name in model.vars
+        assert _require_bijected_var(scale).name in model.parameters
         assert scale.name not in model.parameters
 
     def test_rename_variable(self):
@@ -52,7 +64,7 @@ class TestBasicModifyModel:
 
         assert "renamed" in model.vars
         assert scale.value_node.name == "renamed_value"
-        assert scale.dist_node.name == "renamed_log_prob"
+        assert _require_dist_node(scale).name == "renamed_log_prob"
 
         assert "scale" not in model.vars
         assert "scale_value" not in model.nodes
@@ -79,7 +91,7 @@ class TestBasicModifyModel:
 
         assert "renamed" in model.vars
         assert scale.value_node.name == "renamed_value"
-        assert scale.dist_node.name == "renamed_log_prob"
+        assert _require_dist_node(scale).name == "renamed_log_prob"
 
         assert "scale" not in model.vars
         assert "scale_value" not in model.nodes
@@ -106,7 +118,7 @@ class TestBasicModifyModel:
 
         assert "renamed" in model.vars
         assert scale.value_node.name == "named_node"
-        assert scale.dist_node.name == "renamed_log_prob"
+        assert _require_dist_node(scale).name == "renamed_log_prob"
 
         assert "scale" not in model.vars
         assert "renamed_value" not in model.nodes
@@ -129,7 +141,7 @@ class TestBasicModifyModel:
         model = lsl.Model([y])
         model.locked = False
 
-        dist_node = scale.dist_node
+        dist_node = _require_dist_node(scale)
 
         scale.dist_node = None
 
@@ -152,11 +164,11 @@ class TestBasicModifyModel:
         model = lsl.Model([y])
         model.locked = False
 
-        assert y.dist_node.per_obs
+        assert _require_dist_node(y).per_obs
         assert y.log_prob.size == 10
 
-        y.dist_node.per_obs = False
-        assert not y.dist_node.per_obs
+        _require_dist_node(y).per_obs = False
+        assert not _require_dist_node(y).per_obs
         assert y.log_prob.size == 1
 
     def test_change_obs_flag_of_a_var(self):
@@ -559,10 +571,10 @@ class TestBracketReplace:
 
         assert jnp.allclose(loc.value, x1.value + x2.value)
 
-        y.dist_node["loc"] = x3
+        _require_dist_node(y)["loc"] = x3
 
         assert jnp.allclose(loc.value, x1.value + x2.value)
-        assert y.dist_node["loc"] is x3
+        assert _require_dist_node(y)["loc"] is x3
 
         assert loc.name in model.vars
         assert x3.name in model.vars
@@ -593,10 +605,10 @@ class TestBracketReplace:
 
         assert jnp.allclose(loc.value, x1.value + x2.value)
 
-        y.dist_node["loc"] = x3
+        _require_dist_node(y)["loc"] = x3
 
         assert jnp.allclose(loc.value, x1.value + x2.value)
-        assert y.dist_node["loc"] is x3
+        assert _require_dist_node(y)["loc"] is x3
 
         assert loc.name in model.vars
         assert x3.name in model.nodes
@@ -627,10 +639,10 @@ class TestBracketReplace:
 
         assert jnp.allclose(loc.value, x1.value + x2.value)
 
-        y.dist_node["loc"] = x3
+        _require_dist_node(y)["loc"] = x3
 
         assert jnp.allclose(loc.value, x1.value + x2.value)
-        assert jnp.allclose(y.dist_node["loc"].value, x3.value)
+        assert jnp.allclose(_require_dist_node(y)["loc"].value, x3.value)
 
         assert loc.name in model.vars
         assert x3.name in model.nodes
@@ -672,7 +684,7 @@ class TestReplace:
 
         model.replace(scale, scale2)
 
-        assert y.dist_node["scale"] is scale2
+        assert _require_dist_node(y)["scale"] is scale2
         assert scale.name not in model.vars
         assert "scale_value" not in model.nodes
         assert "scale_log_prob" not in model.nodes
@@ -713,7 +725,7 @@ class TestReplace:
 
         model.replace("scale", scale2)
 
-        assert y.dist_node["scale"] is scale2
+        assert _require_dist_node(y)["scale"] is scale2
         assert scale.name not in model.vars
         assert "scale_value" not in model.nodes
         assert "scale_log_prob" not in model.nodes
@@ -754,7 +766,7 @@ class TestReplace:
         with pytest.raises(RuntimeError, match="can only be part of one model"):
             model.replace(scale, scale2)
 
-        assert y.dist_node["scale"] is scale
+        assert _require_dist_node(y)["scale"] is scale
         assert scale2.name not in model.vars
         assert scale.name in model.vars
         assert "scale_value" in model.nodes
@@ -794,7 +806,7 @@ class TestReplace:
 
         model.replace(scale, scale2)
 
-        assert y.dist_node["scale"] is scale2
+        assert _require_dist_node(y)["scale"] is scale2
         assert scale2.name in model.vars
         assert scale.name not in model.vars
         assert "scale_value" not in model.nodes
@@ -834,7 +846,7 @@ class TestReplace:
 
         model.replace(scale, scale2)
 
-        assert y.dist_node["scale"] is scale2
+        assert _require_dist_node(y)["scale"] is scale2
         assert scale2.name in model.vars
         assert scale.name not in model.vars
         assert "scale_value" not in model.nodes
@@ -869,7 +881,7 @@ class TestReplace:
 
         model.replace(scale, scale2)
 
-        assert y.dist_node["scale"] is scale2
+        assert _require_dist_node(y)["scale"] is scale2
         assert scale2.name in model.nodes
         assert scale.name not in model.vars
         assert "scale_value" not in model.nodes
@@ -905,7 +917,7 @@ class TestReplace:
         assert not auto_names_nodes
         model.replace(scale, 10.0)
 
-        assert y.dist_node["scale"].value == pytest.approx(10.0)
+        assert _require_dist_node(y)["scale"].value == pytest.approx(10.0)
 
         auto_names_nodes = [
             name
@@ -953,7 +965,7 @@ class TestReplace:
 
         model.replace(scale, scale2)
 
-        assert y.dist_node["scale"] is scale2
+        assert _require_dist_node(y)["scale"] is scale2
         assert scale.name not in model.vars
         assert "a" not in model.vars
         assert "b" not in model.vars
@@ -983,7 +995,7 @@ class TestReplace:
             1.0,
             lsl.Dist(
                 tfd.Weibull,
-                concentration=scale.dist_node["concentration"],
+                concentration=_require_dist_node(scale)["concentration"],
                 scale=lsl.Var.new_param(1.0, name="c"),
             ),
             name="scale2",
@@ -991,7 +1003,7 @@ class TestReplace:
 
         model.replace(scale, scale2)
 
-        assert y.dist_node["scale"] is scale2
+        assert _require_dist_node(y)["scale"] is scale2
         assert scale.name not in model.vars
         assert "a" in model.vars
         assert "b" not in model.vars
@@ -1019,7 +1031,7 @@ class TestReplace:
 
         model.replace(scale, scale)
 
-        assert y.dist_node["scale"] is scale
+        assert _require_dist_node(y)["scale"] is scale
         assert scale.name in model.vars
         assert "scale_value" in model.nodes
         assert "scale_log_prob" in model.nodes
@@ -1291,7 +1303,7 @@ class TestModelAdd:
         assert x not in model.seed_nodes_and_vars
         assert y in model.seed_nodes_and_vars
         assert x2 in model.seed_nodes_and_vars
-        assert x2.dist_node.name in model.nodes
+        assert _require_dist_node(x2).name in model.nodes
 
     def test_add_one_larger_model(self):
         x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
@@ -1325,9 +1337,9 @@ class TestModelAdd:
         assert y in model.seed_nodes_and_vars
         assert x2 not in model.seed_nodes_and_vars
         assert x2.name in model.vars
-        assert x2.dist_node.name in model.nodes
+        assert _require_dist_node(x2).name in model.nodes
         assert y2 in model.seed_nodes_and_vars
-        assert y2.dist_node.name in model.nodes
+        assert _require_dist_node(y2).name in model.nodes
 
     def test_add_one_model_copy(self):
         x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
@@ -1356,7 +1368,7 @@ class TestModelAdd:
         assert x2 not in model.seed_nodes_and_vars
 
         assert x2.name in model.vars
-        assert x2.dist_node.name in model.nodes
+        assert _require_dist_node(x2).name in model.nodes
 
         seed_node_names = [n.name for n in model.seed_nodes_and_vars]
         assert x2.name in seed_node_names

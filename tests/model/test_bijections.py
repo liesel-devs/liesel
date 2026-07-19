@@ -12,6 +12,12 @@ import liesel.goose as gs
 import liesel.model as lsl
 
 
+def _require_bijected_var(var: lsl.Var) -> lsl.Var:
+    bijected_var = var.bijected_var
+    assert bijected_var is not None
+    return bijected_var
+
+
 class TestBijectParametersValidation:
     """Test validation in Dist.biject_parameters."""
 
@@ -141,7 +147,9 @@ class TestBijectParametersValidation:
 
         dist = lsl.Dist(tfd.InverseGamma, scale=scale, concentration=concentration)
         with pytest.raises(TypeError, match="bijector class"):
-            dist.biject_parameters(bijectors=[tfb.Identity])
+            dist.biject_parameters(
+                bijectors=[tfb.Identity]  # ty: ignore[invalid-argument-type]
+            )
 
     def test_inference(self):
         scale = lsl.Var.new_param(
@@ -154,7 +162,11 @@ class TestBijectParametersValidation:
             dist.biject_parameters()
 
         with pytest.raises(ValueError, match="not supported"):
-            dist.biject_parameters(inference=gs.MCMCSpec(gs.HMCKernel))
+            dist.biject_parameters(
+                inference=gs.MCMCSpec(  # ty: ignore[invalid-argument-type]
+                    gs.HMCKernel
+                )
+            )
 
         dist.biject_parameters(inference="drop")
         assert scale.weak
@@ -363,7 +375,7 @@ class TestBijectParametersSuccess:
         dist = lsl.Dist(tfd.Gamma, concentration, scale)
         assert dist._dtype == jnp.dtype("float64")
         dist.biject_parameters()
-        assert concentration.bijected_var.value.dtype == jnp.dtype("float64")
+        assert _require_bijected_var(concentration).value.dtype == jnp.dtype("float64")
         jax.config.update("jax_enable_x64", False)
 
 
@@ -391,16 +403,16 @@ class TestVarBiject:
         scale = lsl.Var.new_param(1.0, name="scale")
         scale.biject(tfb.Exp())
 
-        assert scale.bijected_var.name == "h(scale)"
+        assert _require_bijected_var(scale).name == "h(scale)"
 
     def test_bijected_var_from_transform(self):
         scale = lsl.Var.new_param(1.0, name="scale")
         scale.transform(tfb.Exp())
 
-        assert scale.bijected_var.name == "scale_transformed"
+        assert _require_bijected_var(scale).name == "scale_transformed"
 
     def test_unnamed_bijected_var(self):
         scale = lsl.Var.new_param(1.0)
         scale.transform(tfb.Exp())
 
-        assert scale.bijected_var.name == ""
+        assert _require_bijected_var(scale).name == ""
