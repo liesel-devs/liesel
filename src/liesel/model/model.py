@@ -3119,6 +3119,13 @@ class TemporaryModel:
         If ``silent=True``, all logging will be suppressed.
     """
 
+    gb: GraphBuilder
+    model: Model
+    var_names: list[str]
+    node_names: list[str]
+    vars: list[Var]
+    nodes: list[Node]
+
     def __init__(
         self,
         *vars_and_nodes,
@@ -3133,13 +3140,6 @@ class TemporaryModel:
 
         if verbose and silent:
             raise ValueError(f"{verbose=} and {silent=} cannot both be True.")
-
-        self.gb = None
-        self.model = None
-        self.var_names = None
-        self.node_names = None
-        self.vars = None
-        self.nodes = None
 
     def __enter__(self):
         verbose = self.verbose
