@@ -561,16 +561,18 @@ class Node(ABC):
         else:
             raise ValueError(f"Key must be str or int, not {type(key)}.")
 
-    def __getstate__(self):
+    def __getstate__(self) -> dict[str, Any]:
         state = self.__dict__.copy()
         state["_model"] = self._model()
         return state
 
-    def __setstate__(self, state):
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        # __getstate__ stores the dereferenced Model rather than its weak reference.
+        model: Model | None = state["_model"]
         self.__dict__.update(state)
 
-        if self._model is not None:
-            self._model = weakref.ref(self._model)
+        if model is not None:
+            self._model = weakref.ref(model)
         else:
             self._model = lambda: None
 
