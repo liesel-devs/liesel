@@ -417,7 +417,10 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         """Locations."""
         return self._loc
 
-    def _sample_n(self, n, seed=None) -> Array:
+    def _sample_n(self, n, seed=None, **kwargs) -> Array:
+        if seed is None:
+            raise ValueError("Must provide a JAX PRNG key as `seed`.")
+
         shape = [n] + self.batch_shape + self.event_shape
 
         # The added dimension at the end here makes sure that matrix multiplication
