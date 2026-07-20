@@ -70,6 +70,9 @@ def test_default_build_engine_uses_opinionated_defaults():
     assert engine.optimizers[0].position_keys == tuple(engine.loss.q.parameters)
     assert engine.stopper == Stopper(epochs=1000, patience=10, rtol=1e-6)
     assert engine.train_monitor == "auto"
+    assert engine.progress_update_every == 10
+    assert engine.show_step_progress is False
+    assert engine.step_progress_update_every == 10
 
 
 def test_batch_size_shortcut_builds_training_batches():
@@ -204,15 +207,24 @@ def test_progress_and_train_monitor_are_passed_to_engine():
 
     engine = LieselVI(
         model,
+        batch_size=1,
         train_monitor="weighted_epoch_average",
         show_progress=False,
         progress_n_updates=7,
+        progress_update_every=3,
+        show_step_progress=True,
+        step_progress_update_every=4,
+        step_progress_n_updates=4,
         seed=1,
     ).build_engine()
 
     assert engine.train_monitor == "weighted_epoch_average"
     assert engine.show_progress is False
     assert engine.progress_n_updates == 7
+    assert engine.progress_update_every == 143
+    assert engine.show_step_progress is True
+    assert engine.step_progress_update_every == 2
+    assert engine.step_progress_n_updates == 3
 
 
 def test_fit_returns_optim_result():

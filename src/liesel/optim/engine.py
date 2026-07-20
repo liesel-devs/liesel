@@ -9,16 +9,21 @@ but direct construction is useful for custom losses or optimizer schedules.
 from __future__ import annotations
 
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
-from math import ceil
 from typing import Literal
 
 import jax
 import jax.numpy as jnp
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
-from ._engine_utils import BatchConfig, SplitConfig
+from ._engine_utils import (
+    BatchConfig,
+    SplitConfig,
+    _progress_n_updates,
+    _progress_print_rate,
+    _validate_positive_int,
+)
 from .batch import Batches
 from .loss import Loss
 from .optimizer import Optimizer
@@ -40,18 +45,6 @@ from .types import ModelState, Position
 __all__ = ["OptimEngine"]
 
 TrainMonitor = Literal["auto", "epoch_average", "weighted_epoch_average", "full_data"]
-
-
-def _progress_print_rate(epochs: int, progress_n_updates: int) -> int:
-    return max(ceil(epochs / progress_n_updates), 1)
-
-
-def _should_update_progress(completed_epochs: int | jax.Array, print_rate: int):
-    return completed_epochs % print_rate == 0
-
-
-def _progress_remainder(completed_epochs: int | jax.Array, print_rate: int) -> int:
-    return int(completed_epochs % print_rate)
 
 
 def _tree_has_nan(tree) -> jax.Array:
@@ -78,7 +71,7 @@ def _position_where(
     return Position(_tree_where(condition, true_position, false_position))
 
 
-@dataclass
+@dataclass(init=False)
 class OptimEngine:
     """
     Runs an optimization loop over epochs, batches, and optimizers.
@@ -113,12 +106,15 @@ class OptimEngine:
     prune_history
         If ``True``, remove unused history entries after early stopping.
     show_progress
-        Whether to show a ``tqdm`` progress bar.
+        Whether to show ``tqdm`` progress bars. This is the master switch for both
+        epoch and optional batch progress.
     save_position_history
         Whether to store the full position history. The global best position is
         tracked independently of this setting.
     progress_n_updates
-        Approximate maximum number of progress-bar updates.
+        Compatibility alias for configuring an approximate maximum number of epoch
+        progress-bar updates. The value is converted to ``progress_update_every``;
+        reading it returns the resulting effective number of updates.
     train_monitor
         Training-data monitor used when no validation split is available.
         ``"auto"`` uses ``"weighted_epoch_average"`` for mini-batch runs and the
@@ -130,6 +126,20 @@ class OptimEngine:
         loss can be reused.
     debug_nans
         Whether to capture first-NaN reproduction data during batch updates.
+    progress_update_every
+        Update the epoch progress bar after this many completed epochs. Defaults to
+        10. The final state is always rendered. When batch progress is active, the
+        epoch bar advances after every epoch to keep the nested display consistent.
+    show_step_progress
+        Whether to show an additional progress bar for batches within each epoch
+        when ``show_progress`` is enabled.
+    step_progress_update_every
+        Update the batch progress bar after this many completed batches. Defaults to
+        10. The final state of an interrupted epoch is always rendered.
+    step_progress_n_updates
+        Compatibility alias for configuring an approximate maximum number of batch
+        progress-bar updates per epoch. Reading it returns the resulting effective
+        number of updates.
 
     Attributes
     ----------
@@ -163,9 +173,61 @@ class OptimEngine:
     prune_history: bool = True
     show_progress: bool = True
     save_position_history: bool = True
-    progress_n_updates: int = 100
+    progress_update_every: int = 10
     train_monitor: TrainMonitor = "auto"
     debug_nans: bool = False
+    show_step_progress: bool = False
+    step_progress_update_every: int = 10
+
+    def __init__(
+        self,
+        loss: Loss,
+        batches: BatchConfig,
+        optimizers: Sequence[Optimizer],
+        stopper: Stopper,
+        seed: int | jax.Array,
+        initial_state: ModelState,
+        restore_best_position: bool = True,
+        prune_history: bool = True,
+        show_progress: bool = True,
+        save_position_history: bool = True,
+        progress_n_updates: int | None = None,
+        train_monitor: TrainMonitor = "auto",
+        debug_nans: bool = False,
+        *,
+        progress_update_every: int = 10,
+        show_step_progress: bool = False,
+        step_progress_update_every: int = 10,
+        step_progress_n_updates: int | None = None,
+    ) -> None:
+        """Initializes an optimization engine.
+
+        ``progress_n_updates`` retains its historical positional and keyword slot.
+        When supplied, it takes precedence over ``progress_update_every``. The batch
+        aliases follow the same rule.
+        """
+        self.loss = loss
+        self.batches = batches
+        self.optimizers = optimizers
+        self.stopper = stopper
+        self.seed = seed
+        self.initial_state = initial_state
+        self.restore_best_position = restore_best_position
+        self.prune_history = prune_history
+        self.show_progress = show_progress
+        self.save_position_history = save_position_history
+        self.progress_update_every = progress_update_every
+        self.train_monitor = train_monitor
+        self.debug_nans = debug_nans
+        self.show_step_progress = show_step_progress
+        self.step_progress_update_every = step_progress_update_every
+
+        if progress_n_updates is not None:
+            self.progress_n_updates = progress_n_updates
+        if step_progress_n_updates is not None:
+            self.step_progress_n_updates = step_progress_n_updates
+
+        self.__post_init__()
 
     def __post_init__(self) -> None:
         """
@@ -204,6 +266,34 @@ class OptimEngine:
             The split object stored on ``self.loss.split``.
         """
         return self.loss.split
+
+    @property
+    def progress_n_updates(self) -> int:
+        """Effective number of epoch updates implied by the update interval."""
+        _validate_positive_int(self.progress_update_every, "progress_update_every")
+        return _progress_n_updates(self.stopper.epochs, self.progress_update_every)
+
+    @progress_n_updates.setter
+    def progress_n_updates(self, value: int) -> None:
+        _validate_positive_int(value, "progress_n_updates")
+        self.progress_update_every = _progress_print_rate(self.stopper.epochs, value)
+
+    @property
+    def step_progress_n_updates(self) -> int:
+        """Effective number of batch updates implied by the update interval."""
+        _validate_positive_int(
+            self.step_progress_update_every, "step_progress_update_every"
+        )
+        return _progress_n_updates(
+            self.batches.n_full_batches, self.step_progress_update_every
+        )
+
+    @step_progress_n_updates.setter
+    def step_progress_n_updates(self, value: int) -> None:
+        _validate_positive_int(value, "step_progress_n_updates")
+        self.step_progress_update_every = _progress_print_rate(
+            self.batches.n_full_batches, value
+        )
 
     @property
     def position_keys(self) -> list[str]:
@@ -272,14 +362,12 @@ class OptimEngine:
         Raises
         ------
         ValueError
-            If ``progress_n_updates`` is not a positive integer.
+            If either progress update interval is not a positive integer.
         """
-        if (
-            not isinstance(self.progress_n_updates, int)
-            or isinstance(self.progress_n_updates, bool)
-            or self.progress_n_updates < 1
-        ):
-            raise ValueError("progress_n_updates must be a positive integer.")
+        _validate_positive_int(self.progress_update_every, "progress_update_every")
+        _validate_positive_int(
+            self.step_progress_update_every, "step_progress_update_every"
+        )
 
     def _validate_train_monitor(self) -> None:
         """
@@ -510,62 +598,6 @@ class OptimEngine:
                     history.tracked[name] = value[:i, ...]
 
         return history
-
-    def _get_tqdm_callback(self, stopper: Stopper) -> tuple[Callable, Callable]:
-        """
-        Creates progress-bar update and close callbacks.
-
-        Parameters
-        ----------
-        stopper
-            Stopper whose ``epochs`` value determines the progress-bar length.
-
-        Returns
-        -------
-        tuple[Callable, Callable]
-            A pair ``(update_progress, close_progress_bar)``. Both callbacks accept an
-            :class:`.OptimCarry`.
-        """
-        print_rate = _progress_print_rate(stopper.epochs, self.progress_n_updates)
-
-        progress_bar_inst = tqdm(
-            total=stopper.epochs, desc=("Initializing"), position=0, leave=True
-        )
-
-        def tqdm_update(losses, update=print_rate):
-            loss_train = float(jnp.squeeze(losses[0]))
-            loss_validate = float(jnp.squeeze(losses[1]))
-            desc = (
-                f"Training loss: {loss_train:.3f}, Monitoring loss: {loss_validate:.3f}"
-            )
-            progress_bar_inst.update(update)
-            progress_bar_inst.set_description(desc)
-
-        def tqdm_callback(carry: OptimCarry):
-            completed_epochs = carry.epoch
-
-            loss_train, loss_validate = carry.loss_train, carry.loss_validate
-            losses = (loss_train, loss_validate)
-
-            def true_fn(_):
-                jax.debug.callback(tqdm_update, losses, ordered=True)
-                return losses
-
-            _ = jax.lax.cond(
-                _should_update_progress(completed_epochs, print_rate),
-                true_fn,
-                lambda _: losses,
-                operand=None,
-            )
-
-        def close_progress_bar(carry: OptimCarry):
-            print_remainder = _progress_remainder(carry.epoch, print_rate)
-            loss_train, loss_validate = carry.loss_train, carry.loss_validate
-            losses = (loss_train, loss_validate)
-            tqdm_update(losses, print_remainder)
-            progress_bar_inst.close()
-
-        return tqdm_callback, close_progress_bar
 
     def _run_optimizer_step(self, opt: Optimizer, carry: OptimCarry) -> OptimCarry:
         """
@@ -866,12 +898,11 @@ class OptimEngine:
         )
 
         for opt_index, opt in enumerate(self.optimizers):
+
             def run_optimizer_step(
                 carry: OptimCarry, opt=opt, opt_index=opt_index
             ) -> OptimCarry:
-                return self._run_optimizer_step_debug(
-                    opt, opt_index, obs_batch, carry
-                )
+                return self._run_optimizer_step_debug(opt, opt_index, obs_batch, carry)
 
             carry = jax.lax.cond(
                 self._debug_state(carry).has_nan,
@@ -959,6 +990,29 @@ class OptimEngine:
 
         return self.loss.loss_train(carry.position, carry)
 
+    def _start_epoch(self, carry: OptimCarry) -> OptimCarry:
+        """Starts a batch epoch and resets its accumulated losses."""
+        key, subkey = jax.random.split(carry.key)
+        carry.key = key
+        carry.batches = carry.batches.start_epoch(subkey)
+        carry.loss_train = jnp.zeros_like(carry.loss_train)
+        carry.loss_validate = jnp.zeros_like(carry.loss_validate)
+        return carry
+
+    def _run_batch_range(
+        self,
+        lower: int | jax.Array,
+        upper: int | jax.Array,
+        carry: OptimCarry,
+    ) -> OptimCarry:
+        """Runs a contiguous range of batches within the current epoch."""
+        return jax.lax.fori_loop(
+            lower=lower,
+            upper=upper,
+            body_fun=self._run_batch,
+            init_val=carry,
+        )
+
     def _run_epoch(self, carry: OptimCarry) -> OptimCarry:
         """
         Runs one full epoch over the configured batches.
@@ -977,20 +1031,11 @@ class OptimEngine:
         OptimCarry
             Carry advanced by one completed epoch.
         """
-        # permuting the batch indices for each outer iteration
-        key, subkey = jax.random.split(carry.key)
-        carry.key = key
-
-        carry.batches = carry.batches.start_epoch(subkey)
-
-        carry.loss_train = jnp.zeros_like(carry.loss_train)
-        carry.loss_validate = jnp.zeros_like(carry.loss_validate)
-        # run all full batches once
-        carry = jax.lax.fori_loop(
+        carry = self._start_epoch(carry)
+        carry = self._run_batch_range(
             lower=0,
             upper=carry.batches.n_full_batches,
-            body_fun=self._run_batch,
-            init_val=carry,
+            carry=carry,
         )
 
         if self.debug_nans:
@@ -1056,6 +1101,38 @@ class OptimEngine:
 
         return carry
 
+    def _continue_fit(self, carry: OptimCarry) -> jax.Array:
+        """Returns whether another epoch should be run."""
+        loss_train_is_nan = jnp.isnan(carry.loss_train)
+        loss_validate_is_nan = jnp.isnan(carry.loss_validate)
+        no_nan_loss = ~jnp.logical_or(loss_train_is_nan, loss_validate_is_nan)
+        continue_ = self.stopper.continue_(carry.epoch, carry.history.loss_validate)
+        should_continue = jnp.logical_and(no_nan_loss, continue_)
+
+        if self.debug_nans:
+            should_continue = jnp.logical_and(
+                should_continue, ~self._debug_state(carry).has_nan
+            )
+
+        return should_continue
+
+    @staticmethod
+    def _completed_epoch_losses(carry: OptimCarry) -> tuple[jax.Array, jax.Array]:
+        """Returns losses from the latest completed epoch, if one exists."""
+        index = jnp.maximum(carry.epoch - 1, 0)
+        has_completed_epoch = carry.epoch > 0
+        loss_train = jnp.where(
+            has_completed_epoch,
+            carry.history.loss_train[index],
+            carry.loss_train,
+        )
+        loss_validate = jnp.where(
+            has_completed_epoch,
+            carry.history.loss_validate[index],
+            carry.loss_validate,
+        )
+        return loss_train, loss_validate
+
     def _init_carry(self, epochs: int) -> OptimCarry:
         """
         Creates the initial :class:`.OptimCarry` for a fit.
@@ -1090,52 +1167,270 @@ class OptimEngine:
 
         return carry
 
-    def _fit(self) -> OptimCarry:
-        """
-        Runs the JAX ``while_loop`` backing :meth:`fit`.
-
-        Returns
-        -------
-        OptimCarry
-            Final carry after early stopping, reaching ``stopper.epochs``, or
-            encountering ``nan`` loss values.
-        """
-        stopper = self.stopper
-
-        if self.show_progress:
-            update_progress, close_progress_bar = self._get_tqdm_callback(stopper)
-
-        def while_body(carry: OptimCarry) -> OptimCarry:
-            carry = self._run_epoch(carry)
-
-            if self.show_progress:
-                update_progress(carry)
-            return carry
-
-        def cont(carry: OptimCarry) -> bool:
-            loss_train_is_nan = jnp.isnan(carry.loss_train)
-            loss_validate_is_nan = jnp.isnan(carry.loss_validate)
-            no_nan_loss = ~jnp.logical_or(loss_train_is_nan, loss_validate_is_nan)
-            continue_ = stopper.continue_(carry.epoch, carry.history.loss_validate)
-            should_continue = jnp.logical_and(no_nan_loss, continue_)
-            if self.debug_nans:
-                debug_has_nan = self._debug_state(carry).has_nan
-                should_continue = jnp.logical_and(should_continue, ~debug_has_nan)
-
-            return should_continue
-
-        carry = self._init_carry(stopper.epochs)
-
-        result = jax.lax.while_loop(
-            cond_fun=cont,
-            body_fun=while_body,
+    def _fit_monolithic(self, carry: OptimCarry) -> OptimCarry:
+        """Runs the full fit as one JAX loop without host synchronization."""
+        return jax.lax.while_loop(
+            cond_fun=self._continue_fit,
+            body_fun=self._run_epoch,
             init_val=carry,
         )
 
-        if self.show_progress:
-            close_progress_bar(result)
+    @staticmethod
+    def _progress_description(loss_train, loss_validate) -> str:
+        return (
+            f"Training loss: {float(loss_train):.3f}, "
+            f"Monitoring loss: {float(loss_validate):.3f}"
+        )
 
-        return result
+    def _update_outer_progress(
+        self,
+        progress_bar,
+        rendered_epochs: int,
+        completed_epochs: int,
+        loss_train,
+        loss_validate,
+    ) -> int:
+        """Updates the outer bar once and returns its new rendered position."""
+        update = completed_epochs - rendered_epochs
+        if progress_bar is not None and update > 0:
+            progress_bar.set_description(
+                self._progress_description(loss_train, loss_validate), refresh=False
+            )
+            progress_bar.update(update)
+        return max(rendered_epochs, completed_epochs)
+
+    @staticmethod
+    def _close_progress_bar(progress_bar) -> None:
+        """Closes a display without masking an optimization exception."""
+        if progress_bar is None:
+            return
+        try:
+            progress_bar.close()
+        except Exception:
+            # Progress display cleanup must not replace an optimization error.
+            pass
+
+    def _fit_epoch_chunks(self, carry: OptimCarry, progress_bar) -> OptimCarry:
+        """Runs dynamic epoch chunks and updates progress on the host."""
+        update_every = self.progress_update_every
+        max_epochs = self.stopper.epochs
+
+        @jax.jit
+        def run_chunk(carry: OptimCarry):
+            target_epoch = jnp.minimum(carry.epoch + update_every, max_epochs)
+
+            def continue_chunk(carry: OptimCarry) -> jax.Array:
+                return jnp.logical_and(
+                    self._continue_fit(carry), carry.epoch < target_epoch
+                )
+
+            carry = jax.lax.while_loop(continue_chunk, self._run_epoch, carry)
+            loss_train, loss_validate = self._completed_epoch_losses(carry)
+            status = (
+                carry.epoch,
+                loss_train,
+                loss_validate,
+                self._continue_fit(carry),
+            )
+            return carry, status
+
+        rendered_epochs = 0
+        should_continue = True
+
+        while should_continue:
+            carry, status = run_chunk(carry)
+            completed, loss_train, loss_validate, continue_value = jax.device_get(
+                status
+            )
+            completed_epochs = int(completed)
+            should_continue = bool(continue_value)
+            rendered_epochs = self._update_outer_progress(
+                progress_bar,
+                rendered_epochs,
+                completed_epochs,
+                loss_train,
+                loss_validate,
+            )
+
+            # A zero-length chunk can only occur when the initial carry should stop.
+            if completed_epochs == 0:
+                break
+
+        return carry
+
+    def _fit_nested_progress(self, carry: OptimCarry, outer_progress_bar) -> OptimCarry:
+        """Runs batch chunks and updates nested progress bars on the host."""
+        n_batches = self.batches.n_full_batches
+        step_update_every = self.step_progress_update_every
+        max_epochs = self.stopper.epochs
+
+        @jax.jit
+        def run_batch_chunk(
+            carry: OptimCarry, lower: int | jax.Array, upper: int | jax.Array
+        ):
+            carry = jax.lax.cond(
+                lower == 0,
+                self._start_epoch,
+                lambda carry: carry,
+                carry,
+            )
+            carry = self._run_batch_range(lower, upper, carry)
+
+            if self.debug_nans:
+                debug_has_nan = self._debug_state(carry).has_nan
+            else:
+                debug_has_nan = jnp.asarray(False)
+
+            completed_batches = jnp.where(debug_has_nan, carry.i_batch + 1, upper)
+            finished_epoch = jnp.logical_and(upper == n_batches, ~debug_has_nan)
+            carry = jax.lax.cond(
+                finished_epoch,
+                self._finish_epoch,
+                lambda carry: carry,
+                carry,
+            )
+            loss_train, loss_validate = self._completed_epoch_losses(carry)
+            should_continue = jax.lax.cond(
+                finished_epoch,
+                self._continue_fit,
+                lambda carry: ~debug_has_nan,
+                carry,
+            )
+            status = (
+                carry.epoch,
+                completed_batches,
+                loss_train,
+                loss_validate,
+                debug_has_nan,
+                finished_epoch,
+                should_continue,
+            )
+            return carry, status
+
+        inner_progress_bar = None
+        rendered_epochs = 0
+        completed_epochs = 0
+        should_continue = True
+
+        try:
+            while should_continue:
+                current_epoch = completed_epochs + 1
+                if inner_progress_bar is None and outer_progress_bar is not None:
+                    inner_progress_bar = tqdm(
+                        total=n_batches,
+                        desc=f"Epoch {current_epoch}/{max_epochs}",
+                        position=1,
+                        leave=False,
+                    )
+                elif inner_progress_bar is not None:
+                    inner_progress_bar.reset(total=n_batches)
+                    inner_progress_bar.set_description(
+                        f"Epoch {current_epoch}/{max_epochs}", refresh=False
+                    )
+
+                rendered_batches = 0
+                finished_epoch = False
+                loss_train = carry.loss_train
+                loss_validate = carry.loss_validate
+
+                for lower in range(0, n_batches, step_update_every):
+                    upper = min(lower + step_update_every, n_batches)
+                    carry, status = run_batch_chunk(carry, lower, upper)
+                    (
+                        completed,
+                        completed_batches_value,
+                        loss_train,
+                        loss_validate,
+                        debug_has_nan_value,
+                        finished_epoch_value,
+                        continue_value,
+                    ) = jax.device_get(status)
+
+                    completed_batches = int(completed_batches_value)
+                    if inner_progress_bar is not None:
+                        update = completed_batches - rendered_batches
+                        if update > 0:
+                            inner_progress_bar.update(update)
+                    rendered_batches = max(rendered_batches, completed_batches)
+                    finished_epoch = bool(finished_epoch_value)
+                    should_continue = bool(continue_value)
+
+                    if bool(debug_has_nan_value) or finished_epoch:
+                        break
+
+                completed_epochs = int(completed)
+                if finished_epoch:
+                    rendered_epochs = self._update_outer_progress(
+                        outer_progress_bar,
+                        rendered_epochs,
+                        completed_epochs,
+                        loss_train,
+                        loss_validate,
+                    )
+
+                if not finished_epoch:
+                    break
+        finally:
+            self._close_progress_bar(inner_progress_bar)
+
+        return carry
+
+    def _fit(self) -> OptimCarry:
+        """
+        Runs optimization with host-controlled progress updates.
+
+        The numerical carry remains on the device. Progress-enabled modes return
+        only small status tuples to Python at configured display boundaries, so
+        notebook output is never written from a JAX callback thread.
+        """
+        self._validate_progress_settings()
+        carry = self._init_carry(self.stopper.epochs)
+
+        if not self.show_progress:
+            return self._fit_monolithic(carry)
+
+        render_progress = jax.process_index() == 0
+        outer_progress_bar = None
+        if render_progress:
+            outer_progress_bar = tqdm(
+                total=self.stopper.epochs,
+                desc="Initializing",
+                position=0,
+                leave=True,
+            )
+
+        rendered_epochs = 0
+        try:
+            use_nested_progress = (
+                self.show_step_progress
+                and self.step_progress_update_every < self.batches.n_full_batches
+            )
+
+            if use_nested_progress:
+                carry = self._fit_nested_progress(carry, outer_progress_bar)
+            elif self.progress_update_every < self.stopper.epochs:
+                carry = self._fit_epoch_chunks(carry, outer_progress_bar)
+            else:
+                carry = self._fit_monolithic(carry)
+
+            final_loss_train, final_loss_validate = self._completed_epoch_losses(carry)
+            completed, loss_train, loss_validate = jax.device_get(
+                (carry.epoch, final_loss_train, final_loss_validate)
+            )
+            completed_epochs = int(completed)
+            if outer_progress_bar is not None:
+                rendered_epochs = int(outer_progress_bar.n)
+            self._update_outer_progress(
+                outer_progress_bar,
+                rendered_epochs,
+                completed_epochs,
+                loss_train,
+                loss_validate,
+            )
+        finally:
+            self._close_progress_bar(outer_progress_bar)
+
+        return carry
 
     def __repr__(self) -> str:
         """Returns a compact representation showing the configured loss."""

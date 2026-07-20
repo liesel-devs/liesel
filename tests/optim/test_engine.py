@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 
 import jax
@@ -17,11 +18,7 @@ from liesel.optim import (
     PositionSplitManager,
     Stopper,
 )
-from liesel.optim.engine import (
-    _progress_print_rate,
-    _progress_remainder,
-    _should_update_progress,
-)
+from liesel.optim.engine import _progress_print_rate
 from liesel.optim.liesel_optim import LieselOptim as LieselOptimFromQuick
 from liesel.optim.liesel_vi import LieselVI
 from liesel.optim.state import OptimCarry
@@ -163,6 +160,7 @@ class NanOptimizer(DebugNoOpOptimizer):
 class DebugNaNLoss:
     split: PositionSplit
     trigger_batch_value: float | None = None
+    trigger_epoch: int | None = None
     initial_nan: bool = False
 
     def position(self, position_keys) -> Position:
@@ -183,6 +181,8 @@ class DebugNaNLoss:
         trigger = jnp.asarray(False)
         for value in carry.batch.values():
             trigger = trigger | jnp.any(value == self.trigger_batch_value)
+        if self.trigger_epoch is not None:
+            trigger = trigger & (carry.epoch == self.trigger_epoch)
         return jnp.where(trigger, jnp.nan, loss)
 
     def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
@@ -234,6 +234,83 @@ def _optimizer(
         values=jnp.array([0.0, 5.0, 6.0, 7.0]),
         identifier=identifier,
     )
+
+
+def _progress_engine(
+    *,
+    epochs: int = 5,
+    n_batches: int = 5,
+    show_progress: bool = True,
+    progress_update_every: int = 2,
+    show_step_progress: bool = False,
+    step_progress_update_every: int = 2,
+    debug_nans: bool = False,
+    loss=None,
+) -> OptimEngine:
+    split = PositionSplit(
+        train=Position({"y": jnp.arange(float(n_batches))}),
+        validate=Position({}),
+        test=Position({}),
+        train_axis_size=n_batches,
+        validate_axis_size=0,
+        test_axis_size=0,
+    )
+    resolved_loss = BatchSensitiveLoss(split) if loss is None else loss(split)
+    return OptimEngine(
+        loss=resolved_loss,
+        batches=Batches(
+            ["y"],
+            axis_size=n_batches,
+            batch_size=1,
+            shuffle=False,
+        ),
+        optimizers=[DebugNoOpOptimizer(["theta"])],
+        stopper=Stopper(epochs=epochs, patience=epochs),
+        seed=1,
+        initial_state={},
+        show_progress=show_progress,
+        progress_update_every=progress_update_every,
+        show_step_progress=show_step_progress,
+        step_progress_update_every=step_progress_update_every,
+        debug_nans=debug_nans,
+    )
+
+
+class FakeTqdm:
+    instances: list[FakeTqdm] = []
+
+    def __init__(self, total, desc, position, leave):
+        self.total = total
+        self.desc = desc
+        self.position = position
+        self.leave = leave
+        self.n = 0
+        self.updates = []
+        self.descriptions = [desc]
+        self.thread_ids = [threading.get_ident()]
+        self.closed = False
+        type(self).instances.append(self)
+
+    def update(self, value):
+        self.thread_ids.append(threading.get_ident())
+        self.updates.append(value)
+        self.n += value
+
+    def set_description(self, desc, refresh=True):
+        del refresh
+        self.thread_ids.append(threading.get_ident())
+        self.desc = desc
+        self.descriptions.append(desc)
+
+    def reset(self, total=None):
+        self.thread_ids.append(threading.get_ident())
+        self.n = 0
+        if total is not None:
+            self.total = total
+
+    def close(self):
+        self.thread_ids.append(threading.get_ident())
+        self.closed = True
 
 
 @pytest.mark.parametrize("save_position_history", [True, False])
@@ -331,6 +408,42 @@ def test_invalid_progress_n_updates_raises(progress_n_updates):
             initial_state={},
             show_progress=False,
             progress_n_updates=progress_n_updates,
+        )
+
+
+@pytest.mark.parametrize(
+    "name", ["progress_update_every", "step_progress_update_every"]
+)
+@pytest.mark.parametrize("value", [0, True, 1.5, "10"])
+def test_invalid_progress_update_interval_raises(name, value):
+    kwargs = {name: value}
+    with pytest.raises(ValueError, match=name):
+        OptimEngine(
+            loss=_loss(),
+            batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
+            optimizers=[_optimizer()],
+            stopper=Stopper(epochs=4, patience=2),
+            seed=1,
+            initial_state={},
+            show_progress=False,
+            **kwargs,
+        )
+
+
+@pytest.mark.parametrize("name", ["progress_n_updates", "step_progress_n_updates"])
+@pytest.mark.parametrize("value", [0, True, 1.5, "10"])
+def test_invalid_progress_update_count_raises(name, value):
+    kwargs = {name: value}
+    with pytest.raises(ValueError, match=name):
+        OptimEngine(
+            loss=_loss(),
+            batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
+            optimizers=[_optimizer()],
+            stopper=Stopper(epochs=4, patience=2),
+            seed=1,
+            initial_state={},
+            show_progress=False,
+            **kwargs,
         )
 
 
@@ -635,17 +748,253 @@ def test_api_imports_after_engine_refactor():
     assert not hasattr(engine_module, "LieselVI")
 
 
-def test_progress_helpers_use_completed_epochs():
+def test_progress_count_conversion_uses_a_ceiling():
     assert _progress_print_rate(100, 10) == 10
     assert _progress_print_rate(101, 100) == 2
     assert _progress_print_rate(201, 100) == 3
-    assert bool(_should_update_progress(10, 10))
-    assert not bool(_should_update_progress(9, 10))
-    assert _progress_remainder(23, 10) == 3
 
-    print_rate = _progress_print_rate(101, 100)
-    updates = sum(
-        bool(_should_update_progress(completed_epochs, print_rate))
-        for completed_epochs in range(1, 102)
+
+def test_progress_defaults_and_linked_count_properties():
+    engine = OptimEngine(
+        loss=_loss(),
+        batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
+        optimizers=[_optimizer()],
+        stopper=Stopper(epochs=101, patience=10),
+        seed=1,
+        initial_state={},
+        show_progress=False,
     )
-    assert updates <= 100
+
+    assert engine.progress_update_every == 10
+    assert engine.step_progress_update_every == 10
+    assert engine.show_step_progress is False
+    assert engine.progress_n_updates == 11
+    assert engine.step_progress_n_updates == 1
+
+    engine.progress_n_updates = 100
+    assert engine.progress_update_every == 2
+    assert engine.progress_n_updates == 51
+
+    engine.stopper = Stopper(epochs=201, patience=10)
+    assert engine.progress_n_updates == 101
+
+    engine.batches = Batches(["y"], axis_size=23, batch_size=1, shuffle=False)
+    engine.step_progress_n_updates = 10
+    assert engine.step_progress_update_every == 3
+    assert engine.step_progress_n_updates == 8
+
+
+def test_progress_count_aliases_override_intervals():
+    engine = OptimEngine(
+        loss=_loss(),
+        batches=Batches(["y"], axis_size=10, batch_size=1, shuffle=False),
+        optimizers=[_optimizer()],
+        stopper=Stopper(epochs=10, patience=10),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+        progress_update_every=2,
+        progress_n_updates=3,
+        step_progress_update_every=2,
+        step_progress_n_updates=4,
+    )
+
+    assert engine.progress_update_every == 4
+    assert engine.progress_n_updates == 3
+    assert engine.step_progress_update_every == 3
+    assert engine.step_progress_n_updates == 4
+
+
+def test_progress_count_keeps_historical_positional_slot():
+    engine = OptimEngine(
+        _loss(),
+        Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
+        [_optimizer()],
+        Stopper(epochs=10, patience=10),
+        1,
+        {},
+        True,
+        True,
+        False,
+        True,
+        3,
+    )
+
+    assert engine.progress_update_every == 4
+    assert engine.progress_n_updates == 3
+
+
+def test_nested_progress_matches_monolithic_and_never_uses_callback(monkeypatch):
+    expected = _progress_engine(show_progress=False).fit()
+    FakeTqdm.instances = []
+    monkeypatch.setattr(engine_module, "tqdm", FakeTqdm)
+
+    def fail_callback(*args, **kwargs):
+        del args, kwargs
+        raise AssertionError("jax.debug.callback must not be used for progress")
+
+    monkeypatch.setattr(jax.debug, "callback", fail_callback)
+    actual_engine = _progress_engine(show_step_progress=True)
+    actual = actual_engine.fit()
+
+    assert actual.final_epoch == expected.final_epoch == 5
+    assert jnp.allclose(actual.history.loss_train, expected.history.loss_train)
+    assert jnp.allclose(actual.history.loss_validate, expected.history.loss_validate)
+
+    assert len(FakeTqdm.instances) == 2
+    outer, inner = FakeTqdm.instances
+    assert outer.position == 0
+    assert outer.updates == [1, 1, 1, 1, 1]
+    assert actual_engine.progress_update_every == 2
+    assert inner.position == 1
+    assert inner.leave is False
+    assert inner.updates == [2, 2, 1] * 5
+    assert outer.closed and inner.closed
+    assert set(outer.thread_ids + inner.thread_ids) == {threading.get_ident()}
+
+
+def test_large_step_interval_uses_epoch_only_progress(monkeypatch):
+    FakeTqdm.instances = []
+    monkeypatch.setattr(engine_module, "tqdm", FakeTqdm)
+    engine = _progress_engine(
+        show_step_progress=True,
+        step_progress_update_every=5,
+    )
+
+    result = engine.fit()
+
+    assert result.final_epoch == 5
+    assert len(FakeTqdm.instances) == 1
+    assert FakeTqdm.instances[0].updates == [2, 2, 1]
+
+
+def test_large_intervals_use_monolithic_final_only_progress(monkeypatch):
+    FakeTqdm.instances = []
+    monkeypatch.setattr(engine_module, "tqdm", FakeTqdm)
+    engine = _progress_engine(
+        progress_update_every=5,
+        show_step_progress=True,
+        step_progress_update_every=5,
+    )
+
+    def fail_chunked(*args, **kwargs):
+        del args, kwargs
+        raise AssertionError("chunked progress path must not be used")
+
+    monkeypatch.setattr(engine, "_fit_epoch_chunks", fail_chunked)
+    monkeypatch.setattr(engine, "_fit_nested_progress", fail_chunked)
+    result = engine.fit()
+
+    assert result.final_epoch == 5
+    assert len(FakeTqdm.instances) == 1
+    assert FakeTqdm.instances[0].updates == [5]
+    assert FakeTqdm.instances[0].closed
+
+
+def test_nested_progress_renders_partial_nan_batch_and_closes(monkeypatch):
+    FakeTqdm.instances = []
+    monkeypatch.setattr(engine_module, "tqdm", FakeTqdm)
+    engine = _progress_engine(
+        show_step_progress=True,
+        debug_nans=True,
+        loss=lambda split: DebugNaNLoss(split, trigger_batch_value=2.0),
+    )
+
+    result = engine.fit()
+
+    assert result.final_epoch == 0
+    assert result.nan_debug is not None
+    assert len(FakeTqdm.instances) == 2
+    outer, inner = FakeTqdm.instances
+    assert outer.updates == []
+    assert inner.updates == [2, 1]
+    assert outer.closed and inner.closed
+
+
+def test_nested_progress_uses_last_completed_losses_after_nan(monkeypatch):
+    FakeTqdm.instances = []
+    monkeypatch.setattr(engine_module, "tqdm", FakeTqdm)
+    engine = _progress_engine(
+        show_step_progress=True,
+        debug_nans=True,
+        loss=lambda split: DebugNaNLoss(
+            split, trigger_batch_value=2.0, trigger_epoch=3
+        ),
+    )
+
+    result = engine.fit()
+
+    assert result.final_epoch == 3
+    outer, inner = FakeTqdm.instances
+    assert outer.updates == [1, 1, 1]
+    assert outer.descriptions[-1].startswith("Training loss: 2.000")
+    assert inner.updates == [2, 2, 1] * 3 + [2, 1]
+
+
+def test_nested_progress_supports_batch_manager(monkeypatch):
+    FakeTqdm.instances = []
+    monkeypatch.setattr(engine_module, "tqdm", FakeTqdm)
+    expected_engine = _progress_engine(show_progress=False)
+    expected_engine.batches = BatchManager([expected_engine.batches])
+    actual_engine = _progress_engine(show_step_progress=True)
+    actual_engine.batches = BatchManager([actual_engine.batches])
+
+    expected = expected_engine.fit()
+    actual = actual_engine.fit()
+
+    assert actual.final_epoch == expected.final_epoch
+    assert jnp.allclose(actual.history.loss_train, expected.history.loss_train)
+    assert jnp.allclose(actual.history.loss_validate, expected.history.loss_validate)
+    assert len(FakeTqdm.instances) == 2
+
+
+def test_epoch_progress_renders_early_stop_remainder(monkeypatch):
+    FakeTqdm.instances = []
+    monkeypatch.setattr(engine_module, "tqdm", FakeTqdm)
+    engine = OptimEngine(
+        loss=_loss(),
+        batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
+        optimizers=[_optimizer()],
+        stopper=Stopper(epochs=4, patience=2),
+        seed=1,
+        initial_state={},
+        progress_update_every=2,
+    )
+
+    result = engine.fit()
+
+    assert result.final_epoch == 3
+    assert FakeTqdm.instances[0].updates == [2, 1]
+
+
+def test_progress_bars_close_when_an_update_raises(monkeypatch):
+    class RaisingFakeTqdm(FakeTqdm):
+        def update(self, value):
+            super().update(value)
+            if self.position == 1:
+                raise RuntimeError("display failed")
+
+        def close(self):
+            super().close()
+            raise RuntimeError("close failed")
+
+    RaisingFakeTqdm.instances = []
+    monkeypatch.setattr(engine_module, "tqdm", RaisingFakeTqdm)
+    engine = _progress_engine(show_step_progress=True)
+
+    with pytest.raises(RuntimeError, match="display failed"):
+        engine.fit()
+
+    assert len(RaisingFakeTqdm.instances) == 2
+    assert all(bar.closed for bar in RaisingFakeTqdm.instances)
+
+
+def test_only_process_zero_constructs_progress_bars(monkeypatch):
+    FakeTqdm.instances = []
+    monkeypatch.setattr(engine_module, "tqdm", FakeTqdm)
+    monkeypatch.setattr(jax, "process_index", lambda: 1)
+
+    result = _progress_engine(show_step_progress=True).fit()
+
+    assert result.final_epoch == 5
+    assert FakeTqdm.instances == []

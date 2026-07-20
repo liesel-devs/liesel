@@ -9,7 +9,13 @@ from typing import TYPE_CHECKING, Literal
 import optax
 
 from ..model import Model
-from ._engine_utils import BatchConfig, SplitConfig
+from ._engine_utils import (
+    BatchConfig,
+    SplitConfig,
+    _progress_n_updates,
+    _progress_print_rate,
+    _validate_positive_int,
+)
 from .batch import Batches, BatchManager
 from .optimizer import Optimizer
 from .split import PositionSplit, PositionSplitManager
@@ -90,9 +96,21 @@ class LieselVI:
         Training-data monitor used by :class:`.OptimEngine` when no validation split
         exists.
     show_progress
-        Whether the built engine should show an epoch-level ``tqdm`` progress bar.
+        Whether the built engine should show ``tqdm`` progress bars.
     progress_n_updates
-        Approximate maximum number of epoch progress-bar updates.
+        Compatibility alias for an approximate maximum number of epoch updates.
+        Reading it returns the effective update count after interval conversion.
+    progress_update_every
+        Update the epoch progress bar after this many completed epochs. When batch
+        progress is active, the epoch bar advances after every epoch.
+    show_step_progress
+        Whether to show an additional progress bar for batches within each epoch
+        when ``show_progress`` is enabled.
+    step_progress_update_every
+        Update the batch progress bar after this many completed batches.
+    step_progress_n_updates
+        Compatibility alias for an approximate maximum number of batch updates.
+        Reading it returns the effective update count after interval conversion.
 
     Examples
     --------
@@ -142,7 +160,11 @@ class LieselVI:
             "auto", "epoch_average", "weighted_epoch_average", "full_data"
         ] = "auto",
         show_progress: bool = True,
-        progress_n_updates: int = 100,
+        progress_n_updates: int | None = None,
+        progress_update_every: int = 10,
+        show_step_progress: bool = False,
+        step_progress_update_every: int = 10,
+        step_progress_n_updates: int | None = None,
     ) -> None:
         if batch_axis_size is not _MISSING:
             if batch_size is not None:
@@ -181,7 +203,45 @@ class LieselVI:
         self.optimizers = self._resolve_optimizers(optimizers)
         self.train_monitor = train_monitor
         self.show_progress = show_progress
-        self.progress_n_updates = progress_n_updates
+        self.progress_update_every = progress_update_every
+        self.show_step_progress = show_step_progress
+        self.step_progress_update_every = step_progress_update_every
+        if progress_n_updates is not None:
+            self.progress_n_updates = progress_n_updates
+        if step_progress_n_updates is not None:
+            self.step_progress_n_updates = step_progress_n_updates
+        _validate_positive_int(self.progress_update_every, "progress_update_every")
+        _validate_positive_int(
+            self.step_progress_update_every, "step_progress_update_every"
+        )
+
+    @property
+    def progress_n_updates(self) -> int:
+        """Effective number of epoch updates implied by the update interval."""
+        _validate_positive_int(self.progress_update_every, "progress_update_every")
+        return _progress_n_updates(self.stopper.epochs, self.progress_update_every)
+
+    @progress_n_updates.setter
+    def progress_n_updates(self, value: int) -> None:
+        _validate_positive_int(value, "progress_n_updates")
+        self.progress_update_every = _progress_print_rate(self.stopper.epochs, value)
+
+    @property
+    def step_progress_n_updates(self) -> int:
+        """Effective number of batch updates implied by the update interval."""
+        _validate_positive_int(
+            self.step_progress_update_every, "step_progress_update_every"
+        )
+        return _progress_n_updates(
+            self.batches.n_full_batches, self.step_progress_update_every
+        )
+
+    @step_progress_n_updates.setter
+    def step_progress_n_updates(self, value: int) -> None:
+        _validate_positive_int(value, "step_progress_n_updates")
+        self.step_progress_update_every = _progress_print_rate(
+            self.batches.n_full_batches, value
+        )
 
     def _resolve_split(
         self,
@@ -352,7 +412,9 @@ class LieselVI:
             seed=self.seed,
             train_monitor=self.train_monitor,
             show_progress=self.show_progress,
-            progress_n_updates=self.progress_n_updates,
+            progress_update_every=self.progress_update_every,
+            show_step_progress=self.show_step_progress,
+            step_progress_update_every=self.step_progress_update_every,
         )
 
     def fit(self) -> OptimResult:
