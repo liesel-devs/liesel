@@ -15,7 +15,7 @@ from typing import Literal
 
 import jax
 import jax.numpy as jnp
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 from ._engine_utils import (
     BatchConfig,
