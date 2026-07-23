@@ -20,6 +20,7 @@ import jax.random
 import networkx as nx
 import pandas as pd
 
+from ..goose.types import ModelState, Position
 from .nodes import (
     Array,
     Calc,
@@ -2109,6 +2110,13 @@ class Model:
         """
         return self.pop_nodes_and_vars()[1]
 
+    @property
+    def to_float32(self) -> bool:
+        """
+        Whether the values of the added nodes will be converted from float64 to float32.
+        """
+        return self._to_float32
+
     def pop_nodes_and_vars(self) -> tuple[dict[str, Node], dict[str, Var]]:
         """
         Pops the nodes and variables out of this model.
@@ -2709,7 +2717,7 @@ class Model:
         self,
         position_keys: Sequence[str],
         model_state: dict[str, NodeState] | None = None,
-    ) -> dict[str, Array]:
+    ) -> Position:
         """
         Extracts a position from a model state.
 
@@ -2731,7 +2739,57 @@ class Model:
                 node_key = self.vars[key].value_node.name
                 position[key] = model_state[node_key].value
 
-        return position
+        return Position(position)
+
+    def _node_for_position_key(self, key: str) -> Node:
+        try:
+            return self.nodes[key]
+        except KeyError:
+            return self.vars[key].value_node
+
+    def _validate_weak_var_position(self, position: dict[str, Array]) -> None:
+        """
+        Validates that weak variable updates in a position are unambiguous.
+
+        If ``position`` contains a weak variable, it must not also contain another
+        key targeting the weak variable's value node, one of its ancestors, or one
+        of its descendants. Updating related nodes together with the weak variable
+        would make it unclear which value should determine the resulting graph
+        state.
+
+        Raises
+        ------
+        RuntimeError
+            If a weak variable in ``position`` is updated together with another
+            position key targeting the weak variable's value node, one of its
+            ancestors, or one of its descendants.
+        """
+        weak_vars = [
+            (key, self.vars[key])
+            for key in position
+            if key in self.vars and self.vars[key].weak
+        ]
+
+        if not weak_vars:
+            return
+
+        position_nodes = {key: self._node_for_position_key(key) for key in position}
+
+        for weak_key, var in weak_vars:
+            value_node = var.value_node
+            related_nodes = (
+                nx.ancestors(self.node_graph, value_node)
+                | nx.descendants(self.node_graph, value_node)
+                | {value_node}
+            )
+
+            for key, node in position_nodes.items():
+                if key != weak_key and node in related_nodes:
+                    raise RuntimeError(
+                        "Ambiguous weak variable update. "
+                        f"Cannot update weak variable '{weak_key}' together "
+                        f"with related position key '{key}'."
+                    )
 
     def _node_for_position_key(self, key: str) -> Node:
         try:
@@ -2790,7 +2848,7 @@ class Model:
         inplace: bool = False,
         *,
         allow_weak_vars: bool = False,
-    ) -> dict[str, NodeState]:
+    ) -> ModelState:
         """
         Updates and returns a model state given a position.
 

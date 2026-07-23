@@ -143,6 +143,35 @@ to run stochastic gradient descent on a liesel model.
     ~liesel.goose.history_to_df
     ~liesel.goose.OptimResult
 
+Optimizer API
+*************
+
+The :mod:`liesel.optim` module provides the newer optimization engine, data-splitting
+utilities, and variational inference helpers.
+
+.. autosummary::
+    :toctree: generated
+    :caption: Optimizer API
+    :recursive:
+    :nosignatures:
+
+    ~liesel.optim.LieselOptim
+    ~liesel.optim.LieselVI
+    ~liesel.optim.OptimEngine
+    ~liesel.optim.NegLogProbLoss
+    ~liesel.optim.NegElboLoss
+    ~liesel.optim.VDist
+    ~liesel.optim.CompositeVDist
+    ~liesel.optim.Optimizer
+    ~liesel.optim.LBFGS
+    ~liesel.optim.Stopper
+    ~liesel.optim.Batches
+    ~liesel.optim.BatchManager
+    ~liesel.optim.Split
+    ~liesel.optim.SplitManager
+    ~liesel.optim.PositionSplit
+    ~liesel.optim.PositionSplitManager
+
 Model (Advanced)
 ************************
 
@@ -244,10 +273,10 @@ Experimental API
 .. autosummary::
     :toctree: generated
     :caption: Experimental API
-    :recursive:
     :nosignatures:
 
-    ~liesel.experimental
+    ~liesel.experimental.arviz
+    ~liesel.experimental.pymc
 
 
 Effort-Based Versioning
