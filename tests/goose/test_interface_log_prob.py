@@ -61,7 +61,7 @@ class TestLogProb:
         for interface, state in zip(interfaces, states):
             lp = gs.InterfaceLogProb(interface, state)
 
-            pos = {"mu": 2.0}
+            pos = gs.Position({"mu": 2.0})
             val = lp.log_prob(pos)
 
             vals.append(val)
@@ -73,7 +73,7 @@ class TestLogProb:
         for interface, state in zip(interfaces, states):
             lp = gs.InterfaceLogProb(interface, state)
 
-            pos = {"mu": 2.0}
+            pos = gs.Position({"mu": 2.0})
             val = lp.grad(pos)
 
             vals.append(val)
@@ -86,7 +86,7 @@ class TestLogProb:
         for interface, state in zip(interfaces, states):
             lp = gs.InterfaceLogProb(interface, state, diff_mode=diff_mode)
 
-            pos = {"mu": 2.0}
+            pos = gs.Position({"mu": 2.0})
             val = lp.hessian(pos)
 
             vals.append(val)

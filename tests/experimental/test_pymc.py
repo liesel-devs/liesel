@@ -70,7 +70,7 @@ def test_simple():
     assert state["mu"] == 0.0
     assert roughly_close(interface.log_prob(state), -0.91893853)
 
-    state = interface.update_state({"mu": np.array(1.0)}, state)
+    state = interface.update_state(gs.Position({"mu": np.array(1.0)}), state)
     assert state["mu"] == 1.0
     assert roughly_close(interface.log_prob(state), -1.41893853)
 
@@ -110,7 +110,7 @@ def test_simple2():
     assert interface.extract_position(["sigma"], state)["sigma"] == 1.0
 
     state = interface.update_state(
-        {"mu": np.array(1.0), "sigma_log__": np.array(-1.0)}, state
+        gs.Position({"mu": np.array(1.0), "sigma_log__": np.array(-1.0)}), state
     )
     assert state["mu"] == 1.0
     assert state["sigma_log__"] == -1.0
