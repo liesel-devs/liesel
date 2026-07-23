@@ -2121,11 +2121,12 @@ class Var:
 
     def get_inference(self, key: str | None) -> InferenceTypes:
         if isinstance(self.inference, dict):
+            inference_by_key = cast(dict[str, Any], self.inference)
             if key is None:
                 raise ValueError(
-                    f"{key=} is invalid. Possible keys: {list(self.inference)}."
+                    f"{key=} is invalid. Possible keys: {list(inference_by_key)}."
                 )
-            return self.inference[key]
+            return inference_by_key[key]
         return self.inference
 
     def all_input_nodes(
