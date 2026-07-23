@@ -32,12 +32,12 @@ class Option(Generic[T]):
         self._value = value
 
     @staticmethod
-    def some(value: T) -> Option[T]:
-        return Option(value)
+    def some(value: U) -> Option[U]:
+        return Option[U](value)
 
     @staticmethod
     def none() -> Option[T]:
-        return Option(None)
+        return Option[T](None)
 
     def is_some(self) -> bool:
         return self.value is not None
