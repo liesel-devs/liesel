@@ -625,6 +625,10 @@ class TestVarPredictions:
         assert jnp.allclose(pred, x * samples["b"])
         assert pred.shape[-1] == x.shape[-1]
 
+        # predict in chunks, including a partial final chunk
+        pred_chunked = loc.predict(samples, chunk_size=5)
+        assert jnp.allclose(pred_chunked, pred)
+
         # predict at new observations with same shape
         xnew = jax.random.uniform(jax.random.PRNGKey(5), (n,))
         pred = loc.predict(samples, newdata={"x": xnew})

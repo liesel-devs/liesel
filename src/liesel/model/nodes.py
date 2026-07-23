@@ -2963,6 +2963,7 @@ class Var:
         self,
         samples: dict[str, jax.typing.ArrayLike],
         newdata: dict[str, jax.typing.ArrayLike] | None = None,
+        chunk_size: int | None = None,
     ) -> Array:
         """
         Returns an array of predictions for this variable.
@@ -2975,6 +2976,12 @@ class Var:
             Dictionary of new data at which to evaluate predictions. The keys should \
             correspond to variable or node names in the model whose values should be \
             set to the given values before evaluating predictions.
+        chunk_size
+            Maximum number of flattened samples to evaluate in parallel. If ``None`` \
+            (default), all samples are evaluated in parallel. A smaller value reduces \
+            the peak memory required for sample-dependent intermediate values, at the \
+            potential cost of lower accelerator utilization. It does not reduce the \
+            memory required to store the returned predictions.
         """
         if self.model is not None:
             submodel = self.model.parental_submodel(self)
@@ -3013,7 +3020,12 @@ class Var:
             if key not in submodel.vars or (key in submodel.nodes):
                 newdata.pop(key, None)
 
-        pred = submodel.predict(samples=samples, predict=[self.name], newdata=newdata)
+        pred = submodel.predict(
+            samples=samples,
+            predict=[self.name],
+            newdata=newdata,
+            chunk_size=chunk_size,
+        )
         return pred[self.name]
 
     def diagnose(self, verbose: bool = False) -> pd.DataFrame:

@@ -615,12 +615,19 @@ class TestModel:
 
 
 class TestPredictions:
-    def test_compiled_prediction_is_differentiable(self) -> None:
+    @pytest.mark.parametrize("chunk_size", [None, 2])
+    def test_compiled_prediction_is_differentiable(
+        self, chunk_size: int | None
+    ) -> None:
         theta = Var.new_param(1.0, name="theta")
         target = Var.new_calc(lambda x: x**2, theta, name="target")
         model = Model([target])
         submodel = model.parental_submodel(target)
-        predict_batched = _compile_prediction(submodel, ["target"])
+        predict_batched = _compile_prediction(
+            submodel,
+            ["target"],
+            chunk_size=chunk_size,
+        )
 
         def sum_predictions(theta_samples):
             predictions = predict_batched({"theta": theta_samples}, submodel.state)
@@ -630,6 +637,68 @@ class TestPredictions:
         gradient = jax.grad(sum_predictions)(theta_samples)
 
         assert jnp.allclose(gradient, 2.0 * theta_samples)
+
+    @pytest.mark.parametrize("chunk_size", [1, 3, 20])
+    def test_predict_in_chunks(self, model, chunk_size: int) -> None:
+        samples = {
+            "sigma_hat": tfd.Uniform().sample((2, 5), rnd.PRNGKey(6)),
+            "beta_hat": tfd.Uniform().sample((2, 5, 2), rnd.PRNGKey(7)),
+        }
+
+        expected = model.predict(samples=samples, predict=["mu"])
+        chunked = model.predict(
+            samples=samples,
+            predict=["mu"],
+            chunk_size=chunk_size,
+        )
+
+        assert chunked["mu"].shape == (2, 5, 500)
+        assert jnp.allclose(chunked["mu"], expected["mu"])
+
+    @pytest.mark.parametrize("chunk_size", [0, -1])
+    def test_predict_rejects_non_positive_chunk_size(
+        self, model, chunk_size: int
+    ) -> None:
+        samples = model.extract_position(["sigma_hat", "beta_hat"])
+
+        with pytest.raises(ValueError, match="positive integer"):
+            model.predict(samples=samples, chunk_size=chunk_size)
+
+    @pytest.mark.parametrize("chunk_size", [True, 1.5, "2"])
+    def test_predict_rejects_non_integer_chunk_size(self, model, chunk_size) -> None:
+        samples = model.extract_position(["sigma_hat", "beta_hat"])
+
+        with pytest.raises(TypeError, match="positive integer or None"):
+            model.predict(samples=samples, chunk_size=chunk_size)
+
+    @pytest.mark.skipif(
+        jax.default_backend() != "cpu",
+        reason="Compiled memory statistics are backend-specific.",
+    )
+    def test_chunking_reduces_compiled_temporary_memory(self) -> None:
+        n = 37
+        n_samples = 7
+        theta = Var.new_param(1.0, name="theta")
+        matrix = Var.new_calc(lambda x: x * jnp.eye(n), theta, name="matrix")
+        target = Var.new_calc(jnp.sum, matrix, name="target")
+        model = Model([target])
+        submodel = model.parental_submodel(target)
+        samples = {"theta": jnp.ones(n_samples)}
+
+        full = (
+            _compile_prediction(submodel, ["target"])
+            .lower(samples, submodel.state)
+            .compile()
+            .memory_analysis()
+        )
+        chunked = (
+            _compile_prediction(submodel, ["target"], chunk_size=3)
+            .lower(samples, submodel.state)
+            .compile()
+            .memory_analysis()
+        )
+
+        assert chunked.temp_size_in_bytes < full.temp_size_in_bytes
 
     def test_predict_does_not_retain_batched_intermediates(self) -> None:
         gc.collect()
@@ -718,6 +787,7 @@ class TestPredictions:
         pred = model.predict(
             samples=samples,
             predict=["_model_log_lik", "_model_log_prob", "_model_log_prior"],
+            chunk_size=5,
         )
 
         assert len(pred) == 3

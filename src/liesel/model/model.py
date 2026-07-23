@@ -10,6 +10,7 @@ import re
 from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from copy import deepcopy
+from numbers import Integral
 from types import MappingProxyType
 from typing import IO, Any, Literal, Self, TypeVar
 
@@ -102,7 +103,9 @@ def _set_weak_var_value(var: Var, value: Array) -> None:
 
 
 def _compile_prediction(
-    model: Model, predict_names: Sequence[str]
+    model: Model,
+    predict_names: Sequence[str],
+    chunk_size: int | None = None,
 ) -> Callable[
     [dict[str, Array], dict[str, NodeState]],
     dict[str, Array],
@@ -122,7 +125,37 @@ def _compile_prediction(
         updated_state = model.update_state(samples, model_state, inplace=False)
         return model.extract_position(predict_names, updated_state)
 
-    return jax.jit(jax.vmap(predict_one, in_axes=(0, None), out_axes=0))
+    if chunk_size is None:
+        predict_batched = jax.vmap(predict_one, in_axes=(0, None), out_axes=0)
+    else:
+
+        def predict_batched(
+            samples: dict[str, Array], model_state: dict[str, NodeState]
+        ) -> dict[str, Array]:
+            def predict_from_samples(samples):
+                return predict_one(samples, model_state)
+
+            return jax.lax.map(
+                predict_from_samples,
+                samples,
+                batch_size=chunk_size,
+            )
+
+    return jax.jit(predict_batched)
+
+
+def _validate_chunk_size(chunk_size: int | None) -> int | None:
+    """Validates and normalizes the prediction chunk size."""
+    if chunk_size is None:
+        return None
+
+    if isinstance(chunk_size, bool) or not isinstance(chunk_size, Integral):
+        raise TypeError("chunk_size must be a positive integer or None.")
+
+    if chunk_size < 1:
+        raise ValueError("chunk_size must be a positive integer.")
+
+    return int(chunk_size)
 
 
 class GraphBuilder:
@@ -2893,6 +2926,7 @@ class Model:
         samples: dict[str, jax.typing.ArrayLike],
         predict: Sequence[str] | None = None,
         newdata: dict[str, jax.typing.ArrayLike] | None = None,
+        chunk_size: int | None = None,
     ) -> dict[str, Array]:
         """
         Returns a dictionary of predictions.
@@ -2913,8 +2947,15 @@ class Model:
             correspond to variable or node names in the model whose values should be \
             set to the given values before evaluating predictions. If ``None`` \
             (default), the current variable values are used.
+        chunk_size
+            Maximum number of flattened samples to evaluate in parallel. If ``None`` \
+            (default), all samples are evaluated in parallel. A smaller value reduces \
+            the peak memory required for sample-dependent intermediate values, at the \
+            potential cost of lower accelerator utilization. It does not reduce the \
+            memory required to store the returned predictions.
 
         """
+        chunk_size = _validate_chunk_size(chunk_size)
         samples = samples.copy()
         for name in self.model_nodes:
             samples.pop(name, None)
@@ -3013,7 +3054,11 @@ class Model:
         # Compile only the numerical state update and vectorized prediction. Passing
         # the initial state explicitly avoids capturing its arrays as constants in the
         # compiled function.
-        predict_batched = _compile_prediction(submodel, predict_names)
+        predict_batched = _compile_prediction(
+            submodel,
+            predict_names,
+            chunk_size=chunk_size,
+        )
 
         def flatten_batch_dims(x):
             new_shape = (-1,) + jnp.shape(x)[n_batching_dim:]
