@@ -6,6 +6,7 @@ from .liesel_vi import LieselVI as LieselVI
 from .loss import NegLogProbLoss as NegLogProbLoss
 from .optimizer import LBFGS as LBFGS
 from .optimizer import Optimizer as Optimizer
+from .optimizer import OptimizerLike as OptimizerLike
 from .split import PositionSplit as PositionSplit
 from .split import PositionSplitManager as PositionSplitManager
 from .split import Split as Split
@@ -30,6 +31,7 @@ __all__ = [
     "OptimEngine",
     "OptimNaNDebugInfo",
     "Optimizer",
+    "OptimizerLike",
     "PositionSplit",
     "PositionSplitManager",
     "Split",

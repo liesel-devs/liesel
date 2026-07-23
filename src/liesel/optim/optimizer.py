@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Protocol
 
 import jax
 import jax.numpy as jnp
@@ -21,6 +21,39 @@ from .types import Position
 if TYPE_CHECKING:
     from .loss import Loss
     from .state import OptimCarry
+
+
+class OptimizerLike(Protocol):
+    """Structural interface consumed by :class:`.OptimEngine`."""
+
+    @property
+    def position_keys(self) -> Sequence[str]:
+        """Names of the parameter entries owned by this optimizer."""
+        ...
+
+    @property
+    def identifier(self) -> str:
+        """Identifier used to store this optimizer's state."""
+        ...
+
+    @identifier.setter
+    def identifier(self, value: str) -> None: ...
+
+    def position(self, position: Position) -> Position:
+        """Extract the entries owned by this optimizer."""
+        ...
+
+    def not_position(self, position: Position) -> Position:
+        """Extract the entries not owned by this optimizer."""
+        ...
+
+    def init(self, position: Position) -> Any:
+        """Initialize optimizer state from a full position."""
+        ...
+
+    def step(self, position: Position, loss: Loss, carry: OptimCarry) -> OptimCarry:
+        """Run one optimizer step."""
+        ...
 
 
 @dataclass

@@ -570,6 +570,7 @@ class PositionSplit:
         """
         normalized = _normalize_sample_sizes(sample_sizes)
 
+        part: SplitPart
         for part, n_part in (
             ("train", self.train_axis_size),
             ("validate", self.validate_axis_size),
@@ -625,6 +626,7 @@ class PositionSplit:
             )
 
         sizes: dict[SplitPart, int] = {}
+        part: SplitPart
         for part, position, n_part in (
             ("train", self.train, self.train_axis_size),
             ("validate", self.validate, self.validate_axis_size),

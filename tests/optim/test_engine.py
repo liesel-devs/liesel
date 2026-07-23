@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import jax
@@ -21,6 +22,7 @@ from liesel.optim import (
 from liesel.optim.engine import _progress_print_rate
 from liesel.optim.liesel_optim import LieselOptim as LieselOptimFromQuick
 from liesel.optim.liesel_vi import LieselVI
+from liesel.optim.loss import Loss
 from liesel.optim.state import OptimCarry
 from liesel.optim.types import Position
 
@@ -245,7 +247,7 @@ def _progress_engine(
     show_step_progress: bool = False,
     step_progress_update_every: int = 2,
     debug_nans: bool = False,
-    loss=None,
+    loss: Callable[[PositionSplit], Loss] | None = None,
 ) -> OptimEngine:
     split = PositionSplit(
         train=Position({"y": jnp.arange(float(n_batches))}),

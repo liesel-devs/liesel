@@ -26,7 +26,7 @@ from ._engine_utils import (
 )
 from .batch import Batches
 from .loss import Loss
-from .optimizer import Optimizer
+from .optimizer import OptimizerLike
 from .split import PositionSplitManager
 from .state import (
     _NAN_DEBUG_KIND_LOSS,
@@ -165,7 +165,7 @@ class OptimEngine:
 
     loss: Loss
     batches: BatchConfig
-    optimizers: Sequence[Optimizer]
+    optimizers: Sequence[OptimizerLike]
     stopper: Stopper
     seed: int | jax.Array
     initial_state: ModelState
@@ -183,7 +183,7 @@ class OptimEngine:
         self,
         loss: Loss,
         batches: BatchConfig,
-        optimizers: Sequence[Optimizer],
+        optimizers: Sequence[OptimizerLike],
         stopper: Stopper,
         seed: int | jax.Array,
         initial_state: ModelState,
@@ -429,7 +429,7 @@ class OptimEngine:
                 f"are missing: {missing}."
             )
 
-    def _name_optimizers(self) -> Sequence[Optimizer]:
+    def _name_optimizers(self) -> Sequence[OptimizerLike]:
         """
         Fills missing optimizer identifiers with stable numeric names.
 
@@ -439,7 +439,7 @@ class OptimEngine:
 
         Returns
         -------
-        collections.abc.Sequence[Optimizer]
+        collections.abc.Sequence[OptimizerLike]
             The optimizer sequence attached to the engine.
         """
         for i, opt in enumerate(self.optimizers):
@@ -599,7 +599,7 @@ class OptimEngine:
 
         return history
 
-    def _run_optimizer_step(self, opt: Optimizer, carry: OptimCarry) -> OptimCarry:
+    def _run_optimizer_step(self, opt: OptimizerLike, carry: OptimCarry) -> OptimCarry:
         """
         Runs one optimizer update for the current batch.
 
@@ -789,7 +789,7 @@ class OptimEngine:
 
     def _run_optimizer_step_debug(
         self,
-        opt: Optimizer,
+        opt: OptimizerLike,
         opt_index: int,
         obs_batch: Position,
         carry: OptimCarry,

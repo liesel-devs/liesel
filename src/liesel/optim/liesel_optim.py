@@ -18,7 +18,7 @@ from ._engine_utils import (
 )
 from .batch import Batches, BatchManager
 from .loss import Loss, NegLogProbLoss
-from .optimizer import LBFGS, Optimizer
+from .optimizer import LBFGS, Optimizer, OptimizerLike
 from .split import PositionSplit, PositionSplitManager
 from .stop import Stopper
 
@@ -131,7 +131,7 @@ class LieselOptim:
         batch_size: int | None = None,
         batch_axis_size: int | None | object = _MISSING,
         split: SplitConfig | None = None,
-        optimizers: Sequence[Optimizer] | Literal["adam", "lbfgs"] = "adam",
+        optimizers: Sequence[OptimizerLike] | Literal["adam", "lbfgs"] = "adam",
         stopper: Stopper = Stopper(epochs=1000, patience=10, rtol=1e-6),
         seed: int | None = None,
         axis_size: int | None = None,
@@ -317,8 +317,8 @@ class LieselOptim:
         )
 
     def _resolve_optimizers(
-        self, optimizers: Sequence[Optimizer] | Literal["adam", "lbfgs"]
-    ) -> Sequence[Optimizer]:
+        self, optimizers: Sequence[OptimizerLike] | Literal["adam", "lbfgs"]
+    ) -> Sequence[OptimizerLike]:
         if not isinstance(optimizers, str):
             return optimizers
 

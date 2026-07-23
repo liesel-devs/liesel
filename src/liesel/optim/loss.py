@@ -53,7 +53,10 @@ class Loss(Protocol):
     these gradient methods automatically.
     """
 
-    split: SplitConfig
+    @property
+    def split(self) -> SplitConfig:
+        """Train/validation/test split used by this loss."""
+        ...
 
     def position(self, position_keys: Sequence[str]) -> Position:
         """

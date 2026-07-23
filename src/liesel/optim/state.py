@@ -23,12 +23,11 @@ from liesel.goose.types import ModelState
 
 from ..goose.pytree import register_dataclass_as_pytree
 from .batch import Batches, BatchManager
-from .optimizer import Optimizer
+from .optimizer import OptimizerLike
 from .types import Position
 
 if TYPE_CHECKING:
     from .engine import OptimEngine
-    from .optimizer import Optimizer
 
 Array = Any
 BatchConfig = Batches | BatchManager
@@ -635,7 +634,7 @@ class OptimCarry:
         position: Position,
         tracked: Position | None,
         batches: BatchConfig,
-        optimizers: Sequence[Optimizer],
+        optimizers: Sequence[OptimizerLike],
         model_state: ModelState,
         save_position_history: bool,
     ) -> OptimCarry:
@@ -744,7 +743,7 @@ class OptimNaNDebugInfo:
 
         return self.reproduction_position
 
-    def optimizer(self, engine: OptimEngine) -> Optimizer | None:
+    def optimizer(self, engine: OptimEngine) -> OptimizerLike | None:
         """Returns the optimizer that introduced the NaN position, if known."""
         if self.optimizer_index is None:
             return None
