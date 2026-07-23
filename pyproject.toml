@@ -73,7 +73,7 @@ build-backend = "hatchling.build"
 
 
 [tool.mypy]
-files = ["liesel", "tests"]
+files = ["src/liesel", "tests"]
 ignore_missing_imports = true
 scripts_are_modules = true
 disable_error_code = "annotation-unchecked"
