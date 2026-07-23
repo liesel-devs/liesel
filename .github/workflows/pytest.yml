@@ -11,7 +11,7 @@ jobs:
 
     strategy:
       matrix:
-        python-version: ["3.13"]
+        python-version: ["3.13", "3.14"]
 
     steps:
       - name: Check out repository
@@ -31,11 +31,13 @@ jobs:
         run: uv run pytest --cov=liesel
 
       - name: Create coverage badge
+        if: matrix.python-version == '3.13'
         uses: tj-actions/coverage-badge-py@v2
         with:
           output: coverage-new.svg
 
       - name: Commit coverage.svg
+        if: matrix.python-version == '3.13'
         run: |
           git config --local user.name "github-actions[bot]"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
@@ -46,6 +48,7 @@ jobs:
           git diff --staged --quiet || git commit -m "Updated coverage.svg"
 
       - name: Push coverage.svg
+        if: matrix.python-version == '3.13'
         uses: ad-m/github-push-action@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
