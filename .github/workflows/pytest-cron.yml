@@ -16,6 +16,10 @@ jobs:
     strategy:
       matrix:
         include:
+          - python-version: "3.14"
+            resolution: upgrade
+            sync-args: "--upgrade --all-groups"
+            pytest-args: ""
           - python-version: "3.13"
             resolution: upgrade
             sync-args: "--upgrade --all-groups"
