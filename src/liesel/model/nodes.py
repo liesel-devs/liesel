@@ -78,6 +78,18 @@ def _callable_name(fn: Callable[..., Any]) -> str:
     return name if isinstance(name, str) else type(fn).__name__
 
 
+def _transformed_distribution_bijector(distribution: Distribution) -> Bijector:
+    """Returns the bijector from a transformed JAX or NumPy distribution."""
+    if isinstance(
+        distribution, (jd.TransformedDistribution, nd.TransformedDistribution)
+    ):
+        return distribution.bijector
+
+    raise TypeError(
+        f"Expected a transformed distribution, but got {type(distribution).__name__}."
+    )
+
+
 def in_model_method(fn):
     @wraps(fn)
     def wrapped(self, *args, **kwargs):
@@ -3333,7 +3345,7 @@ def _transform_var_with_bijector_class(
 
     dist_node_transformed.per_obs = var.dist_node.per_obs
 
-    bijector_inv = dist_node_transformed.init_dist().bijector
+    bijector_inv = _transformed_distribution_bijector(dist_node_transformed.init_dist())
 
     if var.weak:
         try:

@@ -31,6 +31,7 @@ from .nodes import (
     Value,
     Var,
     VarValue,
+    _transformed_distribution_bijector,
 )
 from .viz import plot_nodes, plot_vars
 
@@ -67,7 +68,9 @@ def _transform_back(var_transformed: Var) -> Calc:
     transformed_distribution = var_transformed.dist_node.distribution
 
     def fn(at, *args, **kwargs):
-        bijector = transformed_distribution(*args, **kwargs).bijector
+        bijector = _transformed_distribution_bijector(
+            transformed_distribution(*args, **kwargs)
+        )
         return bijector.inverse(at)
 
     inputs = var_transformed.dist_node.inputs
