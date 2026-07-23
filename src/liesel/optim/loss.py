@@ -1,8 +1,7 @@
 """Loss protocols and concrete losses for experimental optimizers.
 
 This module defines the interface consumed by :class:`.OptimEngine` and provides
-the default negative log-probability loss for Liesel models. The same protocol is
-also implemented by variational losses such as :class:`.NegElboLoss`.
+the default negative log-probability loss for Liesel models.
 """
 
 from collections.abc import Callable, Sequence

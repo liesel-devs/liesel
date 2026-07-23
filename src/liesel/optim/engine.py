@@ -2,8 +2,8 @@
 
 The :class:`OptimEngine` class coordinates losses, optimizers, mini-batches,
 train/validation/test splits, early stopping, and optimizer history recording. Most
-users will usually construct it through :class:`.LieselOptim` or :class:`.LieselVI`,
-but direct construction is useful for custom losses or optimizer schedules.
+users will usually construct it through :class:`.LieselOptim`, but direct construction
+is useful for custom losses or optimizer schedules.
 """
 
 from __future__ import annotations
