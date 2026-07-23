@@ -1,3 +1,4 @@
+import gc
 import tempfile
 import typing
 from collections.abc import Generator
@@ -10,7 +11,13 @@ import jax.random as rnd
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
-from liesel.model.model import GraphBuilder, Model, log_prob_pointwise, save_model
+from liesel.model.model import (
+    GraphBuilder,
+    Model,
+    _compile_prediction,
+    log_prob_pointwise,
+    save_model,
+)
 from liesel.model.nodes import Calc, Dist, Group, TransientNode, Value, Var
 
 
@@ -608,6 +615,49 @@ class TestModel:
 
 
 class TestPredictions:
+    def test_compiled_prediction_is_differentiable(self) -> None:
+        theta = Var.new_param(1.0, name="theta")
+        target = Var.new_calc(lambda x: x**2, theta, name="target")
+        model = Model([target])
+        submodel = model.parental_submodel(target)
+        predict_batched = _compile_prediction(submodel, ["target"])
+
+        def sum_predictions(theta_samples):
+            predictions = predict_batched({"theta": theta_samples}, submodel.state)
+            return predictions["target"].sum()
+
+        theta_samples = jnp.array([1.0, 2.0, 3.0])
+        gradient = jax.grad(sum_predictions)(theta_samples)
+
+        assert jnp.allclose(gradient, 2.0 * theta_samples)
+
+    def test_predict_does_not_retain_batched_intermediates(self) -> None:
+        gc.collect()
+        gc_was_enabled = gc.isenabled()
+        gc.disable()
+
+        try:
+            n = 37
+            n_samples = 7
+            theta = Var.new_param(1.0, name="theta")
+            matrix = Var.new_calc(lambda x: x * jnp.eye(n), theta, name="matrix")
+            target = Var.new_calc(jnp.sum, matrix, name="target")
+            model = Model([target])
+
+            predictions = model.predict(
+                {"theta": jnp.ones(n_samples)}, predict=["target"]
+            )
+            jax.block_until_ready(predictions)
+
+            retained = [
+                array for array in jax.live_arrays() if array.shape == (n_samples, n, n)
+            ]
+            assert not retained
+        finally:
+            if gc_was_enabled:
+                gc.enable()
+            gc.collect()
+
     def test_predict_no_batching_dim(self, model) -> None:
         position = model.extract_position(["sigma_hat", "beta_hat"])
 

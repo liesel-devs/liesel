@@ -101,6 +101,30 @@ def _set_weak_var_value(var: Var, value: Array) -> None:
         node.flag_outdated()
 
 
+def _compile_prediction(
+    model: Model, predict_names: Sequence[str]
+) -> Callable[
+    [dict[str, Array], dict[str, NodeState]],
+    dict[str, Array],
+]:
+    """
+    Compiles a vectorized prediction for a fully prepared model.
+
+    Model and submodel construction must happen before this function is called.
+    Keeping that Python-side graph preparation outside the compiled function avoids
+    tracing model validation and lets JAX compile only the numerical state update.
+    """
+    predict_names = tuple(predict_names)
+
+    def predict_one(
+        samples: dict[str, Array], model_state: dict[str, NodeState]
+    ) -> dict[str, Array]:
+        updated_state = model.update_state(samples, model_state, inplace=False)
+        return model.extract_position(predict_names, updated_state)
+
+    return jax.jit(jax.vmap(predict_one, in_axes=(0, None), out_axes=0))
+
+
 class GraphBuilder:
     """
     A graph builder, used to set up a :class:`.Model`.
@@ -2984,15 +3008,12 @@ class Model:
                 f"Nodes in submodel: {vars_and_nodes}"
             )
 
-        # single prediction function
-        def predict_one(samples):
-            updated_state = submodel.update_state(
-                samples, submodel.state, inplace=False
-            )
-            return submodel.extract_position(predict_names, updated_state)
+        initial_state = submodel.state
 
-        # map over iterations
-        predict_batched = jax.vmap(predict_one, in_axes=0, out_axes=0)
+        # Compile only the numerical state update and vectorized prediction. Passing
+        # the initial state explicitly avoids capturing its arrays as constants in the
+        # compiled function.
+        predict_batched = _compile_prediction(submodel, predict_names)
 
         def flatten_batch_dims(x):
             new_shape = (-1,) + jnp.shape(x)[n_batching_dim:]
@@ -3000,7 +3021,7 @@ class Model:
 
         flattened_samples = jax.tree.map(flatten_batch_dims, filtered_samples)
 
-        flat_predictions = predict_batched(flattened_samples)
+        flat_predictions = predict_batched(flattened_samples, initial_state)
 
         def unflatten_batch_dims(x):
             new_shape = batch_shape + jnp.shape(x)[1:]
