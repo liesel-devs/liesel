@@ -1116,6 +1116,18 @@ class TestSample:
         assert jnp.all(samples2["b"] <= 0.2)
         assert jnp.all(samples2["b"] >= 0.1)
 
+    def test_sample_from_custom_dist_is_only_distribution(self):
+        x = Var.new_param(jnp.zeros(2), name="x")
+        model = Model([x])
+
+        samples = model.sample(
+            shape=(3,),
+            seed=rnd.key(1),
+            dists={"x": Dist(tfd.Normal, loc=jnp.zeros(2), scale=1.0)},
+        )
+
+        assert samples["x"].shape == (3, 2)
+
     def test_sample_from_custom_dist_with_variable_dependent_param(self):
         min_ = Var.new_param(0.1, Dist(tfd.Uniform, low=0.1, high=0.2), name="min")
         max_ = Var.new_calc(lambda x: x + 0.1, x=min_, name="max")

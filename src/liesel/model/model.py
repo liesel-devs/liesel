@@ -11,7 +11,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from copy import deepcopy
 from types import MappingProxyType
-from typing import IO, Any, Literal, Self, TypeVar
+from typing import IO, Any, Literal, Self, TypedDict
 
 import dill
 import jax
@@ -45,7 +45,13 @@ logger = logging.getLogger(__name__)
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
-NV = TypeVar("NV", Node, Var)
+class _SamplingSpec(TypedDict):
+    """Information needed to draw and store a sample from a distribution node."""
+
+    shape: tuple[int, ...]
+    dist: Dist
+    seed_index: int
+    value_node: Node
 
 
 def _reduced_sum(*args: Array) -> Array:
@@ -306,7 +312,7 @@ class GraphBuilder:
         return all_nodes, all_vars
 
     @staticmethod
-    def _do_set_missing_names(nodes_or_vars: Iterable[NV]) -> list[str]:
+    def _do_set_missing_names(nodes_or_vars: Iterable[Node | Var]) -> list[str]:
         """
         Sets the missing names for the given nodes or variables.
 
@@ -2336,8 +2342,8 @@ class Model:
         ]
 
         # collect information for sampling by processing dist nodes
-        sampling_specs = {}
-        for i, dist in enumerate(dists_list):
+        sampling_specs: dict[str, _SamplingSpec] = {}
+        for dist in dists_list:
             tfp_dist = dist.init_dist()
 
             event_shape = tfp_dist.event_shape
@@ -2361,8 +2367,8 @@ class Model:
                 sampling_specs[var_name] = {
                     "shape": sample_shape,
                     "dist": dist,
-                    "i": i,
-                    "value_var": value_var,
+                    "seed_index": len(sampling_specs),
+                    "value_node": value_var,
                 }
 
         # add information for custom dists for variables that are not yet covered.
@@ -2372,21 +2378,20 @@ class Model:
                 # and it is also already using the custom dist
                 continue
 
-            i += 1
             tfp_dist = dist.init_dist()
             event_shape = tfp_dist.event_shape
             batch_shape = tfp_dist.batch_shape
+            value_shape = jnp.asarray(self.vars[var_name].value).shape
             sample_index = len(value_shape) - len(batch_shape) - len(event_shape)
             sample_shape = value_shape[:sample_index]
-            value_shape = jnp.asarray(self.vars[var_name].value).shape  # type: ignore
 
-            value_var = self.vars[var_name].value_node
+            value_node = self.vars[var_name].value_node
 
             sampling_specs[var_name] = {
                 "shape": sample_shape,
                 "dist": dist,
-                "i": i,
-                "value_var": value_var,
+                "seed_index": len(sampling_specs),
+                "value_node": value_node,
             }
 
         # Shape handling
@@ -2436,7 +2441,7 @@ class Model:
                 tfp_dist = spec["dist"].init_dist()
 
                 # draw the actual sample
-                value = tfp_dist.sample(spec["shape"], seeds[spec["i"]])
+                value = tfp_dist.sample(spec["shape"], seeds[spec["seed_index"]])
 
                 # save the sampled value
                 sampled_position[name] = value
@@ -2444,7 +2449,10 @@ class Model:
                 # update the variable's value with the sampled value so that the
                 # distributions of variables further down the model hierarchy will be
                 # correctly initialized based on the sampled values higher up
-                spec["value_var"].value = value
+                value_node = spec["value_node"]
+                if not isinstance(value_node, Value):
+                    raise AttributeError(f"Cannot set value of {value_node}")
+                value_node.value = value
 
             # to avoid tracer leakage we prevent side effects to persists
             self.state = previous_state
