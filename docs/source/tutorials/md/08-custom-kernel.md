@@ -1,6 +1,5 @@
 # Defining a custom MCMC kernel
 
-
 ## Custom Metropolis-Hastings kernel
 
 The easiest way to use a custom MCMC kernel in `liesel.goose` is to
@@ -39,7 +38,7 @@ implemented with
 It can then be attached to the coefficient variable with
 
 ``` python
->>> model.vars[param_name].coef.inference = gs.MCMCSpec(
+>>> model.vars[param_name].inference = gs.MCMCSpec(
 ...     gs.MHKernel,
 ...     kernel_kwargs={"proposal_fn": rw_proposal, "da_tune_step_size": True},
 ... )
@@ -103,15 +102,14 @@ between transitions. This allows the kernels to have specialized
 {class}`.KernelState` and {class}`.TransitionInfo` classes. A kernel
 state can be any pytree.
 
-**The tune method.** The {meth}`.Kernel.tune` method is updates the
-kernel hyperparameters at the end of an adaptation epoch. The method
-receives the PRNG key, the model state, the kernel state, the epoch
-state, and (optionally) the *history*, i.e.~the samples from the
-previous epoch, as arguments. It returns a {class}`.TuningOutcome`
-object that wraps the new kernel state and some meta-information about
-the tuning process, e.g.~an error code. As for the transition, the
-{class}`.TuningInfo` class can be kernel-specific but must be a valid
-pytree.
+**The tune method.** The {meth}`.Kernel.tune` method updates the kernel
+hyperparameters at the end of an adaptation epoch. The method receives
+the PRNG key, the model state, the kernel state, the epoch state, and
+(optionally) the *history*, i.e.~the samples from the previous epoch, as
+arguments. It returns a {class}`.TuningOutcome` object that wraps the
+new kernel state and some meta-information about the tuning process,
+e.g.~an error code. As for the transition, the {class}`.TuningInfo`
+class can be kernel-specific but must be a valid pytree.
 
 The signature of the {meth}`.Kernel.tune` method is as follows:
 
@@ -141,11 +139,12 @@ averaging for step size tuning in this kernel class, we define a kernel
 state that follows the {class}`.DAKernelState` protocol.
 
 ``` python
-from dataclasses import dataclass, field  # general dataclass functionalty
+from dataclasses import dataclass
+from liesel.goose import da  # dual averaging functionality
+from liesel.goose.da import DualAvgState
 from liesel.goose.pytree import (
     register_dataclass_as_pytree,  # dataclasses must be registered as pytrees with jax
 )
-from liesel.goose import da  # dual averaging functionality
 
 
 @register_dataclass_as_pytree
@@ -157,12 +156,11 @@ class RWKernelState:
     """
 
     step_size: float
-    error_sum: float = field(default=0.0, init=False)
-    log_avg_step_size: float = field(default=0.0, init=False)
-    mu: float = field(init=False)
+    da_state: DualAvgState | None = None
 
     def __post_init__(self):
-        da.da_init(self)
+        if self.da_state is None:
+            self.da_state = DualAvgState.from_step_size(self.step_size)
 ```
 
 #### The kernel class
@@ -181,7 +179,10 @@ current epoch. This means that we only have to implement these two
 methods.
 
 ``` python
+from collections.abc import Sequence
+
 import jax
+import jax.flatten_util
 import liesel.goose as gs
 
 
@@ -227,7 +228,7 @@ of the kernel is stored separately in the {class}`.RWKernelState`.
 ``` python
     def __init__(
         self,
-        position_keys: list[str] | tuple[str, ...],
+        position_keys: Sequence[str],
         initial_step_size: float = 1.0,
         da_target_accept: float = 0.234,
         da_gamma: float = 0.05,
@@ -449,7 +450,10 @@ averaging based on the observed acceptance probability.
 We now simply restate the full code-block here:
 
 ``` python
+from collections.abc import Sequence
+
 import jax
+import jax.flatten_util
 import liesel.goose as gs
 
 
@@ -470,7 +474,7 @@ class RWKernel(
 
     def __init__(
         self,
-        position_keys: list[str] | tuple[str, ...],
+        position_keys: Sequence[str],
         initial_step_size: float = 1.0,
         da_target_accept: float = 0.234,
         da_gamma: float = 0.05,
@@ -627,349 +631,199 @@ gs.Summary(results)
     liesel.goose.engine - INFO - Initializing kernels...
     liesel.goose.engine - INFO - Done
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
-
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-     50%|█████████████████████                     | 1/2 [00:00<00:00,  1.05chunk/s]
-    100%|██████████████████████████████████████████| 2/2 [00:00<00:00,  2.09chunk/s]
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s] 50%|█████████████████████                     | 1/2 [00:00<00:00,  2.34chunk/s]100%|██████████████████████████████████████████| 2/2 [00:00<00:00,  4.66chunk/s]
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
-
-      0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|█████████████████████████████████████████| 1/1 [00:00<00:00, 981.58chunk/s]
+      0%|                                                  | 0/1 [00:00<?, ?chunk/s]100%|█████████████████████████████████████████| 1/1 [00:00<00:00, 820.96chunk/s]
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
-
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1318.96chunk/s]
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 2/2 [00:00<00:00, 3200.54chunk/s]
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 275 transitions, 25 jitted together
-
-      0%|                                                 | 0/11 [00:00<?, ?chunk/s]
-    100%|██████████████████████████████████████| 11/11 [00:00<00:00, 1687.79chunk/s]
+      0%|                                                 | 0/11 [00:00<?, ?chunk/s]100%|██████████████████████████████████████| 11/11 [00:00<00:00, 3650.97chunk/s]
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 100 transitions, 25 jitted together
-
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|████████████████████████████████████████| 4/4 [00:00<00:00, 1499.84chunk/s]
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 4/4 [00:00<00:00, 1868.49chunk/s]
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Finished warmup
     liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 500 transitions, 25 jitted together
-
-      0%|                                                 | 0/20 [00:00<?, ?chunk/s]
-    100%|██████████████████████████████████████| 20/20 [00:00<00:00, 1924.17chunk/s]
+      0%|                                                 | 0/20 [00:00<?, ?chunk/s]100%|██████████████████████████████████████| 20/20 [00:00<00:00, 4763.01chunk/s]
     liesel.goose.engine - INFO - Finished epoch
 
 <p>
-
 <strong>Parameter summary:</strong>
 </p>
-
 <table border="0" class="dataframe">
-
 <thead>
-
 <tr style="text-align: right;">
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 kernel
 </th>
-
 <th>
-
 mean
 </th>
-
 <th>
-
 sd
 </th>
-
 <th>
-
 q_0.05
 </th>
-
 <th>
-
 q_0.5
 </th>
-
 <th>
-
 q_0.95
 </th>
-
 <th>
-
 sample_size
 </th>
-
 <th>
-
 ess_bulk
 </th>
-
 <th>
-
 ess_tail
 </th>
-
 <th>
-
 rhat
 </th>
-
 </tr>
-
 <tr>
-
 <th>
-
 parameter
 </th>
-
 <th>
-
 index
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 </tr>
-
 </thead>
-
 <tbody>
-
 <tr>
-
 <th>
-
 mu
 </th>
-
 <th>
-
 ()
 </th>
-
 <td>
-
 kernel_00
 </td>
-
 <td>
-
 0.457
 </td>
-
 <td>
-
 0.098
 </td>
-
 <td>
-
 0.278
 </td>
-
 <td>
-
 0.464
 </td>
-
 <td>
-
 0.609
 </td>
-
 <td>
-
 2000
 </td>
-
 <td>
-
 313.054
 </td>
-
 <td>
-
 271.839
 </td>
-
 <td>
-
 1.013
 </td>
-
 </tr>
-
 </tbody>
-
 </table>
-
 <p>
-
 <strong>Acceptance probabilities:</strong>
 </p>
-
 <table border="0" class="dataframe">
-
 <thead>
-
 <tr style="text-align: right;">
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 acceptance_probability
 </th>
-
 <th>
-
 position_moved
 </th>
-
 </tr>
-
 <tr>
-
 <th>
-
 kernel
 </th>
-
 <th>
-
 positions
 </th>
-
 <th>
-
 phase
 </th>
-
 <th>
-
 </th>
-
 <th>
-
 </th>
-
 </tr>
-
 </thead>
-
 <tbody>
-
 <tr>
-
 <th rowspan="2" valign="top">
-
 kernel_00
 </th>
-
 <th rowspan="2" valign="top">
-
 mu
 </th>
-
 <th>
-
 posterior
 </th>
-
 <td>
-
 0.206
 </td>
-
 <td>
-
 0.205
 </td>
-
 </tr>
-
 <tr>
-
 <th>
-
 warmup
 </th>
-
 <td>
-
 0.221
 </td>
-
 <td>
-
 0.220
 </td>
-
 </tr>
-
 </tbody>
-
 </table>
