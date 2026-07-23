@@ -3063,6 +3063,7 @@ class Var:
         fixed: Sequence[str] = (),
         newdata: dict[str, jax.typing.ArrayLike] | None = None,
         dists: dict[str, Dist] | None = None,
+        chunk_size: int | None = None,
     ) -> dict[str, Array]:
         """
         Draws samples from the parental model for this variable.
@@ -3093,11 +3094,18 @@ class Var:
             Can be used to provide a dictionary of variable names and :class:`.Dist` \
             instances to use in sampling. If ``None`` (default), samples are drawn for \
             each variable using their :attr:`.Var.dist_node`.
+        chunk_size
+            Maximum number of flattened requested-draw and posterior-sample \
+            combinations to evaluate in parallel. If ``None`` (default), all \
+            combinations are evaluated in parallel. A smaller value reduces the peak \
+            memory required for sample-dependent intermediate values, at the potential \
+            cost of lower accelerator utilization. It does not reduce the memory \
+            required to store the returned samples.
 
         Notes
         -----
         When compiling this function with ``jax.jit``, the arguments ``shape``,
-        ``fixed``, and ``dists`` must be static.
+        ``fixed``, ``dists``, and ``chunk_size`` must be static.
 
         Returns
         -------
@@ -3113,6 +3121,7 @@ class Var:
                 fixed=fixed,
                 newdata=newdata,
                 dists=dists,
+                chunk_size=chunk_size,
             )
             return drawn_samples
 
@@ -3133,6 +3142,7 @@ class Var:
                 fixed=fixed,
                 newdata=newdata,
                 dists=dists,
+                chunk_size=chunk_size,
             )
 
             return drawn_samples

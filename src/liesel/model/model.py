@@ -145,7 +145,7 @@ def _compile_prediction(
 
 
 def _validate_chunk_size(chunk_size: int | None) -> int | None:
-    """Validates and normalizes the prediction chunk size."""
+    """Validates and normalizes a prediction or sampling chunk size."""
     if chunk_size is None:
         return None
 
@@ -156,6 +156,74 @@ def _validate_chunk_size(chunk_size: int | None) -> int | None:
         raise ValueError("chunk_size must be a positive integer.")
 
     return int(chunk_size)
+
+
+def _compile_sampling(
+    model: Model,
+    sampling_specs: dict[str, dict[str, Any]],
+    posterior_size: int,
+    chunk_size: int | None = None,
+) -> Callable[
+    [
+        Array,
+        Array,
+        dict[str, Array],
+        dict[str, NodeState],
+    ],
+    dict[str, Array],
+]:
+    """
+    Compiles sampling over a flattened draw and posterior-sample axis.
+
+    Sampling specifications and all Python-side model preparation must be completed
+    before calling this function.
+    """
+
+    def one_draw(
+        draw_index: Array,
+        seeds: Array,
+        posterior_samples: dict[str, Array],
+        model_state: dict[str, NodeState],
+    ) -> dict[str, Array]:
+        posterior_index = draw_index % posterior_size
+        position = jax.tree.map(
+            lambda value: value[posterior_index],
+            posterior_samples,
+        )
+        previous_state = model.state
+
+        model.state = model.update_state(position, model_state)
+
+        sampled_position = {}
+        for seed_index, (name, spec) in enumerate(sampling_specs.items()):
+            tfp_dist = spec["dist"].init_dist()
+            value = tfp_dist.sample(spec["shape"], seeds[seed_index])
+            sampled_position[name] = value
+            spec["value_var"].value = value
+
+        model.state = previous_state
+        return sampled_position
+
+    def draw_all(
+        draw_indices: Array,
+        seeds: Array,
+        posterior_samples: dict[str, Array],
+        model_state: dict[str, NodeState],
+    ) -> dict[str, Array]:
+        def draw(draw_index):
+            return one_draw(
+                draw_index,
+                seeds[draw_index],
+                posterior_samples,
+                model_state,
+            )
+
+        if chunk_size is None:
+            return jax.vmap(draw)(draw_indices)
+
+        return jax.lax.map(draw, draw_indices, batch_size=chunk_size)
+
+    return jax.jit(draw_all)
 
 
 class GraphBuilder:
@@ -2289,6 +2357,7 @@ class Model:
         fixed: Sequence[str] = (),
         newdata: dict[str, jax.typing.ArrayLike] | None = None,
         dists: dict[str, Dist] | None = None,
+        chunk_size: int | None = None,
     ) -> dict[str, Array]:
         """
         Draws samples from the model.
@@ -2319,11 +2388,18 @@ class Model:
             Can be used to provide a dictionary of variable names and :class:`.Dist` \
             instances to use in sampling. If ``None`` (default), samples are drawn for \
             each variable using their :attr:`.Var.dist_node`.
+        chunk_size
+            Maximum number of flattened requested-draw and posterior-sample \
+            combinations to evaluate in parallel. If ``None`` (default), all \
+            combinations are evaluated in parallel. A smaller value reduces the peak \
+            memory required for sample-dependent intermediate values, at the potential \
+            cost of lower accelerator utilization. It does not reduce the memory \
+            required to store the returned samples.
 
         Notes
         -----
         When compiling this function with ``jax.jit``, the arguments ``shape``,
-        ``fixed``, and ``dists`` must be static.
+        ``fixed``, ``dists``, and ``chunk_size`` must be static.
 
         Returns
         -------
@@ -2331,6 +2407,8 @@ class Model:
             only sampled variables.
         """
 
+        chunk_size = _validate_chunk_size(chunk_size)
+        shape = tuple(shape)
         posterior_samples = posterior_samples if posterior_samples is not None else {}
 
         unique_sample_keys = set(list(posterior_samples))
@@ -2343,8 +2421,30 @@ class Model:
                 "Any key should be present in only one of these arguments."
             )
 
-        if posterior_samples is not None:
-            posterior_samples = jax.tree.map(jnp.asarray, posterior_samples)
+        # Filter before converting to JAX arrays so irrelevant posterior entries are
+        # not needlessly transferred to an accelerator.
+        vars_and_nodes = list(self.vars) + list(self.nodes)
+        filtered_samples = {
+            key: value
+            for key, value in posterior_samples.items()
+            if key in vars_and_nodes
+        }
+
+        shape_sources = filtered_samples if filtered_samples else posterior_samples
+        posterior_batch_shapes = [
+            tuple(jnp.shape(value)[:2]) for value in shape_sources.values()
+        ]
+        if posterior_batch_shapes and (
+            any(len(batch_shape) != 2 for batch_shape in posterior_batch_shapes)
+            or len(set(posterior_batch_shapes)) != 1
+        ):
+            raise ValueError(
+                "The values in 'posterior_samples' must have two consistent leading "
+                "batching dimensions."
+            )
+
+        samples_shape = posterior_batch_shapes[0] if posterior_batch_shapes else ()
+        posterior_samples = jax.tree.map(jnp.asarray, filtered_samples)
 
         if newdata is not None:
             newdata = jax.tree.map(jnp.asarray, newdata)
@@ -2447,87 +2547,54 @@ class Model:
         # ------------------------------------------------------------------------------
 
         # set up shape of samples
-        samples_shape = (
-            next(iter(posterior_samples.values())).shape[:2]
-            if posterior_samples
-            else ()
-        )
         nsamples = math.prod(
             shape
         )  # total number of samples to draw (pure python so jit works)
-
-        # set up all seeds that will be needed
+        posterior_size = math.prod(samples_shape) if samples_shape else 1
+        total_draws = nsamples * posterior_size
+        draw_indices = jnp.arange(total_draws)
         seeds = jax.random.split(
-            seed, (nsamples,) + samples_shape + (len(sampling_specs),)
+            seed,
+            (nsamples,) + samples_shape + (len(sampling_specs),),
         )
+        seeds = jnp.reshape(seeds, (total_draws, len(sampling_specs)))
 
         def reshape(a):
             # brings samples into the desired shape based on input argument.
             # shape=(3,4)
             # nsamples=12
-            # shape of drawn samples: (12,...)
-            # reshaped to (3,4, ...)
-            return jnp.reshape(a, shape=shape + a.shape[1:])
+            # posterior shape=(2, 8)
+            # shape of drawn samples: (12 * 2 * 8, ...)
+            # reshaped to (3, 4, 2, 8, ...)
+            return jnp.reshape(a, shape=shape + samples_shape + a.shape[1:])
 
         # Workhorse function
         # ------------------------------------------------------------------------------
-
-        def one_draw(position, seeds):
-            # the position argument is for updating the state with posterior samples
-            previous_state = self.state
-
-            # update model state using the position (a single posterior sample, if any)
-            # and the state_for_sampling, which includes the observed values from
-            # newdata.
-            self.state = self.update_state(position, state_for_sampling)
-
-            # draw samples in order of the model graph
-            sampled_position = {}
-            for name, spec in sampling_specs.items():
-                # initializes the distribution node using the current model state,
-                # which may have been influenced by 'position', 'newdata', or sampled
-                # values from variables higher up the model hierarchy
-                tfp_dist = spec["dist"].init_dist()
-
-                # draw the actual sample
-                value = tfp_dist.sample(spec["shape"], seeds[spec["i"]])
-
-                # save the sampled value
-                sampled_position[name] = value
-
-                # update the variable's value with the sampled value so that the
-                # distributions of variables further down the model hierarchy will be
-                # correctly initialized based on the sampled values higher up
-                spec["value_var"].value = value
-
-            # to avoid tracer leakage we prevent side effects to persists
-            self.state = previous_state
-
-            return sampled_position
-
-        if not posterior_samples:
-            draw_chains = jax.vmap(one_draw, in_axes=(None, 0), out_axes=0)
-            # since we have no posterior samples, we use position={}
-            drawn_samples = draw_chains({}, seeds)
-
-            # return reshaped version of samples
-            return jax.tree.map(reshape, drawn_samples)
-
-        # this branch of the function continues only if posterior_samples is not None
-        # -----------------------------------------------------------------------------
-        draw_iter = jax.vmap(one_draw, in_axes=(0, 0), out_axes=0)
-        draw_chains = jax.vmap(draw_iter, in_axes=(0, 0), out_axes=0)
-        draw_samples = jax.vmap(draw_chains, in_axes=(None, 0), out_axes=0)
-
-        # filter samples to include only samples that belong to the model
-        vars_and_nodes = list(self.vars) + list(self.nodes)
-        filtered_samples = {
-            k: v for k, v in posterior_samples.items() if k in vars_and_nodes
-        }
+        flattened_posterior_samples = jax.tree.map(
+            lambda value: jnp.reshape(
+                value,
+                (posterior_size,) + value.shape[2:],
+            ),
+            posterior_samples,
+        )
+        draw_samples = _compile_sampling(
+            self,
+            sampling_specs,
+            posterior_size=posterior_size,
+            chunk_size=chunk_size,
+        )
 
         try:
-            drawn_samples = draw_samples(filtered_samples, seeds)
+            drawn_samples = draw_samples(
+                draw_indices,
+                seeds,
+                flattened_posterior_samples,
+                state_for_sampling,
+            )
         except Exception as e:
+            if not posterior_samples:
+                raise
+
             msg = (
                 "Error during sampling. Make sure to check sample shapes! The values in"
                 " 'posterior_samples' must have two leading batching dimensions."

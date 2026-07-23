@@ -772,7 +772,11 @@ class TestVarSample:
         if build_model:
             _ = lsl.Model([y])
 
-        samples = mu.sample(shape=(1, 100), seed=jax.random.key(2))
+        samples = mu.sample(
+            shape=(1, 100),
+            seed=jax.random.key(2),
+            chunk_size=13,
+        )
 
         assert len(samples) == 1  # because there is only 1 var in the subgraph
         assert samples["b"].shape == (1, 100, 2)  # verify correct shape

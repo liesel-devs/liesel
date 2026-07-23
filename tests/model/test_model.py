@@ -15,6 +15,7 @@ from liesel.model.model import (
     GraphBuilder,
     Model,
     _compile_prediction,
+    _compile_sampling,
     log_prob_pointwise,
     save_model,
 )
@@ -1109,6 +1110,137 @@ def linreg():
 
 
 class TestSample:
+    def test_sample_in_chunks(self, linreg: Model):
+        model = linreg
+
+        expected = model.sample(
+            shape=(2, 5),
+            seed=rnd.key(1),
+            fixed=["y"],
+        )
+        chunked = model.sample(
+            shape=(2, 5),
+            seed=rnd.key(1),
+            fixed=["y"],
+            chunk_size=3,
+        )
+
+        assert jax.tree.all(jax.tree.map(jnp.array_equal, expected, chunked))
+
+    def test_sample_from_posterior_in_chunks(self, linreg: Model):
+        model = linreg
+        posterior_samples = model.sample(
+            shape=(2, 4),
+            seed=rnd.key(7),
+            fixed=["y"],
+        )
+
+        expected = model.sample(
+            shape=(3,),
+            seed=rnd.key(8),
+            posterior_samples=posterior_samples,
+        )
+        chunked = model.sample(
+            shape=(3,),
+            seed=rnd.key(8),
+            posterior_samples=posterior_samples,
+            chunk_size=5,
+        )
+
+        assert chunked["y"].shape == (3, 2, 4, 100)
+        assert jax.tree.all(jax.tree.map(jnp.array_equal, expected, chunked))
+
+    @pytest.mark.parametrize("chunk_size", [0, -1])
+    def test_sample_rejects_non_positive_chunk_size(
+        self, linreg: Model, chunk_size: int
+    ):
+        with pytest.raises(ValueError, match="positive integer"):
+            linreg.sample(
+                shape=(2,),
+                seed=rnd.key(1),
+                chunk_size=chunk_size,
+            )
+
+    @pytest.mark.parametrize("chunk_size", [True, 1.5, "2"])
+    def test_sample_rejects_non_integer_chunk_size(self, linreg: Model, chunk_size):
+        with pytest.raises(TypeError, match="positive integer or None"):
+            linreg.sample(
+                shape=(2,),
+                seed=rnd.key(1),
+                chunk_size=chunk_size,
+            )
+
+    @pytest.mark.skipif(
+        jax.default_backend() != "cpu",
+        reason="Compiled memory statistics are backend-specific.",
+    )
+    def test_sample_chunking_reduces_compiled_temporary_memory(self):
+        n = 37
+        theta = Var.new_param(0.0, name="theta")
+        y = Var(0.0, Dist(tfd.Normal, loc=theta, scale=1.0), name="y")
+        matrix = Var.new_calc(
+            lambda value: jnp.exp(value) * jnp.eye(n),
+            y,
+            name="matrix",
+        )
+        z = Var(
+            jnp.zeros(n),
+            Dist(
+                tfd.MultivariateNormalTriL,
+                loc=jnp.zeros(n),
+                scale_tril=matrix,
+            ),
+            name="z",
+        )
+        model = Model([z])
+        sampling_specs = {
+            "y": {
+                "shape": (),
+                "dist": y.dist_node,
+                "value_var": y.value_node,
+            },
+            "z": {
+                "shape": (),
+                "dist": z.dist_node,
+                "value_var": z.value_node,
+            },
+        }
+        posterior_size = 6
+        total_draws = 18
+        draw_indices = jnp.arange(total_draws)
+        seeds = rnd.split(rnd.key(1), (total_draws, 2))
+        posterior_samples = {"theta": jnp.zeros(posterior_size)}
+
+        full = (
+            _compile_sampling(model, sampling_specs, posterior_size)
+            .lower(
+                draw_indices,
+                seeds,
+                posterior_samples,
+                model.state,
+            )
+            .compile()
+            .memory_analysis()
+        )
+        chunked = (
+            _compile_sampling(
+                model,
+                sampling_specs,
+                posterior_size,
+                chunk_size=3,
+            )
+            .lower(
+                draw_indices,
+                seeds,
+                posterior_samples,
+                model.state,
+            )
+            .compile()
+            .memory_analysis()
+        )
+
+        assert chunked.temp_size_in_bytes < full.temp_size_in_bytes
+
     def test_sample_prior(self):
         """
         Test that the function runs and shows expected behavior in a minimal example.
@@ -1200,7 +1332,7 @@ class TestSample:
 
         jitted_sample = jax.jit(
             model.sample,
-            static_argnames=["shape", "fixed", "dists"],
+            static_argnames=["shape", "fixed", "dists", "chunk_size"],
         )
 
         jitted_sample(shape=(1, 100), seed=rnd.key(1))
@@ -1209,7 +1341,11 @@ class TestSample:
         x_new = tfd.Uniform(low=10.0, high=11.0).sample(x_shape, seed=rnd.key(9))
         jitted_sample(shape=(1, 100), seed=rnd.key(1), newdata={"X": x_new})
         jitted_sample(
-            shape=(1, 100), seed=rnd.key(1), newdata={"X": x_new}, fixed=("y")
+            shape=(1, 100),
+            seed=rnd.key(1),
+            newdata={"X": x_new},
+            fixed=("y"),
+            chunk_size=13,
         )
 
     def test_sample_from_custom_dist(self, linreg: Model):
