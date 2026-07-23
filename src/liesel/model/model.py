@@ -10,6 +10,7 @@ import re
 from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from copy import deepcopy
+from numbers import Integral
 from types import MappingProxyType
 from typing import IO, Any, Literal, Self, TypeVar
 
@@ -21,7 +22,18 @@ import networkx as nx
 import pandas as pd
 
 from ..goose.types import ModelState, Position
-from .nodes import Array, Calc, Dist, Group, Node, NodeState, Value, Var, VarValue
+from .nodes import (
+    Array,
+    Calc,
+    Dist,
+    Group,
+    Node,
+    NodeState,
+    TransientNode,
+    Value,
+    Var,
+    VarValue,
+)
 from .viz import plot_nodes, plot_vars
 
 __all__ = ["GraphBuilder", "Model", "load_model", "save_model"]
@@ -64,6 +76,155 @@ def _transform_back(var_transformed: Var) -> Calc:
     kwinputs = var_transformed.dist_node.kwinputs
 
     return Calc(fn, var_transformed.value_node, *inputs, **kwinputs)  # type: ignore
+
+
+def _set_weak_var_value(var: Var, value: Array) -> None:
+    """
+    Sets the cached value of a weak variable's value node.
+
+    This is a low-level helper for temporarily overriding weak variable values. It
+    can put the graph into an inconsistent state: the cached value no longer
+    needs to match the value implied by the variable's inputs.
+
+    This helper calls :meth:`.Node.flag_outdated` on the value node's outputs
+    only. It does not call ``var.value_node.flag_outdated()`` on the value node
+    itself. Callers that want the weak variable to be recomputed from its inputs
+    after downstream updates should usually flag the value node itself as
+    outdated too.
+    """
+    if isinstance(var.value_node, TransientNode):
+        raise RuntimeError(
+            f"{repr(var)} is weak and transient, cannot set cached value"
+        )
+
+    var.value_node.state = NodeState(value, False)
+
+    for node in var.value_node.outputs:
+        node.flag_outdated()
+
+
+def _compile_prediction(
+    model: Model,
+    predict_names: Sequence[str],
+    chunk_size: int | None = None,
+) -> Callable[
+    [dict[str, Array], dict[str, NodeState]],
+    dict[str, Array],
+]:
+    """
+    Compiles a vectorized prediction for a fully prepared model.
+
+    Model and submodel construction must happen before this function is called.
+    Keeping that Python-side graph preparation outside the compiled function avoids
+    tracing model validation and lets JAX compile only the numerical state update.
+    """
+    predict_names = tuple(predict_names)
+
+    def predict_one(
+        samples: dict[str, Array], model_state: dict[str, NodeState]
+    ) -> dict[str, Array]:
+        updated_state = model.update_state(samples, model_state, inplace=False)
+        return model.extract_position(predict_names, updated_state)
+
+    if chunk_size is None:
+        predict_batched = jax.vmap(predict_one, in_axes=(0, None), out_axes=0)
+    else:
+
+        def predict_batched(
+            samples: dict[str, Array], model_state: dict[str, NodeState]
+        ) -> dict[str, Array]:
+            def predict_from_samples(samples):
+                return predict_one(samples, model_state)
+
+            return jax.lax.map(
+                predict_from_samples,
+                samples,
+                batch_size=chunk_size,
+            )
+
+    return jax.jit(predict_batched)
+
+
+def _validate_chunk_size(chunk_size: int | None) -> int | None:
+    """Validates and normalizes a prediction or sampling chunk size."""
+    if chunk_size is None:
+        return None
+
+    if isinstance(chunk_size, bool) or not isinstance(chunk_size, Integral):
+        raise TypeError("chunk_size must be a positive integer or None.")
+
+    if chunk_size < 1:
+        raise ValueError("chunk_size must be a positive integer.")
+
+    return int(chunk_size)
+
+
+def _compile_sampling(
+    model: Model,
+    sampling_specs: dict[str, dict[str, Any]],
+    posterior_size: int,
+    chunk_size: int | None = None,
+) -> Callable[
+    [
+        Array,
+        Array,
+        dict[str, Array],
+        dict[str, NodeState],
+    ],
+    dict[str, Array],
+]:
+    """
+    Compiles sampling over a flattened draw and posterior-sample axis.
+
+    Sampling specifications and all Python-side model preparation must be completed
+    before calling this function.
+    """
+
+    def one_draw(
+        draw_index: Array,
+        seeds: Array,
+        posterior_samples: dict[str, Array],
+        model_state: dict[str, NodeState],
+    ) -> dict[str, Array]:
+        posterior_index = draw_index % posterior_size
+        position = jax.tree.map(
+            lambda value: value[posterior_index],
+            posterior_samples,
+        )
+        previous_state = model.state
+
+        model.state = model.update_state(position, model_state)
+
+        sampled_position = {}
+        for seed_index, (name, spec) in enumerate(sampling_specs.items()):
+            tfp_dist = spec["dist"].init_dist()
+            value = tfp_dist.sample(spec["shape"], seeds[seed_index])
+            sampled_position[name] = value
+            spec["value_var"].value = value
+
+        model.state = previous_state
+        return sampled_position
+
+    def draw_all(
+        draw_indices: Array,
+        seeds: Array,
+        posterior_samples: dict[str, Array],
+        model_state: dict[str, NodeState],
+    ) -> dict[str, Array]:
+        def draw(draw_index):
+            return one_draw(
+                draw_index,
+                seeds[draw_index],
+                posterior_samples,
+                model_state,
+            )
+
+        if chunk_size is None:
+            return jax.vmap(draw)(draw_indices)
+
+        return jax.lax.map(draw, draw_indices, batch_size=chunk_size)
+
+    return jax.jit(draw_all)
 
 
 class GraphBuilder:
@@ -2204,6 +2365,7 @@ class Model:
         fixed: Sequence[str] = (),
         newdata: dict[str, jax.typing.ArrayLike] | None = None,
         dists: dict[str, Dist] | None = None,
+        chunk_size: int | None = 64,
     ) -> dict[str, Array]:
         """
         Draws samples from the model.
@@ -2234,11 +2396,18 @@ class Model:
             Can be used to provide a dictionary of variable names and :class:`.Dist` \
             instances to use in sampling. If ``None`` (default), samples are drawn for \
             each variable using their :attr:`.Var.dist_node`.
+        chunk_size
+            Maximum number of flattened requested-draw and posterior-sample \
+            combinations to evaluate in parallel. Defaults to ``64``. Pass ``None`` \
+            to evaluate all combinations in parallel. A smaller value reduces the \
+            peak memory required for sample-dependent intermediate values, at the \
+            potential cost of lower accelerator utilization. It does not reduce the \
+            memory required to store the returned samples.
 
         Notes
         -----
         When compiling this function with ``jax.jit``, the arguments ``shape``,
-        ``fixed``, and ``dists`` must be static.
+        ``fixed``, ``dists``, and ``chunk_size`` must be static.
 
         Returns
         -------
@@ -2246,6 +2415,8 @@ class Model:
             only sampled variables.
         """
 
+        chunk_size = _validate_chunk_size(chunk_size)
+        shape = tuple(shape)
         posterior_samples = posterior_samples if posterior_samples is not None else {}
 
         unique_sample_keys = set(list(posterior_samples))
@@ -2258,8 +2429,30 @@ class Model:
                 "Any key should be present in only one of these arguments."
             )
 
-        if posterior_samples is not None:
-            posterior_samples = jax.tree.map(jnp.asarray, posterior_samples)
+        # Filter before converting to JAX arrays so irrelevant posterior entries are
+        # not needlessly transferred to an accelerator.
+        vars_and_nodes = list(self.vars) + list(self.nodes)
+        filtered_samples = {
+            key: value
+            for key, value in posterior_samples.items()
+            if key in vars_and_nodes
+        }
+
+        shape_sources = filtered_samples if filtered_samples else posterior_samples
+        posterior_batch_shapes = [
+            tuple(jnp.shape(value)[:2]) for value in shape_sources.values()
+        ]
+        if posterior_batch_shapes and (
+            any(len(batch_shape) != 2 for batch_shape in posterior_batch_shapes)
+            or len(set(posterior_batch_shapes)) != 1
+        ):
+            raise ValueError(
+                "The values in 'posterior_samples' must have two consistent leading "
+                "batching dimensions."
+            )
+
+        samples_shape = posterior_batch_shapes[0] if posterior_batch_shapes else ()
+        posterior_samples = jax.tree.map(jnp.asarray, filtered_samples)
 
         if newdata is not None:
             newdata = jax.tree.map(jnp.asarray, newdata)
@@ -2362,87 +2555,54 @@ class Model:
         # ------------------------------------------------------------------------------
 
         # set up shape of samples
-        samples_shape = (
-            next(iter(posterior_samples.values())).shape[:2]
-            if posterior_samples
-            else ()
-        )
         nsamples = math.prod(
             shape
         )  # total number of samples to draw (pure python so jit works)
-
-        # set up all seeds that will be needed
+        posterior_size = math.prod(samples_shape) if samples_shape else 1
+        total_draws = nsamples * posterior_size
+        draw_indices = jnp.arange(total_draws)
         seeds = jax.random.split(
-            seed, (nsamples,) + samples_shape + (len(sampling_specs),)
+            seed,
+            (nsamples,) + samples_shape + (len(sampling_specs),),
         )
+        seeds = jnp.reshape(seeds, (total_draws, len(sampling_specs)))
 
         def reshape(a):
             # brings samples into the desired shape based on input argument.
             # shape=(3,4)
             # nsamples=12
-            # shape of drawn samples: (12,...)
-            # reshaped to (3,4, ...)
-            return jnp.reshape(a, shape=shape + a.shape[1:])
+            # posterior shape=(2, 8)
+            # shape of drawn samples: (12 * 2 * 8, ...)
+            # reshaped to (3, 4, 2, 8, ...)
+            return jnp.reshape(a, shape=shape + samples_shape + a.shape[1:])
 
         # Workhorse function
         # ------------------------------------------------------------------------------
-
-        def one_draw(position, seeds):
-            # the position argument is for updating the state with posterior samples
-            previous_state = self.state
-
-            # update model state using the position (a single posterior sample, if any)
-            # and the state_for_sampling, which includes the observed values from
-            # newdata.
-            self.state = self.update_state(position, state_for_sampling)
-
-            # draw samples in order of the model graph
-            sampled_position = {}
-            for name, spec in sampling_specs.items():
-                # initializes the distribution node using the current model state,
-                # which may have been influenced by 'position', 'newdata', or sampled
-                # values from variables higher up the model hierarchy
-                tfp_dist = spec["dist"].init_dist()
-
-                # draw the actual sample
-                value = tfp_dist.sample(spec["shape"], seeds[spec["i"]])
-
-                # save the sampled value
-                sampled_position[name] = value
-
-                # update the variable's value with the sampled value so that the
-                # distributions of variables further down the model hierarchy will be
-                # correctly initialized based on the sampled values higher up
-                spec["value_var"].value = value
-
-            # to avoid tracer leakage we prevent side effects to persists
-            self.state = previous_state
-
-            return sampled_position
-
-        if not posterior_samples:
-            draw_chains = jax.vmap(one_draw, in_axes=(None, 0), out_axes=0)
-            # since we have no posterior samples, we use position={}
-            drawn_samples = draw_chains({}, seeds)
-
-            # return reshaped version of samples
-            return jax.tree.map(reshape, drawn_samples)
-
-        # this branch of the function continues only if posterior_samples is not None
-        # -----------------------------------------------------------------------------
-        draw_iter = jax.vmap(one_draw, in_axes=(0, 0), out_axes=0)
-        draw_chains = jax.vmap(draw_iter, in_axes=(0, 0), out_axes=0)
-        draw_samples = jax.vmap(draw_chains, in_axes=(None, 0), out_axes=0)
-
-        # filter samples to include only samples that belong to the model
-        vars_and_nodes = list(self.vars) + list(self.nodes)
-        filtered_samples = {
-            k: v for k, v in posterior_samples.items() if k in vars_and_nodes
-        }
+        flattened_posterior_samples = jax.tree.map(
+            lambda value: jnp.reshape(
+                value,
+                (posterior_size,) + value.shape[2:],
+            ),
+            posterior_samples,
+        )
+        draw_samples = _compile_sampling(
+            self,
+            sampling_specs,
+            posterior_size=posterior_size,
+            chunk_size=chunk_size,
+        )
 
         try:
-            drawn_samples = draw_samples(filtered_samples, seeds)
+            drawn_samples = draw_samples(
+                draw_indices,
+                seeds,
+                flattened_posterior_samples,
+                state_for_sampling,
+            )
         except Exception as e:
+            if not posterior_samples:
+                raise
+
             msg = (
                 "Error during sampling. Make sure to check sample shapes! The values in"
                 " 'posterior_samples' must have two leading batching dimensions."
@@ -2705,11 +2865,113 @@ class Model:
 
         return Position(position)
 
+    def _node_for_position_key(self, key: str) -> Node:
+        try:
+            return self.nodes[key]
+        except KeyError:
+            return self.vars[key].value_node
+
+    def _validate_weak_var_position(self, position: dict[str, Array]) -> None:
+        """
+        Validates that weak variable updates in a position are unambiguous.
+
+        If ``position`` contains a weak variable, it must not also contain another
+        key targeting the weak variable's value node, one of its ancestors, or one
+        of its descendants. Updating related nodes together with the weak variable
+        would make it unclear which value should determine the resulting graph
+        state.
+
+        Raises
+        ------
+        RuntimeError
+            If a weak variable in ``position`` is updated together with another
+            position key targeting the weak variable's value node, one of its
+            ancestors, or one of its descendants.
+        """
+        weak_vars = [
+            (key, self.vars[key])
+            for key in position
+            if key in self.vars and self.vars[key].weak
+        ]
+
+        if not weak_vars:
+            return
+
+        position_nodes = {key: self._node_for_position_key(key) for key in position}
+
+        for weak_key, var in weak_vars:
+            value_node = var.value_node
+            related_nodes = (
+                nx.ancestors(self.node_graph, value_node)
+                | nx.descendants(self.node_graph, value_node)
+                | {value_node}
+            )
+
+            for key, node in position_nodes.items():
+                if key != weak_key and node in related_nodes:
+                    raise RuntimeError(
+                        "Ambiguous weak variable update. "
+                        f"Cannot update weak variable '{weak_key}' together "
+                        f"with related position key '{key}'."
+                    )
+
+    def _node_for_position_key(self, key: str) -> Node:
+        try:
+            return self.nodes[key]
+        except KeyError:
+            return self.vars[key].value_node
+
+    def _validate_weak_var_position(self, position: dict[str, Array]) -> None:
+        """
+        Validates that weak variable updates in a position are unambiguous.
+
+        If ``position`` contains a weak variable, it must not also contain another
+        key targeting the weak variable's value node, one of its ancestors, or one
+        of its descendants. Updating related nodes together with the weak variable
+        would make it unclear which value should determine the resulting graph
+        state.
+
+        Raises
+        ------
+        RuntimeError
+            If a weak variable in ``position`` is updated together with another
+            position key targeting the weak variable's value node, one of its
+            ancestors, or one of its descendants.
+        """
+        weak_vars = [
+            (key, self.vars[key])
+            for key in position
+            if key in self.vars and self.vars[key].weak
+        ]
+
+        if not weak_vars:
+            return
+
+        position_nodes = {key: self._node_for_position_key(key) for key in position}
+
+        for weak_key, var in weak_vars:
+            value_node = var.value_node
+            related_nodes = (
+                nx.ancestors(self.node_graph, value_node)
+                | nx.descendants(self.node_graph, value_node)
+                | {value_node}
+            )
+
+            for key, node in position_nodes.items():
+                if key != weak_key and node in related_nodes:
+                    raise RuntimeError(
+                        "Ambiguous weak variable update. "
+                        f"Cannot update weak variable '{weak_key}' together "
+                        f"with related position key '{key}'."
+                    )
+
     def update_state(
         self,
         position: dict[str, Array],
         model_state: dict[str, NodeState] | None = None,
         inplace: bool = False,
+        *,
+        allow_weak_vars: bool = False,
     ) -> ModelState:
         """
         Updates and returns a model state given a position.
@@ -2725,6 +2987,14 @@ class Model:
             If ``False`` (default), a new model state is returned, while the current \
             model's state is left unchanged. If ``True``, the current model's state is \
             updated in place.
+        allow_weak_vars
+            If ``False`` (default), weak variables remain read-only. If ``True``, \
+            entries in ``position`` keyed by weak variable names are written directly \
+            to the cached value of the variable's value node and downstream nodes are \
+            updated accordingly. Positions must be unambiguous: no weak variable \
+            entry may be combined with another entry targeting the same value node, \
+            an ancestor, or a descendant. Transient weak variables cannot be set this \
+            way.
 
         Warnings
         --------
@@ -2743,22 +3013,37 @@ class Model:
         for node in model.nodes.values():
             node._outdated = False
 
+        if allow_weak_vars:
+            model._validate_weak_var_position(position)
+
         # temporarily disable auto_update to avoid shape incompatibilities
         # when updating variables sequentially with new shapes
         original_auto_update = model.auto_update
         model.auto_update = False
+
+        weak_var_names = []
 
         try:
             for key, value in position.items():
                 try:
                     model.nodes[key].value = value  # type: ignore  # data node
                 except KeyError:
-                    model.vars[key].value = value
+                    var = model.vars[key]
+                    if allow_weak_vars and var.weak:
+                        _set_weak_var_value(var, value)
+                        weak_var_names.append(var.name)
+                    else:
+                        var.value = value
         finally:
             # restore original auto_update setting
             model.auto_update = original_auto_update
 
         model.update()
+
+        for name in weak_var_names:
+            model.vars[name].value_node.flag_outdated()
+            for node in model.vars[name].value_node.outputs:
+                node.flag_outdated()
         return model.state
 
     def predict(
@@ -2766,6 +3051,7 @@ class Model:
         samples: dict[str, jax.typing.ArrayLike],
         predict: Sequence[str] | None = None,
         newdata: dict[str, jax.typing.ArrayLike] | None = None,
+        chunk_size: int | None = 64,
     ) -> dict[str, Array]:
         """
         Returns a dictionary of predictions.
@@ -2786,8 +3072,15 @@ class Model:
             correspond to variable or node names in the model whose values should be \
             set to the given values before evaluating predictions. If ``None`` \
             (default), the current variable values are used.
+        chunk_size
+            Maximum number of flattened samples to evaluate in parallel. Defaults to \
+            ``64``. Pass ``None`` to evaluate all samples in parallel. A smaller value \
+            reduces the peak memory required for sample-dependent intermediate values, \
+            at the potential cost of lower accelerator utilization. It does not reduce \
+            the memory required to store the returned predictions.
 
         """
+        chunk_size = _validate_chunk_size(chunk_size)
         samples = samples.copy()
         for name in self.model_nodes:
             samples.pop(name, None)
@@ -2881,15 +3174,16 @@ class Model:
                 f"Nodes in submodel: {vars_and_nodes}"
             )
 
-        # single prediction function
-        def predict_one(samples):
-            updated_state = submodel.update_state(
-                samples, submodel.state, inplace=False
-            )
-            return submodel.extract_position(predict_names, updated_state)
+        initial_state = submodel.state
 
-        # map over iterations
-        predict_batched = jax.vmap(predict_one, in_axes=0, out_axes=0)
+        # Compile only the numerical state update and vectorized prediction. Passing
+        # the initial state explicitly avoids capturing its arrays as constants in the
+        # compiled function.
+        predict_batched = _compile_prediction(
+            submodel,
+            predict_names,
+            chunk_size=chunk_size,
+        )
 
         def flatten_batch_dims(x):
             new_shape = (-1,) + jnp.shape(x)[n_batching_dim:]
@@ -2897,7 +3191,7 @@ class Model:
 
         flattened_samples = jax.tree.map(flatten_batch_dims, filtered_samples)
 
-        flat_predictions = predict_batched(flattened_samples)
+        flat_predictions = predict_batched(flattened_samples, initial_state)
 
         def unflatten_batch_dims(x):
             new_shape = batch_shape + jnp.shape(x)[1:]

@@ -917,7 +917,11 @@ class Calc(Node):
         try:
             self._value = self.function(*args, **kwargs)
         except Exception as e:
-            raise RuntimeError(f"Error while updating {self}.") from e
+            if self.var is not None:
+                msg = f"Error while updating {self} of {self.var}."
+            else:
+                msg = f"Error while updating {self}."
+            raise RuntimeError(msg) from e
         self._outdated = False
         return self
 
@@ -2959,6 +2963,7 @@ class Var:
         self,
         samples: dict[str, jax.typing.ArrayLike],
         newdata: dict[str, jax.typing.ArrayLike] | None = None,
+        chunk_size: int | None = 64,
     ) -> Array:
         """
         Returns an array of predictions for this variable.
@@ -2971,6 +2976,12 @@ class Var:
             Dictionary of new data at which to evaluate predictions. The keys should \
             correspond to variable or node names in the model whose values should be \
             set to the given values before evaluating predictions.
+        chunk_size
+            Maximum number of flattened samples to evaluate in parallel. Defaults to \
+            ``64``. Pass ``None`` to evaluate all samples in parallel. A smaller value \
+            reduces the peak memory required for sample-dependent intermediate values, \
+            at the potential cost of lower accelerator utilization. It does not reduce \
+            the memory required to store the returned predictions.
         """
         if self.model is not None:
             submodel = self.model.parental_submodel(self)
@@ -3009,7 +3020,12 @@ class Var:
             if key not in submodel.vars or (key in submodel.nodes):
                 newdata.pop(key, None)
 
-        pred = submodel.predict(samples=samples, predict=[self.name], newdata=newdata)
+        pred = submodel.predict(
+            samples=samples,
+            predict=[self.name],
+            newdata=newdata,
+            chunk_size=chunk_size,
+        )
         return pred[self.name]
 
     def diagnose(self, verbose: bool = False) -> pd.DataFrame:
@@ -3047,6 +3063,7 @@ class Var:
         fixed: Sequence[str] = (),
         newdata: dict[str, jax.typing.ArrayLike] | None = None,
         dists: dict[str, Dist] | None = None,
+        chunk_size: int | None = 64,
     ) -> dict[str, Array]:
         """
         Draws samples from the parental model for this variable.
@@ -3077,11 +3094,18 @@ class Var:
             Can be used to provide a dictionary of variable names and :class:`.Dist` \
             instances to use in sampling. If ``None`` (default), samples are drawn for \
             each variable using their :attr:`.Var.dist_node`.
+        chunk_size
+            Maximum number of flattened requested-draw and posterior-sample \
+            combinations to evaluate in parallel. Defaults to ``64``. Pass ``None`` \
+            to evaluate all combinations in parallel. A smaller value reduces the \
+            peak memory required for sample-dependent intermediate values, at the \
+            potential cost of lower accelerator utilization. It does not reduce the \
+            memory required to store the returned samples.
 
         Notes
         -----
         When compiling this function with ``jax.jit``, the arguments ``shape``,
-        ``fixed``, and ``dists`` must be static.
+        ``fixed``, ``dists``, and ``chunk_size`` must be static.
 
         Returns
         -------
@@ -3097,6 +3121,7 @@ class Var:
                 fixed=fixed,
                 newdata=newdata,
                 dists=dists,
+                chunk_size=chunk_size,
             )
             return drawn_samples
 
@@ -3117,6 +3142,7 @@ class Var:
                 fixed=fixed,
                 newdata=newdata,
                 dists=dists,
+                chunk_size=chunk_size,
             )
 
             return drawn_samples
