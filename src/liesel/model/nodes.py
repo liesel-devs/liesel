@@ -2963,7 +2963,7 @@ class Var:
         self,
         samples: dict[str, jax.typing.ArrayLike],
         newdata: dict[str, jax.typing.ArrayLike] | None = None,
-        chunk_size: int | None = None,
+        chunk_size: int | None = 64,
     ) -> Array:
         """
         Returns an array of predictions for this variable.
@@ -2977,11 +2977,11 @@ class Var:
             correspond to variable or node names in the model whose values should be \
             set to the given values before evaluating predictions.
         chunk_size
-            Maximum number of flattened samples to evaluate in parallel. If ``None`` \
-            (default), all samples are evaluated in parallel. A smaller value reduces \
-            the peak memory required for sample-dependent intermediate values, at the \
-            potential cost of lower accelerator utilization. It does not reduce the \
-            memory required to store the returned predictions.
+            Maximum number of flattened samples to evaluate in parallel. Defaults to \
+            ``64``. Pass ``None`` to evaluate all samples in parallel. A smaller value \
+            reduces the peak memory required for sample-dependent intermediate values, \
+            at the potential cost of lower accelerator utilization. It does not reduce \
+            the memory required to store the returned predictions.
         """
         if self.model is not None:
             submodel = self.model.parental_submodel(self)
@@ -3063,7 +3063,7 @@ class Var:
         fixed: Sequence[str] = (),
         newdata: dict[str, jax.typing.ArrayLike] | None = None,
         dists: dict[str, Dist] | None = None,
-        chunk_size: int | None = None,
+        chunk_size: int | None = 64,
     ) -> dict[str, Array]:
         """
         Draws samples from the parental model for this variable.
@@ -3096,11 +3096,11 @@ class Var:
             each variable using their :attr:`.Var.dist_node`.
         chunk_size
             Maximum number of flattened requested-draw and posterior-sample \
-            combinations to evaluate in parallel. If ``None`` (default), all \
-            combinations are evaluated in parallel. A smaller value reduces the peak \
-            memory required for sample-dependent intermediate values, at the potential \
-            cost of lower accelerator utilization. It does not reduce the memory \
-            required to store the returned samples.
+            combinations to evaluate in parallel. Defaults to ``64``. Pass ``None`` \
+            to evaluate all combinations in parallel. A smaller value reduces the \
+            peak memory required for sample-dependent intermediate values, at the \
+            potential cost of lower accelerator utilization. It does not reduce the \
+            memory required to store the returned samples.
 
         Notes
         -----

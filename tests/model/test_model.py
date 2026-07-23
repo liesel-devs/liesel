@@ -1,4 +1,5 @@
 import gc
+import inspect
 import tempfile
 import typing
 from collections.abc import Generator
@@ -616,6 +617,10 @@ class TestModel:
 
 
 class TestPredictions:
+    def test_default_chunk_size(self) -> None:
+        assert inspect.signature(Model.predict).parameters["chunk_size"].default == 64
+        assert inspect.signature(Var.predict).parameters["chunk_size"].default == 64
+
     @pytest.mark.parametrize("chunk_size", [None, 2])
     def test_compiled_prediction_is_differentiable(
         self, chunk_size: int | None
@@ -646,7 +651,11 @@ class TestPredictions:
             "beta_hat": tfd.Uniform().sample((2, 5, 2), rnd.PRNGKey(7)),
         }
 
-        expected = model.predict(samples=samples, predict=["mu"])
+        expected = model.predict(
+            samples=samples,
+            predict=["mu"],
+            chunk_size=None,
+        )
         chunked = model.predict(
             samples=samples,
             predict=["mu"],
@@ -1110,6 +1119,10 @@ def linreg():
 
 
 class TestSample:
+    def test_default_chunk_size(self) -> None:
+        assert inspect.signature(Model.sample).parameters["chunk_size"].default == 64
+        assert inspect.signature(Var.sample).parameters["chunk_size"].default == 64
+
     def test_sample_in_chunks(self, linreg: Model):
         model = linreg
 
@@ -1117,6 +1130,7 @@ class TestSample:
             shape=(2, 5),
             seed=rnd.key(1),
             fixed=["y"],
+            chunk_size=None,
         )
         chunked = model.sample(
             shape=(2, 5),
@@ -1139,6 +1153,7 @@ class TestSample:
             shape=(3,),
             seed=rnd.key(8),
             posterior_samples=posterior_samples,
+            chunk_size=None,
         )
         chunked = model.sample(
             shape=(3,),
