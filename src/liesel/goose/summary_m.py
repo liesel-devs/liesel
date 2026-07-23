@@ -4,8 +4,8 @@ Posterior statistics and diagnostics.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Any, Literal, NamedTuple
+from collections.abc import Mapping, Sequence
+from typing import Any, Literal, NamedTuple, cast
 
 import arviz as az
 import jax
@@ -1118,7 +1118,7 @@ class SamplesSummary:
 
 
 def concatenate_arrays_in_dict(
-    x: dict[str, jax.typing.ArrayLike], n_leading_axes: int = 2
+    x: Mapping[str, jax.typing.ArrayLike], n_leading_axes: int = 2
 ) -> jax.Array:
     """
     Concatenates all arrays in the supplied dictionary into a single array.
@@ -1143,10 +1143,17 @@ def concatenate_arrays_in_dict(
     return out_array
 
 
+class _LieselELPDData(az.ELPDData):
+    """An ArviZ LOO result with Liesel's legacy attribute aliases."""
+
+    elpd_loo: float
+    p_loo: float
+
+
 def _apply_loo_scale(
     result: az.ELPDData,
     scale: Literal["log", "negative_log", "deviance"],
-) -> az.ELPDData:
+) -> _LieselELPDData:
     if scale != "log":
         multiplier = -1 if scale == "negative_log" else -2
         result.elpd = multiplier * result.elpd
@@ -1154,17 +1161,18 @@ def _apply_loo_scale(
         result.elpd_i = multiplier * result.elpd_i
         result.scale = scale
 
-    result.elpd_loo = result.elpd
-    result.p_loo = result.p
-    return result
+    liesel_result = cast(_LieselELPDData, result)
+    liesel_result.elpd_loo = result.elpd
+    liesel_result.p_loo = result.p
+    return liesel_result
 
 
 def loo(
-    lpp: dict[str, jax.typing.ArrayLike] | jax.typing.ArrayLike,
+    lpp: Mapping[str, jax.typing.ArrayLike] | jax.typing.ArrayLike,
     samples: dict[str, jax.typing.ArrayLike] | None,
     reff: float | None = None,
     scale: Literal["log", "negative_log", "deviance"] = "log",
-) -> az.ELPDData:
+) -> _LieselELPDData:
     """
     Compute Pareto-smoothed importance sampling leave-one-out cross-validation
     (PSIS-LOO-CV) statistic via ArviZ.
@@ -1214,10 +1222,11 @@ def loo(
             "available."
         )
 
-    try:
+    if isinstance(lpp, Mapping):
+        lpp_by_variable = cast(Mapping[str, jax.typing.ArrayLike], lpp)
+        lpp_array = concatenate_arrays_in_dict(lpp_by_variable)
+    else:
         lpp_array = jnp.asarray(lpp)
-    except Exception:  # assume its a dict now
-        lpp_array = concatenate_arrays_in_dict(lpp)
 
     lpp_array = np.asarray(lpp_array)
     idat = az.from_dict({"log_likelihood": {"observed": lpp_array}})
