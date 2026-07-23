@@ -72,6 +72,12 @@ def _unique_tuple(*args: Iterable[T]) -> tuple[T, ...]:
     return tuple(dict.fromkeys(chain(*args)))
 
 
+def _callable_name(fn: Callable[..., Any]) -> str:
+    """Returns a useful display name for a function, class, or callable object."""
+    name = getattr(fn, "__name__", None)
+    return name if isinstance(name, str) else type(fn).__name__
+
+
 def in_model_method(fn):
     @wraps(fn)
     def wrapped(self, *args, **kwargs):
@@ -1428,13 +1434,15 @@ class Dist(Node):
 
     def find_default_parameter_bijectors(self) -> dict[str, Bijector | None]:
         """Extracts default parameter bijectors from the wrapped distribution."""
+        distribution_name = _callable_name(self.distribution)
+
         try:
             param_props = self.init_dist().parameter_properties(dtype=self._dtype)
         except (AttributeError, TypeError) as e:
             # raise the same error type
             raise type(e)(
                 "Error when accessing "
-                f"parameter_properties() method on {self.distribution.__name__}. "
+                f"parameter_properties() method on {distribution_name}. "
                 "Cannot auto-transform parameters. "
                 "This may indicate an issue with the TFP distribution or version. "
                 "Either use a distribution that supports parameter_properties() or "
@@ -1443,7 +1451,7 @@ class Dist(Node):
 
         if not isinstance(param_props, dict):
             raise TypeError(
-                f"Distribution {self.distribution.__name__}'s "
+                f"Distribution {distribution_name}'s "
                 "parameter_properties() must return a dictionary, but returned "
                 f"{type(param_props).__name__}. This may indicate an issue with "
                 "a custom distribution implementation."
@@ -1455,7 +1463,7 @@ class Dist(Node):
             if not hasattr(prop, "default_constraining_bijector_fn"):
                 raise AttributeError(
                     f"Parameter property for '{param_name}' of "
-                    f"{self.distribution.__name__} does not have "
+                    f"{distribution_name} does not have "
                     "'default_constraining_bijector_fn' attribute. This may "
                     "indicate an issue with the TFP distribution or version. "
                     "Either use a distribution that supports "
@@ -1468,13 +1476,13 @@ class Dist(Node):
             except Exception as e:
                 raise type(e)(
                     f"Error getting bijector for parameter '{param_name}' of "
-                    f"{self.distribution.__name__}: {e}"
+                    f"{distribution_name}: {e}"
                 ) from e
 
             if bijector is None:
                 raise ValueError(
                     f"Expected a bijector or BIJECTOR_NOT_IMPLEMENTED for "
-                    f"parameter '{param_name}' of {self.distribution.__name__}, "
+                    f"parameter '{param_name}' of {distribution_name}, "
                     f"but got None. If no default bijector is provided for "
                     f"this parameter, the return value should be the "
                     f"BIJECTOR_NOT_IMPLEMENTED method instead."

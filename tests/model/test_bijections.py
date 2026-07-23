@@ -21,6 +21,18 @@ def _require_bijected_var(var: lsl.Var) -> lsl.Var:
 class TestBijectParametersValidation:
     """Test validation in Dist.biject_parameters."""
 
+    def test_callable_distribution_without_name_has_useful_error(self):
+        class DistributionFactory:
+            def __call__(self, **kwargs):
+                del kwargs
+                return object()
+
+        loc = lsl.Var.new_param(0.0, name="loc")
+        dist = lsl.Dist(DistributionFactory(), loc=loc)
+
+        with pytest.raises(AttributeError, match="DistributionFactory"):
+            dist.find_default_parameter_bijectors()
+
     def test_mixed_positional_keyword_inputs_raises(self):
         """Auto bijectors should reject mixed positional and keyword inputs."""
         scale = lsl.Var.new_param(1.0, name="scale")
