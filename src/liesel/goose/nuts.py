@@ -12,6 +12,7 @@ from blackjax import nuts as nuts_kernel
 from blackjax.adaptation.step_size import find_reasonable_step_size
 from blackjax.mcmc import hmc, nuts
 from jax.flatten_util import ravel_pytree
+from jax.typing import ArrayLike
 
 from .da import (
     DualAvgState,
@@ -33,7 +34,7 @@ from .kernel import (
 )
 from .mm import tune_inv_mm_diag, tune_inv_mm_full
 from .pytree import register_dataclass_as_pytree
-from .types import Array, KeyArray, ModelState, Position
+from .types import Array, KeyArray, ModelState, Position, Scalar
 
 
 @register_dataclass_as_pytree
@@ -44,7 +45,7 @@ class NUTSKernelState:
     :class:`.DAKernelState` protocol.
     """
 
-    step_size: float
+    step_size: Scalar
     inverse_mass_matrix: Array
     da_state: DualAvgState | None = None
 
@@ -56,10 +57,10 @@ class NUTSKernelState:
 @register_dataclass_as_pytree
 @dataclass
 class NUTSTransitionInfo(DefaultTransitionInfo):
-    error_code: int
+    error_code: ArrayLike
     """Dict of error codes and their meaning."""
-    acceptance_prob: float
-    position_moved: int
+    acceptance_prob: ArrayLike
+    position_moved: ArrayLike
     divergent: bool
     """
     Whether the difference in energy between the original and the new state exceeded
@@ -76,7 +77,7 @@ class NUTSTransitionInfo(DefaultTransitionInfo):
     """The number of computed leapfrog steps."""
 
 
-def _error_code(*args: bool) -> int:
+def _error_code(*args: bool) -> ArrayLike:
     return jnp.array(args) @ (2 ** jnp.arange(len(args)))
 
 

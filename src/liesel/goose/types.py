@@ -8,6 +8,9 @@ from abc import abstractmethod
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, NewType, Protocol, TypeVar
 
+import jax
+from jax.typing import ArrayLike
+
 if TYPE_CHECKING:
     from .epoch import EpochState
     from .kernel import (
@@ -21,6 +24,7 @@ if TYPE_CHECKING:
 
 PyTree = Any
 Array = Any
+type Scalar = float | jax.Array
 
 ModelState = PyTree
 Position = NewType("Position", dict[str, Array])
@@ -33,31 +37,34 @@ JitterFunctions = dict[str, JitterFunction]
 class TuningInfo(Protocol):
     """Holds information about sampler tuning."""
 
-    error_code: int
-    time: int
+    @property
+    def error_code(self) -> ArrayLike:
+        """Error code produced during tuning."""
+        ...
+
+    @property
+    def time(self) -> ArrayLike:
+        """MCMC time at which tuning occurred."""
+        ...
 
 
 class TransitionInfo(Protocol):
     """Holds information about MCMC transitions."""
 
-    error_code: int
-    """
-    An error code defined in the error book of the kernel.
-    0 if no errors occurred during the transition.
-    """
+    @property
+    def error_code(self) -> ArrayLike:
+        """Error code produced during the transition; zero means no error."""
+        ...
 
-    acceptance_prob: float
-    """
-    The acceptance probability of a proposal of a Metropolis-Hastings kernel
-    or the average acceptance probability across a trajectory of a NUTS-type kernel.
-    99.0 if not used by the kernel.
-    """
+    @property
+    def acceptance_prob(self) -> ArrayLike:
+        """Acceptance probability, or 99 if it is not used by the kernel."""
+        ...
 
-    position_moved: int
-    """
-    0 if the position did not move during the transition, 1 if it *did* move,
-    and 99 if unknown.
-    """
+    @property
+    def position_moved(self) -> ArrayLike:
+        """Zero if the position stayed fixed, one if it moved, or 99 if unknown."""
+        ...
 
     @abstractmethod
     def minimize(self) -> DefaultTransitionInfo:
@@ -96,7 +103,7 @@ class ModelInterface(Protocol):
         raise NotImplementedError
 
     @abstractmethod
-    def log_prob(self, model_state: ModelState) -> float:
+    def log_prob(self, model_state: ModelState) -> Scalar:
         """Computes the unnormalized log-probability given the model state."""
 
         raise NotImplementedError

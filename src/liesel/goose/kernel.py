@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Generic
 
 import jax
+from jax.typing import ArrayLike
 
 from ..docs import usedocs
 from .epoch import EpochState, EpochType
@@ -18,6 +19,7 @@ from .types import (
     ModelInterface,
     ModelState,
     Position,
+    Scalar,
     TKernelState,
     TTransitionInfo,
     TTuningInfo,
@@ -29,11 +31,11 @@ from .types import (
 class DefaultTransitionInfo:
     """A default template for a transition information object."""
 
-    error_code: int
+    error_code: ArrayLike
     """Error code for the transition."""
-    acceptance_prob: float
+    acceptance_prob: ArrayLike
     """Acceptance probability of the transition."""
-    position_moved: int
+    position_moved: ArrayLike
     """Indicates whether the transition resulted in acceptance or not."""
 
     def minimize(self) -> "DefaultTransitionInfo":
@@ -46,9 +48,9 @@ class DefaultTransitionInfo:
 class DefaultTuningInfo:
     """A default template for a tuning information object."""
 
-    error_code: int
+    error_code: ArrayLike
     """Error code for error during tuning."""
-    time: int
+    time: ArrayLike
     """MCMC time when the tuning happend."""
 
 
@@ -146,12 +148,12 @@ class ModelMixin:
 
         return self.model.extract_position(self.position_keys, model_state)
 
-    def log_prob_fn(self, model_state: ModelState) -> Callable[[Position], float]:
+    def log_prob_fn(self, model_state: ModelState) -> Callable[[Position], Scalar]:
         """
         Returns the log-probability function with the position as the only argument.
         """
 
-        def log_prob_fn(position: Position) -> float:
+        def log_prob_fn(position: Position) -> Scalar:
             new_model_state = self.model.update_state(position, model_state)
             return self.model.log_prob(new_model_state)
 
@@ -276,6 +278,9 @@ class TuningMixin(Generic[TKernelState, TTuningInfo]):
 
 
 class ReprMixin:
+    position_keys: tuple[str, ...]
+    identifier: str
+
     def __repr__(self):
         return (
             f"{type(self).__name__}({list(self.position_keys)}, "

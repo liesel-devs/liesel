@@ -7,12 +7,12 @@ from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING
 
 from ..docs import usedocs
-from .types import ModelInterface, ModelState, Position
+from .types import ModelInterface, ModelState, Position, Scalar
 
 if TYPE_CHECKING:
     from ..model.model import Model
 
-LogProbFunction = Callable[[ModelState], float]
+LogProbFunction = Callable[[ModelState], Scalar]
 
 
 @usedocs(ModelInterface)
@@ -100,7 +100,7 @@ class DictInterface:
         """
         return model_state | position
 
-    def log_prob(self, model_state: ModelState) -> float:
+    def log_prob(self, model_state: ModelState) -> Scalar:
         """
         Returns the log-probability from a model state.
 
@@ -193,7 +193,7 @@ class DataclassInterface:
         """
         return Position({key: getattr(model_state, key) for key in position_keys})
 
-    def log_prob(self, model_state: ModelState) -> float:
+    def log_prob(self, model_state: ModelState) -> Scalar:
         """
         Returns the log-probability from a model state.
 
@@ -301,7 +301,7 @@ class LieselInterface:
         """
         return self._model.update_state(position, model_state)
 
-    def log_prob(self, model_state: ModelState) -> float:
+    def log_prob(self, model_state: ModelState) -> Scalar:
         """
         Returns the log-probability from a model state.
 
@@ -413,7 +413,7 @@ class NamedTupleInterface:
         new_state = model_state._replace(**position)
         return new_state
 
-    def log_prob(self, model_state: ModelState) -> float:
+    def log_prob(self, model_state: ModelState) -> Scalar:
         """
         Returns the log-probability from a model state.
 

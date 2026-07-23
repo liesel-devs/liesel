@@ -10,10 +10,12 @@ from liesel.goose.mh_kernel import (
     MHTuningInfo,
     RWKernelState,
 )
-from liesel.goose.types import Kernel, KeyArray, ModelState, Position
+from liesel.goose.types import Kernel, KeyArray, ModelState, Position, Scalar
 
 
-def proposal_fn(key: KeyArray, model_state: ModelState, step_size: float) -> MHProposal:
+def proposal_fn(
+    key: KeyArray, model_state: ModelState, step_size: Scalar
+) -> MHProposal:
     key0, key1 = jax.random.split(key)
     beta = model_state["beta"] + step_size * jax.random.normal(
         key0, model_state["beta"].shape
@@ -27,7 +29,7 @@ def proposal_fn(key: KeyArray, model_state: ModelState, step_size: float) -> MHP
 
 
 def proposal_asym_fn(
-    key: KeyArray, model_state: ModelState, step_size: float
+    key: KeyArray, model_state: ModelState, step_size: Scalar
 ) -> MHProposal:
     key0, key1 = jax.random.split(key)
 
