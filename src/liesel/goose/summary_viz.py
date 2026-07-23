@@ -2,10 +2,9 @@
 Diagnostic plots of the posterior samples.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
-import jax
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -106,7 +105,7 @@ def _move_col_first(df: pd.DataFrame, colname: str) -> pd.DataFrame:
 
 
 def _validate_params(
-    posterior_samples: dict[str, jax.Array], params: str | list[str] | None
+    posterior_samples: Mapping[str, Array], params: str | list[str] | None
 ) -> list[str]:
     """Convert ``str`` or ``None`` input of ``params`` to sequence of strings."""
     posterior_keys = list(posterior_samples.keys())
@@ -144,7 +143,7 @@ def _subparam_chains_to_df(
 
 
 def _preprocess_param_chains(
-    posterior_samples: dict[str, jax.Array], param: str
+    posterior_samples: Mapping[str, Array], param: str
 ) -> np.ndarray:
     """Convert array of posteror samples for each parameter to equal dimensions."""
 
@@ -225,7 +224,7 @@ def _postprocess_param_df(
 
 
 def _collect_subparam_dfs(
-    posterior_samples: dict[str, jax.Array],
+    posterior_samples: Mapping[str, Array],
     param: str,
     param_indices: int | Sequence[int] | None,
     chain_indices: int | Sequence[int] | None,
@@ -266,12 +265,13 @@ def _collect_param_dfs(
 ) -> pd.DataFrame:
     """Combines individual data frames for each parameter into a single data frame."""
 
-    if isinstance(results, dict):
-        samples = results
-    elif include_warmup:
-        samples = results.get_samples()
+    samples: Mapping[str, Array]
+    if isinstance(results, SamplingResults):
+        samples = (
+            results.get_samples() if include_warmup else results.get_posterior_samples()
+        )
     else:
-        samples = results.get_posterior_samples()
+        samples = results
 
     params = _validate_params(samples, params)
 
@@ -400,7 +400,7 @@ def plot_trace(
     color_palette: str | list[str] | dict[int, str] | None = None,
     ncol: int = 3,
     height: int = 3,
-    aspect_ratio: int = 1,
+    aspect_ratio: float = 1.0,
     save_path: str | None = None,
     include_warmup: bool = False,
     show: bool = True,
@@ -526,7 +526,7 @@ def plot_density(
     color_palette: str | list[str] | dict[int, str] | None = None,
     ncol: int = 3,
     height: int = 3,
-    aspect_ratio: int = 1,
+    aspect_ratio: float = 1.0,
     save_path: str | None = None,
     show: bool = True,
     **kwargs,
@@ -658,7 +658,7 @@ def plot_cor(
     color_palette: str | list[str] | dict[int, str] | None = None,
     ncol: int = 3,
     height: int = 3,
-    aspect_ratio: int = 1,
+    aspect_ratio: float = 1.0,
     save_path: str | None = None,
     show: bool = True,
     **kwargs,
@@ -1129,7 +1129,7 @@ def plot_pairs(
     diag_kind: str = "kde",
     color_palette: str | list[str] | dict[int, str] | None = None,
     height: int = 3,
-    aspect_ratio: int = 1,
+    aspect_ratio: float = 1.0,
     save_path: str | None = None,
     include_warmup: bool = False,
     show: bool = True,
