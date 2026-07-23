@@ -156,7 +156,6 @@ utilities, and variational inference helpers.
     :nosignatures:
 
     ~liesel.optim.LieselOptim
-    ~liesel.optim.LieselVI
     ~liesel.optim.OptimEngine
     ~liesel.optim.NegLogProbLoss
     ~liesel.optim.NegElboLoss

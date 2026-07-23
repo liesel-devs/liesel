@@ -1066,8 +1066,7 @@ def _child_sample_sizes_from_totals(
         if total_axis_size == 0:
             if total_sample_size != 0.0:
                 raise ValueError(
-                    f"sample_sizes[{part!r}] must be zero when "
-                    f"{part}_axis_size == 0."
+                    f"sample_sizes[{part!r}] must be zero when {part}_axis_size == 0."
                 )
 
             for child_sizes in child_sample_sizes:
