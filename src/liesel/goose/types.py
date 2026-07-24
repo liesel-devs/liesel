@@ -6,10 +6,12 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any, ClassVar, NewType, Protocol, TypeVar
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol, TypeVar
 
 import jax
 from jax.typing import ArrayLike
+
+from ..types import Position
 
 if TYPE_CHECKING:
     from .epoch import EpochState
@@ -27,7 +29,6 @@ Array = Any
 type Scalar = float | jax.Array
 
 ModelState = PyTree
-Position = NewType("Position", dict[str, Array])
 KernelState = PyTree
 KeyArray = Any
 JitterFunction = Callable[[KeyArray, Array], Array]

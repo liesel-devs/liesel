@@ -2,6 +2,7 @@
 Liesel modeling framework.
 """
 
+from ..types import Position
 from .distreg import DistRegBuilder, dist_reg_mcmc, tau2_gibbs_kernel
 from .legacy import (
     PIT,
@@ -45,6 +46,7 @@ __all__ = [
     "tau2_gibbs_kernel",
     "GooseModel",
     "PIT",
+    "Position",
     "Addition",
     "Bijector",
     "ColumnStack",

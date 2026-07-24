@@ -616,10 +616,14 @@ class TestVarPredictions:
         if in_model:
             _ = lsl.Model([yvar])
 
-        samples = {
-            "b": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1)),
-            "scale_transformed": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1)),
-        }
+        samples = lsl.Position(
+            {
+                "b": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1)),
+                "scale_transformed": jax.random.uniform(
+                    jax.random.PRNGKey(3), (4, 7, 1)
+                ),
+            }
+        )
 
         pred = loc.predict(samples)
         assert jnp.allclose(pred, x * samples["b"])
@@ -627,14 +631,14 @@ class TestVarPredictions:
 
         # predict at new observations with same shape
         xnew = jax.random.uniform(jax.random.PRNGKey(5), (n,))
-        pred = loc.predict(samples, newdata={"x": xnew})
+        pred = loc.predict(samples, newdata=lsl.Position({"x": xnew}))
 
         assert jnp.allclose(pred, xnew * samples["b"])
         assert pred.shape[-1] == x.shape[-1]
 
         # predict at new grid of observations
         xnew = jnp.linspace(0, 10)
-        pred = loc.predict(samples, newdata={"x": xnew})
+        pred = loc.predict(samples, newdata=lsl.Position({"x": xnew}))
 
         assert jnp.allclose(pred, xnew * samples["b"])
         assert pred.shape[-1] != x.shape[-1]
@@ -642,14 +646,14 @@ class TestVarPredictions:
 
         # predict when irrelevant variables from the model are present
         if in_model:
-            pred = scale.predict(samples, newdata={"x": xnew})
+            pred = scale.predict(samples, newdata=lsl.Position({"x": xnew}))
         if not in_model:
             with pytest.raises(KeyError, match="more strict"):
-                scale.predict(samples, newdata={"x": xnew})
+                scale.predict(samples, newdata=lsl.Position({"x": xnew}))
 
         # predict when variables not in the model are present
         with pytest.raises(KeyError):
-            scale.predict(samples, newdata={"w": xnew})
+            scale.predict(samples, newdata=lsl.Position({"w": xnew}))
 
     def test_predict_with_ignored_entries(self) -> None:
         n = 10
@@ -669,16 +673,20 @@ class TestVarPredictions:
 
         _ = lsl.Model([yvar])
 
-        samples = {
-            "b": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1)),
-            "scale_transformed": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1)),
-            "scale": tfp.distributions.Uniform().sample(
-                (4, 7, 1), jax.random.PRNGKey(6)
-            ),
-            "_model_log_lik": tfp.distributions.Uniform().sample(
-                (4, 7), jax.random.PRNGKey(6)
-            ),
-        }
+        samples = lsl.Position(
+            {
+                "b": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1)),
+                "scale_transformed": jax.random.uniform(
+                    jax.random.PRNGKey(3), (4, 7, 1)
+                ),
+                "scale": tfp.distributions.Uniform().sample(
+                    (4, 7, 1), jax.random.PRNGKey(6)
+                ),
+                "_model_log_lik": tfp.distributions.Uniform().sample(
+                    (4, 7), jax.random.PRNGKey(6)
+                ),
+            }
+        )
 
         pred = loc.predict(samples)
         assert jnp.allclose(pred, x * samples["b"])
@@ -718,25 +726,25 @@ class TestVarPredictions:
 
         # predict at new observations with same shape
         xnew = jax.random.uniform(jax.random.PRNGKey(5), (n,))
-        pred = loc.predict(samples, newdata={"x": xnew})
+        pred = loc.predict(samples, newdata=lsl.Position({"x": xnew}))
 
         assert jnp.allclose(pred, xnew * samples["b"])
         assert pred.shape[-1] == x.shape[-1]
 
         # predict at new grid of observations
         xnew = jnp.linspace(0, 10)
-        pred = loc.predict(samples, newdata={"x": xnew})
+        pred = loc.predict(samples, newdata=lsl.Position({"x": xnew}))
 
         assert jnp.allclose(pred, xnew * samples["b"])
         assert pred.shape[-1] != x.shape[-1]
         assert pred.shape[-1] == xnew.shape[-1]
 
         # predict when irrelevant variables from the model are present
-        pred = scale.predict(samples, newdata={"x": xnew})
+        pred = scale.predict(samples, newdata=lsl.Position({"x": xnew}))
 
         # predict when variables not in the model are present
         with pytest.raises(KeyError):
-            scale.predict(samples, newdata={"w": xnew})
+            scale.predict(samples, newdata=lsl.Position({"w": xnew}))
 
 
 class TestVarSample:

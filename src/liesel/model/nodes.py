@@ -32,6 +32,7 @@ import tensorflow_probability.substrates.numpy.bijectors as nb
 import tensorflow_probability.substrates.numpy.distributions as nd
 
 from ..distributions.nodist import NoDistribution
+from ..types import Position
 from .names import random_name
 from .viz import plot_nodes, plot_vars
 
@@ -2999,8 +3000,8 @@ class Var:
 
     def predict(
         self,
-        samples: dict[str, jax.typing.ArrayLike],
-        newdata: dict[str, jax.typing.ArrayLike] | None = None,
+        samples: Position,
+        newdata: Position | None = None,
     ) -> Array:
         """
         Returns an array of predictions for this variable.
@@ -3035,9 +3036,8 @@ class Var:
         else:
             model = self.model
 
-        newdata = newdata if newdata is not None else {}
-        newdata = newdata.copy()
-        for key in list(newdata.keys()):
+        newdata_values = dict(newdata) if newdata is not None else {}
+        for key in list(newdata_values):
             if key not in model.vars or (key in model.nodes):
                 msg = f"{key} is not part of the model."
                 if self.model is None:
@@ -3049,9 +3049,13 @@ class Var:
                 raise KeyError(msg)
 
             if key not in submodel.vars or (key in submodel.nodes):
-                newdata.pop(key, None)
+                newdata_values.pop(key, None)
 
-        pred = submodel.predict(samples=samples, predict=[self.name], newdata=newdata)
+        pred = submodel.predict(
+            samples=samples,
+            predict=[self.name],
+            newdata=Position(newdata_values),
+        )
         return pred[self.name]
 
     def diagnose(self, verbose: bool = False) -> pd.DataFrame:
@@ -3089,7 +3093,7 @@ class Var:
         fixed: Sequence[str] = (),
         newdata: dict[str, jax.typing.ArrayLike] | None = None,
         dists: dict[str, Dist] | None = None,
-    ) -> dict[str, Array]:
+    ) -> Position:
         """
         Draws samples from the parental model for this variable.
 

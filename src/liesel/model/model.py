@@ -8,7 +8,7 @@ import logging
 import math
 import re
 from collections import Counter
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
 from types import MappingProxyType
 from typing import IO, Any, Literal, Self, TypedDict
@@ -20,6 +20,7 @@ import jax.random
 import networkx as nx
 import pandas as pd
 
+from ..types import Position
 from .nodes import (
     Array,
     Calc,
@@ -2241,7 +2242,7 @@ class Model:
         fixed: Sequence[str] = (),
         newdata: dict[str, jax.typing.ArrayLike] | None = None,
         dists: dict[str, Dist] | None = None,
-    ) -> dict[str, Array]:
+    ) -> Position:
         """
         Draws samples from the model.
 
@@ -2465,7 +2466,7 @@ class Model:
             drawn_samples = draw_chains({}, seeds)
 
             # return reshaped version of samples
-            return jax.tree.map(reshape, drawn_samples)
+            return Position(jax.tree.map(reshape, drawn_samples))
 
         # this branch of the function continues only if posterior_samples is not None
         # -----------------------------------------------------------------------------
@@ -2497,7 +2498,7 @@ class Model:
             raise error_to_raise from e
 
         # return reshaped version of samples
-        return jax.tree.map(reshape, drawn_samples)
+        return Position(jax.tree.map(reshape, drawn_samples))
 
     @property
     def state(self) -> dict[str, NodeState]:
@@ -2720,7 +2721,7 @@ class Model:
         self,
         position_keys: Sequence[str],
         model_state: dict[str, NodeState] | None = None,
-    ) -> dict[str, Array]:
+    ) -> Position:
         """
         Extracts a position from a model state.
 
@@ -2742,13 +2743,48 @@ class Model:
                 node_key = self.vars[key].value_node.name
                 position[key] = model_state[node_key].value
 
-        return position
+        return Position(position)
 
     def _node_for_position_key(self, key: str) -> Node:
         try:
             return self.nodes[key]
         except KeyError:
             return self.vars[key].value_node
+
+    def convert_position(
+        self,
+        position: Mapping[str, Any],
+        *,
+        allow_unknown: bool = False,
+    ) -> Position:
+        """
+        Converts the values in a position using their model-specific converters.
+
+        Variable keys use the converter configured on the respective
+        :class:`.Var`; node keys use the converter configured on the respective
+        :class:`.Node`. Unknown keys raise a :class:`KeyError` unless
+        ``allow_unknown=True``, in which case their values are left unchanged.
+
+        This method is useful for constructing a typed :class:`.Position` at an API
+        boundary, before repeatedly passing it through model computations.
+        """
+        converted = {}
+
+        for key, value in position.items():
+            try:
+                converter = self.nodes[key]._convert
+            except KeyError:
+                try:
+                    converter = self.vars[key]._convert
+                except KeyError:
+                    if allow_unknown:
+                        converted[key] = value
+                        continue
+                    raise KeyError(f"{key} is not part of the model.") from None
+
+            converted[key] = converter(value)
+
+        return Position(converted)
 
     def _validate_weak_var_position(self, position: dict[str, Array]) -> None:
         """
@@ -2877,9 +2913,9 @@ class Model:
 
     def predict(
         self,
-        samples: dict[str, jax.typing.ArrayLike],
+        samples: Position,
         predict: Sequence[str] | None = None,
-        newdata: dict[str, jax.typing.ArrayLike] | None = None,
+        newdata: Position | None = None,
     ) -> dict[str, Array]:
         """
         Returns a dictionary of predictions.
@@ -2902,20 +2938,20 @@ class Model:
             (default), the current variable values are used.
 
         """
-        samples = samples.copy()
+        sample_values = dict(samples)
         for name in self.model_nodes:
-            samples.pop(name, None)
+            sample_values.pop(name, None)
 
         for name, var in self.vars.items():
             if var.weak:
-                if name in samples:
+                if name in sample_values:
                     logger.debug(
                         f"Key '{name}' belongs to a weak var. "
                         "Removing it from samples dictionary."
                     )
-                    samples.pop(name, None)
+                    sample_values.pop(name, None)
 
-        unique_sample_keys = set(list(samples))
+        unique_sample_keys = set(list(sample_values))
         unique_newdata_keys = set(list(newdata)) if newdata is not None else set()
         intersection = unique_sample_keys & unique_newdata_keys
         if len(intersection) > 0:
@@ -2925,9 +2961,7 @@ class Model:
                 "Any key should be present in only one of these arguments."
             )
 
-        samples = jax.tree.map(jnp.asarray, samples)
-        if newdata is not None:
-            newdata = jax.tree.map(jnp.asarray, newdata)
+        samples = self.convert_position(sample_values, allow_unknown=True)
         # deduce batching dimensions
         shapes = []
         for name, value in samples.items():
@@ -2973,22 +3007,23 @@ class Model:
             # construct submodel for target nodes
             submodel = self.parental_submodel(*predict_nodes_)
 
-        newdata = newdata if newdata is not None else {}
-
         # handle keys that are not needed
-        newdata = newdata.copy()
-        for key in list(newdata.keys()):
+        newdata_values = dict(newdata) if newdata is not None else {}
+        for key in list(newdata_values):
             if key not in self.vars or (key in self.nodes):
                 raise KeyError(f"{key} is not part of the model.")
             if key not in submodel.vars or (key in submodel.nodes):
-                newdata.pop(key, None)
+                newdata_values.pop(key, None)
 
         # update submodel with new data, if any were given
-        submodel.state = submodel.update_state(newdata)
+        converted_newdata = submodel.convert_position(newdata_values)
+        submodel.state = submodel.update_state(converted_newdata)
 
         # filter samples to include only samples that belong to the submodel
         vars_and_nodes = list(submodel.vars) + list(submodel.nodes)
-        filtered_samples = {k: v for k, v in samples.items() if k in vars_and_nodes}
+        filtered_samples = Position(
+            {k: v for k, v in samples.items() if k in vars_and_nodes}
+        )
         if not filtered_samples:
             raise ValueError(
                 "No samples provided for the variables or nodes in the submodel. "
@@ -3214,8 +3249,8 @@ class TemporaryModel:
 
 def log_prob_pointwise(
     vars_: dict[str, Var],
-    samples: dict[str, jax.typing.ArrayLike],
-    newdata: dict[str, jax.typing.ArrayLike] | None = None,
+    samples: Position,
+    newdata: Position | None = None,
 ) -> dict[str, jax.Array]:
     """
     Returns a dictionary of pointwise log probabilities for the supplied variables.

@@ -279,7 +279,7 @@ class LieselInterface:
         model_state
             A dictionary of node names and their corresponding :class:`.NodeState`.
         """
-        return self._model.extract_position(position_keys, model_state)  # type: ignore
+        return self._model.extract_position(position_keys, model_state)
 
     def update_state(self, position: Position, model_state: ModelState) -> ModelState:
         """
