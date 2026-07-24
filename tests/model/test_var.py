@@ -20,7 +20,7 @@ def test_initialization() -> None:
 
     # simple data variable with specified nodes
     dat = lsl.Value(1)
-    dist = lsl.Dist(NoDistribution())
+    dist = lsl.Dist(NoDistribution)
     var1 = lsl.Var(dat, dist, "foo")
     assert id(var1.value_node) == id(dat)
     assert id(var1.dist_node) == id(dist)
@@ -247,7 +247,7 @@ def test_auto_transform():
 def test_method_nodes() -> None:
     in0 = lsl.Value(0)
     calc = lsl.Calc(lambda x: x + 1, in0)
-    dist = lsl.Dist(NoDistribution())
+    dist = lsl.Dist(NoDistribution)
     var0 = lsl.Var(calc, dist)
 
     assert len(var0.nodes) == 3
@@ -431,7 +431,7 @@ class TestAllInputs:
 
     def test_all_input_vars_weak_w_dist_2(self):
         def dist_mk():
-            return lsl.Dist(lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=1.0))
+            return lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=1.0)
 
         x = lsl.Var(1)
         y = lsl.Var(1)
