@@ -288,8 +288,10 @@ def test_frozen_calculator_kwinputs_manipulation(Calc) -> None:
     calc = Calc(np.exp, x)
     calc.update()
 
+    model = Model([calc])
+    model.locked = True
+
     with pytest.raises(RuntimeError):
-        _ = Model([calc])
         calc.set_inputs()
 
     with pytest.raises(RuntimeError):
