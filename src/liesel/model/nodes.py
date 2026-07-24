@@ -80,7 +80,8 @@ def _to_float32_for_temporary_model() -> bool:
     """Whether temporary models should convert float64 values to float32."""
     try:
         return not bool(jax.config.read("jax_enable_x64"))
-    except Exception:  # defensive fallback in case JAX changes its config API
+    except (AttributeError, KeyError, ValueError):
+        # Defensive fallback in case JAX changes its config API.
         return jnp.array(1.0).dtype == jnp.dtype("float32")
 
 
@@ -563,7 +564,7 @@ class Node(ABC):
                 )
                 raise KeyError(msg) from error
         else:
-            raise ValueError(f"Key must be str or int, not {type(key)}.")
+            raise TypeError(f"Key must be str or int, not {type(key)}.")
 
     def _iloc_replace(self, key: int, value: Node | Var | Any) -> None:
         inputs = list(self.inputs)
@@ -593,7 +594,7 @@ class Node(ABC):
         elif isinstance(key, str):
             return self._loc_replace(key, value)
         else:
-            raise ValueError(f"Key must be str or int, not {type(key)}.")
+            raise TypeError(f"Key must be str or int, not {type(key)}.")
 
     def __getstate__(self) -> dict[str, Any]:
         state = self.__dict__.copy()
@@ -1318,19 +1319,17 @@ class Dist(Node):
         default_bijectors = self.find_default_parameter_bijectors()
         param_names = list(default_bijectors)
 
-        if self.inputs:
-            if not len(self.inputs) <= len(param_names):
-                raise ValueError(
-                    f"{self.distribution} has the parameters {param_names}, but got "
-                    f"{len(self.inputs)} inputs: {self.inputs}."
-                )
+        if self.inputs and not len(self.inputs) <= len(param_names):
+            raise ValueError(
+                f"{self.distribution} has the parameters {param_names}, but got "
+                f"{len(self.inputs)} inputs: {self.inputs}."
+            )
 
-        if self.kwinputs:
-            if not set(self.kwinputs) <= set(param_names):
-                raise ValueError(
-                    f"{self.distribution} has the parameters {param_names}, but got "
-                    f"inputs: {list(self.kwinputs)} with values {self.kwinputs}."
-                )
+        if self.kwinputs and not set(self.kwinputs) <= set(param_names):
+            raise ValueError(
+                f"{self.distribution} has the parameters {param_names}, but got "
+                f"inputs: {list(self.kwinputs)} with values {self.kwinputs}."
+            )
 
         # Resolve bijector specification to dict
         if bijectors == "auto":
@@ -1404,7 +1403,7 @@ class Dist(Node):
                         )
                     result[param_name] = (param_var, bijector)
             else:
-                raise ValueError(
+                raise TypeError(
                     f"Got bijector {bijector} for parameter '{param_name}', given by "
                     f"{input_node}, but only lsl.Var "
                     "objects can be bijected. You can supply 'None' for this parameter "
@@ -1427,7 +1426,7 @@ class Dist(Node):
                         )
                     result[param_name] = (param_var, bijector)
             else:
-                raise ValueError(
+                raise TypeError(
                     f"Got bijector {bijector} for parameter '{param_name}', given by "
                     f"{input_node}, but only lsl.Var "
                     "objects can be bijected. You can supply 'None' for this parameter "
@@ -2781,7 +2780,10 @@ class Var:
     def value(self, value: Any):
         value_node = self.value_node
         if not isinstance(value_node, Value):
-            raise RuntimeError(f"{self!r} is weak, cannot set value")
+            # Weakness is variable state, not an invalid argument type.
+            raise RuntimeError(  # noqa: TRY004
+                f"{self!r} is weak, cannot set value"
+            )
 
         value_node.value = value
 
@@ -2799,12 +2801,11 @@ class Var:
         if not isinstance(value_node, Node):
             value_node = Value(value_node, convert=self._convert)
 
-        if value_node.model:
-            if value_node.model is not self.model:
-                raise RuntimeError(
-                    f"{value_node!r} and {self} must be part of no "
-                    "model, or the same model."
-                )
+        if value_node.model and value_node.model is not self.model:
+            raise RuntimeError(
+                f"{value_node!r} and {self} must be part of no "
+                "model, or the same model."
+            )
 
         if self.name and not value_node.name:
             value_node.name = f"{self.name}_value"

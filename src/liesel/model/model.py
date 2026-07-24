@@ -99,7 +99,10 @@ def _set_weak_var_value(var: Var, value: Array) -> None:
     outdated too.
     """
     if isinstance(var.value_node, TransientNode):
-        raise RuntimeError(f"{var!r} is weak and transient, cannot set cached value")
+        # This is an invalid graph state, not an invalid argument type.
+        raise RuntimeError(  # noqa: TRY004
+            f"{var!r} is weak and transient, cannot set cached value"
+        )
 
     var.value_node.state = NodeState(value, False)
 
@@ -328,16 +331,16 @@ class GraphBuilder:
         """Sets the missing node and variable names."""
         nodes, _vars = self._all_nodes_and_vars()
 
-        var_names_before = set([v.name for v in _vars])
+        var_names_before = {v.name for v in _vars}
         for var in _vars:
             var.ensure_name()
-        var_names_after = set([v.name for v in _vars])
+        var_names_after = {v.name for v in _vars}
         auto_var_names = list(var_names_after - var_names_before)
 
-        node_names_before = set([v.name for v in nodes])
+        node_names_before = {v.name for v in nodes}
         for node in nodes:
             node.ensure_name()
-        node_names_after = set([v.name for v in nodes])
+        node_names_after = {v.name for v in nodes}
         auto_node_names = list(node_names_after - node_names_before)
 
         return {"vars": auto_var_names, "nodes": auto_node_names}
@@ -401,7 +404,7 @@ class GraphBuilder:
                 self.nodes.extend(arg.nodes)
                 self.vars.extend(arg.vars)
             else:
-                raise RuntimeError(f"Cannot add {type(arg).__name__} to graph builder")
+                raise TypeError(f"Cannot add {type(arg).__name__} to graph builder")
 
         if to_float32:
             self.convert_dtype("float64", "float32")
@@ -951,12 +954,11 @@ class Model:
             )
 
             for var in self.vars.values():
-                if var.dist_node is not None:
-                    if not var.parameter and not var.observed:
-                        logger.warning(
-                            f"{var} has a distribution but "
-                            "Var.parameter=False and Var.observed=False."
-                        )
+                if var.dist_node is not None and not var.parameter and not var.observed:
+                    logger.warning(
+                        f"{var} has a distribution but "
+                        "Var.parameter=False and Var.observed=False."
+                    )
 
     @property
     def graph_outdated(self) -> bool:
@@ -1125,7 +1127,10 @@ class Model:
                     new.name = new.name + "__tmp_new__"
                 self._replace_var_with_node(old_nv, new)
             else:
-                raise RuntimeError("Unexpected unknown problem in Model.replace().")
+                # Reaching this branch indicates an internal dispatch invariant failed.
+                raise RuntimeError(  # noqa: TRY004
+                    "Unexpected unknown problem in Model.replace()."
+                )
         else:
             raise TypeError(f"{old=} must be of type Var, got {type(old_nv)}.")
 
@@ -1166,8 +1171,6 @@ class Model:
                 of = self.vars[of]
             else:
                 raise KeyError(f"{of=} not found in the model.")
-        else:
-            of = of
 
         p_nodes_and_vars = set()
 
@@ -1418,7 +1421,7 @@ class Model:
         models = [m for m in args if isinstance(m, Model)]
         nv = [nv for nv in args if isinstance(nv, Var | Node)]
 
-        if not (len(models) + len(nv)) == len(args):
+        if len(models) + len(nv) != len(args):
             unexpected = [x for x in args if x not in models and x not in nv]
             raise TypeError(f"Received arguments of unexpected types: {unexpected}")
 
@@ -1707,7 +1710,7 @@ class Model:
         self.seed_nodes_and_vars += model.seed_nodes_and_vars  # manual update
 
         replacement_names = list(
-            set([nv.name for nv in replacements.values() if isinstance(nv, Var)])
+            {nv.name for nv in replacements.values() if isinstance(nv, Var)}
         )
         if replacements:
             logger.info(f"Joining by: {', '.join(replacement_names)}")
@@ -2155,8 +2158,8 @@ class Model:
         """
         seeds = jax.random.split(seed, len(self._seed_nodes))
 
-        for node, seed in zip(self._seed_nodes, seeds):
-            node.value = seed  # data node
+        for node, node_seed in zip(self._seed_nodes, seeds):
+            node.value = node_seed  # data node
 
         return self
 
@@ -2206,7 +2209,7 @@ class Model:
 
         seeds = jax.random.split(seed, len(dists))
 
-        for dist, seed in zip(dists, seeds):
+        for dist, dist_seed in zip(dists, seeds):
             tfp_dist = dist.init_dist()
             at = dist.at
             assert at is not None
@@ -2217,7 +2220,7 @@ class Model:
             sample_index = len(value_shape) - len(batch_shape) - len(event_shape)
             sample_shape = value_shape[:sample_index]
 
-            value = tfp_dist.sample(sample_shape, seed)
+            value = tfp_dist.sample(sample_shape, dist_seed)
 
             if isinstance(at, VarValue):
                 value_node = at.inputs[0]
@@ -2225,7 +2228,9 @@ class Model:
                 value_node = at
 
             if not isinstance(value_node, Value):
-                raise AttributeError(f"Cannot set value of {value_node}")
+                raise AttributeError(  # noqa: TRY004
+                    f"Cannot set value of {value_node}"
+                )
             value_node.value = value
 
         return self
@@ -2282,8 +2287,8 @@ class Model:
 
         posterior_samples = posterior_samples if posterior_samples is not None else {}
 
-        unique_sample_keys = set(list(posterior_samples))
-        unique_newdata_keys = set(list(newdata)) if newdata is not None else set()
+        unique_sample_keys = set(posterior_samples)
+        unique_newdata_keys = set(newdata) if newdata is not None else set()
         intersection = unique_sample_keys & unique_newdata_keys
         if len(intersection) > 0:
             raise RuntimeError(
@@ -2452,7 +2457,9 @@ class Model:
                 # correctly initialized based on the sampled values higher up
                 value_node = spec["value_node"]
                 if not isinstance(value_node, Value):
-                    raise AttributeError(f"Cannot set value of {value_node}")
+                    raise AttributeError(  # noqa: TRY004
+                        f"Cannot set value of {value_node}"
+                    )
                 value_node.value = value
 
             # to avoid tracer leakage we prevent side effects to persists
@@ -2490,7 +2497,7 @@ class Model:
 
             try:
                 error_to_raise = e.__class__(msg)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 # fallback in case e has a custom error class that cannot simply
                 # be instantiated with a message.
                 error_to_raise = RuntimeError(msg)
@@ -2901,7 +2908,9 @@ class Model:
                         var.value = value
                 else:
                     if not isinstance(node, Value):
-                        raise AttributeError(f"Cannot set value of {node!r}")
+                        raise AttributeError(  # noqa: TRY004
+                            f"Cannot set value of {node!r}"
+                        )
                     node.value = value
         finally:
             # restore original auto_update setting
@@ -2947,16 +2956,15 @@ class Model:
             sample_values.pop(name, None)
 
         for name, var in self.vars.items():
-            if var.weak:
-                if name in sample_values:
-                    logger.debug(
-                        f"Key '{name}' belongs to a weak var. "
-                        "Removing it from samples dictionary."
-                    )
-                    sample_values.pop(name, None)
+            if var.weak and name in sample_values:
+                logger.debug(
+                    f"Key '{name}' belongs to a weak var. "
+                    "Removing it from samples dictionary."
+                )
+                sample_values.pop(name, None)
 
-        unique_sample_keys = set(list(sample_values))
-        unique_newdata_keys = set(list(newdata)) if newdata is not None else set()
+        unique_sample_keys = set(sample_values)
+        unique_newdata_keys = set(newdata) if newdata is not None else set()
         intersection = unique_sample_keys & unique_newdata_keys
         if len(intersection) > 0:
             raise RuntimeError(
@@ -3296,7 +3304,7 @@ def log_prob_pointwise(
                 "all variables contributing to the likelihood."
             )
 
-        if not var.value.shape == var.log_prob.shape:
+        if var.value.shape != var.log_prob.shape:
             msg = (
                 f"{var}.value has shape {var.value.shape}, "
                 f"while {var}.log_prob has shape {var.log_prob.shape}. This "
