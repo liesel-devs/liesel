@@ -145,7 +145,7 @@ def t_test_engine():
 
     print(results.positions.combine_all())
     print(results.transition_infos.combine_all())
-    print(results.kernel_states.combine_all())
+    print(results.kernel_states.unwrap().combine_all())
 
     print(results.get_posterior_samples())
     print(results.get_tuning_times())
