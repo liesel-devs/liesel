@@ -5,7 +5,6 @@ Kernel-related info, outcome and mixin classes.
 from abc import abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Generic
 
 import jax
 from jax.typing import ArrayLike
@@ -20,9 +19,8 @@ from .types import (
     ModelState,
     Position,
     Scalar,
-    TKernelState,
-    TTransitionInfo,
-    TTuningInfo,
+    TransitionInfo,
+    TuningInfo,
 )
 
 
@@ -56,7 +54,7 @@ class DefaultTuningInfo:
 
 @register_dataclass_as_pytree
 @dataclass
-class TransitionOutcome(Generic[TKernelState, TTransitionInfo]):
+class TransitionOutcome[TKernelState, TTransitionInfo: TransitionInfo]:
     """
     A dataclass for the return value of the kernel method :meth:`.Kernel.transition`.
     Different kernels can use different types of :class:`.KernelState`'s and
@@ -83,7 +81,7 @@ class TransitionOutcome(Generic[TKernelState, TTransitionInfo]):
 
 @register_dataclass_as_pytree
 @dataclass
-class TuningOutcome(Generic[TKernelState, TTuningInfo]):
+class TuningOutcome[TKernelState, TTuningInfo: TuningInfo]:
     """
     A dataclass for the return value of the kernel method :meth:`.Kernel.tune`.
     Different kernels can use different types of :class:`.KernelState`'s and
@@ -102,7 +100,7 @@ class TuningOutcome(Generic[TKernelState, TTuningInfo]):
 
 @register_dataclass_as_pytree
 @dataclass
-class WarmupOutcome(Generic[TKernelState]):
+class WarmupOutcome[TKernelState]:
     """
     A dataclass for the return value of the kernel method :meth:`.Kernel.end_warmup`.
     Different kernels can use different types of :class:`.KernelState`'s.
@@ -160,7 +158,7 @@ class ModelMixin:
         return log_prob_fn
 
 
-class TransitionMixin(Generic[TKernelState, TTransitionInfo]):
+class TransitionMixin[TKernelState, TTransitionInfo: TransitionInfo]:
     """
     An abstract mixin defining two transition methods with and without adaptation.
     """
@@ -216,7 +214,7 @@ class TransitionMixin(Generic[TKernelState, TTransitionInfo]):
         raise NotImplementedError
 
 
-class TuningMixin(Generic[TKernelState, TTuningInfo]):
+class TuningMixin[TKernelState, TTuningInfo: TuningInfo]:
     """
     An abstract mixin defining two tuning methods after a slow and a fast adaptation
     epoch.
