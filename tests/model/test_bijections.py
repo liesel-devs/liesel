@@ -91,16 +91,16 @@ class TestBijectParametersValidation:
         concentration = lsl.Value(1.0)
         dist = lsl.Dist(tfd.InverseGamma, concentration=concentration, scale=scale)
 
-        with pytest.raises(ValueError, match="only lsl.Var objects can be bijected"):
+        with pytest.raises(TypeError, match="only lsl.Var objects can be bijected"):
             dist.biject_parameters(bijectors=["auto"])
 
-        with pytest.raises(ValueError, match="only lsl.Var objects can be bijected"):
+        with pytest.raises(TypeError, match="only lsl.Var objects can be bijected"):
             dist.biject_parameters(bijectors="auto")
 
-        with pytest.raises(ValueError, match="only lsl.Var objects can be bijected"):
+        with pytest.raises(TypeError, match="only lsl.Var objects can be bijected"):
             dist.biject_parameters(bijectors={"scale": "auto"})
 
-        with pytest.raises(ValueError, match="only lsl.Var objects can be bijected"):
+        with pytest.raises(TypeError, match="only lsl.Var objects can be bijected"):
             dist.biject_parameters(bijectors={"concentration": None, "scale": "auto"})
 
         dist.biject_parameters(bijectors={"concentration": None, "scale": None})
