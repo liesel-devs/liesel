@@ -4,7 +4,15 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, ParamSpec, Protocol, assert_never
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Literal,
+    ParamSpec,
+    Protocol,
+    assert_never,
+)
 
 import tensorflow_probability.substrates.jax.distributions as tfd
 
@@ -86,7 +94,7 @@ class LieselMCMC:
 
         Raises
         ------
-        ValueError
+        TypeError
             If the inference attached to the variable is not of type ``MCMCSpec``.
         """
         inference = var.get_inference(self.which)
@@ -94,7 +102,7 @@ class LieselMCMC:
             return inference
 
         if not isinstance(inference, MCMCSpec):
-            raise ValueError(
+            raise TypeError(
                 f"Attribute 'inference' of variable {var} is of type"
                 f" {type(inference)}, but expected type '{MCMCSpec}'."
             )
@@ -485,7 +493,11 @@ class MCMCSpec:
                 f"Expected one of {self._JITTER_METHODS}."
             )
 
-    _JITTER_METHODS = ["additive", "multiplicative", "replacement"]
+    _JITTER_METHODS: ClassVar[tuple[str, ...]] = (
+        "additive",
+        "multiplicative",
+        "replacement",
+    )
 
     kernel: KernelFactory
     kernel_kwargs: dict[str, Any] = field(default_factory=dict)
