@@ -65,7 +65,7 @@ def test_mh_kernel_symmetric(mcmc_seed) -> None:
         ["beta", "log_sigma"], proposal_fn, da_tune_step_size=True, identifier="test"
     )
     results = run_kernel_test(mcmc_seed, [kernel])
-    kernel.identifier in results.get_posterior_transition_infos()
+    assert kernel.identifier in results.get_posterior_transition_infos()
 
 
 @pytest.mark.mcmc
