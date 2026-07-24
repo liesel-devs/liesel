@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -24,10 +25,10 @@ class FixedDistribution(tfd.Distribution):
         )
         self.fixed_value = fixed_value
 
-    def _sample_n(self, n, seed=None):
+    def _sample_n(self, n, seed=None, **kwargs):
         return jnp.tile(self.fixed_value, (n, 1))
 
-    def _batch_shape_tensor(self):
+    def _batch_shape_tensor(self, **parameter_kwargs):
         return jnp.array([])
 
     def _batch_shape(self):
@@ -64,16 +65,16 @@ class TestMCMCSpec:
         result = spec.apply_jitter(self.key, self.value)
         assert jnp.array_equal(result, self.value)
 
-    @pytest.mark.xfail(reason="Jitter method 'none' removed")
-    def test_jitter_type_none(self):
-        """Test that no jitter is applied when jitter_type is none."""
-        spec = MCMCSpec(
-            kernel=self.kernel_factory,
-            jitter_dist=tfd.Normal(loc=0.0, scale=1.0),
-            jitter_method="none",
-        )
-        result = spec.apply_jitter(self.key, self.value)
-        assert jnp.array_equal(result, self.value)
+    def test_jitter_type_none_is_rejected(self):
+        """Test that the removed jitter method "none" is rejected."""
+        invalid_jitter_method: Any = "none"
+
+        with pytest.raises(ValueError, match="Invalid jitter method"):
+            MCMCSpec(
+                kernel=self.kernel_factory,
+                jitter_dist=tfd.Normal(loc=0.0, scale=1.0),
+                jitter_method=invalid_jitter_method,
+            )
 
     def test_additive_jitter(self):
         """Test additive jitter application."""
@@ -458,9 +459,11 @@ class TestLieselMCMC:
         mcmc = gs.LieselMCMC(model)
         kernels = mcmc.get_kernel_list()
         assert len(kernels) == 1
-        assert kernels[0].position_keys == ("mu", "sigma")
-        assert kernels[0].da_target_accept == pytest.approx(kwargs["da_target_accept"])
-        assert kernels[0].mm_diag == pytest.approx(kwargs["mm_diag"])
+        kernel = kernels[0]
+        assert isinstance(kernel, gs.NUTSKernel)
+        assert kernel.position_keys == ("mu", "sigma")
+        assert kernel.da_target_accept == pytest.approx(kwargs["da_target_accept"])
+        assert kernel.mm_diag == pytest.approx(kwargs["mm_diag"])
 
     def test_incoherent_kernel_group(self):
         mu = lsl.Var.new_param(

@@ -439,10 +439,8 @@ class MCMCSpec:
         A TensorFlow Probability distribution used to apply random jitter to the \
         initial value of the variable.
     jitter_method
-        The type of jitter to be applied. This can be one of the following: - `none`: No
-        jitter is applied. - `additive`: Additive jitter is applied. - `multiplicative`:
-        Multiplicative jitter is applied. - `replacement`: Value is replaced when jitter
-        is applied.
+        The type of jitter to be applied: `additive`, `multiplicative`, or
+        `replacement`. To disable jitter, leave ``jitter_dist`` as ``None``.
     order
         If you want to change the order in which parameter blocks are sampled. Blocks
         will be ordered by default based on the topological order of the graph (from the
