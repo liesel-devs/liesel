@@ -1,4 +1,6 @@
 import tempfile
+from collections.abc import Generator
+from typing import BinaryIO
 
 import jax.numpy as jnp
 import jax.random as rnd
@@ -48,101 +50,83 @@ y = Var(y, distribution=likelihood, name="y")
 model = Model([y])
 
 
+@pytest.fixture
+def temp_file() -> Generator[BinaryIO]:
+    with tempfile.TemporaryFile() as fp:
+        yield fp
+
+
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Test plot_nodes() ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
-def test_plot_nodes() -> None:
-    fp = tempfile.TemporaryFile()
-    plot_nodes(model, save_path=fp)
+def test_plot_nodes(temp_file: BinaryIO) -> None:
+    plot_nodes(model, save_path=temp_file)
     plt.close()
-    fp.close()
 
 
-def test_plot_nodes_negative_width() -> None:
-    fp = tempfile.TemporaryFile()
-
+def test_plot_nodes_negative_width(temp_file: BinaryIO) -> None:
     with pytest.raises(ValueError):
-        plot_nodes(model, width=-1, save_path=fp)
+        plot_nodes(model, width=-1, save_path=temp_file)
 
     plt.close()
-    fp.close()
 
 
-def test_plot_nodes_negative_height() -> None:
-    fp = tempfile.TemporaryFile()
-
+def test_plot_nodes_negative_height(temp_file: BinaryIO) -> None:
     with pytest.raises(ValueError):
-        plot_nodes(model, height=-1, save_path=fp)
+        plot_nodes(model, height=-1, save_path=temp_file)
 
     plt.close()
-    fp.close()
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
-def test_plot_nodes_circo_prog() -> None:
-    fp = tempfile.TemporaryFile()
-    plot_nodes(model, save_path=fp, prog="circo")
+def test_plot_nodes_circo_prog(temp_file: BinaryIO) -> None:
+    plot_nodes(model, save_path=temp_file, prog="circo")
     plt.close()
-    fp.close()
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
-def test_plot_nodes_dot_prog() -> None:
-    fp = tempfile.TemporaryFile()
-    plot_nodes(model, save_path=fp, prog="dot")
+def test_plot_nodes_dot_prog(temp_file: BinaryIO) -> None:
+    plot_nodes(model, save_path=temp_file, prog="dot")
     plt.close()
-    fp.close()
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
-def test_plot_nodes_fdp_prog() -> None:
-    fp = tempfile.TemporaryFile()
-    plot_nodes(model, save_path=fp, prog="fdp")
+def test_plot_nodes_fdp_prog(temp_file: BinaryIO) -> None:
+    plot_nodes(model, save_path=temp_file, prog="fdp")
     plt.close()
-    fp.close()
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
-def test_plot_nodes_neato_prog() -> None:
-    fp = tempfile.TemporaryFile()
-    plot_nodes(model, save_path=fp, prog="neato")
+def test_plot_nodes_neato_prog(temp_file: BinaryIO) -> None:
+    plot_nodes(model, save_path=temp_file, prog="neato")
     plt.close()
-    fp.close()
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
-def test_plot_nodes_osage_prog() -> None:
-    fp = tempfile.TemporaryFile()
-    plot_nodes(model, save_path=fp, prog="osage")
+def test_plot_nodes_osage_prog(temp_file: BinaryIO) -> None:
+    plot_nodes(model, save_path=temp_file, prog="osage")
     plt.close()
-    fp.close()
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
-def test_plot_nodes_patchwork_prog() -> None:
-    fp = tempfile.TemporaryFile()
-    plot_nodes(model, save_path=fp, prog="patchwork")
+def test_plot_nodes_patchwork_prog(temp_file: BinaryIO) -> None:
+    plot_nodes(model, save_path=temp_file, prog="patchwork")
     plt.close()
-    fp.close()
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
-def test_plot_nodes_twopi_prog() -> None:
-    fp = tempfile.TemporaryFile()
-    plot_nodes(model, save_path=fp, prog="twopi")
+def test_plot_nodes_twopi_prog(temp_file: BinaryIO) -> None:
+    plot_nodes(model, save_path=temp_file, prog="twopi")
     plt.close()
-    fp.close()
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
-def test_plot_nodes_sfdp_prog() -> None:
-    fp = tempfile.TemporaryFile()
-    plot_nodes(model, save_path=fp, prog="sfdp")
+def test_plot_nodes_sfdp_prog(temp_file: BinaryIO) -> None:
+    plot_nodes(model, save_path=temp_file, prog="sfdp")
     plt.close()
-    fp.close()
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -151,92 +135,68 @@ def test_plot_nodes_sfdp_prog() -> None:
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
-def test_plot_vars() -> None:
-    fp = tempfile.TemporaryFile()
-    plot_vars(model, save_path=fp)
+def test_plot_vars(temp_file: BinaryIO) -> None:
+    plot_vars(model, save_path=temp_file)
     plt.close()
-    fp.close()
 
 
-def test_plot_vars_negative_width() -> None:
-    fp = tempfile.TemporaryFile()
-
+def test_plot_vars_negative_width(temp_file: BinaryIO) -> None:
     with pytest.raises(ValueError):
-        plot_vars(model, width=-1, save_path=fp)
+        plot_vars(model, width=-1, save_path=temp_file)
 
     plt.close()
-    fp.close()
 
 
-def test_plot_vars_negative_height() -> None:
-    fp = tempfile.TemporaryFile()
-
+def test_plot_vars_negative_height(temp_file: BinaryIO) -> None:
     with pytest.raises(ValueError):
-        plot_vars(model, height=-1, save_path=fp)
+        plot_vars(model, height=-1, save_path=temp_file)
 
     plt.close()
-    fp.close()
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
-def test_plot_vars_circo_prog() -> None:
-    fp = tempfile.TemporaryFile()
-    plot_vars(model, save_path=fp, prog="circo")
+def test_plot_vars_circo_prog(temp_file: BinaryIO) -> None:
+    plot_vars(model, save_path=temp_file, prog="circo")
     plt.close()
-    fp.close()
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
-def test_plot_vars_dot_prog() -> None:
-    fp = tempfile.TemporaryFile()
-    plot_vars(model, save_path=fp, prog="dot")
+def test_plot_vars_dot_prog(temp_file: BinaryIO) -> None:
+    plot_vars(model, save_path=temp_file, prog="dot")
     plt.close()
-    fp.close()
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
-def test_plot_vars_fdp_prog() -> None:
-    fp = tempfile.TemporaryFile()
-    plot_vars(model, save_path=fp, prog="fdp")
+def test_plot_vars_fdp_prog(temp_file: BinaryIO) -> None:
+    plot_vars(model, save_path=temp_file, prog="fdp")
     plt.close()
-    fp.close()
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
-def test_plot_vars_neato_prog() -> None:
-    fp = tempfile.TemporaryFile()
-    plot_vars(model, save_path=fp, prog="neato")
+def test_plot_vars_neato_prog(temp_file: BinaryIO) -> None:
+    plot_vars(model, save_path=temp_file, prog="neato")
     plt.close()
-    fp.close()
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
-def test_plot_vars_osage_prog() -> None:
-    fp = tempfile.TemporaryFile()
-    plot_vars(model, save_path=fp, prog="osage")
+def test_plot_vars_osage_prog(temp_file: BinaryIO) -> None:
+    plot_vars(model, save_path=temp_file, prog="osage")
     plt.close()
-    fp.close()
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
-def test_plot_vars_patchwork_prog() -> None:
-    fp = tempfile.TemporaryFile()
-    plot_vars(model, save_path=fp, prog="patchwork")
+def test_plot_vars_patchwork_prog(temp_file: BinaryIO) -> None:
+    plot_vars(model, save_path=temp_file, prog="patchwork")
     plt.close()
-    fp.close()
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
-def test_plot_vars_twopi_prog() -> None:
-    fp = tempfile.TemporaryFile()
-    plot_vars(model, save_path=fp, prog="twopi")
+def test_plot_vars_twopi_prog(temp_file: BinaryIO) -> None:
+    plot_vars(model, save_path=temp_file, prog="twopi")
     plt.close()
-    fp.close()
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
-def test_plot_vars_sfdp_prog() -> None:
-    fp = tempfile.TemporaryFile()
-    plot_vars(model, save_path=fp, prog="sfdp")
+def test_plot_vars_sfdp_prog(temp_file: BinaryIO) -> None:
+    plot_vars(model, save_path=temp_file, prog="sfdp")
     plt.close()
-    fp.close()
