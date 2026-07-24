@@ -70,9 +70,10 @@ def _make_error_summary(
         krnl_summary: dict[int, ErrorSummaryForOneCode] = {}
         for key, count in counter_dict.items():
             ec = key
-            error_msg = kel.kernel_cls.map_or(
-                "",
-                lambda krn_cls: krn_cls.error_book[ec],
+            error_msg = (
+                kel.kernel_cls.unwrap().error_book[ec]
+                if kel.kernel_cls.is_some()
+                else ""
             )
             krnl_summary[ec] = ErrorSummaryForOneCode(ec, error_msg, count, None)
 
@@ -133,9 +134,8 @@ def _summarize_acceptance_probabilities(
             chain["acceptance_probability"] = float(ap[c, ...].mean())
             position_moved = jnp.mean(pm[c, ...])
             chain["position_moved"] = position_moved
-            if float(position_moved) > 1.0:
-                if int(position_moved.round()) == 99:
-                    chain["position_moved"] = jnp.nan
+            if float(position_moved) > 1.0 and int(position_moved.round()) == 99:
+                chain["position_moved"] = jnp.nan
             data.append(chain)
     return data
 
@@ -443,8 +443,8 @@ class Summary:
 
         # create one row per entry
         df_dict = {}
-        first_quant = list(quants.values())[0]
-        for var in first_quant.keys():
+        first_quant = next(iter(quants.values()))
+        for var in first_quant:
             it = np.nditer(first_quant[var], flags=["multi_index"])
             for _ in it:
                 var_fqn = (
@@ -983,8 +983,8 @@ class SamplesSummary:
 
         # create one row per entry
         df_dict = {}
-        first_quant = list(quants.values())[0]
-        for var in first_quant.keys():
+        first_quant = next(iter(quants.values()))
+        for var in first_quant:
             it = np.nditer(first_quant[var], flags=["multi_index"])
             for _ in it:
                 var_fqn = (
