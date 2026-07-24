@@ -131,8 +131,8 @@ class TestModel:
         """Verifies that the vars and nodes are unfrozen."""
         nodes_and_vars = model.copy_nodes_and_vars()
 
-        assert all([not node.model for node in nodes_and_vars[0].values()])
-        assert all([not var.model for var in nodes_and_vars[1].values()])
+        assert all(not node.model for node in nodes_and_vars[0].values())
+        assert all(not var.model for var in nodes_and_vars[1].values())
 
     def test_copy_computational_model(self, model: Model) -> None:
         cmodel = model._copy_computational_model()
@@ -262,10 +262,10 @@ class TestModel:
         log_prob_before = model.log_prob
         beta = model.vars["beta_hat"]
         beta.value = jnp.array([-10.0, 10.0])
-        assert any([node.outdated for node in model.nodes.values()])
+        assert any(node.outdated for node in model.nodes.values())
 
         model.update()
-        assert not any([node.outdated for node in model.nodes.values()])
+        assert not any(node.outdated for node in model.nodes.values())
         assert log_prob_before != pytest.approx(model.log_prob)
 
     def test_update_uses_correct_order(self, model: Model) -> None:
@@ -304,8 +304,8 @@ class TestModel:
         """
 
         vars = list(model.vars.values())
-        assert all([node in vars for node in model.var_graph.nodes])
-        assert all([node in model.var_graph.nodes for node in vars])
+        assert all(node in vars for node in model.var_graph.nodes)
+        assert all(node in model.var_graph.nodes for node in vars)
 
     def test_node_graph(self, model: Model) -> None:
         """
@@ -313,8 +313,8 @@ class TestModel:
         """
 
         nodes = list(model.nodes.values())
-        assert all([node in nodes for node in model.node_graph.nodes])
-        assert all([node in model.node_graph.nodes for node in nodes])
+        assert all(node in nodes for node in model.node_graph.nodes)
+        assert all(node in model.node_graph.nodes for node in nodes)
 
     def test_nodes_len(self, model: Model) -> None:
         assert isinstance(model.nodes, MappingProxyType)
@@ -1041,9 +1041,8 @@ def test_save_model() -> None:
     x = Var(1.0, name="x")
     model = Model([x])
 
-    fh = tempfile.TemporaryFile()
-    save_model(model, fh)
-    fh.close()
+    with tempfile.TemporaryFile() as fh:
+        save_model(model, fh)
 
 
 @pytest.fixture
