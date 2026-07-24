@@ -517,7 +517,7 @@ def optim_flat(
         position: Position, model_state: ModelState, batch_indices: Array | None = None
     ):
         batched_observed = batched_nodes(observed, batch_indices)
-        position = position | batched_observed  # type: ignore
+        position = Position(position | batched_observed)
 
         updated_state = interface_train.update_state(position, model_state)
         if not do_batching:
@@ -758,9 +758,9 @@ def optim_flat(
     )
 
     if restore_best_position:
-        final_position: Position = {
-            name: pos[ibest] for name, pos in val["history"]["position"].items()
-        }  # type: ignore
+        final_position = Position(
+            {name: pos[ibest] for name, pos in val["history"]["position"].items()}
+        )
     else:
         final_position = val["position"]
 
