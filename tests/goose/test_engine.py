@@ -159,7 +159,7 @@ def test_liesel_model_in_engine_builder() -> None:
     model = Model([y])
 
     with pytest.raises(TypeError):
-        builder.set_model(model)  # type: ignore
+        builder.set_model(model)
 
 
 def t_test_engine_builder() -> None:

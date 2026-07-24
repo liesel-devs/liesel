@@ -807,7 +807,7 @@ def _set_colors(plot_df: pd.DataFrame, color_list: list[str] | None) -> list[str
         if num_chains > 10:
             color_list = color_list * (num_chains // 10 + 1)
 
-        color_list = color_list[:num_chains]  # type: ignore
+        color_list = color_list[:num_chains]
 
     return color_list
 

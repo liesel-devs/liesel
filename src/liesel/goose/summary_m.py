@@ -132,9 +132,10 @@ def _summarize_acceptance_probabilities(
         for c in range(chains):
             chain = {"kernel": k, "phase": phase, "chain": c}
             chain["acceptance_probability"] = float(ap[c, ...].mean())
-            chain["position_moved"] = jnp.mean(pm[c, ...])
-            if float(chain["position_moved"]) > 1.0:  # type: ignore # spurious warning
-                if int(chain["position_moved"].round()) == 99:  # type: ignore
+            position_moved = jnp.mean(pm[c, ...])
+            chain["position_moved"] = position_moved
+            if float(position_moved) > 1.0:
+                if int(position_moved.round()) == 99:
                     chain["position_moved"] = jnp.nan
             data.append(chain)
     return data

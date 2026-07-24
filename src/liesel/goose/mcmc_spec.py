@@ -190,8 +190,7 @@ class LieselMCMC:
         """
         kernel_groups = self.get_kernel_groups()
         kernel_list = [
-            g.kernel(g.position_keys, **g.kwargs)  # type: ignore
-            for g in kernel_groups.values()
+            g.kernel(g.position_keys, **g.kwargs) for g in kernel_groups.values()
         ]
         return kernel_list
 

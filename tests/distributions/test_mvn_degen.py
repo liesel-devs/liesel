@@ -66,7 +66,7 @@ def mvnorm_degen_logpdf(
     if log_det:
         rank_prec = log_det[1]
         gen_log_det = log_det[0]
-        gen_log_det += -rank_prec * np.log(sigma2)  # type: ignore
+        gen_log_det += -rank_prec * np.log(sigma2)
     else:
         gen_log_det, rank_prec = determinant_structure_degen(precision)
 

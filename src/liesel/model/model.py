@@ -2160,7 +2160,7 @@ class Model:
         seeds = jax.random.split(seed, len(self._seed_nodes))
 
         for node, seed in zip(self._seed_nodes, seeds):
-            node.value = seed  # type: ignore  # data node
+            node.value = seed  # data node
 
         return self
 
@@ -2212,25 +2212,25 @@ class Model:
 
         for dist, seed in zip(dists, seeds):
             tfp_dist = dist.init_dist()
+            at = dist.at
+            assert at is not None
 
             event_shape = tfp_dist.event_shape
             batch_shape = tfp_dist.batch_shape
-            value_shape = jnp.asarray(dist.at.value).shape  # type: ignore
+            value_shape = jnp.asarray(at.value).shape
             sample_index = len(value_shape) - len(batch_shape) - len(event_shape)
             sample_shape = value_shape[:sample_index]
 
             value = tfp_dist.sample(sample_shape, seed)
 
-            if isinstance(dist.at, VarValue):
-                try:
-                    dist.at.inputs[0].value = value  # type: ignore
-                except AttributeError:
-                    raise AttributeError(f"Cannot set value of {dist.at.inputs[0]}")
+            if isinstance(at, VarValue):
+                value_node = at.inputs[0]
             else:
-                try:
-                    dist.at.value = value  # type: ignore
-                except AttributeError:
-                    raise AttributeError(f"Cannot set value of {dist.at}")
+                value_node = at
+
+            if not isinstance(value_node, Value):
+                raise AttributeError(f"Cannot set value of {value_node}")
+            value_node.value = value
 
         return self
 
@@ -2346,19 +2346,23 @@ class Model:
         sampling_specs: dict[str, _SamplingSpec] = {}
         for dist in dists_list:
             tfp_dist = dist.init_dist()
+            at = dist.at
+            assert at is not None
 
             event_shape = tfp_dist.event_shape
             batch_shape = tfp_dist.batch_shape
-            value_shape = jnp.asarray(dist.at.value).shape  # type: ignore
+            value_shape = jnp.asarray(at.value).shape
             sample_index = len(value_shape) - len(batch_shape) - len(event_shape)
             sample_shape = value_shape[:sample_index]
 
-            if isinstance(dist.at, VarValue):
-                var_name = dist.at.var.name  # type: ignore
-                value_var = dist.at.inputs[0]
+            if isinstance(at, VarValue):
+                if at.var is None:
+                    raise RuntimeError(f"{at} is not part of a variable")
+                var_name = at.var.name
+                value_var = at.inputs[0]
             else:
-                var_name = dist.at.name  # type: ignore
-                value_var = dist.at  # type: ignore
+                var_name = at.name
+                value_var = at
 
             if var_name not in posterior_samples:
                 # pulls manually defined distribution from dists dict, returns current

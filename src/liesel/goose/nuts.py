@@ -318,16 +318,18 @@ class NUTSKernel(
 
         if history is not None:
             history = Position({k: history[k] for k in self.position_keys})
+            old_inv_mm = kernel_state.inverse_mass_matrix
 
             if self.mm_diag:
                 new_inv_mm = tune_inv_mm_diag(history)
-                trace_fn = jnp.sum  # type: ignore
+                old_trace = jnp.sum(old_inv_mm)
+                new_trace = jnp.sum(new_inv_mm)
             else:
                 new_inv_mm = tune_inv_mm_full(history)
-                trace_fn = jnp.trace  # type: ignore
+                old_trace = jnp.trace(old_inv_mm)
+                new_trace = jnp.trace(new_inv_mm)
 
-            old_inv_mm = kernel_state.inverse_mass_matrix
-            adjustment = jnp.sqrt(trace_fn(old_inv_mm) / trace_fn(new_inv_mm))
+            adjustment = jnp.sqrt(old_trace / new_trace)
             kernel_state.step_size = adjustment * kernel_state.step_size
 
             kernel_state.inverse_mass_matrix = new_inv_mm

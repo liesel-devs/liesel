@@ -1485,7 +1485,7 @@ class Dist(Node):
                 )
 
             try:
-                bijector = prop.default_constraining_bijector_fn()  # type: ignore
+                bijector = prop.default_constraining_bijector_fn()
             except Exception as e:
                 raise type(e)(
                     f"Error getting bijector for parameter '{param_name}' of "
@@ -1754,8 +1754,8 @@ class Var:
         self._var_value_node._set_var(self)
 
         # use setters
-        self.value_node = value  # type: ignore  # unfrozen
-        self.dist_node = dist  # type: ignore  # unfrozen
+        self.value_node = value  # unfrozen
+        self.dist_node = dist  # unfrozen
 
         self._auto_transform = False
         self._bijected_var: Var | None = None
@@ -2398,7 +2398,7 @@ class Var:
                 f"Argument {bijector=} is of invalid type {type(bijector)}."
             )
 
-        tvar.parameter = self.parameter  # type: ignore
+        tvar.parameter = self.parameter
         self.parameter = False
 
         if not self.name:
@@ -2580,7 +2580,7 @@ class Var:
             dist_node = NoDist()
 
         if self.name and not dist_node.name:
-            dist_node.name = f"{self.name}_log_prob"  # type: ignore  # unfrozen
+            dist_node.name = f"{self.name}_log_prob"  # unfrozen
 
         if self._dist_node.model:
             model = self._dist_node.model
@@ -2612,7 +2612,7 @@ class Var:
             self._dist_node.at = None
 
         dist_node._set_var(self)
-        dist_node.at = self.var_value_node  # type: ignore  # unfrozen
+        dist_node.at = self.var_value_node  # unfrozen
         self._dist_node = dist_node
 
     @property
@@ -2648,11 +2648,11 @@ class Var:
     @changes_model_graph
     def name(self, name: str):
         if name and self.value_node.name in ("", f"{self.name}_value"):
-            self.value_node.name = f"{name}_value"  # type: ignore  # unfrozen
-            self.var_value_node.name = f"{name}_var_value"  # type: ignore  # unfrozen
+            self.value_node.name = f"{name}_value"  # unfrozen
+            self.var_value_node.name = f"{name}_var_value"  # unfrozen
 
         if name and self._dist_node.name in ("", f"{self.name}_log_prob"):
-            self._dist_node.name = f"{name}_log_prob"  # type: ignore  # unfrozen
+            self._dist_node.name = f"{name}_log_prob"  # unfrozen
 
         self._name = name
 
@@ -3240,7 +3240,7 @@ class Var:
 
 
 def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) -> Var:
-    if var.dist_node is None:  # type: ignore
+    if var.dist_node is None:
         raise RuntimeError(f"{var} has no distribution")
     InputDist = var.dist_node.distribution
     inputs = var.dist_node.inputs
@@ -3309,7 +3309,7 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
 def _transform_var_with_bijector_class(
     var: Var, bijector_cls: type[jb.Bijector] | None, *args, **kwargs
 ) -> Var:
-    if var.dist_node is None:  # type: ignore
+    if var.dist_node is None:
         raise RuntimeError(f"{var} has no distribution")
     InputDist = var.dist_node.distribution
 

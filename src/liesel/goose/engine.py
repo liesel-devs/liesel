@@ -75,9 +75,9 @@ def _split_keys(keys, n):
 
 def _initialze_prng(seed: int | KeyArray) -> KeyArray:
     if jnp.isscalar(seed):
-        return jax.random.PRNGKey(seed)  # type: ignore
-    elif jnp.shape(seed) == (2,):  # type: ignore
-        return seed  # type: ignore
+        return jax.random.PRNGKey(seed)
+    elif jnp.shape(seed) == (2,):
+        return seed
     else:
         raise ValueError("Seed has an unsupported shape")
 

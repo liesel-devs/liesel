@@ -122,7 +122,7 @@ def test_simple2():
     "ignore:Explicitly requested dtype float64 requested in astype is not available"
     ".*:UserWarning"
 )
-def test_mcmc(basic_lm: pm.Model):  # type: ignore
+def test_mcmc(basic_lm: pm.Model):
     interface = PyMCInterface(basic_lm, additional_vars=["sigma", "mu[0]"])
     state = interface.get_initial_state()
     builder = gs.EngineBuilder(1, 2)
@@ -153,7 +153,7 @@ def test_mcmc(basic_lm: pm.Model):  # type: ignore
     "ignore:Explicitly requested dtype float64 requested in astype is not available"
     ".*:UserWarning"
 )
-def test_mcmc_two_kernels(basic_lm: pm.Model):  # type: ignore
+def test_mcmc_two_kernels(basic_lm: pm.Model):
     interface = PyMCInterface(basic_lm, additional_vars=["sigma", "mu[0]"])
     state = interface.get_initial_state()
     builder = gs.EngineBuilder(1, 2)

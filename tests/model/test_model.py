@@ -233,10 +233,10 @@ class TestModel:
         """
 
         with pytest.raises(TypeError):
-            model.set_seed(jnp.array([0, 123]))  # type: ignore
+            model.set_seed(jnp.array([0, 123]))
 
         with pytest.raises(TypeError):
-            model.set_seed(jnp.array([123]))  # type: ignore
+            model.set_seed(jnp.array([123]))
 
         with pytest.raises(TypeError):
             model.set_seed(123)  # type: ignore
