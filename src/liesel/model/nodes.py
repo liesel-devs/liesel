@@ -79,6 +79,14 @@ def _callable_name(fn: Callable[..., Any]) -> str:
     return name if isinstance(name, str) else type(fn).__name__
 
 
+def _to_float32_for_temporary_model() -> bool:
+    """Whether temporary models should convert float64 values to float32."""
+    try:
+        return not bool(jax.config.read("jax_enable_x64"))
+    except Exception:  # defensive fallback in case JAX changes its config API
+        return jnp.array(1.0).dtype == jnp.dtype("float32")
+
+
 def _transformed_distribution_bijector(distribution: Distribution) -> Bijector:
     """Returns the bijector from a transformed JAX or NumPy distribution."""
     if isinstance(
@@ -2778,10 +2786,11 @@ class Var:
 
     @value.setter
     def value(self, value: Any):
-        if self.weak:
+        value_node = self.value_node
+        if not isinstance(value_node, Value):
             raise RuntimeError(f"{repr(self)} is weak, cannot set value")
 
-        self.value_node.value = value  # type: ignore  # data node
+        value_node.value = value
 
     @property
     def value_node(self) -> Node:
@@ -2857,13 +2866,7 @@ class Var:
 
         from liesel.model.model import TemporaryModel
 
-        try:
-            to_float32 = not jax.config.jax_enable_x64  # type: ignore
-        except Exception:  # just to be really sure in case anything changes
-            # this is an implicit test of whether x64 flag is enabled
-            import jax.numpy as jnp
-
-            to_float32 = jnp.array(1.0).dtype == jnp.dtype("float32")
+        to_float32 = _to_float32_for_temporary_model()
         with TemporaryModel(self, verbose=verbose, to_float32=to_float32) as model:
             match which:
                 case "vars":
@@ -3020,13 +3023,7 @@ class Var:
         else:
             from liesel.model.model import TemporaryModel
 
-            try:
-                to_float32 = not jax.config.jax_enable_x64  # type: ignore
-            except Exception:  # just to be really sure in case anything changes
-                # this is an implicit test of whether x64 flag is enabled
-                import jax.numpy as jnp
-
-                to_float32 = jnp.array(1.0).dtype == jnp.dtype("float32")
+            to_float32 = _to_float32_for_temporary_model()
 
             with TemporaryModel(self, silent=True, to_float32=to_float32) as model:
                 submodel = model.parental_submodel(self)
@@ -3067,13 +3064,7 @@ class Var:
         else:
             from liesel.model.model import TemporaryModel
 
-            try:
-                to_float32 = not jax.config.jax_enable_x64  # type: ignore
-            except Exception:  # just to be really sure in case anything changes
-                # this is an implicit test of whether x64 flag is enabled
-                import jax.numpy as jnp
-
-                to_float32 = jnp.array(1.0).dtype == jnp.dtype("float32")
+            to_float32 = _to_float32_for_temporary_model()
 
             with TemporaryModel(self, silent=True, to_float32=to_float32) as model:
                 submodel = model.parental_submodel(self)
@@ -3148,13 +3139,7 @@ class Var:
 
         from .model import TemporaryModel
 
-        try:
-            to_float32 = not jax.config.jax_enable_x64  # type: ignore
-        except Exception:  # just to be really sure in case anything changes
-            # this is an implicit test of whether x64 flag is enabled
-            import jax.numpy as jnp
-
-            to_float32 = jnp.array(1.0).dtype == jnp.dtype("float32")
+        to_float32 = _to_float32_for_temporary_model()
         with TemporaryModel(self, silent=True, to_float32=to_float32) as model:
             drawn_samples = model.sample(
                 shape=shape,
@@ -3240,11 +3225,12 @@ class Var:
 
 
 def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) -> Var:
-    if var.dist_node is None:
+    dist_node = var.dist_node
+    if dist_node is None:
         raise RuntimeError(f"{var} has no distribution")
-    InputDist = var.dist_node.distribution
-    inputs = var.dist_node.inputs
-    kwinputs = var.dist_node.kwinputs
+    InputDist = dist_node.distribution
+    inputs = dist_node.inputs
+    kwinputs: dict[str, Any] = dict(dist_node.kwinputs)
 
     bijector_inv = jb.Invert(bijector_inst)
 
@@ -3255,32 +3241,28 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
         transform_dist,
         *inputs,
         _name="",
-        _needs_seed=var.dist_node.needs_seed,
+        _needs_seed=dist_node.needs_seed,
         bijectors=None,
         convert_inputs=jnp.asarray,
         **kwinputs,
     )
 
-    transformed_dist.per_obs = var.dist_node.per_obs
+    transformed_dist.per_obs = dist_node.per_obs
 
     if var.weak:
-        try:
-            value_function = var.value_node.function  # type: ignore
-        except AttributeError as e:
+        value_node = var.value_node
+        if not isinstance(value_node, Calc):
             raise AttributeError(
                 "Trying to transform a weak variable without calculator node."
-            ) from e
+            )
 
         def forward(*args, **kwargs):
-            return bijector_inv.forward(value_function(*args, **kwargs))
+            return bijector_inv.forward(value_node.function(*args, **kwargs))
 
-        value_inputs = var.value_node.inputs
-        value_kwinputs = var.value_node.kwinputs
-        value_node_needs_seed = var.value_node.needs_seed
-        try:
-            value_node_update_on_init = var.value_node._update_on_init  # type: ignore
-        except AttributeError as e:
-            raise e
+        value_inputs = value_node.inputs
+        value_kwinputs = value_node.kwinputs
+        value_node_needs_seed = value_node.needs_seed
+        value_node_update_on_init = value_node._update_on_init
 
         transformed_var = Var(
             Calc(
@@ -3309,13 +3291,15 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
 def _transform_var_with_bijector_class(
     var: Var, bijector_cls: type[jb.Bijector] | None, *args, **kwargs
 ) -> Var:
-    if var.dist_node is None:
+    dist_node = var.dist_node
+    if dist_node is None:
         raise RuntimeError(f"{var} has no distribution")
-    InputDist = var.dist_node.distribution
+    InputDist = dist_node.distribution
 
+    dist_kwinputs: dict[str, Any] = dict(dist_node.kwinputs)
     dist_inputs = InputGroup(
-        *var.dist_node.inputs,
-        **var.dist_node.kwinputs,  # type: ignore
+        *dist_node.inputs,
+        **dist_kwinputs,
     )
 
     bijector_inputs = InputGroup(*args, **kwargs)
@@ -3344,32 +3328,28 @@ def _transform_var_with_bijector_class(
         dist_inputs,
         bijector_inputs,
         _name="",
-        _needs_seed=var.dist_node.needs_seed,
+        _needs_seed=dist_node.needs_seed,
         bijectors=None,
     )
 
-    dist_node_transformed.per_obs = var.dist_node.per_obs
+    dist_node_transformed.per_obs = dist_node.per_obs
 
     bijector_inv = _transformed_distribution_bijector(dist_node_transformed.init_dist())
 
     if var.weak:
-        try:
-            value_function = var.value_node.function  # type: ignore
-        except AttributeError as e:
+        value_node = var.value_node
+        if not isinstance(value_node, Calc):
             raise AttributeError(
                 "Trying to transform a weak variable without calculator node."
-            ) from e
+            )
 
         def forward(*args, **kwargs):
-            return bijector_inv.forward(value_function(*args, **kwargs))
+            return bijector_inv.forward(value_node.function(*args, **kwargs))
 
-        value_inputs = var.value_node.inputs
-        value_kwinputs = var.value_node.kwinputs
-        value_node_needs_seed = var.value_node.needs_seed
-        try:
-            value_node_upadte_on_init = var.value_node._update_on_init  # type: ignore
-        except AttributeError as e:
-            raise e
+        value_inputs = value_node.inputs
+        value_kwinputs = value_node.kwinputs
+        value_node_needs_seed = value_node.needs_seed
+        value_node_update_on_init = value_node._update_on_init
 
         transformed_var = Var(
             Calc(
@@ -3377,7 +3357,7 @@ def _transform_var_with_bijector_class(
                 *value_inputs,
                 _name="",
                 _needs_seed=value_node_needs_seed,
-                _update_on_init=value_node_upadte_on_init,
+                _update_on_init=value_node_update_on_init,
                 convert_inputs=jnp.asarray,
                 **value_kwinputs,
             ),

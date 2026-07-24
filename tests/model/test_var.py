@@ -793,8 +793,10 @@ class TestVarSample:
 
         # basic plausibility checks for sampling from the correct distribution
         # this is not a tough check though.
-        sigma_mean = sigma.dist_node.init_dist().mean()  # type: ignore
-        sigma_std = sigma.dist_node.init_dist().stddev()  # type: ignore
+        sigma_dist = sigma.dist_node
+        assert sigma_dist is not None
+        sigma_mean = sigma_dist.init_dist().mean()
+        sigma_std = sigma_dist.init_dist().stddev()
         assert samples["sigma"].mean() == pytest.approx(sigma_mean, abs=0.1)
         assert samples["sigma"].std() == pytest.approx(sigma_std, abs=0.1)
 
