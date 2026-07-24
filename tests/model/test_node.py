@@ -894,19 +894,19 @@ class TestDistSetitem:
         ).update()
 
         with pytest.raises(AttributeError):
-            del _require_dist_node(x)["loc"]
+            del _require_dist_node(x)["loc"]  # ty: ignore[not-subscriptable]
 
         x = Var(
             0.0, Dist(tfd.Normal, Var(0.0, name="loc"), scale=Var(1.0, name="scale"))
         ).update()
 
         with pytest.raises(AttributeError):
-            del _require_dist_node(x)[0]
+            del _require_dist_node(x)[0]  # ty: ignore[not-subscriptable]
 
         x = Var(0.0, Dist(tfd.Normal, 0.0, scale=Var(1.0, name="scale"))).update()
 
         with pytest.raises(AttributeError):
-            del _require_dist_node(x)[0]
+            del _require_dist_node(x)[0]  # ty: ignore[not-subscriptable]
 
     def test_assign_none(self):
         x = Var(
