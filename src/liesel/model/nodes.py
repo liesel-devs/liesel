@@ -19,7 +19,6 @@ from typing import (
     NamedTuple,
     Self,
     TypeGuard,
-    TypeVar,
     cast,
 )
 
@@ -64,12 +63,10 @@ type Array = Any
 type Distribution = jd.Distribution | nd.Distribution
 type Bijector = jb.Bijector | nb.Bijector
 
-T = TypeVar("T", bound=Hashable)
-
 logger = logging.getLogger(__name__)
 
 
-def _unique_tuple(*args: Iterable[T]) -> tuple[T, ...]:
+def _unique_tuple[T: Hashable](*args: Iterable[T]) -> tuple[T, ...]:
     return tuple(dict.fromkeys(chain(*args)))
 
 
@@ -90,7 +87,7 @@ def _to_float32_for_temporary_model() -> bool:
 def _transformed_distribution_bijector(distribution: Distribution) -> Bijector:
     """Returns the bijector from a transformed JAX or NumPy distribution."""
     if isinstance(
-        distribution, (jd.TransformedDistribution, nd.TransformedDistribution)
+        distribution, jd.TransformedDistribution | nd.TransformedDistribution
     ):
         return distribution.bijector
 
