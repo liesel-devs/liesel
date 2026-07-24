@@ -198,9 +198,9 @@ class TestBasicModifyModel:
 
         y.observed, y.parameter = False, True
 
-        model.log_prior == pytest.approx(prior_before + lik_before)
-        model.log_lik == pytest.approx(0.0)
-        model.log_prob == pytest.approx(prob_before)
+        assert model.log_prior == pytest.approx(prior_before + lik_before)
+        assert model.log_lik == pytest.approx(0.0)
+        assert model.log_prob == pytest.approx(prob_before)
 
     def test_change_parameter_flag_of_a_var(self):
         x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
@@ -229,9 +229,9 @@ class TestBasicModifyModel:
 
         scale.parameter, scale.observed = False, True
 
-        model.log_prior == pytest.approx(0.0)
-        model.log_lik == pytest.approx(prior_before + lik_before)
-        model.log_prob == pytest.approx(prob_before)
+        assert model.log_prior == pytest.approx(0.0)
+        assert model.log_lik == pytest.approx(prior_before + lik_before)
+        assert model.log_prob == pytest.approx(prob_before)
 
     def test_node_add_inputs(self):
         x1 = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x1")
@@ -532,11 +532,11 @@ class TestBracketReplace:
 
         assert jnp.allclose(loc.value, x1.value + x2.value)
 
-        nodes_before = set(list(model.nodes))
+        nodes_before = set(model.nodes)
 
         loc.value_node[0] = x3
 
-        nodes_after = set(list(model.nodes))
+        nodes_after = set(model.nodes)
 
         assert len(nodes_after - nodes_before) == 1
         assert x3.name in nodes_after - nodes_before
@@ -1693,7 +1693,7 @@ class TestModelJoin:
         list(m1.vars)
         list(m2.vars)
 
-        y.value_node[0] is x1
+        assert y.value_node[0] is x1
         assert x1 in m1.seed_nodes_and_vars
         assert y in m1.seed_nodes_and_vars
         assert x2 not in m1.seed_nodes_and_vars
