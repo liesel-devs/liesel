@@ -81,9 +81,9 @@ def _transform_back(var_transformed: Var) -> Calc:
         return bijector.inverse(at)
 
     inputs = var_transformed.dist_node.inputs
-    kwinputs = var_transformed.dist_node.kwinputs
+    kwinputs: dict[str, Any] = dict(var_transformed.dist_node.kwinputs)
 
-    return Calc(fn, var_transformed.value_node, *inputs, **kwinputs)  # type: ignore
+    return Calc(fn, var_transformed.value_node, *inputs, **kwinputs)
 
 
 def _set_weak_var_value(var: Var, value: Array) -> None:
@@ -649,6 +649,9 @@ class GraphBuilder:
                     pass
 
         for node in nodes:
+            if not isinstance(node, Value):
+                continue
+
             if node.model:
                 auto_update_before = node.model.auto_update
                 node.model.auto_update = False
@@ -657,7 +660,7 @@ class GraphBuilder:
                 wrappers = jax.tree.map(ConversionWrapper, node.value)
 
                 value = jax.tree.map(lambda x: x.value, wrappers)
-                node.value = value  # type: ignore # data node
+                node.value = value  # data node
 
                 converted = jax.tree.map(lambda x: x.converted, wrappers)
 
@@ -2895,7 +2898,7 @@ class Model:
         try:
             for key, value in position.items():
                 try:
-                    model.nodes[key].value = value  # type: ignore  # data node
+                    node = model.nodes[key]
                 except KeyError:
                     var = model.vars[key]
                     if allow_weak_vars and var.weak:
@@ -2903,6 +2906,10 @@ class Model:
                         weak_var_names.append(var.name)
                     else:
                         var.value = value
+                else:
+                    if not isinstance(node, Value):
+                        raise AttributeError(f"Cannot set value of {repr(node)}")
+                    node.value = value
         finally:
             # restore original auto_update setting
             model.auto_update = original_auto_update

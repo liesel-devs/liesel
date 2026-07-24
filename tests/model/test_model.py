@@ -239,7 +239,7 @@ class TestModel:
             model.set_seed(jnp.array([123]))
 
         with pytest.raises(TypeError):
-            model.set_seed(123)  # type: ignore
+            model.set_seed(123)  # ty: ignore[invalid-argument-type]
 
     def test_set_seed(self, model: Model) -> None:
         """Verifies that seed nodes are created by set_seed."""
@@ -1134,8 +1134,10 @@ class TestSample:
         # basic plausibility checks for sampling from the correct distribution
         # this is not a tough check though.
         sigma = model.vars["sigma"]
-        sigma_mean = sigma.dist_node.init_dist().mean()  # type: ignore
-        sigma_std = sigma.dist_node.init_dist().stddev()  # type: ignore
+        sigma_dist = sigma.dist_node
+        assert sigma_dist is not None
+        sigma_mean = sigma_dist.init_dist().mean()
+        sigma_std = sigma_dist.init_dist().stddev()
         assert samples["sigma"].mean() == pytest.approx(sigma_mean, abs=0.1)
         assert samples["sigma"].std() == pytest.approx(sigma_std, abs=0.1)
 
