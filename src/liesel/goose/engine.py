@@ -32,6 +32,7 @@ from .pytree import as_strong_pytree, register_dataclass_as_pytree
 from .types import (
     Array,
     GeneratedQuantity,
+    Kernel,
     KernelState,
     KeyArray,
     ModelInterface,
@@ -44,6 +45,8 @@ from .types import (
 
 logger = logging.getLogger(__name__)
 
+type KernelClass = type[Kernel[Any, Any, Any]]
+
 
 class KernelErrorLog(NamedTuple):
     """
@@ -55,7 +58,7 @@ class KernelErrorLog(NamedTuple):
     """
 
     kernel_ident: str
-    kernel_cls: Option[type]  # needed to use the error book
+    kernel_cls: Option[KernelClass]  # needed to use the error book
 
     transition: np.ndarray
     """1-D array (time)."""
@@ -149,7 +152,7 @@ class SamplingResults:
     is_none(), if monitoring was not explicitly requested.
     """
 
-    kernel_classes: Option[dict[str, type]]
+    kernel_classes: Option[dict[str, KernelClass]]
     """
     Optional map of kernel identifier to the respective kernel type.
     """
@@ -513,7 +516,9 @@ class Engine:
             gqs = None
 
         kernels = self._kernel_sequence.get_kernels()
-        kernels_cls: dict[str, type] = {ker.identifier: type(ker) for ker in kernels}
+        kernels_cls: dict[str, KernelClass] = {
+            ker.identifier: type(ker) for ker in kernels
+        }
 
         kernels_by_position: dict[str, str] = dict()
         for kernel in kernels:
@@ -651,8 +656,9 @@ class Engine:
             def count_non_zero_error_codes(tis: TransitionInfos):
                 cts = {}
                 for kernel_id, ti in tis.items():
-                    nzero = jnp.sum(ti.error_code != 0, axis=1)
-                    ntrans = ti.error_code.shape[1]  # type: ignore
+                    error_code = jnp.asarray(ti.error_code)
+                    nzero = jnp.sum(error_code != 0, axis=1)
+                    ntrans = error_code.shape[1]
                     cts[kernel_id] = (nzero, ntrans)
                 return cts
 
