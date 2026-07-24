@@ -403,7 +403,7 @@ class TestVarBiject:
         log_scale = lsl.Value(1.0)
         scale = lsl.Var.new_calc(jnp.exp, log_scale)
         with pytest.raises(TypeError):
-            scale.bijected_var = log_scale
+            setattr(scale, "bijected_var", log_scale)
 
     def test_bijected_var_is_no_input(self):
         log_scale = lsl.Var(1.0)
