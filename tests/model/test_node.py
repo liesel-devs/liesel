@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 import tensorflow_probability.substrates.jax.distributions as jtfd
 import tensorflow_probability.substrates.numpy.distributions as tfd
+from networkx.exception import NetworkXUnfeasible
 
 from liesel.model.model import Model
 from liesel.model.nodes import (
@@ -329,7 +330,7 @@ def test_transient_calculator_kwinput_manipulation() -> None:
     calc.set_inputs(y=Value(1))
 
     with pytest.raises(RuntimeError):
-        calc.value
+        _ = calc.value
 
 
 @pytest.mark.parametrize("Calc", [Calc, TransientCalc])
@@ -385,7 +386,7 @@ def test_transient_calculator_error_in_update() -> None:
 
     calc = TransientCalc(update_fn, x=x)
     with pytest.raises(RuntimeError):
-        calc.value
+        _ = calc.value
 
 
 def test_calculator__update_on_init_error(local_caplog) -> None:
@@ -823,7 +824,7 @@ class TestDistSetitem:
         b = Var(2.0, a)
         a["loc"] = a
 
-        with pytest.raises(Exception):
+        with pytest.raises(NetworkXUnfeasible):
             Model([b])
 
     def test_replacing_keyword_input_leads_to_correct_log_prob(self):
@@ -995,7 +996,7 @@ class TestCalcSetItem:
 
         x[0] = x
 
-        with pytest.raises(Exception):
+        with pytest.raises(NetworkXUnfeasible):
             Model([x])
 
     def test_variable_length_args_cannot_be_extended_by_setitem(self):
