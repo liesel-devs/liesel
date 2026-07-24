@@ -70,10 +70,9 @@ def _make_error_summary(
         krnl_summary: dict[int, ErrorSummaryForOneCode] = {}
         for key, count in counter_dict.items():
             ec = key
-            # type ignore is ok since the type must implement the kernel protocol.
             error_msg = kel.kernel_cls.map_or(
                 "",
-                lambda krn_cls: krn_cls.error_book[ec],  # type: ignore
+                lambda krn_cls: krn_cls.error_book[ec],
             )
             krnl_summary[ec] = ErrorSummaryForOneCode(ec, error_msg, count, None)
 
