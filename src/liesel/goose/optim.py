@@ -599,7 +599,7 @@ def optim_flat(
     # ---------------------------------------------------------------------------------
     # Initialize while loop carry dictionary
 
-    init_val: dict[str, Any] = dict()
+    init_val: dict[str, Any] = {}
     init_val["while_i"] = 0
     init_val["history"] = history
     init_val["position"] = position
@@ -821,7 +821,7 @@ def history_to_df(history: Mapping[str, Any]) -> pd.DataFrame:
     """
     Turns a :attr:`.OptimResult.history` dictionary into a ``pandas.DataFrame``.
     """
-    data: dict[str, Array] = dict()
+    data: dict[str, Array] = {}
 
     position_history = history.get("position", None)
     tracked_history = history.get("tracked", None)
