@@ -5,13 +5,12 @@ A Rust-inspired Option type.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Generic, TypeVar
+from typing import TypeVar
 
-T = TypeVar("T")
 U = TypeVar("U")
 
 
-class Option(Generic[T]):
+class Option[T]:
     """
     An Option type inspired by the Rust standard library.
 
