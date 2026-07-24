@@ -267,12 +267,12 @@ class GeneratedQuantity(Protocol):
     error_code: int
 
 
-TGeneratedQuantity = TypeVar(
-    "TGeneratedQuantity", bound=GeneratedQuantity, covariant=True
+TGeneratedQuantity_co = TypeVar(
+    "TGeneratedQuantity_co", bound=GeneratedQuantity, covariant=True
 )
 
 
-class QuantityGenerator(Protocol[TGeneratedQuantity]):
+class QuantityGenerator(Protocol[TGeneratedQuantity_co]):
     """
     Protocol for a class that calculates a quantity based on the model
     state and a random seed.
@@ -303,7 +303,7 @@ class QuantityGenerator(Protocol[TGeneratedQuantity]):
         prng_key: KeyArray,
         model_state: ModelState,
         epoch: EpochState,
-    ) -> TGeneratedQuantity:
+    ) -> TGeneratedQuantity_co:
         """
         Generates a new quantity based on the model and PRNG state.
 
