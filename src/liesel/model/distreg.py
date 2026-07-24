@@ -245,7 +245,9 @@ class DistRegBuilder(GraphBuilder):
         self._distributional_parameters[name] = parameter_var
 
         dist_node = self.response.dist_node
-        dist_node.set_inputs(**self._distributional_parameters)  # type: ignore
+        if dist_node is None:
+            raise RuntimeError("Response has no distribution.")
+        dist_node.set_inputs(**self._distributional_parameters)
 
         self.add(predictor_var, parameter_var)
         return self

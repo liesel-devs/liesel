@@ -51,7 +51,9 @@ class TestDistRegBuilder:
         )
 
         assert "loc" in drb._distributional_parameters
-        assert "loc" in drb.response.dist_node.kwinputs  # type: ignore
+        dist_node = drb.response.dist_node
+        assert dist_node is not None
+        assert "loc" in dist_node.kwinputs
 
     def test_add_p_smooth(self, y, X) -> None:
         drb = (
