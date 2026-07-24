@@ -50,7 +50,7 @@ class Chain(Protocol[TPyTree]):
         raise NotImplementedError
 
 
-class EpochChain(Chain[TPyTree]):
+class EpochChain(Chain[TPyTree], Protocol[TPyTree]):
     """
     An ``EpochChain`` is a :class:`.Chain` with an associated :class:`.EpochConfig`.
 
