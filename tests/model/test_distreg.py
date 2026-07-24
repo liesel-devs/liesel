@@ -219,7 +219,7 @@ class TestDistRegMCMC:
         model = drb.build_model()
         ebuilder = dr.dist_reg_mcmc(model, 42, 2)
         assert len(ebuilder.kernels) == 2
-        assert all([isinstance(k, gs.IWLSKernel) for k in ebuilder.kernels])
+        assert all(isinstance(k, gs.IWLSKernel) for k in ebuilder.kernels)
 
     def test_dist_reg_mcmc_build_p_smooth(self, drb) -> None:
         """
