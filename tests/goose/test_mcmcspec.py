@@ -214,8 +214,8 @@ class TestLieselMCMC:
         mcmc = gs.LieselMCMC(model)
         with local_caplog() as caplog:
             mcmc.get_engine_builder(seed=1, num_chains=4)
-            caplog.records[0].levelno == logging.WARNING
-            "No inference specification" in caplog.records[0].msg
+            assert caplog.records[0].levelno == logging.WARNING
+            assert "No inference specification" in caplog.records[0].msg
 
         mu = lsl.Var.new_param(
             0.0,
@@ -229,7 +229,7 @@ class TestLieselMCMC:
         mcmc = gs.LieselMCMC(model)
         with local_caplog() as caplog:
             mcmc.get_engine_builder(seed=1, num_chains=4)
-            len(caplog.records) == 0
+            assert len(caplog.records) == 0
 
         mu = lsl.Var.new_param(
             0.0,
@@ -248,7 +248,7 @@ class TestLieselMCMC:
         mcmc = gs.LieselMCMC(model)
         with local_caplog() as caplog:
             mcmc.get_engine_builder(seed=1, num_chains=4)
-            len(caplog.records) == 2
+            assert len(caplog.records) == 2
 
     def test_engine(self):
         mu = lsl.Var.new_param(
