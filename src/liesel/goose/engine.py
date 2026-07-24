@@ -352,7 +352,10 @@ class SamplingResults:
             error_codes: np.ndarray = cast(np.ndarray, tis[ker_name].error_code)[
                 :, mask
             ]
-            cls = self.kernel_classes.map(lambda d: d[ker_name])
+            if self.kernel_classes.is_some():
+                cls = Option(self.kernel_classes.unwrap()[ker_name])
+            else:
+                cls = Option(None)
             error_log[ker_name] = KernelErrorLog(ker_name, cls, transition, error_codes)
         return Option(error_log)
 
@@ -416,7 +419,7 @@ class Engine:
         # fetch kernels' position keys and add them automatically to track them
         # in the position chain
         self._history_required_for_tuning = any(
-            [ker.needs_history for ker in self._kernel_sequence._kernels]
+            ker.needs_history for ker in self._kernel_sequence._kernels
         )  # FIXME: use of private field
 
         self._prng_key = seeds
@@ -520,7 +523,7 @@ class Engine:
             ker.identifier: type(ker) for ker in kernels
         }
 
-        kernels_by_position: dict[str, str] = dict()
+        kernels_by_position: dict[str, str] = {}
         for kernel in kernels:
             kernels_by_position.update(
                 {key: kernel.identifier for key in kernel.position_keys}
@@ -741,7 +744,7 @@ class Engine:
             # minimize transition infos if requested
             tinfos = out.infos
             if self._minimize_transition_infos:
-                for id in tinfos.keys():
+                for id in tinfos:
                     tinfos[id] = tinfos[id].minimize()
 
             ks = None
