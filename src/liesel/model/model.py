@@ -68,9 +68,7 @@ def _transform_back(var_transformed: Var) -> Calc:
     """
 
     if var_transformed.dist_node is None:
-        raise RuntimeError(
-            f"{repr(var_transformed)} must have a transformed distribution"
-        )
+        raise RuntimeError(f"{var_transformed!r} must have a transformed distribution")
 
     transformed_distribution = var_transformed.dist_node.distribution
 
@@ -101,9 +99,7 @@ def _set_weak_var_value(var: Var, value: Array) -> None:
     outdated too.
     """
     if isinstance(var.value_node, TransientNode):
-        raise RuntimeError(
-            f"{repr(var)} is weak and transient, cannot set cached value"
-        )
+        raise RuntimeError(f"{var!r} is weak and transient, cannot set cached value")
 
     var.value_node.state = NodeState(value, False)
 
@@ -441,8 +437,7 @@ class GraphBuilder:
 
             if group.name in old and group is not old[group.name]:
                 raise RuntimeError(
-                    f"Group with name {repr(group.name)} already exists "
-                    "in graph builder"
+                    f"Group with name {group.name!r} already exists in graph builder"
                 )
 
             self.add(*group.nodes_and_vars.values())
@@ -521,7 +516,7 @@ class GraphBuilder:
 
         for node in nodes:
             if node.name.startswith("_model") and not node.name.endswith("_seed"):
-                raise RuntimeError(f"{repr(node)} has reserved name '_model*'")
+                raise RuntimeError(f"{node!r} has reserved name '_model*'")
 
         gb = self.copy()
 
@@ -579,7 +574,7 @@ class GraphBuilder:
 
         for node in nodes:
             if node.name.startswith("_model") and not node.name.endswith("_seed"):
-                raise RuntimeError(f"{repr(node)} has reserved name '_model*'")
+                raise RuntimeError(f"{node!r} has reserved name '_model*'")
 
         gb = self.copy()
 
@@ -665,7 +660,7 @@ class GraphBuilder:
                 converted = jax.tree.map(lambda x: x.converted, wrappers)
 
                 if any(jax.tree_util.tree_flatten(converted)[0]):
-                    logger.info(f"Converted dtype of {repr(node)}.value")
+                    logger.info(f"Converted dtype of {node!r}.value")
             except AttributeError:
                 pass
 
@@ -831,8 +826,8 @@ class GraphBuilder:
         if old.dist_node:
             if not new.dist_node:
                 raise RuntimeError(
-                    f"Cannot replace {repr(old)} with distribution "
-                    f"with {repr(new)} without distribution"
+                    f"Cannot replace {old!r} with distribution "
+                    f"with {new!r} without distribution"
                 )
 
             self.replace_node(old.dist_node, new.dist_node)
@@ -1076,9 +1071,7 @@ class Model:
 
         return self
 
-    def replace(
-        self, old: str | Var, new: Node | Var | float | int | jax.Array
-    ) -> Self:
+    def replace(self, old: str | Var, new: Node | Var | float | jax.Array) -> Self:
         """
         Replaces the ``old`` with the ``new`` node or variable.
 
@@ -2908,7 +2901,7 @@ class Model:
                         var.value = value
                 else:
                     if not isinstance(node, Value):
-                        raise AttributeError(f"Cannot set value of {repr(node)}")
+                        raise AttributeError(f"Cannot set value of {node!r}")
                     node.value = value
         finally:
             # restore original auto_update setting

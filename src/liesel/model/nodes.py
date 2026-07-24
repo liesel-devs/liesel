@@ -45,7 +45,6 @@ __all__ = [
     "Array",
     "Bijector",
     "Calc",
-    "Value",
     "Dist",
     "Distribution",
     "Group",
@@ -56,6 +55,7 @@ __all__ = [
     "TransientDist",
     "TransientIdentity",
     "TransientNode",
+    "Value",
     "Var",
 ]
 
@@ -101,7 +101,7 @@ def in_model_method(fn):
     def wrapped(self, *args, **kwargs):
         if not self.model:
             raise RuntimeError(
-                f"{repr(self)} is not part of a model, cannot call {fn.__name__}()"
+                f"{self!r} is not part of a model, cannot call {fn.__name__}()"
             )
         return fn(self, *args, **kwargs)
 
@@ -113,7 +113,7 @@ def in_model_getter(fn):
     def wrapped(self, *args, **kwargs):
         if not self.model:
             raise RuntimeError(
-                f"{repr(self)} is not part of a model, cannot call '{fn.__name__}'"
+                f"{self!r} is not part of a model, cannot call '{fn.__name__}'"
             )
         return fn(self, *args, **kwargs)
 
@@ -125,7 +125,7 @@ def no_model_method(fn):
     def wrapped(self, *args, **kwargs):
         if self.model:
             raise RuntimeError(
-                f"{repr(self)} is part of a model, cannot call {fn.__name__}()"
+                f"{self!r} is part of a model, cannot call {fn.__name__}()"
             )
         return fn(self, *args, **kwargs)
 
@@ -137,7 +137,7 @@ def no_model_setter(fn):
     def wrapped(self, *args, **kwargs):
         if self.model:
             raise RuntimeError(
-                f"{repr(self)} is part of a model, cannot set '{fn.__name__}'"
+                f"{self!r} is part of a model, cannot set '{fn.__name__}'"
             )
         return fn(self, *args, **kwargs)
 
@@ -149,7 +149,7 @@ def changes_model_graph(fn):
     def wrapped(self, *args, **kwargs):
         if self.model and self.model.locked:
             raise RuntimeError(
-                f"{repr(self)} is part of a locked model, cannot call {fn.__name__}(). "
+                f"{self!r} is part of a locked model, cannot call {fn.__name__}(). "
                 "To allow for changes to the model, you can set the Model.locked flag "
                 "to False. "
                 "ATTENTION: Note that, from v0.5, the default state for models will "
@@ -295,14 +295,14 @@ class Node(ABC):
 
     def _set_model(self, model: Model) -> Node:
         if self.model:
-            raise RuntimeError(f"{repr(self)} can only be part of one model")
+            raise RuntimeError(f"{self!r} can only be part of one model")
 
         self._model = weakref.ref(model)
         return self
 
     def _set_var(self, var: Var) -> Node:
         if self.var:
-            raise RuntimeError(f"{repr(self)} can only be part of one var")
+            raise RuntimeError(f"{self!r} can only be part of one var")
 
         self._var = var
         return self
@@ -808,8 +808,6 @@ class Data(Value):
         :class:`.Value`.
     """
 
-    pass
-
 
 class Calc(Node):
     """
@@ -928,7 +926,7 @@ class Calc(Node):
             except Exception as e:
                 logger.warning(
                     f"{self} was not updated during initialization, because the"
-                    f" following exception occured: {repr(e)}. See debug log for the"
+                    f" following exception occured: {e!r}. See debug log for the"
                     " full traceback."
                 )
                 logger.debug(
@@ -1134,9 +1132,7 @@ class Dist(Node):
     @changes_model_graph
     def at(self, at: Node | None):
         if self.var and at is not self.var.var_value_node:
-            raise RuntimeError(
-                f"{repr(self)} is part of a var, cannot set property `at`"
-            )
+            raise RuntimeError(f"{self!r} is part of a var, cannot set property `at`")
 
         self._at = at
 
@@ -1175,7 +1171,7 @@ class Dist(Node):
     def update(self) -> Dist:
         if not self.at:
             raise RuntimeError(
-                f"{repr(self)} cannot evaluate log-prob, property `at` not set"
+                f"{self!r} cannot evaluate log-prob, property `at` not set"
             )
 
         log_prob = self.init_dist().log_prob(self.at.value)
@@ -1523,7 +1519,7 @@ class TransientDist(TransientNode, Dist):
     def value(self) -> Any:
         if not self.at:
             raise RuntimeError(
-                f"{repr(self)} cannot evaluate log-prob, property `at` not set"
+                f"{self!r} cannot evaluate log-prob, property `at` not set"
             )
 
         log_prob = self.init_dist().log_prob(self.at.value)
@@ -1710,10 +1706,9 @@ class Var:
     """
 
     __slots__ = (
-        "info",
-        "inference",
         "_auto_transform",
         "_bijected_var",
+        "_convert",
         "_dist_node",
         "_groups",
         "_name",
@@ -1722,7 +1717,8 @@ class Var:
         "_role",
         "_value_node",
         "_var_value_node",
-        "_convert",
+        "inference",
+        "info",
     )
 
     def __init__(
@@ -2054,7 +2050,7 @@ class Var:
         2.7182817
 
         .. _docs: https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html
-        """  # noqa: E501
+        """
 
         if convert_inputs == "default":
             convert_inputs = cls.convert_value
@@ -2785,7 +2781,7 @@ class Var:
     def value(self, value: Any):
         value_node = self.value_node
         if not isinstance(value_node, Value):
-            raise RuntimeError(f"{repr(self)} is weak, cannot set value")
+            raise RuntimeError(f"{self!r} is weak, cannot set value")
 
         value_node.value = value
 
@@ -2806,7 +2802,7 @@ class Var:
         if value_node.model:
             if value_node.model is not self.model:
                 raise RuntimeError(
-                    f"{repr(value_node)} and {self} must be part of no "
+                    f"{value_node!r} and {self} must be part of no "
                     "model, or the same model."
                 )
 
@@ -3516,8 +3512,7 @@ class Group:
         for member in self._nodes_and_vars.values():
             if name in member.groups:
                 raise RuntimeError(
-                    f"{repr(member)} is already a member of a group "
-                    f"with the name {repr(name)}"
+                    f"{member!r} is already a member of a group with the name {name!r}"
                 )
             member._groups[name] = self
 

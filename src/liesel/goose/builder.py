@@ -404,8 +404,8 @@ class EngineBuilder:
     def add_adaptation(
         self,
         duration: int,
-        init: float | int = 0.1,
-        term: float | int = 0.2,
+        init: float = 0.1,
+        term: float = 0.2,
         base: int = 25,
         thinning: int = 1,
     ):

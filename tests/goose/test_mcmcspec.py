@@ -3,10 +3,10 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
-import jax.random as random
 import pytest
 import tensorflow_probability.substrates.jax.bijectors as tfb
 import tensorflow_probability.substrates.jax.distributions as tfd
+from jax import random
 
 import liesel.goose as gs
 import liesel.model as lsl

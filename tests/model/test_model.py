@@ -272,7 +272,6 @@ class TestModel:
         """
         Verifies that Model.update() updates the model in the correct topological order.
         """
-        ...
 
     def test_log_probs(self, model: Model) -> None:
         assert model.log_prior.shape == ()

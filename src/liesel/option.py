@@ -51,7 +51,7 @@ class Option[T]:
         return self.value
 
     def unwrap(self) -> T:
-        return self.expect(f"Trying to unwrap None from {repr(self)}")
+        return self.expect(f"Trying to unwrap None from {self!r}")
 
     def unwrap_or(self, default: T) -> T:
         if self.value is None:
@@ -80,7 +80,7 @@ class Option[T]:
             )
 
     def __repr__(self) -> str:
-        return f"Option({repr(self.value)})"
+        return f"Option({self.value!r})"
 
     def __str__(self) -> str:
         return f"Option({self.value})"

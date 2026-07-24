@@ -714,9 +714,9 @@ class Summary:
             apdf_md = apdf.to_markdown()
             error_md = error_df.to_markdown()
         except ImportError:
-            param_md = f"```\n{repr(param_df)}\n```"
-            apdf_md = f"```\n{repr(apdf)}\n```"
-            error_md = f"```\n{repr(error_df)}\n```"
+            param_md = f"```\n{param_df!r}\n```"
+            apdf_md = f"```\n{apdf!r}\n```"
+            error_md = f"```\n{error_df!r}\n```"
 
         md = "\n\n**Parameter summary:**\n\n" + param_md
 

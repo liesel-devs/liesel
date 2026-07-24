@@ -37,7 +37,7 @@ class DistRegBuilder(GraphBuilder):
     @property
     def response(self) -> Var:
         """The response node."""
-        return self._response.expect(f"No response in {repr(self)}")
+        return self._response.expect(f"No response in {self!r}")
 
     def _smooth_name(self, name: str | None, predictor: str, prefix: str) -> str:
         """Generates a name for a smooth if the ``name`` argument is ``None``."""
@@ -55,8 +55,8 @@ class DistRegBuilder(GraphBuilder):
 
         if name in other_names:
             raise RuntimeError(
-                f"Smooth {repr(name)} already exists in {repr(self)} "
-                f"for predictor {repr(predictor)}"
+                f"Smooth {name!r} already exists in {self!r} "
+                f"for predictor {predictor!r}"
             )
 
         return name

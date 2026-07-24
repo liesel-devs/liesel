@@ -12,13 +12,13 @@ from .types import Position
 setup_logger()
 
 __all__ = [
+    "Position",
     "__version__",
     "__version_info__",
     "bijectors",
     "distributions",
     "goose",
     "model",
-    "Position",
     "reset_logger",
     "setup_logger",
 ]

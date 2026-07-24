@@ -169,7 +169,7 @@ class SamplingResults:
         position.
         """
         opt: Option[Position] = self.positions.combine_all()
-        return opt.expect(f"No samples in {repr(self)}")
+        return opt.expect(f"No samples in {self!r}")
 
     def get_warmup_samples(self) -> Position:
         """
@@ -179,7 +179,7 @@ class SamplingResults:
         opt = self.positions.combine_filtered(
             lambda config: EpochType.is_warmup(config.type)
         )
-        return opt.expect(f"No warmup samples in {repr(self)}")
+        return opt.expect(f"No warmup samples in {self!r}")
 
     def get_adaptation_samples(self) -> Position:
         """
@@ -189,7 +189,7 @@ class SamplingResults:
         opt = self.positions.combine_filtered(
             lambda config: EpochType.is_adaptation(config.type)
         )
-        return opt.expect(f"No adaptation samples in {repr(self)}")
+        return opt.expect(f"No adaptation samples in {self!r}")
 
     def get_posterior_samples(self) -> Position:
         """
@@ -199,7 +199,7 @@ class SamplingResults:
         opt = self.positions.combine_filtered(
             lambda config: config.type == EpochType.POSTERIOR
         )
-        return opt.expect(f"No posterior samples in {repr(self)}")
+        return opt.expect(f"No posterior samples in {self!r}")
 
     def get_kernels_by_pos_key(self) -> dict[str, str]:
         """
@@ -208,7 +208,7 @@ class SamplingResults:
         The dict has the format ``{"position name": "kernel identifier"}``.
         """
         return self.kernels_by_pos_key.expect(
-            f"No position-kernel associations in {repr(self)}"
+            f"No position-kernel associations in {self!r}"
         )
 
     def get_pos_keys_by_kernels(self) -> dict[str, list[str]]:
@@ -234,7 +234,7 @@ class SamplingResults:
         opt = self.transition_infos.combine_filtered(
             lambda config: config.type == EpochType.POSTERIOR
         )
-        return opt.expect(f"No posterior transition infos in {repr(self)}")
+        return opt.expect(f"No posterior transition infos in {self!r}")
 
     def get_warmup_transition_infos(self) -> dict[str, TransitionInfo]:
         """
@@ -244,7 +244,7 @@ class SamplingResults:
         opt = self.transition_infos.combine_filtered(
             lambda config: EpochType.is_warmup(config.type)
         )
-        return opt.expect(f"No warmup transition infos in {repr(self)}")
+        return opt.expect(f"No warmup transition infos in {self!r}")
 
     def get_warmup_acceptance_probabilities(self) -> dict[str, Array]:
         """
@@ -339,10 +339,10 @@ class SamplingResults:
             if opt.is_none():
                 return Option(None)
             else:
-                tis = opt.expect(f"No posterior transition infos in {repr(self)}")
+                tis = opt.expect(f"No posterior transition infos in {self!r}")
         else:
             opt = self.transition_infos.combine_all()
-            tis = opt.expect(f"No transition infos in {repr(self)}")
+            tis = opt.expect(f"No transition infos in {self!r}")
 
         error_log: ErrorLog = {}
         for ker_name in tis:
