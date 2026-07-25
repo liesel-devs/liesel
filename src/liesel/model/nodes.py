@@ -10,7 +10,6 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Hashable, Iterable, Sequence
 from functools import wraps
 from itertools import chain
-from types import MappingProxyType
 from typing import IO, TYPE_CHECKING, Any, Literal, NamedTuple, Self, TypeGuard, TypeVar
 
 import jax
@@ -22,6 +21,7 @@ import tensorflow_probability.substrates.numpy.bijectors as nb
 import tensorflow_probability.substrates.numpy.distributions as nd
 
 from ..distributions.nodist import NoDistribution
+from ._mapping import _KeyCompletableMapping, _KeyCompletableProperty
 from .names import random_name
 from .viz import plot_nodes, plot_vars
 
@@ -322,20 +322,20 @@ class Node(ABC):
 
         return self
 
-    @property
-    def groups(self) -> MappingProxyType[str, Group]:
+    @_KeyCompletableProperty
+    def groups(self) -> _KeyCompletableMapping[Group]:
         """The groups that this node is a part of."""
-        return MappingProxyType(self._groups)
+        return _KeyCompletableMapping(self._groups)
 
     @property
     def inputs(self) -> tuple[Node, ...]:
         """The non-keyword input nodes."""
         return self._inputs
 
-    @property
-    def kwinputs(self) -> MappingProxyType[str, Node]:
+    @_KeyCompletableProperty
+    def kwinputs(self) -> _KeyCompletableMapping[Node]:
         """The keyword input nodes."""
-        return MappingProxyType(self._kwinputs)
+        return _KeyCompletableMapping(self._kwinputs)
 
     @property
     def model(self) -> Model | None:
@@ -2576,10 +2576,10 @@ class Var:
         dist_node.at = self.var_value_node  # type: ignore  # unfrozen
         self._dist_node = dist_node
 
-    @property
-    def groups(self) -> MappingProxyType[str, Group]:
+    @_KeyCompletableProperty
+    def groups(self) -> _KeyCompletableMapping[Group]:
         """The groups that this variable is a part of."""
-        return MappingProxyType(self._groups)
+        return _KeyCompletableMapping(self._groups)
 
     @property
     def has_dist(self) -> bool:
@@ -3478,9 +3478,8 @@ class Group:
 
     See Also
     --------
-    * :attr:`.Node.groups` and :attr:`.Var.groups` are :obj:`MappingProxyType` objects
-      (basically read-only dictionaries) of the groups whose member the respective
-      object is.
+    * :attr:`.Node.groups` and :attr:`.Var.groups` are read-only mappings of the
+      groups whose member the respective object is.
     * :meth:`.GraphBuilder.groups` and :meth:`.Model.groups` are methods that collect
       and return all groups within the graph/model.
 
@@ -3566,20 +3565,20 @@ class Group:
 
         return model_state[value_name].value
 
-    @property
-    def vars(self) -> MappingProxyType[str, Var]:
+    @_KeyCompletableProperty
+    def vars(self) -> _KeyCompletableMapping[Var]:
         """A mapping of the variables in the group with their names as keys."""
-        return MappingProxyType(self._vars)
+        return _KeyCompletableMapping(self._vars)
 
-    @property
-    def nodes(self) -> MappingProxyType[str, Node]:
+    @_KeyCompletableProperty
+    def nodes(self) -> _KeyCompletableMapping[Node]:
         """A mapping of the nodes in the group with their names as keys."""
-        return MappingProxyType(self._nodes)
+        return _KeyCompletableMapping(self._nodes)
 
-    @property
-    def nodes_and_vars(self) -> MappingProxyType[str, Node | Var]:
+    @_KeyCompletableProperty
+    def nodes_and_vars(self) -> _KeyCompletableMapping[Node | Var]:
         """A mapping of all group members with their names as keys."""
-        return MappingProxyType(self._nodes_and_vars)
+        return _KeyCompletableMapping(self._nodes_and_vars)
 
     def __contains__(self, key) -> bool:
         return key in self._nodes_and_vars
