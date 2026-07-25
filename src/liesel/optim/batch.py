@@ -14,6 +14,8 @@ from ._log_lik import scaled_common_log_lik as _scaled_common_log_lik
 from ._log_lik import scaled_liesel_log_lik as _scaled_liesel_log_lik
 from ._model_utils import position_key_groups_from_model
 from .split import (
+    PositionSplit,
+    PositionSplitManager,
     _count_likelihood_contributions,
     _has_custom_model_log_lik,
     _observed_dist_infos,
@@ -305,6 +307,48 @@ class Batches:
             return jnp.arange(self.n_full_batches * self.batch_size) % self.axis_size
 
         return jnp.arange(self.axis_size)
+
+    @classmethod
+    def from_split(
+        cls,
+        split: PositionSplit | PositionSplitManager,
+        batch_size: int | None,
+        shuffle: bool = True,
+        batch_axes: dict[str, int] | None = None,
+        default_batch_axis: int = 0,
+        mode: Literal["strict", "resample"] = "resample",
+        epoch_size: Literal["max", "min"] | int = "max",
+    ) -> Batches | BatchManager:
+        """Build training batches directly from a completed position split."""
+        if isinstance(split, PositionSplitManager):
+            children = [
+                cls(
+                    position_keys=child.position_keys,
+                    axis_size=child.train_axis_size,
+                    batch_size=batch_size,
+                    shuffle=False if batch_size is None else shuffle,
+                    batch_axes=batch_axes,
+                    default_batch_axis=default_batch_axis,
+                    sample_size=child.train_sample_size,
+                    sample_with_replacement=(
+                        mode == "resample"
+                        and batch_size is not None
+                        and batch_size > child.train_axis_size
+                    ),
+                )
+                for child in split.splits
+            ]
+            return BatchManager(children, mode=mode, epoch_size=epoch_size)
+
+        return cls(
+            position_keys=split.position_keys,
+            axis_size=split.train_axis_size,
+            batch_size=batch_size,
+            shuffle=False if batch_size is None else shuffle,
+            batch_axes=batch_axes,
+            default_batch_axis=default_batch_axis,
+            sample_size=split.train_sample_size,
+        )
 
     @classmethod
     def from_model(

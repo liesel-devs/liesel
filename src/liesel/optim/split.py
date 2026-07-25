@@ -1066,8 +1066,7 @@ def _child_sample_sizes_from_totals(
         if total_axis_size == 0:
             if total_sample_size != 0.0:
                 raise ValueError(
-                    f"sample_sizes[{part!r}] must be zero when "
-                    f"{part}_axis_size == 0."
+                    f"sample_sizes[{part!r}] must be zero when {part}_axis_size == 0."
                 )
 
             for child_sizes in child_sample_sizes:
@@ -1708,9 +1707,14 @@ class SplitManager:
         if len(self.splits) == 0:
             raise ValueError("SplitManager requires at least one Split object.")
 
-        _validate_unique_position_keys(
-            [split.position_keys for split in self.splits], "splits"
-        )
+        groups = []
+        for split in self.splits:
+            if split.position_keys is None:
+                raise ValueError(
+                    "SplitManager children must define position_keys explicitly."
+                )
+            groups.append(split.position_keys)
+        _validate_unique_position_keys(groups, "splits")
         self._validate_split_availability("validation")
         self._validate_split_availability("test")
 
@@ -1824,6 +1828,7 @@ class SplitManager:
         """
         keys: list[str] = []
         for split in self.splits:
+            assert split.position_keys is not None
             keys.extend(split.position_keys)
         return keys
 
@@ -1918,7 +1923,8 @@ class Split:
     Parameters
     ----------
     position_keys
-        Names of position entries that should be split.
+        Names of position entries that should be split. If omitted,
+        :meth:`split_position` uses all keys in the supplied position.
     axis_size
         Number of observations along each split axis. Must be positive.
     validate_axis_size
@@ -1941,6 +1947,10 @@ class Split:
     sample_sizes
         Optional effective sample sizes passed to the resulting
         :class:`PositionSplit`.
+    keep_in_train
+        Positional row indices that must belong to the training partition. Reserved
+        rows count toward ``train_axis_size``; this controls membership, not order.
+        This is useful when a random split must retain rare categories in training.
 
     Attributes
     ----------
@@ -1997,8 +2007,8 @@ class Split:
     [[6, 7, 8]]
     """
 
-    position_keys: Sequence[str]
-    axis_size: int
+    position_keys: Sequence[str] | None = None
+    axis_size: int = 0
     validate_axis_size: int = 0
     test_axis_size: int = 0
     train_axis_size: int | None = None
@@ -2007,6 +2017,7 @@ class Split:
     shuffle: bool = False
     seed: jax.Array | int | None = None
     sample_sizes: SampleSizes | None = None
+    keep_in_train: Sequence[int] | None = None
 
     def __post_init__(self):
         if self.split_axes is None:
@@ -2017,7 +2028,9 @@ class Split:
         if self.axis_size <= 0:
             raise ValueError(f"{self.axis_size=} is <= 0, which is not allowed.")
 
-        if len(set(self.position_keys)) != len(self.position_keys):
+        if self.position_keys is not None and len(set(self.position_keys)) != len(
+            self.position_keys
+        ):
             raise ValueError(
                 f"Duplicate position_keys are not allowed: {list(self.position_keys)}"
             )
@@ -2051,6 +2064,25 @@ class Split:
                 f"exactly to {self.axis_size=}."
             )
 
+        if self.keep_in_train is None or len(self.keep_in_train) == 0:
+            reserved = jnp.asarray([], dtype=int)
+        else:
+            reserved = jnp.asarray(self.keep_in_train)
+            if reserved.ndim != 1 or not jnp.issubdtype(reserved.dtype, jnp.integer):
+                raise ValueError("keep_in_train must contain integer row indices.")
+            reserved = jnp.unique(reserved)
+
+        if bool(jnp.any((reserved < 0) | (reserved >= self.axis_size))):
+            raise ValueError(
+                f"keep_in_train indices must be between 0 and {self.axis_size - 1}."
+            )
+        if reserved.size > self._train_axis_size:
+            raise ValueError(
+                f"keep_in_train contains {reserved.size} rows, but train_axis_size is "
+                f"only {self._train_axis_size}."
+            )
+        self.keep_in_train = reserved.tolist()
+
         if self.shuffle:
             if isinstance(self.seed, jax.Array):
                 key = self.seed
@@ -2058,6 +2090,11 @@ class Split:
                 seed = int(time.time()) if self.seed is None else self.seed
                 key = jax.random.key(seed)
             self.indices = self.permute_indices(key)
+
+        reserved_mask = jnp.isin(self.indices, reserved)
+        self.indices = jnp.concatenate(
+            (self.indices[reserved_mask], self.indices[~reserved_mask])
+        )
 
     @property
     def _train_axis_size(self) -> int:
@@ -2344,6 +2381,9 @@ class Split:
         >>> split.validate["x"].tolist()
         [[3], [7]]
         """
+        if self.position_keys is None:
+            self.position_keys = list(position)
+
         train_position = {}
         validation_position = {}
         test_position = {}
