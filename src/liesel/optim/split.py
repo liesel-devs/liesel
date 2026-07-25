@@ -570,11 +570,12 @@ class PositionSplit:
         """
         normalized = _normalize_sample_sizes(sample_sizes)
 
-        for part, n_part in (
+        split_parts: tuple[tuple[SplitPart, int], ...] = (
             ("train", self.train_axis_size),
             ("validate", self.validate_axis_size),
             ("test", self.test_axis_size),
-        ):
+        )
+        for part, n_part in split_parts:
             if (
                 n_part > 0
                 and normalized is not None
@@ -625,11 +626,12 @@ class PositionSplit:
             )
 
         sizes: dict[SplitPart, int] = {}
-        for part, position, n_part in (
+        split_parts: tuple[tuple[SplitPart, Position, int], ...] = (
             ("train", self.train, self.train_axis_size),
             ("validate", self.validate, self.validate_axis_size),
             ("test", self.test, self.test_axis_size),
-        ):
+        )
+        for part, position, n_part in split_parts:
             if n_part == 0:
                 continue
 

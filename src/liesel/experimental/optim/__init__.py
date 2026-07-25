@@ -25,7 +25,6 @@ _SUBMODULES = (
     "state",
     "stop",
     "types",
-    "util",
     "vi",
 )
 
