@@ -16,10 +16,10 @@ from ._engine_utils import (
     _progress_print_rate,
     _validate_positive_int,
 )
-from .batch import Batches, BatchManager
+from .batch import Batches
 from .loss import Loss, NegLogProbLoss
 from .optimizer import LBFGS, Optimizer, OptimizerLike
-from .split import PositionSplit, PositionSplitManager
+from .split import PositionSplit
 from .stop import Stopper
 
 if TYPE_CHECKING:
@@ -284,36 +284,14 @@ class LieselOptim:
         if batches is not None:
             return batches
 
-        shuffle = False if batch_size is None else shuffle
-        if isinstance(self.split, PositionSplitManager):
-            children = [
-                Batches(
-                    position_keys=child.position_keys,
-                    axis_size=child.train_axis_size,
-                    batch_size=batch_size,
-                    shuffle=shuffle,
-                    batch_axes=split_axes,
-                    default_batch_axis=default_split_axis,
-                    sample_size=child.train_sample_size,
-                    sample_with_replacement=(
-                        mode == "resample"
-                        and batch_size is not None
-                        and batch_size > child.train_axis_size
-                    ),
-                )
-                for child in self.split.splits
-            ]
-            return BatchManager(children, mode=mode, epoch_size=epoch_size)
-
-        position_keys = self.split.position_keys or list(self.model.observed)
-        return Batches(
-            position_keys=position_keys,
-            axis_size=self.split.train_axis_size,
+        return Batches.from_split(
+            self.split,
             batch_size=batch_size,
             shuffle=shuffle,
             batch_axes=split_axes,
             default_batch_axis=default_split_axis,
-            sample_size=self.split.train_sample_size,
+            mode=mode,
+            epoch_size=epoch_size,
         )
 
     def _resolve_optimizers(

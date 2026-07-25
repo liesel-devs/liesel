@@ -45,6 +45,41 @@ def _matrix_obs_model(shape=(4, 8)):
 
 
 class TestSplit:
+    def test_split_position_infers_position_keys_when_omitted(self):
+        splitter = Split(axis_size=4, validate_axis_size=1)
+
+        split = splitter.split_position(
+            Position({"x": jnp.arange(4), "y": jnp.arange(4) + 10})
+        )
+
+        assert split.position_keys == ["x", "y"]
+        assert split.train["x"].tolist() == [0, 1, 2]
+        assert split.validate["y"].tolist() == [13]
+
+    def test_keep_in_train_reserves_rows_without_changing_split_sizes(self):
+        splitter = Split(
+            axis_size=10,
+            validate_axis_size=2,
+            test_axis_size=2,
+            keep_in_train=[8, 9],
+            shuffle=True,
+            seed=1,
+        )
+
+        assert {8, 9}.issubset(set(splitter.indices_train.tolist()))
+        assert splitter.indices_train.size == 6
+        assert splitter.indices_validate.size == 2
+        assert splitter.indices_test.size == 2
+        assert sorted(splitter.indices.tolist()) == list(range(10))
+
+    def test_keep_in_train_rejects_more_rows_than_training_size(self):
+        with pytest.raises(ValueError, match="train_axis_size"):
+            Split(
+                axis_size=5,
+                validate_axis_size=3,
+                keep_in_train=[0, 1, 2],
+            )
+
     def test_no_split(self):
         m = lsl.Var.new_param(0.0, name="m")
         x = lsl.Var.new_obs(
@@ -370,6 +405,10 @@ class TestPositionSplit:
 
 
 class TestSplitManager:
+    def test_rejects_children_with_deferred_position_keys(self):
+        with pytest.raises(ValueError, match="position_keys"):
+            SplitManager([Split(axis_size=3)])
+
     def test_combines_different_size_branches(self):
         manager = SplitManager(
             [

@@ -5,10 +5,61 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 from jax.random import key, uniform
 
 import liesel.model as lsl
-from liesel.optim import Batches, BatchManager
+from liesel.optim import Batches, BatchManager, PositionSplit, PositionSplitManager
+from liesel.optim.types import Position
 
 
 class TestBatches:
+    def test_from_split_builds_training_batches(self):
+        split = PositionSplit(
+            train=Position({"x": jnp.arange(6)}),
+            validate=Position({"x": jnp.arange(6, 8)}),
+            test=Position({}),
+            train_axis_size=6,
+            validate_axis_size=2,
+            test_axis_size=0,
+            sample_sizes={"train": 24},
+        )
+
+        batches = Batches.from_split(split, batch_size=2, shuffle=False)
+
+        assert isinstance(batches, Batches)
+        assert batches.position_keys == ["x"]
+        assert batches.axis_size == 6
+        assert batches.batch_size == 2
+        assert batches.sample_size == 24.0
+
+    def test_from_split_builds_batch_manager(self):
+        split = PositionSplitManager(
+            [
+                PositionSplit(
+                    Position({"x": jnp.arange(6)}),
+                    Position({}),
+                    Position({}),
+                    6,
+                    0,
+                    0,
+                ),
+                PositionSplit(
+                    Position({"y": jnp.arange(4)}),
+                    Position({}),
+                    Position({}),
+                    4,
+                    0,
+                    0,
+                ),
+            ]
+        )
+
+        batches = Batches.from_split(
+            split, batch_size=2, shuffle=False, mode="resample"
+        )
+
+        assert isinstance(batches, BatchManager)
+        assert batches.position_keys == ["x", "y"]
+        assert batches.axis_size == (6, 4)
+        assert batches.n_full_batches == 3
+
     def test_runs(self):
         Bi = Batches(["x"], axis_size=30, batch_size=4, shuffle=True)
         assert Bi.batch_indices.shape == (7, 4)
