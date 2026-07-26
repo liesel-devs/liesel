@@ -2239,9 +2239,9 @@ class Model:
         self,
         shape: Sequence[int],
         seed: jax.Array,
-        posterior_samples: dict[str, jax.typing.ArrayLike] | None = None,
+        posterior_samples: Position | None = None,
         fixed: Sequence[str] = (),
-        newdata: dict[str, jax.typing.ArrayLike] | None = None,
+        newdata: Position | None = None,
         dists: dict[str, Dist] | None = None,
     ) -> Position:
         """
@@ -2258,17 +2258,19 @@ class Model:
             See :mod:`jax.random` and \
             https://docs.jax.dev/en/latest/jep/9263-typed-keys.html for more details.
         posterior_samples
-            Dictionary of samples at which to evaluate predictions. All values of the \
-            dictionary are assumed to have two leading dimensions corresponding to \
-            ``(nchains, niteration)``.
+            Position of samples at which to evaluate predictions. All values are \
+            assumed to have two leading dimensions corresponding to \
+            ``(nchains, niteration)``. Values are converted with their model-specific \
+            converters before sampling.
         fixed
             The names of the nodes or variables to be excluded from the simulation. \
             By default, no nodes or variables are skipped.
         newdata
-            Dictionary of new data at which to produce samples. The keys should \
+            Position of new data at which to produce samples. The keys should \
             correspond to variable or node names in the model whose values should be \
-            set to the given values before sampling. If ``None`` \
-            (default), the current variable values are used.
+            set to the given values before sampling. Values are converted with their \
+            model-specific converters. If ``None`` (default), the current variable \
+            values are used.
         dists
             Can be used to provide a dictionary of variable names and :class:`.Dist` \
             instances to use in sampling. If ``None`` (default), samples are drawn for \
@@ -2285,7 +2287,9 @@ class Model:
             only sampled variables.
         """
 
-        posterior_samples = posterior_samples if posterior_samples is not None else {}
+        posterior_samples = (
+            posterior_samples if posterior_samples is not None else Position({})
+        )
 
         unique_sample_keys = set(posterior_samples)
         unique_newdata_keys = set(newdata) if newdata is not None else set()
@@ -2297,11 +2301,10 @@ class Model:
                 "Any key should be present in only one of these arguments."
             )
 
-        if posterior_samples is not None:
-            posterior_samples = jax.tree.map(jnp.asarray, posterior_samples)
+        posterior_samples = self.convert_position(posterior_samples, allow_unknown=True)
 
         if newdata is not None:
-            newdata = jax.tree.map(jnp.asarray, newdata)
+            newdata = self.convert_position(newdata)
         # Pre-processing
         # ------------------------------------------------------------------------------
         state_for_sampling = (
@@ -2470,7 +2473,7 @@ class Model:
         if not posterior_samples:
             draw_chains = jax.vmap(one_draw, in_axes=(None, 0), out_axes=0)
             # since we have no posterior samples, we use position={}
-            drawn_samples = draw_chains({}, seeds)
+            drawn_samples = draw_chains(Position({}), seeds)
 
             # return reshaped version of samples
             return Position(jax.tree.map(reshape, drawn_samples))
@@ -2483,9 +2486,9 @@ class Model:
 
         # filter samples to include only samples that belong to the model
         vars_and_nodes = list(self.vars) + list(self.nodes)
-        filtered_samples = {
-            k: v for k, v in posterior_samples.items() if k in vars_and_nodes
-        }
+        filtered_samples = Position(
+            {k: v for k, v in posterior_samples.items() if k in vars_and_nodes}
+        )
 
         try:
             drawn_samples = draw_samples(filtered_samples, seeds)

@@ -1166,9 +1166,12 @@ class TestSample:
 
         x_shape = model.vars["X"].value.shape
         x_new = tfd.Uniform(low=10.0, high=11.0).sample(x_shape, seed=rnd.key(9))
-        jitted_sample(shape=(1, 100), seed=rnd.key(1), newdata={"X": x_new})
+        jitted_sample(shape=(1, 100), seed=rnd.key(1), newdata=Position({"X": x_new}))
         jitted_sample(
-            shape=(1, 100), seed=rnd.key(1), newdata={"X": x_new}, fixed=("y")
+            shape=(1, 100),
+            seed=rnd.key(1),
+            newdata=Position({"X": x_new}),
+            fixed=("y"),
         )
 
     def test_sample_from_custom_dist(self, linreg: Model):
@@ -1333,6 +1336,44 @@ class TestSample:
         # to the elements of the sample shape for sample1
         assert samples2["y"].shape == (11, 2, 8, 100)
 
+    @pytest.mark.parametrize("argument", ["posterior_samples", "newdata"])
+    def test_sample_uses_configured_converter(self, argument: str) -> None:
+        class RawValue:
+            def __init__(self, value) -> None:
+                self.value = value
+
+        def convert(value):
+            if isinstance(value, RawValue):
+                value = value.value
+            return jnp.asarray(value)
+
+        x = Var.new_value(
+            0.0,
+            name="x",
+            convert=convert,
+        )
+        y = Var(
+            0.0,
+            Dist(tfd.Deterministic, loc=x),
+            name="y",
+        )
+        model = Model(y)
+
+        if argument == "posterior_samples":
+            samples = model.sample(
+                shape=(2,),
+                seed=rnd.key(8),
+                posterior_samples=Position({"x": RawValue([[3.0]])}),
+            )
+        else:
+            samples = model.sample(
+                shape=(2,),
+                seed=rnd.key(8),
+                newdata=Position({"x": RawValue(3.0)}),
+            )
+
+        assert samples["y"] == pytest.approx(3.0)
+
     def test_sample_at_newdata(self, linreg: Model):
         model = linreg
 
@@ -1346,7 +1387,7 @@ class TestSample:
         samples2 = model.sample(
             shape=(2, 8),
             seed=rnd.key(8),
-            newdata={"X": x_new},
+            newdata=Position({"X": x_new}),
         )
 
         assert not jnp.allclose(samples1["y"], samples2["y"])
@@ -1366,7 +1407,7 @@ class TestSample:
                 shape=(2, 8),
                 seed=rnd.key(8),
                 posterior_samples=samples1,
-                newdata={"X": x_new, "b": samples1["b"][0, 0, :]},
+                newdata=Position({"X": x_new, "b": samples1["b"][0, 0, :]}),
             )
 
     def test_sample_posterior_shape_of_posterior_samples(self, linreg: Model):

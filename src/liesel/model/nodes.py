@@ -3162,9 +3162,9 @@ class Var:
         self,
         shape: Sequence[int],
         seed: jax.Array,
-        posterior_samples: dict[str, jax.typing.ArrayLike] | None = None,
+        posterior_samples: Position | None = None,
         fixed: Sequence[str] = (),
-        newdata: dict[str, jax.typing.ArrayLike] | None = None,
+        newdata: Position | None = None,
         dists: dict[str, Dist] | None = None,
     ) -> Position:
         """
@@ -3181,17 +3181,19 @@ class Var:
             See :mod:`jax.random` and \
             https://docs.jax.dev/en/latest/jep/9263-typed-keys.html for more details.
         posterior_samples
-            Dictionary of samples at which to evaluate predictions. All values of the \
-            dictionary are assumed to have two leading dimensions corresponding to \
-            ``(nchains, niteration)``.
+            Position of samples at which to evaluate predictions. All values are \
+            assumed to have two leading dimensions corresponding to \
+            ``(nchains, niteration)``. Values are converted with their model-specific \
+            converters before sampling.
         fixed
             The names of the nodes or variables to be excluded from the simulation. \
             By default, no nodes or variables are skipped.
         newdata
-            Dictionary of new data at which to produce samples. The keys should \
+            Position of new data at which to produce samples. The keys should \
             correspond to variable or node names in the model whose values should be \
-            set to the given values before sampling. If ``None`` \
-            (default), the current variable values are used.
+            set to the given values before sampling. Values are converted with their \
+            model-specific converters. If ``None`` (default), the current variable \
+            values are used.
         dists
             Can be used to provide a dictionary of variable names and :class:`.Dist` \
             instances to use in sampling. If ``None`` (default), samples are drawn for \

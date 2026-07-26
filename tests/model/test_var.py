@@ -806,6 +806,36 @@ class TestVarSample:
         assert "sigma" in samples
         assert "b" in samples
 
+    def test_sample_uses_configured_converter(self) -> None:
+        class RawValue:
+            def __init__(self, value) -> None:
+                self.value = value
+
+        def convert(value):
+            if isinstance(value, RawValue):
+                value = value.value
+            return jnp.asarray(value)
+
+        x = lsl.Var.new_value(
+            0.0,
+            name="x",
+            convert=convert,
+        )
+        y = lsl.Var(
+            0.0,
+            lsl.Dist(tfp.distributions.Deterministic, loc=x),
+            name="y",
+        )
+        _ = lsl.Model(y)
+
+        samples = y.sample(
+            shape=(2,),
+            seed=jax.random.key(8),
+            newdata=lsl.Position({"x": RawValue(3.0)}),
+        )
+
+        assert samples["y"] == pytest.approx(3.0)
+
 
 class TestValueConversion:
     def test_default(self):
