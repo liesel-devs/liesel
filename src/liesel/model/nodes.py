@@ -70,6 +70,74 @@ def _unique_tuple[T: Hashable](*args: Iterable[T]) -> tuple[T, ...]:
     return tuple(dict.fromkeys(chain(*args)))
 
 
+def _conversion_values_equal(left: Any, right: Any) -> bool:
+    """Cheaply compare representative values from two conversion results."""
+    if left is right:
+        return True
+
+    left_leaves, left_structure = jax.tree_util.tree_flatten(left)
+    right_leaves, right_structure = jax.tree_util.tree_flatten(right)
+
+    if left_structure != right_structure or len(left_leaves) != len(right_leaves):
+        return False
+
+    for left_leaf, right_leaf in zip(left_leaves, right_leaves):
+        if left_leaf is right_leaf:
+            continue
+
+        try:
+            left_array = jnp.asarray(left_leaf)
+            right_array = jnp.asarray(right_leaf)
+        except (TypeError, ValueError):
+            try:
+                if not bool(left_leaf == right_leaf):
+                    return False
+            except (TypeError, ValueError):
+                # Some arbitrary Python objects do not provide scalar equality.
+                # This initialization check is deliberately best-effort.
+                continue
+        else:
+            if (
+                left_array.shape != right_array.shape
+                or left_array.dtype != right_array.dtype
+            ):
+                return False
+
+            size = left_array.size
+            if size == 0:
+                continue
+
+            indices = jnp.asarray(tuple({0, size // 2, size - 1}))
+            if not bool(
+                jnp.array_equal(
+                    left_array.reshape(-1)[indices],
+                    right_array.reshape(-1)[indices],
+                    equal_nan=True,
+                )
+            ):
+                return False
+
+    return True
+
+
+def _check_conversion_is_idempotent(
+    converter: Callable[[Any], Any], converted_value: Any
+) -> None:
+    """Smoke-test a converter by applying it once more to its own output."""
+    try:
+        converted_twice = converter(converted_value)
+    except Exception as e:
+        raise ValueError(
+            "Conversion functions must accept their own output and be idempotent."
+        ) from e
+
+    if not _conversion_values_equal(converted_value, converted_twice):
+        raise ValueError(
+            "Conversion functions must be idempotent, but applying this converter "
+            "twice changed the initial value."
+        )
+
+
 def _callable_name(fn: Callable[..., Any]) -> str:
     """Returns a useful display name for a function, class, or callable object."""
     name = getattr(fn, "__name__", None)
@@ -221,7 +289,7 @@ class Node(ABC):
     convert
         A function used to process the value of this node. The default uses the
         function stored in :meth:`.Node.convert_value`, which is
-        ``jax.numpy.asarray``.
+        ``jax.numpy.asarray``. Conversion functions must be idempotent.
 
     See Also
     --------
@@ -283,6 +351,9 @@ class Node(ABC):
                 @staticmethod
                 def convert_value(x):
                     return jnp.asarray(x) if x is not None else x
+
+        Conversion functions must be idempotent: converting an already-converted
+        value must not change it.
         """
         return jnp.asarray(x) if x is not None else x
 
@@ -711,7 +782,7 @@ class Value(Node):
     convert
         A function used to process the value of this node. The default uses the
         function stored in :meth:`.Node.convert_value`, which is
-        ``jax.numpy.asarray``.
+        ``jax.numpy.asarray``. Conversion functions must be idempotent.
 
 
     See Also
@@ -759,6 +830,7 @@ class Value(Node):
     ):
         super().__init__(_name=_name, convert=convert)
         self.value = value
+        _check_conversion_is_idempotent(self._convert, self.value)
 
     def flag_outdated(self) -> Value:
         """Stops the recursion setting outdated flags."""
@@ -1672,6 +1744,7 @@ class Var:
     convert
         A function used to process the value of this variable. The default uses the
         function stored in :meth:`.Var.convert_value`, which is ``jax.numpy.asarray``.
+        Conversion functions must be idempotent.
 
     distribution
         Deprecated argument name for the probability distribution of the variable,
@@ -1730,6 +1803,8 @@ class Var:
         convert: Callable[[Any], Any] | Literal["default"] = "default",
         distribution: Dist | None = None,
     ):
+        value_is_node_or_var = isinstance(value, Node | Var)
+
         if dist is not None and distribution is not None:
             raise ValueError(
                 "Values for 'dist' and 'distribution' provided. "
@@ -1756,6 +1831,16 @@ class Var:
         # use setters
         self.value_node = value  # unfrozen
         self.dist_node = dist  # unfrozen
+
+        if value_is_node_or_var:
+            try:
+                initial_value = self.value
+            except Exception:  # noqa: BLE001  # Transient values may be unavailable.
+                initial_value = None
+
+            if initial_value is not None:
+                converted_value = self._convert(initial_value)
+                _check_conversion_is_idempotent(self._convert, converted_value)
 
         self._auto_transform = False
         self._bijected_var: Var | None = None
@@ -1788,6 +1873,9 @@ class Var:
                 @staticmethod
                 def convert_value(x):
                     return jnp.asarray(x) if x is not None else x
+
+        Conversion functions must be idempotent: converting an already-converted
+        value must not change it.
         """
         return jnp.asarray(x) if x is not None else x
 

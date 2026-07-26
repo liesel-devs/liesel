@@ -825,6 +825,10 @@ class TestValueConversion:
         assert not isinstance(a.value, jax.Array)
         assert isinstance(a.value, float)
 
+    def test_conversion_must_be_idempotent_with_value_node(self):
+        with pytest.raises(ValueError, match="must be idempotent"):
+            lsl.Var(lsl.Value(1.0), convert=lambda value: value + 1.0)
+
     def test_calc(self):
         a = lsl.Var.new_calc(lambda x, y: x + y, 1.0, 1.0)
         assert isinstance(a.value, jax.Array)

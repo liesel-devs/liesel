@@ -1,6 +1,7 @@
 import logging
 
 import jax
+import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 import pytest
@@ -128,6 +129,26 @@ def test_value_pandas_series():
 def test_value_list():
     x = Value([1.0, 2.0])
     assert isinstance(x.value, jax.Array)
+
+
+def test_value_conversion_must_be_idempotent():
+    with pytest.raises(ValueError, match="must be idempotent"):
+        Value(1.0, convert=lambda value: value + 1.0)
+
+
+def test_value_conversion_must_accept_its_output():
+    def convert(value):
+        if isinstance(value, str):
+            return float(value)
+        raise TypeError
+
+    with pytest.raises(ValueError, match="must accept their own output"):
+        Value("1.0", convert=convert)
+
+
+def test_value_idempotence_check_allows_nan():
+    value = Value(jnp.nan, convert=lambda x: jnp.asarray(x) + 0.0)
+    assert jnp.isnan(value.value)
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
