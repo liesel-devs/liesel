@@ -20,6 +20,10 @@ class TestStopper:
             ({"epochs": True, "patience": 1}, "epochs"),
             ({"epochs": 10, "patience": 1.5}, "patience"),
             ({"epochs": 10, "patience": True}, "patience"),
+            ({"epochs": 10, "patience": 5, "min_epochs": -1}, "min_epochs"),
+            ({"epochs": 10, "patience": 5, "min_epochs": 11}, "min_epochs"),
+            ({"epochs": 10, "patience": 5, "min_epochs": 1.5}, "min_epochs"),
+            ({"epochs": 10, "patience": 5, "min_epochs": True}, "min_epochs"),
             ({"epochs": 10, "patience": 5, "atol": -1.0}, "atol"),
             ({"epochs": 10, "patience": 5, "rtol": -1.0}, "rtol"),
         ],
@@ -33,9 +37,14 @@ class TestStopper:
         assert stopper.max_iter == stopper.epochs
 
     def test_accepts_integral_configuration(self):
-        stopper = Stopper(epochs=np.int64(10), patience=np.int64(5))
+        stopper = Stopper(
+            epochs=np.int64(10),
+            patience=np.int64(5),
+            min_epochs=np.int64(7),
+        )
         assert stopper.epochs == 10
         assert stopper.patience == 5
+        assert stopper.min_epochs == 7
 
     def test_stopper_does_not_stop(self):
         stopper = Stopper(patience=5, epochs=100)
@@ -113,8 +122,15 @@ class TestStopper:
         for i in range(100):
             assert not bool(stopper.stop_early(i, loss_history))
 
+    def test_min_epochs(self):
+        stopper = Stopper(epochs=100, patience=5, min_epochs=8)
+        loss_history = jnp.zeros(shape=(100,))
+
+        assert not bool(stopper.stop_early(i=7, loss_history=loss_history))
+        assert bool(stopper.stop_early(i=8, loss_history=loss_history))
+
     def test_stops_after_maximum_epochs(self):
-        stopper = Stopper(epochs=10, patience=5)
+        stopper = Stopper(epochs=10, patience=5, min_epochs=10)
         loss_history = jnp.linspace(10.0, 0.0, 10)
 
         assert not bool(stopper.stop_now(i=9, loss_history=loss_history))

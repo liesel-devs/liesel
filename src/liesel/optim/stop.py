@@ -9,7 +9,7 @@ from .types import Array
 
 def _validate_int_type(value: Integral, name: str) -> None:
     if not isinstance(value, Integral) or isinstance(value, bool):
-        raise ValueError(f"{name} must be a positive integer.")
+        raise ValueError(f"{name} must be an integer.")
 
 
 @dataclass
@@ -35,6 +35,10 @@ class Stopper:
     rtol
         Relative tolerance for early stopping. The default of ``0.0`` disables
         additional relative tolerance beyond exact non-improvement.
+    min_epochs
+        Minimum number of completed epochs before early stopping can happen.
+        The default of ``0`` preserves the existing patience-based behavior.
+        The effective earliest stop is ``max(min_epochs, patience + 1)``.
 
     Notes
     -----
@@ -95,16 +99,22 @@ class Stopper:
     patience: int
     atol: float = 0.0
     rtol: float = 0.0
+    min_epochs: int = 0
 
     def __post_init__(self):
         _validate_int_type(self.epochs, "epochs")
         _validate_int_type(self.patience, "patience")
+        _validate_int_type(self.min_epochs, "min_epochs")
         if self.epochs < 1:
             raise ValueError("epochs must be at least 1.")
         if self.patience < 1:
             raise ValueError("patience must be at least 1.")
         if self.patience > self.epochs:
             raise ValueError("patience must be less than or equal to epochs.")
+        if self.min_epochs < 0:
+            raise ValueError("min_epochs must be non-negative.")
+        if self.min_epochs > self.epochs:
+            raise ValueError("min_epochs must be less than or equal to epochs.")
         if self.atol < 0:
             raise ValueError("atol must be non-negative.")
         if self.rtol < 0:
@@ -146,12 +156,13 @@ class Stopper:
         """
         Stopping happens only if we actually went through a full patience period.
         """
+        current_i_is_after_min_epochs = i >= self.min_epochs
 
         stop = abs_improvement_is_neglectable | rel_improvement_is_neglectable
-        return stop & current_i_is_after_patience
+        return stop & current_i_is_after_patience & current_i_is_after_min_epochs
 
     def stop_now(self, i: int | Array, loss_history: Array):
-        """Whether optimization should stop now."""
+        """Whether optimization should stop now, including at the maximum epoch."""
         stop_early = self.stop_early(i=i, loss_history=loss_history)
         stop_epochs = i >= self.epochs
 
