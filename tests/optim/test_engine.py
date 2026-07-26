@@ -257,14 +257,16 @@ def _progress_engine(
     )
     resolved_loss = BatchSensitiveLoss(split) if loss is None else loss(split)
     return OptimEngine(
-        loss=resolved_loss,
+        loss=resolved_loss,  # type: ignore[arg-type]  # intentional test double
         batches=Batches(
             ["y"],
             axis_size=n_batches,
             batch_size=1,
             shuffle=False,
         ),
-        optimizers=[DebugNoOpOptimizer(["theta"])],
+        optimizers=[
+            DebugNoOpOptimizer(["theta"])  # type: ignore[list-item]  # test double
+        ],
         stopper=Stopper(epochs=epochs, patience=epochs),
         seed=1,
         initial_state={},
