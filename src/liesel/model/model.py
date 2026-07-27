@@ -106,10 +106,7 @@ def _compile_prediction(
     model: Model,
     predict_names: Sequence[str],
     chunk_size: int | None = None,
-) -> Callable[
-    [dict[str, Array], dict[str, NodeState]],
-    dict[str, Array],
-]:
+) -> jax.stages.Wrapped:
     """
     Compiles a vectorized prediction for a fully prepared model.
 
