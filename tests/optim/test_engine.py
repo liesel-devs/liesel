@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -280,11 +281,13 @@ def _progress_engine(
 class FakeTqdm:
     instances: list[FakeTqdm] = []
 
-    def __init__(self, total, desc, position, leave):
+    def __init__(self, total, desc, leave, position=None, ncols=None, bar_format=None):
         self.total = total
         self.desc = desc
         self.position = position
         self.leave = leave
+        self.ncols = ncols
+        self.bar_format = bar_format
         self.n = 0
         self.updates = []
         self.descriptions = [desc]
@@ -302,6 +305,9 @@ class FakeTqdm:
         self.thread_ids.append(threading.get_ident())
         self.desc = desc
         self.descriptions.append(desc)
+
+    def set_description_str(self, desc, refresh=True):
+        self.set_description(desc, refresh)
 
     def reset(self, total=None):
         self.thread_ids.append(threading.get_ident())
@@ -833,6 +839,7 @@ def test_nested_progress_matches_monolithic_and_never_uses_callback(monkeypatch)
     expected = _progress_engine(show_progress=False).fit()
     FakeTqdm.instances = []
     monkeypatch.setattr(engine_module, "tqdm", FakeTqdm)
+    monkeypatch.setattr(engine_module.sys.stderr, "isatty", lambda: True)
 
     def fail_callback(*args, **kwargs):
         del args, kwargs
@@ -856,6 +863,61 @@ def test_nested_progress_matches_monolithic_and_never_uses_callback(monkeypatch)
     assert inner.updates == [2, 2, 1] * 5
     assert outer.closed and inner.closed
     assert set(outer.thread_ids + inner.thread_ids) == {threading.get_ident()}
+
+
+def test_non_tty_progress_uses_one_fixed_width_bar(monkeypatch):
+    FakeTqdm.instances = []
+    monkeypatch.setattr(engine_module, "tqdm", FakeTqdm)
+    monkeypatch.setattr(engine_module.sys.stderr, "isatty", lambda: False)
+
+    result = _progress_engine(show_step_progress=True).fit()
+
+    assert result.final_epoch == 5
+    assert len(FakeTqdm.instances) == 1
+    progress_bar = FakeTqdm.instances[0]
+    assert progress_bar.position is None
+    assert progress_bar.ncols == 88
+    assert progress_bar.bar_format == "{desc}"
+    assert progress_bar.total == 25
+    assert progress_bar.updates == [2, 2, 1] * 5
+    assert progress_bar.descriptions[-1].endswith("E [5/5], B [5/5]")
+    assert all(desc.startswith("Train=") for desc in progress_bar.descriptions)
+    assert all("Monitor=" in desc for desc in progress_bar.descriptions)
+    assert progress_bar.closed
+
+
+def test_shared_progress_description_uses_fixed_width_counts():
+    description = OptimEngine._shared_progress_description(
+        epoch=1,
+        max_epochs=10,
+        batch=587,
+        n_batches=781,
+        loss_train=1.25,
+        loss_validate=2.5,
+    )
+
+    assert description == ("Train=1.250, Monitor=2.500, E [ 1/10], B [587/781]")
+
+
+def test_non_tty_progress_renders_without_ansi_cursor_movement(monkeypatch):
+    stream = io.StringIO()
+    monkeypatch.setattr(engine_module.sys, "stderr", stream)
+
+    result = _progress_engine(epochs=1, show_step_progress=True).fit()
+    output = stream.getvalue()
+
+    assert result.final_epoch == 1
+    assert "Train=" in output
+    assert "Monitor=" in output
+    assert "E [1/1], B [5/5]" in output
+    assert "%|" not in output
+    assert "it/s" not in output
+    assert "\x1b[A" not in output
+    assert all(
+        not line.rstrip().endswith(":")
+        for line in output.replace("\n", "\r").split("\r")
+    )
+    assert all(len(line) <= 88 for line in output.replace("\n", "\r").split("\r"))
 
 
 def test_large_step_interval_uses_epoch_only_progress(monkeypatch):
@@ -899,6 +961,7 @@ def test_large_intervals_use_monolithic_final_only_progress(monkeypatch):
 def test_nested_progress_renders_partial_nan_batch_and_closes(monkeypatch):
     FakeTqdm.instances = []
     monkeypatch.setattr(engine_module, "tqdm", FakeTqdm)
+    monkeypatch.setattr(engine_module.sys.stderr, "isatty", lambda: True)
     engine = _progress_engine(
         show_step_progress=True,
         debug_nans=True,
@@ -919,6 +982,7 @@ def test_nested_progress_renders_partial_nan_batch_and_closes(monkeypatch):
 def test_nested_progress_uses_last_completed_losses_after_nan(monkeypatch):
     FakeTqdm.instances = []
     monkeypatch.setattr(engine_module, "tqdm", FakeTqdm)
+    monkeypatch.setattr(engine_module.sys.stderr, "isatty", lambda: True)
     engine = _progress_engine(
         show_step_progress=True,
         debug_nans=True,
@@ -939,6 +1003,7 @@ def test_nested_progress_uses_last_completed_losses_after_nan(monkeypatch):
 def test_nested_progress_supports_batch_manager(monkeypatch):
     FakeTqdm.instances = []
     monkeypatch.setattr(engine_module, "tqdm", FakeTqdm)
+    monkeypatch.setattr(engine_module.sys.stderr, "isatty", lambda: True)
     expected_engine = _progress_engine(show_progress=False)
     expected_engine.batches = BatchManager([expected_engine.batches])
     actual_engine = _progress_engine(show_step_progress=True)
@@ -985,6 +1050,7 @@ def test_progress_bars_close_when_an_update_raises(monkeypatch):
 
     RaisingFakeTqdm.instances = []
     monkeypatch.setattr(engine_module, "tqdm", RaisingFakeTqdm)
+    monkeypatch.setattr(engine_module.sys.stderr, "isatty", lambda: True)
     engine = _progress_engine(show_step_progress=True)
 
     with pytest.raises(RuntimeError, match="display failed"):

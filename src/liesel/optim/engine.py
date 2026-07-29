@@ -8,6 +8,7 @@ is useful for custom losses or optimizer schedules.
 
 from __future__ import annotations
 
+import sys
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -1182,6 +1183,21 @@ class OptimEngine:
             f"Monitoring loss: {float(loss_validate):.3f}"
         )
 
+    @staticmethod
+    def _shared_progress_description(
+        epoch: int,
+        max_epochs: int,
+        batch: int,
+        n_batches: int,
+        loss_train,
+        loss_validate,
+    ) -> str:
+        return (
+            f"Train={float(loss_train):.3f}, Monitor={float(loss_validate):.3f}, "
+            f"E [{epoch:>{len(str(max_epochs))}}/{max_epochs}], "
+            f"B [{batch:>{len(str(n_batches))}}/{n_batches}]"
+        )
+
     def _update_outer_progress(
         self,
         progress_bar,
@@ -1258,8 +1274,10 @@ class OptimEngine:
 
         return carry
 
-    def _fit_nested_progress(self, carry: OptimCarry, outer_progress_bar) -> OptimCarry:
-        """Runs batch chunks and updates nested progress bars on the host."""
+    def _fit_nested_progress(
+        self, carry: OptimCarry, outer_progress_bar, use_nested_bars: bool
+    ) -> OptimCarry:
+        """Runs batch chunks and updates step progress on the host."""
         n_batches = self.batches.n_full_batches
         step_update_every = self.step_progress_update_every
         max_epochs = self.stopper.epochs
@@ -1315,19 +1333,26 @@ class OptimEngine:
         try:
             while should_continue:
                 current_epoch = completed_epochs + 1
-                if inner_progress_bar is None and outer_progress_bar is not None:
+                if (
+                    use_nested_bars
+                    and inner_progress_bar is None
+                    and outer_progress_bar is not None
+                ):
                     inner_progress_bar = tqdm(
                         total=n_batches,
                         desc=f"Epoch {current_epoch}/{max_epochs}",
                         position=1,
                         leave=False,
                     )
-                elif inner_progress_bar is not None:
+                elif use_nested_bars and inner_progress_bar is not None:
                     inner_progress_bar.reset(total=n_batches)
                     inner_progress_bar.set_description(
                         f"Epoch {current_epoch}/{max_epochs}", refresh=False
                     )
 
+                batch_progress_bar = (
+                    inner_progress_bar if use_nested_bars else outer_progress_bar
+                )
                 rendered_batches = 0
                 finished_epoch = False
                 loss_train = carry.loss_train
@@ -1347,12 +1372,24 @@ class OptimEngine:
                     ) = jax.device_get(status)
 
                     completed_batches = int(completed_batches_value)
-                    if inner_progress_bar is not None:
+                    finished_epoch = bool(finished_epoch_value)
+                    if batch_progress_bar is not None:
+                        if not use_nested_bars:
+                            batch_progress_bar.set_description_str(
+                                self._shared_progress_description(
+                                    current_epoch,
+                                    max_epochs,
+                                    completed_batches,
+                                    n_batches,
+                                    loss_train,
+                                    loss_validate,
+                                ),
+                                refresh=False,
+                            )
                         update = completed_batches - rendered_batches
                         if update > 0:
-                            inner_progress_bar.update(update)
+                            batch_progress_bar.update(update)
                     rendered_batches = max(rendered_batches, completed_batches)
-                    finished_epoch = bool(finished_epoch_value)
                     should_continue = bool(continue_value)
 
                     if bool(debug_has_nan_value) or finished_epoch:
@@ -1360,13 +1397,14 @@ class OptimEngine:
 
                 completed_epochs = int(completed)
                 if finished_epoch:
-                    rendered_epochs = self._update_outer_progress(
-                        outer_progress_bar,
-                        rendered_epochs,
-                        completed_epochs,
-                        loss_train,
-                        loss_validate,
-                    )
+                    if use_nested_bars:
+                        rendered_epochs = self._update_outer_progress(
+                            outer_progress_bar,
+                            rendered_epochs,
+                            completed_epochs,
+                            loss_train,
+                            loss_validate,
+                        )
 
                 if not finished_epoch:
                     break
@@ -1389,25 +1427,43 @@ class OptimEngine:
         if not self.show_progress:
             return self._fit_monolithic(carry)
 
+        use_nested_progress = (
+            self.show_step_progress
+            and self.step_progress_update_every < self.batches.n_full_batches
+        )
+        use_nested_bars = sys.stderr.isatty()
         render_progress = jax.process_index() == 0
         outer_progress_bar = None
         if render_progress:
-            outer_progress_bar = tqdm(
-                total=self.stopper.epochs,
-                desc="Initializing",
-                position=0,
-                leave=True,
-            )
+            if use_nested_progress and not use_nested_bars:
+                outer_progress_bar = tqdm(
+                    total=self.stopper.epochs * self.batches.n_full_batches,
+                    desc=self._shared_progress_description(
+                        1,
+                        self.stopper.epochs,
+                        0,
+                        self.batches.n_full_batches,
+                        carry.loss_train,
+                        carry.loss_validate,
+                    ),
+                    leave=True,
+                    ncols=88,
+                    bar_format="{desc}",
+                )
+            else:
+                outer_progress_bar = tqdm(
+                    total=self.stopper.epochs,
+                    desc="Initializing",
+                    position=0,
+                    leave=True,
+                )
 
         rendered_epochs = 0
         try:
-            use_nested_progress = (
-                self.show_step_progress
-                and self.step_progress_update_every < self.batches.n_full_batches
-            )
-
             if use_nested_progress:
-                carry = self._fit_nested_progress(carry, outer_progress_bar)
+                carry = self._fit_nested_progress(
+                    carry, outer_progress_bar, use_nested_bars
+                )
             elif self.progress_update_every < self.stopper.epochs:
                 carry = self._fit_epoch_chunks(carry, outer_progress_bar)
             else:
@@ -1418,15 +1474,16 @@ class OptimEngine:
                 (carry.epoch, final_loss_train, final_loss_validate)
             )
             completed_epochs = int(completed)
-            if outer_progress_bar is not None:
-                rendered_epochs = int(outer_progress_bar.n)
-            self._update_outer_progress(
-                outer_progress_bar,
-                rendered_epochs,
-                completed_epochs,
-                loss_train,
-                loss_validate,
-            )
+            if not use_nested_progress or use_nested_bars:
+                if outer_progress_bar is not None:
+                    rendered_epochs = int(outer_progress_bar.n)
+                self._update_outer_progress(
+                    outer_progress_bar,
+                    rendered_epochs,
+                    completed_epochs,
+                    loss_train,
+                    loss_validate,
+                )
         finally:
             self._close_progress_bar(outer_progress_bar)
 
