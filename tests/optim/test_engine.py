@@ -877,10 +877,12 @@ def test_non_tty_progress_uses_one_fixed_width_bar(monkeypatch):
     progress_bar = FakeTqdm.instances[0]
     assert progress_bar.position is None
     assert progress_bar.ncols == 88
-    assert progress_bar.bar_format == "{desc}"
+    assert (
+        progress_bar.bar_format == "{l_bar}{bar}| [{elapsed}<{remaining}, {rate_fmt}]"
+    )
     assert progress_bar.total == 25
     assert progress_bar.updates == [2, 2, 1] * 5
-    assert progress_bar.descriptions[-1].endswith("E [5/5], B [5/5]")
+    assert progress_bar.descriptions[-1].endswith("E 5/5, B 5/5")
     assert all(desc.startswith("Train=") for desc in progress_bar.descriptions)
     assert all("Monitor=" in desc for desc in progress_bar.descriptions)
     assert progress_bar.closed
@@ -896,7 +898,7 @@ def test_shared_progress_description_uses_fixed_width_counts():
         loss_validate=2.5,
     )
 
-    assert description == ("Train=1.250, Monitor=2.500, E [ 1/10], B [587/781]")
+    assert description == ("Train=1.250, Monitor=2.500, E  1/10, B 587/781")
 
 
 def test_non_tty_progress_renders_without_ansi_cursor_movement(monkeypatch):
@@ -909,9 +911,10 @@ def test_non_tty_progress_renders_without_ansi_cursor_movement(monkeypatch):
     assert result.final_epoch == 1
     assert "Train=" in output
     assert "Monitor=" in output
-    assert "E [1/1], B [5/5]" in output
-    assert "%|" not in output
-    assert "it/s" not in output
+    assert "E 1/1, B 5/5" in output
+    assert "%|" in output
+    assert "it/s" in output
+    assert "| 5/5 [" not in output
     assert "\x1b[A" not in output
     assert all(
         not line.rstrip().endswith(":")
