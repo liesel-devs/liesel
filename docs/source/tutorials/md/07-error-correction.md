@@ -12,12 +12,16 @@ distribution of the model parameters and the latent covariate.
 Assuming a total number of $M$ replicates of the covariate $x$ affected
 by measurement error, we can write the measurement error model as
 
-$$\tilde{x}_i^{(m)} = x_i + u_i^{(m)}, \quad m = 1, \ldots, M.$$
+$$
+\tilde{x}_i^{(m)} = x_i + u_i^{(m)}, \quad m = 1, \ldots, M.
+$$
 
 In this tutorial, the replicates are assumed to be independent with
 constant variance
 
-$$\mathbf{u}_i \sim N_M(\mathbf{0}, \mathbf{\sigma}^{2}_u\mathbf{I}_M).$$
+$$
+\mathbf{u}_i \sim N_M(\mathbf{0}, \mathbf{\sigma}^{2}_u\mathbf{I}_M).
+$$
 
 The fundamental concept behind Bayesian measurement error correction is
 to treat the true, unknown covariate values $x_i$ as additional latent
@@ -25,9 +29,9 @@ variables. These values are then imputed using MCMC simulations while
 simultaneously estimating all other parameters of the model. To achieve
 this, we assign a simple prior distribution to $x_i$. We further add
 hyperpriors with assigned prior distributions to the distribution
-parameters of $x_i$, to achieve further flexibility.
-$$x_i \sim N(\mu_x,\tau^2_x), \quad \mu_x \sim N(0, \tau^2_{\mu}), \quad \tau^2_x \sim IG(a_x,b_x)$$
-These priors correspond to being relatively uninformative about the
+parameters of $x_i$, to achieve further flexibility. $$
+x_i \sim N(\mu_x,\tau^2_x), \quad \mu_x \sim N(0, \tau^2_{\mu}), \quad \tau^2_x \sim IG(a_x,b_x)
+$$ These priors correspond to being relatively uninformative about the
 distribution of $x_i$.
 
 ## Imports
@@ -243,7 +247,7 @@ model = lsl.Model([y_var, x_tilde_var])
 model.plot_vars()
 ```
 
-    liesel.model.model - WARNING - Inconsistent log prob decomposition: Model.log_prob=-19741.52 ≠ (Model.log_lik=-14871.53 + Model.log_prior=-1715.54).
+    liesel.model.model - WARNING - Inconsistent log prob decomposition: Model.log_prob=-19741.52 ≠ (Model.log_lik=-14871.53 + Model.log_prior=-1715.54). 
     liesel.model.model - WARNING - Var(name="x_tilde") has a distribution but Var.parameter=False and Var.observed=False.
 
 <img
@@ -258,10 +262,12 @@ to sample our x-values. To draw from $\mu_x$ and $\tau^2_x$ we use Gibbs
 kernels ({class}`~.goose.GibbsKernel`), as this allows us to use custom
 transition functions for our parameters. The full conditionals are:
 
-$$\begin{aligned}
+$$
+\begin{aligned}
 \mu_x \mid \cdot &\sim N \left(\frac{n\bar{x}\tau^2_\mu}{n\tau^2_\mu+\tau^2_x},\frac{\tau^2_x\tau^2_\mu}{n\tau^2_\mu+\tau^2_x}\right)\\
 \tau^2_x \mid \cdot &\sim IG \left( a_x + \frac{n}{2}, b_x + \frac{1}{2}\sum_{i=1}^{n}(x_i - \mu_x)^2   \right)\\
-\end{aligned}.$$
+\end{aligned}.
+$$
 
 Let us implement these
 
@@ -370,8 +376,8 @@ engine.sample_all_epochs()
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 75 transitions, 25 jitted together
 
       0%|                                                  | 0/3 [00:00<?, ?chunk/s]
-     33%|██████████████                            | 1/3 [00:11<00:22, 11.32s/chunk]
-    100%|██████████████████████████████████████████| 3/3 [00:11<00:00,  3.78s/chunk]
+     33%|██████████████                            | 1/3 [00:11<00:23, 11.67s/chunk]
+    100%|██████████████████████████████████████████| 3/3 [00:11<00:00,  3.89s/chunk]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 0, 1, 1, 0 / 75 transitions
     liesel.goose.engine - WARNING - Errors per chain for kernel_03: 2, 6, 2, 3 / 75 transitions
     liesel.goose.engine - WARNING - Errors per chain for kernel_04: 4, 3, 6, 2 / 75 transitions
@@ -380,7 +386,7 @@ engine.sample_all_epochs()
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
 
       0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|█████████████████████████████████████████| 1/1 [00:00<00:00, 501.95chunk/s]
+    100%|█████████████████████████████████████████| 1/1 [00:00<00:00, 456.25chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 2, 1, 1 / 25 transitions
     liesel.goose.engine - WARNING - Errors per chain for kernel_03: 1, 2, 1, 2 / 25 transitions
     liesel.goose.engine - WARNING - Errors per chain for kernel_04: 1, 2, 1, 1 / 25 transitions
@@ -389,7 +395,7 @@ engine.sample_all_epochs()
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|█████████████████████████████████████████| 2/2 [00:00<00:00, 664.39chunk/s]
+    100%|█████████████████████████████████████████| 2/2 [00:00<00:00, 752.21chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 50 transitions
     liesel.goose.engine - WARNING - Errors per chain for kernel_03: 1, 2, 1, 3 / 50 transitions
     liesel.goose.engine - WARNING - Errors per chain for kernel_04: 3, 1, 2, 1 / 50 transitions
@@ -398,7 +404,7 @@ engine.sample_all_epochs()
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
 
       0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|████████████████████████████████████████| 4/4 [00:00<00:00, 1001.45chunk/s]
+    100%|█████████████████████████████████████████| 4/4 [00:00<00:00, 809.75chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 100 transitions
     liesel.goose.engine - WARNING - Errors per chain for kernel_03: 3, 3, 3, 2 / 100 transitions
     liesel.goose.engine - WARNING - Errors per chain for kernel_04: 3, 3, 1, 1 / 100 transitions
@@ -407,10 +413,10 @@ engine.sample_all_epochs()
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 550 transitions, 25 jitted together
 
       0%|                                                 | 0/22 [00:00<?, ?chunk/s]
-     41%|████████████████▊                        | 9/22 [00:00<00:00, 70.20chunk/s]
-     77%|██████████████████████████████▉         | 17/22 [00:00<00:00, 31.30chunk/s]
-    100%|████████████████████████████████████████| 22/22 [00:00<00:00, 27.77chunk/s]
-    100%|████████████████████████████████████████| 22/22 [00:00<00:00, 30.68chunk/s]
+     41%|████████████████▊                        | 9/22 [00:00<00:00, 67.02chunk/s]
+     73%|█████████████████████████████           | 16/22 [00:00<00:00, 30.29chunk/s]
+     91%|████████████████████████████████████▎   | 20/22 [00:00<00:00, 27.18chunk/s]
+    100%|████████████████████████████████████████| 22/22 [00:00<00:00, 29.26chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 550 transitions
     liesel.goose.engine - WARNING - Errors per chain for kernel_03: 2, 3, 5, 6 / 550 transitions
     liesel.goose.engine - WARNING - Errors per chain for kernel_04: 3, 3, 3, 4 / 550 transitions
@@ -419,7 +425,7 @@ engine.sample_all_epochs()
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 200 transitions, 25 jitted together
 
       0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|██████████████████████████████████████████| 8/8 [00:00<00:00, 98.67chunk/s]
+    100%|██████████████████████████████████████████| 8/8 [00:00<00:00, 93.99chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 200 transitions
     liesel.goose.engine - WARNING - Errors per chain for kernel_03: 1, 3, 5, 3 / 200 transitions
     liesel.goose.engine - WARNING - Errors per chain for kernel_04: 1, 1, 0, 2 / 200 transitions
@@ -429,27 +435,27 @@ engine.sample_all_epochs()
     liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 2000 transitions, 25 jitted together
 
       0%|                                                 | 0/80 [00:00<?, ?chunk/s]
-     12%|█████                                   | 10/80 [00:00<00:00, 86.03chunk/s]
-     24%|█████████▌                              | 19/80 [00:00<00:01, 38.29chunk/s]
-     31%|████████████▌                           | 25/80 [00:00<00:01, 33.27chunk/s]
-     38%|███████████████                         | 30/80 [00:00<00:01, 30.89chunk/s]
-     42%|█████████████████                       | 34/80 [00:01<00:01, 29.61chunk/s]
-     48%|███████████████████                     | 38/80 [00:01<00:01, 28.63chunk/s]
-     51%|████████████████████▌                   | 41/80 [00:01<00:01, 28.11chunk/s]
-     55%|██████████████████████                  | 44/80 [00:01<00:01, 27.65chunk/s]
-     59%|███████████████████████▌                | 47/80 [00:01<00:01, 27.27chunk/s]
-     62%|█████████████████████████               | 50/80 [00:01<00:01, 26.98chunk/s]
-     66%|██████████████████████████▌             | 53/80 [00:01<00:01, 26.83chunk/s]
-     70%|████████████████████████████            | 56/80 [00:01<00:00, 26.70chunk/s]
-     74%|█████████████████████████████▌          | 59/80 [00:01<00:00, 26.51chunk/s]
-     78%|███████████████████████████████         | 62/80 [00:02<00:00, 26.36chunk/s]
-     81%|████████████████████████████████▌       | 65/80 [00:02<00:00, 26.41chunk/s]
-     85%|██████████████████████████████████      | 68/80 [00:02<00:00, 25.89chunk/s]
-     89%|███████████████████████████████████▌    | 71/80 [00:02<00:00, 25.91chunk/s]
-     92%|█████████████████████████████████████   | 74/80 [00:02<00:00, 26.02chunk/s]
-     96%|██████████████████████████████████████▌ | 77/80 [00:02<00:00, 25.15chunk/s]
-    100%|████████████████████████████████████████| 80/80 [00:02<00:00, 25.54chunk/s]
-    100%|████████████████████████████████████████| 80/80 [00:02<00:00, 28.65chunk/s]
+     12%|█████                                   | 10/80 [00:00<00:00, 81.90chunk/s]
+     24%|█████████▌                              | 19/80 [00:00<00:01, 36.34chunk/s]
+     30%|████████████                            | 24/80 [00:00<00:01, 32.19chunk/s]
+     35%|██████████████                          | 28/80 [00:00<00:01, 30.14chunk/s]
+     40%|████████████████                        | 32/80 [00:00<00:01, 28.72chunk/s]
+     45%|██████████████████                      | 36/80 [00:01<00:01, 27.64chunk/s]
+     49%|███████████████████▌                    | 39/80 [00:01<00:01, 27.01chunk/s]
+     52%|█████████████████████                   | 42/80 [00:01<00:01, 26.51chunk/s]
+     56%|██████████████████████▌                 | 45/80 [00:01<00:01, 26.17chunk/s]
+     60%|████████████████████████                | 48/80 [00:01<00:01, 25.89chunk/s]
+     64%|█████████████████████████▌              | 51/80 [00:01<00:01, 25.70chunk/s]
+     68%|███████████████████████████             | 54/80 [00:01<00:01, 25.51chunk/s]
+     71%|████████████████████████████▌           | 57/80 [00:01<00:00, 25.49chunk/s]
+     75%|██████████████████████████████          | 60/80 [00:02<00:00, 25.41chunk/s]
+     79%|███████████████████████████████▌        | 63/80 [00:02<00:00, 25.37chunk/s]
+     82%|█████████████████████████████████       | 66/80 [00:02<00:00, 25.38chunk/s]
+     86%|██████████████████████████████████▌     | 69/80 [00:02<00:00, 25.06chunk/s]
+     90%|████████████████████████████████████    | 72/80 [00:02<00:00, 25.07chunk/s]
+     94%|█████████████████████████████████████▌  | 75/80 [00:02<00:00, 25.05chunk/s]
+     98%|███████████████████████████████████████ | 78/80 [00:02<00:00, 24.19chunk/s]
+    100%|████████████████████████████████████████| 80/80 [00:02<00:00, 27.49chunk/s]
     liesel.goose.engine - INFO - Finished epoch
 
 Now we can take a look at the results for our parameters
