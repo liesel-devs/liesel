@@ -1193,9 +1193,9 @@ class OptimEngine:
         loss_validate,
     ) -> str:
         return (
-            f"Train={float(loss_train):.3f}, Monitor={float(loss_validate):.3f}, "
-            f"E {epoch:>{len(str(max_epochs))}}/{max_epochs}, "
-            f"B {batch:>{len(str(n_batches))}}/{n_batches}"
+            f"Train={float(loss_train):.3f}, Monitor={float(loss_validate):.3f} "
+            f"[E {epoch:>{len(str(max_epochs))}}/{max_epochs}, "
+            f"B {batch:>{len(str(n_batches))}}/{n_batches}]"
         )
 
     def _update_outer_progress(
@@ -1470,7 +1470,7 @@ class OptimEngine:
                     ),
                     leave=True,
                     ncols=88,
-                    bar_format="{l_bar}{bar}| [{elapsed}<{remaining}, {rate_fmt}]",
+                    bar_format="{l_bar}{bar}| [{elapsed}, {rate_fmt}]",
                 )
             else:
                 outer_progress_bar = tqdm(
