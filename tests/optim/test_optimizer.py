@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+import jax
 import jax.numpy as jnp
 import optax
 import pytest
@@ -28,6 +29,18 @@ def test_optimizer_normalizes_position_keys():
     optimizer = Optimizer(["x"], optax.sgd(0.1))
 
     assert optimizer.position_keys == ("x",)
+
+
+def test_optimizer_activation_delay_defaults_to_zero():
+    optimizer = Optimizer(["x"], optax.sgd(0.1))
+
+    assert optimizer.activate_after_epochs == 0
+
+
+@pytest.mark.parametrize("value", [-1, True, 1.5, "1"])
+def test_optimizer_rejects_invalid_activation_delay(value):
+    with pytest.raises(ValueError, match="activate_after_epochs"):
+        Optimizer(["x"], optax.sgd(0.1), activate_after_epochs=value)
 
 
 def test_position_requires_all_claimed_keys():
@@ -64,7 +77,32 @@ def test_step_updates_only_owned_position_keys():
     assert carry.position["y"] == pytest.approx(5.0)
 
 
-def test_lbfgs_uses_compact_optimizer_repr():
-    optimizer = LBFGS(["x"], identifier="x_lbfgs")
+@pytest.mark.parametrize(
+    ("delay", "expected"),
+    [
+        (0, "LBFGS(('x',), identifier=x_lbfgs)"),
+        (3, "LBFGS(('x',), identifier=x_lbfgs, activate_after_epochs=3)"),
+    ],
+)
+def test_lbfgs_uses_compact_optimizer_repr(delay, expected):
+    optimizer = LBFGS(["x"], identifier="x_lbfgs", activate_after_epochs=delay)
 
-    assert repr(optimizer) == "LBFGS(('x',), identifier=x_lbfgs)"
+    assert repr(optimizer) == expected
+
+
+def test_optimizer_repr_shows_nonzero_activation_delay():
+    optimizer = Optimizer(
+        ["x"], optax.sgd(0.1), identifier="x_opt", activate_after_epochs=3
+    )
+
+    assert repr(optimizer) == (
+        "Optimizer(('x',), identifier=x_opt, activate_after_epochs=3)"
+    )
+
+
+def test_optimizer_pytree_round_trip_preserves_activation_delay():
+    optimizer = Optimizer(["x"], optax.sgd(0.1), activate_after_epochs=3)
+
+    rebuilt = jax.tree.map(lambda value: value, optimizer)
+
+    assert rebuilt.activate_after_epochs == 3

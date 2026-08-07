@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 import jax
 import jax.numpy as jnp
+import optax
 import pytest
 
 import liesel.optim as opt
@@ -16,6 +17,7 @@ from liesel.optim import (
     BatchManager,
     LieselOptim,
     OptimEngine,
+    Optimizer,
     PositionSplit,
     PositionSplitManager,
     Stopper,
@@ -32,6 +34,7 @@ class SequenceOptimizer:
     position_keys: list[str]
     values: jax.Array
     identifier: str = "sequence"
+    activate_after_epochs: int = 0
 
     def position(self, position: Position) -> Position:
         return Position({key: position[key] for key in self.position_keys})
@@ -112,9 +115,35 @@ class BatchSensitiveLoss:
 
 
 @dataclass
+class UnitGradientLoss:
+    split: PositionSplit
+
+    def position(self, position_keys) -> Position:
+        return Position({key: jnp.array(0.0) for key in position_keys})
+
+    def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
+        del carry
+        return sum(jnp.sum(value) for value in params.values())
+
+    def grad(self, params: Position, carry: OptimCarry):
+        del carry
+        return {key: jnp.ones_like(value) for key, value in params.items()}
+
+
+@dataclass
+class RandomGradientLoss(UnitGradientLoss):
+    def grad(self, params: Position, carry: OptimCarry):
+        return {
+            key: jax.random.normal(carry.key, shape=value.shape)
+            for key, value in params.items()
+        }
+
+
+@dataclass
 class DebugNoOpOptimizer:
     position_keys: list[str]
     identifier: str = "noop"
+    activate_after_epochs: int = 0
 
     def position(self, position: Position) -> Position:
         return Position({key: position[key] for key in self.position_keys})
@@ -374,6 +403,103 @@ def test_empty_optimizers_raise():
             initial_state={},
             show_progress=False,
         )
+
+
+def test_optimizer_activation_delay_must_allow_an_active_epoch():
+    optimizer = Optimizer(["theta"], optax.sgd(0.1), activate_after_epochs=4)
+
+    with pytest.raises(ValueError, match="activate_after_epochs"):
+        OptimEngine(
+            loss=_loss(),
+            batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
+            optimizers=[optimizer],
+            stopper=Stopper(epochs=4, patience=2),
+            seed=1,
+            initial_state={},
+            show_progress=False,
+        )
+
+
+@pytest.mark.parametrize("debug_nans", [False, True])
+def test_optimizer_activates_after_completed_epoch_delay(debug_nans):
+    loss = UnitGradientLoss(_split())
+
+    def delayed_learning_rate(count):
+        return jnp.where(count == 0, 1.0, 10.0)
+
+    engine = OptimEngine(
+        loss=loss,  # type: ignore[arg-type]  # intentional custom loss
+        batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
+        optimizers=[
+            Optimizer(["theta"], optax.sgd(1.0), identifier="theta"),
+            Optimizer(
+                ["eta"],
+                optax.sgd(delayed_learning_rate),
+                identifier="eta",
+                activate_after_epochs=2,
+            ),
+        ],
+        stopper=Stopper(epochs=4, patience=4),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+        debug_nans=debug_nans,
+    )
+
+    result = engine.fit()
+
+    assert {
+        key: values.tolist() for key, values in result.history.position.items()
+    } == {
+        "theta": [-1.0, -2.0, -3.0, -4.0],
+        "eta": [0.0, 0.0, -1.0, -11.0],
+    }
+
+
+def test_inactive_optimizer_does_not_consume_random_key():
+    def first_theta_position(optimizers):
+        engine = OptimEngine(
+            loss=RandomGradientLoss(_split()),  # type: ignore[arg-type]
+            batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
+            optimizers=optimizers,
+            stopper=Stopper(epochs=2, patience=2),
+            seed=1,
+            initial_state={},
+            show_progress=False,
+        )
+        return engine.fit().history.position["theta"][0]
+
+    theta = Optimizer(["theta"], optax.sgd(1.0), identifier="theta")
+    delayed_eta = Optimizer(
+        ["eta"],
+        optax.sgd(1.0),
+        identifier="eta",
+        activate_after_epochs=1,
+    )
+
+    expected = first_theta_position([theta])
+    actual = first_theta_position([delayed_eta, theta])
+
+    assert jnp.array_equal(actual, expected)
+
+
+def test_fit_can_stop_before_any_optimizer_activates():
+    engine = OptimEngine(
+        loss=UnitGradientLoss(_split()),  # type: ignore[arg-type]
+        batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
+        optimizers=[Optimizer(["theta"], optax.sgd(1.0), activate_after_epochs=3)],
+        stopper=Stopper(epochs=5, patience=1),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+    )
+
+    result = engine.fit()
+
+    assert (result.final_epoch, result.history.position["theta"].tolist()) == (
+        2,
+        [0.0, 0.0],
+    )
 
 
 def test_duplicate_optimizer_position_keys_raise():
@@ -882,13 +1008,11 @@ def test_non_tty_progress_uses_one_fixed_width_bar(monkeypatch):
     progress_bar = FakeTqdm.instances[0]
     assert progress_bar.position is None
     assert progress_bar.ncols == 88
-    assert (
-        progress_bar.bar_format == "{l_bar}{bar}| [{elapsed}<{remaining}, {rate_fmt}]"
-    )
+    assert progress_bar.bar_format == "{l_bar}{bar}| [{elapsed}, {rate_fmt}]"
     assert progress_bar.total == 25
     assert progress_bar.updates == [2, 2, 1] * 5
     assert progress_bar.refreshes == 5
-    assert progress_bar.descriptions[-1].endswith("E 5/5, B 5/5")
+    assert progress_bar.descriptions[-1].endswith("[E 5/5, B 5/5]")
     assert all(desc.startswith("Train=") for desc in progress_bar.descriptions)
     assert all("Monitor=" in desc for desc in progress_bar.descriptions)
     assert progress_bar.closed
@@ -930,7 +1054,7 @@ def test_shared_progress_description_uses_fixed_width_counts():
         loss_validate=2.5,
     )
 
-    assert description == ("Train=1.250, Monitor=2.500, E  1/10, B 587/781")
+    assert description == ("Train=1.250, Monitor=2.500 [E  1/10, B 587/781]")
 
 
 def test_non_tty_progress_renders_without_ansi_cursor_movement(monkeypatch):

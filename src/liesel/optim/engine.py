@@ -94,7 +94,8 @@ class OptimEngine:
         with different observation sizes.
     optimizers
         Sequence of optimizers. Each optimizer must claim a disjoint set of position
-        keys.
+        keys. Individual optimizers may delay activation with
+        :attr:`.Optimizer.activate_after_epochs`.
     stopper
         Early-stopping and maximum-epoch configuration.
     seed
@@ -248,6 +249,7 @@ class OptimEngine:
         self._name_optimizers()
         self._validate_optimizer_identifiers()
         self._validate_position_keys()
+        self._validate_optimizer_activation_delays()
         self._validate_progress_settings()
         self._validate_train_monitor()
         self._validate_debug_nans()
@@ -331,6 +333,18 @@ class OptimEngine:
         if len(duplicates) >= 1:
             raise ValueError(
                 f"Position keys claimed by multiple optimizers: {list(duplicates)}"
+            )
+
+    def _validate_optimizer_activation_delays(self) -> None:
+        invalid = [
+            opt.identifier
+            for opt in self.optimizers
+            if opt.activate_after_epochs >= self.stopper.epochs
+        ]
+        if invalid:
+            raise ValueError(
+                "activate_after_epochs must be less than stopper.epochs for "
+                f"optimizers: {invalid}."
             )
 
     def _validate_optimizer_identifiers(self) -> None:
@@ -770,7 +784,12 @@ class OptimEngine:
         carry.batch = obs_batch
 
         for opt in self.optimizers:
-            carry = self._run_optimizer_step(opt, carry)
+            carry = jax.lax.cond(
+                carry.epoch >= opt.activate_after_epochs,
+                lambda carry, opt=opt: self._run_optimizer_step(opt, carry),
+                lambda carry: carry,
+                carry,
+            )
 
         loss = self.loss.loss_train_batched(carry.position, carry)
         loss_dtype = jnp.asarray(loss).dtype
@@ -906,7 +925,10 @@ class OptimEngine:
                 return self._run_optimizer_step_debug(opt, opt_index, obs_batch, carry)
 
             carry = jax.lax.cond(
-                self._debug_state(carry).has_nan,
+                jnp.logical_or(
+                    self._debug_state(carry).has_nan,
+                    carry.epoch < opt.activate_after_epochs,
+                ),
                 lambda carry: carry,
                 run_optimizer_step,
                 carry,
