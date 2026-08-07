@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from numbers import Integral
 from typing import TYPE_CHECKING
 
 import jax
@@ -44,6 +45,9 @@ class Optimizer:
         Optional identifier used to store this optimizer's state in
         :class:`.OptimCarry`. Missing identifiers are filled by
         :class:`.OptimEngine`.
+    activate_after_epochs
+        Number of completed epochs required before this optimizer participates in
+        batch updates. ``0`` activates it from the first epoch.
 
     Notes
     -----
@@ -70,6 +74,7 @@ class Optimizer:
     position_keys: Sequence[str]
     optimizer: optax.GradientTransformation
     identifier: str = ""
+    activate_after_epochs: int = 0
 
     def __post_init__(self) -> None:
         """
@@ -81,6 +86,14 @@ class Optimizer:
             If no position keys are supplied or if any key is duplicated.
         """
         self.position_keys = tuple(self.position_keys)
+
+        if (
+            not isinstance(self.activate_after_epochs, Integral)
+            or isinstance(self.activate_after_epochs, bool)
+            or self.activate_after_epochs < 0
+        ):
+            raise ValueError("activate_after_epochs must be a non-negative integer.")
+        self.activate_after_epochs = int(self.activate_after_epochs)
 
         if len(self.position_keys) == 0:
             raise ValueError("position_keys must not be empty.")
@@ -196,6 +209,7 @@ class Optimizer:
             "position_keys": self.position_keys,
             "identifier": self.identifier,
             "optimizer": self.optimizer,
+            "activate_after_epochs": self.activate_after_epochs,
         }
         return (children, aux_data)
 
@@ -208,8 +222,12 @@ class Optimizer:
     def __repr__(self) -> str:
         """Returns a compact representation with position keys and identifier."""
         name = type(self).__name__
-        out = f"{name}({self.position_keys}, identifier={self.identifier})"
-        return out
+        delay = (
+            f", activate_after_epochs={self.activate_after_epochs}"
+            if self.activate_after_epochs
+            else ""
+        )
+        return f"{name}({self.position_keys}, identifier={self.identifier}{delay})"
 
 
 jax.tree_util.register_pytree_node(
@@ -235,6 +253,9 @@ class LBFGS(Optimizer):
     identifier
         Optional optimizer-state identifier filled by :class:`.OptimEngine` when
         omitted.
+    activate_after_epochs
+        Number of completed epochs required before this optimizer participates in
+        batch updates. ``0`` activates it from the first epoch.
 
     Examples
     --------
