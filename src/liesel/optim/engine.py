@@ -1300,28 +1300,25 @@ class OptimEngine:
                 debug_has_nan = jnp.asarray(False)
 
             completed_batches = jnp.where(debug_has_nan, carry.i_batch + 1, upper)
-            finished_epoch = jnp.logical_and(upper == n_batches, ~debug_has_nan)
-            carry = jax.lax.cond(
-                finished_epoch,
-                self._finish_epoch,
-                lambda carry: carry,
-                carry,
-            )
             loss_train, loss_validate = self._completed_epoch_losses(carry)
-            should_continue = jax.lax.cond(
-                finished_epoch,
-                self._continue_fit,
-                lambda carry: ~debug_has_nan,
-                carry,
-            )
             status = (
                 carry.epoch,
                 completed_batches,
                 loss_train,
                 loss_validate,
                 debug_has_nan,
-                finished_epoch,
-                should_continue,
+            )
+            return carry, status
+
+        @jax.jit
+        def finish_epoch(carry: OptimCarry):
+            carry = self._finish_epoch(carry)
+            loss_train, loss_validate = self._completed_epoch_losses(carry)
+            status = (
+                carry.epoch,
+                loss_train,
+                loss_validate,
+                self._continue_fit(carry),
             )
             return carry, status
 
@@ -1367,12 +1364,12 @@ class OptimEngine:
                         loss_train,
                         loss_validate,
                         debug_has_nan_value,
-                        finished_epoch_value,
-                        continue_value,
                     ) = jax.device_get(status)
 
+                    debug_has_nan = bool(debug_has_nan_value)
                     completed_batches = int(completed_batches_value)
-                    finished_epoch = bool(finished_epoch_value)
+                    completed_epochs = int(completed)
+                    finished_epoch = upper == n_batches and not debug_has_nan
                     if batch_progress_bar is not None:
                         if not use_nested_bars:
                             batch_progress_bar.set_description_str(
@@ -1389,13 +1386,38 @@ class OptimEngine:
                         update = completed_batches - rendered_batches
                         if update > 0:
                             batch_progress_bar.update(update)
+                        if finished_epoch:
+                            batch_progress_bar.refresh()
                     rendered_batches = max(rendered_batches, completed_batches)
-                    should_continue = bool(continue_value)
 
-                    if bool(debug_has_nan_value) or finished_epoch:
+                    if debug_has_nan:
+                        should_continue = False
                         break
 
-                completed_epochs = int(completed)
+                    if finished_epoch:
+                        carry, status = finish_epoch(carry)
+                        (
+                            completed,
+                            loss_train,
+                            loss_validate,
+                            continue_value,
+                        ) = jax.device_get(status)
+                        completed_epochs = int(completed)
+                        should_continue = bool(continue_value)
+                        if batch_progress_bar is not None and not use_nested_bars:
+                            batch_progress_bar.set_description_str(
+                                self._shared_progress_description(
+                                    current_epoch,
+                                    max_epochs,
+                                    completed_batches,
+                                    n_batches,
+                                    loss_train,
+                                    loss_validate,
+                                ),
+                                refresh=False,
+                            )
+                        break
+
                 if finished_epoch:
                     if use_nested_bars:
                         rendered_epochs = self._update_outer_progress(

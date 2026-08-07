@@ -292,6 +292,7 @@ class FakeTqdm:
         self.updates = []
         self.descriptions = [desc]
         self.thread_ids = [threading.get_ident()]
+        self.refreshes = 0
         self.closed = False
         type(self).instances.append(self)
 
@@ -314,6 +315,10 @@ class FakeTqdm:
         self.n = 0
         if total is not None:
             self.total = total
+
+    def refresh(self):
+        self.thread_ids.append(threading.get_ident())
+        self.refreshes += 1
 
     def close(self):
         self.thread_ids.append(threading.get_ident())
@@ -882,10 +887,37 @@ def test_non_tty_progress_uses_one_fixed_width_bar(monkeypatch):
     )
     assert progress_bar.total == 25
     assert progress_bar.updates == [2, 2, 1] * 5
+    assert progress_bar.refreshes == 5
     assert progress_bar.descriptions[-1].endswith("E 5/5, B 5/5")
     assert all(desc.startswith("Train=") for desc in progress_bar.descriptions)
     assert all("Monitor=" in desc for desc in progress_bar.descriptions)
     assert progress_bar.closed
+
+
+def test_step_progress_refreshes_before_finishing_epoch(monkeypatch):
+    events = []
+
+    class RecordingTqdm(FakeTqdm):
+        def refresh(self):
+            events.append("refresh")
+            super().refresh()
+
+    engine = _progress_engine(epochs=1, show_step_progress=True)
+    finish_epoch = engine._finish_epoch
+
+    def record_finish(carry):
+        events.append("finish")
+        return finish_epoch(carry)
+
+    FakeTqdm.instances = []
+    monkeypatch.setattr(engine_module, "tqdm", RecordingTqdm)
+    monkeypatch.setattr(engine_module.sys.stderr, "isatty", lambda: False)
+    monkeypatch.setattr(engine_module.jax, "jit", lambda fn: fn)
+    monkeypatch.setattr(engine, "_finish_epoch", record_finish)
+
+    engine.fit()
+
+    assert events == ["refresh", "finish"]
 
 
 def test_shared_progress_description_uses_fixed_width_counts():
