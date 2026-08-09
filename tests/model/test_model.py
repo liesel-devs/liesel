@@ -547,6 +547,31 @@ class TestModel:
         pos = model.extract_position(["z"])
         assert pos["z"] == pytest.approx(model.nodes["z"].value)
 
+    def test_convert_position_uses_model_converters(self) -> None:
+        x = Var.new_value(
+            0.0,
+            name="x",
+            convert=lambda value: jnp.asarray(value, dtype=jnp.float32),
+        )
+        node = Value(
+            0,
+            _name="node",
+            convert=lambda value: jnp.asarray(value, dtype=jnp.int32),
+        )
+        model = Model(x, node)
+
+        position = model.convert_position({"x": [1, 2], "node": [3.0, 4.0]})
+
+        assert position["x"].dtype == jnp.float32
+        assert position["node"].dtype == jnp.int32
+
+        with pytest.raises(KeyError, match="unknown is not part of the model"):
+            model.convert_position({"unknown": 1})
+
+        unknown = object()
+        position = model.convert_position({"unknown": unknown}, allow_unknown=True)
+        assert position["unknown"] is unknown
+
     def test_update_state(self, model) -> None:
         pos = {"z": 3.0}
         state = model.update_state(pos, inplace=False)
@@ -683,6 +708,51 @@ class TestPredictions:
     def test_default_chunk_size(self) -> None:
         assert inspect.signature(Model.predict).parameters["chunk_size"].default == 64
         assert inspect.signature(Var.predict).parameters["chunk_size"].default == 64
+
+    def test_predict_converts_samples(self) -> None:
+        class RawValue:
+            def __init__(self, value) -> None:
+                self.value = value
+
+        def convert(value):
+            if isinstance(value, RawValue):
+                value = value.value
+            return jnp.asarray(value, dtype=jnp.float32)
+
+        x = Var.new_param(0.0, name="x", convert=convert)
+        twice_x = Var.new_calc(lambda value: 2.0 * value, x, name="twice_x")
+        model = Model(twice_x)
+
+        pred = model.predict(
+            samples={"x": RawValue([1, 2, 3])},
+            predict=["twice_x"],
+        )
+
+        assert pred["twice_x"].dtype == jnp.float32
+        assert pred["twice_x"] == pytest.approx([2.0, 4.0, 6.0])
+
+    def test_predict_converts_newdata(self) -> None:
+        class RawValue:
+            def __init__(self, value) -> None:
+                self.value = value
+
+        def convert(value):
+            if isinstance(value, RawValue):
+                value = value.value
+            return jnp.asarray(value, dtype=jnp.float32)
+
+        x = Var.new_obs([0.0], name="x", convert=convert)
+        theta = Var.new_param(0.0, name="theta")
+        target = Var.new_calc(lambda x, theta: x + theta, x, theta, name="target")
+        model = Model(target)
+
+        pred = model.predict(
+            samples={"theta": [1.0, 2.0]},
+            predict=["target"],
+            newdata={"x": RawValue([3.0, 4.0])},
+        )
+
+        assert jnp.allclose(pred["target"], jnp.array([[4.0, 5.0], [5.0, 6.0]]))
 
     @pytest.mark.parametrize("chunk_size", [None, 2])
     def test_compiled_prediction_is_differentiable(
@@ -1185,6 +1255,50 @@ class TestSample:
     def test_default_chunk_size(self) -> None:
         assert inspect.signature(Model.sample).parameters["chunk_size"].default == 64
         assert inspect.signature(Var.sample).parameters["chunk_size"].default == 64
+
+    def test_sample_converts_posterior_samples(self) -> None:
+        class RawValue:
+            def __init__(self, value) -> None:
+                self.value = value
+
+        def convert(value):
+            if isinstance(value, RawValue):
+                value = value.value
+            return jnp.asarray(value)
+
+        x = Var.new_value(0.0, name="x", convert=convert)
+        y = Var(0.0, Dist(tfd.Deterministic, loc=x), name="y")
+        model = Model(y)
+
+        samples = model.sample(
+            shape=(2,),
+            seed=rnd.key(8),
+            posterior_samples={"x": RawValue([[3.0]])},
+        )
+
+        assert samples["y"] == pytest.approx(3.0)
+
+    def test_sample_converts_newdata(self) -> None:
+        class RawValue:
+            def __init__(self, value) -> None:
+                self.value = value
+
+        def convert(value):
+            if isinstance(value, RawValue):
+                value = value.value
+            return jnp.asarray(value)
+
+        x = Var.new_value(0.0, name="x", convert=convert)
+        y = Var(0.0, Dist(tfd.Deterministic, loc=x), name="y")
+        model = Model(y)
+
+        samples = model.sample(
+            shape=(2,),
+            seed=rnd.key(8),
+            newdata={"x": RawValue(3.0)},
+        )
+
+        assert samples["y"] == pytest.approx(3.0)
 
     def test_sample_in_chunks(self, linreg: Model):
         model = linreg

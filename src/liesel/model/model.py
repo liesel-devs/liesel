@@ -8,7 +8,7 @@ import logging
 import math
 import re
 from collections import Counter
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
 from numbers import Integral
 from typing import IO, Any, Literal, Self, TypeVar
@@ -2350,9 +2350,9 @@ class Model:
         self,
         shape: Sequence[int],
         seed: jax.Array,
-        posterior_samples: dict[str, jax.typing.ArrayLike] | None = None,
+        posterior_samples: dict[str, Any] | None = None,
         fixed: Sequence[str] = (),
-        newdata: dict[str, jax.typing.ArrayLike] | None = None,
+        newdata: dict[str, Any] | None = None,
         dists: dict[str, Dist] | None = None,
         chunk_size: int | None = 64,
     ) -> dict[str, Array]:
@@ -2372,15 +2372,17 @@ class Model:
         posterior_samples
             Dictionary of samples at which to evaluate predictions. All values of the \
             dictionary are assumed to have two leading dimensions corresponding to \
-            ``(nchains, niteration)``.
+            ``(nchains, niteration)``. Values are converted with their model-specific \
+            converters before sampling.
         fixed
             The names of the nodes or variables to be excluded from the simulation. \
             By default, no nodes or variables are skipped.
         newdata
             Dictionary of new data at which to produce samples. The keys should \
             correspond to variable or node names in the model whose values should be \
-            set to the given values before sampling. If ``None`` \
-            (default), the current variable values are used.
+            set to the given values before sampling. Values are converted with their \
+            model-specific converters. If ``None`` (default), the current variable \
+            values are used.
         dists
             Can be used to provide a dictionary of variable names and :class:`.Dist` \
             instances to use in sampling. If ``None`` (default), samples are drawn for \
@@ -2427,6 +2429,10 @@ class Model:
             if key in vars_and_nodes
         }
 
+        # Ported from ty (d75b5464). A future branch merge should route this through
+        # ty's shared Position abstraction without losing optim-devel's chunking.
+        filtered_samples = self.convert_position(filtered_samples)
+
         shape_sources = filtered_samples if filtered_samples else posterior_samples
         posterior_batch_shapes = [
             tuple(jnp.shape(value)[:2]) for value in shape_sources.values()
@@ -2444,7 +2450,7 @@ class Model:
         posterior_samples = jax.tree.map(jnp.asarray, filtered_samples)
 
         if newdata is not None:
-            newdata = jax.tree.map(jnp.asarray, newdata)
+            newdata = self.convert_position(newdata)
         # Pre-processing
         # ------------------------------------------------------------------------------
         state_for_sampling = (
@@ -2860,6 +2866,34 @@ class Model:
         except KeyError:
             return self.vars[key].value_node
 
+    def convert_position(
+        self,
+        position: Mapping[str, Any],
+        *,
+        allow_unknown: bool = False,
+    ) -> Position:
+        """Convert position values with their model-specific converters.
+
+        Variable keys use the converter configured on the respective :class:`.Var`;
+        node keys use the converter configured on the respective :class:`.Node`.
+        Unknown keys raise :class:`KeyError` unless ``allow_unknown=True``, in which
+        case their values are returned unchanged.
+        """
+        converted = {}
+
+        for key, value in position.items():
+            try:
+                converter = self._node_for_position_key(key)._convert
+            except KeyError:
+                if allow_unknown:
+                    converted[key] = value
+                    continue
+                raise KeyError(f"{key} is not part of the model.") from None
+
+            converted[key] = converter(value)
+
+        return Position(converted)
+
     def _validate_weak_var_position(self, position: dict[str, Array]) -> None:
         """
         Validates that weak variable updates in a position are unambiguous.
@@ -2987,9 +3021,9 @@ class Model:
 
     def predict(
         self,
-        samples: dict[str, jax.typing.ArrayLike],
+        samples: dict[str, Any],
         predict: Sequence[str] | None = None,
-        newdata: dict[str, jax.typing.ArrayLike] | None = None,
+        newdata: dict[str, Any] | None = None,
         chunk_size: int | None = 64,
     ) -> dict[str, Array]:
         """
@@ -3000,7 +3034,8 @@ class Model:
         samples
             Dictionary of samples at which to evaluate predictions. If ``samples``
             contains entries for weak variables or for nodes in :attr:`.model_nodes`
-            they are ignored.
+            they are ignored. Remaining values are converted with their model-specific
+            converters.
         predict
             Sequence of strings, which are the names of nodes or variables. \
             Predictions will be returned only for the nodes or variables inlcuded \
@@ -3009,8 +3044,9 @@ class Model:
         newdata
             Dictionary of new data at which to evaluate predictions. The keys should \
             correspond to variable or node names in the model whose values should be \
-            set to the given values before evaluating predictions. If ``None`` \
-            (default), the current variable values are used.
+            set to the given values before evaluating predictions. Values are converted
+            with their model-specific converters. If ``None`` (default), the current
+            variable values are used.
         chunk_size
             Maximum number of flattened samples to evaluate in parallel. Defaults to \
             ``64``. Pass ``None`` to evaluate all samples in parallel. A smaller value \
@@ -3043,9 +3079,9 @@ class Model:
                 "Any key should be present in only one of these arguments."
             )
 
-        samples = jax.tree.map(jnp.asarray, samples)
-        if newdata is not None:
-            newdata = jax.tree.map(jnp.asarray, newdata)
+        # Ported from ty (25cd6877). A future branch merge should adopt ty's shared
+        # Position abstraction while retaining optim-devel's chunked prediction.
+        samples = self.convert_position(samples, allow_unknown=True)
         # deduce batching dimensions
         shapes = []
         for name, value in samples.items():
@@ -3102,7 +3138,7 @@ class Model:
                 newdata.pop(key, None)
 
         # update submodel with new data, if any were given
-        submodel.state = submodel.update_state(newdata)
+        submodel.state = submodel.update_state(submodel.convert_position(newdata))
 
         # filter samples to include only samples that belong to the submodel
         vars_and_nodes = list(submodel.vars) + list(submodel.nodes)

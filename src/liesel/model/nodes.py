@@ -2961,8 +2961,8 @@ class Var:
 
     def predict(
         self,
-        samples: dict[str, jax.typing.ArrayLike],
-        newdata: dict[str, jax.typing.ArrayLike] | None = None,
+        samples: dict[str, Any],
+        newdata: dict[str, Any] | None = None,
         chunk_size: int | None = 64,
     ) -> Array:
         """
@@ -3059,9 +3059,9 @@ class Var:
         self,
         shape: Sequence[int],
         seed: jax.Array,
-        posterior_samples: dict[str, jax.typing.ArrayLike] | None = None,
+        posterior_samples: dict[str, Any] | None = None,
         fixed: Sequence[str] = (),
-        newdata: dict[str, jax.typing.ArrayLike] | None = None,
+        newdata: dict[str, Any] | None = None,
         dists: dict[str, Dist] | None = None,
         chunk_size: int | None = 64,
     ) -> dict[str, Array]:
