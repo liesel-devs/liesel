@@ -371,7 +371,7 @@ def _infer_sample_size_for_part(
     >>> _infer_sample_size_for_part(model, state, split, "validate")
     1
     """
-    infos = _observed_dist_infos(model, split.position_keys)
+    infos = _observed_dist_infos(model, split.split_position_keys)
     sizes: dict[str, int] = {}
 
     for var_name, node_name, per_obs in infos:
@@ -427,6 +427,10 @@ class PositionSplit:
         If omitted, split-axis counts are used. Use :meth:`from_model` or
         :meth:`add_inferred_sample_sizes_from_model` to infer these values from
         pointwise observed log-probability arrays.
+    passthrough
+        Keyword-only position entries copied unchanged into ``train``, ``validate``,
+        and ``test``. These entries are excluded from split likelihood scaling and
+        from batches derived automatically from this split.
 
     Examples
     --------
@@ -455,8 +459,15 @@ class PositionSplit:
     validate_axis_size: int
     test_axis_size: int
     sample_sizes: SampleSizes | None = None
+    passthrough: Position = field(
+        default_factory=lambda: Position({}), kw_only=True, repr=False
+    )
 
     def __post_init__(self):
+        self.passthrough = Position(dict(self.passthrough))
+        self.train = _merge_positions([self.train, self.passthrough])
+        self.validate = _merge_positions([self.validate, self.passthrough])
+        self.test = _merge_positions([self.test, self.passthrough])
         self.set_sample_sizes(self.sample_sizes)
 
         if (
@@ -490,6 +501,11 @@ class PositionSplit:
 
             raise ValueError("PositionSplit must contain position entries.")
 
+        if not self.split_position_keys:
+            raise ValueError(
+                "PositionSplit requires at least one position key to be split."
+            )
+
         for part, position, n_part in (
             ("train", self.train, self.train_axis_size),
             ("validate", self.validate, self.validate_axis_size),
@@ -509,7 +525,9 @@ class PositionSplit:
                 )
 
             for key, value in position.items():
-                if not _position_size_is_compatible(value, n_part):
+                if key not in self.passthrough and not _position_size_is_compatible(
+                    value, n_part
+                ):
                     raise ValueError(
                         f"PositionSplit.{part}[{key!r}] has shape {jnp.shape(value)}, "
                         f"which is incompatible with the declared split size "
@@ -542,6 +560,12 @@ class PositionSplit:
                 return list(position)
 
         return []
+
+    @property
+    def split_position_keys(self) -> list[str]:
+        """Position keys that are partitioned rather than passed through."""
+        passthrough_keys = set(self.passthrough)
+        return [key for key in self.position_keys if key not in passthrough_keys]
 
     def set_sample_sizes(self, sample_sizes: SampleSizes | None) -> PositionSplit:
         """
@@ -873,7 +897,7 @@ class PositionSplit:
             return scaled_liesel_log_lik(
                 model=model,
                 model_state=model_state,
-                groups=[(self.position_keys, scale)],
+                groups=[(self.split_position_keys, scale)],
             )
 
         return scaled_common_log_lik(model_state, scale)
@@ -893,7 +917,7 @@ class PositionSplit:
         axis_size: int | None = None,
         validate_axis_share: float = 0.0,
         test_axis_share: float = 0.0,
-        split_axes: dict[str, int] | None = None,
+        split_axes: dict[str, int | None] | None = None,
         default_split_axis: int = 0,
         shuffle: bool = False,
         seed: jax.Array | int | None = None,
@@ -909,8 +933,9 @@ class PositionSplit:
         model
             Model containing the observed variables to split.
         position_keys
-            Names of observed position entries to split. If ``None``, all observed
-            variables in ``model`` are used.
+            Names of observed position entries to include. If ``None``, all observed
+            variables in ``model`` are used. Use ``split_axes={key: None}`` to keep
+            a selected entry unchanged.
         axis_size
             Number of observations along the split axis. If ``None``, the number is
             guessed from ``model`` along ``default_split_axis``.
@@ -919,7 +944,8 @@ class PositionSplit:
         test_axis_share
             Share of observations assigned to the test split.
         split_axes
-            Optional mapping from position key to split axis. Keys missing from this
+            Optional mapping from position key to split axis. ``None`` keeps a
+            selected key unchanged in every split part. Keys missing from this
             mapping use ``default_split_axis``.
         default_split_axis
             Split axis for all position keys not listed in ``split_axes``.
@@ -994,6 +1020,11 @@ class PositionSplit:
         groups = position_key_groups_from_model(
             model, pos_keys, split_axes, default_split_axis
         )
+        if not groups:
+            raise ValueError(
+                "PositionSplit.from_model() requires at least one position key "
+                "to be split."
+            )
         if len(groups) > 1 and multi_size == "manager":
             if axis_size is not None:
                 raise ValueError(
@@ -1101,6 +1132,9 @@ class PositionSplitManager:
         :attr:`PositionSplit.position_keys` must not overlap. Either all children
         must contain validation data or none may contain validation data; the same
         rule applies to test data.
+    passthrough
+        Keyword-only shared position entries copied unchanged into the manager's
+        merged ``train``, ``validate``, and ``test`` positions.
 
     Raises
     ------
@@ -1163,12 +1197,16 @@ class PositionSplitManager:
     """
 
     splits: Sequence[PositionSplit]
+    passthrough: Position = field(
+        default_factory=lambda: Position({}), kw_only=True, repr=False
+    )
     _train: Position = field(init=False, repr=False)
     _validate: Position = field(init=False, repr=False)
     _test: Position = field(init=False, repr=False)
 
     def __post_init__(self):
         self.splits = tuple(self.splits)
+        self.passthrough = Position(dict(self.passthrough))
 
         if len(self.splits) == 0:
             raise ValueError(
@@ -1180,9 +1218,15 @@ class PositionSplitManager:
         )
         self._validate_split_availability("validation")
         self._validate_split_availability("test")
-        self._train = _merge_positions([split.train for split in self.splits])
-        self._validate = _merge_positions([split.validate for split in self.splits])
-        self._test = _merge_positions([split.test for split in self.splits])
+        self._train = _merge_positions(
+            [*[split.train for split in self.splits], self.passthrough]
+        )
+        self._validate = _merge_positions(
+            [*[split.validate for split in self.splits], self.passthrough]
+        )
+        self._test = _merge_positions(
+            [*[split.test for split in self.splits], self.passthrough]
+        )
 
     def _validate_split_availability(self, part: Literal["validation", "test"]):
         if part == "validation":
@@ -1203,7 +1247,7 @@ class PositionSplitManager:
         position_keys: Sequence[str] | None = None,
         validate_axis_share: float = 0.0,
         test_axis_share: float = 0.0,
-        split_axes: dict[str, int] | None = None,
+        split_axes: dict[str, int | None] | None = None,
         default_split_axis: int = 0,
         shuffle: bool = False,
         seed: jax.Array | int | None = None,
@@ -1291,6 +1335,15 @@ class PositionSplitManager:
         keys: list[str] = []
         for split in self.splits:
             keys.extend(split.position_keys)
+        keys.extend(self.passthrough)
+        return keys
+
+    @property
+    def split_position_keys(self) -> list[str]:
+        """Position keys that are partitioned rather than passed through."""
+        keys: list[str] = []
+        for split in self.splits:
+            keys.extend(split.split_position_keys)
         return keys
 
     @property
@@ -1632,7 +1685,7 @@ class PositionSplitManager:
 
         if isinstance(model, Model):
             groups = [
-                (split.position_keys, scale)
+                (split.split_position_keys, scale)
                 for split, scale in zip(self.splits, scales, strict=True)
             ]
             return scaled_liesel_log_lik(model, model_state, groups)
@@ -1671,6 +1724,8 @@ class SplitManager:
         Non-empty sequence of :class:`Split` objects. Their ``position_keys`` must
         not overlap. Either all children must define validation data or none may; the
         same rule applies to test data.
+    passthrough_position_keys
+        Keyword-only names copied unchanged into every returned split part.
 
     Examples
     --------
@@ -1702,9 +1757,13 @@ class SplitManager:
     """
 
     splits: Sequence[Split]
+    passthrough_position_keys: Sequence[str] = field(
+        default_factory=tuple, kw_only=True
+    )
 
     def __post_init__(self):
         self.splits = tuple(self.splits)
+        self.passthrough_position_keys = tuple(self.passthrough_position_keys)
 
         if len(self.splits) == 0:
             raise ValueError("SplitManager requires at least one Split object.")
@@ -1716,7 +1775,9 @@ class SplitManager:
                     "SplitManager children must define position_keys explicitly."
                 )
             groups.append(split.position_keys)
-        _validate_unique_position_keys(groups, "splits")
+        _validate_unique_position_keys(
+            [*groups, self.passthrough_position_keys], "splits"
+        )
         self._validate_split_availability("validation")
         self._validate_split_availability("test")
 
@@ -1739,7 +1800,7 @@ class SplitManager:
         position_keys: Sequence[str] | None = None,
         validate_axis_share: float = 0.0,
         test_axis_share: float = 0.0,
-        split_axes: dict[str, int] | None = None,
+        split_axes: dict[str, int | None] | None = None,
         default_split_axis: int = 0,
         shuffle: bool = False,
         seed: jax.Array | int | None = None,
@@ -1752,14 +1813,16 @@ class SplitManager:
         model
             Model containing the observed variables to split.
         position_keys
-            Names of observed position entries to split. If ``None``, all observed
-            variables in ``model`` are used.
+            Names of observed position entries to include. If ``None``, all observed
+            variables in ``model`` are used. Use ``split_axes={key: None}`` to keep
+            a selected entry unchanged.
         validate_axis_share
             Share of observations assigned to validation in every child split.
         test_axis_share
             Share of observations assigned to testing in every child split.
         split_axes
-            Optional mapping from position key to split axis.
+            Optional mapping from position key to split axis. ``None`` keeps a
+            selected key unchanged in every split part.
         default_split_axis
             Split axis for all position keys not listed in ``split_axes``.
         shuffle
@@ -1794,6 +1857,16 @@ class SplitManager:
         groups = position_key_groups_from_model(
             model, pos_keys, split_axes, default_split_axis
         )
+        if not groups:
+            raise ValueError(
+                "SplitManager.from_model() requires at least one position key "
+                "to be split."
+            )
+
+        split_axes = split_axes or {}
+        passthrough_position_keys = [
+            key for key in pos_keys if split_axes.get(key, default_split_axis) is None
+        ]
         seeds = _child_seeds(seed, len(groups)) if shuffle else (seed,) * len(groups)
         splits = []
 
@@ -1813,7 +1886,7 @@ class SplitManager:
 
         _validate_child_split_availability(splits, validate_axis_share, test_axis_share)
 
-        return cls(splits)
+        return cls(splits, passthrough_position_keys=passthrough_position_keys)
 
     @property
     def position_keys(self) -> list[str]:
@@ -1832,6 +1905,7 @@ class SplitManager:
         for split in self.splits:
             assert split.position_keys is not None
             keys.extend(split.position_keys)
+        keys.extend(self.passthrough_position_keys)
         return keys
 
     @property
@@ -1899,8 +1973,12 @@ class SplitManager:
         >>> split.train["x"].shape, split.validate["y"].shape
         ((2, 3), (2,))
         """
+        passthrough = Position(
+            {key: position[key] for key in self.passthrough_position_keys}
+        )
         return PositionSplitManager(
-            [split.split_position(position) for split in self.splits]
+            [split.split_position(position) for split in self.splits],
+            passthrough=passthrough,
         )
 
     def __repr__(self) -> str:
@@ -1925,8 +2003,9 @@ class Split:
     Parameters
     ----------
     position_keys
-        Names of position entries that should be split. If omitted,
-        :meth:`split_position` uses all keys in the supplied position.
+        Names of position entries that should be included. If omitted,
+        :meth:`split_position` uses all keys in the supplied position. Entries
+        mapped to ``None`` in ``split_axes`` are passed through unchanged.
     axis_size
         Number of observations along each split axis. Must be positive.
     validate_axis_size
@@ -1937,8 +2016,9 @@ class Split:
         Number of training observations. If left at ``None``, it is computed as
         ``axis_size - validate_axis_size - test_axis_size``.
     split_axes
-        Optional mapping from position key to split axis. Keys missing from this
-        mapping use ``default_split_axis``.
+        Optional mapping from position key to split axis. ``None`` keeps a selected
+        key unchanged in every split part. Keys missing from this mapping use
+        ``default_split_axis``.
     default_split_axis
         Split axis for all position keys not listed in ``split_axes``.
     shuffle
@@ -2014,7 +2094,7 @@ class Split:
     validate_axis_size: int = 0
     test_axis_size: int = 0
     train_axis_size: int | None = None
-    split_axes: dict[str, int] | None = field(default_factory=dict)
+    split_axes: dict[str, int | None] | None = field(default_factory=dict)
     default_split_axis: int = 0
     shuffle: bool = False
     seed: jax.Array | int | None = None
@@ -2036,6 +2116,9 @@ class Split:
             raise ValueError(
                 f"Duplicate position_keys are not allowed: {list(self.position_keys)}"
             )
+
+        if self.position_keys is not None and not self.split_position_keys:
+            raise ValueError("Split requires at least one position key to be split.")
 
         if self.train_axis_size is None:
             self.train_axis_size = (
@@ -2172,7 +2255,7 @@ class Split:
         axis_size: int,
         validate_axis_share: float = 0.0,
         test_axis_share: float = 0.0,
-        split_axes: dict[str, int] | None = None,
+        split_axes: dict[str, int | None] | None = None,
         default_split_axis: int = 0,
         shuffle: bool = False,
         seed: jax.Array | int | None = None,
@@ -2188,7 +2271,8 @@ class Split:
         Parameters
         ----------
         position_keys
-            Names of position entries that should be split.
+            Names of position entries that should be included. Entries mapped to
+            ``None`` in ``split_axes`` are passed through unchanged.
         axis_size
             Number of observations along each split axis.
         validate_axis_share
@@ -2196,7 +2280,8 @@ class Split:
         test_axis_share
             Share of observations assigned to testing.
         split_axes
-            Optional mapping from position key to split axis.
+            Optional mapping from position key to split axis. ``None`` keeps a
+            selected key unchanged in every split part.
         default_split_axis
             Split axis for all position keys not listed in ``split_axes``.
         shuffle
@@ -2386,13 +2471,17 @@ class Split:
         if self.position_keys is None:
             self.position_keys = list(position)
 
+        if not self.split_position_keys:
+            raise ValueError("Split requires at least one position key to be split.")
+
         train_position = {}
         validation_position = {}
         test_position = {}
 
         assert self.split_axes is not None
-        for key in self.position_keys:
+        for key in self.split_position_keys:
             axis = self.split_axes.get(key, self.default_split_axis)
+            assert axis is not None
 
             n_this_key = jnp.shape(position[key])[axis]
             if not jnp.shape(position[key])[axis] == self.axis_size:
@@ -2411,6 +2500,10 @@ class Split:
             validation_position[key] = validation_values
             test_position[key] = test_values
 
+        passthrough = Position(
+            {key: position[key] for key in self.passthrough_position_keys}
+        )
+
         split = PositionSplit(
             train=Position(train_position),
             validate=Position(validation_position),
@@ -2419,8 +2512,35 @@ class Split:
             validate_axis_size=self.validate_axis_size,
             test_axis_size=self.test_axis_size,
             sample_sizes=self.sample_sizes,
+            passthrough=passthrough,
         )
         return split
+
+    @property
+    def split_position_keys(self) -> list[str]:
+        """Position keys that are partitioned by this splitter."""
+        if self.position_keys is None:
+            return []
+
+        assert self.split_axes is not None
+        return [
+            key
+            for key in self.position_keys
+            if self.split_axes.get(key, self.default_split_axis) is not None
+        ]
+
+    @property
+    def passthrough_position_keys(self) -> list[str]:
+        """Position keys copied unchanged into every split part."""
+        if self.position_keys is None:
+            return []
+
+        assert self.split_axes is not None
+        return [
+            key
+            for key in self.position_keys
+            if self.split_axes.get(key, self.default_split_axis) is None
+        ]
 
     def __repr__(self) -> str:
         name = type(self).__name__

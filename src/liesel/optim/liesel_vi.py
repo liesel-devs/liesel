@@ -73,7 +73,9 @@ class LieselVI:
     axis_size
         Optional scalar observation count for scalar default splitting.
     split_axes
-        Optional mapping from observed position key to split/batch axis.
+        Optional mapping from observed position key to split/batch axis. ``None``
+        includes a selected key unchanged in every split part; such keys are not
+        included in automatically derived batches.
     default_split_axis
         Split/batch axis for observed keys missing from ``split_axes``.
     shuffle_batches
@@ -148,7 +150,7 @@ class LieselVI:
         stopper: Stopper = Stopper(epochs=1000, patience=10, rtol=1e-6),
         seed: int | None = None,
         axis_size: int | None = None,
-        split_axes: dict[str, int] | None = None,
+        split_axes: dict[str, int | None] | None = None,
         default_split_axis: int = 0,
         shuffle_batches: bool = True,
         batch_mode: Literal["strict", "resample"] = "resample",
@@ -248,7 +250,7 @@ class LieselVI:
         loss: Literal["mvn_diag", "mvn_tril", "mvn_blocked"] | NegElboLoss,
         split: SplitConfig | None,
         axis_size: int | None,
-        split_axes: dict[str, int] | None,
+        split_axes: dict[str, int | None] | None,
         default_split_axis: int,
     ) -> SplitConfig:
         if isinstance(loss, NegElboLoss):
@@ -322,7 +324,7 @@ class LieselVI:
         self,
         batches: BatchConfig | None,
         batch_size: int | None,
-        split_axes: dict[str, int] | None,
+        split_axes: dict[str, int | None] | None,
         default_split_axis: int,
         shuffle: bool,
         mode: Literal["strict", "resample"],
@@ -331,15 +333,18 @@ class LieselVI:
         if batches is not None:
             return batches
 
+        batch_axes = {
+            key: axis for key, axis in (split_axes or {}).items() if axis is not None
+        }
         shuffle = False if batch_size is None else shuffle
         if isinstance(self.split, PositionSplitManager):
             children = [
                 Batches(
-                    position_keys=child.position_keys,
+                    position_keys=child.split_position_keys,
                     axis_size=child.train_axis_size,
                     batch_size=batch_size,
                     shuffle=shuffle,
-                    batch_axes=split_axes,
+                    batch_axes=batch_axes,
                     default_batch_axis=default_split_axis,
                     sample_size=child.train_sample_size,
                     sample_with_replacement=(
@@ -352,13 +357,13 @@ class LieselVI:
             ]
             return BatchManager(children, mode=mode, epoch_size=epoch_size)
 
-        position_keys = self.split.position_keys or list(self.model.observed)
+        position_keys = self.split.split_position_keys
         return Batches(
             position_keys=position_keys,
             axis_size=self.split.train_axis_size,
             batch_size=batch_size,
             shuffle=shuffle,
-            batch_axes=split_axes,
+            batch_axes=batch_axes,
             default_batch_axis=default_split_axis,
             sample_size=self.split.train_sample_size,
         )

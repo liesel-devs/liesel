@@ -45,6 +45,31 @@ def _matrix_obs_model(shape=(4, 8)):
 
 
 class TestSplit:
+    def test_split_position_keeps_none_axis_keys_unchanged(self):
+        response = jnp.arange(24.0).reshape(4, 6)
+        land = jnp.arange(6.0).reshape(6, 1)
+        splitter = Split(
+            ["response", "land"],
+            axis_size=4,
+            validate_axis_size=1,
+            test_axis_size=1,
+            split_axes={"response": 0, "land": None},
+        )
+
+        split = splitter.split_position({"response": response, "land": land})
+
+        assert split.train["response"].shape == (2, 6)
+        assert split.validate["response"].shape == (1, 6)
+        assert split.test["response"].shape == (1, 6)
+        assert split.position_keys == ["response", "land"]
+        assert split.split_position_keys == ["response"]
+        for part in (split.train, split.validate, split.test):
+            assert jnp.array_equal(part["land"], land)
+
+    def test_split_requires_at_least_one_non_passthrough_key(self):
+        with pytest.raises(ValueError, match="at least one.*split"):
+            Split(["land"], axis_size=4, split_axes={"land": None})
+
     def test_split_position_infers_position_keys_when_omitted(self):
         splitter = Split(axis_size=4, validate_axis_size=1)
 
@@ -221,6 +246,17 @@ class TestSplit:
 
 
 class TestPositionSplit:
+    def test_from_model_keeps_position_keys_authoritative(self):
+        model, _, _ = _two_branch_model()
+
+        split = PositionSplit.from_model(
+            model,
+            position_keys=["y1"],
+            split_axes={"y2": None},
+        )
+
+        assert split.position_keys == ["y1"]
+
     def test_integrity_checks(self):
         pos = Position({"x": jnp.arange(1)})
 
@@ -405,6 +441,33 @@ class TestPositionSplit:
 
 
 class TestSplitManager:
+    def test_from_model_keeps_shared_passthrough_keys(self):
+        loc = lsl.Var.new_param(0.0, name="loc")
+        y1 = lsl.Var.new_obs(
+            jnp.arange(10.0),
+            lsl.Dist(tfd.Normal, loc=loc, scale=1.0),
+            name="y1",
+        )
+        y2 = lsl.Var.new_obs(
+            jnp.arange(6.0),
+            lsl.Dist(tfd.Normal, loc=loc, scale=1.0),
+            name="y2",
+        )
+        shared = lsl.Var.new_obs(jnp.arange(3.0), name="shared")
+        model = lsl.Model([y1, y2, shared])
+
+        split = PositionSplitManager.from_model(
+            model,
+            position_keys=["y1", "y2", "shared"],
+            validate_axis_share=0.2,
+            split_axes={"shared": None},
+        )
+
+        assert split.position_keys == ["y1", "y2", "shared"]
+        assert split.split_position_keys == ["y1", "y2"]
+        for part in (split.train, split.validate, split.test):
+            assert jnp.array_equal(part["shared"], shared.value)
+
     def test_rejects_children_with_deferred_position_keys(self):
         with pytest.raises(ValueError, match="position_keys"):
             SplitManager([Split(axis_size=3)])

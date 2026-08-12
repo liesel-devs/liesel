@@ -323,7 +323,7 @@ class Batches:
         if isinstance(split, PositionSplitManager):
             children = [
                 cls(
-                    position_keys=child.position_keys,
+                    position_keys=child.split_position_keys,
                     axis_size=child.train_axis_size,
                     batch_size=batch_size,
                     shuffle=False if batch_size is None else shuffle,
@@ -341,7 +341,7 @@ class Batches:
             return BatchManager(children, mode=mode, epoch_size=epoch_size)
 
         return cls(
-            position_keys=split.position_keys,
+            position_keys=split.split_position_keys,
             axis_size=split.train_axis_size,
             batch_size=batch_size,
             shuffle=False if batch_size is None else shuffle,

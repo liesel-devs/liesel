@@ -6,6 +6,7 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.model as lsl
 from liesel.optim import (
+    Batches,
     NegElboLoss,
     NegLogProbLoss,
     PositionSplit,
@@ -108,6 +109,37 @@ def test_neg_log_prob_loss_scale_uses_inferred_training_sample_size():
     assert split.train_sample_size == 24.0
     assert scaled_loss.scalar == 24.0
     assert jnp.allclose(scaled, unscaled / 24.0)
+
+
+def test_passthrough_likelihood_is_not_split_scaled_or_batched_by_default():
+    y = lsl.Var.new_obs(
+        jnp.arange(10.0),
+        lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+        name="y",
+    )
+    z = lsl.Var.new_obs(
+        jnp.arange(3.0),
+        lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+        name="z",
+    )
+    model = lsl.Model([y, z])
+    split = PositionSplit.from_model(
+        model,
+        position_keys=["y", "z"],
+        validate_axis_share=0.2,
+        split_axes={"y": 0, "z": None},
+    )
+
+    state = model.update_state(split.validate, model.state)
+    value = split.scaled_log_lik(model, state)
+    manual = (
+        split.validate_sample_scale * state["y_log_prob"].value.sum()
+        + state["z_log_prob"].value.sum()
+    )
+    batches = Batches.from_split(split, batch_size=2, shuffle=False)
+
+    assert jnp.allclose(value, manual)
+    assert batches.position_keys == ["y"]
 
 
 def test_neg_log_prob_loss_scale_uses_total_unequal_branch_training_size():
