@@ -239,6 +239,43 @@ def test_batched_fit_handles_float32_model_with_x64_enabled():
     assert result.history.loss_train.dtype == jnp.float32
 
 
+def test_fit_can_split_response_and_batch_shared_covariate_on_different_axes():
+    loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
+    response = lsl.Var.new_obs(
+        jnp.arange(24.0).reshape(4, 6),
+        lsl.Dist(tfd.Normal, loc=loc, scale=1.0),
+        name="response",
+    )
+    land = lsl.Var.new_obs(jnp.arange(6.0).reshape(6, 1), name="land")
+    model = lsl.Model([response, land])
+    split = PositionSplit.from_model(
+        model,
+        position_keys=["response", "land"],
+        axis_size=4,
+        validate_axis_share=0.25,
+        split_axes={"response": 0, "land": None},
+    )
+    batches = Batches.from_model(
+        model,
+        batch_size=3,
+        position_keys=["response", "land"],
+        axis_size=6,
+        batch_axes={"response": 1, "land": 0},
+        shuffle=False,
+    )
+
+    result = LieselOptim(
+        model,
+        split=split,
+        batches=batches,
+        stopper=Stopper(epochs=1, patience=1),
+        seed=1,
+        show_progress=False,
+    ).fit()
+
+    assert jnp.isfinite(result.history.loss_train[0])
+
+
 def test_fit_handles_float64_model_with_x64_enabled():
     with jax.enable_x64(True):
         loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
