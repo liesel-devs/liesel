@@ -40,6 +40,11 @@ class OptimizerLike(Protocol):
     @identifier.setter
     def identifier(self, value: str) -> None: ...
 
+    @property
+    def activate_after_epochs(self) -> int:
+        """Number of completed epochs before this optimizer becomes active."""
+        ...
+
     def position(self, position: Position) -> Position:
         """Extract the entries owned by this optimizer."""
         ...
