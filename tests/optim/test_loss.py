@@ -1,9 +1,10 @@
 from types import SimpleNamespace
 
 import jax.numpy as jnp
-import liesel.model as lsl
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
+
+import liesel.model as lsl
 from liesel.optim import (
     Batches,
     NegLogProbLoss,
