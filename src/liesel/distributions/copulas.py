@@ -85,7 +85,7 @@ class GaussianCopula(tfd.TransformedDistribution):
     ):
         parameters = dict(locals())
 
-        batch_shape = np.shape(dependence)
+        batch_shape = () if dependence is None else np.shape(dependence)
         loc = np.zeros(batch_shape + (2,))
 
         if dependence is None:

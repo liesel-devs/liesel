@@ -14,6 +14,13 @@ from liesel.model.goose import finite_discrete_gibbs_kernel
 
 
 class TestFiniteDiscreteGibbsKernel:
+    def test_variable_without_distribution(self):
+        variable = lsl.Var(0, name="variable")
+        model = lsl.Model([variable])
+
+        with pytest.raises(ValueError, match="Variable 'variable' has no distribution"):
+            finite_discrete_gibbs_kernel("variable", model)
+
     def test_transition(self):
         values = [0, 1, 2]
         prior_probs = [0.1, 0.2, 0.7]

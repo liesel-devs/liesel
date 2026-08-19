@@ -11,7 +11,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
 from numbers import Integral
-from typing import IO, Any, Literal, Self, TypeVar
+from typing import IO, Any, Literal, Self, TypedDict
 
 import dill
 import jax
@@ -20,7 +20,7 @@ import jax.random
 import networkx as nx
 import pandas as pd
 
-from ..goose.types import ModelState, Position
+from ..types import Position
 from ._mapping import _KeyCompletableMapping, _KeyCompletableProperty
 from .nodes import (
     Array,
@@ -33,6 +33,7 @@ from .nodes import (
     Value,
     Var,
     VarValue,
+    _transformed_distribution_bijector,
 )
 from .viz import plot_nodes, plot_vars
 
@@ -46,7 +47,13 @@ logger = logging.getLogger(__name__)
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
-NV = TypeVar("NV", Node, Var)
+class _SamplingSpec(TypedDict):
+    """Information needed to draw and store a sample from a distribution node."""
+
+    shape: tuple[int, ...]
+    dist: Dist
+    seed_index: int
+    value_node: Node
 
 
 def _reduced_sum(*args: Array) -> Array:
@@ -62,20 +69,20 @@ def _transform_back(var_transformed: Var) -> Calc:
     """
 
     if var_transformed.dist_node is None:
-        raise RuntimeError(
-            f"{repr(var_transformed)} must have a transformed distribution"
-        )
+        raise RuntimeError(f"{var_transformed!r} must have a transformed distribution")
 
     transformed_distribution = var_transformed.dist_node.distribution
 
     def fn(at, *args, **kwargs):
-        bijector = transformed_distribution(*args, **kwargs).bijector
+        bijector = _transformed_distribution_bijector(
+            transformed_distribution(*args, **kwargs)
+        )
         return bijector.inverse(at)
 
     inputs = var_transformed.dist_node.inputs
-    kwinputs = var_transformed.dist_node.kwinputs
+    kwinputs: dict[str, Any] = dict(var_transformed.dist_node.kwinputs)
 
-    return Calc(fn, var_transformed.value_node, *inputs, **kwinputs)  # type: ignore
+    return Calc(fn, var_transformed.value_node, *inputs, **kwinputs)
 
 
 def _set_weak_var_value(var: Var, value: Array) -> None:
@@ -93,8 +100,9 @@ def _set_weak_var_value(var: Var, value: Array) -> None:
     outdated too.
     """
     if isinstance(var.value_node, TransientNode):
-        raise RuntimeError(
-            f"{repr(var)} is weak and transient, cannot set cached value"
+        # This is an invalid graph state, not an invalid argument type.
+        raise RuntimeError(  # noqa: TRY004
+            f"{var!r} is weak and transient, cannot set cached value"
         )
 
     var.value_node.state = NodeState(value, False)
@@ -158,7 +166,7 @@ def _validate_chunk_size(chunk_size: int | None) -> int | None:
 
 def _compile_sampling(
     model: Model,
-    sampling_specs: dict[str, dict[str, Any]],
+    sampling_specs: dict[str, _SamplingSpec],
     posterior_size: int,
     chunk_size: int | None = None,
 ) -> jax.stages.Wrapped:
@@ -189,7 +197,10 @@ def _compile_sampling(
             tfp_dist = spec["dist"].init_dist()
             value = tfp_dist.sample(spec["shape"], seeds[seed_index])
             sampled_position[name] = value
-            spec["value_var"].value = value
+            value_node = spec["value_node"]
+            if not isinstance(value_node, Value):
+                raise AttributeError(f"Cannot set value of {value_node}")  # noqa: TRY004
+            value_node.value = value
 
         model.state = previous_state
         return sampled_position
@@ -418,7 +429,7 @@ class GraphBuilder:
         return all_nodes, all_vars
 
     @staticmethod
-    def _do_set_missing_names(nodes_or_vars: Iterable[NV]) -> list[str]:
+    def _do_set_missing_names(nodes_or_vars: Iterable[Node | Var]) -> list[str]:
         """
         Sets the missing names for the given nodes or variables.
 
@@ -437,16 +448,16 @@ class GraphBuilder:
         """Sets the missing node and variable names."""
         nodes, _vars = self._all_nodes_and_vars()
 
-        var_names_before = set([v.name for v in _vars])
+        var_names_before = {v.name for v in _vars}
         for var in _vars:
             var.ensure_name()
-        var_names_after = set([v.name for v in _vars])
+        var_names_after = {v.name for v in _vars}
         auto_var_names = list(var_names_after - var_names_before)
 
-        node_names_before = set([v.name for v in nodes])
+        node_names_before = {v.name for v in nodes}
         for node in nodes:
             node.ensure_name()
-        node_names_after = set([v.name for v in nodes])
+        node_names_after = {v.name for v in nodes}
         auto_node_names = list(node_names_after - node_names_before)
 
         return {"vars": auto_var_names, "nodes": auto_node_names}
@@ -510,7 +521,7 @@ class GraphBuilder:
                 self.nodes.extend(arg.nodes)
                 self.vars.extend(arg.vars)
             else:
-                raise RuntimeError(f"Cannot add {type(arg).__name__} to graph builder")
+                raise TypeError(f"Cannot add {type(arg).__name__} to graph builder")
 
         if to_float32:
             self.convert_dtype("float64", "float32")
@@ -546,8 +557,7 @@ class GraphBuilder:
 
             if group.name in old and group is not old[group.name]:
                 raise RuntimeError(
-                    f"Group with name {repr(group.name)} already exists "
-                    "in graph builder"
+                    f"Group with name {group.name!r} already exists in graph builder"
                 )
 
             self.add(*group.nodes_and_vars.values())
@@ -626,7 +636,7 @@ class GraphBuilder:
 
         for node in nodes:
             if node.name.startswith("_model") and not node.name.endswith("_seed"):
-                raise RuntimeError(f"{repr(node)} has reserved name '_model*'")
+                raise RuntimeError(f"{node!r} has reserved name '_model*'")
 
         gb = self.copy()
 
@@ -684,7 +694,7 @@ class GraphBuilder:
 
         for node in nodes:
             if node.name.startswith("_model") and not node.name.endswith("_seed"):
-                raise RuntimeError(f"{repr(node)} has reserved name '_model*'")
+                raise RuntimeError(f"{node!r} has reserved name '_model*'")
 
         gb = self.copy()
 
@@ -754,6 +764,9 @@ class GraphBuilder:
                     pass
 
         for node in nodes:
+            if not isinstance(node, Value):
+                continue
+
             if node.model:
                 auto_update_before = node.model.auto_update
                 node.model.auto_update = False
@@ -762,12 +775,12 @@ class GraphBuilder:
                 wrappers = jax.tree.map(ConversionWrapper, node.value)
 
                 value = jax.tree.map(lambda x: x.value, wrappers)
-                node.value = value  # type: ignore # data node
+                node.value = value  # data node
 
                 converted = jax.tree.map(lambda x: x.converted, wrappers)
 
                 if any(jax.tree_util.tree_flatten(converted)[0]):
-                    logger.info(f"Converted dtype of {repr(node)}.value")
+                    logger.info(f"Converted dtype of {node!r}.value")
             except AttributeError:
                 pass
 
@@ -933,8 +946,8 @@ class GraphBuilder:
         if old.dist_node:
             if not new.dist_node:
                 raise RuntimeError(
-                    f"Cannot replace {repr(old)} with distribution "
-                    f"with {repr(new)} without distribution"
+                    f"Cannot replace {old!r} with distribution "
+                    f"with {new!r} without distribution"
                 )
 
             self.replace_node(old.dist_node, new.dist_node)
@@ -1058,12 +1071,11 @@ class Model:
             )
 
             for var in self.vars.values():
-                if var.dist_node is not None:
-                    if not var.parameter and not var.observed:
-                        logger.warning(
-                            f"{var} has a distribution but "
-                            "Var.parameter=False and Var.observed=False."
-                        )
+                if var.dist_node is not None and not var.parameter and not var.observed:
+                    logger.warning(
+                        f"{var} has a distribution but "
+                        "Var.parameter=False and Var.observed=False."
+                    )
 
     @property
     def graph_outdated(self) -> bool:
@@ -1178,9 +1190,7 @@ class Model:
 
         return self
 
-    def replace(
-        self, old: str | Var, new: Node | Var | float | int | jax.Array
-    ) -> Self:
+    def replace(self, old: str | Var, new: Node | Var | float | jax.Array) -> Self:
         """
         Replaces the ``old`` with the ``new`` node or variable.
 
@@ -1234,7 +1244,10 @@ class Model:
                     new.name = new.name + "__tmp_new__"
                 self._replace_var_with_node(old_nv, new)
             else:
-                raise RuntimeError("Unexpected unknown problem in Model.replace().")
+                # Reaching this branch indicates an internal dispatch invariant failed.
+                raise RuntimeError(  # noqa: TRY004
+                    "Unexpected unknown problem in Model.replace()."
+                )
         else:
             raise TypeError(f"{old=} must be of type Var, got {type(old_nv)}.")
 
@@ -1275,8 +1288,6 @@ class Model:
                 of = self.vars[of]
             else:
                 raise KeyError(f"{of=} not found in the model.")
-        else:
-            of = of
 
         p_nodes_and_vars = set()
 
@@ -1527,7 +1538,7 @@ class Model:
         models = [m for m in args if isinstance(m, Model)]
         nv = [nv for nv in args if isinstance(nv, Var | Node)]
 
-        if not (len(models) + len(nv)) == len(args):
+        if len(models) + len(nv) != len(args):
             unexpected = [x for x in args if x not in models and x not in nv]
             raise TypeError(f"Received arguments of unexpected types: {unexpected}")
 
@@ -1816,7 +1827,7 @@ class Model:
         self.seed_nodes_and_vars += model.seed_nodes_and_vars  # manual update
 
         replacement_names = list(
-            set([nv.name for nv in replacements.values() if isinstance(nv, Var)])
+            {nv.name for nv in replacements.values() if isinstance(nv, Var)}
         )
         if replacements:
             logger.info(f"Joining by: {', '.join(replacement_names)}")
@@ -2271,8 +2282,8 @@ class Model:
         """
         seeds = jax.random.split(seed, len(self._seed_nodes))
 
-        for node, seed in zip(self._seed_nodes, seeds):
-            node.value = seed  # type: ignore  # data node
+        for node, node_seed in zip(self._seed_nodes, seeds):
+            node.value = node_seed  # data node
 
         return self
 
@@ -2322,27 +2333,29 @@ class Model:
 
         seeds = jax.random.split(seed, len(dists))
 
-        for dist, seed in zip(dists, seeds):
+        for dist, dist_seed in zip(dists, seeds):
             tfp_dist = dist.init_dist()
+            at = dist.at
+            assert at is not None
 
             event_shape = tfp_dist.event_shape
             batch_shape = tfp_dist.batch_shape
-            value_shape = jnp.asarray(dist.at.value).shape  # type: ignore
+            value_shape = jnp.asarray(at.value).shape
             sample_index = len(value_shape) - len(batch_shape) - len(event_shape)
             sample_shape = value_shape[:sample_index]
 
-            value = tfp_dist.sample(sample_shape, seed)
+            value = tfp_dist.sample(sample_shape, dist_seed)
 
-            if isinstance(dist.at, VarValue):
-                try:
-                    dist.at.inputs[0].value = value  # type: ignore
-                except AttributeError:
-                    raise AttributeError(f"Cannot set value of {dist.at.inputs[0]}")
+            if isinstance(at, VarValue):
+                value_node = at.inputs[0]
             else:
-                try:
-                    dist.at.value = value  # type: ignore
-                except AttributeError:
-                    raise AttributeError(f"Cannot set value of {dist.at}")
+                value_node = at
+
+            if not isinstance(value_node, Value):
+                raise AttributeError(  # noqa: TRY004
+                    f"Cannot set value of {value_node}"
+                )
+            value_node.value = value
 
         return self
 
@@ -2350,12 +2363,12 @@ class Model:
         self,
         shape: Sequence[int],
         seed: jax.Array,
-        posterior_samples: dict[str, Any] | None = None,
+        posterior_samples: Position | None = None,
         fixed: Sequence[str] = (),
-        newdata: dict[str, Any] | None = None,
+        newdata: Position | None = None,
         dists: dict[str, Dist] | None = None,
         chunk_size: int | None = 64,
-    ) -> dict[str, Array]:
+    ) -> Position:
         """
         Draws samples from the model.
 
@@ -2370,15 +2383,15 @@ class Model:
             See :mod:`jax.random` and \
             https://docs.jax.dev/en/latest/jep/9263-typed-keys.html for more details.
         posterior_samples
-            Dictionary of samples at which to evaluate predictions. All values of the \
-            dictionary are assumed to have two leading dimensions corresponding to \
+            Position of samples at which to evaluate predictions. All values are \
+            assumed to have two leading dimensions corresponding to \
             ``(nchains, niteration)``. Values are converted with their model-specific \
             converters before sampling.
         fixed
             The names of the nodes or variables to be excluded from the simulation. \
             By default, no nodes or variables are skipped.
         newdata
-            Dictionary of new data at which to produce samples. The keys should \
+            Position of new data at which to produce samples. The keys should \
             correspond to variable or node names in the model whose values should be \
             set to the given values before sampling. Values are converted with their \
             model-specific converters. If ``None`` (default), the current variable \
@@ -2408,10 +2421,12 @@ class Model:
 
         chunk_size = _validate_chunk_size(chunk_size)
         shape = tuple(shape)
-        posterior_samples = posterior_samples if posterior_samples is not None else {}
+        posterior_samples = (
+            posterior_samples if posterior_samples is not None else Position({})
+        )
 
-        unique_sample_keys = set(list(posterior_samples))
-        unique_newdata_keys = set(list(newdata)) if newdata is not None else set()
+        unique_sample_keys = set(posterior_samples)
+        unique_newdata_keys = set(newdata) if newdata is not None else set()
         intersection = unique_sample_keys & unique_newdata_keys
         if len(intersection) > 0:
             raise RuntimeError(
@@ -2420,18 +2435,17 @@ class Model:
                 "Any key should be present in only one of these arguments."
             )
 
-        # Filter before converting to JAX arrays so irrelevant posterior entries are
-        # not needlessly transferred to an accelerator.
+        # Filter before converting so irrelevant posterior entries are not needlessly
+        # converted or transferred to an accelerator.
         vars_and_nodes = list(self.vars) + list(self.nodes)
-        filtered_samples = {
-            key: value
-            for key, value in posterior_samples.items()
-            if key in vars_and_nodes
-        }
-
-        # Ported from ty (d75b5464). A future branch merge should route this through
-        # ty's shared Position abstraction without losing optim-devel's chunking.
-        filtered_samples = self.convert_position(filtered_samples)
+        filtered_samples = self.convert_position(
+            {
+                key: value
+                for key, value in posterior_samples.items()
+                if key in vars_and_nodes
+            },
+            allow_unknown=True,
+        )
 
         shape_sources = filtered_samples if filtered_samples else posterior_samples
         posterior_batch_shapes = [
@@ -2447,7 +2461,7 @@ class Model:
             )
 
         samples_shape = posterior_batch_shapes[0] if posterior_batch_shapes else ()
-        posterior_samples = jax.tree.map(jnp.asarray, filtered_samples)
+        posterior_samples = filtered_samples
 
         if newdata is not None:
             newdata = self.convert_position(newdata)
@@ -2493,22 +2507,26 @@ class Model:
         ]
 
         # collect information for sampling by processing dist nodes
-        sampling_specs = {}
-        for i, dist in enumerate(dists_list):
+        sampling_specs: dict[str, _SamplingSpec] = {}
+        for dist in dists_list:
             tfp_dist = dist.init_dist()
+            at = dist.at
+            assert at is not None
 
             event_shape = tfp_dist.event_shape
             batch_shape = tfp_dist.batch_shape
-            value_shape = jnp.asarray(dist.at.value).shape  # type: ignore
+            value_shape = jnp.asarray(at.value).shape
             sample_index = len(value_shape) - len(batch_shape) - len(event_shape)
             sample_shape = value_shape[:sample_index]
 
-            if isinstance(dist.at, VarValue):
-                var_name = dist.at.var.name  # type: ignore
-                value_var = dist.at.inputs[0]
+            if isinstance(at, VarValue):
+                if at.var is None:
+                    raise RuntimeError(f"{at} is not part of a variable")
+                var_name = at.var.name
+                value_var = at.inputs[0]
             else:
-                var_name = dist.at.name  # type: ignore
-                value_var = dist.at  # type: ignore
+                var_name = at.name
+                value_var = at
 
             if var_name not in posterior_samples:
                 # pulls manually defined distribution from dists dict, returns current
@@ -2518,8 +2536,8 @@ class Model:
                 sampling_specs[var_name] = {
                     "shape": sample_shape,
                     "dist": dist,
-                    "i": i,
-                    "value_var": value_var,
+                    "seed_index": len(sampling_specs),
+                    "value_node": value_var,
                 }
 
         # add information for custom dists for variables that are not yet covered.
@@ -2529,21 +2547,20 @@ class Model:
                 # and it is also already using the custom dist
                 continue
 
-            i += 1
             tfp_dist = dist.init_dist()
             event_shape = tfp_dist.event_shape
             batch_shape = tfp_dist.batch_shape
+            value_shape = jnp.asarray(self.vars[var_name].value).shape
             sample_index = len(value_shape) - len(batch_shape) - len(event_shape)
             sample_shape = value_shape[:sample_index]
-            value_shape = jnp.asarray(self.vars[var_name].value).shape  # type: ignore
 
-            value_var = self.vars[var_name].value_node
+            value_node = self.vars[var_name].value_node
 
             sampling_specs[var_name] = {
                 "shape": sample_shape,
                 "dist": dist,
-                "i": i,
-                "value_var": value_var,
+                "seed_index": len(sampling_specs),
+                "value_node": value_node,
             }
 
         # Shape handling
@@ -2605,7 +2622,7 @@ class Model:
 
             try:
                 error_to_raise = e.__class__(msg)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 # fallback in case e has a custom error class that cannot simply
                 # be instantiated with a message.
                 error_to_raise = RuntimeError(msg)
@@ -2613,7 +2630,7 @@ class Model:
             raise error_to_raise from e
 
         # return reshaped version of samples
-        return jax.tree.map(reshape, drawn_samples)
+        return Position(jax.tree.map(reshape, drawn_samples))
 
     @property
     def state(self) -> dict[str, NodeState]:
@@ -2872,23 +2889,30 @@ class Model:
         *,
         allow_unknown: bool = False,
     ) -> Position:
-        """Convert position values with their model-specific converters.
+        """
+        Converts the values in a position using their model-specific converters.
 
-        Variable keys use the converter configured on the respective :class:`.Var`;
-        node keys use the converter configured on the respective :class:`.Node`.
-        Unknown keys raise :class:`KeyError` unless ``allow_unknown=True``, in which
-        case their values are returned unchanged.
+        Variable keys use the converter configured on the respective
+        :class:`.Var`; node keys use the converter configured on the respective
+        :class:`.Node`. Unknown keys raise a :class:`KeyError` unless
+        ``allow_unknown=True``, in which case their values are left unchanged.
+
+        This method is useful for constructing a typed :class:`.Position` at an API
+        boundary, before repeatedly passing it through model computations.
         """
         converted = {}
 
         for key, value in position.items():
             try:
-                converter = self._node_for_position_key(key)._convert
+                converter = self.nodes[key]._convert
             except KeyError:
-                if allow_unknown:
-                    converted[key] = value
-                    continue
-                raise KeyError(f"{key} is not part of the model.") from None
+                try:
+                    converter = self.vars[key]._convert
+                except KeyError:
+                    if allow_unknown:
+                        converted[key] = value
+                        continue
+                    raise KeyError(f"{key} is not part of the model.") from None
 
             converted[key] = converter(value)
 
@@ -2945,7 +2969,7 @@ class Model:
         inplace: bool = False,
         *,
         allow_weak_vars: bool = False,
-    ) -> ModelState:
+    ) -> dict[str, NodeState]:
         """
         Updates and returns a model state given a position.
 
@@ -2999,7 +3023,7 @@ class Model:
         try:
             for key, value in position.items():
                 try:
-                    model.nodes[key].value = value  # type: ignore  # data node
+                    node = model.nodes[key]
                 except KeyError:
                     var = model.vars[key]
                     if allow_weak_vars and var.weak:
@@ -3007,6 +3031,12 @@ class Model:
                         weak_var_names.append(var.name)
                     else:
                         var.value = value
+                else:
+                    if not isinstance(node, Value):
+                        raise AttributeError(  # noqa: TRY004
+                            f"Cannot set value of {node!r}"
+                        )
+                    node.value = value
         finally:
             # restore original auto_update setting
             model.auto_update = original_auto_update
@@ -3021,9 +3051,9 @@ class Model:
 
     def predict(
         self,
-        samples: dict[str, Any],
+        samples: Position,
         predict: Sequence[str] | None = None,
-        newdata: dict[str, Any] | None = None,
+        newdata: Position | None = None,
         chunk_size: int | None = 64,
     ) -> dict[str, Array]:
         """
@@ -3044,9 +3074,9 @@ class Model:
         newdata
             Dictionary of new data at which to evaluate predictions. The keys should \
             correspond to variable or node names in the model whose values should be \
-            set to the given values before evaluating predictions. Values are converted
-            with their model-specific converters. If ``None`` (default), the current
-            variable values are used.
+            set to the given values before evaluating predictions. Values are \
+            converted with their model-specific converters. If ``None`` (default), \
+            the current variable values are used.
         chunk_size
             Maximum number of flattened samples to evaluate in parallel. Defaults to \
             ``64``. Pass ``None`` to evaluate all samples in parallel. A smaller value \
@@ -3056,21 +3086,20 @@ class Model:
 
         """
         chunk_size = _validate_chunk_size(chunk_size)
-        samples = samples.copy()
+        sample_values = dict(samples)
         for name in self.model_nodes:
-            samples.pop(name, None)
+            sample_values.pop(name, None)
 
         for name, var in self.vars.items():
-            if var.weak:
-                if name in samples:
-                    logger.debug(
-                        f"Key '{name}' belongs to a weak var. "
-                        "Removing it from samples dictionary."
-                    )
-                    samples.pop(name, None)
+            if var.weak and name in sample_values:
+                logger.debug(
+                    f"Key '{name}' belongs to a weak var. "
+                    "Removing it from samples dictionary."
+                )
+                sample_values.pop(name, None)
 
-        unique_sample_keys = set(list(samples))
-        unique_newdata_keys = set(list(newdata)) if newdata is not None else set()
+        unique_sample_keys = set(sample_values)
+        unique_newdata_keys = set(newdata) if newdata is not None else set()
         intersection = unique_sample_keys & unique_newdata_keys
         if len(intersection) > 0:
             raise RuntimeError(
@@ -3079,9 +3108,7 @@ class Model:
                 "Any key should be present in only one of these arguments."
             )
 
-        # Ported from ty (25cd6877). A future branch merge should adopt ty's shared
-        # Position abstraction while retaining optim-devel's chunked prediction.
-        samples = self.convert_position(samples, allow_unknown=True)
+        samples = self.convert_position(sample_values, allow_unknown=True)
         # deduce batching dimensions
         shapes = []
         for name, value in samples.items():
@@ -3127,22 +3154,23 @@ class Model:
             # construct submodel for target nodes
             submodel = self.parental_submodel(*predict_nodes_)
 
-        newdata = newdata if newdata is not None else {}
-
         # handle keys that are not needed
-        newdata = newdata.copy()
-        for key in list(newdata.keys()):
+        newdata_values = dict(newdata) if newdata is not None else {}
+        for key in list(newdata_values):
             if key not in self.vars or (key in self.nodes):
                 raise KeyError(f"{key} is not part of the model.")
             if key not in submodel.vars or (key in submodel.nodes):
-                newdata.pop(key, None)
+                newdata_values.pop(key, None)
 
         # update submodel with new data, if any were given
-        submodel.state = submodel.update_state(submodel.convert_position(newdata))
+        converted_newdata = submodel.convert_position(newdata_values)
+        submodel.state = submodel.update_state(converted_newdata)
 
         # filter samples to include only samples that belong to the submodel
         vars_and_nodes = list(submodel.vars) + list(submodel.nodes)
-        filtered_samples = {k: v for k, v in samples.items() if k in vars_and_nodes}
+        filtered_samples = Position(
+            {k: v for k, v in samples.items() if k in vars_and_nodes}
+        )
         if not filtered_samples:
             raise ValueError(
                 "No samples provided for the variables or nodes in the submodel. "
@@ -3285,6 +3313,13 @@ class TemporaryModel:
         If ``silent=True``, all logging will be suppressed.
     """
 
+    gb: GraphBuilder
+    model: Model
+    var_names: list[str]
+    node_names: list[str]
+    vars: list[Var]
+    nodes: list[Node]
+
     def __init__(
         self,
         *vars_and_nodes,
@@ -3299,13 +3334,6 @@ class TemporaryModel:
 
         if verbose and silent:
             raise ValueError(f"{verbose=} and {silent=} cannot both be True.")
-
-        self.gb = None
-        self.model = None
-        self.var_names = None
-        self.node_names = None
-        self.vars = None
-        self.nodes = None
 
     def __enter__(self):
         verbose = self.verbose
@@ -3369,8 +3397,8 @@ class TemporaryModel:
 
 def log_prob_pointwise(
     vars_: dict[str, Var],
-    samples: dict[str, jax.typing.ArrayLike],
-    newdata: dict[str, jax.typing.ArrayLike] | None = None,
+    samples: Position,
+    newdata: Position | None = None,
 ) -> dict[str, jax.Array]:
     """
     Returns a dictionary of pointwise log probabilities for the supplied variables.
@@ -3412,7 +3440,7 @@ def log_prob_pointwise(
                 "all variables contributing to the likelihood."
             )
 
-        if not var.value.shape == var.log_prob.shape:
+        if var.value.shape != var.log_prob.shape:
             msg = (
                 f"{var}.value has shape {var.value.shape}, "
                 f"while {var}.log_prob has shape {var.log_prob.shape}. This "

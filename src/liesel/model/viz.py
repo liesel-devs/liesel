@@ -148,7 +148,8 @@ def _prepare_figure(graph, width, height, prog):
         )
 
         pos = nx.kamada_kawai_layout(graph.to_undirected())
-    except Exception as e:
+    # Graphviz integrations can fail with backend-specific exception classes.
+    except Exception as e:  # noqa: BLE001
         logger.warning(
             "Graphviz via pydot failed. Using fallback graph layout. "
             f"Raised exception: {e}"

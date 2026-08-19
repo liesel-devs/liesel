@@ -180,7 +180,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
             )
 
         try:
-            jnp.broadcast_shapes(prec.shape[-1], loc.shape[-1])
+            jnp.broadcast_shapes((prec.shape[-1],), (loc.shape[-1],))
         except ValueError:
             raise ValueError(
                 f"The event sizes of `prec` ({prec.shape[-1]}) and `loc` "
@@ -417,7 +417,10 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         """Locations."""
         return self._loc
 
-    def _sample_n(self, n, seed=None) -> Array:
+    def _sample_n(self, n, seed=None, **kwargs) -> Array:
+        if seed is None:
+            raise ValueError("Must provide a JAX PRNG key as `seed`.")
+
         shape = [n] + self.batch_shape + self.event_shape
 
         # The added dimension at the end here makes sure that matrix multiplication
@@ -452,5 +455,5 @@ class MultivariateNormalDegenerate(tfd.Distribution):
     def _batch_shape(self):
         return tf.TensorShape(self._broadcast_batch_shape)
 
-    def _batch_shape_tensor(self):
+    def _batch_shape_tensor(self, **parameter_kwargs):
         return jnp.array(self._broadcast_batch_shape, dtype=jnp.int32)

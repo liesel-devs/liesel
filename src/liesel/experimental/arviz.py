@@ -42,18 +42,16 @@ def to_arviz_inference_data(
     """
 
     posterior_samples = results.get_posterior_samples()
+    sample_groups = {"posterior": posterior_samples}
 
-    warmup_posterior_samples = None
     if include_warmup:
         warmup_posterior_samples = results.positions.combine_filtered(
             lambda ec: ec.type.is_warmup(ec.type)
         ).expect("No warmup samples found.")
+        sample_groups["warmup_posterior"] = warmup_posterior_samples
 
     inference_data = az.from_dict(
-        {
-            "posterior": posterior_samples,
-            "warmup_posterior": warmup_posterior_samples,
-        },
+        sample_groups,
         attrs={
             "posterior": {
                 "inference_library": "liesel",

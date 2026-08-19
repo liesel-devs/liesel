@@ -1,3 +1,4 @@
+import jax
 import jax.numpy as jnp
 import pytest
 
@@ -5,7 +6,7 @@ from liesel.goose.interface import DictInterface
 from liesel.goose.types import ModelInterface, Position
 
 
-def log_prob(state) -> float:
+def log_prob(state) -> jax.Array:
     x = state["x"]
     return -jnp.sum(x**2)
 
@@ -17,7 +18,7 @@ def create_state():
 def test_log_prob() -> None:
     conn: ModelInterface = DictInterface(log_prob)
     state = create_state()
-    lp = float(conn.log_prob(state))
+    lp = jnp.asarray(conn.log_prob(state)).item()
     assert lp == pytest.approx(-2.0)
 
 

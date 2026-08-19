@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 
 from .kernel import DefaultTransitionInfo
-from .types import KeyArray, ModelInterface, ModelState, Position
+from .types import KeyArray, ModelInterface, ModelState, Position, Scalar
 
 mh_error_book = {0: "no errors", 90: "nan acceptance prob"}
 """The error book of the :func:`.mh_step` function."""
@@ -19,7 +19,7 @@ def mh_step(
     model: ModelInterface,
     proposal: Position,
     model_state: ModelState,
-    log_correction: float = 0.0,
+    log_correction: Scalar = 0.0,
 ) -> tuple[DefaultTransitionInfo, ModelState]:
     r"""
     Decides if an MCMC proposal is accepted in a Metropolis-Hastings step.
@@ -45,11 +45,11 @@ def mh_step(
     A tuple of a :class:`.TransitionInfo` and a :class:`.ModelState` (= a pytree).
     """
 
-    current_log_prob = model.log_prob(model_state)
+    current_log_prob = jnp.asarray(model.log_prob(model_state))
     proposed_model_state = model.update_state(proposal, model_state)
-    proposed_log_prob = model.log_prob(proposed_model_state)
+    proposed_log_prob = jnp.asarray(model.log_prob(proposed_model_state))
 
-    log_acc_prob = proposed_log_prob - current_log_prob + log_correction
+    log_acc_prob = proposed_log_prob - current_log_prob + jnp.asarray(log_correction)
 
     log_acc_prob, error_code = jax.lax.cond(
         jnp.isnan(log_acc_prob),

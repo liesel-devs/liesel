@@ -1,6 +1,7 @@
 """Tests for Dist.biject_parameters validation and behavior."""
 
 import logging
+from typing import Any, cast
 
 import jax
 import jax.numpy as jnp
@@ -12,8 +13,26 @@ import liesel.goose as gs
 import liesel.model as lsl
 
 
+def _require_bijected_var(var: lsl.Var) -> lsl.Var:
+    bijected_var = var.bijected_var
+    assert bijected_var is not None
+    return bijected_var
+
+
 class TestBijectParametersValidation:
     """Test validation in Dist.biject_parameters."""
+
+    def test_callable_distribution_without_name_has_useful_error(self):
+        class DistributionFactory:
+            def __call__(self, **kwargs):
+                del kwargs
+                return object()
+
+        loc = lsl.Var.new_param(0.0, name="loc")
+        dist = lsl.Dist(DistributionFactory(), loc=loc)
+
+        with pytest.raises(AttributeError, match="DistributionFactory"):
+            dist.find_default_parameter_bijectors()
 
     def test_mixed_positional_keyword_inputs_raises(self):
         """Auto bijectors should reject mixed positional and keyword inputs."""
@@ -72,16 +91,16 @@ class TestBijectParametersValidation:
         concentration = lsl.Value(1.0)
         dist = lsl.Dist(tfd.InverseGamma, concentration=concentration, scale=scale)
 
-        with pytest.raises(ValueError, match="only lsl.Var objects can be bijected"):
+        with pytest.raises(TypeError, match="only lsl.Var objects can be bijected"):
             dist.biject_parameters(bijectors=["auto"])
 
-        with pytest.raises(ValueError, match="only lsl.Var objects can be bijected"):
+        with pytest.raises(TypeError, match="only lsl.Var objects can be bijected"):
             dist.biject_parameters(bijectors="auto")
 
-        with pytest.raises(ValueError, match="only lsl.Var objects can be bijected"):
+        with pytest.raises(TypeError, match="only lsl.Var objects can be bijected"):
             dist.biject_parameters(bijectors={"scale": "auto"})
 
-        with pytest.raises(ValueError, match="only lsl.Var objects can be bijected"):
+        with pytest.raises(TypeError, match="only lsl.Var objects can be bijected"):
             dist.biject_parameters(bijectors={"concentration": None, "scale": "auto"})
 
         dist.biject_parameters(bijectors={"concentration": None, "scale": None})
@@ -141,7 +160,9 @@ class TestBijectParametersValidation:
 
         dist = lsl.Dist(tfd.InverseGamma, scale=scale, concentration=concentration)
         with pytest.raises(TypeError, match="bijector class"):
-            dist.biject_parameters(bijectors=[tfb.Identity])
+            dist.biject_parameters(
+                bijectors=[tfb.Identity]  # ty: ignore[invalid-argument-type]
+            )
 
     def test_inference(self):
         scale = lsl.Var.new_param(
@@ -154,7 +175,11 @@ class TestBijectParametersValidation:
             dist.biject_parameters()
 
         with pytest.raises(ValueError, match="not supported"):
-            dist.biject_parameters(inference=gs.MCMCSpec(gs.HMCKernel))
+            dist.biject_parameters(
+                inference=gs.MCMCSpec(  # ty: ignore[invalid-argument-type]
+                    gs.HMCKernel
+                )
+            )
 
         dist.biject_parameters(inference="drop")
         assert scale.weak
@@ -363,7 +388,7 @@ class TestBijectParametersSuccess:
         dist = lsl.Dist(tfd.Gamma, concentration, scale)
         assert dist._dtype == jnp.dtype("float64")
         dist.biject_parameters()
-        assert concentration.bijected_var.value.dtype == jnp.dtype("float64")
+        assert _require_bijected_var(concentration).value.dtype == jnp.dtype("float64")
         jax.config.update("jax_enable_x64", False)
 
 
@@ -379,7 +404,7 @@ class TestVarBiject:
         log_scale = lsl.Value(1.0)
         scale = lsl.Var.new_calc(jnp.exp, log_scale)
         with pytest.raises(TypeError):
-            scale.bijected_var = log_scale
+            scale.bijected_var = cast(Any, log_scale)
 
     def test_bijected_var_is_no_input(self):
         log_scale = lsl.Var(1.0)
@@ -391,16 +416,16 @@ class TestVarBiject:
         scale = lsl.Var.new_param(1.0, name="scale")
         scale.biject(tfb.Exp())
 
-        assert scale.bijected_var.name == "h(scale)"
+        assert _require_bijected_var(scale).name == "h(scale)"
 
     def test_bijected_var_from_transform(self):
         scale = lsl.Var.new_param(1.0, name="scale")
         scale.transform(tfb.Exp())
 
-        assert scale.bijected_var.name == "scale_transformed"
+        assert _require_bijected_var(scale).name == "scale_transformed"
 
     def test_unnamed_bijected_var(self):
         scale = lsl.Var.new_param(1.0)
         scale.transform(tfb.Exp())
 
-        assert scale.bijected_var.name == ""
+        assert _require_bijected_var(scale).name == ""
