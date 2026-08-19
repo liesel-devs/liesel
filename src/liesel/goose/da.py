@@ -8,8 +8,10 @@ from dataclasses import dataclass
 from typing import Protocol
 
 import jax.numpy as jnp
+from jax.typing import ArrayLike
 
 from .pytree import register_dataclass_as_pytree
+from .types import Scalar
 
 
 @register_dataclass_as_pytree
@@ -19,17 +21,17 @@ class DualAvgState:
     The state of the dual averaging algorithm.
     """
 
-    error_sum: float
+    error_sum: Scalar
     """The error sum of the acceptance probability."""
 
-    log_avg_step_size: float
+    log_avg_step_size: Scalar
     """The logarithm of the average step size."""
 
-    mu: float
+    mu: Scalar
     """The bias of the step size proposals."""
 
     @classmethod
-    def from_step_size(cls, step_size: float) -> "DualAvgState":
+    def from_step_size(cls, step_size: Scalar) -> "DualAvgState":
         """Initializes a dual averaging state for ``step_size``."""
         return cls(
             error_sum=0.0,
@@ -50,7 +52,7 @@ class DAKernelState(Protocol):
        <https://mc-stan.org/docs/2_28/reference-manual/hmc-algorithm-parameters.html>`_.
     """
 
-    step_size: float
+    step_size: Scalar
     """The step size of the kernel."""
 
     da_state: DualAvgState | None
@@ -68,8 +70,8 @@ def da_init(kernel_state: DAKernelState) -> None:
 
 def da_step(
     kernel_state: DAKernelState,
-    acceptance_prob: float,
-    time_in_epoch: int,
+    acceptance_prob: ArrayLike,
+    time_in_epoch: ArrayLike,
     target_accept: float = 0.8,
     gamma: float = 0.05,
     kappa: float = 0.75,

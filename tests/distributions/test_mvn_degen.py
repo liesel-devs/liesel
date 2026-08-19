@@ -66,7 +66,7 @@ def mvnorm_degen_logpdf(
     if log_det:
         rank_prec = log_det[1]
         gen_log_det = log_det[0]
-        gen_log_det += -rank_prec * np.log(sigma2)  # type: ignore
+        gen_log_det += -rank_prec * np.log(sigma2)
     else:
         gen_log_det, rank_prec = determinant_structure_degen(precision)
 
@@ -169,10 +169,10 @@ class TestComputePseudoLogDet:
 
         evals_batch = jnpla.eigvalsh(jnp.array([K1, K2]))
 
-        ldet = _log_pdet(evals_batch)
+        ldet = jnp.asarray(_log_pdet(evals_batch))
 
-        assert ldet1 == pytest.approx(ldet[0])  # type: ignore
-        assert ldet2 == pytest.approx(ldet[1])  # type: ignore
+        assert ldet1 == pytest.approx(ldet[0])
+        assert ldet2 == pytest.approx(ldet[1])
 
     def test_log_pdet_batch_given_rank(self) -> None:
         """
@@ -191,7 +191,7 @@ class TestComputePseudoLogDet:
         evals_batch = jnpla.eigvalsh(jnp.array([K1, K2]))
         rank_batch = _rank(evals_batch)
 
-        ldet = jit(_log_pdet)(evals_batch, rank=rank_batch)
+        ldet = jnp.asarray(jit(_log_pdet)(evals_batch, rank=rank_batch))
 
         assert ldet1 == pytest.approx(ldet[0])
         assert ldet2 == pytest.approx(ldet[1])
@@ -219,12 +219,12 @@ class TestComputePseudoLogDet:
         evals_batch = jnpla.eigvalsh(jnp.array([[K1, K2], [K3, K4]]))
         _rank_batch = _rank(evals_batch)
 
-        ldet = _log_pdet(evals_batch, rank=_rank_batch)
+        ldet = jnp.asarray(_log_pdet(evals_batch, rank=_rank_batch))
 
-        assert ldet1 == pytest.approx(ldet[0, 0])  # type: ignore
-        assert ldet2 == pytest.approx(ldet[0, 1])  # type: ignore
-        assert ldet3 == pytest.approx(ldet[1, 0])  # type: ignore
-        assert ldet4 == pytest.approx(ldet[1, 1])  # type: ignore
+        assert ldet1 == pytest.approx(ldet[0, 0])
+        assert ldet2 == pytest.approx(ldet[0, 1])
+        assert ldet3 == pytest.approx(ldet[1, 0])
+        assert ldet4 == pytest.approx(ldet[1, 1])
 
 
 class TestMVNDegenerateValues:

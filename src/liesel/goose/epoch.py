@@ -179,9 +179,11 @@ class EpochManager:
             if config.duration < config.thinning:
                 raise RuntimeError("Duration must be greater than or equal to thinning")
 
-            if config.type == EpochType.POSTERIOR:
-                if config.duration % config.thinning != 0:
-                    raise RuntimeError("Duration must be a multiple of thinning")
+            if (
+                config.type == EpochType.POSTERIOR
+                and config.duration % config.thinning != 0
+            ):
+                raise RuntimeError("Duration must be a multiple of thinning")
 
         self._configs.append(config)
 

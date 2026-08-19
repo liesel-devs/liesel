@@ -601,12 +601,16 @@ def model():
 
 
 def test_loo(model):
-    samples = {
-        "sigma_hat": tfd.Normal(loc=1.0, scale=0.01).sample((4, 100), rnd.PRNGKey(6)),
-        "beta_hat": tfd.Normal(loc=jnp.array([1.0, 2.0]), scale=0.1).sample(
-            (4, 100), rnd.PRNGKey(6)
-        ),
-    }
+    samples = lsl.Position(
+        {
+            "sigma_hat": tfd.Normal(loc=1.0, scale=0.01).sample(
+                (4, 100), rnd.PRNGKey(6)
+            ),
+            "beta_hat": tfd.Normal(loc=jnp.array([1.0, 2.0]), scale=0.1).sample(
+                (4, 100), rnd.PRNGKey(6)
+            ),
+        }
+    )
 
     lpp = lsl.log_prob_pointwise(model.observed, samples)
     loo_ = loo(lpp, samples)

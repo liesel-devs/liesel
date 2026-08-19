@@ -28,5 +28,5 @@ def test_gibbs(mcmc_seed):
     kernel1 = gs.NUTSKernel(["log_sigma"], identifier="k1")
 
     results = run_kernel_test(mcmc_seed, [kernel0, kernel1])
-    kernel0.identifier in results.get_posterior_transition_infos()
-    kernel1.identifier in results.get_posterior_transition_infos()
+    assert kernel0.identifier in results.get_posterior_transition_infos()
+    assert kernel1.identifier in results.get_posterior_transition_infos()

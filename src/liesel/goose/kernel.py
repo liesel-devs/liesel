@@ -5,9 +5,9 @@ Kernel-related info, outcome and mixin classes.
 from abc import abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Generic
 
 import jax
+from jax.typing import ArrayLike
 
 from ..docs import usedocs
 from .epoch import EpochState, EpochType
@@ -18,9 +18,9 @@ from .types import (
     ModelInterface,
     ModelState,
     Position,
-    TKernelState,
-    TTransitionInfo,
-    TTuningInfo,
+    Scalar,
+    TransitionInfo,
+    TuningInfo,
 )
 
 
@@ -29,11 +29,11 @@ from .types import (
 class DefaultTransitionInfo:
     """A default template for a transition information object."""
 
-    error_code: int
+    error_code: ArrayLike
     """Error code for the transition."""
-    acceptance_prob: float
+    acceptance_prob: ArrayLike
     """Acceptance probability of the transition."""
-    position_moved: int
+    position_moved: ArrayLike
     """Indicates whether the transition resulted in acceptance or not."""
 
     def minimize(self) -> "DefaultTransitionInfo":
@@ -46,15 +46,15 @@ class DefaultTransitionInfo:
 class DefaultTuningInfo:
     """A default template for a tuning information object."""
 
-    error_code: int
+    error_code: ArrayLike
     """Error code for error during tuning."""
-    time: int
+    time: ArrayLike
     """MCMC time when the tuning happend."""
 
 
 @register_dataclass_as_pytree
 @dataclass
-class TransitionOutcome(Generic[TKernelState, TTransitionInfo]):
+class TransitionOutcome[TKernelState, TTransitionInfo: TransitionInfo]:
     """
     A dataclass for the return value of the kernel method :meth:`.Kernel.transition`.
     Different kernels can use different types of :class:`.KernelState`'s and
@@ -81,7 +81,7 @@ class TransitionOutcome(Generic[TKernelState, TTransitionInfo]):
 
 @register_dataclass_as_pytree
 @dataclass
-class TuningOutcome(Generic[TKernelState, TTuningInfo]):
+class TuningOutcome[TKernelState, TTuningInfo: TuningInfo]:
     """
     A dataclass for the return value of the kernel method :meth:`.Kernel.tune`.
     Different kernels can use different types of :class:`.KernelState`'s and
@@ -100,7 +100,7 @@ class TuningOutcome(Generic[TKernelState, TTuningInfo]):
 
 @register_dataclass_as_pytree
 @dataclass
-class WarmupOutcome(Generic[TKernelState]):
+class WarmupOutcome[TKernelState]:
     """
     A dataclass for the return value of the kernel method :meth:`.Kernel.end_warmup`.
     Different kernels can use different types of :class:`.KernelState`'s.
@@ -146,19 +146,19 @@ class ModelMixin:
 
         return self.model.extract_position(self.position_keys, model_state)
 
-    def log_prob_fn(self, model_state: ModelState) -> Callable[[Position], float]:
+    def log_prob_fn(self, model_state: ModelState) -> Callable[[Position], Scalar]:
         """
         Returns the log-probability function with the position as the only argument.
         """
 
-        def log_prob_fn(position: Position) -> float:
+        def log_prob_fn(position: Position) -> Scalar:
             new_model_state = self.model.update_state(position, model_state)
             return self.model.log_prob(new_model_state)
 
         return log_prob_fn
 
 
-class TransitionMixin(Generic[TKernelState, TTransitionInfo]):
+class TransitionMixin[TKernelState, TTransitionInfo: TransitionInfo]:
     """
     An abstract mixin defining two transition methods with and without adaptation.
     """
@@ -214,7 +214,7 @@ class TransitionMixin(Generic[TKernelState, TTransitionInfo]):
         raise NotImplementedError
 
 
-class TuningMixin(Generic[TKernelState, TTuningInfo]):
+class TuningMixin[TKernelState, TTuningInfo: TuningInfo]:
     """
     An abstract mixin defining two tuning methods after a slow and a fast adaptation
     epoch.
@@ -276,6 +276,9 @@ class TuningMixin(Generic[TKernelState, TTuningInfo]):
 
 
 class ReprMixin:
+    position_keys: tuple[str, ...]
+    identifier: str
+
     def __repr__(self):
         return (
             f"{type(self).__name__}({list(self.position_keys)}, "

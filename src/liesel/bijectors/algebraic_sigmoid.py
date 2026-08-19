@@ -34,5 +34,5 @@ class AlgebraicSigmoid(tfb.Bijector):
         return -1.5 * np.log(1.0 + x**2)
 
     @classmethod
-    def _is_increasing(cls):
+    def _is_increasing(cls, **kwargs):
         return True
