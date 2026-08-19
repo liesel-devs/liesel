@@ -80,7 +80,7 @@ def run_kernel_test(
 
                 # the next line is safe since this if block checks for the existance
                 # of da_target_accept
-                target_accept = kernel.da_target_accept  # type: ignore
+                target_accept = kernel.da_target_accept
                 assert avg_acceptance_prob == approx(target_accept, abs=0.05)
 
     return results

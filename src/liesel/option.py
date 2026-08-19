@@ -5,13 +5,12 @@ A Rust-inspired Option type.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Generic, TypeVar
+from typing import TypeVar
 
-T = TypeVar("T")
 U = TypeVar("U")
 
 
-class Option(Generic[T]):
+class Option[T]:
     """
     An Option type inspired by the Rust standard library.
 
@@ -32,12 +31,12 @@ class Option(Generic[T]):
         self._value = value
 
     @staticmethod
-    def some(value: T) -> Option[T]:
-        return Option(value)
+    def some(value: U) -> Option[U]:
+        return Option[U](value)
 
     @staticmethod
     def none() -> Option[T]:
-        return Option(None)
+        return Option[T](None)
 
     def is_some(self) -> bool:
         return self.value is not None
@@ -52,7 +51,7 @@ class Option(Generic[T]):
         return self.value
 
     def unwrap(self) -> T:
-        return self.expect(f"Trying to unwrap None from {repr(self)}")
+        return self.expect(f"Trying to unwrap None from {self!r}")
 
     def unwrap_or(self, default: T) -> T:
         if self.value is None:
@@ -81,7 +80,7 @@ class Option(Generic[T]):
             )
 
     def __repr__(self) -> str:
-        return f"Option({repr(self.value)})"
+        return f"Option({self.value!r})"
 
     def __str__(self) -> str:
         return f"Option({self.value})"
