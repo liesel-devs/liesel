@@ -629,6 +629,10 @@ class TestVarPredictions:
         assert jnp.allclose(pred, x * samples["b"])
         assert pred.shape[-1] == x.shape[-1]
 
+        # predict in chunks, including a partial final chunk
+        pred_chunked = loc.predict(samples, chunk_size=5)
+        assert jnp.allclose(pred_chunked, pred)
+
         # predict at new observations with same shape
         xnew = jax.random.uniform(jax.random.PRNGKey(5), (n,))
         pred = loc.predict(samples, newdata=lsl.Position({"x": xnew}))
@@ -776,7 +780,11 @@ class TestVarSample:
         if build_model:
             _ = lsl.Model([y])
 
-        samples = mu.sample(shape=(1, 100), seed=jax.random.key(2))
+        samples = mu.sample(
+            shape=(1, 100),
+            seed=jax.random.key(2),
+            chunk_size=13,
+        )
 
         assert len(samples) == 1  # because there is only 1 var in the subgraph
         assert samples["b"].shape == (1, 100, 2)  # verify correct shape
