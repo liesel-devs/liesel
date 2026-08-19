@@ -11,7 +11,6 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
 from numbers import Integral
-from types import MappingProxyType
 from typing import IO, Any, Literal, Self, TypedDict
 
 import dill
@@ -22,6 +21,7 @@ import networkx as nx
 import pandas as pd
 
 from ..types import Position
+from ._mapping import _KeyCompletableMapping, _KeyCompletableProperty
 from .nodes import (
     Array,
     Calc,
@@ -2221,10 +2221,10 @@ class Model:
         """The directed graph of the model nodes."""
         return self._node_graph
 
-    @property
-    def nodes(self) -> MappingProxyType[str, Node]:
+    @_KeyCompletableProperty
+    def nodes(self) -> _KeyCompletableMapping[Node]:
         """A mapping of the model nodes with their names as keys."""
-        return MappingProxyType(self._nodes)
+        return _KeyCompletableMapping(self._nodes)
 
     def pop_vars(self) -> dict[str, Var]:
         """
@@ -2667,22 +2667,22 @@ class Model:
         """The directed graph of the model variables."""
         return self._var_graph
 
-    @property
-    def vars(self) -> MappingProxyType[str, Var]:
+    @_KeyCompletableProperty
+    def vars(self) -> _KeyCompletableMapping[Var]:
         """A mapping of the model variables with their names as keys."""
-        return MappingProxyType(self._vars)
+        return _KeyCompletableMapping(self._vars)
 
-    @property
-    def parameters(self) -> MappingProxyType[str, Var]:
+    @_KeyCompletableProperty
+    def parameters(self) -> _KeyCompletableMapping[Var]:
         """A mapping of the model parameters with their names as keys."""
         params = {k: v for k, v in self._vars.items() if v.parameter}
-        return MappingProxyType(params)
+        return _KeyCompletableMapping(params)
 
-    @property
-    def observed(self) -> MappingProxyType[str, Var]:
+    @_KeyCompletableProperty
+    def observed(self) -> _KeyCompletableMapping[Var]:
         """A mapping of the observed model variables with their names as keys."""
         observed = {k: v for k, v in self._vars.items() if v.observed}
-        return MappingProxyType(observed)
+        return _KeyCompletableMapping(observed)
 
     def __repr__(self) -> str:
         brackets = f"({len(self._nodes)} nodes, {len(self._vars)} vars)"

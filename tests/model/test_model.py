@@ -2,15 +2,15 @@ import gc
 import inspect
 import tempfile
 import typing
-from collections.abc import Generator
+from collections.abc import Generator, Mapping
 from itertools import combinations
-from types import MappingProxyType
 
 import jax
 import jax.numpy as jnp
 import jax.random as rnd
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
+from IPython.core.guarded_eval import EvaluationContext, guarded_eval
 
 from liesel.model.model import (
     GraphBuilder,
@@ -327,7 +327,7 @@ class TestModel:
         assert all(node in model.node_graph.nodes for node in nodes)
 
     def test_nodes_len(self, model: Model) -> None:
-        assert isinstance(model.nodes, MappingProxyType)
+        assert isinstance(model.nodes, Mapping)
         print(list(model.vars.keys()))
         print(list(model.nodes.keys()))
         # this is a bit surprising since variables have always 2 value and 1
@@ -335,8 +335,71 @@ class TestModel:
         assert len(model.nodes) == 25
 
     def test_vars_len(self, model: Model) -> None:
-        assert isinstance(model.vars, MappingProxyType)
+        assert isinstance(model.vars, Mapping)
         assert len(model.vars) == 9
+
+    def test_read_only_mappings_support_key_completion(self, model: Model) -> None:
+        node = Value(0.0, _name="node")
+        var = Var(0.0, name="var")
+        group = Group("group", node=node, var=var)
+
+        mappings: list[typing.Any] = [
+            node.groups,
+            node.kwinputs,
+            var.groups,
+            group.vars,
+            group.nodes,
+            group.nodes_and_vars,
+            model.nodes,
+            model.vars,
+            model.parameters,
+            model.observed,
+        ]
+
+        for mapping in mappings:
+            assert mapping._ipython_key_completions_() == list(mapping)
+            assert mapping.copy() == dict(mapping)
+            assert mapping | {"extra": None} == dict(mapping) | {"extra": None}
+            assert {"extra": None} | mapping == {"extra": None} | dict(mapping)
+
+            read_only_mapping: typing.Any = mapping
+            with pytest.raises(TypeError):
+                read_only_mapping["extra"] = None
+
+        groups = node.groups
+        Group("other", node=node)
+        assert list(groups) == ["group", "other"]
+
+        read_only_model: typing.Any = model
+        with pytest.raises(AttributeError, match="read-only"):
+            read_only_model.vars = {}
+
+    def test_ipython_can_evaluate_read_only_mappings(self, model: Model) -> None:
+        node = Value(0.0, _name="node")
+        var = Var(0.0, name="var")
+        group = Group("group", node=node, var=var)
+        context = EvaluationContext(
+            globals={},
+            locals={"group": group, "model": model, "node": node, "var": var},
+            evaluation="limited",
+        )
+
+        expressions = (
+            "node.groups",
+            "node.kwinputs",
+            "var.groups",
+            "group.vars",
+            "group.nodes",
+            "group.nodes_and_vars",
+            "model.nodes",
+            "model.vars",
+            "model.parameters",
+            "model.observed",
+        )
+
+        for expression in expressions:
+            mapping = guarded_eval(expression, context)
+            assert mapping._ipython_key_completions_() == list(mapping)
 
     def test_vars(self, model: Model) -> None:
         """
