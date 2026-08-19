@@ -1,11 +1,13 @@
 import logging
 
 import jax
+import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 import pytest
 import tensorflow_probability.substrates.jax.distributions as jtfd
 import tensorflow_probability.substrates.numpy.distributions as tfd
+from networkx.exception import NetworkXUnfeasible
 
 from liesel.model.model import Model
 from liesel.model.nodes import (
@@ -17,6 +19,13 @@ from liesel.model.nodes import (
     Value,
     Var,
 )
+
+
+def _require_dist_node(var: Var) -> Dist:
+    dist_node = var.dist_node
+    assert dist_node is not None
+    return dist_node
+
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Test Data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -105,8 +114,8 @@ def test_float64():
     x.update()
 
     assert x.value.dtype == "float64"
-    assert x.dist_node["loc"].value.dtype == "float64"
-    assert x.dist_node["scale"].value.dtype == "float64"
+    assert _require_dist_node(x)["loc"].value.dtype == "float64"
+    assert _require_dist_node(x)["scale"].value.dtype == "float64"
 
     jax.config.update("jax_enable_x64", False)
 
@@ -120,6 +129,26 @@ def test_value_pandas_series():
 def test_value_list():
     x = Value([1.0, 2.0])
     assert isinstance(x.value, jax.Array)
+
+
+def test_value_conversion_must_be_idempotent():
+    with pytest.raises(ValueError, match="must be idempotent"):
+        Value(1.0, convert=lambda value: value + 1.0)
+
+
+def test_value_conversion_must_accept_its_output():
+    def convert(value):
+        if isinstance(value, str):
+            return float(value)
+        raise TypeError
+
+    with pytest.raises(ValueError, match="must accept their own output"):
+        Value("1.0", convert=convert)
+
+
+def test_value_idempotence_check_allows_nan():
+    value = Value(jnp.nan, convert=lambda x: jnp.asarray(x) + 0.0)
+    assert jnp.isnan(value.value)
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -280,8 +309,10 @@ def test_frozen_calculator_kwinputs_manipulation(Calc) -> None:
     calc = Calc(np.exp, x)
     calc.update()
 
+    model = Model([calc])
+    model.locked = True
+
     with pytest.raises(RuntimeError):
-        _ = Model([calc])
         calc.set_inputs()
 
     with pytest.raises(RuntimeError):
@@ -322,7 +353,7 @@ def test_transient_calculator_kwinput_manipulation() -> None:
     calc.set_inputs(y=Value(1))
 
     with pytest.raises(RuntimeError):
-        calc.value
+        _ = calc.value
 
 
 @pytest.mark.parametrize("Calc", [Calc, TransientCalc])
@@ -378,7 +409,7 @@ def test_transient_calculator_error_in_update() -> None:
 
     calc = TransientCalc(update_fn, x=x)
     with pytest.raises(RuntimeError):
-        calc.value
+        _ = calc.value
 
 
 def test_calculator__update_on_init_error(local_caplog) -> None:
@@ -816,7 +847,7 @@ class TestDistSetitem:
         b = Var(2.0, a)
         a["loc"] = a
 
-        with pytest.raises(Exception):
+        with pytest.raises(NetworkXUnfeasible):
             Model([b])
 
     def test_replacing_keyword_input_leads_to_correct_log_prob(self):
@@ -826,15 +857,15 @@ class TestDistSetitem:
             tfd.Normal(loc=0.0, scale=1.0).log_prob(x.value)
         )
 
-        x.dist_node["loc"] = 2.0
+        _require_dist_node(x)["loc"] = 2.0
         x.update()
 
         assert x.log_prob == pytest.approx(
             tfd.Normal(loc=2.0, scale=1.0).log_prob(x.value)
         )
-        assert len(x.dist_node._loc) == 2
+        assert len(_require_dist_node(x)._loc) == 2
 
-        x.dist_node["scale"] = 2.0
+        _require_dist_node(x)["scale"] = 2.0
         x.update()
 
         assert x.log_prob == pytest.approx(
@@ -844,7 +875,7 @@ class TestDistSetitem:
     def test_cannot_replace_dist_at(self):
         x = Var(0.0, Dist(tfd.Normal, loc=0.0, scale=1.0)).update()
         with pytest.raises(IndexError):
-            x.dist_node[2] = Var(1.0)
+            _require_dist_node(x)[2] = Var(1.0)
 
     def test_replacing_positional_input_leads_to_correct_log_prob(self):
         x = Var(0.0, Dist(tfd.Normal, 0.0, 1.0)).update()
@@ -853,7 +884,7 @@ class TestDistSetitem:
             tfd.Normal(loc=0.0, scale=1.0).log_prob(x.value)
         )
 
-        x.dist_node[0] = 2.0
+        _require_dist_node(x)[0] = 2.0
         x.update()
 
         assert x.log_prob == pytest.approx(
@@ -864,7 +895,7 @@ class TestDistSetitem:
         x = Var(0.0, Dist(tfd.Normal, 0.0, 1.0)).update()
 
         with pytest.raises(KeyError):
-            x.dist_node["loc"] = 2.0
+            _require_dist_node(x)["loc"] = 2.0
 
     def test_replacing_an_input_node_with_a_var_works(self):
         x = Var(0.0, Dist(tfd.Normal, 0.0, 1.0)).update()
@@ -873,7 +904,7 @@ class TestDistSetitem:
             tfd.Normal(loc=0.0, scale=1.0).log_prob(x.value)
         )
 
-        x.dist_node[0] = Var(2.0, name="loc")
+        _require_dist_node(x)[0] = Var(2.0, name="loc")
         x.update()
 
         assert x.log_prob == pytest.approx(
@@ -887,19 +918,19 @@ class TestDistSetitem:
         ).update()
 
         with pytest.raises(AttributeError):
-            del x.dist_node["loc"]
+            del _require_dist_node(x)["loc"]  # ty: ignore[not-subscriptable]
 
         x = Var(
             0.0, Dist(tfd.Normal, Var(0.0, name="loc"), scale=Var(1.0, name="scale"))
         ).update()
 
         with pytest.raises(AttributeError):
-            del x.dist_node[0]
+            del _require_dist_node(x)[0]  # ty: ignore[not-subscriptable]
 
         x = Var(0.0, Dist(tfd.Normal, 0.0, scale=Var(1.0, name="scale"))).update()
 
         with pytest.raises(AttributeError):
-            del x.dist_node[0]
+            del _require_dist_node(x)[0]  # ty: ignore[not-subscriptable]
 
     def test_assign_none(self):
         x = Var(
@@ -907,7 +938,7 @@ class TestDistSetitem:
             Dist(tfd.Normal, loc=Var(0.0, name="loc"), scale=Var(1.0, name="scale")),
         ).update()
 
-        x.dist_node["loc"] = None
+        _require_dist_node(x)["loc"] = None
 
 
 class TestCalcGetitem:
@@ -988,7 +1019,7 @@ class TestCalcSetItem:
 
         x[0] = x
 
-        with pytest.raises(Exception):
+        with pytest.raises(NetworkXUnfeasible):
             Model([x])
 
     def test_variable_length_args_cannot_be_extended_by_setitem(self):

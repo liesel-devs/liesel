@@ -22,7 +22,7 @@ from .kernel import (
 )
 from .mh import mh_step
 from .rw import RWKernelState
-from .types import KeyArray, ModelState, Position, TuningInfo
+from .types import KeyArray, ModelState, Position, Scalar, TuningInfo
 
 
 class MHProposal(NamedTuple):
@@ -47,7 +47,7 @@ class MHProposal(NamedTuple):
     """
 
     position: Position
-    log_correction: float
+    log_correction: Scalar
     """
     Let :math:`q(x' | x)` be the proposal density, then
     :math:`log(q(x | x') / q(x' | x))` is the log_mh_correction.
@@ -56,7 +56,7 @@ class MHProposal(NamedTuple):
 
 MHTransitionInfo = DefaultTransitionInfo
 MHTuningInfo = DefaultTuningInfo
-MHProposalFn = Callable[[KeyArray, ModelState, float], MHProposal]
+MHProposalFn = Callable[[KeyArray, ModelState, Scalar], MHProposal]
 
 
 class MHKernel(ModelMixin, TransitionMixin[RWKernelState, MHTransitionInfo], ReprMixin):

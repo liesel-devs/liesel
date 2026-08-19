@@ -15,7 +15,7 @@ def type_check() -> None:
 def test_iwls(mcmc_seed):
     kernel = gs.IWLSKernel(["beta", "log_sigma"], identifier="my_id")
     results = run_kernel_test(mcmc_seed, [kernel])
-    kernel.identifier in results.get_posterior_transition_infos()
+    assert kernel.identifier in results.get_posterior_transition_infos()
 
 
 @pytest.mark.mcmc

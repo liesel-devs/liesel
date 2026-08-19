@@ -17,8 +17,6 @@ from liesel.goose.types import Kernel, KeyArray, ModelInterface, ModelState, Pos
 @register_dataclass_as_pytree
 @dataclass
 class MockKernelState:
-    pass
-
     @staticmethod
     def default() -> "MockKernelState":
         return MockKernelState()

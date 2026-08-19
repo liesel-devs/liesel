@@ -32,7 +32,7 @@ from .kernel import (
 )
 from .mh import mh_step
 from .pytree import register_dataclass_as_pytree
-from .types import Array, KeyArray, ModelState, Position
+from .types import Array, KeyArray, ModelState, Position, Scalar
 
 
 @register_dataclass_as_pytree
@@ -43,7 +43,7 @@ class IWLSKernelState:
     :class:`.liesel.goose.da.DAKernelState` protocol.
     """
 
-    step_size: float
+    step_size: Scalar
     da_state: DualAvgState | None = None
 
     def __post_init__(self):
@@ -190,13 +190,13 @@ class IWLSKernel(
 
     def _flat_log_prob_fn(
         self, model_state: ModelState, unravel_fn: Callable[[Array], Position]
-    ) -> Callable[[Array], float]:
+    ) -> Callable[[Array], Scalar]:
         """
         Returns a callable which takes a flat position and returns the log-probability
         of the model.
         """
 
-        def flat_log_prob_fn(flat_position: Array) -> float:
+        def flat_log_prob_fn(flat_position: Array) -> Scalar:
             position = unravel_fn(flat_position)
             new_model_state = self.model.update_state(position, model_state)
             return self.model.log_prob(new_model_state)

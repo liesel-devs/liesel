@@ -70,7 +70,7 @@ def test_simple():
     assert state["mu"] == 0.0
     assert roughly_close(interface.log_prob(state), -0.91893853)
 
-    state = interface.update_state({"mu": np.array(1.0)}, state)
+    state = interface.update_state(gs.Position({"mu": np.array(1.0)}), state)
     assert state["mu"] == 1.0
     assert roughly_close(interface.log_prob(state), -1.41893853)
 
@@ -110,7 +110,7 @@ def test_simple2():
     assert interface.extract_position(["sigma"], state)["sigma"] == 1.0
 
     state = interface.update_state(
-        {"mu": np.array(1.0), "sigma_log__": np.array(-1.0)}, state
+        gs.Position({"mu": np.array(1.0), "sigma_log__": np.array(-1.0)}), state
     )
     assert state["mu"] == 1.0
     assert state["sigma_log__"] == -1.0
@@ -122,7 +122,7 @@ def test_simple2():
     "ignore:Explicitly requested dtype float64 requested in astype is not available"
     ".*:UserWarning"
 )
-def test_mcmc(basic_lm: pm.Model):  # type: ignore
+def test_mcmc(basic_lm: pm.Model):
     interface = PyMCInterface(basic_lm, additional_vars=["sigma", "mu[0]"])
     state = interface.get_initial_state()
     builder = gs.EngineBuilder(1, 2)
@@ -153,7 +153,7 @@ def test_mcmc(basic_lm: pm.Model):  # type: ignore
     "ignore:Explicitly requested dtype float64 requested in astype is not available"
     ".*:UserWarning"
 )
-def test_mcmc_two_kernels(basic_lm: pm.Model):  # type: ignore
+def test_mcmc_two_kernels(basic_lm: pm.Model):
     interface = PyMCInterface(basic_lm, additional_vars=["sigma", "mu[0]"])
     state = interface.get_initial_state()
     builder = gs.EngineBuilder(1, 2)

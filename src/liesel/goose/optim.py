@@ -1,6 +1,6 @@
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, NotRequired, TypedDict
 
 import jax
 import jax.experimental
@@ -10,7 +10,7 @@ import optax
 import pandas as pd
 from tqdm import tqdm
 
-from ..model import Model, Node, Var
+from ..model import Model
 from .interface import LieselInterface
 from .types import Array, KeyArray, ModelState, Position
 
@@ -31,6 +31,15 @@ def array_to_dict(
         raise ValueError(f"x should have ndim <= 2, but it has x.ndim={x.ndim}")
 
 
+class OptimHistory(TypedDict):
+    """Optimization diagnostics collected across iterations."""
+
+    loss_train: jax.Array
+    loss_validation: jax.Array
+    position: NotRequired[Any]
+    tracked: NotRequired[Any]
+
+
 @dataclass
 class OptimResult:
     """Holds the results of model optimization with :func:`.optim_flat`."""
@@ -43,7 +52,7 @@ class OptimResult:
     """Iteration counter of the last iteration."""
     iteration_best: int
     """Iteration counter of the iteration with lowest loss."""
-    history: dict[str, dict[str, Array] | Array]
+    history: OptimHistory
     """History of loss evaluations and, if applicable, intermediate position values."""
     max_iter: int
     """Maximum number of iterations."""
@@ -53,7 +62,7 @@ class OptimResult:
     """Number of validation observations, or ``1`` if batching was disabled."""
 
 
-def _find_observed(model: Model) -> dict[str, Var | Node]:
+def _find_observed(model: Model) -> dict[str, Array]:
     obs = {
         var_.name: jnp.array(var_.value)
         for var_ in model.vars.values()
@@ -402,7 +411,7 @@ def optim_flat(
 
     >>> coef = lsl.Var.new_param(jnp.zeros(2), name="coef")
     >>> xvar = lsl.Var.new_obs(jnp.c_[jnp.ones_like(x), x], name="x")
-    >>> mu = Var.new_calc(jnp.dot, xvar, coef, name="mu")
+    >>> mu = lsl.Var.new_calc(jnp.dot, xvar, coef, name="mu")
     >>> ydist = lsl.Dist(tfd.Normal, loc=mu, scale=1.0)
     >>> yvar = lsl.Var.new_obs(y, ydist, name="y")
     >>> model = lsl.Model([yvar])
@@ -508,7 +517,7 @@ def optim_flat(
         position: Position, model_state: ModelState, batch_indices: Array | None = None
     ):
         batched_observed = batched_nodes(observed, batch_indices)
-        position = position | batched_observed  # type: ignore
+        position = Position(position | batched_observed)
 
         updated_state = interface_train.update_state(position, model_state)
         if not do_batching:
@@ -524,7 +533,7 @@ def optim_flat(
 
         return nlp
 
-    def _neg_log_prob_train(position: Position, model_state: ModelState):
+    def _neg_log_prob_train(position: Position, model_state: ModelState) -> Array:
         updated_state = interface_train.update_state(position, model_state)
         nlp = -updated_state["_model_log_prob"].value
         if scale_loss:
@@ -532,7 +541,7 @@ def optim_flat(
 
         return nlp
 
-    def _neg_log_prob_validation(position: Position, model_state: ModelState):
+    def _neg_log_prob_validation(position: Position, model_state: ModelState) -> Array:
         updated_state = interface_validation.update_state(position, model_state)
         log_lik = likelihood_scalar_validation * updated_state["_model_log_lik"].value
         log_prior = updated_state["_model_log_prior"].value
@@ -543,17 +552,21 @@ def optim_flat(
 
         return nlp
 
+    neg_log_prob_validation: Callable[[Position, ModelState], Array]
     if model_validation is model_train:
-        _neg_log_prob_validation = _neg_log_prob_train
+        neg_log_prob_validation = _neg_log_prob_train
+    else:
+        neg_log_prob_validation = _neg_log_prob_validation
 
     neg_log_prob_grad = jax.grad(_batched_neg_log_prob, argnums=0)
 
     # ---------------------------------------------------------------------------------
     # Initialize history
 
-    history: dict[str, Any] = dict()
-    history["loss_train"] = jnp.zeros(shape=stopper.max_iter)
-    history["loss_validation"] = jnp.zeros(shape=stopper.max_iter)
+    history: OptimHistory = {
+        "loss_train": jnp.zeros(shape=stopper.max_iter),
+        "loss_validation": jnp.zeros(shape=stopper.max_iter),
+    }
 
     if save_position_history:
         history["position"] = {
@@ -577,9 +590,7 @@ def optim_flat(
     loss_train_start = _neg_log_prob_train(
         position=position, model_state=model_train.state
     )
-    loss_validation_start = _neg_log_prob_validation(
-        position=position, model_state=model_validation.state
-    )
+    loss_validation_start = neg_log_prob_validation(position, model_validation.state)
     history["loss_train"] = history["loss_train"].at[0].set(loss_train_start)
     history["loss_validation"] = (
         history["loss_validation"].at[0].set(loss_validation_start)
@@ -588,7 +599,7 @@ def optim_flat(
     # ---------------------------------------------------------------------------------
     # Initialize while loop carry dictionary
 
-    init_val: dict[str, Any] = dict()
+    init_val: dict[str, Any] = {}
     init_val["while_i"] = 0
     init_val["history"] = history
     init_val["position"] = position
@@ -694,8 +705,8 @@ def optim_flat(
             val["history"]["loss_train"].at[val["while_i"]].set(loss_train)
         )
 
-        loss_validation = _neg_log_prob_validation(
-            val["position"], model_state=val["model_state_validation"]
+        loss_validation = neg_log_prob_validation(
+            val["position"], val["model_state_validation"]
         )
 
         val["history"]["loss_validation"] = (
@@ -747,9 +758,9 @@ def optim_flat(
     )
 
     if restore_best_position:
-        final_position: Position = {
-            name: pos[ibest] for name, pos in val["history"]["position"].items()
-        }  # type: ignore
+        final_position = Position(
+            {name: pos[ibest] for name, pos in val["history"]["position"].items()}
+        )
     else:
         final_position = val["position"]
 
@@ -806,11 +817,11 @@ def optim_flat(
     return result
 
 
-def history_to_df(history: dict[str, Array]) -> pd.DataFrame:
+def history_to_df(history: Mapping[str, Any]) -> pd.DataFrame:
     """
     Turns a :attr:`.OptimResult.history` dictionary into a ``pandas.DataFrame``.
     """
-    data: dict[str, Array] = dict()
+    data: dict[str, Array] = {}
 
     position_history = history.get("position", None)
     tracked_history = history.get("tracked", None)

@@ -4,8 +4,8 @@ Posterior statistics and diagnostics.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Any, Literal, NamedTuple
+from collections.abc import Mapping, Sequence
+from typing import Any, Literal, NamedTuple, cast
 
 import arviz as az
 import jax
@@ -70,10 +70,10 @@ def _make_error_summary(
         krnl_summary: dict[int, ErrorSummaryForOneCode] = {}
         for key, count in counter_dict.items():
             ec = key
-            # type ignore is ok since the type must implement the kernel protocol.
-            error_msg = kel.kernel_cls.map_or(
-                "",
-                lambda krn_cls: krn_cls.error_book[ec],  # type: ignore
+            error_msg = (
+                kel.kernel_cls.unwrap().error_book[ec]
+                if kel.kernel_cls.is_some()
+                else ""
             )
             krnl_summary[ec] = ErrorSummaryForOneCode(ec, error_msg, count, None)
 
@@ -132,10 +132,10 @@ def _summarize_acceptance_probabilities(
         for c in range(chains):
             chain = {"kernel": k, "phase": phase, "chain": c}
             chain["acceptance_probability"] = float(ap[c, ...].mean())
-            chain["position_moved"] = jnp.mean(pm[c, ...])
-            if float(chain["position_moved"]) > 1.0:  # type: ignore # spurious warning
-                if int(chain["position_moved"].round()) == 99:  # type: ignore
-                    chain["position_moved"] = jnp.nan
+            position_moved = jnp.mean(pm[c, ...])
+            chain["position_moved"] = position_moved
+            if float(position_moved) > 1.0 and int(position_moved.round()) == 99:
+                chain["position_moved"] = jnp.nan
             data.append(chain)
     return data
 
@@ -443,8 +443,8 @@ class Summary:
 
         # create one row per entry
         df_dict = {}
-        first_quant = list(quants.values())[0]
-        for var in first_quant.keys():
+        first_quant = next(iter(quants.values()))
+        for var in first_quant:
             it = np.nditer(first_quant[var], flags=["multi_index"])
             for _ in it:
                 var_fqn = (
@@ -714,9 +714,9 @@ class Summary:
             apdf_md = apdf.to_markdown()
             error_md = error_df.to_markdown()
         except ImportError:
-            param_md = f"```\n{repr(param_df)}\n```"
-            apdf_md = f"```\n{repr(apdf)}\n```"
-            error_md = f"```\n{repr(error_df)}\n```"
+            param_md = f"```\n{param_df!r}\n```"
+            apdf_md = f"```\n{apdf!r}\n```"
+            error_md = f"```\n{error_df!r}\n```"
 
         md = "\n\n**Parameter summary:**\n\n" + param_md
 
@@ -983,8 +983,8 @@ class SamplesSummary:
 
         # create one row per entry
         df_dict = {}
-        first_quant = list(quants.values())[0]
-        for var in first_quant.keys():
+        first_quant = next(iter(quants.values()))
+        for var in first_quant:
             it = np.nditer(first_quant[var], flags=["multi_index"])
             for _ in it:
                 var_fqn = (
@@ -1118,7 +1118,7 @@ class SamplesSummary:
 
 
 def concatenate_arrays_in_dict(
-    x: dict[str, jax.typing.ArrayLike], n_leading_axes: int = 2
+    x: Mapping[str, jax.typing.ArrayLike], n_leading_axes: int = 2
 ) -> jax.Array:
     """
     Concatenates all arrays in the supplied dictionary into a single array.
@@ -1143,10 +1143,17 @@ def concatenate_arrays_in_dict(
     return out_array
 
 
+class _LieselELPDData(az.ELPDData):
+    """An ArviZ LOO result with Liesel's legacy attribute aliases."""
+
+    elpd_loo: float
+    p_loo: float
+
+
 def _apply_loo_scale(
     result: az.ELPDData,
     scale: Literal["log", "negative_log", "deviance"],
-) -> az.ELPDData:
+) -> _LieselELPDData:
     if scale != "log":
         multiplier = -1 if scale == "negative_log" else -2
         result.elpd = multiplier * result.elpd
@@ -1154,17 +1161,18 @@ def _apply_loo_scale(
         result.elpd_i = multiplier * result.elpd_i
         result.scale = scale
 
-    result.elpd_loo = result.elpd
-    result.p_loo = result.p
-    return result
+    liesel_result = cast(_LieselELPDData, result)
+    liesel_result.elpd_loo = result.elpd
+    liesel_result.p_loo = result.p
+    return liesel_result
 
 
 def loo(
-    lpp: dict[str, jax.typing.ArrayLike] | jax.typing.ArrayLike,
+    lpp: Mapping[str, jax.typing.ArrayLike] | jax.typing.ArrayLike,
     samples: dict[str, jax.typing.ArrayLike] | None,
     reff: float | None = None,
     scale: Literal["log", "negative_log", "deviance"] = "log",
-) -> az.ELPDData:
+) -> _LieselELPDData:
     """
     Compute Pareto-smoothed importance sampling leave-one-out cross-validation
     (PSIS-LOO-CV) statistic via ArviZ.
@@ -1214,10 +1222,11 @@ def loo(
             "available."
         )
 
-    try:
+    if isinstance(lpp, Mapping):
+        lpp_by_variable = cast(Mapping[str, jax.typing.ArrayLike], lpp)
+        lpp_array = concatenate_arrays_in_dict(lpp_by_variable)
+    else:
         lpp_array = jnp.asarray(lpp)
-    except Exception:  # assume its a dict now
-        lpp_array = concatenate_arrays_in_dict(lpp)
 
     lpp_array = np.asarray(lpp_array)
     idat = az.from_dict({"log_likelihood": {"observed": lpp_array}})

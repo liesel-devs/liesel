@@ -66,7 +66,7 @@ intersphinx_mapping = {
     "jax": ("https://jax.readthedocs.io/en/latest/", None),
     "tensorflow_probability": (  # we can use "tfp" as a prefix, too
         "https://www.tensorflow.org/probability/api_docs/python",
-        "https://github.com/GPflow/tensorflow-intersphinx/raw/master/tfp_py_objects.inv",  # noqa: E501
+        "https://github.com/GPflow/tensorflow-intersphinx/raw/master/tfp_py_objects.inv",
     ),
 }
 

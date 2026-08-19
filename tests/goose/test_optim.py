@@ -45,8 +45,8 @@ def setup_model(ys: Array, xs: Array) -> lsl.Model:
 
 
 def train_test_split(model_fn, test_share: float = 0.20, **model_args):
-    train = dict()
-    test = dict()
+    train = {}
+    test = {}
     for name, value in model_args.items():
         train_idx = int(len(value) * (1 - test_share)) + 1
         test_idx = int(len(value) * test_share)

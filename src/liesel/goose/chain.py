@@ -6,7 +6,7 @@ This module is experimental. Expect API changes.
 
 from abc import abstractmethod
 from collections.abc import Callable, Sequence
-from typing import Generic, Protocol, TypeVar
+from typing import Protocol
 
 import jax
 import numpy as np
@@ -18,10 +18,8 @@ from .epoch import EpochConfig
 from .pytree import concatenate_leaves, slice_leaves
 from .types import PyTree
 
-TPyTree = TypeVar("TPyTree", bound=PyTree)
 
-
-class Chain(Protocol[TPyTree]):
+class Chain[TPyTree: PyTree](Protocol):
     """
     A ``Chain`` stores multiple chucks of pytrees and concatenates them along a
     time axis.
@@ -50,7 +48,7 @@ class Chain(Protocol[TPyTree]):
         raise NotImplementedError
 
 
-class EpochChain(Chain[TPyTree]):
+class EpochChain[TPyTree: PyTree](Chain[TPyTree], Protocol):
     """
     An ``EpochChain`` is a :class:`.Chain` with an associated :class:`.EpochConfig`.
 
@@ -70,7 +68,7 @@ class EpochChain(Chain[TPyTree]):
 
 
 @usedocs(Chain)
-class ListChain(Generic[TPyTree]):
+class ListChain[TPyTree: PyTree]:
     """Implements the :class:`.Chain` protocol with a list as storage."""
 
     def __init__(self):
@@ -93,7 +91,7 @@ class ListChain(Generic[TPyTree]):
 
 
 @usedocs(EpochChain)
-class ListEpochChain(ListChain[TPyTree]):
+class ListEpochChain[TPyTree: PyTree](ListChain[TPyTree]):
     """Implements the :class:`.EpochChain` protocol with a list as storage."""
 
     def __init__(self, epoch: EpochConfig, apply_thinning: bool = False):
@@ -122,7 +120,7 @@ class ListEpochChain(ListChain[TPyTree]):
             return super().append(chunk)
 
 
-class EpochChainManager(Generic[TPyTree]):
+class EpochChainManager[TPyTree: PyTree]:
     """
     An ``EpochChainManager`` is a container for multiple epoch chains.
 

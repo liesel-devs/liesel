@@ -20,7 +20,7 @@ def test_initialization() -> None:
 
     # simple data variable with specified nodes
     dat = lsl.Value(1)
-    dist = lsl.Dist(NoDistribution())
+    dist = lsl.Dist(NoDistribution)
     var1 = lsl.Var(dat, dist, "foo")
     assert id(var1.value_node) == id(dat)
     assert id(var1.dist_node) == id(dist)
@@ -247,7 +247,7 @@ def test_auto_transform():
 def test_method_nodes() -> None:
     in0 = lsl.Value(0)
     calc = lsl.Calc(lambda x: x + 1, in0)
-    dist = lsl.Dist(NoDistribution())
+    dist = lsl.Dist(NoDistribution)
     var0 = lsl.Var(calc, dist)
 
     assert len(var0.nodes) == 3
@@ -431,7 +431,7 @@ class TestAllInputs:
 
     def test_all_input_vars_weak_w_dist_2(self):
         def dist_mk():
-            return lsl.Dist(lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=1.0))
+            return lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=1.0)
 
         x = lsl.Var(1)
         y = lsl.Var(1)
@@ -616,10 +616,14 @@ class TestVarPredictions:
         if in_model:
             _ = lsl.Model([yvar])
 
-        samples = {
-            "b": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1)),
-            "scale_transformed": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1)),
-        }
+        samples = lsl.Position(
+            {
+                "b": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1)),
+                "scale_transformed": jax.random.uniform(
+                    jax.random.PRNGKey(3), (4, 7, 1)
+                ),
+            }
+        )
 
         pred = loc.predict(samples)
         assert jnp.allclose(pred, x * samples["b"])
@@ -631,14 +635,14 @@ class TestVarPredictions:
 
         # predict at new observations with same shape
         xnew = jax.random.uniform(jax.random.PRNGKey(5), (n,))
-        pred = loc.predict(samples, newdata={"x": xnew})
+        pred = loc.predict(samples, newdata=lsl.Position({"x": xnew}))
 
         assert jnp.allclose(pred, xnew * samples["b"])
         assert pred.shape[-1] == x.shape[-1]
 
         # predict at new grid of observations
         xnew = jnp.linspace(0, 10)
-        pred = loc.predict(samples, newdata={"x": xnew})
+        pred = loc.predict(samples, newdata=lsl.Position({"x": xnew}))
 
         assert jnp.allclose(pred, xnew * samples["b"])
         assert pred.shape[-1] != x.shape[-1]
@@ -646,14 +650,14 @@ class TestVarPredictions:
 
         # predict when irrelevant variables from the model are present
         if in_model:
-            pred = scale.predict(samples, newdata={"x": xnew})
+            pred = scale.predict(samples, newdata=lsl.Position({"x": xnew}))
         if not in_model:
             with pytest.raises(KeyError, match="more strict"):
-                scale.predict(samples, newdata={"x": xnew})
+                scale.predict(samples, newdata=lsl.Position({"x": xnew}))
 
         # predict when variables not in the model are present
         with pytest.raises(KeyError):
-            scale.predict(samples, newdata={"w": xnew})
+            scale.predict(samples, newdata=lsl.Position({"w": xnew}))
 
     def test_predict_with_ignored_entries(self) -> None:
         n = 10
@@ -673,16 +677,20 @@ class TestVarPredictions:
 
         _ = lsl.Model([yvar])
 
-        samples = {
-            "b": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1)),
-            "scale_transformed": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1)),
-            "scale": tfp.distributions.Uniform().sample(
-                (4, 7, 1), jax.random.PRNGKey(6)
-            ),
-            "_model_log_lik": tfp.distributions.Uniform().sample(
-                (4, 7), jax.random.PRNGKey(6)
-            ),
-        }
+        samples = lsl.Position(
+            {
+                "b": jax.random.uniform(jax.random.PRNGKey(3), (4, 7, 1)),
+                "scale_transformed": jax.random.uniform(
+                    jax.random.PRNGKey(3), (4, 7, 1)
+                ),
+                "scale": tfp.distributions.Uniform().sample(
+                    (4, 7, 1), jax.random.PRNGKey(6)
+                ),
+                "_model_log_lik": tfp.distributions.Uniform().sample(
+                    (4, 7), jax.random.PRNGKey(6)
+                ),
+            }
+        )
 
         pred = loc.predict(samples)
         assert jnp.allclose(pred, x * samples["b"])
@@ -722,25 +730,25 @@ class TestVarPredictions:
 
         # predict at new observations with same shape
         xnew = jax.random.uniform(jax.random.PRNGKey(5), (n,))
-        pred = loc.predict(samples, newdata={"x": xnew})
+        pred = loc.predict(samples, newdata=lsl.Position({"x": xnew}))
 
         assert jnp.allclose(pred, xnew * samples["b"])
         assert pred.shape[-1] == x.shape[-1]
 
         # predict at new grid of observations
         xnew = jnp.linspace(0, 10)
-        pred = loc.predict(samples, newdata={"x": xnew})
+        pred = loc.predict(samples, newdata=lsl.Position({"x": xnew}))
 
         assert jnp.allclose(pred, xnew * samples["b"])
         assert pred.shape[-1] != x.shape[-1]
         assert pred.shape[-1] == xnew.shape[-1]
 
         # predict when irrelevant variables from the model are present
-        pred = scale.predict(samples, newdata={"x": xnew})
+        pred = scale.predict(samples, newdata=lsl.Position({"x": xnew}))
 
         # predict when variables not in the model are present
         with pytest.raises(KeyError):
-            scale.predict(samples, newdata={"w": xnew})
+            scale.predict(samples, newdata=lsl.Position({"w": xnew}))
 
 
 class TestVarSample:
@@ -793,8 +801,10 @@ class TestVarSample:
 
         # basic plausibility checks for sampling from the correct distribution
         # this is not a tough check though.
-        sigma_mean = sigma.dist_node.init_dist().mean()  # type: ignore
-        sigma_std = sigma.dist_node.init_dist().stddev()  # type: ignore
+        sigma_dist = sigma.dist_node
+        assert sigma_dist is not None
+        sigma_mean = sigma_dist.init_dist().mean()
+        sigma_std = sigma_dist.init_dist().stddev()
         assert samples["sigma"].mean() == pytest.approx(sigma_mean, abs=0.1)
         assert samples["sigma"].std() == pytest.approx(sigma_std, abs=0.1)
 
@@ -803,6 +813,36 @@ class TestVarSample:
         assert "y" in samples
         assert "sigma" in samples
         assert "b" in samples
+
+    def test_sample_uses_configured_converter(self) -> None:
+        class RawValue:
+            def __init__(self, value) -> None:
+                self.value = value
+
+        def convert(value):
+            if isinstance(value, RawValue):
+                value = value.value
+            return jnp.asarray(value)
+
+        x = lsl.Var.new_value(
+            0.0,
+            name="x",
+            convert=convert,
+        )
+        y = lsl.Var(
+            0.0,
+            lsl.Dist(tfp.distributions.Deterministic, loc=x),
+            name="y",
+        )
+        _ = lsl.Model(y)
+
+        samples = y.sample(
+            shape=(2,),
+            seed=jax.random.key(8),
+            newdata=lsl.Position({"x": RawValue(3.0)}),
+        )
+
+        assert samples["y"] == pytest.approx(3.0)
 
 
 class TestValueConversion:
@@ -822,6 +862,10 @@ class TestValueConversion:
         a = MyVar.new_param(1.0, convert=lambda x: x)
         assert not isinstance(a.value, jax.Array)
         assert isinstance(a.value, float)
+
+    def test_conversion_must_be_idempotent_with_value_node(self):
+        with pytest.raises(ValueError, match="must be idempotent"):
+            lsl.Var(lsl.Value(1.0), convert=lambda value: value + 1.0)
 
     def test_calc(self):
         a = lsl.Var.new_calc(lambda x, y: x + y, 1.0, 1.0)
