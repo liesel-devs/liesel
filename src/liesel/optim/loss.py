@@ -41,19 +41,22 @@ class Loss(Protocol):
     for training and validation, provide initial parameter positions, compute
     training and validation losses, and provide gradients for optimizer updates.
 
-    Attributes
-    ----------
-    split
-        Train/validation/test split used by the loss.
-
     Notes
     -----
     Built-in optimizers call :meth:`grad` or :meth:`value_and_grad` on
     ``loss_train_batched``. Custom losses can inherit from :class:`LossMixin` to get
     these gradient methods automatically.
+
+    ``split`` is declared read-only here so that implementations may narrow it, for
+    example to :class:`PositionSplit`. A writable protocol member would be invariant
+    and reject such implementations. Storing it as a plain instance attribute still
+    satisfies the protocol.
     """
 
-    split: SplitConfig
+    @property
+    def split(self) -> SplitConfig:
+        """Train/validation/test split used by the loss."""
+        ...
 
     def position(self, position_keys: Sequence[str]) -> Position:
         """
