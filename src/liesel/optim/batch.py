@@ -38,7 +38,7 @@ def _resolve_batch_size(
     return batch_axis_size if batch_size is _MISSING else batch_size  # type: ignore[return-value]
 
 
-def _normalize_positive_size(size: int | float | None, name: str) -> float | None:
+def _normalize_positive_size(size: float | None, name: str) -> float | None:
     if size is None:
         return None
 
@@ -242,8 +242,8 @@ class Batches:
         batch_axes: dict[str, int] | None = None,
         default_batch_axis: int = 0,
         sample_with_replacement: bool = False,
-        sample_size: int | float | None = None,
-        batch_sample_size: int | float | None = None,
+        sample_size: float | None = None,
+        batch_sample_size: float | None = None,
         *,
         batch_axis_size: int | None | object = _MISSING,
     ) -> None:
@@ -363,8 +363,8 @@ class Batches:
         multi_size: Literal["error", "manager"] = "error",
         mode: Literal["strict", "resample"] = "resample",
         epoch_size: Literal["max", "min"] | int = "max",
-        sample_size: int | float | None = None,
-        batch_sample_size: int | float | None = None,
+        sample_size: float | None = None,
+        batch_sample_size: float | None = None,
         infer_sample_size: bool = True,
         sample_with_replacement: bool = False,
         *,

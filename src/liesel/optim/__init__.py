@@ -18,11 +18,11 @@ from .vi import NegElboLoss as NegElboLoss
 from .vi import VDist as VDist
 
 __all__ = [
-    "Batches",
+    "LBFGS",
     "BatchManager",
+    "Batches",
     "CompositeVDist",
     "Elbo",
-    "LBFGS",
     "LieselOptim",
     "LieselVI",
     "NegElboLoss",
