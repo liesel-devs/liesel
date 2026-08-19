@@ -169,15 +169,7 @@ def _compile_sampling(
     sampling_specs: dict[str, _SamplingSpec],
     posterior_size: int,
     chunk_size: int | None = None,
-) -> Callable[
-    [
-        Array,
-        Array,
-        dict[str, Array],
-        dict[str, NodeState],
-    ],
-    dict[str, Array],
-]:
+) -> jax.stages.Wrapped:
     """
     Compiles sampling over a flattened draw and posterior-sample axis.
 

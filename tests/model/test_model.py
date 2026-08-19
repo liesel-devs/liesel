@@ -17,6 +17,7 @@ from liesel.model.model import (
     Model,
     _compile_prediction,
     _compile_sampling,
+    _SamplingSpec,
     log_prob_pointwise,
     save_model,
 )
@@ -733,6 +734,8 @@ class TestPredictions:
             .memory_analysis()
         )
 
+        assert full is not None
+        assert chunked is not None
         assert chunked.temp_size_in_bytes < full.temp_size_in_bytes
 
     def test_predict_does_not_retain_batched_intermediates(self) -> None:
@@ -749,7 +752,7 @@ class TestPredictions:
             model = Model([target])
 
             predictions = model.predict(
-                {"theta": jnp.ones(n_samples)}, predict=["target"]
+                Position({"theta": jnp.ones(n_samples)}), predict=["target"]
             )
             jax.block_until_ready(predictions)
 
@@ -1283,15 +1286,19 @@ class TestSample:
             name="z",
         )
         model = Model([z])
-        sampling_specs = {
+        assert y.dist_node is not None
+        assert z.dist_node is not None
+        sampling_specs: dict[str, _SamplingSpec] = {
             "y": {
                 "shape": (),
                 "dist": y.dist_node,
+                "seed_index": 0,
                 "value_node": y.value_node,
             },
             "z": {
                 "shape": (),
                 "dist": z.dist_node,
+                "seed_index": 1,
                 "value_node": z.value_node,
             },
         }
@@ -1329,6 +1336,8 @@ class TestSample:
             .memory_analysis()
         )
 
+        assert full is not None
+        assert chunked is not None
         assert chunked.temp_size_in_bytes < full.temp_size_in_bytes
 
     def test_sample_prior(self):
