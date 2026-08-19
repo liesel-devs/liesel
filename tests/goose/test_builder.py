@@ -36,12 +36,14 @@ def test_jitter_fns():
     builder.set_jitter_fns(
         {
             "x": (
-                lambda key, cv: cv
-                + tfd.Uniform(-1.0, 1.0).sample(sample_shape=cv.shape, seed=key)
+                lambda key, cv: (
+                    cv + tfd.Uniform(-1.0, 1.0).sample(sample_shape=cv.shape, seed=key)
+                )
             ),
             "y": (
-                lambda key, cv: cv
-                + tfd.Uniform(-1.0, 1.0).sample(sample_shape=cv.shape, seed=key)
+                lambda key, cv: (
+                    cv + tfd.Uniform(-1.0, 1.0).sample(sample_shape=cv.shape, seed=key)
+                )
             ),
         }
     )

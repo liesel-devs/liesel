@@ -4,6 +4,13 @@ from pytest import approx
 import liesel.distributions as lsld
 
 
+def test_default_dependence():
+    distribution = lsld.GaussianCopula()
+
+    assert distribution.batch_shape.as_list() == []
+    assert distribution.log_prob(jnp.array([0.5, 0.5])) == approx(0.0)
+
+
 def test_scalar_batch():
     distribution = lsld.GaussianCopula(0.42)
 

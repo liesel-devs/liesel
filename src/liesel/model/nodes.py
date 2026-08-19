@@ -11,7 +11,16 @@ from collections.abc import Callable, Hashable, Iterable, Sequence
 from functools import wraps
 from itertools import chain
 from types import MappingProxyType
-from typing import IO, TYPE_CHECKING, Any, Literal, NamedTuple, Self, TypeGuard, TypeVar
+from typing import (
+    IO,
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    NamedTuple,
+    Self,
+    TypeGuard,
+    cast,
+)
 
 import jax
 import jax.numpy as jnp
@@ -22,6 +31,7 @@ import tensorflow_probability.substrates.numpy.bijectors as nb
 import tensorflow_probability.substrates.numpy.distributions as nd
 
 from ..distributions.nodist import NoDistribution
+from ..types import Position
 from .names import random_name
 from .viz import plot_nodes, plot_vars
 
@@ -35,7 +45,6 @@ __all__ = [
     "Array",
     "Bijector",
     "Calc",
-    "Value",
     "Dist",
     "Distribution",
     "Group",
@@ -46,6 +55,7 @@ __all__ = [
     "TransientDist",
     "TransientIdentity",
     "TransientNode",
+    "Value",
     "Var",
 ]
 
@@ -53,13 +63,106 @@ type Array = Any
 type Distribution = jd.Distribution | nd.Distribution
 type Bijector = jb.Bijector | nb.Bijector
 
-T = TypeVar("T", bound=Hashable)
-
 logger = logging.getLogger(__name__)
 
 
-def _unique_tuple(*args: Iterable[T]) -> tuple[T, ...]:
+def _unique_tuple[T: Hashable](*args: Iterable[T]) -> tuple[T, ...]:
     return tuple(dict.fromkeys(chain(*args)))
+
+
+def _conversion_values_equal(left: Any, right: Any) -> bool:
+    """Cheaply compare representative values from two conversion results."""
+    if left is right:
+        return True
+
+    left_leaves, left_structure = jax.tree_util.tree_flatten(left)
+    right_leaves, right_structure = jax.tree_util.tree_flatten(right)
+
+    if left_structure != right_structure or len(left_leaves) != len(right_leaves):
+        return False
+
+    for left_leaf, right_leaf in zip(left_leaves, right_leaves):
+        if left_leaf is right_leaf:
+            continue
+
+        try:
+            left_array = jnp.asarray(left_leaf)
+            right_array = jnp.asarray(right_leaf)
+        except (TypeError, ValueError):
+            try:
+                if not bool(left_leaf == right_leaf):
+                    return False
+            except (TypeError, ValueError):
+                # Some arbitrary Python objects do not provide scalar equality.
+                # This initialization check is deliberately best-effort.
+                continue
+        else:
+            if (
+                left_array.shape != right_array.shape
+                or left_array.dtype != right_array.dtype
+            ):
+                return False
+
+            size = left_array.size
+            if size == 0:
+                continue
+
+            indices = jnp.asarray(tuple({0, size // 2, size - 1}))
+            if not bool(
+                jnp.array_equal(
+                    left_array.reshape(-1)[indices],
+                    right_array.reshape(-1)[indices],
+                    equal_nan=True,
+                )
+            ):
+                return False
+
+    return True
+
+
+def _check_conversion_is_idempotent(
+    converter: Callable[[Any], Any], converted_value: Any
+) -> None:
+    """Smoke-test a converter by applying it once more to its own output."""
+    try:
+        converted_twice = converter(converted_value)
+    except Exception as e:
+        raise ValueError(
+            "Conversion functions must accept their own output and be idempotent."
+        ) from e
+
+    if not _conversion_values_equal(converted_value, converted_twice):
+        raise ValueError(
+            "Conversion functions must be idempotent, but applying this converter "
+            "twice changed the initial value."
+        )
+
+
+def _callable_name(fn: Callable[..., Any]) -> str:
+    """Returns a useful display name for a function, class, or callable object."""
+    name = getattr(fn, "__name__", None)
+    return name if isinstance(name, str) else type(fn).__name__
+
+
+def _to_float32_for_temporary_model() -> bool:
+    """Whether temporary models should convert float64 values to float32."""
+    try:
+        return not bool(jax.config.read("jax_enable_x64"))
+    except (AttributeError, KeyError, ValueError):
+        # Defensive fallback in case JAX changes its config API.
+        return jnp.array(1.0).dtype == jnp.dtype("float32")
+
+
+def _transformed_distribution_bijector(distribution: Distribution) -> Bijector:
+    """Returns the bijector from a transformed JAX or NumPy distribution."""
+    if isinstance(
+        distribution, jd.TransformedDistribution | nd.TransformedDistribution
+    ):
+        return distribution.bijector
+
+    raise TypeError(
+        f"Expected a transformed distribution, but got {type(distribution).__name__}."
+    )
 
 
 def in_model_method(fn):
@@ -67,7 +170,7 @@ def in_model_method(fn):
     def wrapped(self, *args, **kwargs):
         if not self.model:
             raise RuntimeError(
-                f"{repr(self)} is not part of a model, cannot call {fn.__name__}()"
+                f"{self!r} is not part of a model, cannot call {fn.__name__}()"
             )
         return fn(self, *args, **kwargs)
 
@@ -79,7 +182,7 @@ def in_model_getter(fn):
     def wrapped(self, *args, **kwargs):
         if not self.model:
             raise RuntimeError(
-                f"{repr(self)} is not part of a model, cannot call '{fn.__name__}'"
+                f"{self!r} is not part of a model, cannot call '{fn.__name__}'"
             )
         return fn(self, *args, **kwargs)
 
@@ -91,7 +194,7 @@ def no_model_method(fn):
     def wrapped(self, *args, **kwargs):
         if self.model:
             raise RuntimeError(
-                f"{repr(self)} is part of a model, cannot call {fn.__name__}()"
+                f"{self!r} is part of a model, cannot call {fn.__name__}()"
             )
         return fn(self, *args, **kwargs)
 
@@ -103,7 +206,7 @@ def no_model_setter(fn):
     def wrapped(self, *args, **kwargs):
         if self.model:
             raise RuntimeError(
-                f"{repr(self)} is part of a model, cannot set '{fn.__name__}'"
+                f"{self!r} is part of a model, cannot set '{fn.__name__}'"
             )
         return fn(self, *args, **kwargs)
 
@@ -115,7 +218,7 @@ def changes_model_graph(fn):
     def wrapped(self, *args, **kwargs):
         if self.model and self.model.locked:
             raise RuntimeError(
-                f"{repr(self)} is part of a locked model, cannot call {fn.__name__}(). "
+                f"{self!r} is part of a locked model, cannot call {fn.__name__}(). "
                 "To allow for changes to the model, you can set the Model.locked flag "
                 "to False. "
                 "ATTENTION: Note that, from v0.5, the default state for models will "
@@ -186,7 +289,7 @@ class Node(ABC):
     convert
         A function used to process the value of this node. The default uses the
         function stored in :meth:`.Node.convert_value`, which is
-        ``jax.numpy.asarray``.
+        ``jax.numpy.asarray``. Conversion functions must be idempotent.
 
     See Also
     --------
@@ -248,6 +351,9 @@ class Node(ABC):
                 @staticmethod
                 def convert_value(x):
                     return jnp.asarray(x) if x is not None else x
+
+        Conversion functions must be idempotent: converting an already-converted
+        value must not change it.
         """
         return jnp.asarray(x) if x is not None else x
 
@@ -261,14 +367,14 @@ class Node(ABC):
 
     def _set_model(self, model: Model) -> Node:
         if self.model:
-            raise RuntimeError(f"{repr(self)} can only be part of one model")
+            raise RuntimeError(f"{self!r} can only be part of one model")
 
         self._model = weakref.ref(model)
         return self
 
     def _set_var(self, var: Var) -> Node:
         if self.var:
-            raise RuntimeError(f"{repr(self)} can only be part of one var")
+            raise RuntimeError(f"{self!r} can only be part of one var")
 
         self._var = var
         return self
@@ -529,7 +635,7 @@ class Node(ABC):
                 )
                 raise KeyError(msg) from error
         else:
-            raise ValueError(f"Key must be str or int, not {type(key)}.")
+            raise TypeError(f"Key must be str or int, not {type(key)}.")
 
     def _iloc_replace(self, key: int, value: Node | Var | Any) -> None:
         inputs = list(self.inputs)
@@ -559,18 +665,20 @@ class Node(ABC):
         elif isinstance(key, str):
             return self._loc_replace(key, value)
         else:
-            raise ValueError(f"Key must be str or int, not {type(key)}.")
+            raise TypeError(f"Key must be str or int, not {type(key)}.")
 
-    def __getstate__(self):
+    def __getstate__(self) -> dict[str, Any]:
         state = self.__dict__.copy()
         state["_model"] = self._model()
         return state
 
-    def __setstate__(self, state):
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        # __getstate__ stores the dereferenced Model rather than its weak reference.
+        model: Model | None = state["_model"]
         self.__dict__.update(state)
 
-        if self._model is not None:
-            self._model = weakref.ref(self._model)
+        if model is not None:
+            self._model = weakref.ref(model)
         else:
             self._model = lambda: None
 
@@ -674,7 +782,7 @@ class Value(Node):
     convert
         A function used to process the value of this node. The default uses the
         function stored in :meth:`.Node.convert_value`, which is
-        ``jax.numpy.asarray``.
+        ``jax.numpy.asarray``. Conversion functions must be idempotent.
 
 
     See Also
@@ -722,6 +830,7 @@ class Value(Node):
     ):
         super().__init__(_name=_name, convert=convert)
         self.value = value
+        _check_conversion_is_idempotent(self._convert, self.value)
 
     def flag_outdated(self) -> Value:
         """Stops the recursion setting outdated flags."""
@@ -771,8 +880,6 @@ class Data(Value):
         Alias for :class:`.Value`. For full documentation, please consult
         :class:`.Value`.
     """
-
-    pass
 
 
 class Calc(Node):
@@ -892,7 +999,7 @@ class Calc(Node):
             except Exception as e:
                 logger.warning(
                     f"{self} was not updated during initialization, because the"
-                    f" following exception occured: {repr(e)}. See debug log for the"
+                    f" following exception occured: {e!r}. See debug log for the"
                     " full traceback."
                 )
                 logger.debug(
@@ -1098,9 +1205,7 @@ class Dist(Node):
     @changes_model_graph
     def at(self, at: Node | None):
         if self.var and at is not self.var.var_value_node:
-            raise RuntimeError(
-                f"{repr(self)} is part of a var, cannot set property `at`"
-            )
+            raise RuntimeError(f"{self!r} is part of a var, cannot set property `at`")
 
         self._at = at
 
@@ -1139,7 +1244,7 @@ class Dist(Node):
     def update(self) -> Dist:
         if not self.at:
             raise RuntimeError(
-                f"{repr(self)} cannot evaluate log-prob, property `at` not set"
+                f"{self!r} cannot evaluate log-prob, property `at` not set"
             )
 
         log_prob = self.init_dist().log_prob(self.at.value)
@@ -1280,46 +1385,49 @@ class Dist(Node):
     ) -> dict[str, tuple[Var, Bijector | Literal["auto"]]]:
         """Resolves bijector specs to parameter->(Var, Bijector) mappings."""
         result: dict[str, tuple[Var, Bijector | Literal["auto"]]] = {}
+        bijector_dict: dict[str, Bijector | None]
 
         # Get default bijectors once - validates parameter_properties()
         default_bijectors = self.find_default_parameter_bijectors()
         param_names = list(default_bijectors)
 
-        if self.inputs:
-            if not len(self.inputs) <= len(param_names):
-                raise ValueError(
-                    f"{self.distribution} has the parameters {param_names}, but got "
-                    f"{len(self.inputs)} inputs: {self.inputs}."
-                )
+        if self.inputs and not len(self.inputs) <= len(param_names):
+            raise ValueError(
+                f"{self.distribution} has the parameters {param_names}, but got "
+                f"{len(self.inputs)} inputs: {self.inputs}."
+            )
 
-        if self.kwinputs:
-            if not set(self.kwinputs) <= set(param_names):
-                raise ValueError(
-                    f"{self.distribution} has the parameters {param_names}, but got "
-                    f"inputs: {list(self.kwinputs)} with values {self.kwinputs}."
-                )
+        if self.kwinputs and not set(self.kwinputs) <= set(param_names):
+            raise ValueError(
+                f"{self.distribution} has the parameters {param_names}, but got "
+                f"inputs: {list(self.kwinputs)} with values {self.kwinputs}."
+            )
 
         # Resolve bijector specification to dict
         if bijectors == "auto":
             bijector_dict = default_bijectors
 
         elif isinstance(bijectors, dict):
+            bijector_specs = cast(
+                dict[str, Bijector | Literal["auto"] | None], bijectors
+            )
+
             if self.inputs:
                 raise ValueError(
                     "When dist inputs are supplied as positional arguments, "
                     "bijectors have to be supplied positionally, too. Got inputs "
-                    f"{self.inputs} and bijectors {bijectors} for dist {self}."
+                    f"{self.inputs} and bijectors {bijector_specs} for dist {self}."
                 )
 
             # Validate that all keys are valid parameter names
-            invalid_keys = set(bijectors.keys()) - set(param_names)
+            invalid_keys = set(bijector_specs) - set(param_names)
             if invalid_keys:
                 raise ValueError(
                     f"Invalid parameter name(s) in bijectors dict: {invalid_keys}. "
                     f"Valid parameter names are: {', '.join(param_names)}."
                 )
             bijector_dict = {}
-            for param_name, bijector in bijectors.items():
+            for param_name, bijector in bijector_specs.items():
                 if bijector == "auto":
                     bijector_dict[param_name] = default_bijectors.get(param_name)
                 else:
@@ -1359,7 +1467,7 @@ class Dist(Node):
 
             if isinstance(input_node, VarValue):
                 param_var = input_node.var
-                if param_var:
+                if param_var is not None:
                     if not param_var.parameter:
                         logger.warning(
                             f"{param_var} has parameter=False "
@@ -1367,7 +1475,7 @@ class Dist(Node):
                         )
                     result[param_name] = (param_var, bijector)
             else:
-                raise ValueError(
+                raise TypeError(
                     f"Got bijector {bijector} for parameter '{param_name}', given by "
                     f"{input_node}, but only lsl.Var "
                     "objects can be bijected. You can supply 'None' for this parameter "
@@ -1382,7 +1490,7 @@ class Dist(Node):
 
             if isinstance(input_node, VarValue):
                 param_var = input_node.var
-                if param_var:
+                if param_var is not None:
                     if not param_var.parameter:
                         logger.warning(
                             f"{param_var} has parameter=False "
@@ -1390,7 +1498,7 @@ class Dist(Node):
                         )
                     result[param_name] = (param_var, bijector)
             else:
-                raise ValueError(
+                raise TypeError(
                     f"Got bijector {bijector} for parameter '{param_name}', given by "
                     f"{input_node}, but only lsl.Var "
                     "objects can be bijected. You can supply 'None' for this parameter "
@@ -1411,13 +1519,15 @@ class Dist(Node):
 
     def find_default_parameter_bijectors(self) -> dict[str, Bijector | None]:
         """Extracts default parameter bijectors from the wrapped distribution."""
+        distribution_name = _callable_name(self.distribution)
+
         try:
             param_props = self.init_dist().parameter_properties(dtype=self._dtype)
         except (AttributeError, TypeError) as e:
             # raise the same error type
             raise type(e)(
                 "Error when accessing "
-                f"parameter_properties() method on {self.distribution.__name__}. "
+                f"parameter_properties() method on {distribution_name}. "
                 "Cannot auto-transform parameters. "
                 "This may indicate an issue with the TFP distribution or version. "
                 "Either use a distribution that supports parameter_properties() or "
@@ -1426,7 +1536,7 @@ class Dist(Node):
 
         if not isinstance(param_props, dict):
             raise TypeError(
-                f"Distribution {self.distribution.__name__}'s "
+                f"Distribution {distribution_name}'s "
                 "parameter_properties() must return a dictionary, but returned "
                 f"{type(param_props).__name__}. This may indicate an issue with "
                 "a custom distribution implementation."
@@ -1438,7 +1548,7 @@ class Dist(Node):
             if not hasattr(prop, "default_constraining_bijector_fn"):
                 raise AttributeError(
                     f"Parameter property for '{param_name}' of "
-                    f"{self.distribution.__name__} does not have "
+                    f"{distribution_name} does not have "
                     "'default_constraining_bijector_fn' attribute. This may "
                     "indicate an issue with the TFP distribution or version. "
                     "Either use a distribution that supports "
@@ -1447,17 +1557,17 @@ class Dist(Node):
                 )
 
             try:
-                bijector = prop.default_constraining_bijector_fn()  # type: ignore
+                bijector = prop.default_constraining_bijector_fn()
             except Exception as e:
                 raise type(e)(
                     f"Error getting bijector for parameter '{param_name}' of "
-                    f"{self.distribution.__name__}: {e}"
+                    f"{distribution_name}: {e}"
                 ) from e
 
             if bijector is None:
                 raise ValueError(
                     f"Expected a bijector or BIJECTOR_NOT_IMPLEMENTED for "
-                    f"parameter '{param_name}' of {self.distribution.__name__}, "
+                    f"parameter '{param_name}' of {distribution_name}, "
                     f"but got None. If no default bijector is provided for "
                     f"this parameter, the return value should be the "
                     f"BIJECTOR_NOT_IMPLEMENTED method instead."
@@ -1480,7 +1590,7 @@ class TransientDist(TransientNode, Dist):
     def value(self) -> Any:
         if not self.at:
             raise RuntimeError(
-                f"{repr(self)} cannot evaluate log-prob, property `at` not set"
+                f"{self!r} cannot evaluate log-prob, property `at` not set"
             )
 
         log_prob = self.init_dist().log_prob(self.at.value)
@@ -1634,6 +1744,7 @@ class Var:
     convert
         A function used to process the value of this variable. The default uses the
         function stored in :meth:`.Var.convert_value`, which is ``jax.numpy.asarray``.
+        Conversion functions must be idempotent.
 
     distribution
         Deprecated argument name for the probability distribution of the variable,
@@ -1667,10 +1778,9 @@ class Var:
     """
 
     __slots__ = (
-        "info",
-        "inference",
         "_auto_transform",
         "_bijected_var",
+        "_convert",
         "_dist_node",
         "_groups",
         "_name",
@@ -1679,7 +1789,8 @@ class Var:
         "_role",
         "_value_node",
         "_var_value_node",
-        "_convert",
+        "inference",
+        "info",
     )
 
     def __init__(
@@ -1692,6 +1803,8 @@ class Var:
         convert: Callable[[Any], Any] | Literal["default"] = "default",
         distribution: Dist | None = None,
     ):
+        value_is_node_or_var = isinstance(value, Node | Var)
+
         if dist is not None and distribution is not None:
             raise ValueError(
                 "Values for 'dist' and 'distribution' provided. "
@@ -1716,8 +1829,18 @@ class Var:
         self._var_value_node._set_var(self)
 
         # use setters
-        self.value_node = value  # type: ignore  # unfrozen
-        self.dist_node = dist  # type: ignore  # unfrozen
+        self.value_node = value  # unfrozen
+        self.dist_node = dist  # unfrozen
+
+        if value_is_node_or_var:
+            try:
+                initial_value = self.value
+            except Exception:  # noqa: BLE001  # Transient values may be unavailable.
+                initial_value = None
+
+            if initial_value is not None:
+                converted_value = self._convert(initial_value)
+                _check_conversion_is_idempotent(self._convert, converted_value)
 
         self._auto_transform = False
         self._bijected_var: Var | None = None
@@ -1750,6 +1873,9 @@ class Var:
                 @staticmethod
                 def convert_value(x):
                     return jnp.asarray(x) if x is not None else x
+
+        Conversion functions must be idempotent: converting an already-converted
+        value must not change it.
         """
         return jnp.asarray(x) if x is not None else x
 
@@ -2011,7 +2137,7 @@ class Var:
         2.7182817
 
         .. _docs: https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html
-        """  # noqa: E501
+        """
 
         if convert_inputs == "default":
             convert_inputs = cls.convert_value
@@ -2084,11 +2210,12 @@ class Var:
 
     def get_inference(self, key: str | None) -> InferenceTypes:
         if isinstance(self.inference, dict):
+            inference_by_key = cast(dict[str, Any], self.inference)
             if key is None:
                 raise ValueError(
-                    f"{key=} is invalid. Possible keys: {list(self.inference)}."
+                    f"{key=} is invalid. Possible keys: {list(inference_by_key)}."
                 )
-            return self.inference[key]
+            return inference_by_key[key]
         return self.inference
 
     def all_input_nodes(
@@ -2359,7 +2486,7 @@ class Var:
                 f"Argument {bijector=} is of invalid type {type(bijector)}."
             )
 
-        tvar.parameter = self.parameter  # type: ignore
+        tvar.parameter = self.parameter
         self.parameter = False
 
         if not self.name:
@@ -2541,7 +2668,7 @@ class Var:
             dist_node = NoDist()
 
         if self.name and not dist_node.name:
-            dist_node.name = f"{self.name}_log_prob"  # type: ignore  # unfrozen
+            dist_node.name = f"{self.name}_log_prob"  # unfrozen
 
         if self._dist_node.model:
             model = self._dist_node.model
@@ -2573,7 +2700,7 @@ class Var:
             self._dist_node.at = None
 
         dist_node._set_var(self)
-        dist_node.at = self.var_value_node  # type: ignore  # unfrozen
+        dist_node.at = self.var_value_node  # unfrozen
         self._dist_node = dist_node
 
     @property
@@ -2609,11 +2736,11 @@ class Var:
     @changes_model_graph
     def name(self, name: str):
         if name and self.value_node.name in ("", f"{self.name}_value"):
-            self.value_node.name = f"{name}_value"  # type: ignore  # unfrozen
-            self.var_value_node.name = f"{name}_var_value"  # type: ignore  # unfrozen
+            self.value_node.name = f"{name}_value"  # unfrozen
+            self.var_value_node.name = f"{name}_var_value"  # unfrozen
 
         if name and self._dist_node.name in ("", f"{self.name}_log_prob"):
-            self._dist_node.name = f"{name}_log_prob"  # type: ignore  # unfrozen
+            self._dist_node.name = f"{name}_log_prob"  # unfrozen
 
         self._name = name
 
@@ -2739,10 +2866,14 @@ class Var:
 
     @value.setter
     def value(self, value: Any):
-        if self.weak:
-            raise RuntimeError(f"{repr(self)} is weak, cannot set value")
+        value_node = self.value_node
+        if not isinstance(value_node, Value):
+            # Weakness is variable state, not an invalid argument type.
+            raise RuntimeError(  # noqa: TRY004
+                f"{self!r} is weak, cannot set value"
+            )
 
-        self.value_node.value = value  # type: ignore  # data node
+        value_node.value = value
 
     @property
     def value_node(self) -> Node:
@@ -2758,12 +2889,11 @@ class Var:
         if not isinstance(value_node, Node):
             value_node = Value(value_node, convert=self._convert)
 
-        if value_node.model:
-            if value_node.model is not self.model:
-                raise RuntimeError(
-                    f"{repr(value_node)} and {self} must be part of no "
-                    "model, or the same model."
-                )
+        if value_node.model and value_node.model is not self.model:
+            raise RuntimeError(
+                f"{value_node!r} and {self} must be part of no "
+                "model, or the same model."
+            )
 
         if self.name and not value_node.name:
             value_node.name = f"{self.name}_value"
@@ -2818,13 +2948,7 @@ class Var:
 
         from liesel.model.model import TemporaryModel
 
-        try:
-            to_float32 = not jax.config.jax_enable_x64  # type: ignore
-        except Exception:  # just to be really sure in case anything changes
-            # this is an implicit test of whether x64 flag is enabled
-            import jax.numpy as jnp
-
-            to_float32 = jnp.array(1.0).dtype == jnp.dtype("float32")
+        to_float32 = _to_float32_for_temporary_model()
         with TemporaryModel(self, verbose=verbose, to_float32=to_float32) as model:
             match which:
                 case "vars":
@@ -2961,8 +3085,8 @@ class Var:
 
     def predict(
         self,
-        samples: dict[str, jax.typing.ArrayLike],
-        newdata: dict[str, jax.typing.ArrayLike] | None = None,
+        samples: Position,
+        newdata: Position | None = None,
     ) -> Array:
         """
         Returns an array of predictions for this variable.
@@ -2981,13 +3105,7 @@ class Var:
         else:
             from liesel.model.model import TemporaryModel
 
-            try:
-                to_float32 = not jax.config.jax_enable_x64  # type: ignore
-            except Exception:  # just to be really sure in case anything changes
-                # this is an implicit test of whether x64 flag is enabled
-                import jax.numpy as jnp
-
-                to_float32 = jnp.array(1.0).dtype == jnp.dtype("float32")
+            to_float32 = _to_float32_for_temporary_model()
 
             with TemporaryModel(self, silent=True, to_float32=to_float32) as model:
                 submodel = model.parental_submodel(self)
@@ -2997,9 +3115,8 @@ class Var:
         else:
             model = self.model
 
-        newdata = newdata if newdata is not None else {}
-        newdata = newdata.copy()
-        for key in list(newdata.keys()):
+        newdata_values = dict(newdata) if newdata is not None else {}
+        for key in list(newdata_values):
             if key not in model.vars or (key in model.nodes):
                 msg = f"{key} is not part of the model."
                 if self.model is None:
@@ -3011,9 +3128,13 @@ class Var:
                 raise KeyError(msg)
 
             if key not in submodel.vars or (key in submodel.nodes):
-                newdata.pop(key, None)
+                newdata_values.pop(key, None)
 
-        pred = submodel.predict(samples=samples, predict=[self.name], newdata=newdata)
+        pred = submodel.predict(
+            samples=samples,
+            predict=[self.name],
+            newdata=Position(newdata_values),
+        )
         return pred[self.name]
 
     def diagnose(self, verbose: bool = False) -> pd.DataFrame:
@@ -3025,13 +3146,7 @@ class Var:
         else:
             from liesel.model.model import TemporaryModel
 
-            try:
-                to_float32 = not jax.config.jax_enable_x64  # type: ignore
-            except Exception:  # just to be really sure in case anything changes
-                # this is an implicit test of whether x64 flag is enabled
-                import jax.numpy as jnp
-
-                to_float32 = jnp.array(1.0).dtype == jnp.dtype("float32")
+            to_float32 = _to_float32_for_temporary_model()
 
             with TemporaryModel(self, silent=True, to_float32=to_float32) as model:
                 submodel = model.parental_submodel(self)
@@ -3047,11 +3162,11 @@ class Var:
         self,
         shape: Sequence[int],
         seed: jax.Array,
-        posterior_samples: dict[str, jax.typing.ArrayLike] | None = None,
+        posterior_samples: Position | None = None,
         fixed: Sequence[str] = (),
-        newdata: dict[str, jax.typing.ArrayLike] | None = None,
+        newdata: Position | None = None,
         dists: dict[str, Dist] | None = None,
-    ) -> dict[str, Array]:
+    ) -> Position:
         """
         Draws samples from the parental model for this variable.
 
@@ -3066,17 +3181,19 @@ class Var:
             See :mod:`jax.random` and \
             https://docs.jax.dev/en/latest/jep/9263-typed-keys.html for more details.
         posterior_samples
-            Dictionary of samples at which to evaluate predictions. All values of the \
-            dictionary are assumed to have two leading dimensions corresponding to \
-            ``(nchains, niteration)``.
+            Position of samples at which to evaluate predictions. All values are \
+            assumed to have two leading dimensions corresponding to \
+            ``(nchains, niteration)``. Values are converted with their model-specific \
+            converters before sampling.
         fixed
             The names of the nodes or variables to be excluded from the simulation. \
             By default, no nodes or variables are skipped.
         newdata
-            Dictionary of new data at which to produce samples. The keys should \
+            Position of new data at which to produce samples. The keys should \
             correspond to variable or node names in the model whose values should be \
-            set to the given values before sampling. If ``None`` \
-            (default), the current variable values are used.
+            set to the given values before sampling. Values are converted with their \
+            model-specific converters. If ``None`` (default), the current variable \
+            values are used.
         dists
             Can be used to provide a dictionary of variable names and :class:`.Dist` \
             instances to use in sampling. If ``None`` (default), samples are drawn for \
@@ -3106,13 +3223,7 @@ class Var:
 
         from .model import TemporaryModel
 
-        try:
-            to_float32 = not jax.config.jax_enable_x64  # type: ignore
-        except Exception:  # just to be really sure in case anything changes
-            # this is an implicit test of whether x64 flag is enabled
-            import jax.numpy as jnp
-
-            to_float32 = jnp.array(1.0).dtype == jnp.dtype("float32")
+        to_float32 = _to_float32_for_temporary_model()
         with TemporaryModel(self, silent=True, to_float32=to_float32) as model:
             drawn_samples = model.sample(
                 shape=shape,
@@ -3198,11 +3309,12 @@ class Var:
 
 
 def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) -> Var:
-    if var.dist_node is None:  # type: ignore
+    dist_node = var.dist_node
+    if dist_node is None:
         raise RuntimeError(f"{var} has no distribution")
-    InputDist = var.dist_node.distribution
-    inputs = var.dist_node.inputs
-    kwinputs = var.dist_node.kwinputs
+    InputDist = dist_node.distribution
+    inputs = dist_node.inputs
+    kwinputs: dict[str, Any] = dict(dist_node.kwinputs)
 
     bijector_inv = jb.Invert(bijector_inst)
 
@@ -3213,32 +3325,28 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
         transform_dist,
         *inputs,
         _name="",
-        _needs_seed=var.dist_node.needs_seed,
+        _needs_seed=dist_node.needs_seed,
         bijectors=None,
         convert_inputs=jnp.asarray,
         **kwinputs,
     )
 
-    transformed_dist.per_obs = var.dist_node.per_obs
+    transformed_dist.per_obs = dist_node.per_obs
 
     if var.weak:
-        try:
-            value_function = var.value_node.function  # type: ignore
-        except AttributeError as e:
+        value_node = var.value_node
+        if not isinstance(value_node, Calc):
             raise AttributeError(
                 "Trying to transform a weak variable without calculator node."
-            ) from e
+            )
 
         def forward(*args, **kwargs):
-            return bijector_inv.forward(value_function(*args, **kwargs))
+            return bijector_inv.forward(value_node.function(*args, **kwargs))
 
-        value_inputs = var.value_node.inputs
-        value_kwinputs = var.value_node.kwinputs
-        value_node_needs_seed = var.value_node.needs_seed
-        try:
-            value_node_update_on_init = var.value_node._update_on_init  # type: ignore
-        except AttributeError as e:
-            raise e
+        value_inputs = value_node.inputs
+        value_kwinputs = value_node.kwinputs
+        value_node_needs_seed = value_node.needs_seed
+        value_node_update_on_init = value_node._update_on_init
 
         transformed_var = Var(
             Calc(
@@ -3267,13 +3375,15 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
 def _transform_var_with_bijector_class(
     var: Var, bijector_cls: type[jb.Bijector] | None, *args, **kwargs
 ) -> Var:
-    if var.dist_node is None:  # type: ignore
+    dist_node = var.dist_node
+    if dist_node is None:
         raise RuntimeError(f"{var} has no distribution")
-    InputDist = var.dist_node.distribution
+    InputDist = dist_node.distribution
 
+    dist_kwinputs: dict[str, Any] = dict(dist_node.kwinputs)
     dist_inputs = InputGroup(
-        *var.dist_node.inputs,
-        **var.dist_node.kwinputs,  # type: ignore
+        *dist_node.inputs,
+        **dist_kwinputs,
     )
 
     bijector_inputs = InputGroup(*args, **kwargs)
@@ -3302,32 +3412,28 @@ def _transform_var_with_bijector_class(
         dist_inputs,
         bijector_inputs,
         _name="",
-        _needs_seed=var.dist_node.needs_seed,
+        _needs_seed=dist_node.needs_seed,
         bijectors=None,
     )
 
-    dist_node_transformed.per_obs = var.dist_node.per_obs
+    dist_node_transformed.per_obs = dist_node.per_obs
 
-    bijector_inv = dist_node_transformed.init_dist().bijector
+    bijector_inv = _transformed_distribution_bijector(dist_node_transformed.init_dist())
 
     if var.weak:
-        try:
-            value_function = var.value_node.function  # type: ignore
-        except AttributeError as e:
+        value_node = var.value_node
+        if not isinstance(value_node, Calc):
             raise AttributeError(
                 "Trying to transform a weak variable without calculator node."
-            ) from e
+            )
 
         def forward(*args, **kwargs):
-            return bijector_inv.forward(value_function(*args, **kwargs))
+            return bijector_inv.forward(value_node.function(*args, **kwargs))
 
-        value_inputs = var.value_node.inputs
-        value_kwinputs = var.value_node.kwinputs
-        value_node_needs_seed = var.value_node.needs_seed
-        try:
-            value_node_upadte_on_init = var.value_node._update_on_init  # type: ignore
-        except AttributeError as e:
-            raise e
+        value_inputs = value_node.inputs
+        value_kwinputs = value_node.kwinputs
+        value_node_needs_seed = value_node.needs_seed
+        value_node_update_on_init = value_node._update_on_init
 
         transformed_var = Var(
             Calc(
@@ -3335,7 +3441,7 @@ def _transform_var_with_bijector_class(
                 *value_inputs,
                 _name="",
                 _needs_seed=value_node_needs_seed,
-                _update_on_init=value_node_upadte_on_init,
+                _update_on_init=value_node_update_on_init,
                 convert_inputs=jnp.asarray,
                 **value_kwinputs,
             ),
@@ -3379,7 +3485,7 @@ def _transform_var_without_dist_with_bijector_instance(
 
 
 def _transform_var_without_dist_with_bijector_class(
-    var: Var, bijector_cls: type[jb.Bijector] | None, *args, **kwargs
+    var: Var, bijector_cls: type[jb.Bijector], *args, **kwargs
 ) -> Var:
     def bijection_inverse(x, *bjargs, **bjkwargs):
         # this somewhat over-complicated functionality accounts for bijector
@@ -3497,8 +3603,7 @@ class Group:
         for member in self._nodes_and_vars.values():
             if name in member.groups:
                 raise RuntimeError(
-                    f"{repr(member)} is already a member of a group "
-                    f"with the name {repr(name)}"
+                    f"{member!r} is already a member of a group with the name {name!r}"
                 )
             member._groups[name] = self
 

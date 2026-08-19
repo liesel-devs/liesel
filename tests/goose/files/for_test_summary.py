@@ -40,8 +40,6 @@ def setup_tests(beta_dim: int, num_chains: int = 3) -> SamplingResults:
     kernels = KernelSequence([kernel])
     epochs = stan_epochs()
 
-    num_chains = num_chains
-
     model_states = _stack_for_multi([model_state for _ in range(num_chains)])
     seeds = jax.random.split(jax.random.PRNGKey(0), num_chains)
 

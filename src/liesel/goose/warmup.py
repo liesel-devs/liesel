@@ -51,7 +51,7 @@ def stan_epochs(
 
     .. [#stanmanual] https://mc-stan.org/docs/2_28/reference-manual/hmc-algorithm-parameters.html
 
-    """  # noqa: E501
+    """
 
     if warmup_duration < 20:
         raise ValueError("warmup_duration too short (< 20)")
