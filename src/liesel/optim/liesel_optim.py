@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import optax
 
@@ -159,7 +159,7 @@ class LieselOptim:
         if batch_axis_size is not _MISSING:
             if batch_size is not None:
                 raise ValueError("Pass either batch_size or batch_axis_size, not both.")
-            batch_size = batch_axis_size  # type: ignore[assignment]
+            batch_size = cast(int | None, batch_axis_size)
 
         if batches is not None and batch_size is not None:
             raise ValueError("Pass either batches or batch_size, not both.")

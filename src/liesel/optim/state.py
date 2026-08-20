@@ -611,14 +611,14 @@ class OptimCarry:
     batch: Position = field(default_factory=lambda: Position({}))
     fixed_position: Position = field(default_factory=lambda: Position({}))
     best_position: Position = field(default_factory=lambda: Position({}))
-    best_loss: jax.Array | float = jnp.inf
+    best_loss: jax.Array = field(default_factory=lambda: jnp.asarray(jnp.inf))
     best_epoch: jax.Array | int = 0
 
-    loss_train: jax.Array | float = jnp.inf
-    loss_validate: jax.Array | float = jnp.inf
+    loss_train: jax.Array = field(default_factory=lambda: jnp.asarray(jnp.inf))
+    loss_validate: jax.Array = field(default_factory=lambda: jnp.asarray(jnp.inf))
 
     epoch: int = 0  # outer while-loop index over epochs
-    i_batch: int = 0  # inner for-loop index over batches
+    i_batch: int | jax.Array = 0  # inner for-loop index over batches
     nan_debug_state: OptimNaNDebugState | None = None
 
     @classmethod

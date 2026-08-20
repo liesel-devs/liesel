@@ -16,6 +16,7 @@ from typing import Literal
 
 import jax
 import jax.numpy as jnp
+import optax
 from tqdm import tqdm
 
 from ._engine_utils import (
@@ -169,7 +170,7 @@ class OptimEngine:
     batches: BatchConfig
     optimizers: Sequence[OptimizerLike]
     stopper: Stopper
-    seed: int | jax.Array
+    seed: jax.Array
     initial_state: ModelState
     restore_best_position: bool = True
     prune_history: bool = True
@@ -212,7 +213,7 @@ class OptimEngine:
         self.batches = batches
         self.optimizers = optimizers
         self.stopper = stopper
-        self.seed = seed
+        self.seed = jax.random.key(seed) if isinstance(seed, int) else seed
         self.initial_state = initial_state
         self.restore_best_position = restore_best_position
         self.prune_history = prune_history
@@ -254,9 +255,6 @@ class OptimEngine:
         self._validate_train_monitor()
         self._validate_debug_nans()
         self._validate_batch_split_compatibility()
-
-        if isinstance(self.seed, int):
-            self.seed = jax.random.key(self.seed)
 
     @property
     def split(self) -> SplitConfig:
@@ -692,7 +690,7 @@ class OptimEngine:
         loss: jax.Array,
         reproduction_position: Position,
         reproduction_key: jax.Array,
-        reproduction_optimizer_states: dict[str, object],
+        reproduction_optimizer_states: dict[str, optax.OptState],
         reproduction_batches: BatchConfig,
         reproduction_model_state: ModelState,
         optimizer_index: int = -1,

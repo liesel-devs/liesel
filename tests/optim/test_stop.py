@@ -1,3 +1,5 @@
+from typing import cast
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -38,9 +40,9 @@ class TestStopper:
 
     def test_accepts_integral_configuration(self):
         stopper = Stopper(
-            epochs=np.int64(10),
-            patience=np.int64(5),
-            min_epochs=np.int64(7),
+            epochs=cast(int, np.int64(10)),
+            patience=cast(int, np.int64(5)),
+            min_epochs=cast(int, np.int64(7)),
         )
         assert stopper.epochs == 10
         assert stopper.patience == 5

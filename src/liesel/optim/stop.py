@@ -7,7 +7,7 @@ import jax.numpy as jnp
 from .types import Array
 
 
-def _validate_int_type(value: Integral, name: str) -> None:
+def _validate_int_type(value: object, name: str) -> None:
     if not isinstance(value, Integral) or isinstance(value, bool):
         raise ValueError(f"{name} must be an integer.")  # noqa: TRY004
 
@@ -105,6 +105,9 @@ class Stopper:
         _validate_int_type(self.epochs, "epochs")
         _validate_int_type(self.patience, "patience")
         _validate_int_type(self.min_epochs, "min_epochs")
+        self.epochs = int(self.epochs)
+        self.patience = int(self.patience)
+        self.min_epochs = int(self.min_epochs)
         if self.epochs < 1:
             raise ValueError("epochs must be at least 1.")
         if self.patience < 1:

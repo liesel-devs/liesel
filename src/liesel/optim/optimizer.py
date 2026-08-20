@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from numbers import Integral
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import jax
 import jax.numpy as jnp
@@ -234,7 +234,7 @@ class Optimizer:
         opt_state = carry.optimizer_states[self.identifier]
         grad = loss.grad(pos, carry)
         updates, opt_state = self.optimizer.update(grad, opt_state, params=pos)
-        updated_position = Position(optax.apply_updates(pos, updates))
+        updated_position = cast(Position, optax.apply_updates(pos, updates))
 
         carry.position = Position(carry.position | updated_position)
         carry.optimizer_states[self.identifier] = opt_state
@@ -308,7 +308,7 @@ class LBFGS(Optimizer):
     """
 
     position_keys: Sequence[str]
-    optimizer: optax.GradientTransformation = optax.lbfgs()  # noqa: RUF009
+    optimizer: optax.GradientTransformationExtraArgs = optax.lbfgs()  # noqa: RUF009
     identifier: str = ""
 
     def step(self, position: Position, loss: Loss, carry: OptimCarry) -> OptimCarry:
@@ -343,7 +343,7 @@ class LBFGS(Optimizer):
             grad, opt_state, params=pos, value=value, grad=grad, value_fn=loss_fn
         )
 
-        updated_position = Position(optax.apply_updates(pos, updates))
+        updated_position = cast(Position, optax.apply_updates(pos, updates))
 
         carry.position = Position(carry.position | updated_position)
         carry.optimizer_states[self.identifier] = opt_state

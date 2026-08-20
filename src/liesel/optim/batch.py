@@ -4,7 +4,7 @@ import math
 import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, cast
 
 import jax
 import jax.numpy as jnp
@@ -35,7 +35,7 @@ def _resolve_batch_size(
     if batch_size is not _MISSING and batch_axis_size is not _MISSING:
         raise TypeError("Pass either batch_size or batch_axis_size, not both.")
 
-    return batch_axis_size if batch_size is _MISSING else batch_size  # type: ignore[return-value]
+    return cast(int | None, batch_axis_size if batch_size is _MISSING else batch_size)
 
 
 def _normalize_positive_size(size: float | None, name: str) -> float | None:
@@ -744,7 +744,9 @@ class Batches:
         batch_indices = jnp.reshape(idx, (self.n_full_batches, self.batch_size))
         return batch_indices
 
-    def get_batched_position(self, position: Position, batch_index: int) -> Position:
+    def get_batched_position(
+        self, position: Position, batch_index: int | jax.Array
+    ) -> Position:
         """
         Slices observed position entries for one batch.
 
@@ -1658,7 +1660,9 @@ class BatchManager:
             for i, batch in enumerate(self.batches)
         )
 
-    def get_batched_position(self, position: Position, batch_index: int) -> Position:
+    def get_batched_position(
+        self, position: Position, batch_index: int | jax.Array
+    ) -> Position:
         """
         Returns the joint batched position for one optimizer step.
 
