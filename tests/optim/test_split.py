@@ -798,6 +798,7 @@ class TestSplitManager:
             validate_axis_share=0.2,
             multi_size="manager",
         )
+        assert isinstance(split, PositionSplitManager)
 
         quick = LieselOptim(model, split=split)
 

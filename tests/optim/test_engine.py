@@ -448,6 +448,7 @@ def test_optimizer_activates_after_completed_epoch_delay(debug_nans):
     )
 
     result = engine.fit()
+    assert result.history.position is not None
 
     assert {
         key: values.tolist() for key, values in result.history.position.items()
@@ -468,7 +469,9 @@ def test_inactive_optimizer_does_not_consume_random_key():
             initial_state={},
             show_progress=False,
         )
-        return engine.fit().history.position["theta"][0]
+        result = engine.fit()
+        assert result.history.position is not None
+        return result.history.position["theta"][0]
 
     theta = Optimizer(["theta"], optax.sgd(1.0), identifier="theta")
     delayed_eta = Optimizer(
@@ -496,6 +499,7 @@ def test_fit_can_stop_before_any_optimizer_activates():
     )
 
     result = engine.fit()
+    assert result.history.position is not None
 
     assert (result.final_epoch, result.history.position["theta"].tolist()) == (
         2,
@@ -629,6 +633,7 @@ def test_debug_nans_loss_capture_reproduces_loss():
     assert info.batch == 1
     assert info.optimizer_index is None
     assert info.nan_position is None
+    assert info.loss is not None
     assert info.obs_batch["y"].tolist() == pytest.approx([1.0])
     assert info.last_non_nan_position["theta"] == pytest.approx(0.0)
     assert bool(jnp.isnan(info.loss))
@@ -678,6 +683,7 @@ def test_debug_nans_position_after_reproduces_second_optimizer_step():
     assert info.optimizer_index == 1
     assert info.optimizer_identifier == "nan_eta"
     assert info.optimizer_position_keys == ("eta",)
+    assert info.nan_position is not None
     assert info.last_non_nan_position["theta"] == pytest.approx(1.0)
     assert info.last_non_nan_position["eta"] == pytest.approx(0.0)
     assert info.reproduction_position["theta"] == pytest.approx(1.0)
@@ -718,6 +724,7 @@ def test_debug_nans_position_before_capture():
     assert result.final_epoch == 0
     assert info.kind == "position_before"
     assert info.optimizer_index is None
+    assert info.nan_position is not None
     assert bool(jnp.isnan(info.nan_position["theta"]))
 
 
@@ -1165,9 +1172,13 @@ def test_nested_progress_supports_batch_manager(monkeypatch):
     monkeypatch.setattr(engine_module, "tqdm", FakeTqdm)
     monkeypatch.setattr(engine_module.sys.stderr, "isatty", lambda: True)
     expected_engine = _progress_engine(show_progress=False)
-    expected_engine.batches = BatchManager([expected_engine.batches])
+    expected_batches = expected_engine.batches
+    assert isinstance(expected_batches, Batches)
+    expected_engine.batches = BatchManager([expected_batches])
     actual_engine = _progress_engine(show_step_progress=True)
-    actual_engine.batches = BatchManager([actual_engine.batches])
+    actual_batches = actual_engine.batches
+    assert isinstance(actual_batches, Batches)
+    actual_engine.batches = BatchManager([actual_batches])
 
     expected = expected_engine.fit()
     actual = actual_engine.fit()
