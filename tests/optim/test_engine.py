@@ -607,7 +607,7 @@ def test_invalid_train_monitor_raises():
             seed=1,
             initial_state={},
             show_progress=False,
-            train_monitor="sometimes",  # type: ignore[arg-type]
+            train_monitor="sometimes",  # ty: ignore[invalid-argument-type]
         )
 
 

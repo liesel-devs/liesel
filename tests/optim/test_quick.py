@@ -172,7 +172,7 @@ def test_unknown_optimizer_string_raises():
     model = _normal_model()
 
     with pytest.raises(ValueError, match="optimizers"):
-        LieselOptim(model, optimizers="sgd")
+        LieselOptim(model, optimizers="sgd")  # ty: ignore[invalid-argument-type]
 
 
 def test_progress_and_train_monitor_are_passed_to_engine():

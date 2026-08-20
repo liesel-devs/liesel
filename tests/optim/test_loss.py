@@ -183,7 +183,11 @@ def test_neg_log_prob_loss_rejects_unknown_validation_strategy():
     split = PositionSplit.from_model(model, position_keys=["y"])
 
     with pytest.raises(ValueError, match="validation_strategy"):
-        NegLogProbLoss(model, split, validation_strategy="deviance")
+        NegLogProbLoss(
+            model,
+            split,
+            validation_strategy="deviance",  # ty: ignore[invalid-argument-type]
+        )
 
 
 def test_neg_log_prob_loss_rejects_non_bool_scale():
@@ -191,4 +195,4 @@ def test_neg_log_prob_loss_rejects_non_bool_scale():
     split = PositionSplit.from_model(model, position_keys=["y"])
 
     with pytest.raises(ValueError, match="scale"):
-        NegLogProbLoss(model, split, scale="yes")  # type: ignore[arg-type]
+        NegLogProbLoss(model, split, scale="yes")  # ty: ignore[invalid-argument-type]
