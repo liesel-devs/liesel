@@ -14,9 +14,9 @@ from .state import OptimNaNDebugInfo as OptimNaNDebugInfo
 from .stop import Stopper as Stopper
 
 __all__ = [
-    "Batches",
-    "BatchManager",
     "LBFGS",
+    "BatchManager",
+    "Batches",
     "LieselOptim",
     "NegLogProbLoss",
     "OptimEngine",

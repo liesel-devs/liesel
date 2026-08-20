@@ -134,7 +134,9 @@ class LieselOptim:
         batch_axis_size: int | None | object = _MISSING,
         split: SplitConfig | None = None,
         optimizers: Sequence[OptimizerLike] | Literal["adam", "lbfgs"] = "adam",
-        stopper: Stopper = Stopper(epochs=1000, patience=10, rtol=1e-6),
+        stopper: Stopper = Stopper(  # noqa: B008
+            epochs=1000, patience=10, rtol=1e-6
+        ),
         seed: int | None = None,
         axis_size: int | None = None,
         split_axes: dict[str, int | None] | None = None,

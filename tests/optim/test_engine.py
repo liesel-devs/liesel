@@ -4,6 +4,7 @@ import io
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import ClassVar
 
 import jax
 import jax.numpy as jnp
@@ -308,7 +309,7 @@ def _progress_engine(
 
 
 class FakeTqdm:
-    instances: list[FakeTqdm] = []
+    instances: ClassVar[list[FakeTqdm]] = []
 
     def __init__(self, total, desc, leave, position=None, ncols=None, bar_format=None):
         self.total = total

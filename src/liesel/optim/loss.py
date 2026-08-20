@@ -28,7 +28,9 @@ def _training_loss_scalar(split: SplitConfig) -> float:
 
 def _validate_bool(value: bool, name: str) -> None:
     if not isinstance(value, bool):
-        raise ValueError(f"{name} must be True or False, but got {value!r}.")
+        raise ValueError(  # noqa: TRY004
+            f"{name} must be True or False, but got {value!r}."
+        )
 
 
 class Loss(Protocol):

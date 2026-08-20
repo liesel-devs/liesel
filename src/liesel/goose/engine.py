@@ -32,6 +32,7 @@ from .pytree import as_strong_pytree, register_dataclass_as_pytree
 from .types import (
     Array,
     GeneratedQuantity,
+    Kernel,
     KernelState,
     KeyArray,
     ModelInterface,
@@ -44,6 +45,8 @@ from .types import (
 
 logger = logging.getLogger(__name__)
 
+type KernelClass = type[Kernel[Any, Any, Any]]
+
 
 class KernelErrorLog(NamedTuple):
     """
@@ -55,7 +58,7 @@ class KernelErrorLog(NamedTuple):
     """
 
     kernel_ident: str
-    kernel_cls: Option[type]  # needed to use the error book
+    kernel_cls: Option[KernelClass]  # needed to use the error book
 
     transition: np.ndarray
     """1-D array (time)."""
@@ -75,9 +78,9 @@ def _split_keys(keys, n):
 
 def _initialze_prng(seed: int | KeyArray) -> KeyArray:
     if jnp.isscalar(seed):
-        return jax.random.PRNGKey(seed)  # type: ignore
-    elif jnp.shape(seed) == (2,):  # type: ignore
-        return seed  # type: ignore
+        return jax.random.PRNGKey(seed)
+    elif jnp.shape(seed) == (2,):
+        return seed
     else:
         raise ValueError("Seed has an unsupported shape")
 
@@ -149,7 +152,7 @@ class SamplingResults:
     is_none(), if monitoring was not explicitly requested.
     """
 
-    kernel_classes: Option[dict[str, type]]
+    kernel_classes: Option[dict[str, KernelClass]]
     """
     Optional map of kernel identifier to the respective kernel type.
     """
@@ -166,7 +169,7 @@ class SamplingResults:
         position.
         """
         opt: Option[Position] = self.positions.combine_all()
-        return opt.expect(f"No samples in {repr(self)}")
+        return opt.expect(f"No samples in {self!r}")
 
     def get_warmup_samples(self) -> Position:
         """
@@ -176,7 +179,7 @@ class SamplingResults:
         opt = self.positions.combine_filtered(
             lambda config: EpochType.is_warmup(config.type)
         )
-        return opt.expect(f"No warmup samples in {repr(self)}")
+        return opt.expect(f"No warmup samples in {self!r}")
 
     def get_adaptation_samples(self) -> Position:
         """
@@ -186,7 +189,7 @@ class SamplingResults:
         opt = self.positions.combine_filtered(
             lambda config: EpochType.is_adaptation(config.type)
         )
-        return opt.expect(f"No adaptation samples in {repr(self)}")
+        return opt.expect(f"No adaptation samples in {self!r}")
 
     def get_posterior_samples(self) -> Position:
         """
@@ -196,7 +199,7 @@ class SamplingResults:
         opt = self.positions.combine_filtered(
             lambda config: config.type == EpochType.POSTERIOR
         )
-        return opt.expect(f"No posterior samples in {repr(self)}")
+        return opt.expect(f"No posterior samples in {self!r}")
 
     def get_kernels_by_pos_key(self) -> dict[str, str]:
         """
@@ -205,7 +208,7 @@ class SamplingResults:
         The dict has the format ``{"position name": "kernel identifier"}``.
         """
         return self.kernels_by_pos_key.expect(
-            f"No position-kernel associations in {repr(self)}"
+            f"No position-kernel associations in {self!r}"
         )
 
     def get_pos_keys_by_kernels(self) -> dict[str, list[str]]:
@@ -231,7 +234,7 @@ class SamplingResults:
         opt = self.transition_infos.combine_filtered(
             lambda config: config.type == EpochType.POSTERIOR
         )
-        return opt.expect(f"No posterior transition infos in {repr(self)}")
+        return opt.expect(f"No posterior transition infos in {self!r}")
 
     def get_warmup_transition_infos(self) -> dict[str, TransitionInfo]:
         """
@@ -241,7 +244,7 @@ class SamplingResults:
         opt = self.transition_infos.combine_filtered(
             lambda config: EpochType.is_warmup(config.type)
         )
-        return opt.expect(f"No warmup transition infos in {repr(self)}")
+        return opt.expect(f"No warmup transition infos in {self!r}")
 
     def get_warmup_acceptance_probabilities(self) -> dict[str, Array]:
         """
@@ -336,10 +339,10 @@ class SamplingResults:
             if opt.is_none():
                 return Option(None)
             else:
-                tis = opt.expect(f"No posterior transition infos in {repr(self)}")
+                tis = opt.expect(f"No posterior transition infos in {self!r}")
         else:
             opt = self.transition_infos.combine_all()
-            tis = opt.expect(f"No transition infos in {repr(self)}")
+            tis = opt.expect(f"No transition infos in {self!r}")
 
         error_log: ErrorLog = {}
         for ker_name in tis:
@@ -349,7 +352,10 @@ class SamplingResults:
             error_codes: np.ndarray = cast(np.ndarray, tis[ker_name].error_code)[
                 :, mask
             ]
-            cls = self.kernel_classes.map(lambda d: d[ker_name])
+            if self.kernel_classes.is_some():
+                cls = Option(self.kernel_classes.unwrap()[ker_name])
+            else:
+                cls = Option(None)
             error_log[ker_name] = KernelErrorLog(ker_name, cls, transition, error_codes)
         return Option(error_log)
 
@@ -413,7 +419,7 @@ class Engine:
         # fetch kernels' position keys and add them automatically to track them
         # in the position chain
         self._history_required_for_tuning = any(
-            [ker.needs_history for ker in self._kernel_sequence._kernels]
+            ker.needs_history for ker in self._kernel_sequence._kernels
         )  # FIXME: use of private field
 
         self._prng_key = seeds
@@ -513,9 +519,11 @@ class Engine:
             gqs = None
 
         kernels = self._kernel_sequence.get_kernels()
-        kernels_cls: dict[str, type] = {ker.identifier: type(ker) for ker in kernels}
+        kernels_cls: dict[str, KernelClass] = {
+            ker.identifier: type(ker) for ker in kernels
+        }
 
-        kernels_by_position: dict[str, str] = dict()
+        kernels_by_position: dict[str, str] = {}
         for kernel in kernels:
             kernels_by_position.update(
                 {key: kernel.identifier for key in kernel.position_keys}
@@ -651,8 +659,9 @@ class Engine:
             def count_non_zero_error_codes(tis: TransitionInfos):
                 cts = {}
                 for kernel_id, ti in tis.items():
-                    nzero = jnp.sum(ti.error_code != 0, axis=1)
-                    ntrans = ti.error_code.shape[1]  # type: ignore
+                    error_code = jnp.asarray(ti.error_code)
+                    nzero = jnp.sum(error_code != 0, axis=1)
+                    ntrans = error_code.shape[1]
                     cts[kernel_id] = (nzero, ntrans)
                 return cts
 
@@ -735,7 +744,7 @@ class Engine:
             # minimize transition infos if requested
             tinfos = out.infos
             if self._minimize_transition_infos:
-                for id in tinfos.keys():
+                for id in tinfos:
                     tinfos[id] = tinfos[id].minimize()
 
             ks = None

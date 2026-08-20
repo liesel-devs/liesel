@@ -82,16 +82,20 @@ def finite_discrete_gibbs_kernel(
 
     """
     if outcomes is not None:
-        outcomes = jnp.asarray(outcomes)
+        outcomes_array = jnp.asarray(outcomes)
     else:
-        dist = model.vars[name].dist_node.init_dist()  # type: ignore
+        dist_node = model.vars[name].dist_node
+        if dist_node is None:
+            raise ValueError(f"Variable '{name}' has no distribution.")
+
+        dist = dist_node.init_dist()
         assert dist.batch_shape == ()
 
         match dist:
             case tfd.Bernoulli():
-                outcomes = jnp.array([0, 1], dtype=dist.dtype)
+                outcomes_array = jnp.array([0, 1], dtype=dist.dtype)
             case tfd.FiniteDiscrete():
-                outcomes = dist.outcomes
+                outcomes_array = jnp.asarray(dist.outcomes)
             case _:
                 raise ValueError(
                     "Cannot extract outcomes from the distribution of variable "
@@ -116,9 +120,9 @@ def finite_discrete_gibbs_kernel(
             model.update("_model_log_prob")
             return model.log_prob
 
-        conditional_log_probs = jax.vmap(conditional_log_prob_fn)(outcomes)
+        conditional_log_probs = jax.vmap(conditional_log_prob_fn)(outcomes_array)
         draw_index = jax.random.categorical(prng_key, logits=conditional_log_probs)
-        draw = outcomes[draw_index]
+        draw = outcomes_array[draw_index]
 
         return {name: draw}
 

@@ -13,7 +13,7 @@ class State(NamedTuple):
     y: int
 
 
-def log_prob(state: State) -> float:
+def log_prob(state: State) -> jax.Array:
     x = state.x
     return -jnp.sum(x**2)
 
@@ -25,7 +25,7 @@ def create_state() -> State:
 def test_log_prob() -> None:
     conn: ModelInterface = NamedTupleInterface(log_prob)
     state = create_state()
-    lp = float(conn.log_prob(state))
+    lp = jnp.asarray(conn.log_prob(state)).item()
     assert lp == pytest.approx(-2.0)
 
 

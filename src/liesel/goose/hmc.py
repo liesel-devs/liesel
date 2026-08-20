@@ -11,6 +11,7 @@ from blackjax import hmc as hmc_kernel
 from blackjax.adaptation.step_size import find_reasonable_step_size
 from blackjax.mcmc import hmc
 from jax.flatten_util import ravel_pytree
+from jax.typing import ArrayLike
 
 from .da import (
     DualAvgState,
@@ -32,7 +33,7 @@ from .kernel import (
 )
 from .mm import tune_inv_mm_diag, tune_inv_mm_full
 from .pytree import register_dataclass_as_pytree
-from .types import Array, KeyArray, ModelState, Position
+from .types import Array, KeyArray, ModelState, Position, Scalar
 
 
 @register_dataclass_as_pytree
@@ -43,7 +44,7 @@ class HMCKernelState:
     :class:`.DAKernelState` protocol.
     """
 
-    step_size: float
+    step_size: Scalar
     inverse_mass_matrix: Array
     da_state: DualAvgState | None = None
 
@@ -55,9 +56,9 @@ class HMCKernelState:
 @register_dataclass_as_pytree
 @dataclass
 class HMCTransitionInfo(DefaultTransitionInfo):
-    error_code: int
-    acceptance_prob: float
-    position_moved: int
+    error_code: ArrayLike
+    acceptance_prob: ArrayLike
+    position_moved: ArrayLike
     divergent: bool
     """
     Whether the difference in energy between the original and the new state exceeded
@@ -295,16 +296,18 @@ class HMCKernel(
 
         if history is not None:
             history = Position({k: history[k] for k in self.position_keys})
+            old_inv_mm = kernel_state.inverse_mass_matrix
 
             if self.mm_diag:
                 new_inv_mm = tune_inv_mm_diag(history)
-                trace_fn = jnp.sum  # type: ignore
+                old_trace = jnp.sum(old_inv_mm)
+                new_trace = jnp.sum(new_inv_mm)
             else:
                 new_inv_mm = tune_inv_mm_full(history)
-                trace_fn = jnp.trace  # type: ignore
+                old_trace = jnp.trace(old_inv_mm)
+                new_trace = jnp.trace(new_inv_mm)
 
-            old_inv_mm = kernel_state.inverse_mass_matrix
-            adjustment = jnp.sqrt(trace_fn(old_inv_mm) / trace_fn(new_inv_mm))
+            adjustment = jnp.sqrt(old_trace / new_trace)
             kernel_state.step_size = adjustment * kernel_state.step_size
 
             kernel_state.inverse_mass_matrix = new_inv_mm

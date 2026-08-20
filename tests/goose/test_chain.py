@@ -50,7 +50,7 @@ def test_list_chain() -> None:
 
 
 def test_epoch_list_chain():
-    chain: EpochChain[Any] = ListEpochChain(create_epoch(11))
+    chain: EpochChain[Any] = ListEpochChain[Any](create_epoch(11))
     assert chain.get().is_none()
 
     chain.append(create_chunk())

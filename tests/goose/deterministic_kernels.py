@@ -128,7 +128,7 @@ class DetCountingKernel(TransitionMixin[DetCountingKernelState, DetCountingTrans
 
         epoch_value = kernel_state.epoch_counter * 10000
         transition_value = kernel_state.increment_per_transition * epoch.time_in_epoch
-        for pkey in position.keys():
+        for pkey in position:
             position[pkey] = jnp.asarray(epoch_value + transition_value)
 
         new_model_state = self.model.update_state(position, model_state)

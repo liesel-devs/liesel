@@ -160,7 +160,7 @@ class PyMCInterface:
         ms.update(position)
         return ms
 
-    def log_prob(self, model_state: ModelState) -> float:
+    def log_prob(self, model_state: ModelState) -> jax.Array:
         """Computes the unnormalized log-probability given the model state."""
         rv_values = [model_state[rv] for rv in self._rv_names]
         return self._log_prob(rv_values)

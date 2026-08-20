@@ -9,7 +9,7 @@ from .types import Array
 
 def _validate_int_type(value: Integral, name: str) -> None:
     if not isinstance(value, Integral) or isinstance(value, bool):
-        raise ValueError(f"{name} must be an integer.")
+        raise ValueError(f"{name} must be an integer.")  # noqa: TRY004
 
 
 @dataclass

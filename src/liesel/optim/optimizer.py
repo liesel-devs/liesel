@@ -242,7 +242,7 @@ class Optimizer:
 
     def _tree_flatten(self):
         """Flattens the optimizer as a JAX pytree node with static metadata."""
-        children = tuple()
+        children = ()
         aux_data = {
             "position_keys": self.position_keys,
             "identifier": self.identifier,
@@ -308,7 +308,7 @@ class LBFGS(Optimizer):
     """
 
     position_keys: Sequence[str]
-    optimizer: optax.GradientTransformation = optax.lbfgs()
+    optimizer: optax.GradientTransformation = optax.lbfgs()  # noqa: RUF009
     identifier: str = ""
 
     def step(self, position: Position, loss: Loss, carry: OptimCarry) -> OptimCarry:

@@ -415,7 +415,7 @@ class OptimEngine:
             If ``debug_nans`` is not a boolean.
         """
         if not isinstance(self.debug_nans, bool):
-            raise ValueError("debug_nans must be a boolean.")
+            raise ValueError("debug_nans must be a boolean.")  # noqa: TRY004
 
     def _validate_batch_split_compatibility(self) -> None:
         """
@@ -430,7 +430,7 @@ class OptimEngine:
         if isinstance(self.split, PositionSplitManager) and isinstance(
             self.batches, Batches
         ):
-            raise ValueError(
+            raise ValueError(  # noqa: TRY004
                 "OptimEngine requires a BatchManager when used with a "
                 "PositionSplitManager."
             )
@@ -1244,7 +1244,7 @@ class OptimEngine:
             return
         try:
             progress_bar.close()
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             # Progress display cleanup must not replace an optimization error.
             pass
 
@@ -1440,15 +1440,14 @@ class OptimEngine:
                             )
                         break
 
-                if finished_epoch:
-                    if use_nested_bars:
-                        rendered_epochs = self._update_outer_progress(
-                            outer_progress_bar,
-                            rendered_epochs,
-                            completed_epochs,
-                            loss_train,
-                            loss_validate,
-                        )
+                if finished_epoch and use_nested_bars:
+                    rendered_epochs = self._update_outer_progress(
+                        outer_progress_bar,
+                        rendered_epochs,
+                        completed_epochs,
+                        loss_train,
+                        loss_validate,
+                    )
 
                 if not finished_epoch:
                     break

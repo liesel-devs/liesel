@@ -137,7 +137,7 @@ def position_df(
         df = df.reset_index(names="epoch")
         return df.astype(float)
 
-    data: dict[str, Array] = dict()
+    data: dict[str, Array] = {}
     for name, value in items:
         value = jnp.asarray(value)
         original_ndim = value.ndim
@@ -289,7 +289,7 @@ class OptimHistory:
         >>> history.loss_df().iloc[0].to_dict()
         {'epoch': 0.0, 'loss_train': 1.5, 'loss_validate': 2.5}
         """
-        data: dict[str, Array] = dict()
+        data: dict[str, Array] = {}
         data |= array_to_dict(self.loss_train, names_prefix="loss_train")
         data |= array_to_dict(self.loss_validate, names_prefix="loss_validate")
 
@@ -474,12 +474,7 @@ def array_to_dict(
 
     x = jnp.asarray(x)
 
-    if x.ndim == 0:
-        if prefix_1d:
-            return {f"{names_prefix}0": x}
-        else:
-            return {names_prefix: x}
-    elif x.ndim == 1:
+    if x.ndim == 0 or x.ndim == 1:
         if prefix_1d:
             return {f"{names_prefix}0": x}
         else:

@@ -1,17 +1,28 @@
+import gc
+import inspect
 import tempfile
 import typing
-from collections.abc import Generator
+from collections.abc import Generator, Mapping
 from itertools import combinations
-from types import MappingProxyType
 
 import jax
 import jax.numpy as jnp
 import jax.random as rnd
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
+from IPython.core.guarded_eval import EvaluationContext, guarded_eval
 
-from liesel.model.model import GraphBuilder, Model, log_prob_pointwise, save_model
+from liesel.model.model import (
+    GraphBuilder,
+    Model,
+    _compile_prediction,
+    _compile_sampling,
+    _SamplingSpec,
+    log_prob_pointwise,
+    save_model,
+)
 from liesel.model.nodes import Calc, Dist, Group, TransientNode, Value, Var
+from liesel.types import Position
 
 
 @pytest.fixture
@@ -130,8 +141,8 @@ class TestModel:
         """Verifies that the vars and nodes are unfrozen."""
         nodes_and_vars = model.copy_nodes_and_vars()
 
-        assert all([not node.model for node in nodes_and_vars[0].values()])
-        assert all([not var.model for var in nodes_and_vars[1].values()])
+        assert all(not node.model for node in nodes_and_vars[0].values())
+        assert all(not var.model for var in nodes_and_vars[1].values())
 
     def test_copy_computational_model(self, model: Model) -> None:
         cmodel = model._copy_computational_model()
@@ -232,13 +243,13 @@ class TestModel:
         """
 
         with pytest.raises(TypeError):
-            model.set_seed(jnp.array([0, 123]))  # type: ignore
+            model.set_seed(jnp.array([0, 123]))
 
         with pytest.raises(TypeError):
-            model.set_seed(jnp.array([123]))  # type: ignore
+            model.set_seed(jnp.array([123]))
 
         with pytest.raises(TypeError):
-            model.set_seed(123)  # type: ignore
+            model.set_seed(123)  # ty: ignore[invalid-argument-type]
 
     def test_set_seed(self, model: Model) -> None:
         """Verifies that seed nodes are created by set_seed."""
@@ -261,17 +272,16 @@ class TestModel:
         log_prob_before = model.log_prob
         beta = model.vars["beta_hat"]
         beta.value = jnp.array([-10.0, 10.0])
-        assert any([node.outdated for node in model.nodes.values()])
+        assert any(node.outdated for node in model.nodes.values())
 
         model.update()
-        assert not any([node.outdated for node in model.nodes.values()])
+        assert not any(node.outdated for node in model.nodes.values())
         assert log_prob_before != pytest.approx(model.log_prob)
 
     def test_update_uses_correct_order(self, model: Model) -> None:
         """
         Verifies that Model.update() updates the model in the correct topological order.
         """
-        ...
 
     def test_log_probs(self, model: Model) -> None:
         assert model.log_prior.shape == ()
@@ -304,8 +314,8 @@ class TestModel:
         """
 
         vars = list(model.vars.values())
-        assert all([node in vars for node in model.var_graph.nodes])
-        assert all([node in model.var_graph.nodes for node in vars])
+        assert all(node in vars for node in model.var_graph.nodes)
+        assert all(node in model.var_graph.nodes for node in vars)
 
     def test_node_graph(self, model: Model) -> None:
         """
@@ -313,11 +323,11 @@ class TestModel:
         """
 
         nodes = list(model.nodes.values())
-        assert all([node in nodes for node in model.node_graph.nodes])
-        assert all([node in model.node_graph.nodes for node in nodes])
+        assert all(node in nodes for node in model.node_graph.nodes)
+        assert all(node in model.node_graph.nodes for node in nodes)
 
     def test_nodes_len(self, model: Model) -> None:
-        assert isinstance(model.nodes, MappingProxyType)
+        assert isinstance(model.nodes, Mapping)
         print(list(model.vars.keys()))
         print(list(model.nodes.keys()))
         # this is a bit surprising since variables have always 2 value and 1
@@ -325,8 +335,71 @@ class TestModel:
         assert len(model.nodes) == 25
 
     def test_vars_len(self, model: Model) -> None:
-        assert isinstance(model.vars, MappingProxyType)
+        assert isinstance(model.vars, Mapping)
         assert len(model.vars) == 9
+
+    def test_read_only_mappings_support_key_completion(self, model: Model) -> None:
+        node = Value(0.0, _name="node")
+        var = Var(0.0, name="var")
+        group = Group("group", node=node, var=var)
+
+        mappings: list[typing.Any] = [
+            node.groups,
+            node.kwinputs,
+            var.groups,
+            group.vars,
+            group.nodes,
+            group.nodes_and_vars,
+            model.nodes,
+            model.vars,
+            model.parameters,
+            model.observed,
+        ]
+
+        for mapping in mappings:
+            assert mapping._ipython_key_completions_() == list(mapping)
+            assert mapping.copy() == dict(mapping)
+            assert mapping | {"extra": None} == dict(mapping) | {"extra": None}
+            assert {"extra": None} | mapping == {"extra": None} | dict(mapping)
+
+            read_only_mapping: typing.Any = mapping
+            with pytest.raises(TypeError):
+                read_only_mapping["extra"] = None
+
+        groups = node.groups
+        Group("other", node=node)
+        assert list(groups) == ["group", "other"]
+
+        read_only_model: typing.Any = model
+        with pytest.raises(AttributeError, match="read-only"):
+            read_only_model.vars = {}
+
+    def test_ipython_can_evaluate_read_only_mappings(self, model: Model) -> None:
+        node = Value(0.0, _name="node")
+        var = Var(0.0, name="var")
+        group = Group("group", node=node, var=var)
+        context = EvaluationContext(
+            globals={},
+            locals={"group": group, "model": model, "node": node, "var": var},
+            evaluation="limited",
+        )
+
+        expressions = (
+            "node.groups",
+            "node.kwinputs",
+            "var.groups",
+            "group.vars",
+            "group.nodes",
+            "group.nodes_and_vars",
+            "model.nodes",
+            "model.vars",
+            "model.parameters",
+            "model.observed",
+        )
+
+        for expression in expressions:
+            mapping = guarded_eval(expression, context)
+            assert mapping._ipython_key_completions_() == list(mapping)
 
     def test_vars(self, model: Model) -> None:
         """
@@ -475,6 +548,31 @@ class TestModel:
         pos = model.extract_position(["z"])
         assert pos["z"] == pytest.approx(model.nodes["z"].value)
 
+    def test_convert_position(self) -> None:
+        x = Var.new_value(
+            0.0,
+            name="x",
+            convert=lambda value: jnp.asarray(value, dtype=jnp.float32),
+        )
+        node = Value(
+            0,
+            _name="node",
+            convert=lambda value: jnp.asarray(value, dtype=jnp.int32),
+        )
+        model = Model(x, node)
+
+        position = model.convert_position({"x": [1, 2], "node": [3.0, 4.0]})
+
+        assert position["x"].dtype == jnp.float32
+        assert position["node"].dtype == jnp.int32
+
+        with pytest.raises(KeyError, match="unknown is not part of the model"):
+            model.convert_position({"unknown": 1})
+
+        unknown = object()
+        position = model.convert_position({"unknown": unknown}, allow_unknown=True)
+        assert position["unknown"] is unknown
+
     def test_update_state(self, model) -> None:
         pos = {"z": 3.0}
         state = model.update_state(pos, inplace=False)
@@ -608,6 +706,128 @@ class TestModel:
 
 
 class TestPredictions:
+    def test_default_chunk_size(self) -> None:
+        assert inspect.signature(Model.predict).parameters["chunk_size"].default == 64
+        assert inspect.signature(Var.predict).parameters["chunk_size"].default == 64
+
+    @pytest.mark.parametrize("chunk_size", [None, 2])
+    def test_compiled_prediction_is_differentiable(
+        self, chunk_size: int | None
+    ) -> None:
+        theta = Var.new_param(1.0, name="theta")
+        target = Var.new_calc(lambda x: x**2, theta, name="target")
+        model = Model([target])
+        submodel = model.parental_submodel(target)
+        predict_batched = _compile_prediction(
+            submodel,
+            ["target"],
+            chunk_size=chunk_size,
+        )
+
+        def sum_predictions(theta_samples):
+            predictions = predict_batched({"theta": theta_samples}, submodel.state)
+            return predictions["target"].sum()
+
+        theta_samples = jnp.array([1.0, 2.0, 3.0])
+        gradient = jax.grad(sum_predictions)(theta_samples)
+
+        assert jnp.allclose(gradient, 2.0 * theta_samples)
+
+    @pytest.mark.parametrize("chunk_size", [1, 3, 20])
+    def test_predict_in_chunks(self, model, chunk_size: int) -> None:
+        samples = {
+            "sigma_hat": tfd.Uniform().sample((2, 5), rnd.PRNGKey(6)),
+            "beta_hat": tfd.Uniform().sample((2, 5, 2), rnd.PRNGKey(7)),
+        }
+
+        expected = model.predict(
+            samples=samples,
+            predict=["mu"],
+            chunk_size=None,
+        )
+        chunked = model.predict(
+            samples=samples,
+            predict=["mu"],
+            chunk_size=chunk_size,
+        )
+
+        assert chunked["mu"].shape == (2, 5, 500)
+        assert jnp.allclose(chunked["mu"], expected["mu"])
+
+    @pytest.mark.parametrize("chunk_size", [0, -1])
+    def test_predict_rejects_non_positive_chunk_size(
+        self, model, chunk_size: int
+    ) -> None:
+        samples = model.extract_position(["sigma_hat", "beta_hat"])
+
+        with pytest.raises(ValueError, match="positive integer"):
+            model.predict(samples=samples, chunk_size=chunk_size)
+
+    @pytest.mark.parametrize("chunk_size", [True, 1.5, "2"])
+    def test_predict_rejects_non_integer_chunk_size(self, model, chunk_size) -> None:
+        samples = model.extract_position(["sigma_hat", "beta_hat"])
+
+        with pytest.raises(TypeError, match="positive integer or None"):
+            model.predict(samples=samples, chunk_size=chunk_size)
+
+    @pytest.mark.skipif(
+        jax.default_backend() != "cpu",
+        reason="Compiled memory statistics are backend-specific.",
+    )
+    def test_chunking_reduces_compiled_temporary_memory(self) -> None:
+        n = 37
+        n_samples = 7
+        theta = Var.new_param(1.0, name="theta")
+        matrix = Var.new_calc(lambda x: x * jnp.eye(n), theta, name="matrix")
+        target = Var.new_calc(jnp.sum, matrix, name="target")
+        model = Model([target])
+        submodel = model.parental_submodel(target)
+        samples = {"theta": jnp.ones(n_samples)}
+
+        full = (
+            _compile_prediction(submodel, ["target"])
+            .lower(samples, submodel.state)
+            .compile()
+            .memory_analysis()
+        )
+        chunked = (
+            _compile_prediction(submodel, ["target"], chunk_size=3)
+            .lower(samples, submodel.state)
+            .compile()
+            .memory_analysis()
+        )
+
+        assert full is not None
+        assert chunked is not None
+        assert chunked.temp_size_in_bytes < full.temp_size_in_bytes
+
+    def test_predict_does_not_retain_batched_intermediates(self) -> None:
+        gc.collect()
+        gc_was_enabled = gc.isenabled()
+        gc.disable()
+
+        try:
+            n = 37
+            n_samples = 7
+            theta = Var.new_param(1.0, name="theta")
+            matrix = Var.new_calc(lambda x: x * jnp.eye(n), theta, name="matrix")
+            target = Var.new_calc(jnp.sum, matrix, name="target")
+            model = Model([target])
+
+            predictions = model.predict(
+                Position({"theta": jnp.ones(n_samples)}), predict=["target"]
+            )
+            jax.block_until_ready(predictions)
+
+            retained = [
+                array for array in jax.live_arrays() if array.shape == (n_samples, n, n)
+            ]
+            assert not retained
+        finally:
+            if gc_was_enabled:
+                gc.enable()
+            gc.collect()
+
     def test_predict_no_batching_dim(self, model) -> None:
         position = model.extract_position(["sigma_hat", "beta_hat"])
 
@@ -616,11 +836,30 @@ class TestPredictions:
         assert pred["mu"].shape == (500,)
         assert len(pred) == len(model.vars)
 
+    def test_predict_uses_configured_converter(self) -> None:
+        x = Var.new_param(
+            0.0,
+            name="x",
+            convert=lambda value: jnp.asarray(value, dtype=jnp.float32),
+        )
+        twice_x = Var.new_calc(lambda value: 2.0 * value, x, name="twice_x")
+        model = Model(twice_x)
+
+        pred = model.predict(
+            samples=Position({"x": [1, 2, 3]}),
+            predict=["twice_x"],
+        )
+
+        assert pred["twice_x"].dtype == jnp.float32
+        assert pred["twice_x"] == pytest.approx([2.0, 4.0, 6.0])
+
     def test_predict_one_batching_dim(self, model) -> None:
-        samples = {
-            "sigma_hat": tfd.Uniform().sample((3), rnd.PRNGKey(6)),
-            "beta_hat": tfd.Uniform().sample((3, 2), rnd.PRNGKey(6)),
-        }
+        samples = Position(
+            {
+                "sigma_hat": tfd.Uniform().sample((3), rnd.PRNGKey(6)),
+                "beta_hat": tfd.Uniform().sample((3, 2), rnd.PRNGKey(6)),
+            }
+        )
 
         # manual prediction
         manual_pred = jnp.einsum(
@@ -633,10 +872,12 @@ class TestPredictions:
         assert len(pred) == len(model.vars)
 
     def test_predict_at_current_state(self, model) -> None:
-        samples = {
-            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
-            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
-        }
+        samples = Position(
+            {
+                "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+                "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+            }
+        )
 
         # manual prediction
         manual_pred = jnp.einsum(
@@ -650,24 +891,29 @@ class TestPredictions:
         assert len(pred) == len(model.vars)
 
     def test_predict_with_ignored_entries(self, model) -> None:
-        samples = {
-            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
-            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
-            "_model_log_lik": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
-            "mu": tfd.Uniform().sample((4, 3, 500), rnd.PRNGKey(6)),
-        }
+        samples = Position(
+            {
+                "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+                "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+                "_model_log_lik": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+                "mu": tfd.Uniform().sample((4, 3, 500), rnd.PRNGKey(6)),
+            }
+        )
 
         model.predict(samples=samples)
 
     def test_predict_model_nodes(self, model) -> None:
-        samples = {
-            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
-            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
-        }
+        samples = Position(
+            {
+                "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+                "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+            }
+        )
 
         pred = model.predict(
             samples=samples,
             predict=["_model_log_lik", "_model_log_prob", "_model_log_prior"],
+            chunk_size=5,
         )
 
         assert len(pred) == 3
@@ -677,10 +923,12 @@ class TestPredictions:
             assert pred[name].shape == (4, 3)
 
     def test_predict_log_lik_contributions(self, model) -> None:
-        samples = {
-            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
-            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
-        }
+        samples = Position(
+            {
+                "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+                "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+            }
+        )
 
         pred = model.predict(
             samples=samples,
@@ -693,11 +941,13 @@ class TestPredictions:
         assert pred[model.vars["y_var"].dist_node.name].shape == (4, 3, 500)
 
     def test_predict_with_unused_samples(self, model) -> None:
-        samples = {
-            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
-            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
-            "unused": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
-        }
+        samples = Position(
+            {
+                "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+                "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+                "unused": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+            }
+        )
 
         # manual prediction
         manual_pred = jnp.einsum(
@@ -711,10 +961,12 @@ class TestPredictions:
         assert len(pred) == len(model.vars)
 
     def test_predict_for_specific_var(self, model) -> None:
-        samples = {
-            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
-            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
-        }
+        samples = Position(
+            {
+                "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+                "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+            }
+        )
 
         # manual prediction
         manual_pred = jnp.einsum(
@@ -729,10 +981,12 @@ class TestPredictions:
         assert len(pred) == 1
 
     def test_predict_at_newdata(self, model) -> None:
-        samples = {
-            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
-            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
-        }
+        samples = Position(
+            {
+                "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+                "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+            }
+        )
 
         # predictions at new values for X
         xnew = tfd.Normal(loc=0.0, scale=1.0).sample(
@@ -743,15 +997,19 @@ class TestPredictions:
 
         manual_pred = jnp.einsum("nk,...k->...n", xnew, samples["beta_hat"])
 
-        pred = model.predict(samples=samples, predict=["mu"], newdata={"X": xnew})
+        pred = model.predict(
+            samples=samples, predict=["mu"], newdata=Position({"X": xnew})
+        )
         assert jnp.allclose(pred["mu"], manual_pred)
         assert pred["mu"].shape == (4, 3, 500)
 
     def test_predict_when_newdata_and_samples_overlap(self, model) -> None:
-        samples = {
-            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
-            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
-        }
+        samples = Position(
+            {
+                "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+                "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+            }
+        )
 
         # predictions at new values for X
         xnew = tfd.Normal(loc=0.0, scale=1.0).sample(
@@ -764,14 +1022,16 @@ class TestPredictions:
             model.predict(
                 samples=samples,
                 predict=["mu"],
-                newdata={"X": xnew, "beta_hat": samples["beta_hat"][0, 0, :]},
+                newdata=Position({"X": xnew, "beta_hat": samples["beta_hat"][0, 0, :]}),
             )
 
     def test_predict_at_newdata_not_in_the_model(self, model) -> None:
-        samples = {
-            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
-            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
-        }
+        samples = Position(
+            {
+                "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+                "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+            }
+        )
 
         # predictions at new values for X
         xnew = tfd.Normal(loc=0.0, scale=1.0).sample(
@@ -779,26 +1039,36 @@ class TestPredictions:
         )
 
         with pytest.raises(KeyError):
-            model.predict(samples=samples, predict=["mu"], newdata={"Z": xnew})
+            model.predict(
+                samples=samples, predict=["mu"], newdata=Position({"Z": xnew})
+            )
 
     def test_predict_at_newdata_not_needed(self, model) -> None:
-        samples = {
-            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
-            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
-        }
+        samples = Position(
+            {
+                "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+                "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+            }
+        )
 
         # predictions at new values for X
         xnew = tfd.Normal(loc=0.0, scale=1.0).sample(
             sample_shape=model.vars["X"].value.shape, seed=rnd.PRNGKey(7)
         )
 
-        model.predict(samples=samples, predict=["sigma_hat"], newdata={"X": xnew})
+        model.predict(
+            samples=samples,
+            predict=["sigma_hat"],
+            newdata=Position({"X": xnew}),
+        )
 
     def test_predict_at_newdata_with_new_shape(self, model) -> None:
-        samples = {
-            "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
-            "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
-        }
+        samples = Position(
+            {
+                "sigma_hat": tfd.Uniform().sample((4, 3), rnd.PRNGKey(6)),
+                "beta_hat": tfd.Uniform().sample((4, 3, 2), rnd.PRNGKey(6)),
+            }
+        )
 
         # predictions at new values for X with different N
         xnew = tfd.Normal(loc=0.0, scale=1.0).sample(
@@ -807,14 +1077,16 @@ class TestPredictions:
 
         manual_pred = jnp.einsum("nk,...k->...n", xnew, samples["beta_hat"])
 
-        pred = model.predict(samples=samples, predict=["mu"], newdata={"X": xnew})
+        pred = model.predict(
+            samples=samples, predict=["mu"], newdata=Position({"X": xnew})
+        )
         assert jnp.allclose(pred["mu"], manual_pred)
         assert pred["mu"].shape == (4, 3, 10)
 
         # if the newdata shape does not work with some required shapes downstream,
         # we run into a typerror
         with pytest.raises(TypeError):
-            model.predict(samples=samples, newdata={"X": xnew})
+            model.predict(samples=samples, newdata=Position({"X": xnew}))
 
     def test_predict_multiple_vars_new_shapes_issue_291(self) -> None:
         # create model with variables of shape (3,)
@@ -836,9 +1108,9 @@ class TestPredictions:
 
         # update with variables of different but compatible shapes
         pred = model.predict(
-            samples={"dummy": jnp.array([[0.0], [0.0]])},
+            samples=Position({"dummy": jnp.array([[0.0], [0.0]])}),
             predict=["calc_sum"],
-            newdata={"x1": jnp.ones(5), "x2": jnp.ones(5)},
+            newdata=Position({"x1": jnp.ones(5), "x2": jnp.ones(5)}),
         )
 
         # verify prediction works - calc_sum should be 10.0 (5 + 5 + 0 = 10)
@@ -965,9 +1237,8 @@ def test_save_model() -> None:
     x = Var(1.0, name="x")
     model = Model([x])
 
-    fh = tempfile.TemporaryFile()
-    save_model(model, fh)
-    fh.close()
+    with tempfile.TemporaryFile() as fh:
+        save_model(model, fh)
 
 
 @pytest.fixture
@@ -989,6 +1260,149 @@ def linreg():
 
 
 class TestSample:
+    def test_default_chunk_size(self) -> None:
+        assert inspect.signature(Model.sample).parameters["chunk_size"].default == 64
+        assert inspect.signature(Var.sample).parameters["chunk_size"].default == 64
+
+    def test_sample_in_chunks(self, linreg: Model):
+        model = linreg
+
+        expected = model.sample(
+            shape=(2, 5),
+            seed=rnd.key(1),
+            fixed=["y"],
+            chunk_size=None,
+        )
+        chunked = model.sample(
+            shape=(2, 5),
+            seed=rnd.key(1),
+            fixed=["y"],
+            chunk_size=3,
+        )
+
+        assert jax.tree.all(jax.tree.map(jnp.array_equal, expected, chunked))
+
+    def test_sample_from_posterior_in_chunks(self, linreg: Model):
+        model = linreg
+        posterior_samples = model.sample(
+            shape=(2, 4),
+            seed=rnd.key(7),
+            fixed=["y"],
+        )
+
+        expected = model.sample(
+            shape=(3,),
+            seed=rnd.key(8),
+            posterior_samples=posterior_samples,
+            chunk_size=None,
+        )
+        chunked = model.sample(
+            shape=(3,),
+            seed=rnd.key(8),
+            posterior_samples=posterior_samples,
+            chunk_size=5,
+        )
+
+        assert chunked["y"].shape == (3, 2, 4, 100)
+        assert jax.tree.all(jax.tree.map(jnp.array_equal, expected, chunked))
+
+    @pytest.mark.parametrize("chunk_size", [0, -1])
+    def test_sample_rejects_non_positive_chunk_size(
+        self, linreg: Model, chunk_size: int
+    ):
+        with pytest.raises(ValueError, match="positive integer"):
+            linreg.sample(
+                shape=(2,),
+                seed=rnd.key(1),
+                chunk_size=chunk_size,
+            )
+
+    @pytest.mark.parametrize("chunk_size", [True, 1.5, "2"])
+    def test_sample_rejects_non_integer_chunk_size(self, linreg: Model, chunk_size):
+        with pytest.raises(TypeError, match="positive integer or None"):
+            linreg.sample(
+                shape=(2,),
+                seed=rnd.key(1),
+                chunk_size=chunk_size,
+            )
+
+    @pytest.mark.skipif(
+        jax.default_backend() != "cpu",
+        reason="Compiled memory statistics are backend-specific.",
+    )
+    def test_sample_chunking_reduces_compiled_temporary_memory(self):
+        n = 37
+        theta = Var.new_param(0.0, name="theta")
+        y = Var(0.0, Dist(tfd.Normal, loc=theta, scale=1.0), name="y")
+        matrix = Var.new_calc(
+            lambda value: jnp.exp(value) * jnp.eye(n),
+            y,
+            name="matrix",
+        )
+        z = Var(
+            jnp.zeros(n),
+            Dist(
+                tfd.MultivariateNormalTriL,
+                loc=jnp.zeros(n),
+                scale_tril=matrix,
+            ),
+            name="z",
+        )
+        model = Model([z])
+        assert y.dist_node is not None
+        assert z.dist_node is not None
+        sampling_specs: dict[str, _SamplingSpec] = {
+            "y": {
+                "shape": (),
+                "dist": y.dist_node,
+                "seed_index": 0,
+                "value_node": y.value_node,
+            },
+            "z": {
+                "shape": (),
+                "dist": z.dist_node,
+                "seed_index": 1,
+                "value_node": z.value_node,
+            },
+        }
+        posterior_size = 6
+        total_draws = 18
+        draw_indices = jnp.arange(total_draws)
+        seeds = rnd.split(rnd.key(1), (total_draws, 2))
+        posterior_samples = {"theta": jnp.zeros(posterior_size)}
+
+        full = (
+            _compile_sampling(model, sampling_specs, posterior_size)
+            .lower(
+                draw_indices,
+                seeds,
+                posterior_samples,
+                model.state,
+            )
+            .compile()
+            .memory_analysis()
+        )
+        chunked = (
+            _compile_sampling(
+                model,
+                sampling_specs,
+                posterior_size,
+                chunk_size=3,
+            )
+            .lower(
+                draw_indices,
+                seeds,
+                posterior_samples,
+                model.state,
+            )
+            .compile()
+            .memory_analysis()
+        )
+
+        assert full is not None
+        assert chunked is not None
+        assert chunked.temp_size_in_bytes < full.temp_size_in_bytes
+
     def test_sample_prior(self):
         """
         Test that the function runs and shows expected behavior in a minimal example.
@@ -1019,8 +1433,10 @@ class TestSample:
 
         # basic plausibility checks for sampling from the correct distribution
         # this is not a tough check though.
-        sigma_mean = sigma.dist_node.init_dist().mean()
-        sigma_std = sigma.dist_node.init_dist().stddev()
+        sigma_dist_node = sigma.dist_node
+        assert sigma_dist_node is not None
+        sigma_mean = sigma_dist_node.init_dist().mean()
+        sigma_std = sigma_dist_node.init_dist().stddev()
         assert samples["sigma"].mean() == pytest.approx(sigma_mean, abs=0.1)
         assert samples["sigma"].std() == pytest.approx(sigma_std, abs=0.1)
 
@@ -1055,8 +1471,10 @@ class TestSample:
         # basic plausibility checks for sampling from the correct distribution
         # this is not a tough check though.
         sigma = model.vars["sigma"]
-        sigma_mean = sigma.dist_node.init_dist().mean()  # type: ignore
-        sigma_std = sigma.dist_node.init_dist().stddev()  # type: ignore
+        sigma_dist = sigma.dist_node
+        assert sigma_dist is not None
+        sigma_mean = sigma_dist.init_dist().mean()
+        sigma_std = sigma_dist.init_dist().stddev()
         assert samples["sigma"].mean() == pytest.approx(sigma_mean, abs=0.1)
         assert samples["sigma"].std() == pytest.approx(sigma_std, abs=0.1)
 
@@ -1080,16 +1498,20 @@ class TestSample:
 
         jitted_sample = jax.jit(
             model.sample,
-            static_argnames=["shape", "fixed", "dists"],
+            static_argnames=["shape", "fixed", "dists", "chunk_size"],
         )
 
         jitted_sample(shape=(1, 100), seed=rnd.key(1))
 
         x_shape = model.vars["X"].value.shape
         x_new = tfd.Uniform(low=10.0, high=11.0).sample(x_shape, seed=rnd.key(9))
-        jitted_sample(shape=(1, 100), seed=rnd.key(1), newdata={"X": x_new})
+        jitted_sample(shape=(1, 100), seed=rnd.key(1), newdata=Position({"X": x_new}))
         jitted_sample(
-            shape=(1, 100), seed=rnd.key(1), newdata={"X": x_new}, fixed=("y")
+            shape=(1, 100),
+            seed=rnd.key(1),
+            newdata=Position({"X": x_new}),
+            fixed=("y"),
+            chunk_size=13,
         )
 
     def test_sample_from_custom_dist(self, linreg: Model):
@@ -1113,6 +1535,18 @@ class TestSample:
         assert not jnp.allclose(samples["b"], samples2["b"])
         assert jnp.all(samples2["b"] <= 0.2)
         assert jnp.all(samples2["b"] >= 0.1)
+
+    def test_sample_from_custom_dist_is_only_distribution(self):
+        x = Var.new_param(jnp.zeros(2), name="x")
+        model = Model([x])
+
+        samples = model.sample(
+            shape=(3,),
+            seed=rnd.key(1),
+            dists={"x": Dist(tfd.Normal, loc=jnp.zeros(2), scale=1.0)},
+        )
+
+        assert samples["x"].shape == (3, 2)
 
     def test_sample_from_custom_dist_with_variable_dependent_param(self):
         min_ = Var.new_param(0.1, Dist(tfd.Uniform, low=0.1, high=0.2), name="min")
@@ -1242,6 +1676,44 @@ class TestSample:
         # to the elements of the sample shape for sample1
         assert samples2["y"].shape == (11, 2, 8, 100)
 
+    @pytest.mark.parametrize("argument", ["posterior_samples", "newdata"])
+    def test_sample_uses_configured_converter(self, argument: str) -> None:
+        class RawValue:
+            def __init__(self, value) -> None:
+                self.value = value
+
+        def convert(value):
+            if isinstance(value, RawValue):
+                value = value.value
+            return jnp.asarray(value)
+
+        x = Var.new_value(
+            0.0,
+            name="x",
+            convert=convert,
+        )
+        y = Var(
+            0.0,
+            Dist(tfd.Deterministic, loc=x),
+            name="y",
+        )
+        model = Model(y)
+
+        if argument == "posterior_samples":
+            samples = model.sample(
+                shape=(2,),
+                seed=rnd.key(8),
+                posterior_samples=Position({"x": RawValue([[3.0]])}),
+            )
+        else:
+            samples = model.sample(
+                shape=(2,),
+                seed=rnd.key(8),
+                newdata=Position({"x": RawValue(3.0)}),
+            )
+
+        assert samples["y"] == pytest.approx(3.0)
+
     def test_sample_at_newdata(self, linreg: Model):
         model = linreg
 
@@ -1255,7 +1727,7 @@ class TestSample:
         samples2 = model.sample(
             shape=(2, 8),
             seed=rnd.key(8),
-            newdata={"X": x_new},
+            newdata=Position({"X": x_new}),
         )
 
         assert not jnp.allclose(samples1["y"], samples2["y"])
@@ -1275,7 +1747,7 @@ class TestSample:
                 shape=(2, 8),
                 seed=rnd.key(8),
                 posterior_samples=samples1,
-                newdata={"X": x_new, "b": samples1["b"][0, 0, :]},
+                newdata=Position({"X": x_new, "b": samples1["b"][0, 0, :]}),
             )
 
     def test_sample_posterior_shape_of_posterior_samples(self, linreg: Model):
@@ -1304,14 +1776,16 @@ class TestSample:
 
 class TestPointwiseLogLik:
     def test_pointwise_ll(self, model) -> None:
-        samples = {
-            "sigma_hat": tfd.Normal(loc=1.0, scale=0.01).sample(
-                (4, 100), rnd.PRNGKey(6)
-            ),
-            "beta_hat": tfd.Normal(loc=jnp.array([1.0, 2.0]), scale=0.1).sample(
-                (4, 100), rnd.PRNGKey(6)
-            ),
-        }
+        samples = Position(
+            {
+                "sigma_hat": tfd.Normal(loc=1.0, scale=0.01).sample(
+                    (4, 100), rnd.PRNGKey(6)
+                ),
+                "beta_hat": tfd.Normal(loc=jnp.array([1.0, 2.0]), scale=0.1).sample(
+                    (4, 100), rnd.PRNGKey(6)
+                ),
+            }
+        )
 
         pll = log_prob_pointwise(model.observed, samples)
         assert pll["y_var_log_prob"].shape == (4, 100, 500)

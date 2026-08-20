@@ -145,7 +145,7 @@ class PITCalc(Node):
 
         if not dist.at:
             raise RuntimeError(
-                f"Cannot evaluate PIT on {repr(dist)}, property `at` not set"
+                f"Cannot evaluate PIT on {dist!r}, property `at` not set"
             )
 
         self._value = dist.init_dist().cdf(dist.at.value)
@@ -174,7 +174,7 @@ def PIT(_input: Var | Dist, distribution: Dist | None = None, name: str = "") ->
     dist = _input.dist_node if isinstance(_input, Var) else _input
 
     if not dist:
-        raise RuntimeError(f"Cannot evaluate PIT on {repr(_input)}, has no dist node")
+        raise RuntimeError(f"Cannot evaluate PIT on {_input!r}, has no dist node")
 
     if _input.name and not name:
         name = f"{_input.name}_pit"

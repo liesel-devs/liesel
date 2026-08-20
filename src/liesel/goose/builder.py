@@ -30,6 +30,7 @@ from .types import (
     KeyArray,
     ModelInterface,
     ModelState,
+    Position,
     QuantityGenerator,
 )
 from .warmup import stan_epochs
@@ -403,8 +404,8 @@ class EngineBuilder:
     def add_adaptation(
         self,
         duration: int,
-        init: float | int = 0.1,
-        term: float | int = 0.2,
+        init: float = 0.1,
+        term: float = 0.2,
         base: int = 25,
         thinning: int = 1,
     ):
@@ -814,7 +815,7 @@ class EngineBuilder:
 
             jitter_keys = jax.random.split(self._jitter_key, len(jitter_fns_pos_keys))
             current_position = model.extract_position(jitter_fns_pos_keys, model_states)
-            jittered_position = {}
+            jittered_position = Position({})
 
             for i, pos_key in enumerate(jitter_fns_pos_keys):
                 jittered_position[pos_key] = jax.vmap(jitter_fns[pos_key])(
