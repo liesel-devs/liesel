@@ -1,6 +1,6 @@
 import math
-from types import SimpleNamespace
 
+import jax
 import jax.numpy as jnp
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
@@ -17,6 +17,7 @@ from liesel.optim import (
     Split,
     SplitManager,
 )
+from liesel.optim.state import OptimCarry
 from liesel.optim.types import Position
 
 
@@ -780,7 +781,16 @@ class TestSplitManager:
             multi_size="manager",
         )
         loss = NegLogProbLoss(model, split)
-        carry = SimpleNamespace(model_state=model.state, fixed_position=Position({}))
+        carry = OptimCarry.new(
+            key=jax.random.key(0),
+            epochs=1,
+            position=Position({}),
+            tracked=None,
+            batches=Batches([], axis_size=1, batch_size=None),
+            optimizers=[],
+            model_state=model.state,
+            save_position_history=False,
+        )
 
         value = loss.loss_validate(Position({}), carry)
         state = model.update_state(split.validate, model.state)

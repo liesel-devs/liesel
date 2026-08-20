@@ -1,5 +1,4 @@
-from types import SimpleNamespace
-
+import jax
 import jax.numpy as jnp
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
@@ -12,6 +11,7 @@ from liesel.optim import (
     PositionSplitManager,
     Split,
 )
+from liesel.optim.state import OptimCarry
 from liesel.optim.types import Position
 
 
@@ -47,11 +47,16 @@ def _matrix_obs_model():
     return lsl.Model([y])
 
 
-def _empty_carry(model):
-    return SimpleNamespace(
-        batch=Position({}),
-        fixed_position=Position({}),
+def _empty_carry(model) -> OptimCarry:
+    return OptimCarry.new(
+        key=jax.random.key(0),
+        epochs=1,
+        position=Position({}),
+        tracked=None,
+        batches=Batches([], axis_size=1, batch_size=None),
+        optimizers=[],
         model_state=model.state,
+        save_position_history=False,
     )
 
 
@@ -61,11 +66,8 @@ def test_neg_log_prob_loss_train_uses_full_training_split_not_current_batch():
         ["y"], axis_size=6, validate_axis_size=2, shuffle=False
     ).split_position(model.extract_position(["y"]))
     loss = NegLogProbLoss(model, split)
-    carry = SimpleNamespace(
-        batch=Position({"y": jnp.array([1000.0, 2000.0])}),
-        fixed_position=Position({}),
-        model_state=model.state,
-    )
+    carry = _empty_carry(model)
+    carry.batch = Position({"y": jnp.array([1000.0, 2000.0])})
 
     value = loss.loss_train(Position({}), carry)
     train_state = model.update_state(split.train, model.state)

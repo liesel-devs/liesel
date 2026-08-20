@@ -25,7 +25,7 @@ from liesel.optim import (
 )
 from liesel.optim.engine import _progress_print_rate
 from liesel.optim.liesel_optim import LieselOptim as LieselOptimFromQuick
-from liesel.optim.loss import Loss
+from liesel.optim.loss import Loss, LossMixin
 from liesel.optim.state import OptimCarry
 from liesel.optim.types import Position
 
@@ -116,7 +116,7 @@ class BatchSensitiveLoss:
 
 
 @dataclass
-class UnitGradientLoss:
+class UnitGradientLoss(LossMixin):
     split: PositionSplit
 
     def position(self, position_keys) -> Position:
@@ -124,7 +124,13 @@ class UnitGradientLoss:
 
     def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
         del carry
-        return sum(jnp.sum(value) for value in params.values())
+        return sum((jnp.sum(value) for value in params.values()), start=jnp.array(0.0))
+
+    def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
+        return self.loss_train_batched(params, carry)
+
+    def loss_validate(self, params: Position, carry: OptimCarry) -> jax.Array:
+        return self.loss_train_batched(params, carry)
 
     def grad(self, params: Position, carry: OptimCarry):
         del carry
@@ -164,7 +170,6 @@ class DebugNoOpOptimizer:
 
     def step(self, position: Position, loss, carry: OptimCarry) -> OptimCarry:
         del position, loss
-        carry.optimizer_states[self.identifier] += 1
         return carry
 
 
@@ -174,7 +179,6 @@ class AddOneOptimizer(DebugNoOpOptimizer):
         del loss
         key = self.position_keys[0]
         carry.position = Position(carry.position | {key: position[key] + 1.0})
-        carry.optimizer_states[self.identifier] += 1
         return carry
 
 
@@ -184,7 +188,6 @@ class NanOptimizer(DebugNoOpOptimizer):
         del loss
         key = self.position_keys[0]
         carry.position = Position(carry.position | {key: position[key] * jnp.nan})
-        carry.optimizer_states[self.identifier] += 1
         return carry
 
 
@@ -204,8 +207,12 @@ class DebugNaNLoss:
         )
 
     def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
-        param_sum = sum(jnp.sum(value) for value in params.values())
-        batch_sum = sum(jnp.sum(value) for value in carry.batch.values())
+        param_sum = sum(
+            (jnp.sum(value) for value in params.values()), start=jnp.array(0.0)
+        )
+        batch_sum = sum(
+            (jnp.sum(value) for value in carry.batch.values()), start=jnp.array(0.0)
+        )
         loss = param_sum + batch_sum
         if self.trigger_batch_value is None:
             return loss
@@ -219,7 +226,7 @@ class DebugNaNLoss:
 
     def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
         del carry
-        return sum(jnp.sum(value) for value in params.values())
+        return sum((jnp.sum(value) for value in params.values()), start=jnp.array(0.0))
 
     def loss_validate(self, params: Position, carry: OptimCarry) -> jax.Array:
         return self.loss_train(params, carry)
@@ -429,7 +436,7 @@ def test_optimizer_activates_after_completed_epoch_delay(debug_nans):
         return jnp.where(count == 0, 1.0, 10.0)
 
     engine = OptimEngine(
-        loss=loss,  # type: ignore[arg-type]  # intentional custom loss
+        loss=loss,
         batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
         optimizers=[
             Optimizer(["theta"], optax.sgd(1.0), identifier="theta"),
@@ -461,7 +468,7 @@ def test_optimizer_activates_after_completed_epoch_delay(debug_nans):
 def test_inactive_optimizer_does_not_consume_random_key():
     def first_theta_position(optimizers):
         engine = OptimEngine(
-            loss=RandomGradientLoss(_split()),  # type: ignore[arg-type]
+            loss=RandomGradientLoss(_split()),
             batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=optimizers,
             stopper=Stopper(epochs=2, patience=2),
@@ -489,7 +496,7 @@ def test_inactive_optimizer_does_not_consume_random_key():
 
 def test_fit_can_stop_before_any_optimizer_activates():
     engine = OptimEngine(
-        loss=UnitGradientLoss(_split()),  # type: ignore[arg-type]
+        loss=UnitGradientLoss(_split()),
         batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
         optimizers=[Optimizer(["theta"], optax.sgd(1.0), activate_after_epochs=3)],
         stopper=Stopper(epochs=5, patience=1),

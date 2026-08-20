@@ -1,18 +1,36 @@
-from types import SimpleNamespace
-
 import jax
 import jax.numpy as jnp
 import optax
 import pytest
 
-from liesel.optim import LBFGS, Optimizer
+from liesel.optim import LBFGS, Batches, Optimizer, PositionSplit
+from liesel.optim.loss import LossMixin
+from liesel.optim.state import OptimCarry
 from liesel.optim.types import Position
 
 
-class QuadraticLoss:
-    def grad(self, params, carry):
+class QuadraticLoss(LossMixin):
+    split = PositionSplit(
+        train=Position({"y": jnp.array([0.0])}),
+        validate=Position({}),
+        test=Position({}),
+        train_axis_size=1,
+        validate_axis_size=0,
+        test_axis_size=0,
+    )
+
+    def position(self, position_keys) -> Position:
+        return Position({key: jnp.array(0.0) for key in position_keys})
+
+    def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
         del carry
-        return {key: 2.0 * value for key, value in params.items()}
+        return params["x"] ** 2
+
+    def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
+        return self.loss_train_batched(params, carry)
+
+    def loss_validate(self, params: Position, carry: OptimCarry) -> jax.Array:
+        return self.loss_train_batched(params, carry)
 
 
 def test_optimizer_rejects_empty_position_keys():
@@ -66,9 +84,15 @@ def test_position_and_not_position_return_expected_subsets():
 def test_step_updates_only_owned_position_keys():
     optimizer = Optimizer(["x"], optax.sgd(0.1), identifier="x_opt")
     position = Position({"x": jnp.array(1.0), "y": jnp.array(5.0)})
-    carry = SimpleNamespace(
-        optimizer_states={"x_opt": optimizer.init(position)},
+    carry = OptimCarry.new(
+        key=jax.random.key(0),
+        epochs=1,
         position=position,
+        tracked=None,
+        batches=Batches([], axis_size=1, batch_size=None),
+        optimizers=[optimizer],
+        model_state={},
+        save_position_history=False,
     )
 
     carry = optimizer.step(optimizer.position(position), QuadraticLoss(), carry)
