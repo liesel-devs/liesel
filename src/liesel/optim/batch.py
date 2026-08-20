@@ -4,7 +4,7 @@ import math
 import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal, cast
+from typing import Literal, cast, overload
 
 import jax
 import jax.numpy as jnp
@@ -349,6 +349,50 @@ class Batches:
             default_batch_axis=default_batch_axis,
             sample_size=split.train_sample_size,
         )
+
+    @classmethod
+    @overload
+    def from_model(
+        cls,
+        model: Model,
+        batch_size: int | None | object = _MISSING,
+        position_keys: Sequence[str] | None = None,
+        axis_size: int | None = None,
+        shuffle: bool = True,
+        batch_axes: dict[str, int] | None = None,
+        default_batch_axis: int = 0,
+        multi_size: Literal["error"] = "error",
+        mode: Literal["strict", "resample"] = "resample",
+        epoch_size: Literal["max", "min"] | int = "max",
+        sample_size: float | None = None,
+        batch_sample_size: float | None = None,
+        infer_sample_size: bool = True,
+        sample_with_replacement: bool = False,
+        *,
+        batch_axis_size: int | None | object = _MISSING,
+    ) -> Batches: ...
+
+    @classmethod
+    @overload
+    def from_model(
+        cls,
+        model: Model,
+        batch_size: int | None | object = _MISSING,
+        position_keys: Sequence[str] | None = None,
+        axis_size: int | None = None,
+        shuffle: bool = True,
+        batch_axes: dict[str, int] | None = None,
+        default_batch_axis: int = 0,
+        multi_size: Literal["manager"] = "manager",
+        mode: Literal["strict", "resample"] = "resample",
+        epoch_size: Literal["max", "min"] | int = "max",
+        sample_size: float | None = None,
+        batch_sample_size: float | None = None,
+        infer_sample_size: bool = True,
+        sample_with_replacement: bool = False,
+        *,
+        batch_axis_size: int | None | object = _MISSING,
+    ) -> Batches | BatchManager: ...
 
     @classmethod
     def from_model(
