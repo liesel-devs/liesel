@@ -103,7 +103,7 @@ class TestBatches:
     def test_batched_position(self):
         Bi = Batches(["x"], axis_size=30, batch_size=4, shuffle=True)
         Bi.indices = Bi.permute_indices(key(0))
-        pos = {"x": jnp.arange(30)}
+        pos = Position({"x": jnp.arange(30)})
         batched_pos = Bi.get_batched_position(pos, batch_index=0)
         assert batched_pos["x"].shape == (4,)
 
@@ -114,7 +114,7 @@ class TestBatches:
         Bi.indices = Bi.permute_indices(key(0))
 
         x = uniform(key(1), shape=(3, 30))
-        pos = {"x": x}
+        pos = Position({"x": x})
 
         batched_pos = Bi.get_batched_position(pos, batch_index=0)
         assert batched_pos["x"].shape == (3, 4)
@@ -131,7 +131,7 @@ class TestBatches:
 
         x = uniform(key(1), shape=(3, 30))
         y = uniform(key(1), shape=(30, 6))
-        pos = {"x": x, "y": y}
+        pos = Position({"x": x, "y": y})
 
         batched_pos = Bi.get_batched_position(pos, batch_index=0)
         assert batched_pos["x"].shape == (3, 4)
@@ -317,7 +317,7 @@ class TestBatchManager:
                 Batches(["y"], axis_size=9, batch_size=3, shuffle=False),
             ]
         )
-        position = {"x": jnp.arange(6), "y": jnp.arange(9)}
+        position = Position({"x": jnp.arange(6), "y": jnp.arange(9)})
 
         batched = manager.get_batched_position(position, batch_index=1)
 
@@ -528,10 +528,12 @@ class TestBatchManager:
             mode="resample",
             epoch_size="min",
         )
-        position = {
-            "x": jnp.arange(12).reshape(3, 4),
-            "y": jnp.arange(12).reshape(6, 2),
-        }
+        position = Position(
+            {
+                "x": jnp.arange(12).reshape(3, 4),
+                "y": jnp.arange(12).reshape(6, 2),
+            }
+        )
 
         batched = manager.get_batched_position(position, batch_index=0)
 

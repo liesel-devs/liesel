@@ -56,7 +56,7 @@ class TestSplit:
             split_axes={"response": 0, "land": None},
         )
 
-        split = splitter.split_position({"response": response, "land": land})
+        split = splitter.split_position(Position({"response": response, "land": land}))
 
         assert split.train["response"].shape == (2, 6)
         assert split.validate["response"].shape == (1, 6)
@@ -308,7 +308,7 @@ class TestPositionSplit:
             axis_size=8,
             validate_axis_size=2,
             sample_sizes={"train": 18, "validate": 3},
-        ).split_position({"y": jnp.arange(8)})
+        ).split_position(Position({"y": jnp.arange(8)}))
 
         assert split.validate_sample_scale == 6.0
 
@@ -318,7 +318,7 @@ class TestPositionSplit:
                 axis_size=8,
                 validate_axis_size=2,
                 sample_sizes={"train": 0, "validate": 3},
-            ).split_position({"y": jnp.arange(8)})
+            ).split_position(Position({"y": jnp.arange(8)}))
 
     def test_from_model_infers_sample_sizes_from_pointwise_log_probs(self):
         model, _ = _matrix_obs_model(shape=(4, 8))
@@ -479,7 +479,7 @@ class TestSplitManager:
                 Split(["y"], axis_size=6, validate_axis_size=1, test_axis_size=1),
             ]
         )
-        position = {"x": jnp.arange(10), "y": jnp.arange(6)}
+        position = Position({"x": jnp.arange(10), "y": jnp.arange(6)})
 
         split = manager.split_position(position)
 
@@ -519,10 +519,12 @@ class TestSplitManager:
                 Split(["y"], axis_size=6, validate_axis_size=2),
             ]
         )
-        position = {
-            "x": jnp.arange(8).reshape(2, 4),
-            "y": jnp.arange(12).reshape(6, 2),
-        }
+        position = Position(
+            {
+                "x": jnp.arange(8).reshape(2, 4),
+                "y": jnp.arange(12).reshape(6, 2),
+            }
+        )
 
         split = manager.split_position(position)
 
@@ -591,7 +593,7 @@ class TestSplitManager:
             )
 
     def test_scalar_aliases_work_for_equal_sizes_and_raise_for_unequal_sizes(self):
-        equal_position = {"x": jnp.arange(10), "y": jnp.arange(10)}
+        equal_position = Position({"x": jnp.arange(10), "y": jnp.arange(10)})
         equal = SplitManager(
             [
                 Split(["x"], axis_size=10, validate_axis_size=2),
@@ -608,7 +610,7 @@ class TestSplitManager:
                 Split(["x"], axis_size=10, validate_axis_size=2),
                 Split(["y"], axis_size=6, validate_axis_size=1),
             ]
-        ).split_position({"x": jnp.arange(10), "y": jnp.arange(6)})
+        ).split_position(Position({"x": jnp.arange(10), "y": jnp.arange(6)}))
 
         with pytest.raises(ValueError, match="train_axis_sizes"):
             _ = unequal.train_axis_size
@@ -704,7 +706,7 @@ class TestSplitManager:
         assert split.validate_axis_size == 2
 
     def test_position_split_manager_exposes_manual_sample_sizes(self):
-        position = {"x": jnp.arange(8), "y": jnp.arange(6)}
+        position = Position({"x": jnp.arange(8), "y": jnp.arange(6)})
         split = SplitManager(
             [
                 Split(

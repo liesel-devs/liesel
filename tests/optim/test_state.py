@@ -10,7 +10,7 @@ from liesel.optim.types import Position
 
 class TestOptimHistory:
     def test_position_df(self):
-        pos = {"a": jnp.full((3, 2), fill_value=1.0)}
+        pos = Position({"a": jnp.full((3, 2), fill_value=1.0)})
         hist = OptimHistory.from_epochs(epochs=20, position=pos, tracked=None)
         df = hist.position_df()
         assert df.shape == (20, 7)
