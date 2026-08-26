@@ -112,7 +112,8 @@ def da_step(
     """
 
     ks = kernel_state
-    t = time_in_epoch + 1
+    acceptance_prob = jnp.asarray(acceptance_prob)
+    t = jnp.asarray(time_in_epoch) + 1
     eta = t ** (-kappa)
 
     da_state = ks.da_state
