@@ -22,13 +22,3 @@ repos:
     rev: v0.0.74
     hooks:
       - id: ty
-  - repo: local
-    hooks:
-      - id: mypy
-        name: mypy
-        entry: mypy
-        language: python
-        types_or: [python, pyi]
-        args: [--ignore-missing-imports, --scripts-are-modules]
-        require_serial: true
-        exclude: ^docs/
