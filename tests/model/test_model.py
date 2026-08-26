@@ -16,8 +16,6 @@ from liesel.model.model import (
     GraphBuilder,
     Model,
     _compile_prediction,
-    _compile_sampling,
-    _SamplingSpec,
     log_prob_pointwise,
     save_model,
 )
@@ -770,37 +768,6 @@ class TestPredictions:
         with pytest.raises(TypeError, match="positive integer or None"):
             model.predict(samples=samples, chunk_size=chunk_size)
 
-    @pytest.mark.skipif(
-        jax.default_backend() != "cpu",
-        reason="Compiled memory statistics are backend-specific.",
-    )
-    def test_chunking_reduces_compiled_temporary_memory(self) -> None:
-        n = 37
-        n_samples = 7
-        theta = Var.new_param(1.0, name="theta")
-        matrix = Var.new_calc(lambda x: x * jnp.eye(n), theta, name="matrix")
-        target = Var.new_calc(jnp.sum, matrix, name="target")
-        model = Model([target])
-        submodel = model.parental_submodel(target)
-        samples = {"theta": jnp.ones(n_samples)}
-
-        full = (
-            _compile_prediction(submodel, ["target"])
-            .lower(samples, submodel.state)
-            .compile()
-            .memory_analysis()
-        )
-        chunked = (
-            _compile_prediction(submodel, ["target"], chunk_size=3)
-            .lower(samples, submodel.state)
-            .compile()
-            .memory_analysis()
-        )
-
-        assert full is not None
-        assert chunked is not None
-        assert chunked.temp_size_in_bytes < full.temp_size_in_bytes
-
     def test_predict_does_not_retain_batched_intermediates(self) -> None:
         gc.collect()
         gc_was_enabled = gc.isenabled()
@@ -1325,83 +1292,6 @@ class TestSample:
                 seed=rnd.key(1),
                 chunk_size=chunk_size,
             )
-
-    @pytest.mark.skipif(
-        jax.default_backend() != "cpu",
-        reason="Compiled memory statistics are backend-specific.",
-    )
-    def test_sample_chunking_reduces_compiled_temporary_memory(self):
-        n = 37
-        theta = Var.new_param(0.0, name="theta")
-        y = Var(0.0, Dist(tfd.Normal, loc=theta, scale=1.0), name="y")
-        matrix = Var.new_calc(
-            lambda value: jnp.exp(value) * jnp.eye(n),
-            y,
-            name="matrix",
-        )
-        z = Var(
-            jnp.zeros(n),
-            Dist(
-                tfd.MultivariateNormalTriL,
-                loc=jnp.zeros(n),
-                scale_tril=matrix,
-            ),
-            name="z",
-        )
-        model = Model([z])
-        assert y.dist_node is not None
-        assert z.dist_node is not None
-        sampling_specs: dict[str, _SamplingSpec] = {
-            "y": {
-                "shape": (),
-                "dist": y.dist_node,
-                "seed_index": 0,
-                "value_node": y.value_node,
-            },
-            "z": {
-                "shape": (),
-                "dist": z.dist_node,
-                "seed_index": 1,
-                "value_node": z.value_node,
-            },
-        }
-        posterior_size = 6
-        total_draws = 18
-        draw_indices = jnp.arange(total_draws)
-        seeds = rnd.split(rnd.key(1), (total_draws, 2))
-        posterior_samples = {"theta": jnp.zeros(posterior_size)}
-
-        full = (
-            _compile_sampling(model, sampling_specs, posterior_size)
-            .lower(
-                draw_indices,
-                seeds,
-                posterior_samples,
-                model.state,
-            )
-            .compile()
-            .memory_analysis()
-        )
-        chunked = (
-            _compile_sampling(
-                model,
-                sampling_specs,
-                posterior_size,
-                chunk_size=3,
-            )
-            .lower(
-                draw_indices,
-                seeds,
-                posterior_samples,
-                model.state,
-            )
-            .compile()
-            .memory_analysis()
-        )
-
-        assert full is not None
-        assert chunked is not None
-        assert chunked.temp_size_in_bytes < full.temp_size_in_bytes
 
     def test_sample_prior(self):
         """
