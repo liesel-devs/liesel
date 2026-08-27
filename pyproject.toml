@@ -49,7 +49,6 @@ Repository = "https://github.com/liesel-devs/liesel.git"
 [dependency-groups]
 dev = [
     "ruff>=0.11.7",
-    "mypy>=2.1.0",
     "myst-nb>=1.0.0",
     "pre-commit>=4.6.0",
     "pydata-sphinx-theme>=0.18.0",
@@ -72,16 +71,6 @@ pymc = ["pymc>=6.0"]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-
-[tool.mypy]
-files = ["src/liesel", "tests"]
-ignore_missing_imports = true
-scripts_are_modules = true
-disable_error_code = "annotation-unchecked"
-
-[[tool.mypy.overrides]]
-module = "jax.*"
-follow_imports = "skip"
 
 [tool.pytest.ini_options]
 testpaths = "tests"
