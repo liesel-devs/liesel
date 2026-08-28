@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import jax.random as rnd
 import matplotlib
 import matplotlib.pyplot as plt
+import networkx as nx
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
@@ -137,6 +138,24 @@ def test_plot_nodes_sfdp_prog(temp_file: BinaryIO) -> None:
 @pytest.mark.filterwarnings("ignore::UserWarning")
 def test_plot_vars(temp_file: BinaryIO) -> None:
     plot_vars(model, save_path=temp_file)
+    plt.close()
+
+
+def test_plot_vars_uses_integer_graphviz_ids(monkeypatch: pytest.MonkeyPatch) -> None:
+    x = Var(1.0, name="x:y")
+    colon_model = Model(Var.new_calc(lambda x: x, x, name="f(x:y)"))
+    graphviz_nodes = []
+
+    def integer_layout(graph: nx.DiGraph, prog: str):
+        graphviz_nodes.extend(graph)
+        return {node: (float(index), 0.0) for index, node in enumerate(graph)}
+
+    monkeypatch.setattr(nx.nx_pydot, "pydot_layout", integer_layout)
+    plot_vars(colon_model, show=False)
+
+    assert graphviz_nodes
+    assert all(type(node) is int for node in graphviz_nodes)
+    assert graphviz_nodes == list(range(len(graphviz_nodes)))
     plt.close()
 
 
