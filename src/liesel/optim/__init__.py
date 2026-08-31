@@ -1,5 +1,7 @@
 from .batch import Batches as Batches
 from .batch import BatchManager as BatchManager
+from .engine import EmaTrainLossMonitor as EmaTrainLossMonitor
+from .engine import LossMonitor as LossMonitor
 from .engine import OptimEngine as OptimEngine
 from .liesel_optim import LieselOptim as LieselOptim
 from .loss import NegLogProbLoss as NegLogProbLoss
@@ -17,7 +19,9 @@ __all__ = [
     "LBFGS",
     "BatchManager",
     "Batches",
+    "EmaTrainLossMonitor",
     "LieselOptim",
+    "LossMonitor",
     "NegLogProbLoss",
     "OptimEngine",
     "OptimNaNDebugInfo",

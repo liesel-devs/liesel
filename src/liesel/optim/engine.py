@@ -8,6 +8,7 @@ is useful for custom losses or optimizer schedules.
 
 from __future__ import annotations
 
+import math
 import sys
 import time
 from collections.abc import Sequence
@@ -44,7 +45,32 @@ from .state import (
 from .stop import Stopper
 from .types import ModelState, Position
 
-__all__ = ["OptimEngine"]
+__all__ = ["EmaTrainLossMonitor", "LossMonitor", "OptimEngine"]
+
+
+@dataclass(frozen=True)
+class EmaTrainLossMonitor:
+    """Configures EMA monitoring of post-update mini-batch training losses.
+
+    ``effective_window`` is measured in epoch equivalents.
+    """
+
+    effective_window: float = 1.0
+
+    def __post_init__(self) -> None:
+        try:
+            valid = math.isfinite(self.effective_window) and self.effective_window > 0
+        except (TypeError, ValueError):
+            valid = False
+
+        if isinstance(self.effective_window, bool) or not valid:
+            raise ValueError(
+                "effective_window must be finite and positive, but got "
+                f"{self.effective_window!r}."
+            )
+
+
+type LossMonitor = EmaTrainLossMonitor | Literal["validation", "train_full_data"]
 
 TrainMonitor = Literal["auto", "epoch_average", "weighted_epoch_average", "full_data"]
 

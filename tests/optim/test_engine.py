@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 import threading
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import FrozenInstanceError, dataclass
 from typing import ClassVar
 
 import jax
@@ -16,7 +16,9 @@ import liesel.optim.engine as engine_module
 from liesel.optim import (
     Batches,
     BatchManager,
+    EmaTrainLossMonitor,
     LieselOptim,
+    LossMonitor,
     OptimEngine,
     Optimizer,
     PositionSplit,
@@ -28,6 +30,31 @@ from liesel.optim.liesel_optim import LieselOptim as LieselOptimFromQuick
 from liesel.optim.loss import Loss, LossMixin
 from liesel.optim.state import OptimCarry
 from liesel.optim.types import Position
+
+
+def test_ema_train_loss_monitor_default_and_fractional_window():
+    assert EmaTrainLossMonitor().effective_window == 1.0
+    assert EmaTrainLossMonitor(0.25).effective_window == 0.25
+
+
+def test_ema_train_loss_monitor_is_frozen():
+    monitor = EmaTrainLossMonitor()
+
+    with pytest.raises(FrozenInstanceError):
+        monitor.effective_window = 2.0
+
+
+@pytest.mark.parametrize(
+    "effective_window", [True, 0.0, -1.0, float("inf"), float("-inf"), float("nan")]
+)
+def test_ema_train_loss_monitor_rejects_invalid_windows(effective_window):
+    with pytest.raises(ValueError, match="effective_window"):
+        EmaTrainLossMonitor(effective_window)
+
+
+def test_loss_monitor_configuration_is_public():
+    assert opt.EmaTrainLossMonitor is EmaTrainLossMonitor
+    assert opt.LossMonitor is LossMonitor
 
 
 @dataclass
