@@ -772,7 +772,7 @@ class TestSplitManager:
             split.validate_sample_scale * state["_model_log_lik"].value,
         )
 
-    def test_neg_log_prob_loss_validate_uses_per_branch_scaling(self):
+    def test_neg_log_prob_loss_monitor_uses_per_branch_scaling(self):
         model, _, _ = _two_branch_model()
         split = PositionSplit.from_model(
             model,
@@ -792,7 +792,7 @@ class TestSplitManager:
             save_position_history=False,
         )
 
-        value = loss.loss_validate(Position({}), carry)
+        value = loss.loss_monitor(Position({}), carry)
         state = model.update_state(split.validate, model.state)
         manual = -split.scaled_log_lik(model, state)
 

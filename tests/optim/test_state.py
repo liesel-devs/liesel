@@ -21,7 +21,7 @@ class TestOptimHistory:
     def test_position_df_handles_one_epoch_scalar_and_vector_histories(self):
         hist = OptimHistory(
             loss_train=jnp.array([1.0]),
-            loss_validate=jnp.array([2.0]),
+            loss_monitor=jnp.array([2.0]),
             position=Position(
                 {
                     "theta": jnp.array([[1.0, 2.0]]),
@@ -83,9 +83,9 @@ class TestOptimCarry:
 
         assert carry.best_loss.dtype == jnp.float32
         assert carry.loss_train.dtype == jnp.float32
-        assert carry.loss_validate.dtype == jnp.float32
+        assert carry.loss_monitor.dtype == jnp.float32
         assert carry.history.loss_train.dtype == jnp.float32
-        assert carry.history.loss_validate.dtype == jnp.float32
+        assert carry.history.loss_monitor.dtype == jnp.float32
         assert carry.history.position is not None
         assert carry.history.position["theta"].dtype == jnp.float32
 
@@ -126,7 +126,7 @@ class TestOptimResult:
     def test_plot_loss_labels_monitoring_loss(self):
         history = OptimHistory.from_epochs(epochs=2, position=None, tracked=None)
         history.loss_train = jnp.array([1.0, 0.5])
-        history.loss_validate = jnp.array([1.2, 0.7])
+        history.loss_monitor = jnp.array([1.2, 0.7])
         result = OptimResult(
             history=history,
             final_epoch=1,

@@ -104,7 +104,7 @@ class SequenceLoss:
         del carry
         return params["theta"]
 
-    def loss_validate(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_monitor(self, params: Position, carry: OptimCarry) -> jax.Array:
         del carry
         return params["theta"]
 
@@ -130,7 +130,7 @@ class BatchSensitiveLoss:
         del carry
         return params["theta"] + jnp.sum(self.split.train["y"])
 
-    def loss_validate(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_monitor(self, params: Position, carry: OptimCarry) -> jax.Array:
         del params, carry
         return jnp.array(-999.0)
 
@@ -156,7 +156,7 @@ class UnitGradientLoss(LossMixin):
     def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
         return self.loss_train_batched(params, carry)
 
-    def loss_validate(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_monitor(self, params: Position, carry: OptimCarry) -> jax.Array:
         return self.loss_train_batched(params, carry)
 
     def grad(self, params: Position, carry: OptimCarry):
@@ -255,7 +255,7 @@ class DebugNaNLoss:
         del carry
         return sum((jnp.sum(value) for value in params.values()), start=jnp.array(0.0))
 
-    def loss_validate(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_monitor(self, params: Position, carry: OptimCarry) -> jax.Array:
         return self.loss_train(params, carry)
 
     def grad(self, params: Position, carry: OptimCarry):
@@ -408,7 +408,7 @@ def test_engine_restores_global_best_position(save_position_history):
     result = engine.fit()
 
     assert result.best_epoch == 0
-    assert result.history.loss_validate.tolist() == [0.0, 5.0, 6.0]
+    assert result.history.loss_monitor.tolist() == [0.0, 5.0, 6.0]
     assert result.best_position["theta"] == pytest.approx(0.0)
 
 
@@ -805,7 +805,7 @@ def test_no_validation_epoch_average_monitor_uses_arithmetic_average():
     result = engine.fit()
 
     assert result.history.loss_train.tolist() == pytest.approx([2.0])
-    assert result.history.loss_validate.tolist() == pytest.approx([2.0])
+    assert result.history.loss_monitor.tolist() == pytest.approx([2.0])
 
 
 def test_no_validation_full_data_monitor_uses_exact_training_loss():
@@ -824,7 +824,7 @@ def test_no_validation_full_data_monitor_uses_exact_training_loss():
     result = engine.fit()
 
     assert result.history.loss_train.tolist() == pytest.approx([2.0])
-    assert result.history.loss_validate.tolist() == pytest.approx([4.0])
+    assert result.history.loss_monitor.tolist() == pytest.approx([4.0])
 
 
 def test_no_validation_auto_monitor_uses_exact_loss_for_full_data_batches():
@@ -843,7 +843,7 @@ def test_no_validation_auto_monitor_uses_exact_loss_for_full_data_batches():
     result = engine.fit()
 
     assert result.history.loss_train.tolist() == pytest.approx([4.0])
-    assert result.history.loss_validate.tolist() == pytest.approx([4.0])
+    assert result.history.loss_monitor.tolist() == pytest.approx([4.0])
 
 
 @pytest.mark.parametrize("train_monitor", ["auto", "weighted_epoch_average"])
@@ -863,7 +863,7 @@ def test_no_validation_weighted_epoch_average_weights_later_batches(train_monito
     result = engine.fit()
 
     assert result.history.loss_train.tolist() == pytest.approx([2.0])
-    assert result.history.loss_validate.tolist() == pytest.approx([7.0 / 3.0])
+    assert result.history.loss_monitor.tolist() == pytest.approx([7.0 / 3.0])
 
 
 def test_split_manager_requires_batch_manager():
@@ -1024,7 +1024,7 @@ def test_nested_progress_matches_monolithic_and_never_uses_callback(monkeypatch)
 
     assert actual.final_epoch == expected.final_epoch == 5
     assert jnp.allclose(actual.history.loss_train, expected.history.loss_train)
-    assert jnp.allclose(actual.history.loss_validate, expected.history.loss_validate)
+    assert jnp.allclose(actual.history.loss_monitor, expected.history.loss_monitor)
 
     assert len(FakeTqdm.instances) == 2
     outer, inner = FakeTqdm.instances
@@ -1093,7 +1093,7 @@ def test_shared_progress_description_uses_fixed_width_counts():
         batch=587,
         n_batches=781,
         loss_train=1.25,
-        loss_validate=2.5,
+        loss_monitor=2.5,
     )
 
     assert description == ("Train=1.250, Monitor=2.500 [E  1/10, B 587/781]")
@@ -1219,7 +1219,7 @@ def test_nested_progress_supports_batch_manager(monkeypatch):
 
     assert actual.final_epoch == expected.final_epoch
     assert jnp.allclose(actual.history.loss_train, expected.history.loss_train)
-    assert jnp.allclose(actual.history.loss_validate, expected.history.loss_validate)
+    assert jnp.allclose(actual.history.loss_monitor, expected.history.loss_monitor)
     assert len(FakeTqdm.instances) == 2
 
 

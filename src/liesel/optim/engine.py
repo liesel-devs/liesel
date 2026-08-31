@@ -571,7 +571,7 @@ class OptimEngine:
             best_loss=carry.best_loss,
             best_epoch=carry.best_epoch,
             loss_train=carry.loss_train,
-            loss_validate=carry.loss_validate,
+            loss_monitor=carry.loss_monitor,
             epoch=int(debug_state.epoch),
             i_batch=int(debug_state.batch),
             nan_debug_state=None,
@@ -611,7 +611,7 @@ class OptimEngine:
         """
         # Set unused values in history to nan
         history.loss_train = history.loss_train.at[i:].set(jnp.nan)
-        history.loss_validate = history.loss_validate.at[i:].set(jnp.nan)
+        history.loss_monitor = history.loss_monitor.at[i:].set(jnp.nan)
         if self.save_position_history:
             assert history.position is not None
             for name, value in history.position.items():
@@ -626,7 +626,7 @@ class OptimEngine:
 
         # Remove unused values in history, if applicable
         history.loss_train = history.loss_train[:i]
-        history.loss_validate = history.loss_validate[:i]
+        history.loss_monitor = history.loss_monitor[:i]
         if self.save_position_history:
             assert history.position is not None
             for name, value in history.position.items():
@@ -824,7 +824,7 @@ class OptimEngine:
             one = jnp.asarray(1.0, dtype=loss_dtype)
             two = jnp.asarray(2.0, dtype=loss_dtype)
             weight = two * (i_batch + one) / (n_batches * (n_batches + one))
-            carry.loss_validate += weight * loss
+            carry.loss_monitor += weight * loss
 
         carry.i_batch = j
         carry.batch = Position({})
@@ -988,7 +988,7 @@ class OptimEngine:
                     one = jnp.asarray(1.0, dtype=loss_dtype)
                     two = jnp.asarray(2.0, dtype=loss_dtype)
                     weight = two * (i_batch + one) / (n_batches * (n_batches + one))
-                    carry.loss_validate += weight * loss
+                    carry.loss_monitor += weight * loss
 
                 return carry
 
@@ -1015,7 +1015,7 @@ class OptimEngine:
 
         return self._run_batch_unchecked(j, carry)
 
-    def _loss_without_validation(
+    def _monitor_without_validation(
         self, epoch_average_loss: jax.Array, carry: OptimCarry
     ) -> jax.Array:
         """
@@ -1033,7 +1033,7 @@ class OptimEngine:
             return epoch_average_loss
 
         if self.train_monitor in ("auto", "weighted_epoch_average"):
-            return carry.loss_validate
+            return carry.loss_monitor
 
         return self.loss.loss_train(carry.position, carry)
 
@@ -1043,7 +1043,7 @@ class OptimEngine:
         carry.key = key
         carry.batches = carry.batches.start_epoch(subkey)
         carry.loss_train = jnp.zeros_like(carry.loss_train)
-        carry.loss_validate = jnp.zeros_like(carry.loss_validate)
+        carry.loss_monitor = jnp.zeros_like(carry.loss_monitor)
         return carry
 
     def _run_batch_range(
@@ -1107,18 +1107,18 @@ class OptimEngine:
             key, subkey = jax.random.split(carry.key)
             carry.key = subkey
 
-            loss_val_i = self.loss.loss_validate(carry.position, carry)
+            loss_monitor_i = self.loss.loss_monitor(carry.position, carry)
             carry.key = key
 
-            carry.loss_validate = loss_val_i
-            carry.history.loss_validate = carry.history.loss_validate.at[i].set(
-                loss_val_i
+            carry.loss_monitor = loss_monitor_i
+            carry.history.loss_monitor = carry.history.loss_monitor.at[i].set(
+                loss_monitor_i
             )
         else:
-            loss_val_i = self._loss_without_validation(loss_i, carry)
-            carry.loss_validate = loss_val_i
-            carry.history.loss_validate = carry.history.loss_validate.at[i].set(
-                loss_val_i
+            loss_monitor_i = self._monitor_without_validation(loss_i, carry)
+            carry.loss_monitor = loss_monitor_i
+            carry.history.loss_monitor = carry.history.loss_monitor.at[i].set(
+                loss_monitor_i
             )
 
         if self.save_position_history:
@@ -1132,13 +1132,13 @@ class OptimEngine:
                 )
 
         def update_carry(carry: OptimCarry):
-            carry.best_loss = carry.loss_validate
+            carry.best_loss = carry.loss_monitor
             carry.best_position = carry.position
             carry.best_epoch = carry.epoch
             return carry
 
         carry = jax.lax.cond(
-            carry.loss_validate < carry.best_loss,
+            carry.loss_monitor < carry.best_loss,
             update_carry,
             lambda carry: carry,
             carry,
@@ -1151,9 +1151,9 @@ class OptimEngine:
     def _continue_fit(self, carry: OptimCarry) -> jax.Array:
         """Returns whether another epoch should be run."""
         loss_train_is_nan = jnp.isnan(carry.loss_train)
-        loss_validate_is_nan = jnp.isnan(carry.loss_validate)
-        no_nan_loss = ~jnp.logical_or(loss_train_is_nan, loss_validate_is_nan)
-        continue_ = self.stopper.continue_(carry.epoch, carry.history.loss_validate)
+        loss_monitor_is_nan = jnp.isnan(carry.loss_monitor)
+        no_nan_loss = ~jnp.logical_or(loss_train_is_nan, loss_monitor_is_nan)
+        continue_ = self.stopper.continue_(carry.epoch, carry.history.loss_monitor)
         should_continue = jnp.logical_and(no_nan_loss, continue_)
 
         if self.debug_nans:
@@ -1173,12 +1173,12 @@ class OptimEngine:
             carry.history.loss_train[index],
             carry.loss_train,
         )
-        loss_validate = jnp.where(
+        loss_monitor = jnp.where(
             has_completed_epoch,
-            carry.history.loss_validate[index],
-            carry.loss_validate,
+            carry.history.loss_monitor[index],
+            carry.loss_monitor,
         )
-        return loss_train, loss_validate
+        return loss_train, loss_monitor
 
     def _init_carry(self, epochs: int) -> OptimCarry:
         """
@@ -1223,10 +1223,10 @@ class OptimEngine:
         )
 
     @staticmethod
-    def _progress_description(loss_train, loss_validate) -> str:
+    def _progress_description(loss_train, loss_monitor) -> str:
         return (
             f"Training loss: {float(loss_train):.3f}, "
-            f"Monitoring loss: {float(loss_validate):.3f}"
+            f"Monitoring loss: {float(loss_monitor):.3f}"
         )
 
     @staticmethod
@@ -1236,10 +1236,10 @@ class OptimEngine:
         batch: int,
         n_batches: int,
         loss_train,
-        loss_validate,
+        loss_monitor,
     ) -> str:
         return (
-            f"Train={float(loss_train):.3f}, Monitor={float(loss_validate):.3f} "
+            f"Train={float(loss_train):.3f}, Monitor={float(loss_monitor):.3f} "
             f"[E {epoch:>{len(str(max_epochs))}}/{max_epochs}, "
             f"B {batch:>{len(str(n_batches))}}/{n_batches}]"
         )
@@ -1250,13 +1250,13 @@ class OptimEngine:
         rendered_epochs: int,
         completed_epochs: int,
         loss_train,
-        loss_validate,
+        loss_monitor,
     ) -> int:
         """Updates the outer bar once and returns its new rendered position."""
         update = completed_epochs - rendered_epochs
         if progress_bar is not None and update > 0:
             progress_bar.set_description(
-                self._progress_description(loss_train, loss_validate), refresh=False
+                self._progress_description(loss_train, loss_monitor), refresh=False
             )
             progress_bar.update(update)
         return max(rendered_epochs, completed_epochs)
@@ -1287,11 +1287,11 @@ class OptimEngine:
                 )
 
             carry = jax.lax.while_loop(continue_chunk, self._run_epoch, carry)
-            loss_train, loss_validate = self._completed_epoch_losses(carry)
+            loss_train, loss_monitor = self._completed_epoch_losses(carry)
             status = (
                 carry.epoch,
                 loss_train,
-                loss_validate,
+                loss_monitor,
                 self._continue_fit(carry),
             )
             return carry, status
@@ -1301,9 +1301,7 @@ class OptimEngine:
 
         while should_continue:
             carry, status = run_chunk(carry)
-            completed, loss_train, loss_validate, continue_value = jax.device_get(
-                status
-            )
+            completed, loss_train, loss_monitor, continue_value = jax.device_get(status)
             completed_epochs = int(completed)
             should_continue = bool(continue_value)
             rendered_epochs = self._update_outer_progress(
@@ -1311,7 +1309,7 @@ class OptimEngine:
                 rendered_epochs,
                 completed_epochs,
                 loss_train,
-                loss_validate,
+                loss_monitor,
             )
 
             # A zero-length chunk can only occur when the initial carry should stop.
@@ -1346,12 +1344,12 @@ class OptimEngine:
                 debug_has_nan = jnp.asarray(False)
 
             completed_batches = jnp.where(debug_has_nan, carry.i_batch + 1, upper)
-            loss_train, loss_validate = self._completed_epoch_losses(carry)
+            loss_train, loss_monitor = self._completed_epoch_losses(carry)
             status = (
                 carry.epoch,
                 completed_batches,
                 loss_train,
-                loss_validate,
+                loss_monitor,
                 debug_has_nan,
             )
             return carry, status
@@ -1359,11 +1357,11 @@ class OptimEngine:
         @jax.jit
         def finish_epoch(carry: OptimCarry):
             carry = self._finish_epoch(carry)
-            loss_train, loss_validate = self._completed_epoch_losses(carry)
+            loss_train, loss_monitor = self._completed_epoch_losses(carry)
             status = (
                 carry.epoch,
                 loss_train,
-                loss_validate,
+                loss_monitor,
                 self._continue_fit(carry),
             )
             return carry, status
@@ -1399,7 +1397,7 @@ class OptimEngine:
                 rendered_batches = 0
                 finished_epoch = False
                 loss_train = carry.loss_train
-                loss_validate = carry.loss_validate
+                loss_monitor = carry.loss_monitor
 
                 for lower in range(0, n_batches, step_update_every):
                     upper = min(lower + step_update_every, n_batches)
@@ -1408,7 +1406,7 @@ class OptimEngine:
                         completed,
                         completed_batches_value,
                         loss_train,
-                        loss_validate,
+                        loss_monitor,
                         debug_has_nan_value,
                     ) = jax.device_get(status)
 
@@ -1425,7 +1423,7 @@ class OptimEngine:
                                     completed_batches,
                                     n_batches,
                                     loss_train,
-                                    loss_validate,
+                                    loss_monitor,
                                 ),
                                 refresh=False,
                             )
@@ -1445,7 +1443,7 @@ class OptimEngine:
                         (
                             completed,
                             loss_train,
-                            loss_validate,
+                            loss_monitor,
                             continue_value,
                         ) = jax.device_get(status)
                         completed_epochs = int(completed)
@@ -1458,7 +1456,7 @@ class OptimEngine:
                                     completed_batches,
                                     n_batches,
                                     loss_train,
-                                    loss_validate,
+                                    loss_monitor,
                                 ),
                                 refresh=False,
                             )
@@ -1470,7 +1468,7 @@ class OptimEngine:
                         rendered_epochs,
                         completed_epochs,
                         loss_train,
-                        loss_validate,
+                        loss_monitor,
                     )
 
                 if not finished_epoch:
@@ -1511,7 +1509,7 @@ class OptimEngine:
                         0,
                         self.batches.n_full_batches,
                         carry.loss_train,
-                        carry.loss_validate,
+                        carry.loss_monitor,
                     ),
                     leave=True,
                     ncols=88,
@@ -1536,9 +1534,9 @@ class OptimEngine:
             else:
                 carry = self._fit_monolithic(carry)
 
-            final_loss_train, final_loss_validate = self._completed_epoch_losses(carry)
-            completed, loss_train, loss_validate = jax.device_get(
-                (carry.epoch, final_loss_train, final_loss_validate)
+            final_loss_train, final_loss_monitor = self._completed_epoch_losses(carry)
+            completed, loss_train, loss_monitor = jax.device_get(
+                (carry.epoch, final_loss_train, final_loss_monitor)
             )
             completed_epochs = int(completed)
             if not use_nested_progress or use_nested_bars:
@@ -1549,7 +1547,7 @@ class OptimEngine:
                     rendered_epochs,
                     completed_epochs,
                     loss_train,
-                    loss_validate,
+                    loss_monitor,
                 )
         finally:
             self._close_progress_bar(outer_progress_bar)

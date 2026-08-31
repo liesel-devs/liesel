@@ -176,7 +176,7 @@ class OptimHistory:
     ----------
     loss_train
         Training loss history with shape ``(epochs,)``.
-    loss_validate
+    loss_monitor
         Monitoring loss history with shape ``(epochs,)``. This can be a validation
         loss or another loss monitored for stopping and result selection.
     position
@@ -201,7 +201,7 @@ class OptimHistory:
     """
 
     loss_train: jax.Array
-    loss_validate: jax.Array
+    loss_monitor: jax.Array
     position: Position | None
     tracked: Position | None
 
@@ -243,7 +243,7 @@ class OptimHistory:
         >>> history = OptimHistory.from_epochs(
         ...     2, Position({"theta": jnp.array(1.0)}), tracked=None
         ... )
-        >>> history.loss_validate.tolist()
+        >>> history.loss_monitor.tolist()
         [inf, inf]
         >>> history.position["theta"].tolist()
         [0.0, 0.0]
@@ -263,7 +263,7 @@ class OptimHistory:
 
         inst = cls(
             loss_train=jnp.full((epochs,), fill_value=jnp.inf, dtype=loss_dtype),
-            loss_validate=jnp.full((epochs,), fill_value=jnp.inf, dtype=loss_dtype),
+            loss_monitor=jnp.full((epochs,), fill_value=jnp.inf, dtype=loss_dtype),
             position=position_init,
             tracked=tracked_init,
         )
@@ -277,7 +277,7 @@ class OptimHistory:
         -------
         pandas.DataFrame
             Data frame with ``"epoch"``, ``"loss_train"``, and
-            ``"loss_validate"`` columns.
+            ``"loss_monitor"`` columns.
 
         Examples
         --------
@@ -285,13 +285,13 @@ class OptimHistory:
         >>> from liesel.optim.state import OptimHistory
         >>> history = OptimHistory.from_epochs(epochs=2, position=None, tracked=None)
         >>> history.loss_train = history.loss_train.at[0].set(1.5)
-        >>> history.loss_validate = history.loss_validate.at[0].set(2.5)
+        >>> history.loss_monitor = history.loss_monitor.at[0].set(2.5)
         >>> history.loss_df().iloc[0].to_dict()
-        {'epoch': 0.0, 'loss_train': 1.5, 'loss_validate': 2.5}
+        {'epoch': 0.0, 'loss_train': 1.5, 'loss_monitor': 2.5}
         """
         data: dict[str, Array] = {}
         data |= array_to_dict(self.loss_train, names_prefix="loss_train")
-        data |= array_to_dict(self.loss_validate, names_prefix="loss_validate")
+        data |= array_to_dict(self.loss_monitor, names_prefix="loss_monitor")
 
         df = pd.DataFrame(data)
         df = df.reset_index(names="epoch")
@@ -587,7 +587,7 @@ class OptimCarry:
         Epoch at which the best monitoring loss was found.
     loss_train
         Most recent training loss.
-    loss_validate
+    loss_monitor
         Most recent monitoring loss.
     epoch
         Current epoch index.
@@ -615,7 +615,7 @@ class OptimCarry:
     best_epoch: jax.Array | int = 0
 
     loss_train: jax.Array = field(default_factory=lambda: jnp.asarray(jnp.inf))
-    loss_validate: jax.Array = field(default_factory=lambda: jnp.asarray(jnp.inf))
+    loss_monitor: jax.Array = field(default_factory=lambda: jnp.asarray(jnp.inf))
 
     epoch: int = 0  # outer while-loop index over epochs
     i_batch: int | jax.Array = 0  # inner for-loop index over batches
@@ -699,7 +699,7 @@ class OptimCarry:
             best_position=position,
             best_loss=inf,
             loss_train=inf,
-            loss_validate=inf,
+            loss_monitor=inf,
         )
         return inst
 
@@ -850,9 +850,9 @@ class OptimResult:
         i = _plot_window_start(n_iter, window)
         history = history.iloc[i:, :]
 
-        plot_data = history[["loss_validate", "loss_train", "epoch"]].rename(
+        plot_data = history[["loss_monitor", "loss_train", "epoch"]].rename(
             columns={
-                "loss_validate": "Monitoring",
+                "loss_monitor": "Monitoring",
                 "loss_train": "Training",
                 "epoch": "Epoch",
             }

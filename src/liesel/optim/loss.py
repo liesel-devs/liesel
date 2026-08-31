@@ -88,8 +88,8 @@ class Loss(Protocol):
         """
         ...
 
-    def loss_validate(self, params: Position, carry: "OptimCarry") -> jax.Array:
-        """Computes the validation loss at ``params``."""
+    def loss_monitor(self, params: Position, carry: "OptimCarry") -> jax.Array:
+        """Computes the complete validation monitoring loss at ``params``."""
         ...
 
     def value_and_grad(
@@ -392,7 +392,7 @@ class NegLogProbLoss(LossMixin):
         log_prior = new_state["_model_log_prior"].value
         return -(log_lik + log_prior) / self.scalar
 
-    def loss_validate(self, params: Position, carry: "OptimCarry") -> jax.Array:
+    def loss_monitor(self, params: Position, carry: "OptimCarry") -> jax.Array:
         """
         Computes validation loss.
 

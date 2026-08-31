@@ -29,7 +29,7 @@ class QuadraticLoss(LossMixin):
     def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
         return self.loss_train_batched(params, carry)
 
-    def loss_validate(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_monitor(self, params: Position, carry: OptimCarry) -> jax.Array:
         return self.loss_train_batched(params, carry)
 
 
