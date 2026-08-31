@@ -57,8 +57,14 @@ class OptimizerLike(Protocol):
         """Initialize optimizer state from a full position."""
         ...
 
-    def step(self, position: Position, loss: Loss, carry: OptimCarry) -> OptimCarry:
-        """Run one optimizer step."""
+    def step(
+        self, position: Position, loss: Loss, carry: OptimCarry
+    ) -> tuple[OptimCarry, jax.Array]:
+        """Run one optimizer step and return its pre-update scalar loss.
+
+        The scalar and gradient use the same mini-batch, supplied parameter
+        position, PRNG key, and stochastic objective draw.
+        """
         ...
 
 
@@ -209,7 +215,9 @@ class Optimizer:
         pos = self.position(position)
         return self.optimizer.init(pos)
 
-    def step(self, position: Position, loss: Loss, carry: OptimCarry) -> OptimCarry:
+    def step(
+        self, position: Position, loss: Loss, carry: OptimCarry
+    ) -> tuple[OptimCarry, jax.Array]:
         """
         Runs one optimizer step on ``position``.
 
@@ -218,27 +226,27 @@ class Optimizer:
         position
             Parameter subset owned by this optimizer.
         loss
-            Loss object providing :meth:`grad`.
+            Loss object providing :meth:`value_and_grad`.
         carry
             Current optimizer carry. The optimizer state for this object is read from
             and written to ``carry.optimizer_states[self.identifier]``.
 
         Returns
         -------
-        OptimCarry
-            Updated carry with the new parameter subset merged into
-            ``carry.position``.
+        tuple[OptimCarry, jax.Array]
+            Updated carry and the scalar loss evaluated at the supplied position
+            before the update.
         """
         pos = position
 
         opt_state = carry.optimizer_states[self.identifier]
-        grad = loss.grad(pos, carry)
+        value, grad = loss.value_and_grad(pos, carry)
         updates, opt_state = self.optimizer.update(grad, opt_state, params=pos)
         updated_position = cast(Position, optax.apply_updates(pos, updates))
 
         carry.position = Position(carry.position | updated_position)
         carry.optimizer_states[self.identifier] = opt_state
-        return carry
+        return carry, value
 
     def _tree_flatten(self):
         """Flattens the optimizer as a JAX pytree node with static metadata."""
@@ -311,7 +319,9 @@ class LBFGS(Optimizer):
     optimizer: optax.GradientTransformationExtraArgs = optax.lbfgs()  # noqa: RUF009
     identifier: str = ""
 
-    def step(self, position: Position, loss: Loss, carry: OptimCarry) -> OptimCarry:
+    def step(
+        self, position: Position, loss: Loss, carry: OptimCarry
+    ) -> tuple[OptimCarry, jax.Array]:
         """
         Runs one L-BFGS optimizer step on ``position``.
 
@@ -327,9 +337,9 @@ class LBFGS(Optimizer):
 
         Returns
         -------
-        OptimCarry
-            Updated carry with the new parameter subset merged into
-            ``carry.position``.
+        tuple[OptimCarry, jax.Array]
+            Updated carry and the scalar loss used for the update, evaluated at
+            the supplied position before the update.
         """
         pos = position
         opt_state = carry.optimizer_states[self.identifier]
@@ -347,7 +357,7 @@ class LBFGS(Optimizer):
 
         carry.position = Position(carry.position | updated_position)
         carry.optimizer_states[self.identifier] = opt_state
-        return carry
+        return carry, cast(jax.Array, value)
 
 
 jax.tree_util.register_pytree_node(LBFGS, LBFGS._tree_flatten, LBFGS._tree_unflatten)

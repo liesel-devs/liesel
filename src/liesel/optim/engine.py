@@ -664,7 +664,7 @@ class OptimEngine:
 
         key, subkey = jax.random.split(carry.key)
         carry.key = subkey
-        carry = opt.step(pos, self.loss, carry)
+        carry, _ = opt.step(pos, self.loss, carry)
         carry.key = key
         carry.fixed_position = Position({})  # reset fixed position
 
@@ -859,7 +859,7 @@ class OptimEngine:
 
             key, subkey = jax.random.split(carry.key)
             carry.key = subkey
-            carry = opt.step(pos, self.loss, carry)
+            carry, _ = opt.step(pos, self.loss, carry)
             carry.key = key
             carry.fixed_position = Position({})
 

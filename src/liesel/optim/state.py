@@ -774,7 +774,8 @@ class OptimNaNDebugInfo:
 
         carry = deepcopy(self.reproduction_carry)
         position = opt.position(self.reproduction_position)
-        return opt.step(position, engine.loss, carry)
+        carry, _ = opt.step(position, engine.loss, carry)
+        return carry
 
     def reproduce_loss(self, engine: OptimEngine) -> jax.Array:
         """Re-evaluates the batched training loss with the saved reproduction state."""

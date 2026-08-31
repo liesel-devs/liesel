@@ -92,10 +92,12 @@ class SequenceOptimizer:
     def init(self, position: Position):
         return ()
 
-    def step(self, position: Position, loss, carry: OptimCarry) -> OptimCarry:
-        del position, loss
+    def step(
+        self, position: Position, loss, carry: OptimCarry
+    ) -> tuple[OptimCarry, jax.Array]:
+        value = loss.loss_train_batched(position, carry)
         carry.position = Position(carry.position | {"theta": self.values[carry.epoch]})
-        return carry
+        return carry, value
 
 
 @dataclass
@@ -231,27 +233,32 @@ class DebugNoOpOptimizer:
         del position
         return jnp.array(0)
 
-    def step(self, position: Position, loss, carry: OptimCarry) -> OptimCarry:
-        del position, loss
-        return carry
+    def step(
+        self, position: Position, loss, carry: OptimCarry
+    ) -> tuple[OptimCarry, jax.Array]:
+        return carry, loss.loss_train_batched(position, carry)
 
 
 @dataclass
 class AddOneOptimizer(DebugNoOpOptimizer):
-    def step(self, position: Position, loss, carry: OptimCarry) -> OptimCarry:
-        del loss
+    def step(
+        self, position: Position, loss, carry: OptimCarry
+    ) -> tuple[OptimCarry, jax.Array]:
+        value = loss.loss_train_batched(position, carry)
         key = self.position_keys[0]
         carry.position = Position(carry.position | {key: position[key] + 1.0})
-        return carry
+        return carry, value
 
 
 @dataclass
 class NanOptimizer(DebugNoOpOptimizer):
-    def step(self, position: Position, loss, carry: OptimCarry) -> OptimCarry:
-        del loss
+    def step(
+        self, position: Position, loss, carry: OptimCarry
+    ) -> tuple[OptimCarry, jax.Array]:
+        value = loss.loss_train_batched(position, carry)
         key = self.position_keys[0]
         carry.position = Position(carry.position | {key: position[key] * jnp.nan})
-        return carry
+        return carry, value
 
 
 @dataclass

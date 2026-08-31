@@ -33,6 +33,22 @@ class QuadraticLoss(LossMixin):
         return self.loss_train_batched(params, carry)
 
 
+class DifferentObjectiveDrawLoss(QuadraticLoss):
+    def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
+        del carry
+        return 3.0 * params["x"] ** 2
+
+    def grad(self, params: Position, carry: OptimCarry) -> Position:
+        del carry
+        return Position({"x": 6.0 * params["x"]})
+
+    def value_and_grad(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, Position]:
+        del carry
+        return 2.0 * params["x"] ** 2, Position({"x": 4.0 * params["x"]})
+
+
 def test_optimizer_rejects_empty_position_keys():
     with pytest.raises(ValueError, match="position_keys"):
         Optimizer([], optax.sgd(0.1))
@@ -81,7 +97,7 @@ def test_position_and_not_position_return_expected_subsets():
     assert fixed["y"] == pytest.approx(2.0)
 
 
-def test_step_updates_only_owned_position_keys():
+def test_step_returns_pre_update_loss_and_updates_only_owned_position_keys():
     optimizer = Optimizer(["x"], optax.sgd(0.1), identifier="x_opt")
     position = Position({"x": jnp.array(1.0), "y": jnp.array(5.0)})
     carry = OptimCarry.new(
@@ -95,10 +111,32 @@ def test_step_updates_only_owned_position_keys():
         save_position_history=False,
     )
 
-    carry = optimizer.step(optimizer.position(position), QuadraticLoss(), carry)
+    carry, loss = optimizer.step(
+        optimizer.position(position), DifferentObjectiveDrawLoss(), carry
+    )
 
-    assert carry.position["x"] == pytest.approx(0.8)
+    assert loss == pytest.approx(2.0)
+    assert carry.position["x"] == pytest.approx(0.6)
     assert carry.position["y"] == pytest.approx(5.0)
+
+
+def test_lbfgs_step_returns_pre_update_loss():
+    optimizer = LBFGS(["x"], identifier="x_lbfgs")
+    position = Position({"x": jnp.array(1.0)})
+    carry = OptimCarry.new(
+        key=jax.random.key(0),
+        epochs=1,
+        position=position,
+        tracked=None,
+        batches=Batches([], axis_size=1, batch_size=None),
+        optimizers=[optimizer],
+        model_state={},
+        save_position_history=False,
+    )
+
+    _, loss = optimizer.step(optimizer.position(position), QuadraticLoss(), carry)
+
+    assert loss == pytest.approx(1.0)
 
 
 @pytest.mark.parametrize(
