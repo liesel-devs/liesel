@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import io
 import threading
 from collections.abc import Callable
@@ -41,7 +42,7 @@ def test_ema_train_loss_monitor_is_frozen():
     monitor = EmaTrainLossMonitor()
 
     with pytest.raises(FrozenInstanceError):
-        monitor.effective_window = 2.0
+        monitor.effective_window = 2.0  # ty: ignore[invalid-assignment]
 
 
 @pytest.mark.parametrize(
@@ -59,7 +60,7 @@ def test_loss_monitor_configuration_is_public():
 
 def test_engine_requires_explicit_loss_monitor():
     with pytest.raises(TypeError, match="loss_monitor"):
-        OptimEngine(
+        OptimEngine(  # ty: ignore[missing-argument]
             loss=_loss(),
             batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[_optimizer()],
@@ -460,28 +461,29 @@ def test_ema_result_recommends_terminal_and_retains_minimum_monitor_position(
     assert result.n_epochs == 3
     assert result.monitor_source == "train_ema"
     assert result.min_monitor_epoch == 0
-    assert result.position["theta"] == pytest.approx(6.0)
+    position = result.position
+    position_min_monitor = result.position_min_monitor
+    assert position is not None
+    assert position_min_monitor is not None
+    assert position["theta"] == pytest.approx(6.0)
     assert result.position_final["theta"] == pytest.approx(6.0)
-    assert result.position_min_monitor["theta"] == pytest.approx(0.0)
+    assert position_min_monitor["theta"] == pytest.approx(0.0)
 
 
 def test_removed_result_and_engine_api_is_absent():
     removed_engine_argument = "restore_" + "best_" + "position"
-    engine_kwargs = {
-        "loss": _loss(),
-        "loss_monitor": EmaTrainLossMonitor(),
-        "batches": Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
-        "optimizers": [_optimizer()],
-        "stopper": Stopper(epochs=1, patience=1),
-        "seed": 1,
-        "initial_state": {},
-        "show_progress": False,
-    }
+    assert removed_engine_argument not in inspect.signature(OptimEngine).parameters
 
-    with pytest.raises(TypeError, match=removed_engine_argument):
-        OptimEngine(**engine_kwargs, **{removed_engine_argument: True})
-
-    result = OptimEngine(**engine_kwargs).fit()
+    result = OptimEngine(
+        loss=_loss(),
+        loss_monitor=EmaTrainLossMonitor(),
+        batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
+        optimizers=[_optimizer()],
+        stopper=Stopper(epochs=1, patience=1),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+    ).fit()
     for removed_field in (
         "best_" + "position",
         "best_" + "epoch",
@@ -1062,8 +1064,12 @@ def test_exact_monitor_source_drives_epoch_stopping(loss_monitor):
     assert result.history.loss_monitor.tolist() == pytest.approx([0.0, 5.0, 6.0])
     assert result.monitor_source == loss_monitor
     assert result.min_monitor_epoch == 0
-    assert result.position["theta"] == pytest.approx(0.0)
-    assert result.position_min_monitor["theta"] == pytest.approx(0.0)
+    position = result.position
+    position_min_monitor = result.position_min_monitor
+    assert position is not None
+    assert position_min_monitor is not None
+    assert position["theta"] == pytest.approx(0.0)
+    assert position_min_monitor["theta"] == pytest.approx(0.0)
     assert result.position_final["theta"] == pytest.approx(6.0)
     assert result.history.position is None
 

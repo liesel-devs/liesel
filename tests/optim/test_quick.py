@@ -61,7 +61,7 @@ def test_lieseloptim_imports():
 
 def test_lieseloptim_requires_explicit_loss_monitor():
     with pytest.raises(TypeError, match="loss_monitor"):
-        LieselOptim(_normal_model())
+        LieselOptim(_normal_model())  # ty: ignore[missing-argument]
 
 
 def test_lieseloptim_validation_monitor_requires_validation_data():
