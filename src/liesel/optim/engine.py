@@ -654,7 +654,9 @@ class OptimEngine:
 
         return history
 
-    def _run_optimizer_step(self, opt: OptimizerLike, carry: OptimCarry) -> OptimCarry:
+    def _run_optimizer_step(
+        self, opt: OptimizerLike, carry: OptimCarry
+    ) -> tuple[OptimCarry, jax.Array]:
         """
         Runs one optimizer update for the current batch.
 
@@ -667,8 +669,8 @@ class OptimEngine:
 
         Returns
         -------
-        OptimCarry
-            Updated carry with ``carry.position`` modified by ``opt``.
+        tuple[OptimCarry, jax.Array]
+            Updated carry and the optimizer's pre-update scalar loss.
         """
         # subset of the position handled by this optimizer
         pos = opt.position(carry.position)
@@ -678,11 +680,11 @@ class OptimEngine:
 
         key, subkey = jax.random.split(carry.key)
         carry.key = subkey
-        carry, _ = opt.step(pos, self.loss, carry)
+        carry, loss = opt.step(pos, self.loss, carry)
         carry.key = key
         carry.fixed_position = Position({})  # reset fixed position
 
-        return carry
+        return carry, loss
 
     def _debug_obs_batch_template(self, batches: BatchConfig) -> Position:
         if not batches.is_full_data or self.split.has_validation or self.split.has_test:
@@ -823,16 +825,34 @@ class OptimEngine:
             obs_batch = Position({})
         carry.batch = obs_batch
 
+        loss = jnp.zeros_like(carry.loss_train)
+        has_active_optimizer = jnp.asarray(False)
+        optimizer_loss_has_nan = jnp.asarray(False)
         for opt in self.optimizers:
-            carry = jax.lax.cond(
-                carry.epoch >= opt.activate_after_epochs,
+            is_active = carry.epoch >= opt.activate_after_epochs
+            carry, optimizer_loss = jax.lax.cond(
+                is_active,
                 lambda carry, opt=opt: self._run_optimizer_step(opt, carry),
-                lambda carry: carry,
+                lambda carry, loss=loss: (carry, loss),
                 carry,
             )
+            loss = jnp.where(is_active & ~has_active_optimizer, optimizer_loss, loss)
+            optimizer_loss_has_nan = optimizer_loss_has_nan | (
+                is_active & _tree_has_nan(optimizer_loss)
+            )
+            has_active_optimizer = has_active_optimizer | is_active
 
-        loss = self.loss.loss_train_batched(carry.position, carry)
-        carry = self._accumulate_post_update_loss(loss, carry)
+        loss = jax.lax.cond(
+            has_active_optimizer,
+            lambda carry: loss,
+            lambda carry: self.loss.loss_train_batched(carry.position, carry),
+            carry,
+        )
+        batch_has_nan = (
+            optimizer_loss_has_nan | _tree_has_nan(loss) | _tree_has_nan(carry.position)
+        )
+        loss = jnp.where(batch_has_nan, jnp.nan, loss)
+        carry = self._accumulate_loss(loss, carry)
 
         carry.i_batch = j
         carry.batch = Position({})
@@ -988,7 +1008,7 @@ class OptimEngine:
                 )
 
             def accumulate_loss(carry: OptimCarry) -> OptimCarry:
-                return self._accumulate_post_update_loss(loss, carry)
+                return self._accumulate_loss(loss, carry)
 
             return jax.lax.cond(loss_has_nan, capture_loss, accumulate_loss, carry)
 
@@ -1013,9 +1033,7 @@ class OptimEngine:
 
         return self._run_batch_unchecked(j, carry)
 
-    def _accumulate_post_update_loss(
-        self, loss: jax.Array, carry: OptimCarry
-    ) -> OptimCarry:
+    def _accumulate_loss(self, loss: jax.Array, carry: OptimCarry) -> OptimCarry:
         loss_dtype = jnp.asarray(loss).dtype
         n_batches = jnp.asarray(carry.batches.n_full_batches, dtype=loss_dtype)
         carry.loss_train += loss / n_batches

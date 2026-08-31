@@ -297,6 +297,19 @@ class AddOneOptimizer(DebugNoOpOptimizer):
 
 
 @dataclass
+class ConstantLossOptimizer(DebugNoOpOptimizer):
+    returned_loss: float = 0.0
+
+    def step(
+        self, position: Position, loss, carry: OptimCarry
+    ) -> tuple[OptimCarry, jax.Array]:
+        del loss
+        key = self.position_keys[0]
+        carry.position = Position(carry.position | {key: position[key] + 1.0})
+        return carry, jnp.asarray(self.returned_loss)
+
+
+@dataclass
 class NanOptimizer(DebugNoOpOptimizer):
     def step(
         self, position: Position, loss, carry: OptimCarry
@@ -510,7 +523,7 @@ def test_ema_result_recommends_terminal_and_retains_minimum_monitor_position(
 
     result = engine.fit()
 
-    assert result.history.loss_monitor.tolist() == [0.0, 5.0, 6.0]
+    assert result.history.loss_monitor.tolist() == [-1.0, 0.0, 5.0]
     assert result.n_epochs == 3
     assert result.patience == 2
     assert result.monitor_source == "train_ema"
@@ -961,7 +974,7 @@ def test_debug_nans_disabled_keeps_existing_nan_loss_behavior():
     assert bool(jnp.isnan(result.history.loss_train[0]))
 
 
-def test_ema_monitor_is_bias_corrected_and_continues_across_epochs():
+def test_training_history_and_ema_use_pre_update_losses_across_epochs():
     split = _monitor_split()
     engine = OptimEngine(
         loss=BatchSensitiveLoss(split),
@@ -976,8 +989,8 @@ def test_ema_monitor_is_bias_corrected_and_continues_across_epochs():
 
     result = engine.fit()
 
-    assert result.history.loss_train.tolist() == pytest.approx([2.0, 7.0])
-    assert result.history.loss_monitor.tolist() == pytest.approx([2.5, 7.0])
+    assert result.history.loss_train.tolist() == pytest.approx([2.0, 4.5])
+    assert result.history.loss_monitor.tolist() == pytest.approx([2.5, 5.875])
 
 
 def test_train_full_data_monitor_uses_exact_training_loss():
@@ -1018,14 +1031,14 @@ def test_ema_fractional_window_uses_one_step_lower_bound():
     assert result.history.loss_monitor.tolist() == pytest.approx([3.0])
 
 
-def test_ema_monitor_observes_loss_after_all_optimizers():
+def test_training_history_and_ema_use_first_active_optimizer_loss():
     split = _split()
     engine = OptimEngine(
         loss=UnitGradientLoss(split),
         batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
         optimizers=[
-            AddOneOptimizer(["theta"], identifier="theta"),
-            AddOneOptimizer(["eta"], identifier="eta"),
+            ConstantLossOptimizer(["theta"], identifier="theta", returned_loss=10.0),
+            ConstantLossOptimizer(["eta"], identifier="eta", returned_loss=99.0),
         ],
         stopper=Stopper(epochs=1, patience=1),
         seed=1,
@@ -1036,8 +1049,91 @@ def test_ema_monitor_observes_loss_after_all_optimizers():
 
     result = engine.fit()
 
-    assert result.history.loss_train.tolist() == pytest.approx([2.0])
-    assert result.history.loss_monitor.tolist() == pytest.approx([2.0])
+    assert result.history.loss_train.tolist() == pytest.approx([10.0])
+    assert result.history.loss_monitor.tolist() == pytest.approx([10.0])
+    assert result.position_final == pytest.approx({"theta": 1.0, "eta": 1.0})
+
+
+def test_training_history_uses_fallback_then_first_active_loss():
+    split = _monitor_split()
+    engine = OptimEngine(
+        loss=BatchSensitiveLoss(split),
+        batches=Batches(["y"], axis_size=2, batch_size=1, shuffle=False),
+        optimizers=[
+            ConstantLossOptimizer(
+                ["theta"],
+                identifier="theta",
+                activate_after_epochs=2,
+                returned_loss=10.0,
+            ),
+            ConstantLossOptimizer(
+                ["eta"],
+                identifier="eta",
+                activate_after_epochs=1,
+                returned_loss=99.0,
+            ),
+        ],
+        stopper=Stopper(epochs=3, patience=3),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+        loss_monitor=EmaTrainLossMonitor(),
+    )
+
+    result = engine.fit()
+
+    assert result.history.loss_train.tolist() == pytest.approx([2.0, 99.0, 10.0])
+    assert result.history.position is not None
+    assert result.history.position["theta"].tolist() == pytest.approx([0.0, 0.0, 2.0])
+    assert result.history.position["eta"].tolist() == pytest.approx([0.0, 2.0, 4.0])
+
+
+def test_nan_from_later_optimizer_stops_ordinary_fit():
+    engine = OptimEngine(
+        loss=UnitGradientLoss(_split()),
+        batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
+        optimizers=[
+            ConstantLossOptimizer(["theta"], identifier="theta", returned_loss=10.0),
+            ConstantLossOptimizer(
+                ["eta"], identifier="eta", returned_loss=float("nan")
+            ),
+        ],
+        stopper=Stopper(epochs=3, patience=3),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+        loss_monitor=EmaTrainLossMonitor(),
+    )
+
+    result = engine.fit()
+
+    assert result.n_epochs == 1
+    assert bool(jnp.isnan(result.history.loss_train[0]))
+    assert bool(jnp.isnan(result.history.loss_monitor[0]))
+
+
+def test_nan_updated_position_stops_ordinary_fit():
+    engine = OptimEngine(
+        loss=UnitGradientLoss(_split()),
+        batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
+        optimizers=[
+            AddOneOptimizer(["theta"], identifier="theta"),
+            NanOptimizer(["eta"], identifier="eta"),
+        ],
+        stopper=Stopper(epochs=3, patience=3),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+        loss_monitor=EmaTrainLossMonitor(),
+    )
+
+    result = engine.fit()
+
+    assert result.n_epochs == 1
+    assert bool(jnp.isnan(result.history.loss_train[0]))
+    assert bool(jnp.isnan(result.history.loss_monitor[0]))
+    assert result.position_final["theta"] == pytest.approx(1.0)
+    assert bool(jnp.isnan(result.position_final["eta"]))
 
 
 def test_ema_monitor_adds_no_full_data_evaluation():
