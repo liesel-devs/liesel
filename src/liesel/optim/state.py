@@ -18,6 +18,7 @@ import jax.numpy as jnp
 import optax
 import pandas as pd
 import plotnine as p9
+from mizani.breaks import breaks_extended
 
 from liesel.goose.types import ModelState
 
@@ -812,6 +813,8 @@ class OptimResult:
     monitor_source
         Configured monitoring source: ``"train_ema"``, ``"validation"``, or
         ``"train_full_data"``.
+    patience
+        Patience configured for early stopping, measured in epochs.
     duration
         Wall-clock runtime in seconds.
     nan_debug
@@ -834,6 +837,7 @@ class OptimResult:
     ...     n_epochs=2,
     ...     min_monitor_epoch=0,
     ...     monitor_source="validation",
+    ...     patience=1,
     ...     duration=0.25,
     ... )
     >>> result  # doctest: +ELLIPSIS
@@ -848,6 +852,7 @@ class OptimResult:
     n_epochs: int
     min_monitor_epoch: int | None
     monitor_source: Literal["train_ema", "validation", "train_full_data"]
+    patience: int
     duration: float
     nan_debug: OptimNaNDebugInfo | None = None
 
@@ -921,6 +926,43 @@ class OptimResult:
             p += p9.theme(legend_position="none")
 
         return p
+
+    def plot_loss_overview(self, window: int | None = None):
+        """Plot the full loss history above a recent convergence window.
+
+        Parameters
+        ----------
+        window
+            Number of final epochs to show in the lower panel. The default is
+            twice the configured :attr:`patience`.
+
+        Returns
+        -------
+        plotnine.composition.Stack
+            Full and recent loss plots in an 8-by-7-inch composition.
+        """
+        window = 2 * self.patience if window is None else window
+        recent = self.plot_loss(window=window, legend=False) + p9.labs(
+            subtitle="Recent loss history"
+        )
+
+        if self.n_epochs:
+            first_epoch = max(self.n_epochs - window, 0)
+            last_epoch = self.n_epochs - 1
+            default_breaks = breaks_extended()
+            recent += p9.scale_x_continuous(
+                breaks=lambda limits: sorted(
+                    {first_epoch, last_epoch}
+                    | {
+                        value
+                        for value in default_breaks(limits)
+                        if first_epoch < value < last_epoch
+                    }
+                )
+            )
+
+        overview = (self.plot_loss() + p9.labs(subtitle="Full loss history")) / recent
+        return overview + p9.theme(figure_size=(8, 7))
 
     def plot_params(
         self,

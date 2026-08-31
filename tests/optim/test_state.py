@@ -4,6 +4,7 @@ import jax
 import jax.numpy as jnp
 import optax
 import pytest
+from mizani.breaks import breaks_extended
 
 from liesel.optim import Batches, Optimizer
 from liesel.optim.state import OptimCarry, OptimHistory, OptimResult
@@ -123,6 +124,7 @@ class TestOptimResult:
             n_epochs=2,
             min_monitor_epoch=1,
             monitor_source="validation",
+            patience=1,
             duration=0.0,
         )
 
@@ -154,6 +156,7 @@ class TestOptimResult:
             n_epochs=2,
             min_monitor_epoch=1,
             monitor_source=monitor_source,
+            patience=1,
             duration=0.0,
         )
 
@@ -169,6 +172,78 @@ class TestOptimResult:
             f"monitor_source={monitor_source!r}, duration=0.0s)"
         )
 
+    @pytest.mark.parametrize(
+        ("window", "expected_epochs"),
+        [
+            (None, [6, 7, 8, 9]),
+            (2, [8, 9]),
+            (20, list(range(10))),
+            (1, [9]),
+        ],
+    )
+    def test_plot_loss_overview_window(self, window, expected_epochs):
+        history = OptimHistory.from_epochs(epochs=10, position=None, tracked=None)
+        position = Position({})
+        result = OptimResult(
+            history=history,
+            position=position,
+            position_final=position,
+            position_min_monitor=position,
+            n_epochs=10,
+            min_monitor_epoch=1,
+            monitor_source="train_ema",
+            patience=2,
+            duration=0.0,
+        )
+
+        overview = result.plot_loss_overview(window=window)
+        full, recent = overview.items
+
+        assert full.data["Epoch"].unique().tolist() == list(range(10))
+        assert recent.data["Epoch"].unique().tolist() == expected_epochs
+        assert full.labels.title == "Loss history and recent convergence"
+        assert recent.theme.getp("legend_position") == "none"
+
+        x_scale = recent.scales.get_scales("x")
+        assert x_scale is not None
+        breaks = x_scale.breaks((expected_epochs[0], expected_epochs[-1]))
+        default_between = {
+            value
+            for value in breaks_extended()((expected_epochs[0], expected_epochs[-1]))
+            if expected_epochs[0] < value < expected_epochs[-1]
+        }
+        assert set(breaks) == {
+            expected_epochs[0],
+            expected_epochs[-1],
+            *default_between,
+        }
+
+        if window is None:
+            figure = overview.draw()
+            assert figure.get_size_inches() == pytest.approx((8, 7))
+            labels = {tick.get_text() for tick in figure.axes[-1].get_xticklabels()}
+            assert {"6", "9"} <= labels
+
+    def test_plot_loss_overview_handles_no_completed_epochs(self):
+        history = OptimHistory.from_epochs(epochs=0, position=None, tracked=None)
+        position = Position({})
+        result = OptimResult(
+            history=history,
+            position=None,
+            position_final=position,
+            position_min_monitor=None,
+            n_epochs=0,
+            min_monitor_epoch=None,
+            monitor_source="train_ema",
+            patience=2,
+            duration=0.0,
+        )
+
+        _, recent = result.plot_loss_overview().items
+
+        assert recent.data.empty
+        assert recent.scales.get_scales("x") is None
+
     def test_plot_methods_reject_invalid_window(self):
         position = Position({"theta": jnp.array(0.0)})
         history = OptimHistory.from_epochs(epochs=2, position=position, tracked=None)
@@ -180,11 +255,15 @@ class TestOptimResult:
             n_epochs=2,
             min_monitor_epoch=0,
             monitor_source="train_ema",
+            patience=1,
             duration=0.0,
         )
 
         with pytest.raises(ValueError, match="window"):
             result.plot_loss(window=0)
+
+        with pytest.raises(ValueError, match="window"):
+            result.plot_loss_overview(window=0)
 
         with pytest.raises(ValueError, match="window"):
             result.plot_params(window=-1)

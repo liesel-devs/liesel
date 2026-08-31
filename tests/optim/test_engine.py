@@ -459,6 +459,7 @@ def test_ema_result_recommends_terminal_and_retains_minimum_monitor_position(
 
     assert result.history.loss_monitor.tolist() == [0.0, 5.0, 6.0]
     assert result.n_epochs == 3
+    assert result.patience == 2
     assert result.monitor_source == "train_ema"
     assert result.min_monitor_epoch == 0
     position = result.position

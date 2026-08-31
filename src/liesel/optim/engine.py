@@ -522,6 +522,7 @@ class OptimEngine:
             n_epochs=n_epochs,
             min_monitor_epoch=min_monitor_epoch,
             monitor_source=monitor_source,
+            patience=self.stopper.patience,
             duration=end - start,
             nan_debug=nan_debug,
         )
