@@ -321,6 +321,15 @@ class NanOptimizer(DebugNoOpOptimizer):
 
 
 @dataclass
+class NanLossAndPositionOptimizer(NanOptimizer):
+    def step(
+        self, position: Position, loss, carry: OptimCarry
+    ) -> tuple[OptimCarry, jax.Array]:
+        carry, _ = super().step(position, loss, carry)
+        return carry, jnp.asarray(jnp.nan)
+
+
+@dataclass
 class DebugNaNLoss:
     split: PositionSplit
     trigger_batch_value: float | None = None
@@ -810,7 +819,7 @@ def test_validation_monitor_requires_validation_data():
         )
 
 
-def test_debug_nans_loss_capture_reproduces_loss():
+def test_debug_nans_no_active_loss_capture_reproduces_loss():
     split = PositionSplit(
         train=Position({"y": jnp.array([0.0, 1.0, 2.0])}),
         validate=Position({}),
@@ -823,7 +832,7 @@ def test_debug_nans_loss_capture_reproduces_loss():
         loss=DebugNaNLoss(split, trigger_batch_value=1.0),
         loss_monitor=EmaTrainLossMonitor(),
         batches=Batches(["y"], axis_size=3, batch_size=1, shuffle=False),
-        optimizers=[DebugNoOpOptimizer(["theta"])],
+        optimizers=[DebugNoOpOptimizer(["theta"], activate_after_epochs=1)],
         stopper=Stopper(epochs=3, patience=3),
         seed=1,
         initial_state={},
@@ -851,14 +860,6 @@ def test_debug_nans_loss_capture_reproduces_loss():
     assert bool(jnp.isnan(info.reproduce_loss(engine)))
     assert info.reproduction_carry.batch["y"].tolist() == pytest.approx([1.0])
     assert info.reproduction_carry.fixed_position == {}
-
-    epoch_key, _ = jax.random.split(jax.random.key(1))
-    batch0_key, _ = jax.random.split(epoch_key)
-    expected_loss_key, _ = jax.random.split(batch0_key)
-    assert jnp.array_equal(
-        jax.random.key_data(info.reproduction_carry.key),
-        jax.random.key_data(expected_loss_key),
-    )
 
 
 def test_debug_nans_position_after_reproduces_second_optimizer_step():
@@ -921,6 +922,34 @@ def test_debug_nans_position_after_reproduces_second_optimizer_step():
     )
 
 
+def test_debug_nans_later_optimizer_loss_takes_precedence_over_nan_update():
+    split = _split()
+    engine = OptimEngine(
+        loss=DebugNaNLoss(split),
+        loss_monitor=EmaTrainLossMonitor(),
+        batches=Batches(["y"], axis_size=1, batch_size=1, shuffle=False),
+        optimizers=[
+            AddOneOptimizer(["theta"], identifier="add_theta"),
+            NanLossAndPositionOptimizer(["eta"], identifier="nan_eta"),
+        ],
+        stopper=Stopper(epochs=1, patience=1),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+        debug_nans=True,
+    )
+
+    info = engine.fit().nan_debug
+
+    assert info is not None
+    assert info.kind == "loss"
+    assert info.optimizer_index == 1
+    assert info.optimizer_identifier == "nan_eta"
+    assert info.reproduction_position["theta"] == pytest.approx(1.0)
+    assert info.reproduction_position["eta"] == pytest.approx(0.0)
+    assert bool(jnp.isnan(info.reproduce_loss(engine)))
+
+
 def test_debug_nans_position_before_capture():
     split = _split()
     engine = OptimEngine(
@@ -974,7 +1003,8 @@ def test_debug_nans_disabled_keeps_existing_nan_loss_behavior():
     assert bool(jnp.isnan(result.history.loss_train[0]))
 
 
-def test_training_history_and_ema_use_pre_update_losses_across_epochs():
+@pytest.mark.parametrize("debug_nans", [False, True])
+def test_training_history_and_ema_use_pre_update_losses_across_epochs(debug_nans):
     split = _monitor_split()
     engine = OptimEngine(
         loss=BatchSensitiveLoss(split),
@@ -985,6 +1015,7 @@ def test_training_history_and_ema_use_pre_update_losses_across_epochs():
         initial_state={},
         show_progress=False,
         loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
+        debug_nans=debug_nans,
     )
 
     result = engine.fit()

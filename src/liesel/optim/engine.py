@@ -149,7 +149,9 @@ class OptimEngine:
         losses, ``"validation"`` for the complete validation loss, or
         ``"train_full_data"`` for the complete training loss.
     debug_nans
-        Whether to capture first-NaN reproduction data during batch updates.
+        Whether to capture first-NaN reproduction data during batch updates. Every
+        active optimizer's returned pre-update loss and the updated position are
+        checked; when no optimizer is active, the explicit batched loss is checked.
     progress_update_every
         Update the epoch progress bar after this many completed epochs. Defaults to
         10. The final state is always rendered. When batch progress is active, the
@@ -865,27 +867,34 @@ class OptimEngine:
         opt_index: int,
         obs_batch: Position,
         carry: OptimCarry,
-    ) -> OptimCarry:
+    ) -> tuple[OptimCarry, jax.Array]:
         pre_position = Position(dict(carry.position))
         pre_optimizer_states = dict(carry.optimizer_states)
+        pre_model_state = carry.model_state
         pre_position_has_nan = _tree_has_nan(pre_position)
+        empty_loss = jnp.zeros_like(carry.loss_train)
 
-        def capture_pre_position(carry: OptimCarry) -> OptimCarry:
-            return self._debug_capture_nan(
-                carry,
-                kind_code=_NAN_DEBUG_KIND_POSITION_BEFORE,
-                obs_batch=obs_batch,
-                nan_position=pre_position,
-                loss=self._debug_state(carry).loss,
-                reproduction_position=pre_position,
-                reproduction_key=carry.key,
-                reproduction_optimizer_states=pre_optimizer_states,
-                reproduction_batches=carry.batches,
-                reproduction_model_state=carry.model_state,
-                optimizer_index=opt_index,
+        def capture_pre_position(
+            carry: OptimCarry,
+        ) -> tuple[OptimCarry, jax.Array]:
+            return (
+                self._debug_capture_nan(
+                    carry,
+                    kind_code=_NAN_DEBUG_KIND_POSITION_BEFORE,
+                    obs_batch=obs_batch,
+                    nan_position=pre_position,
+                    loss=self._debug_state(carry).loss,
+                    reproduction_position=pre_position,
+                    reproduction_key=carry.key,
+                    reproduction_optimizer_states=pre_optimizer_states,
+                    reproduction_batches=carry.batches,
+                    reproduction_model_state=pre_model_state,
+                    optimizer_index=opt_index,
+                ),
+                empty_loss,
             )
 
-        def run_step(carry: OptimCarry) -> OptimCarry:
+        def run_step(carry: OptimCarry) -> tuple[OptimCarry, jax.Array]:
             carry = self._debug_update_last_non_nan_position(carry, pre_position)
 
             pos = opt.position(pre_position)
@@ -893,11 +902,27 @@ class OptimEngine:
 
             key, subkey = jax.random.split(carry.key)
             carry.key = subkey
-            carry, _ = opt.step(pos, self.loss, carry)
+            carry, loss = opt.step(pos, self.loss, carry)
             carry.key = key
             carry.fixed_position = Position({})
 
+            loss_has_nan = _tree_has_nan(loss)
             position_has_nan = _tree_has_nan(carry.position)
+
+            def capture_loss(carry: OptimCarry) -> OptimCarry:
+                return self._debug_capture_nan(
+                    carry,
+                    kind_code=_NAN_DEBUG_KIND_LOSS,
+                    obs_batch=obs_batch,
+                    nan_position=pre_position,
+                    loss=loss,
+                    reproduction_position=pre_position,
+                    reproduction_key=subkey,
+                    reproduction_optimizer_states=pre_optimizer_states,
+                    reproduction_batches=carry.batches,
+                    reproduction_model_state=pre_model_state,
+                    optimizer_index=opt_index,
+                )
 
             def capture_post_position(carry: OptimCarry) -> OptimCarry:
                 return self._debug_capture_nan(
@@ -910,19 +935,25 @@ class OptimEngine:
                     reproduction_key=subkey,
                     reproduction_optimizer_states=pre_optimizer_states,
                     reproduction_batches=carry.batches,
-                    reproduction_model_state=carry.model_state,
+                    reproduction_model_state=pre_model_state,
                     optimizer_index=opt_index,
                 )
 
             def update_last_non_nan(carry: OptimCarry) -> OptimCarry:
                 return self._debug_update_last_non_nan_position(carry, carry.position)
 
-            return jax.lax.cond(
-                position_has_nan,
-                capture_post_position,
-                update_last_non_nan,
+            carry = jax.lax.cond(
+                loss_has_nan,
+                capture_loss,
+                lambda carry: jax.lax.cond(
+                    position_has_nan,
+                    capture_post_position,
+                    update_last_non_nan,
+                    carry,
+                ),
                 carry,
             )
+            return carry, loss
 
         return jax.lax.cond(
             pre_position_has_nan,
@@ -969,53 +1000,69 @@ class OptimEngine:
             carry,
         )
 
+        loss = jnp.zeros_like(carry.loss_train)
+        has_active_optimizer = jnp.asarray(False)
         for opt_index, opt in enumerate(self.optimizers):
 
             def run_optimizer_step(
                 carry: OptimCarry, opt=opt, opt_index=opt_index
-            ) -> OptimCarry:
+            ) -> tuple[OptimCarry, jax.Array]:
                 return self._run_optimizer_step_debug(opt, opt_index, obs_batch, carry)
 
-            carry = jax.lax.cond(
+            is_active = carry.epoch >= opt.activate_after_epochs
+            carry, optimizer_loss = jax.lax.cond(
                 jnp.logical_or(
                     self._debug_state(carry).has_nan,
-                    carry.epoch < opt.activate_after_epochs,
+                    ~is_active,
                 ),
-                lambda carry: carry,
+                lambda carry, loss=loss: (carry, loss),
                 run_optimizer_step,
                 carry,
             )
+            loss = jnp.where(is_active & ~has_active_optimizer, optimizer_loss, loss)
+            has_active_optimizer = has_active_optimizer | is_active
 
         def skip_loss(carry: OptimCarry) -> OptimCarry:
             return carry
 
-        def evaluate_loss(carry: OptimCarry) -> OptimCarry:
-            loss = self.loss.loss_train_batched(carry.position, carry)
-            loss_has_nan = _tree_has_nan(loss)
-
-            def capture_loss(carry: OptimCarry) -> OptimCarry:
-                return self._debug_capture_nan(
-                    carry,
-                    kind_code=_NAN_DEBUG_KIND_LOSS,
-                    obs_batch=obs_batch,
-                    nan_position=carry.position,
-                    loss=loss,
-                    reproduction_position=carry.position,
-                    reproduction_key=carry.key,
-                    reproduction_optimizer_states=dict(carry.optimizer_states),
-                    reproduction_batches=carry.batches,
-                    reproduction_model_state=carry.model_state,
-                )
-
-            def accumulate_loss(carry: OptimCarry) -> OptimCarry:
+        def record_loss(carry: OptimCarry) -> OptimCarry:
+            def accumulate_optimizer_loss(carry: OptimCarry) -> OptimCarry:
                 return self._accumulate_loss(loss, carry)
 
-            return jax.lax.cond(loss_has_nan, capture_loss, accumulate_loss, carry)
+            def evaluate_loss(carry: OptimCarry) -> OptimCarry:
+                evaluated_loss = self.loss.loss_train_batched(carry.position, carry)
+                loss_has_nan = _tree_has_nan(evaluated_loss)
+
+                def capture_loss(carry: OptimCarry) -> OptimCarry:
+                    return self._debug_capture_nan(
+                        carry,
+                        kind_code=_NAN_DEBUG_KIND_LOSS,
+                        obs_batch=obs_batch,
+                        nan_position=carry.position,
+                        loss=evaluated_loss,
+                        reproduction_position=carry.position,
+                        reproduction_key=carry.key,
+                        reproduction_optimizer_states=dict(carry.optimizer_states),
+                        reproduction_batches=carry.batches,
+                        reproduction_model_state=carry.model_state,
+                    )
+
+                def accumulate_loss(carry: OptimCarry) -> OptimCarry:
+                    return self._accumulate_loss(evaluated_loss, carry)
+
+                return jax.lax.cond(loss_has_nan, capture_loss, accumulate_loss, carry)
+
+            return jax.lax.cond(
+                has_active_optimizer,
+                accumulate_optimizer_loss,
+                evaluate_loss,
+                carry,
+            )
 
         return jax.lax.cond(
             self._debug_state(carry).has_nan,
             skip_loss,
-            evaluate_loss,
+            record_loss,
             carry,
         )
 

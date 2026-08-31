@@ -726,7 +726,8 @@ class OptimNaNDebugInfo:
     Reproduction data for the first NaN captured by :class:`.OptimEngine`.
 
     Use :meth:`reproduce_step` for NaNs introduced by an optimizer update and
-    :meth:`reproduce_loss` for NaNs returned by the batched training loss.
+    :meth:`reproduce_loss` for NaNs returned by an optimizer's pre-update loss or
+    by the explicit batched loss evaluation when no optimizer is active.
     """
 
     kind: OptimNaNKind
@@ -751,7 +752,7 @@ class OptimNaNDebugInfo:
         return self.reproduction_position
 
     def optimizer(self, engine: OptimEngine) -> OptimizerLike | None:
-        """Returns the optimizer that introduced the NaN position, if known."""
+        """Returns the optimizer associated with the captured NaN, if known."""
         if self.optimizer_index is None:
             return None
 
@@ -778,9 +779,20 @@ class OptimNaNDebugInfo:
         return carry
 
     def reproduce_loss(self, engine: OptimEngine) -> jax.Array:
-        """Re-evaluates the batched training loss with the saved reproduction state."""
+        """Reproduces the captured pre-update loss.
+
+        Optimizer-associated events replay that optimizer's step from the saved
+        state and return its scalar loss. Events captured while no optimizer was
+        active re-evaluate the explicit batched training loss directly.
+        """
         carry = deepcopy(self.reproduction_carry)
-        return engine.loss.loss_train_batched(self.reproduction_position, carry)
+        opt = self.optimizer(engine)
+        if opt is None:
+            return engine.loss.loss_train_batched(self.reproduction_position, carry)
+
+        position = opt.position(self.reproduction_position)
+        _, loss = opt.step(position, engine.loss, carry)
+        return loss
 
 
 @dataclass
