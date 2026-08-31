@@ -81,7 +81,7 @@ class TestOptimCarry:
                 save_position_history=True,
             )
 
-        assert carry.best_loss.dtype == jnp.float32
+        assert carry.min_monitor_loss.dtype == jnp.float32
         assert carry.loss_train.dtype == jnp.float32
         assert carry.loss_monitor.dtype == jnp.float32
         assert carry.history.loss_train.dtype == jnp.float32
@@ -110,43 +110,59 @@ class TestOptimCarry:
 
 
 class TestOptimResult:
-    def test_final_epoch_is_completed_epoch_count(self):
+    def test_n_epochs_is_completed_epoch_count(self):
         history = OptimHistory.from_epochs(epochs=2, position=None, tracked=None)
+        position = Position({})
         result = OptimResult(
             history=history,
-            final_epoch=2,
-            best_position=Position({}),
-            best_epoch=1,
+            position=position,
+            position_final=position,
+            position_min_monitor=position,
+            n_epochs=2,
+            min_monitor_epoch=1,
+            monitor_source="validation",
             duration=0.0,
         )
 
-        assert result.final_epoch == len(result.history.loss_train)
-        assert result.final_epoch - 1 == 1
+        assert result.n_epochs == len(result.history.loss_train)
+        assert result.n_epochs - 1 == 1
 
     def test_plot_loss_labels_monitoring_loss(self):
         history = OptimHistory.from_epochs(epochs=2, position=None, tracked=None)
         history.loss_train = jnp.array([1.0, 0.5])
         history.loss_monitor = jnp.array([1.2, 0.7])
+        position = Position({})
         result = OptimResult(
             history=history,
-            final_epoch=1,
-            best_position=Position({}),
-            best_epoch=1,
+            position=position,
+            position_final=position,
+            position_min_monitor=position,
+            n_epochs=2,
+            min_monitor_epoch=1,
+            monitor_source="train_full_data",
             duration=0.0,
         )
 
         plot = result.plot_loss()
 
         assert set(plot.data["Loss Type"].unique()) == {"Training", "Monitoring"}
+        assert len(plot.layers) == 2
+        assert repr(result) == (
+            "OptimResult(n_epochs=2, min_monitor_epoch=1, "
+            "monitor_source='train_full_data', duration=0.0s)"
+        )
 
     def test_plot_methods_reject_invalid_window(self):
         position = Position({"theta": jnp.array(0.0)})
         history = OptimHistory.from_epochs(epochs=2, position=position, tracked=None)
         result = OptimResult(
             history=history,
-            final_epoch=1,
-            best_position=position,
-            best_epoch=0,
+            position=position,
+            position_final=position,
+            position_min_monitor=position,
+            n_epochs=2,
+            min_monitor_epoch=0,
+            monitor_source="train_ema",
             duration=0.0,
         )
 
@@ -155,3 +171,5 @@ class TestOptimResult:
 
         with pytest.raises(ValueError, match="window"):
             result.plot_params(window=-1)
+
+        assert len(result.plot_params().layers) == 2

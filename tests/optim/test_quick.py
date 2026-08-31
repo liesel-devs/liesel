@@ -271,6 +271,13 @@ def test_fit_returns_optim_result():
     ).fit()
 
     assert isinstance(result, OptimResult)
+    assert result.monitor_source == "train_ema"
+    assert result.n_epochs == 1
+    assert result.position is not None
+    assert result.position_min_monitor is not None
+    assert result.position.keys() == result.position_final.keys()
+    for key in result.position:
+        assert jnp.array_equal(result.position[key], result.position_final[key])
 
 
 def test_fit_handles_float32_model_with_x64_enabled():

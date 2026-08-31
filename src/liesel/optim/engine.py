@@ -106,8 +106,8 @@ class OptimEngine:
     optimization API. Each epoch starts by asking ``batches`` for fresh batch indices,
     then iterates over all full batches. For each batch, each optimizer gets a turn
     to update the subset of parameters named in its ``position_keys``. At the end of
-    the epoch, the engine records training and monitoring losses, updates the global
-    best position, and asks ``stopper`` whether to continue.
+    the epoch, the engine records training and monitoring losses, updates the
+    minimum-monitor position, and asks ``stopper`` whether to continue.
 
     Parameters
     ----------
@@ -127,16 +127,13 @@ class OptimEngine:
         Integer seed or JAX PRNG key used for batching and stochastic losses.
     initial_state
         Initial model state passed into :class:`.OptimCarry`.
-    restore_best_position
-        If ``True``, :meth:`fit` returns the global best position found during the
-        run. If ``False``, it returns the final position.
     prune_history
         If ``True``, remove unused history entries after early stopping.
     show_progress
         Whether to show ``tqdm`` progress bars. This is the master switch for both
         epoch and optional batch progress.
     save_position_history
-        Whether to store the full position history. The global best position is
+        Whether to store the full position history. The minimum-monitor position is
         tracked independently of this setting.
     progress_n_updates
         Compatibility alias for configuring an approximate maximum number of epoch
@@ -193,7 +190,6 @@ class OptimEngine:
     seed: jax.Array
     initial_state: ModelState
     loss_monitor: LossMonitor
-    restore_best_position: bool = True
     prune_history: bool = True
     show_progress: bool = True
     save_position_history: bool = True
@@ -210,7 +206,6 @@ class OptimEngine:
         stopper: Stopper,
         seed: int | jax.Array,
         initial_state: ModelState,
-        restore_best_position: bool = True,
         prune_history: bool = True,
         show_progress: bool = True,
         save_position_history: bool = True,
@@ -235,7 +230,6 @@ class OptimEngine:
         self.stopper = stopper
         self.seed = jax.random.key(seed) if isinstance(seed, int) else seed
         self.initial_state = initial_state
-        self.restore_best_position = restore_best_position
         self.prune_history = prune_history
         self.show_progress = show_progress
         self.save_position_history = save_position_history
@@ -487,34 +481,43 @@ class OptimEngine:
         Returns
         -------
         OptimResult
-            Processed optimizer history, selected result position, best epoch, and
-            wall-clock runtime.
-
-        Notes
-        -----
-        ``OptimResult.best_epoch`` always refers to the global best monitoring loss
-        seen during the run. With ``restore_best_position=True``,
-        ``OptimResult.best_position`` is the corresponding global best position. With
-        ``restore_best_position=False``, ``best_position`` contains the final
-        position while ``best_epoch`` still reports the global best epoch.
+            Processed optimizer history, recommended and diagnostic positions,
+            monitoring provenance, and wall-clock runtime.
         """
         start = time.time()
         carry = self._fit()
         end = time.time()
         nan_debug = self._nan_debug_info(carry)
         history = self._process_history(carry.epoch, carry.history)
-        best_epoch = int(carry.best_epoch)
+        n_epochs = int(carry.epoch)
+        position_final = carry.position
 
-        if self.restore_best_position:
-            final_position = carry.best_position
+        if n_epochs == 0:
+            position = None
+            position_min_monitor = None
+            min_monitor_epoch = None
         else:
-            final_position = carry.position
+            position_min_monitor = carry.position_min_monitor
+            min_monitor_epoch = int(carry.min_monitor_epoch)
+            if isinstance(self.loss_monitor, EmaTrainLossMonitor):
+                position = position_final
+            else:
+                position = position_min_monitor
+
+        monitor_source: Literal["train_ema", "validation", "train_full_data"]
+        if isinstance(self.loss_monitor, EmaTrainLossMonitor):
+            monitor_source = "train_ema"
+        else:
+            monitor_source = self.loss_monitor
 
         result = OptimResult(
             history=history,
-            final_epoch=int(carry.epoch),
-            best_position=final_position,
-            best_epoch=best_epoch,
+            position=position,
+            position_final=position_final,
+            position_min_monitor=position_min_monitor,
+            n_epochs=n_epochs,
+            min_monitor_epoch=min_monitor_epoch,
+            monitor_source=monitor_source,
             duration=end - start,
             nan_debug=nan_debug,
         )
@@ -561,9 +564,9 @@ class OptimEngine:
             model_state=debug_state.reproduction_model_state,
             batch=debug_state.obs_batch,
             fixed_position=fixed_position,
-            best_position=carry.best_position,
-            best_loss=carry.best_loss,
-            best_epoch=carry.best_epoch,
+            position_min_monitor=carry.position_min_monitor,
+            min_monitor_loss=carry.min_monitor_loss,
+            min_monitor_epoch=carry.min_monitor_epoch,
             loss_train=carry.loss_train,
             loss_monitor=carry.loss_monitor,
             epoch=int(debug_state.epoch),
@@ -1116,13 +1119,13 @@ class OptimEngine:
                 )
 
         def update_carry(carry: OptimCarry):
-            carry.best_loss = carry.loss_monitor
-            carry.best_position = carry.position
-            carry.best_epoch = carry.epoch
+            carry.min_monitor_loss = carry.loss_monitor
+            carry.position_min_monitor = carry.position
+            carry.min_monitor_epoch = carry.epoch
             return carry
 
         carry = jax.lax.cond(
-            carry.loss_monitor < carry.best_loss,
+            carry.loss_monitor < carry.min_monitor_loss,
             update_carry,
             lambda carry: carry,
             carry,

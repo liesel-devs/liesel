@@ -437,7 +437,9 @@ class FakeTqdm:
 
 
 @pytest.mark.parametrize("save_position_history", [True, False])
-def test_engine_restores_global_best_position(save_position_history):
+def test_ema_result_recommends_terminal_and_retains_minimum_monitor_position(
+    save_position_history,
+):
     loss = _loss()
     optimizer = _optimizer()
     engine = OptimEngine(
@@ -448,16 +450,44 @@ def test_engine_restores_global_best_position(save_position_history):
         stopper=Stopper(epochs=4, patience=2),
         seed=1,
         initial_state={},
-        restore_best_position=True,
         save_position_history=save_position_history,
         show_progress=False,
     )
 
     result = engine.fit()
 
-    assert result.best_epoch == 0
     assert result.history.loss_monitor.tolist() == [0.0, 5.0, 6.0]
-    assert result.best_position["theta"] == pytest.approx(0.0)
+    assert result.n_epochs == 3
+    assert result.monitor_source == "train_ema"
+    assert result.min_monitor_epoch == 0
+    assert result.position["theta"] == pytest.approx(6.0)
+    assert result.position_final["theta"] == pytest.approx(6.0)
+    assert result.position_min_monitor["theta"] == pytest.approx(0.0)
+
+
+def test_removed_result_and_engine_api_is_absent():
+    removed_engine_argument = "restore_" + "best_" + "position"
+    engine_kwargs = {
+        "loss": _loss(),
+        "loss_monitor": EmaTrainLossMonitor(),
+        "batches": Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
+        "optimizers": [_optimizer()],
+        "stopper": Stopper(epochs=1, patience=1),
+        "seed": 1,
+        "initial_state": {},
+        "show_progress": False,
+    }
+
+    with pytest.raises(TypeError, match=removed_engine_argument):
+        OptimEngine(**engine_kwargs, **{removed_engine_argument: True})
+
+    result = OptimEngine(**engine_kwargs).fit()
+    for removed_field in (
+        "best_" + "position",
+        "best_" + "epoch",
+        "final_" + "epoch",
+    ):
+        assert not hasattr(result, removed_field)
 
 
 def test_engine_uses_loss_split():
@@ -589,7 +619,7 @@ def test_fit_can_stop_before_any_optimizer_activates():
     result = engine.fit()
     assert result.history.position is not None
 
-    assert (result.final_epoch, result.history.position["theta"].tolist()) == (
+    assert (result.n_epochs, result.history.position["theta"].tolist()) == (
         2,
         [0.0, 0.0],
     )
@@ -736,7 +766,11 @@ def test_debug_nans_loss_capture_reproduces_loss():
 
     info = result.nan_debug
     assert info is not None
-    assert result.final_epoch == 0
+    assert result.n_epochs == 0
+    assert result.position is None
+    assert result.position_min_monitor is None
+    assert result.min_monitor_epoch is None
+    assert result.position_final["theta"] == pytest.approx(0.0)
     assert info.kind == "loss"
     assert info.batch == 1
     assert info.optimizer_index is None
@@ -786,7 +820,12 @@ def test_debug_nans_position_after_reproduces_second_optimizer_step():
 
     info = result.nan_debug
     assert info is not None
-    assert result.final_epoch == 0
+    assert result.n_epochs == 0
+    assert result.position is None
+    assert result.position_min_monitor is None
+    assert result.min_monitor_epoch is None
+    assert result.position_final["theta"] == pytest.approx(1.0)
+    assert bool(jnp.isnan(result.position_final["eta"]))
     assert info.kind == "position_after"
     assert info.batch == 0
     assert info.optimizer_index == 1
@@ -831,7 +870,7 @@ def test_debug_nans_position_before_capture():
 
     info = result.nan_debug
     assert info is not None
-    assert result.final_epoch == 0
+    assert result.n_epochs == 0
     assert info.kind == "position_before"
     assert info.optimizer_index is None
     assert info.nan_position is not None
@@ -862,7 +901,7 @@ def test_debug_nans_disabled_keeps_existing_nan_loss_behavior():
     result = engine.fit()
 
     assert result.nan_debug is None
-    assert result.final_epoch == 1
+    assert result.n_epochs == 1
     assert bool(jnp.isnan(result.history.loss_train[0]))
 
 
@@ -1012,14 +1051,21 @@ def test_exact_monitor_source_drives_epoch_stopping(loss_monitor):
         stopper=Stopper(epochs=4, patience=2),
         seed=1,
         initial_state={},
+        save_position_history=False,
         show_progress=False,
     )
 
     result = engine.fit()
 
-    assert result.final_epoch == 3
+    assert result.n_epochs == 3
     assert result.history.loss_train.tolist() == pytest.approx([0.0, -1.0, -2.0])
     assert result.history.loss_monitor.tolist() == pytest.approx([0.0, 5.0, 6.0])
+    assert result.monitor_source == loss_monitor
+    assert result.min_monitor_epoch == 0
+    assert result.position["theta"] == pytest.approx(0.0)
+    assert result.position_min_monitor["theta"] == pytest.approx(0.0)
+    assert result.position_final["theta"] == pytest.approx(6.0)
+    assert result.history.position is None
 
 
 def test_ema_monitor_source_drives_epoch_stopping():
@@ -1037,7 +1083,7 @@ def test_ema_monitor_source_drives_epoch_stopping():
 
     result = engine.fit()
 
-    assert result.final_epoch == 4
+    assert result.n_epochs == 4
     assert result.history.loss_train.tolist() == pytest.approx([100.0, 0.0, 1.0, 2.0])
     assert result.history.loss_monitor[:3].tolist() == pytest.approx(
         [100.0, 10.0, 1.9890109]
@@ -1181,7 +1227,6 @@ def test_progress_count_keeps_historical_positional_slot():
         1,
         {},
         True,
-        True,
         False,
         True,
         3,
@@ -1206,7 +1251,7 @@ def test_nested_progress_matches_monolithic_and_never_uses_callback(monkeypatch)
     actual_engine = _progress_engine(show_step_progress=True)
     actual = actual_engine.fit()
 
-    assert actual.final_epoch == expected.final_epoch == 5
+    assert actual.n_epochs == expected.n_epochs == 5
     assert jnp.allclose(actual.history.loss_train, expected.history.loss_train)
     assert jnp.allclose(actual.history.loss_monitor, expected.history.loss_monitor)
 
@@ -1229,7 +1274,7 @@ def test_non_tty_progress_uses_one_fixed_width_bar(monkeypatch):
 
     result = _progress_engine(show_step_progress=True).fit()
 
-    assert result.final_epoch == 5
+    assert result.n_epochs == 5
     assert len(FakeTqdm.instances) == 1
     progress_bar = FakeTqdm.instances[0]
     assert progress_bar.position is None
@@ -1290,7 +1335,7 @@ def test_non_tty_progress_renders_without_ansi_cursor_movement(monkeypatch):
     result = _progress_engine(epochs=1, show_step_progress=True).fit()
     output = stream.getvalue()
 
-    assert result.final_epoch == 1
+    assert result.n_epochs == 1
     assert "Train=" in output
     assert "Monitor=" in output
     assert "E 1/1, B 5/5" in output
@@ -1315,7 +1360,7 @@ def test_large_step_interval_uses_epoch_only_progress(monkeypatch):
 
     result = engine.fit()
 
-    assert result.final_epoch == 5
+    assert result.n_epochs == 5
     assert len(FakeTqdm.instances) == 1
     assert FakeTqdm.instances[0].updates == [2, 2, 1]
 
@@ -1337,7 +1382,7 @@ def test_large_intervals_use_monolithic_final_only_progress(monkeypatch):
     monkeypatch.setattr(engine, "_fit_nested_progress", fail_chunked)
     result = engine.fit()
 
-    assert result.final_epoch == 5
+    assert result.n_epochs == 5
     assert len(FakeTqdm.instances) == 1
     assert FakeTqdm.instances[0].updates == [5]
     assert FakeTqdm.instances[0].closed
@@ -1355,7 +1400,7 @@ def test_nested_progress_renders_partial_nan_batch_and_closes(monkeypatch):
 
     result = engine.fit()
 
-    assert result.final_epoch == 0
+    assert result.n_epochs == 0
     assert result.nan_debug is not None
     assert len(FakeTqdm.instances) == 2
     outer, inner = FakeTqdm.instances
@@ -1378,7 +1423,7 @@ def test_nested_progress_uses_last_completed_losses_after_nan(monkeypatch):
 
     result = engine.fit()
 
-    assert result.final_epoch == 3
+    assert result.n_epochs == 3
     outer, inner = FakeTqdm.instances
     assert outer.updates == [1, 1, 1]
     assert outer.descriptions[-1].startswith("Training loss: 2.000")
@@ -1401,7 +1446,7 @@ def test_nested_progress_supports_batch_manager(monkeypatch):
     expected = expected_engine.fit()
     actual = actual_engine.fit()
 
-    assert actual.final_epoch == expected.final_epoch
+    assert actual.n_epochs == expected.n_epochs
     assert jnp.allclose(actual.history.loss_train, expected.history.loss_train)
     assert jnp.allclose(actual.history.loss_monitor, expected.history.loss_monitor)
     assert len(FakeTqdm.instances) == 2
@@ -1423,7 +1468,7 @@ def test_epoch_progress_renders_early_stop_remainder(monkeypatch):
 
     result = engine.fit()
 
-    assert result.final_epoch == 3
+    assert result.n_epochs == 3
     assert FakeTqdm.instances[0].updates == [2, 1]
 
 
@@ -1457,5 +1502,5 @@ def test_only_process_zero_constructs_progress_bars(monkeypatch):
 
     result = _progress_engine(show_step_progress=True).fit()
 
-    assert result.final_epoch == 5
+    assert result.n_epochs == 5
     assert FakeTqdm.instances == []

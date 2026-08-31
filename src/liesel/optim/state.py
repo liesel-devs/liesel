@@ -554,7 +554,7 @@ class OptimCarry:
 
     ``OptimCarry`` is passed through the epoch and mini-batch loops. It contains the
     current parameter position, model state, optimizer states, batch configuration,
-    current losses, best-so-far values, and preallocated history.
+    current losses, minimum-monitor values, and preallocated history.
 
     Most users do not need to construct this class directly. Use
     :meth:`OptimCarry.new` when testing custom engine logic.
@@ -579,12 +579,12 @@ class OptimCarry:
         Current mini-batch position.
     fixed_position
         Non-optimized position entries.
-    best_position
-        Best parameter position found so far.
-    best_loss
-        Best monitoring loss found so far.
-    best_epoch
-        Epoch at which the best monitoring loss was found.
+    position_min_monitor
+        Parameter position with the smallest completed-epoch monitoring loss so far.
+    min_monitor_loss
+        Smallest completed-epoch monitoring loss found so far.
+    min_monitor_epoch
+        Epoch at which the smallest monitoring loss was found.
     loss_train
         Most recent training loss.
     loss_monitor
@@ -610,9 +610,9 @@ class OptimCarry:
 
     batch: Position = field(default_factory=lambda: Position({}))
     fixed_position: Position = field(default_factory=lambda: Position({}))
-    best_position: Position = field(default_factory=lambda: Position({}))
-    best_loss: jax.Array = field(default_factory=lambda: jnp.asarray(jnp.inf))
-    best_epoch: jax.Array | int = 0
+    position_min_monitor: Position = field(default_factory=lambda: Position({}))
+    min_monitor_loss: jax.Array = field(default_factory=lambda: jnp.asarray(jnp.inf))
+    min_monitor_epoch: jax.Array | int = 0
 
     loss_train: jax.Array = field(default_factory=lambda: jnp.asarray(jnp.inf))
     loss_monitor: jax.Array = field(default_factory=lambda: jnp.asarray(jnp.inf))
@@ -664,7 +664,7 @@ class OptimCarry:
         dict_keys([''])
         >>> carry.history.position["theta"].shape
         (2,)
-        >>> carry.best_position == position
+        >>> carry.position_min_monitor == position
         True
         """
         identifiers = [opt.identifier for opt in optimizers]
@@ -699,8 +699,8 @@ class OptimCarry:
             batches=batches,
             optimizer_states=opt_states,
             model_state=model_state,
-            best_position=position,
-            best_loss=inf,
+            position_min_monitor=position,
+            min_monitor_loss=inf,
             loss_train=inf,
             loss_monitor=inf,
             _ema_numerator=zero,
@@ -780,23 +780,32 @@ class OptimResult:
     """
     Result returned by an optimizer run.
 
-    ``OptimResult`` bundles the processed history, the selected result position, and
-    small metadata about the run. It also provides convenience plotting methods for
-    losses and saved parameter histories.
+    ``OptimResult`` bundles the processed history, the recommended continuation
+    position, the terminal and minimum-monitor positions, and small metadata about
+    the run. It also provides convenience plotting methods for losses and saved
+    parameter histories.
 
     Parameters
     ----------
     history
         Processed optimizer history.
-    final_epoch
-        Number of completed epochs included in the processed history. When at
-        least one epoch completed, the final history index is ``final_epoch - 1``.
-    best_position
-        Parameter position selected by the optimizer. With
-        ``restore_best_position=True``, this is the global best position found during
-        the run. Otherwise, this is the final position.
-    best_epoch
-        Epoch at which the global best monitoring loss was found.
+    position
+        Recommended continuation position. This is the terminal position for EMA
+        monitoring and the minimum-monitor position for exact epoch-level sources.
+        It is ``None`` if no epoch completed.
+    position_final
+        Actual terminal position, including an interrupted partial epoch.
+    position_min_monitor
+        Position with the smallest recorded monitoring loss, or ``None`` if no
+        epoch completed.
+    n_epochs
+        Number of completed epochs included in the processed history.
+    min_monitor_epoch
+        Epoch at which the smallest monitoring loss was recorded, or ``None`` if no
+        epoch completed.
+    monitor_source
+        Configured monitoring source: ``"train_ema"``, ``"validation"``, or
+        ``"train_full_data"``.
     duration
         Wall-clock runtime in seconds.
     nan_debug
@@ -809,22 +818,30 @@ class OptimResult:
     >>> from liesel.optim.state import OptimHistory, OptimResult
     >>> from liesel.optim.types import Position
     >>> history = OptimHistory.from_epochs(epochs=2, position=None, tracked=None)
+    >>> position_final = Position({"theta": jnp.array(2.0)})
+    >>> position_min_monitor = Position({"theta": jnp.array(1.0)})
     >>> result = OptimResult(
     ...     history=history,
-    ...     final_epoch=2,
-    ...     best_position=Position({"theta": jnp.array(1.0)}),
-    ...     best_epoch=0,
+    ...     position=position_min_monitor,
+    ...     position_final=position_final,
+    ...     position_min_monitor=position_min_monitor,
+    ...     n_epochs=2,
+    ...     min_monitor_epoch=0,
+    ...     monitor_source="validation",
     ...     duration=0.25,
     ... )
-    >>> result
-    OptimResult(final_epoch=2, best_epoch=0, duration=0.2s)
+    >>> result  # doctest: +ELLIPSIS
+    OptimResult(n_epochs=2, ..., duration=0.2s)
     """
 
     history: OptimHistory
 
-    final_epoch: int
-    best_position: Position
-    best_epoch: int
+    position: Position | None
+    position_final: Position
+    position_min_monitor: Position | None
+    n_epochs: int
+    min_monitor_epoch: int | None
+    monitor_source: Literal["train_ema", "validation", "train_full_data"]
     duration: float
     nan_debug: OptimNaNDebugInfo | None = None
 
@@ -848,7 +865,7 @@ class OptimResult:
         -------
         plotnine.ggplot
             Plot object with training and monitoring loss curves. A vertical line
-            marks :attr:`best_epoch` when it is inside the displayed window.
+            marks :attr:`min_monitor_epoch` when it is inside the displayed window.
         """
         history = self.history.loss_df()
         n_iter = history.shape[0]
@@ -873,8 +890,8 @@ class OptimResult:
             + p9.geom_line()
         )
 
-        if i <= self.best_epoch < n_iter:
-            p = p + p9.geom_vline(xintercept=self.best_epoch)
+        if self.min_monitor_epoch is not None and i <= self.min_monitor_epoch < n_iter:
+            p = p + p9.geom_vline(xintercept=self.min_monitor_epoch)
 
         if title is not None:
             p += p9.ggtitle(title)
@@ -946,8 +963,8 @@ class OptimResult:
             )
             + p9.geom_line()
         )
-        if i <= self.best_epoch < n_iter:
-            p = p + p9.geom_vline(xintercept=self.best_epoch)
+        if self.min_monitor_epoch is not None and i <= self.min_monitor_epoch < n_iter:
+            p = p + p9.geom_vline(xintercept=self.min_monitor_epoch)
 
         if title is not None:
             p += p9.ggtitle(title)
@@ -960,7 +977,8 @@ class OptimResult:
     def __repr__(self) -> str:
         name = type(self).__name__
         out = (
-            f"{name}(final_epoch={self.final_epoch}, best_epoch={self.best_epoch}, "
-            f"duration={self.duration:.1f}s)"
+            f"{name}(n_epochs={self.n_epochs}, "
+            f"min_monitor_epoch={self.min_monitor_epoch}, "
+            f"monitor_source={self.monitor_source!r}, duration={self.duration:.1f}s)"
         )
         return out
