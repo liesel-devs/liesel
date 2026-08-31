@@ -88,9 +88,12 @@ class LieselOptim:
         This setting has no effect when ``loss`` is supplied.
     loss_monitor
         Source for the epoch-level stopping and progress loss. Pass
-        :class:`.EmaTrainLossMonitor` for a continuous EMA of post-update batch
-        losses, ``"validation"`` for the complete validation loss, or
-        ``"train_full_data"`` for the complete training loss.
+        :class:`.EmaTrainLossMonitor` for a continuous EMA of pre-update losses,
+        ``"validation"`` for one complete validation-loss evaluation after each
+        epoch, or ``"train_full_data"`` for one complete training-loss evaluation
+        after each epoch. Exact monitors use the post-update epoch position.
+        ``"train_full_data"`` always adds the full-data evaluation, including with
+        one full-data optimization batch.
     show_progress
         Whether the built engine should show ``tqdm`` progress bars.
     progress_n_updates

@@ -176,14 +176,18 @@ class OptimHistory:
     Parameters
     ----------
     loss_train
-        Equal-weight mean of the post-update mini-batch training losses within each
-        completed epoch, with shape ``(epochs,)``. Because parameters may change
-        between batches, this summarizes the optimization trajectory; it is not a
-        full-data loss evaluated at the epoch's final position.
+        Equal-weight mean of the pre-update losses within each completed epoch, with
+        shape ``(epochs,)``. The first active optimizer supplies each batch value; a
+        batch with no active optimizer is evaluated once at the unchanged position.
+        Because parameters may change between batches, this summarizes the
+        optimization trajectory; it is not a full-data loss evaluated at the
+        epoch's final position.
     loss_monitor
         Epoch-level series used for stopping and result selection, with shape
         ``(epochs,)``. Depending on the configured source, this is a training EMA,
-        complete validation loss, or complete training loss.
+        complete validation loss, or complete training loss. Exact losses use the
+        post-update epoch position. An EMA snapshot summarizes several positions,
+        so its associated minimum checkpoint is not an exact loss-position pair.
     position
         Optional parameter position history. Each array has a leading epoch
         dimension.
@@ -591,9 +595,9 @@ class OptimCarry:
     min_monitor_epoch
         Epoch at which the smallest monitoring loss was found.
     loss_train
-        Running epoch accumulation of post-update mini-batch training losses. At a
-        completed epoch it is their equal-weight mean, evaluated along the sequence
-        of parameter positions visited during that epoch.
+        Running epoch accumulation of pre-update losses. At a completed epoch it is
+        their equal-weight mean, evaluated along the sequence of parameter positions
+        visited during that epoch.
     loss_monitor
         Most recent monitoring loss.
     epoch
@@ -817,7 +821,10 @@ class OptimResult:
         Actual terminal position, including an interrupted partial epoch.
     position_min_monitor
         Position with the smallest recorded monitoring loss, or ``None`` if no
-        epoch completed.
+        epoch completed. For exact validation and full-training monitors, this is
+        the post-update position used for that loss evaluation. For an EMA, it is
+        the associated epoch-end checkpoint, not a position whose exact loss equals
+        the EMA.
     n_epochs
         Number of completed epochs included in the processed history.
     min_monitor_epoch
@@ -875,11 +882,13 @@ class OptimResult:
         """
         Plots the epoch-mean training loss and configured monitoring loss.
 
-        The training series averages post-update mini-batch losses evaluated along
+        The training series averages pre-update losses evaluated along
         each epoch's optimization trajectory. It is not a full-data loss evaluated
         at the epoch's final position. The monitoring label identifies whether the
         corresponding series is a training EMA, validation loss, or full-data
-        training loss.
+        training loss. For exact monitors, the minimum line identifies the saved
+        post-update position used for that value. For an EMA, it identifies only the
+        associated epoch-end checkpoint.
 
         Parameters
         ----------

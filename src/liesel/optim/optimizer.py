@@ -221,6 +221,10 @@ class Optimizer:
         """
         Runs one optimizer step on ``position``.
 
+        :meth:`.Loss.value_and_grad` computes the returned loss and gradient
+        together, using the same mini-batch, parameter position, PRNG key, and
+        stochastic objective draw.
+
         Parameters
         ----------
         position
@@ -291,7 +295,9 @@ class LBFGS(Optimizer):
     reuse value/gradient information stored by the L-BFGS transformation.
 
     L-BFGS requires full-data batches and a deterministic objective. The engine
-    rejects mini-batches, but cannot detect stochastic objective evaluations.
+    rejects mini-batches, but cannot detect stochastic objective evaluations. For
+    the deterministic objective, the returned scalar is the value used for the
+    update at the supplied pre-update position.
 
     Parameters
     ----------

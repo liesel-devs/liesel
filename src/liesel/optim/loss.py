@@ -49,9 +49,10 @@ class Loss(Protocol):
 
     Notes
     -----
-    Built-in optimizers call :meth:`grad` or :meth:`value_and_grad` on
-    ``loss_train_batched``. Custom losses can inherit from :class:`LossMixin` to get
-    these gradient methods automatically.
+    The standard built-in optimizer calls :meth:`value_and_grad` so the objective
+    value used for monitoring and its gradient share one stochastic evaluation.
+    Custom losses can inherit from :class:`LossMixin` to get :meth:`value_and_grad`
+    and :meth:`grad` automatically.
     """
 
     @property
@@ -83,8 +84,8 @@ class Loss(Protocol):
         """
         Computes the full-data training loss at ``params``.
 
-        The engine calls this method only for exact training-data monitoring when no
-        validation split is available.
+        The engine calls this method for ``loss_monitor="train_full_data"`` after
+        every epoch, at the final post-update position.
         """
         ...
 
@@ -108,9 +109,9 @@ class LossMixin:
     Shared convenience implementation for differentiable losses.
 
     Subclasses must define :attr:`split` and :meth:`loss_train_batched`. They should
-    also define :meth:`loss_train` if they support exact full-data monitoring when
-    no validation split is available. The mixin provides validation-position helpers
-    and JAX gradient methods used by :class:`.Optimizer`.
+    also define :meth:`loss_train` if they support exact full-data monitoring. The
+    mixin provides validation-position helpers and JAX gradient methods used by
+    :class:`.Optimizer`.
 
     Attributes
     ----------

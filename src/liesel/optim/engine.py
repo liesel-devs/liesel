@@ -50,7 +50,14 @@ __all__ = ["EmaTrainLossMonitor", "LossMonitor", "OptimEngine"]
 
 @dataclass(frozen=True)
 class EmaTrainLossMonitor:
-    """Configures EMA monitoring of post-update mini-batch training losses.
+    """Configures EMA monitoring of the pre-update mini-batch training loss.
+
+    The pre-update mini-batch training loss is the scalar objective evaluated for
+    an optimizer's gradient at its supplied position, before that optimizer applies
+    its update. The value and gradient share the same mini-batch, parameter position,
+    PRNG key, and stochastic objective draw; monitoring is not an independent loss
+    evaluation. The first active optimizer supplies this observation. If none is
+    active, the engine evaluates the loss once at the unchanged position.
 
     ``effective_window`` is the EMA span measured in epoch equivalents, not a hard
     inclusion window or half-life. With a typical multi-batch epoch, a span of one
@@ -109,8 +116,10 @@ class OptimEngine:
     ``OptimEngine`` is the low-level execution object behind the experimental
     optimization API. Each epoch starts by asking ``batches`` for fresh batch indices,
     then iterates over all full batches. For each batch, each optimizer gets a turn
-    to update the subset of parameters named in its ``position_keys``. At the end of
-    the epoch, the engine records training and monitoring losses, updates the
+    to update the subset of parameters named in its ``position_keys``. The first
+    active optimizer's pre-update loss supplies the batch observation; if none is
+    active, the loss is evaluated once at the unchanged position. At the end of the
+    epoch, the engine records training and monitoring losses, updates the
     minimum-monitor position, and asks ``stopper`` whether to continue.
 
     Parameters
@@ -145,9 +154,12 @@ class OptimEngine:
         reading it returns the resulting effective number of updates.
     loss_monitor
         Source for the epoch-level stopping and progress loss. Pass
-        :class:`EmaTrainLossMonitor` for a continuous EMA of post-update batch
-        losses, ``"validation"`` for the complete validation loss, or
-        ``"train_full_data"`` for the complete training loss.
+        :class:`EmaTrainLossMonitor` for a continuous EMA of pre-update losses,
+        ``"validation"`` for one complete validation-loss evaluation after each
+        epoch, or ``"train_full_data"`` for one complete training-loss evaluation
+        after each epoch. Exact monitors are evaluated at the final post-update
+        epoch position, and ``"train_full_data"`` incurs this additional full-data
+        evaluation even when optimization itself uses one full-data batch.
     debug_nans
         Whether to capture first-NaN reproduction data during batch updates. Every
         active optimizer's returned pre-update loss and the updated position are
@@ -180,7 +192,10 @@ class OptimEngine:
     next history index to be written. This matches :class:`.Stopper`'s experimental
     indexing convention. Built-in :class:`.LBFGS` is accepted only with full-data
     batches and also requires a deterministic objective, which the engine cannot
-    validate.
+    validate. Exact monitor minima retain the post-update position used for the
+    evaluation. An EMA minimum instead retains the associated epoch-end checkpoint;
+    because an EMA combines losses from several positions, it is not an exact
+    loss-position pairing.
 
     Examples
     --------
@@ -1292,10 +1307,7 @@ class OptimEngine:
 
     @staticmethod
     def _progress_description(loss_train, loss_monitor) -> str:
-        return (
-            f"Training loss: {float(loss_train):.3f}, "
-            f"Monitoring loss: {float(loss_monitor):.3f}"
-        )
+        return f"Train={float(loss_train):.3f}, Monitor={float(loss_monitor):.3f}"
 
     @staticmethod
     def _shared_progress_description(

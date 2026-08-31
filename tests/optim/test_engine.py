@@ -1612,7 +1612,7 @@ def test_nested_progress_uses_last_completed_losses_after_nan(monkeypatch):
     assert result.n_epochs == 3
     outer, inner = FakeTqdm.instances
     assert outer.updates == [1, 1, 1]
-    assert outer.descriptions[-1].startswith("Training loss: 2.000")
+    assert outer.descriptions[-1] == "Train=2.000, Monitor=2.758"
     assert inner.updates == [2, 2, 1] * 3 + [2, 1]
 
 
