@@ -616,6 +616,8 @@ class OptimCarry:
 
     loss_train: jax.Array = field(default_factory=lambda: jnp.asarray(jnp.inf))
     loss_monitor: jax.Array = field(default_factory=lambda: jnp.asarray(jnp.inf))
+    _ema_numerator: jax.Array = field(default_factory=lambda: jnp.asarray(0.0))
+    _ema_weight: jax.Array = field(default_factory=lambda: jnp.asarray(0.0))
 
     epoch: int = 0  # outer while-loop index over epochs
     i_batch: int | jax.Array = 0  # inner for-loop index over batches
@@ -687,6 +689,7 @@ class OptimCarry:
             history = OptimHistory.from_epochs(epochs, None, tracked, loss_dtype)
 
         inf = _inf_with_dtype(loss_dtype)
+        zero = jnp.zeros_like(inf)
 
         inst = cls(
             key=key,
@@ -700,6 +703,8 @@ class OptimCarry:
             best_loss=inf,
             loss_train=inf,
             loss_monitor=inf,
+            _ema_numerator=zero,
+            _ema_weight=zero,
         )
         return inst
 

@@ -72,8 +72,6 @@ class EmaTrainLossMonitor:
 
 type LossMonitor = EmaTrainLossMonitor | Literal["validation", "train_full_data"]
 
-TrainMonitor = Literal["auto", "epoch_average", "weighted_epoch_average", "full_data"]
-
 
 def _tree_has_nan(tree) -> jax.Array:
     leaves = jax.tree_util.tree_leaves(tree)
@@ -144,15 +142,11 @@ class OptimEngine:
         Compatibility alias for configuring an approximate maximum number of epoch
         progress-bar updates. The value is converted to ``progress_update_every``;
         reading it returns the resulting effective number of updates.
-    train_monitor
-        Training-data monitor used when no validation split is available.
-        ``"auto"`` uses ``"weighted_epoch_average"`` for mini-batch runs and the
-        exact full-batch loss for full-data runs. ``"epoch_average"`` always uses
-        the cheap arithmetic epoch average. ``"weighted_epoch_average"`` uses a
-        cheap linearly weighted epoch average for the early-stopping monitor, giving
-        later batches higher weight. ``"full_data"`` evaluates the full training
-        loss at the end of each epoch, except when the existing full-batch epoch
-        loss can be reused.
+    loss_monitor
+        Source for the epoch-level stopping and progress loss. Pass
+        :class:`EmaTrainLossMonitor` for a continuous EMA of post-update batch
+        losses, ``"validation"`` for the complete validation loss, or
+        ``"train_full_data"`` for the complete training loss.
     debug_nans
         Whether to capture first-NaN reproduction data during batch updates.
     progress_update_every
@@ -198,12 +192,12 @@ class OptimEngine:
     stopper: Stopper
     seed: jax.Array
     initial_state: ModelState
+    loss_monitor: LossMonitor
     restore_best_position: bool = True
     prune_history: bool = True
     show_progress: bool = True
     save_position_history: bool = True
     progress_update_every: int = 10
-    train_monitor: TrainMonitor = "auto"
     debug_nans: bool = False
     show_step_progress: bool = False
     step_progress_update_every: int = 10
@@ -221,9 +215,9 @@ class OptimEngine:
         show_progress: bool = True,
         save_position_history: bool = True,
         progress_n_updates: int | None = None,
-        train_monitor: TrainMonitor = "auto",
         debug_nans: bool = False,
         *,
+        loss_monitor: LossMonitor,
         progress_update_every: int = 10,
         show_step_progress: bool = False,
         step_progress_update_every: int = 10,
@@ -246,7 +240,7 @@ class OptimEngine:
         self.show_progress = show_progress
         self.save_position_history = save_position_history
         self.progress_update_every = progress_update_every
-        self.train_monitor = train_monitor
+        self.loss_monitor = loss_monitor
         self.debug_nans = debug_nans
         self.show_step_progress = show_step_progress
         self.step_progress_update_every = step_progress_update_every
@@ -278,7 +272,7 @@ class OptimEngine:
         self._validate_position_keys()
         self._validate_optimizer_activation_delays()
         self._validate_progress_settings()
-        self._validate_train_monitor()
+        self._validate_loss_monitor()
         self._validate_debug_nans()
         self._validate_batch_split_compatibility()
 
@@ -408,25 +402,25 @@ class OptimEngine:
             self.step_progress_update_every, "step_progress_update_every"
         )
 
-    def _validate_train_monitor(self) -> None:
-        """
-        Validates the no-validation training monitor setting.
+    def _validate_loss_monitor(self) -> None:
+        """Validates the configured monitoring source.
 
         Raises
         ------
         ValueError
-            If ``train_monitor`` is not one of the supported strategies.
+            If ``loss_monitor`` is not one of the supported sources.
         """
-        if self.train_monitor not in (
-            "auto",
-            "epoch_average",
-            "weighted_epoch_average",
-            "full_data",
+        if not isinstance(self.loss_monitor, EmaTrainLossMonitor) and (
+            self.loss_monitor not in ("validation", "train_full_data")
         ):
             raise ValueError(
-                "train_monitor must be 'auto', 'epoch_average', "
-                "'weighted_epoch_average', or 'full_data', but got "
-                f"{self.train_monitor!r}."
+                "loss_monitor must be EmaTrainLossMonitor(), 'validation', or "
+                f"'train_full_data', but got {self.loss_monitor!r}."
+            )
+
+        if self.loss_monitor == "validation" and not self.split.has_validation:
+            raise ValueError(
+                "loss_monitor='validation' requires a split with validation data."
             )
 
     def _validate_debug_nans(self) -> None:
@@ -816,15 +810,7 @@ class OptimEngine:
             )
 
         loss = self.loss.loss_train_batched(carry.position, carry)
-        loss_dtype = jnp.asarray(loss).dtype
-        n_batches = jnp.asarray(carry.batches.n_full_batches, dtype=loss_dtype)
-        carry.loss_train += loss / n_batches
-        if self.train_monitor in ("auto", "weighted_epoch_average"):
-            i_batch = jnp.asarray(j, dtype=loss_dtype)
-            one = jnp.asarray(1.0, dtype=loss_dtype)
-            two = jnp.asarray(2.0, dtype=loss_dtype)
-            weight = two * (i_batch + one) / (n_batches * (n_batches + one))
-            carry.loss_monitor += weight * loss
+        carry = self._accumulate_post_update_loss(loss, carry)
 
         carry.i_batch = j
         carry.batch = Position({})
@@ -980,17 +966,7 @@ class OptimEngine:
                 )
 
             def accumulate_loss(carry: OptimCarry) -> OptimCarry:
-                loss_dtype = jnp.asarray(loss).dtype
-                n_batches = jnp.asarray(carry.batches.n_full_batches, dtype=loss_dtype)
-                carry.loss_train += loss / n_batches
-                if self.train_monitor in ("auto", "weighted_epoch_average"):
-                    i_batch = jnp.asarray(j, dtype=loss_dtype)
-                    one = jnp.asarray(1.0, dtype=loss_dtype)
-                    two = jnp.asarray(2.0, dtype=loss_dtype)
-                    weight = two * (i_batch + one) / (n_batches * (n_batches + one))
-                    carry.loss_monitor += weight * loss
-
-                return carry
+                return self._accumulate_post_update_loss(loss, carry)
 
             return jax.lax.cond(loss_has_nan, capture_loss, accumulate_loss, carry)
 
@@ -1015,27 +991,27 @@ class OptimEngine:
 
         return self._run_batch_unchecked(j, carry)
 
-    def _monitor_without_validation(
-        self, epoch_average_loss: jax.Array, carry: OptimCarry
-    ) -> jax.Array:
-        """
-        Computes the early-stopping monitor when no validation split exists.
+    def _accumulate_post_update_loss(
+        self, loss: jax.Array, carry: OptimCarry
+    ) -> OptimCarry:
+        loss_dtype = jnp.asarray(loss).dtype
+        n_batches = jnp.asarray(carry.batches.n_full_batches, dtype=loss_dtype)
+        carry.loss_train += loss / n_batches
 
-        ``epoch_average_loss`` is the cheap average of the post-update batch losses
-        from the current epoch. For full-data batches this is already the exact
-        full-data training loss, so it is reused even when ``train_monitor`` asks for
-        full-data monitoring.
-        """
-        if carry.batches.is_full_data:
-            return epoch_average_loss
+        if isinstance(self.loss_monitor, EmaTrainLossMonitor):
+            one = jnp.asarray(1.0, dtype=loss_dtype)
+            two = jnp.asarray(2.0, dtype=loss_dtype)
+            effective_window = jnp.maximum(
+                one,
+                jnp.asarray(self.loss_monitor.effective_window, dtype=loss_dtype)
+                * n_batches,
+            )
+            alpha = two / (effective_window + one)
+            beta = one - alpha
+            carry._ema_numerator = beta * carry._ema_numerator + alpha * loss
+            carry._ema_weight = beta * carry._ema_weight + alpha
 
-        if self.train_monitor == "epoch_average":
-            return epoch_average_loss
-
-        if self.train_monitor in ("auto", "weighted_epoch_average"):
-            return carry.loss_monitor
-
-        return self.loss.loss_train(carry.position, carry)
+        return carry
 
     def _start_epoch(self, carry: OptimCarry) -> OptimCarry:
         """Starts a batch epoch and resets its accumulated losses."""
@@ -1043,7 +1019,6 @@ class OptimEngine:
         carry.key = key
         carry.batches = carry.batches.start_epoch(subkey)
         carry.loss_train = jnp.zeros_like(carry.loss_train)
-        carry.loss_monitor = jnp.zeros_like(carry.loss_monitor)
         return carry
 
     def _run_batch_range(
@@ -1103,7 +1078,13 @@ class OptimEngine:
         loss_i = carry.loss_train
         carry.history.loss_train = carry.history.loss_train.at[i].set(loss_i)
 
-        if self.split.has_validation:
+        if isinstance(self.loss_monitor, EmaTrainLossMonitor):
+            loss_monitor_i = carry._ema_numerator / carry._ema_weight
+            carry.loss_monitor = loss_monitor_i
+            carry.history.loss_monitor = carry.history.loss_monitor.at[i].set(
+                loss_monitor_i
+            )
+        elif self.loss_monitor == "validation":
             key, subkey = jax.random.split(carry.key)
             carry.key = subkey
 
@@ -1115,7 +1096,10 @@ class OptimEngine:
                 loss_monitor_i
             )
         else:
-            loss_monitor_i = self._monitor_without_validation(loss_i, carry)
+            if carry.batches.is_full_data:
+                loss_monitor_i = loss_i
+            else:
+                loss_monitor_i = self.loss.loss_train(carry.position, carry)
             carry.loss_monitor = loss_monitor_i
             carry.history.loss_monitor = carry.history.loss_monitor.at[i].set(
                 loss_monitor_i

@@ -57,6 +57,18 @@ def test_loss_monitor_configuration_is_public():
     assert opt.LossMonitor is LossMonitor
 
 
+def test_engine_requires_explicit_loss_monitor():
+    with pytest.raises(TypeError, match="loss_monitor"):
+        OptimEngine(
+            loss=_loss(),
+            batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
+            optimizers=[_optimizer()],
+            stopper=Stopper(epochs=1, patience=1),
+            seed=1,
+            initial_state={},
+        )
+
+
 @dataclass
 class SequenceOptimizer:
     position_keys: list[str]
@@ -140,6 +152,29 @@ class BatchSensitiveLoss:
 
     def value_and_grad(self, params: Position, carry: OptimCarry):
         return self.loss_train_batched(params, carry), self.grad(params, carry)
+
+
+@dataclass
+class BatchedOnlyLoss(BatchSensitiveLoss):
+    def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
+        del params, carry
+        raise AssertionError("full training loss should not be evaluated")
+
+
+@dataclass
+class DivergentExactLoss(SequenceLoss):
+    def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
+        del params
+        return -jnp.asarray(carry.epoch, dtype=float)
+
+
+@dataclass
+class EpochSequenceLoss(SequenceLoss):
+    epoch_losses: jax.Array
+
+    def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
+        del params
+        return self.epoch_losses[carry.epoch]
 
 
 @dataclass
@@ -292,6 +327,17 @@ def _monitor_split() -> PositionSplit:
     )
 
 
+def _monitor_split_with_validation() -> PositionSplit:
+    return PositionSplit(
+        train=Position({"y": jnp.array([1.0, 3.0])}),
+        validate=Position({"y": jnp.array([5.0])}),
+        test=Position({}),
+        train_axis_size=2,
+        validate_axis_size=1,
+        test_axis_size=0,
+    )
+
+
 def _optimizer(
     position_keys: list[str] | None = None, identifier: str = "sequence"
 ) -> SequenceOptimizer:
@@ -324,6 +370,7 @@ def _progress_engine(
     resolved_loss = BatchSensitiveLoss(split) if loss is None else loss(split)
     return OptimEngine(
         loss=resolved_loss,
+        loss_monitor=EmaTrainLossMonitor(),
         batches=Batches(
             ["y"],
             axis_size=n_batches,
@@ -395,6 +442,7 @@ def test_engine_restores_global_best_position(save_position_history):
     optimizer = _optimizer()
     engine = OptimEngine(
         loss=loss,
+        loss_monitor=EmaTrainLossMonitor(),
         batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
         optimizers=[optimizer],
         stopper=Stopper(epochs=4, patience=2),
@@ -416,6 +464,7 @@ def test_engine_uses_loss_split():
     loss = _loss()
     engine = OptimEngine(
         loss=loss,
+        loss_monitor=EmaTrainLossMonitor(),
         batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
         optimizers=[_optimizer()],
         stopper=Stopper(epochs=4, patience=2),
@@ -431,6 +480,7 @@ def test_empty_optimizers_raise():
     with pytest.raises(ValueError, match="at least one optimizer"):
         OptimEngine(
             loss=_loss(),
+            loss_monitor=EmaTrainLossMonitor(),
             batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[],
             stopper=Stopper(epochs=4, patience=2),
@@ -446,6 +496,7 @@ def test_optimizer_activation_delay_must_allow_an_active_epoch():
     with pytest.raises(ValueError, match="activate_after_epochs"):
         OptimEngine(
             loss=_loss(),
+            loss_monitor=EmaTrainLossMonitor(),
             batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[optimizer],
             stopper=Stopper(epochs=4, patience=2),
@@ -464,6 +515,7 @@ def test_optimizer_activates_after_completed_epoch_delay(debug_nans):
 
     engine = OptimEngine(
         loss=loss,
+        loss_monitor=EmaTrainLossMonitor(),
         batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
         optimizers=[
             Optimizer(["theta"], optax.sgd(1.0), identifier="theta"),
@@ -496,6 +548,7 @@ def test_inactive_optimizer_does_not_consume_random_key():
     def first_theta_position(optimizers):
         engine = OptimEngine(
             loss=RandomGradientLoss(_split()),
+            loss_monitor=EmaTrainLossMonitor(),
             batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=optimizers,
             stopper=Stopper(epochs=2, patience=2),
@@ -524,6 +577,7 @@ def test_inactive_optimizer_does_not_consume_random_key():
 def test_fit_can_stop_before_any_optimizer_activates():
     engine = OptimEngine(
         loss=UnitGradientLoss(_split()),
+        loss_monitor=EmaTrainLossMonitor(),
         batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
         optimizers=[Optimizer(["theta"], optax.sgd(1.0), activate_after_epochs=3)],
         stopper=Stopper(epochs=5, patience=1),
@@ -545,6 +599,7 @@ def test_duplicate_optimizer_position_keys_raise():
     with pytest.raises(ValueError, match="Position keys"):
         OptimEngine(
             loss=_loss(),
+            loss_monitor=EmaTrainLossMonitor(),
             batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[
                 _optimizer(["theta"], identifier="a"),
@@ -561,6 +616,7 @@ def test_duplicate_optimizer_identifiers_after_naming_raise():
     with pytest.raises(ValueError, match="identifiers"):
         OptimEngine(
             loss=_loss(),
+            loss_monitor=EmaTrainLossMonitor(),
             batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[
                 _optimizer(["theta"], identifier=""),
@@ -578,6 +634,7 @@ def test_invalid_progress_n_updates_raises(progress_n_updates):
     with pytest.raises(ValueError, match="progress_n_updates"):
         OptimEngine(
             loss=_loss(),
+            loss_monitor=EmaTrainLossMonitor(),
             batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[_optimizer()],
             stopper=Stopper(epochs=4, patience=2),
@@ -597,6 +654,7 @@ def test_invalid_progress_update_interval_raises(name, value):
     with pytest.raises(ValueError, match=name):
         OptimEngine(
             loss=_loss(),
+            loss_monitor=EmaTrainLossMonitor(),
             batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[_optimizer()],
             stopper=Stopper(epochs=4, patience=2),
@@ -614,6 +672,7 @@ def test_invalid_progress_update_count_raises(name, value):
     with pytest.raises(ValueError, match=name):
         OptimEngine(
             loss=_loss(),
+            loss_monitor=EmaTrainLossMonitor(),
             batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[_optimizer()],
             stopper=Stopper(epochs=4, patience=2),
@@ -624,8 +683,8 @@ def test_invalid_progress_update_count_raises(name, value):
         )
 
 
-def test_invalid_train_monitor_raises():
-    with pytest.raises(ValueError, match="train_monitor"):
+def test_invalid_loss_monitor_raises():
+    with pytest.raises(ValueError, match="loss_monitor"):
         OptimEngine(
             loss=_loss(),
             batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
@@ -634,7 +693,21 @@ def test_invalid_train_monitor_raises():
             seed=1,
             initial_state={},
             show_progress=False,
-            train_monitor="sometimes",  # ty: ignore[invalid-argument-type]
+            loss_monitor="sometimes",  # ty: ignore[invalid-argument-type]
+        )
+
+
+def test_validation_monitor_requires_validation_data():
+    with pytest.raises(ValueError, match="validation"):
+        OptimEngine(
+            loss=_loss(),
+            batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
+            optimizers=[_optimizer()],
+            stopper=Stopper(epochs=4, patience=2),
+            seed=1,
+            initial_state={},
+            show_progress=False,
+            loss_monitor="validation",
         )
 
 
@@ -649,6 +722,7 @@ def test_debug_nans_loss_capture_reproduces_loss():
     )
     engine = OptimEngine(
         loss=DebugNaNLoss(split, trigger_batch_value=1.0),
+        loss_monitor=EmaTrainLossMonitor(),
         batches=Batches(["y"], axis_size=3, batch_size=1, shuffle=False),
         optimizers=[DebugNoOpOptimizer(["theta"])],
         stopper=Stopper(epochs=3, patience=3),
@@ -695,6 +769,7 @@ def test_debug_nans_position_after_reproduces_second_optimizer_step():
     )
     engine = OptimEngine(
         loss=DebugNaNLoss(split),
+        loss_monitor=EmaTrainLossMonitor(),
         batches=Batches(["y"], axis_size=2, batch_size=1, shuffle=False),
         optimizers=[
             AddOneOptimizer(["theta"], identifier="add_theta"),
@@ -742,6 +817,7 @@ def test_debug_nans_position_before_capture():
     split = _split()
     engine = OptimEngine(
         loss=DebugNaNLoss(split, initial_nan=True),
+        loss_monitor=EmaTrainLossMonitor(),
         batches=Batches(["y"], axis_size=1, batch_size=1, shuffle=False),
         optimizers=[DebugNoOpOptimizer(["theta"])],
         stopper=Stopper(epochs=3, patience=3),
@@ -773,6 +849,7 @@ def test_debug_nans_disabled_keeps_existing_nan_loss_behavior():
     )
     engine = OptimEngine(
         loss=DebugNaNLoss(split, trigger_batch_value=0.0),
+        loss_monitor=EmaTrainLossMonitor(),
         batches=Batches(["y"], axis_size=2, batch_size=1, shuffle=False),
         optimizers=[DebugNoOpOptimizer(["theta"])],
         stopper=Stopper(epochs=3, patience=3),
@@ -789,7 +866,26 @@ def test_debug_nans_disabled_keeps_existing_nan_loss_behavior():
     assert bool(jnp.isnan(result.history.loss_train[0]))
 
 
-def test_no_validation_epoch_average_monitor_uses_arithmetic_average():
+def test_ema_monitor_is_bias_corrected_and_continues_across_epochs():
+    split = _monitor_split()
+    engine = OptimEngine(
+        loss=BatchSensitiveLoss(split),
+        batches=Batches(["y"], axis_size=2, batch_size=1, shuffle=False),
+        optimizers=[_optimizer()],
+        stopper=Stopper(epochs=2, patience=2),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
+    )
+
+    result = engine.fit()
+
+    assert result.history.loss_train.tolist() == pytest.approx([2.0, 7.0])
+    assert result.history.loss_monitor.tolist() == pytest.approx([2.5, 7.0])
+
+
+def test_train_full_data_monitor_uses_exact_training_loss():
     split = _monitor_split()
     engine = OptimEngine(
         loss=BatchSensitiveLoss(split),
@@ -799,7 +895,48 @@ def test_no_validation_epoch_average_monitor_uses_arithmetic_average():
         seed=1,
         initial_state={},
         show_progress=False,
-        train_monitor="epoch_average",
+        loss_monitor="train_full_data",
+    )
+
+    result = engine.fit()
+
+    assert result.history.loss_train.tolist() == pytest.approx([2.0])
+    assert result.history.loss_monitor.tolist() == pytest.approx([4.0])
+
+
+def test_ema_fractional_window_uses_one_step_lower_bound():
+    split = _monitor_split()
+    engine = OptimEngine(
+        loss=BatchSensitiveLoss(split),
+        batches=Batches(["y"], axis_size=2, batch_size=1, shuffle=False),
+        optimizers=[_optimizer()],
+        stopper=Stopper(epochs=1, patience=1),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+        loss_monitor=EmaTrainLossMonitor(effective_window=0.25),
+    )
+
+    result = engine.fit()
+
+    assert result.history.loss_train.tolist() == pytest.approx([2.0])
+    assert result.history.loss_monitor.tolist() == pytest.approx([3.0])
+
+
+def test_ema_monitor_observes_loss_after_all_optimizers():
+    split = _split()
+    engine = OptimEngine(
+        loss=UnitGradientLoss(split),
+        batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
+        optimizers=[
+            AddOneOptimizer(["theta"], identifier="theta"),
+            AddOneOptimizer(["eta"], identifier="eta"),
+        ],
+        stopper=Stopper(epochs=1, patience=1),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+        loss_monitor=EmaTrainLossMonitor(),
     )
 
     result = engine.fit()
@@ -808,8 +945,26 @@ def test_no_validation_epoch_average_monitor_uses_arithmetic_average():
     assert result.history.loss_monitor.tolist() == pytest.approx([2.0])
 
 
-def test_no_validation_full_data_monitor_uses_exact_training_loss():
+def test_ema_monitor_adds_no_full_data_evaluation():
     split = _monitor_split()
+    engine = OptimEngine(
+        loss=BatchedOnlyLoss(split),
+        batches=Batches(["y"], axis_size=2, batch_size=1, shuffle=False),
+        optimizers=[_optimizer()],
+        stopper=Stopper(epochs=1, patience=1),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+        loss_monitor=EmaTrainLossMonitor(),
+    )
+
+    result = engine.fit()
+
+    assert result.history.loss_monitor.tolist() == pytest.approx([2.5])
+
+
+def test_validation_monitor_is_unsmoothed():
+    split = _monitor_split_with_validation()
     engine = OptimEngine(
         loss=BatchSensitiveLoss(split),
         batches=Batches(["y"], axis_size=2, batch_size=1, shuffle=False),
@@ -818,26 +973,26 @@ def test_no_validation_full_data_monitor_uses_exact_training_loss():
         seed=1,
         initial_state={},
         show_progress=False,
-        train_monitor="full_data",
+        loss_monitor="validation",
     )
 
     result = engine.fit()
 
     assert result.history.loss_train.tolist() == pytest.approx([2.0])
-    assert result.history.loss_monitor.tolist() == pytest.approx([4.0])
+    assert result.history.loss_monitor.tolist() == pytest.approx([-999.0])
 
 
-def test_no_validation_auto_monitor_uses_exact_loss_for_full_data_batches():
+def test_train_full_data_reuses_full_batch_loss():
     split = _monitor_split()
     engine = OptimEngine(
-        loss=BatchSensitiveLoss(split),
+        loss=BatchedOnlyLoss(split),
         batches=Batches(["y"], axis_size=2, batch_size=None, shuffle=False),
         optimizers=[_optimizer()],
         stopper=Stopper(epochs=1, patience=1),
         seed=1,
         initial_state={},
         show_progress=False,
-        train_monitor="auto",
+        loss_monitor="train_full_data",
     )
 
     result = engine.fit()
@@ -846,24 +1001,47 @@ def test_no_validation_auto_monitor_uses_exact_loss_for_full_data_batches():
     assert result.history.loss_monitor.tolist() == pytest.approx([4.0])
 
 
-@pytest.mark.parametrize("train_monitor", ["auto", "weighted_epoch_average"])
-def test_no_validation_weighted_epoch_average_weights_later_batches(train_monitor):
-    split = _monitor_split()
+@pytest.mark.parametrize("loss_monitor", ["validation", "train_full_data"])
+def test_exact_monitor_source_drives_epoch_stopping(loss_monitor):
+    split = _monitor_split_with_validation()
     engine = OptimEngine(
-        loss=BatchSensitiveLoss(split),
+        loss=DivergentExactLoss(split),
+        loss_monitor=loss_monitor,
         batches=Batches(["y"], axis_size=2, batch_size=1, shuffle=False),
         optimizers=[_optimizer()],
-        stopper=Stopper(epochs=1, patience=1),
+        stopper=Stopper(epochs=4, patience=2),
         seed=1,
         initial_state={},
         show_progress=False,
-        train_monitor=train_monitor,
     )
 
     result = engine.fit()
 
-    assert result.history.loss_train.tolist() == pytest.approx([2.0])
-    assert result.history.loss_monitor.tolist() == pytest.approx([7.0 / 3.0])
+    assert result.final_epoch == 3
+    assert result.history.loss_train.tolist() == pytest.approx([0.0, -1.0, -2.0])
+    assert result.history.loss_monitor.tolist() == pytest.approx([0.0, 5.0, 6.0])
+
+
+def test_ema_monitor_source_drives_epoch_stopping():
+    split = _monitor_split()
+    engine = OptimEngine(
+        loss=EpochSequenceLoss(split, jnp.array([100.0, 0.0, 1.0, 2.0])),
+        loss_monitor=EmaTrainLossMonitor(),
+        batches=Batches(["y"], axis_size=2, batch_size=1, shuffle=False),
+        optimizers=[DebugNoOpOptimizer(["theta"])],
+        stopper=Stopper(epochs=4, patience=2),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+    )
+
+    result = engine.fit()
+
+    assert result.final_epoch == 4
+    assert result.history.loss_train.tolist() == pytest.approx([100.0, 0.0, 1.0, 2.0])
+    assert result.history.loss_monitor[:3].tolist() == pytest.approx(
+        [100.0, 10.0, 1.9890109]
+    )
 
 
 def test_split_manager_requires_batch_manager():
@@ -881,6 +1059,7 @@ def test_split_manager_requires_batch_manager():
     with pytest.raises(ValueError, match="BatchManager"):
         OptimEngine(
             loss=SequenceLoss(split),
+            loss_monitor=EmaTrainLossMonitor(),
             batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[_optimizer()],
             stopper=Stopper(epochs=4, patience=2),
@@ -894,6 +1073,7 @@ def test_batch_keys_must_be_present_in_training_split():
     with pytest.raises(ValueError, match="split.train"):
         OptimEngine(
             loss=_loss(),
+            loss_monitor=EmaTrainLossMonitor(),
             batches=Batches(["missing"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[_optimizer()],
             stopper=Stopper(epochs=4, patience=2),
@@ -907,6 +1087,7 @@ def test_batch_manager_keys_must_be_present_in_training_split():
     with pytest.raises(ValueError, match="split.train"):
         OptimEngine(
             loss=_loss(),
+            loss_monitor=EmaTrainLossMonitor(),
             batches=BatchManager(
                 [Batches(["missing"], axis_size=1, batch_size=None, shuffle=False)]
             ),
@@ -941,6 +1122,7 @@ def test_progress_count_conversion_uses_a_ceiling():
 def test_progress_defaults_and_linked_count_properties():
     engine = OptimEngine(
         loss=_loss(),
+        loss_monitor=EmaTrainLossMonitor(),
         batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
         optimizers=[_optimizer()],
         stopper=Stopper(epochs=101, patience=10),
@@ -971,6 +1153,7 @@ def test_progress_defaults_and_linked_count_properties():
 def test_progress_count_aliases_override_intervals():
     engine = OptimEngine(
         loss=_loss(),
+        loss_monitor=EmaTrainLossMonitor(),
         batches=Batches(["y"], axis_size=10, batch_size=1, shuffle=False),
         optimizers=[_optimizer()],
         stopper=Stopper(epochs=10, patience=10),
@@ -1002,6 +1185,7 @@ def test_progress_count_keeps_historical_positional_slot():
         False,
         True,
         3,
+        loss_monitor=EmaTrainLossMonitor(),
     )
 
     assert engine.progress_update_every == 4
@@ -1228,6 +1412,7 @@ def test_epoch_progress_renders_early_stop_remainder(monkeypatch):
     monkeypatch.setattr(engine_module, "tqdm", FakeTqdm)
     engine = OptimEngine(
         loss=_loss(),
+        loss_monitor=EmaTrainLossMonitor(),
         batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
         optimizers=[_optimizer()],
         stopper=Stopper(epochs=4, patience=2),

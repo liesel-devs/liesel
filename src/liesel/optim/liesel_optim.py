@@ -17,6 +17,7 @@ from ._engine_utils import (
     _validate_positive_int,
 )
 from .batch import Batches
+from .engine import EmaTrainLossMonitor, LossMonitor
 from .loss import Loss, NegLogProbLoss
 from .optimizer import LBFGS, Optimizer, OptimizerLike
 from .split import PositionSplit
@@ -85,10 +86,11 @@ class LieselOptim:
         Whether the default :class:`.NegLogProbLoss` should divide losses by the
         training sample size. ``"auto"`` scales the internally constructed loss.
         This setting has no effect when ``loss`` is supplied.
-    train_monitor
-        Training-data monitor used by :class:`.OptimEngine` when no validation split
-        exists. The default ``"auto"`` uses exact full-data monitoring when batches
-        are full-data and ``"weighted_epoch_average"`` for mini-batch runs.
+    loss_monitor
+        Source for the epoch-level stopping and progress loss. Pass
+        :class:`.EmaTrainLossMonitor` for a continuous EMA of post-update batch
+        losses, ``"validation"`` for the complete validation loss, or
+        ``"train_full_data"`` for the complete training loss.
     show_progress
         Whether the built engine should show ``tqdm`` progress bars.
     progress_n_updates
@@ -111,7 +113,7 @@ class LieselOptim:
     >>> import jax.numpy as jnp
     >>> import liesel.model as lsl
     >>> import tensorflow_probability.substrates.jax.distributions as tfd
-    >>> from liesel.optim import LieselOptim
+    >>> from liesel.optim import EmaTrainLossMonitor, LieselOptim
     >>> loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
     >>> y = lsl.Var.new_obs(
     ...     jnp.array([0.0, 1.0]),
@@ -119,7 +121,9 @@ class LieselOptim:
     ...     name="y",
     ... )
     >>> model = lsl.Model([y])
-    >>> engine = LieselOptim(model, seed=1).build_engine()
+    >>> engine = LieselOptim(
+    ...     model, loss_monitor=EmaTrainLossMonitor(), seed=1
+    ... ).build_engine()
     >>> type(engine).__name__
     'OptimEngine'
     """
@@ -128,6 +132,7 @@ class LieselOptim:
         self,
         model: Model,
         *,
+        loss_monitor: LossMonitor,
         loss: Loss | None = None,
         batches: BatchConfig | None = None,
         batch_size: int | None = None,
@@ -146,9 +151,6 @@ class LieselOptim:
         epoch_size: Literal["max", "min"] | int = "max",
         validation_strategy: Literal["log_lik", "log_prob"] = "log_lik",
         scale_loss: bool | Literal["auto"] = "auto",
-        train_monitor: Literal[
-            "auto", "epoch_average", "weighted_epoch_average", "full_data"
-        ] = "auto",
         show_progress: bool = True,
         progress_n_updates: int | None = None,
         progress_update_every: int = 10,
@@ -170,6 +172,19 @@ class LieselOptim:
         self.split = self._resolve_split(
             loss, split, axis_size, split_axes, default_split_axis
         )
+        self.loss_monitor = loss_monitor
+        if not isinstance(loss_monitor, EmaTrainLossMonitor) and loss_monitor not in (
+            "validation",
+            "train_full_data",
+        ):
+            raise ValueError(
+                "loss_monitor must be EmaTrainLossMonitor(), 'validation', or "
+                f"'train_full_data', but got {loss_monitor!r}."
+            )
+        if loss_monitor == "validation" and not self.split.has_validation:
+            raise ValueError(
+                "loss_monitor='validation' requires a split with validation data."
+            )
         self.loss = self._resolve_loss(
             loss, validation_strategy=validation_strategy, scale_loss=scale_loss
         )
@@ -183,7 +198,6 @@ class LieselOptim:
             epoch_size=epoch_size,
         )
         self.optimizers = self._resolve_optimizers(optimizers)
-        self.train_monitor = train_monitor
         self.show_progress = show_progress
         self.progress_update_every = progress_update_every
         self.show_step_progress = show_step_progress
@@ -341,7 +355,7 @@ class LieselOptim:
             stopper=self.stopper,
             initial_state=self.model.state,
             seed=self.seed,
-            train_monitor=self.train_monitor,
+            loss_monitor=self.loss_monitor,
             show_progress=self.show_progress,
             progress_update_every=self.progress_update_every,
             show_step_progress=self.show_step_progress,

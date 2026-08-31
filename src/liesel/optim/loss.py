@@ -159,11 +159,11 @@ class LossMixin:
 
         The base mixin does not know how to assemble full training data for arbitrary
         custom losses. Subclasses can implement this method to support
-        ``OptimEngine(train_monitor="full_data")`` without a validation split.
+        ``OptimEngine(loss_monitor="train_full_data")``.
         """
         raise NotImplementedError(
-            f"{type(self).__name__} does not implement loss_train(). Use "
-            "OptimEngine(train_monitor='epoch_average') or implement loss_train() "
+            f"{type(self).__name__} does not implement loss_train(). Pass "
+            "EmaTrainLossMonitor() or implement loss_train() "
             "on the custom loss."
         )
 

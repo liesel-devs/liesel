@@ -10,6 +10,7 @@ import liesel.optim.split as split_module
 from liesel.optim import (
     Batches,
     BatchManager,
+    EmaTrainLossMonitor,
     LieselOptim,
     NegLogProbLoss,
     PositionSplit,
@@ -810,7 +811,7 @@ class TestSplitManager:
         )
         assert isinstance(split, PositionSplitManager)
 
-        quick = LieselOptim(model, split=split)
+        quick = LieselOptim(model, loss_monitor=EmaTrainLossMonitor(), split=split)
 
         assert isinstance(quick.batches, BatchManager)
         assert quick.batches.axis_size == split.train_axis_sizes
@@ -830,4 +831,9 @@ class TestSplitManager:
         batches = Batches(["y1"], axis_size=8, batch_size=None)
 
         with pytest.raises(ValueError, match="BatchManager"):
-            LieselOptim(model, split=split, batches=batches).build_engine()
+            LieselOptim(
+                model,
+                loss_monitor=EmaTrainLossMonitor(),
+                split=split,
+                batches=batches,
+            ).build_engine()
