@@ -290,6 +290,9 @@ class LBFGS(Optimizer):
     :func:`optax.value_and_grad_from_state` inside :meth:`step`, which lets Optax
     reuse value/gradient information stored by the L-BFGS transformation.
 
+    L-BFGS requires full-data batches and a deterministic objective. The engine
+    rejects mini-batches, but cannot detect stochastic objective evaluations.
+
     Parameters
     ----------
     position_keys

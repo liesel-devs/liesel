@@ -29,7 +29,7 @@ from ._engine_utils import (
 )
 from .batch import Batches
 from .loss import Loss
-from .optimizer import OptimizerLike
+from .optimizer import LBFGS, OptimizerLike
 from .split import PositionSplitManager
 from .state import (
     _NAN_DEBUG_KIND_LOSS,
@@ -176,7 +176,9 @@ class OptimEngine:
     -----
     ``OptimEngine`` uses ``carry.epoch`` as the number of completed epochs and as the
     next history index to be written. This matches :class:`.Stopper`'s experimental
-    indexing convention.
+    indexing convention. Built-in :class:`.LBFGS` is accepted only with full-data
+    batches and also requires a deterministic objective, which the engine cannot
+    validate.
 
     Examples
     --------
@@ -435,13 +437,17 @@ class OptimEngine:
 
     def _validate_batch_split_compatibility(self) -> None:
         """
-        Validates that batch and split configurations can be used together.
+        Validates batch, split, and built-in L-BFGS compatibility.
+
+        L-BFGS requires full-data batches and a deterministic objective. Only the
+        batch requirement can be validated here.
 
         Raises
         ------
         ValueError
             If a multi-size split is paired with single-size batches, or if batches
-            reference keys missing from the training split.
+            reference keys missing from the training split, or if built-in L-BFGS
+            is paired with mini-batches.
         """
         if isinstance(self.split, PositionSplitManager) and isinstance(
             self.batches, Batches
@@ -449,6 +455,14 @@ class OptimEngine:
             raise ValueError(  # noqa: TRY004
                 "OptimEngine requires a BatchManager when used with a "
                 "PositionSplitManager."
+            )
+
+        if not self.batches.is_full_data and any(
+            isinstance(opt, LBFGS) for opt in self.optimizers
+        ):
+            raise ValueError(
+                "LBFGS requires full-data batches and a deterministic objective; "
+                "configure full-data batches or use another optimizer."
             )
 
         missing = sorted(
@@ -1104,10 +1118,7 @@ class OptimEngine:
                 loss_monitor_i
             )
         else:
-            if carry.batches.is_full_data:
-                loss_monitor_i = loss_i
-            else:
-                loss_monitor_i = self.loss.loss_train(carry.position, carry)
+            loss_monitor_i = self.loss.loss_train(carry.position, carry)
             carry.loss_monitor = loss_monitor_i
             carry.history.loss_monitor = carry.history.loss_monitor.at[i].set(
                 loss_monitor_i

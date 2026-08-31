@@ -15,6 +15,7 @@ import pytest
 import liesel.optim as opt
 import liesel.optim.engine as engine_module
 from liesel.optim import (
+    LBFGS,
     Batches,
     BatchManager,
     EmaTrainLossMonitor,
@@ -68,6 +69,34 @@ def test_engine_requires_explicit_loss_monitor():
             seed=1,
             initial_state={},
         )
+
+
+def test_engine_rejects_lbfgs_with_mini_batches():
+    with pytest.raises(ValueError, match="LBFGS.*full-data.*deterministic"):
+        OptimEngine(
+            loss=SequenceLoss(_monitor_split()),
+            batches=Batches(["y"], axis_size=2, batch_size=1, shuffle=False),
+            optimizers=[LBFGS(["theta"])],
+            stopper=Stopper(epochs=1, patience=1),
+            seed=1,
+            initial_state={},
+            loss_monitor=EmaTrainLossMonitor(),
+        )
+
+
+def test_engine_accepts_lbfgs_with_full_data_batch():
+    result = OptimEngine(
+        loss=QuadraticEngineLoss(_split()),
+        batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
+        optimizers=[LBFGS(["theta"])],
+        stopper=Stopper(epochs=1, patience=1),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+        loss_monitor="train_full_data",
+    ).fit()
+
+    assert result.history.loss_monitor.tolist() == pytest.approx([0.0], abs=1e-6)
 
 
 @dataclass
@@ -131,6 +160,16 @@ class SequenceLoss:
 
 
 @dataclass
+class QuadraticEngineLoss(SequenceLoss):
+    def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
+        del carry
+        return params["theta"] ** 2
+
+    def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
+        return self.loss_train_batched(params, carry)
+
+
+@dataclass
 class BatchSensitiveLoss:
     split: PositionSplit
 
@@ -162,6 +201,13 @@ class BatchedOnlyLoss(BatchSensitiveLoss):
     def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
         del params, carry
         raise AssertionError("full training loss should not be evaluated")
+
+
+@dataclass
+class DistinctFullDataLoss(BatchSensitiveLoss):
+    def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
+        del carry
+        return params["theta"] + 10.0
 
 
 @dataclass
@@ -1031,10 +1077,10 @@ def test_validation_monitor_is_unsmoothed():
     assert result.history.loss_monitor.tolist() == pytest.approx([-999.0])
 
 
-def test_train_full_data_reuses_full_batch_loss():
+def test_train_full_data_monitor_uses_exact_callback_with_full_data_batch():
     split = _monitor_split()
     engine = OptimEngine(
-        loss=BatchedOnlyLoss(split),
+        loss=DistinctFullDataLoss(split),
         batches=Batches(["y"], axis_size=2, batch_size=None, shuffle=False),
         optimizers=[_optimizer()],
         stopper=Stopper(epochs=1, patience=1),
@@ -1046,8 +1092,7 @@ def test_train_full_data_reuses_full_batch_loss():
 
     result = engine.fit()
 
-    assert result.history.loss_train.tolist() == pytest.approx([4.0])
-    assert result.history.loss_monitor.tolist() == pytest.approx([4.0])
+    assert result.history.loss_monitor.tolist() == pytest.approx([10.0])
 
 
 @pytest.mark.parametrize("loss_monitor", ["validation", "train_full_data"])
