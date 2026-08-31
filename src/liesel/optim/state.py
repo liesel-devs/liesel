@@ -175,10 +175,14 @@ class OptimHistory:
     Parameters
     ----------
     loss_train
-        Training loss history with shape ``(epochs,)``.
+        Equal-weight mean of the post-update mini-batch training losses within each
+        completed epoch, with shape ``(epochs,)``. Because parameters may change
+        between batches, this summarizes the optimization trajectory; it is not a
+        full-data loss evaluated at the epoch's final position.
     loss_monitor
-        Monitoring loss history with shape ``(epochs,)``. This can be a validation
-        loss or another loss monitored for stopping and result selection.
+        Epoch-level series used for stopping and result selection, with shape
+        ``(epochs,)``. Depending on the configured source, this is a training EMA,
+        complete validation loss, or complete training loss.
     position
         Optional parameter position history. Each array has a leading epoch
         dimension.
@@ -586,7 +590,9 @@ class OptimCarry:
     min_monitor_epoch
         Epoch at which the smallest monitoring loss was found.
     loss_train
-        Most recent training loss.
+        Running epoch accumulation of post-update mini-batch training losses. At a
+        completed epoch it is their equal-weight mean, evaluated along the sequence
+        of parameter positions visited during that epoch.
     loss_monitor
         Most recent monitoring loss.
     epoch
@@ -849,7 +855,13 @@ class OptimResult:
         self, legend: bool = True, title: str | None = None, window: int | None = None
     ):
         """
-        Plots training and monitoring loss histories.
+        Plots the epoch-mean training loss and configured monitoring loss.
+
+        The training series averages post-update mini-batch losses evaluated along
+        each epoch's optimization trajectory. It is not a full-data loss evaluated
+        at the epoch's final position. The monitoring label identifies whether the
+        corresponding series is a training EMA, validation loss, or full-data
+        training loss.
 
         Parameters
         ----------
@@ -872,10 +884,16 @@ class OptimResult:
         i = _plot_window_start(n_iter, window)
         history = history.iloc[i:, :]
 
+        monitor_label = {
+            "train_ema": "Monitoring (training EMA)",
+            "validation": "Monitoring (validation)",
+            "train_full_data": "Monitoring (full training data)",
+        }[self.monitor_source]
+
         plot_data = history[["loss_monitor", "loss_train", "epoch"]].rename(
             columns={
-                "loss_monitor": "Monitoring",
-                "loss_train": "Training",
+                "loss_monitor": monitor_label,
+                "loss_train": "Training (epoch mean)",
                 "epoch": "Epoch",
             }
         )

@@ -1,3 +1,5 @@
+from typing import Literal
+
 import jax
 import jax.numpy as jnp
 import optax
@@ -127,7 +129,19 @@ class TestOptimResult:
         assert result.n_epochs == len(result.history.loss_train)
         assert result.n_epochs - 1 == 1
 
-    def test_plot_loss_labels_monitoring_loss(self):
+    @pytest.mark.parametrize(
+        ("monitor_source", "monitor_label"),
+        [
+            ("train_ema", "Monitoring (training EMA)"),
+            ("validation", "Monitoring (validation)"),
+            ("train_full_data", "Monitoring (full training data)"),
+        ],
+    )
+    def test_plot_loss_uses_source_aware_labels(
+        self,
+        monitor_source: Literal["train_ema", "validation", "train_full_data"],
+        monitor_label: str,
+    ):
         history = OptimHistory.from_epochs(epochs=2, position=None, tracked=None)
         history.loss_train = jnp.array([1.0, 0.5])
         history.loss_monitor = jnp.array([1.2, 0.7])
@@ -139,17 +153,20 @@ class TestOptimResult:
             position_min_monitor=position,
             n_epochs=2,
             min_monitor_epoch=1,
-            monitor_source="train_full_data",
+            monitor_source=monitor_source,
             duration=0.0,
         )
 
         plot = result.plot_loss()
 
-        assert set(plot.data["Loss Type"].unique()) == {"Training", "Monitoring"}
+        assert set(plot.data["Loss Type"].unique()) == {
+            "Training (epoch mean)",
+            monitor_label,
+        }
         assert len(plot.layers) == 2
         assert repr(result) == (
             "OptimResult(n_epochs=2, min_monitor_epoch=1, "
-            "monitor_source='train_full_data', duration=0.0s)"
+            f"monitor_source={monitor_source!r}, duration=0.0s)"
         )
 
     def test_plot_methods_reject_invalid_window(self):

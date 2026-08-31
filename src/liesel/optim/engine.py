@@ -52,7 +52,11 @@ __all__ = ["EmaTrainLossMonitor", "LossMonitor", "OptimEngine"]
 class EmaTrainLossMonitor:
     """Configures EMA monitoring of post-update mini-batch training losses.
 
-    ``effective_window`` is measured in epoch equivalents.
+    ``effective_window`` is the EMA span measured in epoch equivalents, not a hard
+    inclusion window or half-life. With a typical multi-batch epoch, a span of one
+    epoch equivalent has a half-life of roughly 0.35 epoch equivalents, so recent
+    batches receive substantially more weight than early batches from the same
+    epoch.
     """
 
     effective_window: float = 1.0
