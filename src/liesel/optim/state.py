@@ -914,6 +914,9 @@ class OptimResult:
         if title is not None:
             p += p9.ggtitle(title)
 
+        p += p9.theme(legend_position="inside")
+        p += p9.theme(legend_position_inside=(0.8, 0.9))
+
         if not legend:
             p += p9.theme(legend_position="none")
 
