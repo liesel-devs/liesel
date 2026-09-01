@@ -50,7 +50,7 @@ __all__ = ["EmaTrainLossMonitor", "LossMonitor", "OptimEngine"]
 
 @dataclass(frozen=True)
 class EmaTrainLossMonitor:
-    """Configures EMA monitoring of the pre-update mini-batch training loss.
+    r"""Configures EMA monitoring of the pre-update mini-batch training loss.
 
     The pre-update mini-batch training loss is the scalar objective evaluated for
     an optimizer's gradient at its supplied position, before that optimizer applies
@@ -59,11 +59,37 @@ class EmaTrainLossMonitor:
     evaluation. The first active optimizer supplies this observation. If none is
     active, the engine evaluates the loss once at the unchanged position.
 
-    ``effective_window`` is the EMA span measured in epoch equivalents, not a hard
+    Let :math:`e` be ``effective_window`` and :math:`N` the configured number of
+    full batches per epoch. The span :math:`W` and smoothing coefficients are
+
+    .. math::
+
+       W = \max(1, eN), \qquad
+       \alpha = \frac{2}{W + 1}, \qquad
+       \beta = 1 - \alpha.
+
+    Starting from :math:`m_0 = w_0 = 0`, mini-batch observation :math:`t` updates
+
+    .. math::
+
+       m_t = \beta m_{t-1} + \alpha L_t, \qquad
+       w_t = \beta w_{t-1} + \alpha, \qquad
+       \operatorname{EMA}_t = \frac{m_t}{w_t}.
+
+    Here :math:`L_t` is the pre-update loss, :math:`m_t` its unnormalized
+    exponentially weighted sum, :math:`w_t` the accumulated weight,
+    :math:`\alpha` the newest-loss weight, and :math:`\beta` the decay applied to
+    earlier losses. The index :math:`t` continues across epoch boundaries. Since
+    :math:`w_t = 1 - \beta^t`, the bias-correction factor :math:`1 / w_t`
+    automatically approaches one without changing the update rule.
+
+    ``effective_window`` is an EMA span measured in epoch equivalents, not a hard
     inclusion window or half-life. With a typical multi-batch epoch, a span of one
     epoch equivalent has a half-life of roughly 0.35 epoch equivalents, so recent
     batches receive substantially more weight than early batches from the same
-    epoch.
+    epoch. The :meth:`from_half_life` constructor uses the large-span approximation
+    :math:`e = 2h / \log(2)` for a requested half-life :math:`h`. The exact
+    finite-step relationship also depends on the number of batches per epoch.
     """
 
     effective_window: float = 1.0
@@ -79,6 +105,27 @@ class EmaTrainLossMonitor:
                 "effective_window must be finite and positive, but got "
                 f"{self.effective_window!r}."
             )
+
+    @classmethod
+    def from_half_life(cls, half_life: float) -> EmaTrainLossMonitor:
+        """Constructs a monitor from an approximate half-life.
+
+        ``half_life`` is measured in configured epoch equivalents. The conversion
+        uses ``effective_window = 2 * half_life / log(2)`` and is approximate because
+        the exact finite-step relationship depends on the number of batches per
+        epoch.
+        """
+        try:
+            valid = math.isfinite(half_life) and half_life > 0
+        except (TypeError, ValueError):
+            valid = False
+
+        if isinstance(half_life, bool) or not valid:
+            raise ValueError(
+                f"half_life must be finite and positive, but got {half_life!r}."
+            )
+
+        return cls(effective_window=2.0 * half_life / math.log(2.0))
 
 
 type LossMonitor = EmaTrainLossMonitor | Literal["validation", "train_full_data"]

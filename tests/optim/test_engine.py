@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import io
+import math
 import threading
 from collections.abc import Callable
 from dataclasses import FrozenInstanceError, dataclass
@@ -52,6 +53,21 @@ def test_ema_train_loss_monitor_is_frozen():
 def test_ema_train_loss_monitor_rejects_invalid_windows(effective_window):
     with pytest.raises(ValueError, match="effective_window"):
         EmaTrainLossMonitor(effective_window)
+
+
+@pytest.mark.parametrize("half_life", [0.25, 1.0, 7.0])
+def test_ema_train_loss_monitor_from_half_life(half_life):
+    monitor = EmaTrainLossMonitor.from_half_life(half_life)
+
+    assert monitor.effective_window == pytest.approx(2.0 * half_life / math.log(2.0))
+
+
+@pytest.mark.parametrize(
+    "half_life", [True, 0.0, -1.0, float("inf"), float("-inf"), float("nan")]
+)
+def test_ema_train_loss_monitor_rejects_invalid_half_lives(half_life):
+    with pytest.raises(ValueError, match="half_life"):
+        EmaTrainLossMonitor.from_half_life(half_life)
 
 
 def test_loss_monitor_configuration_is_public():
