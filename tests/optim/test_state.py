@@ -201,7 +201,8 @@ class TestOptimResult:
 
         assert full.data["Epoch"].unique().tolist() == list(range(10))
         assert recent.data["Epoch"].unique().tolist() == expected_epochs
-        assert full.labels.title == "Loss history and recent convergence"
+        assert full.labels.subtitle == "Full loss history"
+        assert recent.labels.subtitle == "Recent loss history"
         assert recent.theme.getp("legend_position") == "none"
 
         x_scale = recent.scales.get_scales("x")

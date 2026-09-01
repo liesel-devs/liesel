@@ -775,14 +775,18 @@ class TestPredictions:
         reason="Compiled memory statistics are backend-specific.",
     )
     def test_chunking_reduces_compiled_temporary_memory(self) -> None:
-        n = 37
-        n_samples = 7
-        theta = Var.new_param(1.0, name="theta")
-        matrix = Var.new_calc(lambda x: x * jnp.eye(n), theta, name="matrix")
-        target = Var.new_calc(jnp.sum, matrix, name="target")
+        n = 32
+        n_samples = 32
+        theta = Var.new_param(jnp.ones(n), name="theta")
+        matrix = Var.new_calc(
+            lambda x: jnp.outer(x, x) + jnp.eye(n), theta, name="matrix"
+        )
+        target = Var.new_calc(
+            lambda x: jnp.sum(jnp.linalg.cholesky(x)), matrix, name="target"
+        )
         model = Model([target])
         submodel = model.parental_submodel(target)
-        samples = {"theta": jnp.ones(n_samples)}
+        samples = {"theta": jnp.ones((n_samples, n))}
 
         full = (
             _compile_prediction(submodel, ["target"])
@@ -791,7 +795,7 @@ class TestPredictions:
             .memory_analysis()
         )
         chunked = (
-            _compile_prediction(submodel, ["target"], chunk_size=3)
+            _compile_prediction(submodel, ["target"], chunk_size=4)
             .lower(samples, submodel.state)
             .compile()
             .memory_analysis()
