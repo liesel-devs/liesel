@@ -33,6 +33,7 @@ dependencies = [
     "numpy>=2.0",
     "optax>=0.1.7",
     "pandas>=1.4",
+    "plotnine>=0.15.0",
     "pydot>=3.0",
     "scipy>=1.14.1",
     "seaborn>=0.13.2",
