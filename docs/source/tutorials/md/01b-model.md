@@ -43,7 +43,9 @@ second variable. Variables *without* an edge between them are assumed to
 be conditionally independent, allowing us to factorize the model
 log-probability as
 
-$$\log p(\text{Model}) = \sum_{\text{Var $\in$ Model}} \log p(\text{Var} \mid \text{Inputs}(\text{Var})).$$
+$$
+\log p(\text{Model}) = \sum_{\text{Var $\in$ Model}} \log p(\text{Var} \mid \text{Inputs}(\text{Var})).
+$$
 
 So let us consider the same model and data from the [linear regression
 tutorial](01a-lin-reg.md), where we had the underlying model

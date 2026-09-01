@@ -78,7 +78,7 @@ model = lsl.Model(y)
 model.plot()
 ```
 
-    liesel.model.model - WARNING - Inconsistent log prob decomposition: Model.log_prob=-1177.35 ≠ (Model.log_lik=0.00 + Model.log_prior=-15.72).
+    liesel.model.model - WARNING - Inconsistent log prob decomposition: Model.log_prob=-1177.35 ≠ (Model.log_lik=0.00 + Model.log_prior=-15.72). 
     liesel.model.model - WARNING - Var(name="y") has a distribution but Var.parameter=False and Var.observed=False.
 
 <img
@@ -114,46 +114,47 @@ results = gs.LieselMCMC(model).run_for_epochs(
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 100 transitions, 25 jitted together
 
       0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-     25%|██████████▌                               | 1/4 [00:03<00:11,  3.77s/chunk]
-    100%|██████████████████████████████████████████| 4/4 [00:03<00:00,  1.06chunk/s]
+     25%|██████████▌                               | 1/4 [00:04<00:12,  4.14s/chunk]
+    100%|██████████████████████████████████████████| 4/4 [00:04<00:00,  1.03s/chunk]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 3, 3, 3 / 100 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
 
       0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|█████████████████████████████████████████| 1/1 [00:00<00:00, 691.22chunk/s]
+    100%|█████████████████████████████████████████| 1/1 [00:00<00:00, 790.33chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 25 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
 
       0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1458.38chunk/s]
+    100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1135.44chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 4, 2 / 50 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
 
       0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|████████████████████████████████████████| 4/4 [00:00<00:00, 1215.04chunk/s]
+    100%|████████████████████████████████████████| 4/4 [00:00<00:00, 1556.04chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 3, 1, 2 / 100 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 525 transitions, 25 jitted together
 
       0%|                                                 | 0/21 [00:00<?, ?chunk/s]
-    100%|███████████████████████████████████████| 21/21 [00:00<00:00, 215.74chunk/s]
+    100%|███████████████████████████████████████| 21/21 [00:00<00:00, 204.11chunk/s]
+    100%|███████████████████████████████████████| 21/21 [00:00<00:00, 202.35chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 3, 1, 2 / 525 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 200 transitions, 25 jitted together
 
       0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|█████████████████████████████████████████| 8/8 [00:00<00:00, 588.58chunk/s]
+    100%|█████████████████████████████████████████| 8/8 [00:00<00:00, 559.11chunk/s]
     liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 2, 2, 3 / 200 transitions
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Finished warmup
     liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
 
       0%|                                                 | 0/40 [00:00<?, ?chunk/s]
-     62%|████████████████████████▍              | 25/40 [00:00<00:00, 243.33chunk/s]
-    100%|███████████████████████████████████████| 40/40 [00:00<00:00, 212.13chunk/s]
+     60%|███████████████████████▍               | 24/40 [00:00<00:00, 230.38chunk/s]
+    100%|███████████████████████████████████████| 40/40 [00:00<00:00, 196.00chunk/s]
     liesel.goose.engine - INFO - Finished epoch
 
 Judging from the trace plots, it seems that all chains have converged.
