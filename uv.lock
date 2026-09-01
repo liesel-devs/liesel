@@ -1081,7 +1081,7 @@ requires-dist = [
     { name = "networkx", specifier = ">=3.4.2" },
     { name = "numpy", specifier = ">=2.0" },
     { name = "optax", specifier = ">=0.1.7" },
-    { name = "pandas", specifier = ">=1.4" },
+    { name = "pandas", specifier = ">=2.2.3" },
     { name = "pydot", specifier = ">=3.0" },
     { name = "scipy", specifier = ">=1.14.1" },
     { name = "seaborn", specifier = ">=0.13.2" },
