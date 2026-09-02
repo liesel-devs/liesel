@@ -1,5 +1,7 @@
 from itertools import product
+from types import SimpleNamespace
 
+import arviz as az
 import jax.numpy as jnp
 import jax.random as rnd
 import numpy as np
@@ -623,5 +625,28 @@ def test_loo(model):
     assert loo_deviance.p_loo == pytest.approx(5.829, abs=0.01)
     assert loo_deviance.se == pytest.approx(2 * 15.777, abs=0.01)
 
-    with pytest.raises(ValueError, match="relative MCMC efficiency"):
-        loo(lpp, None)
+
+def test_loo_relative_efficiency(monkeypatch):
+    reffs = []
+
+    def fake_loo(_, reff):
+        reffs.append(reff)
+        return SimpleNamespace(elpd=0.0, p=0.0)
+
+    monkeypatch.setattr("liesel.goose.summary_m.az.loo", fake_loo)
+
+    trajectory = np.sin(np.linspace(0.0, 4.0 * np.pi, 400)).reshape(4, 100)
+    lpp = np.stack((trajectory, 0.5 * trajectory, -trajectory), axis=-1) - 10_000.0
+    likelihood = np.exp(lpp - lpp.max(axis=(0, 1), keepdims=True))
+    expected = float(np.mean(az.ess(likelihood, method="mean") / 400))
+
+    loo(lpp)
+    loo(lpp, {"unrelated": np.zeros((4, 100))})
+    loo(np.full((4, 100, 3), -10_000.0))
+
+    assert reffs[:2] == pytest.approx([expected, expected], rel=1e-4)
+    assert reffs[2] == pytest.approx(1.0)
+
+    monkeypatch.setattr(az, "ess", lambda *_args, **_kwargs: pytest.fail())
+    loo(lpp, reff=0.25)
+    assert reffs[3] == pytest.approx(0.25)
