@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from arviz_stats.base import array_stats
+from matplotlib.typing import LegendLocType
 
 from liesel.goose.engine import SamplingResults
 
@@ -1005,7 +1006,7 @@ def plot_scatter(
     style: str = "whitegrid",
     color_list: list[str] | None = None,
     figure_size: tuple[int | float, int | float] = (9, 6),
-    legend_position: tuple[float, float] | str = "best",
+    legend_position: LegendLocType = "best",
     save_path: str | None = None,
     include_warmup: bool = False,
     show: bool = True,
