@@ -1053,7 +1053,7 @@ requires-dist = [
     { name = "dill", specifier = ">=0.4" },
     { name = "jax", specifier = ">=0.7.0" },
     { name = "jaxlib", specifier = ">=0.7.0" },
-    { name = "matplotlib", specifier = ">=3.10.7" },
+    { name = "matplotlib", specifier = ">=3.11" },
     { name = "networkx", specifier = ">=3.4.2" },
     { name = "numpy", specifier = ">=2.0" },
     { name = "optax", specifier = ">=0.1.7" },
