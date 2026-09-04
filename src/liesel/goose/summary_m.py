@@ -143,8 +143,11 @@ def _summarize_acceptance_probabilities(
 def summarize_acceptance_probabilities(
     results: SamplingResults,
 ) -> list[dict[str, Any]]:
-    warmup = _summarize_acceptance_probabilities(
-        results.get_warmup_transition_infos(), "warmup"
+    warmup = results.transition_infos.combine_filtered(
+        lambda epoch: EpochType.is_warmup(epoch.type)
+    ).map_or(
+        [],
+        lambda infos: _summarize_acceptance_probabilities(infos, "warmup"),
     )
     posterior = _summarize_acceptance_probabilities(
         results.get_posterior_transition_infos(), "posterior"
@@ -331,27 +334,36 @@ class Summary:
         param_chain = next(iter(posterior_chain.values()))
         epochs = results.positions.get_epochs()
 
-        warmup_size = np.sum(
-            [
-                int(epoch.duration / epoch.thinning)
-                for epoch in epochs
-                if epoch.type.is_warmup(epoch.type)
-            ]
+        warmup_size = results.positions.combine_filtered(
+            lambda epoch: EpochType.is_warmup(epoch.type)
+        ).map_or(
+            0,
+            lambda samples: next(iter(samples.values())).shape[1],
         )
 
         thinning_warmup = np.unique(
             [epoch.thinning for epoch in epochs if epoch.type.is_warmup(epoch.type)]
+        )
+        thinning_warmup = (
+            thinning_warmup.item() if thinning_warmup.size == 1 else np.nan
         )
 
         thinning_posterior = np.unique(
             [epoch.thinning for epoch in epochs if epoch.type is EpochType.POSTERIOR]
         )
 
+        warmup_transition_count = results.transition_infos.combine_filtered(
+            lambda epoch: EpochType.is_warmup(epoch.type)
+        ).map_or(
+            0 if warmup_size == 0 else warmup_size * thinning_warmup,
+            lambda infos: next(iter(infos.values())).error_code.shape[1],
+        )
+
         sample_info = {
             "num_chains": param_chain.shape[0],
             "sample_size_per_chain": param_chain.shape[1],
             "warmup_size_per_chain": warmup_size,
-            "thinning_warmup": thinning_warmup.squeeze(),
+            "thinning_warmup": thinning_warmup,
             "thinning_posterior": thinning_posterior.squeeze(),
         }
 
@@ -403,6 +415,7 @@ class Summary:
         self.quantities = quantities
         self.config = config
         self.sample_info = sample_info
+        self._warmup_transition_count = warmup_transition_count
         self.error_summary = error_summary
         self.pos_keys_by_kernels_df = posdf
         self._acceptance_prob_summary = summarize_acceptance_probabilities(results)
@@ -650,6 +663,9 @@ class Summary:
         df.loc[pd.IndexSlice[:, :, :, "posterior"], "thinning"] = posterior_thinning
 
         df["sample_size_total"] = df["sample_size"] * df["thinning"]
+        df.loc[pd.IndexSlice[:, :, :, "warmup"], "sample_size_total"] = (
+            self._warmup_transition_count
+        )
 
         df["relative"] = df["count"] / df["sample_size_total"]
 

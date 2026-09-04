@@ -23,6 +23,13 @@ path = os.path.join(path_module_dir, "files", "summary_viz_res.pkl")
 results = SamplingResults.pkl_load(path)
 
 
+def test_legacy_result_has_empty_timing_metadata():
+    legacy_results = SamplingResults.pkl_load(path)
+
+    assert legacy_results.elapsed_wall_time is None
+    assert legacy_results.stop_reason is None
+
+
 def test_data_high_dim_params():
     samples = {"a": jax.random.normal(key=jax.random.key(1), shape=(4, 30, 2, 2))}
     df = _setup_plot_df(

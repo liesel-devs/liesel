@@ -1,7 +1,9 @@
+from dataclasses import replace
 from itertools import product
 from types import SimpleNamespace
 
 import arviz as az
+import jax
 import jax.numpy as jnp
 import jax.random as rnd
 import numpy as np
@@ -10,11 +12,54 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.model as lsl
 from liesel.__version__ import __version__
+from liesel.goose.chain import EpochChainManager
 from liesel.goose.engine import SamplingResults
+from liesel.goose.epoch import EpochConfig, EpochType
 from liesel.goose.summary_m import SamplesSummary, Summary, loo
 
 # TODO: add tests to test correctness of quantities
 # TODO: speed up tests
+
+
+def _results_with_partial_warmup(
+    result: SamplingResults, *, completed: int, thinning: int
+) -> tuple[SamplingResults, EpochConfig]:
+    warmup_epoch = EpochConfig(EpochType.BURNIN, 50, thinning, None)
+    posterior_epoch = EpochConfig(EpochType.POSTERIOR, 250, 1, None)
+
+    positions = EpochChainManager()
+    positions.advance_epoch(warmup_epoch)
+    if completed:
+        stored = completed // thinning
+        positions.append(
+            jax.tree.map(lambda value: value[:, :stored], result.get_warmup_samples())
+        )
+    positions.advance_epoch(posterior_epoch)
+    positions.append(result.get_posterior_samples())
+
+    transition_infos = EpochChainManager()
+    transition_infos.advance_epoch(warmup_epoch)
+    if completed:
+        warmup_infos = jax.tree.map(
+            lambda value: value[:, :completed],
+            result.get_warmup_transition_infos(),
+        )
+        info = warmup_infos["kernel_00"]
+        error_code = np.zeros_like(info.error_code)
+        error_code[:, 0] = 1
+        warmup_infos["kernel_00"] = replace(info, error_code=error_code)
+        transition_infos.append(warmup_infos)
+    transition_infos.advance_epoch(posterior_epoch)
+    transition_infos.append(result.get_posterior_transition_infos())
+
+    return (
+        replace(
+            result,
+            positions=positions,
+            transition_infos=transition_infos,
+        ),
+        warmup_epoch,
+    )
 
 
 def test_shapes(result: SamplingResults):
@@ -119,6 +164,121 @@ def test_sample_info(result: SamplingResults):
     print(summary.sample_info)
     assert summary.sample_info["num_chains"] == 3
     assert summary.sample_info["sample_size_per_chain"] == 250
+
+
+def test_partial_warmup_sample_info_and_error_denominator(
+    result: SamplingResults,
+):
+    partial, warmup_epoch = _results_with_partial_warmup(
+        result, completed=5, thinning=2
+    )
+
+    summary = Summary(partial, selected=["baz"], which=["mean"])
+    warmup_errors = summary.error_df().xs("warmup", level="phase")
+
+    assert summary.sample_info["warmup_size_per_chain"] == 2
+    assert warmup_errors["count"].iloc[0] == 3
+    assert warmup_errors["sample_size"].iloc[0] == 6
+    assert warmup_errors["sample_size_total"].iloc[0] == 15
+    assert warmup_errors["relative"].iloc[0] == pytest.approx(1 / 5)
+    assert warmup_epoch.duration == 50
+
+
+def test_partial_warmup_with_mixed_thinning_has_actual_error_denominator(
+    result: SamplingResults,
+):
+    warmup_epochs = [
+        EpochConfig(EpochType.BURNIN, 12, 2, None),
+        EpochConfig(EpochType.BURNIN, 15, 3, None),
+    ]
+    posterior_epoch = EpochConfig(EpochType.POSTERIOR, 250, 1, None)
+
+    positions = EpochChainManager()
+    transition_infos = EpochChainManager()
+    for epoch, completed, stored, errors in zip(warmup_epochs, [4, 5], [2, 1], [1, 2]):
+        positions.advance_epoch(epoch)
+        positions.append(
+            jax.tree.map(
+                lambda value, stored=stored: value[:, :stored],
+                result.get_warmup_samples(),
+            )
+        )
+
+        transition_infos.advance_epoch(epoch)
+        infos = jax.tree.map(
+            lambda value, completed=completed: value[:, :completed],
+            result.get_warmup_transition_infos(),
+        )
+        info = infos["kernel_00"]
+        error_code = np.zeros_like(info.error_code)
+        error_code[:, :errors] = 1
+        infos["kernel_00"] = replace(info, error_code=error_code)
+        transition_infos.append(infos)
+
+    positions.advance_epoch(posterior_epoch)
+    positions.append(result.get_posterior_samples())
+    transition_infos.advance_epoch(posterior_epoch)
+    transition_infos.append(result.get_posterior_transition_infos())
+
+    partial = replace(
+        result,
+        positions=positions,
+        transition_infos=transition_infos,
+    )
+    summary = Summary(partial, selected=["baz"], which=["mean"])
+    warmup_errors = summary.error_df().xs("warmup", level="phase")
+
+    assert np.isnan(summary.sample_info["thinning_warmup"])
+    assert warmup_errors["count"].iloc[0] == 9
+    assert warmup_errors["sample_size"].iloc[0] == 9
+    assert warmup_errors["sample_size_total"].iloc[0] == 27
+    assert warmup_errors["relative"].iloc[0] == pytest.approx(1 / 3)
+
+
+def test_summary_accepts_zero_completed_warmup_blocks(result: SamplingResults):
+    partial, warmup_epoch = _results_with_partial_warmup(
+        result, completed=0, thinning=2
+    )
+
+    summary = Summary(partial, selected=["baz"], which=["mean"])
+
+    assert summary.sample_info["warmup_size_per_chain"] == 0
+    assert set(summary.acceptance_prob_df().index.get_level_values("phase")) == {
+        "posterior"
+    }
+    assert warmup_epoch.duration == 50
+
+
+def test_summary_accepts_posterior_only_results(result: SamplingResults):
+    posterior_epoch = EpochConfig(EpochType.POSTERIOR, 250, 1, None)
+    positions = EpochChainManager()
+    positions.advance_epoch(posterior_epoch)
+    positions.append(result.get_posterior_samples())
+
+    posterior_infos = jax.tree.map(
+        lambda value: value[:, :], result.get_posterior_transition_infos()
+    )
+    info = posterior_infos["kernel_00"]
+    error_code = np.zeros_like(info.error_code)
+    error_code[:, 0] = 1
+    posterior_infos["kernel_00"] = replace(info, error_code=error_code)
+    transition_infos = EpochChainManager()
+    transition_infos.advance_epoch(posterior_epoch)
+    transition_infos.append(posterior_infos)
+
+    posterior_only = replace(
+        result,
+        positions=positions,
+        transition_infos=transition_infos,
+    )
+
+    summary = Summary(posterior_only, selected=["baz"], which=["mean"])
+    warmup_errors = summary.error_df().xs("warmup", level="phase")
+
+    assert summary.sample_info["warmup_size_per_chain"] == 0
+    assert warmup_errors["count"].iloc[0] == 0
+    assert warmup_errors["sample_size_total"].iloc[0] == 0
+    assert np.isnan(warmup_errors["relative"].iloc[0])
 
 
 def test_df_sample_info(result: SamplingResults):
