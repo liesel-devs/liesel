@@ -32,7 +32,11 @@ from liesel.goose.types import Array, KeyArray, ModelInterface, ModelState
 from liesel.model import Model, Var
 from liesel.option import Option
 
-from .deterministic_kernels import DetCountingKernel, DetCountingKernelState
+from .deterministic_kernels import (
+    DetCountingKernel,
+    DetCountingKernelState,
+    DetCountingKernelTuningInfo,
+)
 
 
 @register_dataclass_as_pytree
@@ -90,17 +94,20 @@ def _engine_with_block_size(
     )
 
 
-def _pause_in_second_epoch(engine: Engine) -> None:
-    """Create a partial epoch until issue 03 adds public deadline stopping."""
+def _stop_in_second_epoch(engine: Engine, monkeypatch) -> None:
     engine.sample_next_epoch()
-    engine._start_epoch()
-    engine._kernel_start_epoch()
-    engine._sample_for_duration(engine.jit_block_size)
+    engine.max_wall_time = 1.0
+    times = iter([10.0, 11.0])
+    with monkeypatch.context() as patch:
+        patch.setattr("liesel.goose.engine.monotonic", lambda: next(times))
+        with pytest.raises(TimeoutError):
+            engine.sample_next_epoch()
+    engine.max_wall_time = None
 
 
-def test_sample_next_epoch_resumes_active_epoch():
+def test_sample_next_epoch_resumes_active_epoch(monkeypatch):
     engine = _engine_with_block_size()
-    _pause_in_second_epoch(engine)
+    _stop_in_second_epoch(engine, monkeypatch)
 
     assert not engine.is_sampling_done()
 
@@ -113,9 +120,9 @@ def test_sample_next_epoch_resumes_active_epoch():
         _ = engine.current_epoch
 
 
-def test_sample_all_epochs_completes_active_final_epoch():
+def test_sample_all_epochs_completes_active_final_epoch(monkeypatch):
     engine = _engine_with_block_size()
-    _pause_in_second_epoch(engine)
+    _stop_in_second_epoch(engine, monkeypatch)
 
     engine.sample_all_epochs()
 
@@ -124,7 +131,7 @@ def test_sample_all_epochs_completes_active_final_epoch():
     assert engine.is_sampling_done()
 
 
-def test_sample_all_epochs_resumes_before_pending_epochs():
+def test_sample_all_epochs_resumes_before_pending_epochs(monkeypatch):
     engine = _engine_with_block_size(
         epoch_configs=[
             EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
@@ -132,7 +139,7 @@ def test_sample_all_epochs_resumes_before_pending_epochs():
             EpochConfig(EpochType.POSTERIOR, 2, 1, None),
         ]
     )
-    _pause_in_second_epoch(engine)
+    _stop_in_second_epoch(engine, monkeypatch)
 
     engine.sample_all_epochs()
 
@@ -222,6 +229,187 @@ def test_error_log():
     assert kel.kernel_ident == "kern0"
     assert np.array_equal(kel.transition, np.array([2, 3]))
     assert np.array_equal(kel.error_codes, np.array([[1, 0], [1, 1]]))
+
+
+def test_sampling_results_timing_metadata_defaults_to_none():
+    results = SamplingResults(
+        EpochChainManager(),
+        EpochChainManager(),
+        Option.none(),
+        Option.none(),
+        Option.none(),
+        Option.none(),
+        Option.none(),
+        Option.none(),
+    )
+
+    assert results.elapsed_wall_time is None
+    assert results.stop_reason is None
+
+
+def test_sample_next_epoch_records_completed_call_metadata(monkeypatch):
+    times = iter([10.0, 12.5])
+    engine = _engine_with_block_size()
+    monkeypatch.setattr("liesel.goose.engine.monotonic", lambda: next(times))
+
+    engine.sample_next_epoch()
+
+    results = engine.get_results()
+    assert results.elapsed_wall_time == 2.5
+    assert results.stop_reason == "completed"
+
+
+def test_sample_next_epoch_stops_at_safety_limit_with_resumable_state(monkeypatch):
+    engine = _engine_with_block_size()
+    engine.sample_next_epoch()
+    engine.max_wall_time = 1.0
+    times = iter([10.0, 11.0])
+    monkeypatch.setattr("liesel.goose.engine.monotonic", lambda: next(times))
+
+    with pytest.raises(
+        TimeoutError,
+        match=r"1\.0.*1\.0.*jit_block_size 2.*resumed",
+    ):
+        engine.sample_next_epoch()
+
+    samples = engine.get_results().get_samples()["x"]
+    assert np.array_equal(samples[0], np.array([0, 10000, 10001]))
+    assert engine.current_epoch.time_in_epoch == 2
+    assert not engine.is_sampling_done()
+    assert engine.get_results().elapsed_wall_time == 1.0
+    assert engine.get_results().stop_reason == "max_wall_time_reached"
+
+
+def test_sample_all_epochs_uses_one_safety_budget_across_epochs(monkeypatch):
+    engine = _engine_with_block_size(
+        epoch_configs=[
+            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
+            EpochConfig(EpochType.BURNIN, 2, 1, None),
+            EpochConfig(EpochType.POSTERIOR, 2, 1, None),
+        ]
+    )
+    engine.max_wall_time = 2.5
+    times = iter([10.0, 11.0, 11.5, 13.0, 14.0])
+    monkeypatch.setattr("liesel.goose.engine.monotonic", lambda: next(times))
+
+    with pytest.raises(TimeoutError):
+        engine.sample_all_epochs()
+
+    assert engine.is_sampling_done()
+    assert engine.get_results().elapsed_wall_time == 4.0
+    assert engine.get_results().stop_reason == "max_wall_time_reached"
+
+
+def test_sample_next_epoch_gets_a_new_safety_budget_when_resumed(monkeypatch):
+    engine = _engine_with_block_size()
+    engine.sample_next_epoch()
+    engine.max_wall_time = 1.0
+    times = iter([10.0, 11.0, 20.0, 20.5, 20.75, 20.75])
+    monkeypatch.setattr("liesel.goose.engine.monotonic", lambda: next(times))
+
+    with pytest.raises(TimeoutError):
+        engine.sample_next_epoch()
+
+    engine.sample_next_epoch()
+
+    assert engine.is_sampling_done()
+    assert engine.get_results().elapsed_wall_time == 0.75
+    assert engine.get_results().stop_reason == "completed"
+
+
+def test_safety_stop_on_final_block_finalizes_adaptation_before_raising(monkeypatch):
+    engine = _engine_with_block_size(
+        epoch_configs=[
+            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
+            EpochConfig(EpochType.FAST_ADAPTATION, 2, 1, None),
+        ]
+    )
+    engine.sample_next_epoch()
+    engine.max_wall_time = 1.0
+    times = iter([10.0, 10.5, 13.0])
+    monkeypatch.setattr("liesel.goose.engine.monotonic", lambda: next(times))
+
+    with pytest.raises(TimeoutError):
+        engine.sample_next_epoch()
+
+    assert engine.is_sampling_done()
+    with pytest.raises(RuntimeError, match="No active epoch"):
+        _ = engine.current_epoch
+    assert np.array_equal(
+        engine.get_results().get_tuning_times().unwrap(), np.array([[3], [3]])
+    )
+    assert engine.get_results().elapsed_wall_time == 3.0
+
+
+def test_safety_clock_observes_synchronized_tuning_infos(monkeypatch):
+    engine = _engine_with_block_size(
+        epoch_configs=[
+            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
+            EpochConfig(EpochType.FAST_ADAPTATION, 2, 1, None),
+        ]
+    )
+    engine.sample_next_epoch()
+    engine.max_wall_time = 1.0
+    tuning_infos_ready = False
+    real_block_until_ready = jax.block_until_ready
+
+    def contains_tuning_info(value) -> bool:
+        if isinstance(value, DetCountingKernelTuningInfo):
+            return True
+        if isinstance(value, dict):
+            return any(contains_tuning_info(item) for item in value.values())
+        if isinstance(value, (list, tuple)):
+            return any(contains_tuning_info(item) for item in value)
+        return False
+
+    def block_until_ready(value):
+        nonlocal tuning_infos_ready
+        result = real_block_until_ready(value)
+        tuning_infos_ready |= contains_tuning_info(value)
+        return result
+
+    clock_started = False
+
+    def monotonic():
+        nonlocal clock_started
+        if not clock_started:
+            clock_started = True
+            return 10.0
+        if tuning_infos_ready:
+            return 11.0
+        return 10.5
+
+    monkeypatch.setattr("liesel.goose.engine.jax.block_until_ready", block_until_ready)
+    monkeypatch.setattr("liesel.goose.engine.monotonic", monotonic)
+
+    with pytest.raises(TimeoutError):
+        engine.sample_next_epoch()
+
+
+def test_untimed_sample_all_epochs_synchronizes_once_at_top_level(monkeypatch):
+    engine = _engine_with_block_size(
+        epoch_configs=[
+            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
+            EpochConfig(EpochType.BURNIN, 2, 1, None),
+            EpochConfig(EpochType.POSTERIOR, 2, 1, None),
+        ]
+    )
+    elapsed = 0.0
+    real_block_until_ready = jax.block_until_ready
+
+    def block_until_ready(value):
+        nonlocal elapsed
+        result = real_block_until_ready(value)
+        elapsed += 1.0
+        return result
+
+    monkeypatch.setattr("liesel.goose.engine.jax.block_until_ready", block_until_ready)
+    monkeypatch.setattr("liesel.goose.engine.monotonic", lambda: elapsed)
+
+    engine.sample_all_epochs()
+
+    assert engine.get_results().elapsed_wall_time == 1.0
+    assert engine.get_results().stop_reason == "completed"
 
 
 def t_test_engine():

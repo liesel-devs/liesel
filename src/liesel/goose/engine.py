@@ -15,7 +15,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
 from functools import partial
 from numbers import Integral, Real
-from typing import Any, NamedTuple, cast
+from time import monotonic
+from typing import Any, Literal, NamedTuple, NoReturn, cast
 
 import jax
 import jax.lax
@@ -164,6 +165,14 @@ class SamplingResults:
     Optional map of position key to identifier of the for sampling responsible
     kernel.
     """
+
+    elapsed_wall_time: float | None = None
+    """Elapsed wall time of the latest top-level sampling call."""
+
+    stop_reason: (
+        Literal["completed", "wall_time_reached", "max_wall_time_reached"] | None
+    ) = None
+    """Reason why the latest top-level sampling call stopped."""
 
     def get_samples(self) -> Position:
         """
@@ -416,6 +425,10 @@ class Engine:
         self._jit_block_size_is_explicit = _jit_block_size_is_explicit
         self._max_wall_time: float | None = None
         self.max_wall_time = max_wall_time
+        self._elapsed_wall_time: float | None = None
+        self._stop_reason: (
+            Literal["completed", "wall_time_reached", "max_wall_time_reached"] | None
+        ) = None
         self._minimize_transition_infos = minimize_transition_infos
         self._store_kernel_states = store_kernel_states
         self._model_states = model_states
@@ -525,14 +538,64 @@ class Engine:
 
         Auto-tuning methods are called automatically.
         """
+        start_time = monotonic()
+        safety_limit = self._max_wall_time
         while self._epoch is not None or self._epoch_manager.has_more():
-            self._sample_next_epoch()
+            limit_reached, elapsed = self._sample_next_epoch(start_time, safety_limit)
+            if limit_reached:
+                assert safety_limit is not None
+                assert elapsed is not None
+                self._raise_timeout(safety_limit, elapsed)
+
+        self._synchronize_top_level()
+        self._elapsed_wall_time = monotonic() - start_time
+        self._stop_reason = "completed"
 
     def sample_next_epoch(self):
         """Runs sampling for the next or currently active epoch."""
-        self._sample_next_epoch()
+        start_time = monotonic()
+        safety_limit = self._max_wall_time
+        limit_reached, elapsed = self._sample_next_epoch(start_time, safety_limit)
+        if limit_reached:
+            assert safety_limit is not None
+            assert elapsed is not None
+            self._raise_timeout(safety_limit, elapsed)
 
-    def _sample_next_epoch(self):
+        self._synchronize_top_level()
+        self._elapsed_wall_time = monotonic() - start_time
+        self._stop_reason = "completed"
+
+    def _raise_timeout(self, safety_limit: float, elapsed: float) -> NoReturn:
+        self._elapsed_wall_time = elapsed
+        self._stop_reason = "max_wall_time_reached"
+        raise TimeoutError(
+            f"Sampling exceeded max_wall_time {safety_limit} seconds after "
+            f"{elapsed} seconds with jit_block_size {self._jit_block_size}; "
+            "the Engine can be resumed."
+        )
+
+    def _synchronize_top_level(self) -> None:
+        outputs = [
+            self._kernel_states,
+            self._model_states,
+            self._tuning_info_chain.get().value,
+        ]
+        chains = [self._position_chain, self._transition_info_chain]
+        if self._store_kernel_states:
+            chains.append(self._kernel_state_chain)
+        if self._quantity_generators:
+            chains.append(self._quantities_chain)
+
+        outputs.extend(
+            chain.get_current_chain().get().value
+            for chain in chains
+            if chain.get_epochs()
+        )
+        jax.block_until_ready(outputs)
+
+    def _sample_next_epoch(
+        self, start_time: float | None = None, safety_limit: float | None = None
+    ) -> tuple[bool, float | None]:
         """Runs sampling for the next or currently active epoch."""
         resuming = self._epoch is not None
         if not resuming:
@@ -541,7 +604,7 @@ class Engine:
         # special treatment for the initial values
         if self.current_epoch.config.type == EpochType.INITIAL_VALUES:
             self._handle_inital_values_epoch()
-            return
+            return False, None
 
         if not resuming:
             self._kernel_start_epoch()
@@ -556,8 +619,20 @@ class Engine:
                 f"{jitted} jitted together"
             )
 
-        self._sample_for_duration(duration=duration)
-        self._end_epoch()
+        limit_reached, elapsed = self._sample_for_duration(
+            duration=duration,
+            start_time=start_time,
+            safety_limit=safety_limit,
+        )
+        if self.current_epoch.time_left() == 0:
+            tuning_infos = self._end_epoch()
+            if safety_limit is not None:
+                assert start_time is not None
+                jax.block_until_ready((self._kernel_states, tuning_infos))
+                elapsed = monotonic() - start_time
+                limit_reached = elapsed >= safety_limit
+
+        return limit_reached, elapsed
 
     def append_epoch(self, epoch: EpochConfig):
         """Appends an epoch to the epochs that should be sampled."""
@@ -607,6 +682,8 @@ class Engine:
             full_model_states=Option(None),
             kernel_classes=Option(kernels_cls),
             kernels_by_pos_key=Option(kernels_by_position),
+            elapsed_wall_time=self._elapsed_wall_time,
+            stop_reason=self._stop_reason,
         )
 
     def _split_prng_key(self, n: int = 1) -> KeyArray:
@@ -641,7 +718,6 @@ class Engine:
                 self._position_keys, self._model_states
             ),
         )
-
         self._position_chain.append(initial_position)
 
         if self._store_kernel_states:
@@ -704,7 +780,7 @@ class Engine:
 
         logger.info("Finished warmup")
 
-    def _end_epoch(self):
+    def _end_epoch(self) -> TuningInfos | None:
         """
         End epoch.
 
@@ -720,7 +796,7 @@ class Engine:
             self._kernel_sequence.end_epoch, in_axes=(0, 0, 0, None)
         )(end_keys, self._kernel_states, self._model_states, epoch)
 
-        self._tune_kernels(epoch)
+        tuning_infos = self._tune_kernels(epoch)
 
         if self._show_progress:
             ti_option = self._transition_info_chain.get_current_chain().get()
@@ -749,8 +825,9 @@ class Engine:
 
         # no epoch is active anymore
         self._epoch = None
+        return tuning_infos
 
-    def _tune_kernels(self, epoch: EpochState):
+    def _tune_kernels(self, epoch: EpochState) -> TuningInfos | None:
         """Trigger tuning if epoch is an adaptation phase."""
         if EpochType.is_adaptation(epoch.config.type):
             tune_keys = self._split_prng_key_one()
@@ -769,7 +846,11 @@ class Engine:
             self._kernel_states = tune_output.kernel_states
 
             # we need to add the time dimension
-            self._tuning_info_chain.append(_add_time_dimension(x=tune_output.infos))
+            tuning_infos = _add_time_dimension(x=tune_output.infos)
+            self._tuning_info_chain.append(tuning_infos)
+            return tuning_infos
+
+        return None
 
     def _sample_many(
         self,
@@ -847,7 +928,12 @@ class Engine:
             chain[3],
         )
 
-    def _sample_for_duration(self, duration: int):
+    def _sample_for_duration(
+        self,
+        duration: int,
+        start_time: float | None = None,
+        safety_limit: float | None = None,
+    ) -> tuple[bool, float | None]:
         if self.current_epoch.time_left() < duration:
             raise RuntimeError("Not enough time left in epoch")
 
@@ -881,7 +967,6 @@ class Engine:
             ) = self._sample_many_jitted(
                 keys, self.current_epoch, self._kernel_states, self._model_states
             )
-
             self._epoch = new_epoch
             self._kernel_states = new_ks
             self._model_states = new_ms
@@ -891,3 +976,14 @@ class Engine:
                 self._kernel_state_chain.append(ksc)
             if self._quantity_generators:
                 self._quantities_chain.append(quants)
+
+            if safety_limit is not None:
+                assert start_time is not None
+                jax.block_until_ready(
+                    (new_epoch, new_ks, new_ms, position_chain, infos, ksc, quants)
+                )
+                elapsed = monotonic() - start_time
+                if elapsed >= safety_limit:
+                    return True, elapsed
+
+        return False, None
