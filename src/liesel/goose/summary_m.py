@@ -227,6 +227,10 @@ class Summary:
     -----
     This class is still considered experimental. The API may still undergo larger
     changes.
+
+    For a partially completed timed epoch, warm-up sample counts and error-rate
+    denominators use the work actually stored in :class:`.SamplingResults`, not the
+    planned epoch duration. Posterior diagnostics likewise operate on stored draws.
     """
 
     per_chain: bool

@@ -178,12 +178,25 @@ class SamplingResults:
     """
 
     elapsed_wall_time: float | None = None
-    """Elapsed wall time of the latest top-level sampling call."""
+    """
+    Elapsed seconds in the latest top-level Engine sampling call.
+
+    Includes first-use compilation and synchronized epoch finalization, but is
+    ``None`` for legacy results or before a sampling call has completed or stopped.
+    """
 
     stop_reason: (
         Literal["completed", "wall_time_reached", "max_wall_time_reached"] | None
     ) = None
-    """Reason why the latest top-level sampling call stopped."""
+    """
+    Reason why the latest top-level Engine sampling call stopped.
+
+    ``"completed"`` means the requested finite schedule (or the one epoch requested
+    by :meth:`Engine.sample_next_epoch`) completed. ``"wall_time_reached"`` is a
+    normal timed stop, and ``"max_wall_time_reached"`` records a safety stop before
+    :class:`TimeoutError` is raised. ``None`` denotes legacy results or no completed
+    top-level sampling call. Stored arrays remain authoritative for sample counts.
+    """
 
     def get_samples(self) -> Position:
         """
@@ -394,7 +407,23 @@ class SamplingResults:
 
 
 class Engine:
-    """MCMC engine capable of combining multiple transition kernels."""
+    """
+    MCMC engine capable of combining multiple transition kernels.
+
+    Sampling is dispatched in blocks of :attr:`.jit_block_size` transitions per
+    chain. Both normal time-based sampling and the exceptional
+    :attr:`.max_wall_time` safety limit check elapsed time only after a completed,
+    synchronized block. Consequently, limits are soft and can overshoot by one block
+    plus any required epoch-end hooks and adaptation tuning. A partial epoch remains
+    active and is resumed by the next sampling call; it is not finalized or tuned
+    early.
+
+    Notes
+    -----
+    The constructor argument ``jitted_sample_duration`` is retained for backwards
+    compatibility. New code should configure ``EngineBuilder.jit_block_size`` and
+    construct Engines through :class:`.EngineBuilder`.
+    """
 
     def __init__(
         self,
@@ -505,12 +534,24 @@ class Engine:
 
     @property
     def jit_block_size(self) -> int:
-        """Number of transitions per chain executed by one JIT call."""
+        """
+        Number of transitions per chain executed by one JIT call.
+
+        Smaller values improve wall-clock responsiveness at the cost of more host
+        dispatch and synchronization overhead. The value is fixed after construction.
+        """
         return self._jit_block_size
 
     @property
     def max_wall_time(self) -> float | None:
-        """Optional wall-clock safety limit in seconds."""
+        """
+        Optional wall-clock safety limit in seconds for each sampling call.
+
+        Reaching this soft limit at a synchronized JIT-block boundary records
+        ``"max_wall_time_reached"`` and raises :class:`TimeoutError`. Assign ``None``
+        to disable the limit before resuming. A non-``None`` value requires an
+        explicitly configured :attr:`.jit_block_size`.
+        """
         return self._max_wall_time
 
     @max_wall_time.setter
@@ -546,7 +587,15 @@ class Engine:
         return self._epoch
 
     def compile(self) -> None:
-        """Compiles the sampler without advancing the Engine state."""
+        """
+        Compile and retain the sampling executable without advancing Engine state.
+
+        Timed sampling otherwise includes lazy JIT compilation. Call this method on
+        each Engine before starting its timer when comparing configurations under
+        equal sampling budgets, as in externally managed MAMBA arms. The method is
+        idempotent for an unchanged compilation signature. It does not promise to
+        eliminate first-dispatch, allocation, or hardware-cache costs.
+        """
         epoch = self._epoch
         if epoch is None:
             configs = self._epoch_manager._configs
@@ -582,7 +631,10 @@ class Engine:
         """
         Runs sampling for all remaining epochs.
 
-        Auto-tuning methods are called automatically.
+        Auto-tuning methods are called automatically. If :attr:`.max_wall_time` is
+        reached, the method raises :class:`TimeoutError` at a completed JIT-block
+        boundary. Completed work and any active partial epoch remain available for
+        inspection or a later call that resumes sampling.
         """
         start_time = monotonic()
         safety_limit = self._max_wall_time
@@ -595,7 +647,13 @@ class Engine:
         self._stop_reason = "completed"
 
     def sample_next_epoch(self):
-        """Runs sampling for the next or currently active epoch."""
+        """
+        Run sampling for the next or currently active epoch.
+
+        The configured :attr:`.max_wall_time` applies to this call and raises
+        :class:`TimeoutError` at a completed JIT-block boundary. An interrupted epoch
+        remains active and is resumed on the next sampling call.
+        """
         start_time = monotonic()
         safety_limit = self._max_wall_time
         limit_reached, elapsed = self._sample_next_epoch(start_time, safety_limit)
@@ -609,7 +667,35 @@ class Engine:
         self._stop_reason = "completed"
 
     def sample_for_time(self, wall_time: float) -> None:
-        """Runs sampling until ``wall_time`` or the epoch schedule is exhausted."""
+        """
+        Run sampling until ``wall_time`` or the finite epoch schedule is exhausted.
+
+        ``wall_time`` must be a positive, finite number of seconds, and the Engine
+        must have an explicitly configured :attr:`.jit_block_size`. When work exists,
+        at least one block is executed. Adaptation, burn-in, and posterior epochs all
+        count when present in the remaining schedule; completed epochs are never
+        repeated to fill the budget.
+
+        The timer includes lazy compilation, synchronized blocks, and required epoch
+        finalization. Checks occur only after blocks, so the horizon can be exceeded by
+        one block plus finalization work. Reaching the normal horizon returns with
+        ``stop_reason="wall_time_reached"``. Exhausting the schedule first returns
+        with ``stop_reason="completed"``.
+
+        If :attr:`.max_wall_time` is shorter than ``wall_time``, a warning is logged
+        and the safety limit controls: reaching it records
+        ``"max_wall_time_reached"`` and raises :class:`TimeoutError`. Equal limits use
+        normal time-based completion.
+
+        Parameters
+        ----------
+        wall_time
+            Positive, finite sampling horizon in seconds.
+
+        See Also
+        --------
+        compile : Compile without consuming the timed sampling budget.
+        """
         start_time = monotonic()
         if (
             isinstance(wall_time, bool)
@@ -733,7 +819,13 @@ class Engine:
         return limit_reached, elapsed
 
     def append_epoch(self, epoch: EpochConfig):
-        """Appends an epoch to the epochs that should be sampled."""
+        """
+        Append an epoch to the remaining sampling schedule.
+
+        Its duration must be divisible by :attr:`.jit_block_size`. This can be used to
+        finish adaptation and burn-in first, then append a posterior epoch for a
+        posterior-only timed call.
+        """
         if (
             epoch.type != EpochType.INITIAL_VALUES
             and epoch.duration % self._jit_block_size
@@ -749,7 +841,13 @@ class Engine:
         return self._epoch is None and not self._epoch_manager.has_more()
 
     def get_results(self) -> SamplingResults:
-        """Returns the results of the sampling process."""
+        """
+        Return the currently stored sampling results.
+
+        The result includes ``elapsed_wall_time`` and ``stop_reason`` for the latest
+        top-level sampling call, including metadata recorded before a safety
+        :class:`TimeoutError` was raised.
+        """
         if self._store_kernel_states:
             ksc = self._kernel_state_chain
         else:

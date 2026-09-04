@@ -80,6 +80,15 @@ class LieselMCMC:
     model: Model
     which: str | None = None
     engine: Engine | None = field(default=None, init=False)
+    """
+    Most recently built Engine, or ``None`` after loading cached results.
+
+    The Engine is assigned before sampling and retained after success or
+    :class:`TimeoutError`, making partial results and resumption available after a
+    safety stop. A subsequent run replaces it. Retaining an Engine may also retain
+    JAX device memory; assign ``None`` when recovery or continuation is no longer
+    needed.
+    """
 
     def get_spec(self, var: Var) -> MCMCSpec | None:
         """
@@ -342,6 +351,15 @@ class LieselMCMC:
         save_path
             Filepath to a pickle file in which results should be saved. If the file
             exists, results are loaded from this file and no sampling occurs.
+        jit_block_size
+            Number of transitions per chain dispatched in one compiled JAX call. If
+            ``None``, the EngineBuilder infers the greatest common divisor of the epoch
+            durations for backwards-compatible untimed sampling. Set this explicitly
+            when using ``max_wall_time``.
+        max_wall_time
+            Optional positive, finite safety limit in seconds. It is checked at
+            synchronized JIT-block boundaries and raises :class:`TimeoutError` while
+            leaving :attr:`.engine` resumable.
 
         Warnings
         ---------
@@ -357,11 +375,28 @@ class LieselMCMC:
             custom configuration; for example you can add additional MCMC kernels via
             :meth:`.EngineBuilder.add_kernel`.
 
-        Notes
+        Returns
+        -------
+        SamplingResults
+            Results from the completed finite schedule.
+
+        Raises
         ------
+        TimeoutError
+            If ``max_wall_time`` is reached. The retained :attr:`.engine` contains
+            completed work and can be resumed.
+
+        Notes
+        -----
+        ``max_wall_time`` is an exceptional safety limit, not a normal time-based
+        sampling horizon. See :meth:`.run_for_time` for successful time-based
+        termination. If cached results are loaded from ``save_path``,
+        :attr:`.engine` is ``None``. A safety failure is propagated and is not saved.
+
         The method is equivalent to the following code::
 
-            eb = LieselMCMC(model).get_engine_builder(
+            mcmc = LieselMCMC(model)
+            eb = mcmc.get_engine_builder(
                 seed=seed, num_chains=num_chains, apply_jitter=apply_jitter
             )
 
@@ -369,15 +404,18 @@ class LieselMCMC:
             eb.positions_included = positions_included or []
             eb.positions_excluded = positions_excluded or []
             eb.show_progress = show_progress
+            eb.jit_block_size = jit_block_size
+            eb.max_wall_time = max_wall_time
 
             if adaptation > 0:
                 eb.add_adaptation(adaptation, adaptation_thinning)
             if burnin > 0:
                 eb.add_burnin(burnin, burnin_thinning)
             eb.add_posterior(posterior, posterior_thinning)
-            engine = eb.build()
-            engine.sample_all_epochs()
-            engine.get_results()
+            mcmc.engine = eb.build()
+            mcmc.engine.sample_all_epochs()
+            results = mcmc.engine.get_results()
+            return results
 
         """
         return self._run(
@@ -422,7 +460,72 @@ class LieselMCMC:
         positions_excluded: list[str] | None = None,
         save_path: str | Path | None = None,
     ) -> SamplingResults:
-        """Run MCMC until ``wall_time`` or the configured epochs are exhausted."""
+        """
+        Run MCMC until ``wall_time`` or the configured epochs are exhausted.
+
+        The iteration arguments define a finite ceiling. Adaptation, burn-in, and
+        posterior epochs all consume the budget when reached, and completed epochs
+        are not repeated. If work exists, at least one JIT block is executed. Normal
+        horizon expiry returns results with ``stop_reason="wall_time_reached"``;
+        schedule exhaustion returns ``stop_reason="completed"``.
+
+        Parameters
+        ----------
+        wall_time
+            Positive, finite Engine sampling horizon in seconds.
+        jit_block_size
+            Positive number of transitions per chain in one JIT call. It must divide
+            every generated non-initial epoch duration. Smaller blocks improve
+            deadline precision but increase dispatch and synchronization overhead.
+        max_wall_time
+            Optional safety limit in seconds. If shorter than ``wall_time``, it
+            controls the call, logs a warning, and raises :class:`TimeoutError`.
+        seed, num_chains
+            Random seed and number of MCMC chains.
+        adaptation, burnin, posterior
+            Maximum number of transitions in each respective phase.
+        adaptation_thinning, burnin_thinning, posterior_thinning
+            Thinning applied in each respective phase.
+        apply_jitter
+            Whether to apply configured initial-state jittering.
+        store_kernel_states
+            Whether to include kernel states in the results.
+        show_progress
+            Whether to show progress bars during sampling.
+        positions_included, positions_excluded
+            Additional model positions to include or positions to exclude.
+        save_path
+            Pickle path for normal result caching. Existing results are loaded without
+            sampling; safety failures are not saved.
+
+        Notes
+        -----
+        Only the call to :meth:`.Engine.sample_for_time` consumes ``wall_time``.
+        LieselMCMC setup, Engine construction, jittering, and result serialization are
+        outside the horizon. Lazy compilation is inside it. Use an explicit Engine and
+        :meth:`.Engine.compile` when comparable precompiled runs are required.
+
+        The built :attr:`.engine` is retained after normal completion and
+        :class:`TimeoutError`; it may retain JAX device memory. It is ``None`` when an
+        existing ``save_path`` is loaded.
+
+        Returns
+        -------
+        SamplingResults
+            Normal timed results or results from the exhausted finite schedule.
+
+        Raises
+        ------
+        TimeoutError
+            If a shorter ``max_wall_time`` safety limit is reached.
+        ValueError
+            If a timing argument or its relationship to the epoch schedule is invalid.
+
+        See Also
+        --------
+        run_for_epochs : Run the finite schedule without a normal time horizon.
+        Engine.compile : Precompile an Engine without advancing sampler state.
+        """
         return self._run(
             time_based=True,
             wall_time=wall_time,

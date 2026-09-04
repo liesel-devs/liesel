@@ -209,7 +209,25 @@ class EngineBuilder:
         self.show_progress: bool = True
         """Whether to show progress bars during sampling."""
         self.jit_block_size: int | None = None
+        """
+        Number of transitions per chain executed by one compiled JAX call.
+
+        Smaller blocks make wall-clock limits more responsive, while larger blocks
+        reduce dispatch and synchronization overhead. The value must divide every
+        configured non-initial epoch duration. If it is ``None``, :meth:`.build`
+        infers the greatest common divisor of those durations for backwards-compatible
+        untimed sampling. Set it explicitly when using :attr:`.max_wall_time` or
+        :meth:`.Engine.sample_for_time`.
+        """
         self.max_wall_time: float | None = None
+        """
+        Optional wall-clock safety limit in seconds for each Engine sampling call.
+
+        The limit requires an explicit :attr:`.jit_block_size`. It is checked after
+        completed, synchronized JIT blocks, so it is a soft safety limit rather than
+        a hard deadline. Reaching it raises :class:`TimeoutError` and leaves the
+        Engine resumable.
+        """
 
         self.positions_included: list[str] = []
         """

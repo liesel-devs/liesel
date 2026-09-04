@@ -7,6 +7,10 @@ All notable changes to this project will be documented in this file.
 - :construction: Fixed spurious warning during model creation (#186, @jobrachem)
 - :construction: Update logging setup (#187, @jobrachem)
 - :sparkles: New method `Var.transform`. (#174, @jobrachem)
+- :sparkles: Added soft wall-clock safety limits and time-based Goose sampling on
+  `Engine` and `LieselMCMC`, with resumable partial epochs, timing metadata, and
+  state-preserving `Engine.compile()`. The legacy `Engine` constructor argument
+  `jitted_sample_duration` remains supported.
 
 ## [0.2.9] - 2024-04-04
 
