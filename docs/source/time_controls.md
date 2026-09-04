@@ -143,37 +143,3 @@ results = engine.get_results()
 ```
 
 An appended duration must be divisible by the Engine's fixed `jit_block_size`.
-
-## Compare externally managed MAMBA arms
-
-Liesel provides the timed Engine operation, but it does not create, score, prune, or
-run MAMBA arms in parallel. Keep that orchestration in the tuning code. The following
-is application-owned pseudocode, not a Liesel MAMBA API. It assumes a collection of
-hyperparameter `configurations`, a sequence of per-arm `stage_budgets`, and
-application functions for building Engines, computing KSD scores, and selecting
-survivors. `make_engine()` must configure an explicit `jit_block_size` that divides
-every non-initial epoch duration so `sample_for_time()` is valid. Compile every arm
-before starting comparable budgets:
-
-```python
-# Application-owned pseudocode; these names are not provided by Liesel.
-active_arms = [make_engine(config) for config in configurations]
-
-for engine in active_arms:
-    engine.compile()
-
-for stage_budget in stage_budgets:
-    # Every arm active in this stage receives the same additional time budget.
-    for engine in active_arms:
-        engine.sample_for_time(stage_budget)
-
-    scores = [
-        kernel_stein_discrepancy(engine.get_results()) for engine in active_arms
-    ]
-    active_arms = select_best_arms(active_arms, scores)
-```
-
-Compilation does not advance sampler state and is idempotent for an unchanged
-signature. It prepares the exact sampling executable retained by the Engine, but
-first dispatch, device allocation, and hardware-cache effects may still occur inside
-the timed call. Apply the same preparation policy to every arm.

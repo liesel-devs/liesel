@@ -75,8 +75,8 @@ To draw samples from your posterior, you will want to call
 with :meth:`~.goose.Engine.get_results`, which will return a :class:`~.goose.SamplingResults`
 instance.
 
-For soft wall-clock safety limits and normal time-based sampling, including recovery
-and fair compute-budget examples, see :doc:`time_controls`.
+For soft wall-clock safety limits and normal time-based sampling, including timing,
+compilation, and recovery guidance, see :doc:`time_controls`.
 
 .. autosummary::
     :toctree: generated

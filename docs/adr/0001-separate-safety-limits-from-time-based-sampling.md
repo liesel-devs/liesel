@@ -2,10 +2,11 @@
 
 ## Context
 
-Unexpectedly slow transitions need an exceptional safety limit, while algorithms
-such as MAMBA need normal sampling for a compute-time budget. Both controls can only
-observe completed JAX work at host synchronization points. They must preserve
-adaptation state and completed samples so an interrupted epoch can resume.
+Unexpectedly slow transitions need an exceptional safety limit, while
+fixed-compute-budget workloads need normal sampling for a chosen duration. Both
+controls can only observe completed JAX work at host synchronization points. They
+must preserve adaptation state and completed samples so an interrupted epoch can
+resume.
 
 ## Decision
 
@@ -53,9 +54,9 @@ failures are not saved.
 
 Wall-clock responsiveness is chosen explicitly through `jit_block_size`: smaller
 blocks improve precision but add dispatch and synchronization overhead. No running
-JAX block is interrupted, and MAMBA arm creation, scoring, pruning, and parallelism
-remain application responsibilities. Callers that want to time only later phases
-must finish earlier phases before starting the timed call.
+JAX block is interrupted, and higher-level orchestration and parallelism remain
+application responsibilities. Callers that want to time only later phases must
+finish earlier phases before starting the timed call.
 
 See the [time-controlled sampling guide](../source/time_controls.md) for operational
 examples and recovery workflows.

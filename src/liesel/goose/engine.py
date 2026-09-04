@@ -592,9 +592,9 @@ class Engine:
 
         Timed sampling otherwise includes lazy JIT compilation. Call this method on
         each Engine before starting its timer when comparing configurations under
-        equal sampling budgets, as in externally managed MAMBA arms. The method is
-        idempotent for an unchanged compilation signature. It does not promise to
-        eliminate first-dispatch, allocation, or hardware-cache costs.
+        equal sampling budgets. The method is idempotent for an unchanged compilation
+        signature. It does not promise to eliminate first-dispatch, allocation, or
+        hardware-cache costs.
         """
         epoch = self._epoch
         if epoch is None:
