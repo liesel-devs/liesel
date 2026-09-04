@@ -4,6 +4,7 @@ from .engine import EmaTrainLossMonitor as EmaTrainLossMonitor
 from .engine import LossMonitor as LossMonitor
 from .engine import OptimEngine as OptimEngine
 from .liesel_optim import LieselOptim as LieselOptim
+from .liesel_vi import LieselVI as LieselVI
 from .loss import NegLogProbLoss as NegLogProbLoss
 from .optimizer import LBFGS as LBFGS
 from .optimizer import Optimizer as Optimizer
@@ -14,14 +15,22 @@ from .split import Split as Split
 from .split import SplitManager as SplitManager
 from .state import OptimNaNDebugInfo as OptimNaNDebugInfo
 from .stop import Stopper as Stopper
+from .vi import CompositeVDist as CompositeVDist
+from .vi import Elbo as Elbo
+from .vi import NegElboLoss as NegElboLoss
+from .vi import VDist as VDist
 
 __all__ = [
     "LBFGS",
     "BatchManager",
     "Batches",
+    "CompositeVDist",
+    "Elbo",
     "EmaTrainLossMonitor",
     "LieselOptim",
+    "LieselVI",
     "LossMonitor",
+    "NegElboLoss",
     "NegLogProbLoss",
     "OptimEngine",
     "OptimNaNDebugInfo",
@@ -32,4 +41,5 @@ __all__ = [
     "Split",
     "SplitManager",
     "Stopper",
+    "VDist",
 ]

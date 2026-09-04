@@ -30,3 +30,14 @@ a comparison of different samplers, and more:
    tutorials/md/06-pymc
    tutorials/md/07-error-correction
    tutorials/md/08-custom-kernel
+
+Optimization and variational inference:
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Optimization
+
+   tutorials/notebooks/09-liesel-optim-basic
+   tutorials/notebooks/10-liesel-optim-advanced
+   tutorials/notebooks/11-liesel-vi-basic
+   tutorials/notebooks/12-liesel-vi-advanced

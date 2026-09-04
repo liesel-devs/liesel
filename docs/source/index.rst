@@ -147,7 +147,7 @@ Optimizer API
 *************
 
 The :mod:`liesel.optim` module provides the newer optimization engine, data-splitting
-utilities, and optimizer helpers.
+utilities, and variational inference helpers.
 
 .. autosummary::
     :toctree: generated
@@ -156,8 +156,13 @@ utilities, and optimizer helpers.
     :nosignatures:
 
     ~liesel.optim.LieselOptim
+    ~liesel.optim.LieselVI
     ~liesel.optim.OptimEngine
+    ~liesel.optim.EmaTrainLossMonitor
     ~liesel.optim.NegLogProbLoss
+    ~liesel.optim.NegElboLoss
+    ~liesel.optim.VDist
+    ~liesel.optim.CompositeVDist
     ~liesel.optim.Optimizer
     ~liesel.optim.LBFGS
     ~liesel.optim.Stopper

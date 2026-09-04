@@ -85,6 +85,7 @@ napoleon_use_rtype = False
 # sphinx_autodoc_typehints options
 typehints_defaults = "comma"
 always_use_bars_union = True
+autodoc_type_aliases = {"ArrayTree": "typing.Any"}
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]

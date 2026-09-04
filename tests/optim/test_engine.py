@@ -19,14 +19,19 @@ from liesel.optim import (
     LBFGS,
     Batches,
     BatchManager,
+    CompositeVDist,
+    Elbo,
     EmaTrainLossMonitor,
     LieselOptim,
+    LieselVI,
     LossMonitor,
+    NegElboLoss,
     OptimEngine,
     Optimizer,
     PositionSplit,
     PositionSplitManager,
     Stopper,
+    VDist,
 )
 from liesel.optim.engine import _progress_print_rate
 from liesel.optim.liesel_optim import LieselOptim as LieselOptimFromQuick
@@ -1351,11 +1356,11 @@ def test_api_imports_after_engine_refactor():
     assert opt.OptimEngine is OptimEngine
     assert opt.LieselOptim is LieselOptim
     assert LieselOptimFromQuick is LieselOptim
-    assert not hasattr(opt, "LieselVI")
-    assert not hasattr(opt, "NegElboLoss")
-    assert not hasattr(opt, "Elbo")
-    assert not hasattr(opt, "VDist")
-    assert not hasattr(opt, "CompositeVDist")
+    assert opt.LieselVI is LieselVI
+    assert opt.NegElboLoss is NegElboLoss
+    assert opt.Elbo is Elbo
+    assert opt.VDist is VDist
+    assert opt.CompositeVDist is CompositeVDist
     assert not hasattr(opt, "QuickOptim")
     assert not hasattr(engine_module, "QuickOptim")
     assert not hasattr(engine_module, "LieselVI")
