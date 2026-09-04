@@ -386,6 +386,178 @@ def test_safety_clock_observes_synchronized_tuning_infos(monkeypatch):
         engine.sample_next_epoch()
 
 
+@pytest.mark.parametrize("value", [True, "1", float("nan"), float("inf"), 0, -1.0])
+def test_sample_for_time_rejects_invalid_wall_time(value):
+    engine = _engine_with_block_size()
+
+    with pytest.raises(ValueError, match="wall_time"):
+        engine.sample_for_time(value)
+
+
+def test_sample_for_time_starts_clock_before_processing_arguments(monkeypatch):
+    engine = _engine_with_block_size(
+        epoch_configs=[
+            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
+            EpochConfig(EpochType.BURNIN, 2, 1, None),
+        ]
+    )
+    clock = [10.0]
+
+    class WallTime(float):
+        def __float__(self):
+            clock[0] += 0.25
+            return super().__float__()
+
+    monkeypatch.setattr("liesel.goose.engine.monotonic", lambda: clock[0])
+
+    engine.sample_for_time(WallTime(10.0))
+
+    assert engine.get_results().elapsed_wall_time == 0.25
+
+
+def test_sample_for_time_requires_explicit_jit_block_size():
+    builder = EngineBuilder(seed=1, num_chains=2)
+    builder.set_model(DictInterface(lambda state: -0.5 * state["x"] ** 2))
+    builder.set_initial_values({"x": jnp.array(0)})
+    builder.add_kernel(DetCountingKernel(["x"], DetCountingKernelState.default()))
+    builder.set_epochs([EpochConfig(EpochType.BURNIN, 4, 1, None)])
+    builder.show_progress = False
+    engine = builder.build()
+
+    with pytest.raises(
+        ValueError,
+        match=r"configure jit_block_size.*wall-clock overshoot.*JIT-block boundaries",
+    ):
+        engine.sample_for_time(1.0)
+
+
+def test_sample_for_time_stops_normally_after_first_completed_block(monkeypatch):
+    engine = _engine_with_block_size()
+    times = iter([10.0, 11.0])
+    monkeypatch.setattr("liesel.goose.engine.monotonic", lambda: next(times))
+
+    engine.sample_for_time(1.0)
+
+    samples = engine.get_results().get_samples()["x"]
+    assert np.array_equal(samples[0], np.array([0, 10000, 10001]))
+    assert engine.current_epoch.time_in_epoch == 2
+    assert engine.get_results().elapsed_wall_time == 1.0
+    assert engine.get_results().stop_reason == "wall_time_reached"
+
+
+def test_sample_for_time_finishes_schedule_without_repeating_epochs(monkeypatch):
+    engine = _engine_with_block_size(
+        epoch_configs=[
+            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
+            EpochConfig(EpochType.BURNIN, 2, 1, None),
+        ]
+    )
+    times = iter([10.0, 10.5, 10.75, 11.0])
+    monkeypatch.setattr("liesel.goose.engine.monotonic", lambda: next(times))
+
+    engine.sample_for_time(10.0)
+
+    samples = engine.get_results().get_samples()["x"]
+    assert np.array_equal(samples[0], np.array([0, 10000, 10001]))
+    assert engine.is_sampling_done()
+    assert engine.get_results().elapsed_wall_time == 1.0
+    assert engine.get_results().stop_reason == "completed"
+
+
+def test_sample_for_time_uses_stricter_safety_limit_and_warns_once(monkeypatch, caplog):
+    engine = _engine_with_block_size()
+    engine.max_wall_time = 1.0
+    times = iter([10.0, 11.0, 12.0, 12.5])
+    monkeypatch.setattr("liesel.goose.engine.monotonic", lambda: next(times))
+
+    with (
+        caplog.at_level("WARNING", logger="liesel.goose.engine"),
+        pytest.raises(TimeoutError),
+    ):
+        engine.sample_for_time(2.0)
+
+    assert engine.get_results().elapsed_wall_time == 1.0
+    assert engine.get_results().stop_reason == "max_wall_time_reached"
+    assert [
+        record.levelname for record in caplog.records if record.levelname == "WARNING"
+    ] == ["WARNING"]
+
+
+def test_sample_for_time_warning_preserves_threshold_precision(monkeypatch, caplog):
+    engine = _engine_with_block_size()
+    engine.max_wall_time = 0.01
+    times = iter([10.0, 10.02])
+    monkeypatch.setattr("liesel.goose.engine.monotonic", lambda: next(times))
+
+    with (
+        caplog.at_level("WARNING", logger="liesel.goose.engine"),
+        pytest.raises(TimeoutError),
+    ):
+        engine.sample_for_time(0.02)
+
+    assert "max_wall_time 0.01 is shorter than wall_time 0.02" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("max_wall_time", "elapsed"),
+    [(1.0, 1.0), (1.5, 2.0)],
+)
+def test_sample_for_time_keeps_normal_horizon_in_control(
+    monkeypatch, caplog, max_wall_time, elapsed
+):
+    engine = _engine_with_block_size()
+    engine.max_wall_time = max_wall_time
+    times = iter([10.0, 10.0 + elapsed])
+    monkeypatch.setattr("liesel.goose.engine.monotonic", lambda: next(times))
+
+    with caplog.at_level("WARNING", logger="liesel.goose.engine"):
+        engine.sample_for_time(1.0)
+
+    assert engine.get_results().elapsed_wall_time == elapsed
+    assert engine.get_results().stop_reason == "wall_time_reached"
+    assert not [record for record in caplog.records if record.levelname == "WARNING"]
+
+
+@pytest.mark.parametrize(
+    "resume_method", ["sample_next_epoch", "sample_all_epochs", "sample_for_time"]
+)
+def test_timed_partial_epoch_resumes_through_public_sampler(monkeypatch, resume_method):
+    engine = _engine_with_block_size()
+    times = iter([10.0, 11.0])
+    with monkeypatch.context() as patch:
+        patch.setattr("liesel.goose.engine.monotonic", lambda: next(times))
+        engine.sample_for_time(1.0)
+
+    if resume_method == "sample_for_time":
+        engine.sample_for_time(100.0)
+    else:
+        getattr(engine, resume_method)()
+
+    samples = engine.get_results().get_samples()["x"]
+    assert np.array_equal(samples[0], np.array([0, 10000, 10001, 10002, 10003]))
+    assert engine.is_sampling_done()
+
+
+def test_timed_stop_on_final_block_finalizes_adaptation(monkeypatch):
+    engine = _engine_with_block_size(
+        epoch_configs=[
+            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
+            EpochConfig(EpochType.FAST_ADAPTATION, 2, 1, None),
+        ]
+    )
+    times = iter([10.0, 10.5, 11.0])
+    monkeypatch.setattr("liesel.goose.engine.monotonic", lambda: next(times))
+
+    engine.sample_for_time(1.0)
+
+    assert engine.is_sampling_done()
+    assert np.array_equal(
+        engine.get_results().get_tuning_times().unwrap(), np.array([[3], [3]])
+    )
+    assert engine.get_results().elapsed_wall_time == 1.0
+    assert engine.get_results().stop_reason == "wall_time_reached"
+
+
 def test_untimed_sample_all_epochs_synchronizes_once_at_top_level(monkeypatch):
     engine = _engine_with_block_size(
         epoch_configs=[

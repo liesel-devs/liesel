@@ -540,15 +540,12 @@ class Engine:
         """
         start_time = monotonic()
         safety_limit = self._max_wall_time
-        while self._epoch is not None or self._epoch_manager.has_more():
-            limit_reached, elapsed = self._sample_next_epoch(start_time, safety_limit)
-            if limit_reached:
-                assert safety_limit is not None
-                assert elapsed is not None
-                self._raise_timeout(safety_limit, elapsed)
+        limit_reached, elapsed = self._sample_epochs(start_time, safety_limit)
+        if limit_reached:
+            assert safety_limit is not None
+            self._raise_timeout(safety_limit, elapsed)
 
-        self._synchronize_top_level()
-        self._elapsed_wall_time = monotonic() - start_time
+        self._elapsed_wall_time = elapsed
         self._stop_reason = "completed"
 
     def sample_next_epoch(self):
@@ -564,6 +561,61 @@ class Engine:
         self._synchronize_top_level()
         self._elapsed_wall_time = monotonic() - start_time
         self._stop_reason = "completed"
+
+    def sample_for_time(self, wall_time: float) -> None:
+        """Runs sampling until ``wall_time`` or the epoch schedule is exhausted."""
+        start_time = monotonic()
+        if (
+            isinstance(wall_time, bool)
+            or not isinstance(wall_time, Real)
+            or not math.isfinite(wall_time)
+            or wall_time <= 0
+        ):
+            raise ValueError("wall_time must be a finite number greater than zero")
+        if not self._jit_block_size_is_explicit:
+            raise ValueError(
+                "sample_for_time requires the caller to configure jit_block_size "
+                "because wall-clock overshoot is controlled at JIT-block boundaries"
+            )
+
+        wall_time = float(wall_time)
+        safety_controls = (
+            self._max_wall_time is not None and self._max_wall_time < wall_time
+        )
+        if safety_controls:
+            assert self._max_wall_time is not None
+            limit = self._max_wall_time
+            logger.warning(
+                "max_wall_time %s is shorter than wall_time %s; the safety "
+                "limit controls this sampling call",
+                limit,
+                wall_time,
+            )
+        else:
+            limit = wall_time
+
+        limit_reached, elapsed = self._sample_epochs(start_time, limit)
+        if limit_reached:
+            if safety_controls:
+                self._raise_timeout(limit, elapsed)
+            self._elapsed_wall_time = elapsed
+            self._stop_reason = "wall_time_reached"
+            return
+
+        self._elapsed_wall_time = elapsed
+        self._stop_reason = "completed"
+
+    def _sample_epochs(
+        self, start_time: float, limit: float | None
+    ) -> tuple[bool, float]:
+        while self._epoch is not None or self._epoch_manager.has_more():
+            limit_reached, elapsed = self._sample_next_epoch(start_time, limit)
+            if limit_reached:
+                assert elapsed is not None
+                return True, elapsed
+
+        self._synchronize_top_level()
+        return False, monotonic() - start_time
 
     def _raise_timeout(self, safety_limit: float, elapsed: float) -> NoReturn:
         self._elapsed_wall_time = elapsed
