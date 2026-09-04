@@ -9,10 +9,12 @@ This module is experimental. Expect API changes.
 from __future__ import annotations
 
 import logging
+import math
 import pickle
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
 from functools import partial
+from numbers import Integral, Real
 from typing import Any, NamedTuple, cast
 
 import jax
@@ -387,11 +389,33 @@ class Engine:
         store_kernel_states: bool = False,
         quantity_generators: Sequence[QuantityGenerator] = [],
         show_progress: bool = True,
+        max_wall_time: float | None = None,
+        _jit_block_size_is_explicit: bool = True,
     ):
+        if (
+            isinstance(jitted_sample_duration, bool)
+            or not isinstance(jitted_sample_duration, Integral)
+            or jitted_sample_duration < 1
+        ):
+            raise ValueError("jit_block_size must be an integer greater than zero")
+        jitted_sample_duration = int(jitted_sample_duration)
+        for config in epoch_configs:
+            if (
+                config.type != EpochType.INITIAL_VALUES
+                and config.duration % jitted_sample_duration
+            ):
+                raise ValueError(
+                    f"jit_block_size {jitted_sample_duration} must divide epoch "
+                    f"duration {config.duration}"
+                )
+
         # fill slots that can be filled directly
         self._inital_states = model_states
         self._seeds = seeds
-        self._jitted_sample_duration = jitted_sample_duration
+        self._jit_block_size = jitted_sample_duration
+        self._jit_block_size_is_explicit = _jit_block_size_is_explicit
+        self._max_wall_time: float | None = None
+        self.max_wall_time = max_wall_time
         self._minimize_transition_infos = minimize_transition_infos
         self._store_kernel_states = store_kernel_states
         self._model_states = model_states
@@ -454,6 +478,36 @@ class Engine:
         )
 
     @property
+    def jit_block_size(self) -> int:
+        """Number of transitions per chain executed by one JIT call."""
+        return self._jit_block_size
+
+    @property
+    def max_wall_time(self) -> float | None:
+        """Optional wall-clock safety limit in seconds."""
+        return self._max_wall_time
+
+    @max_wall_time.setter
+    def max_wall_time(self, value: float | None) -> None:
+        if value is not None:
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, Real)
+                or not math.isfinite(value)
+                or value <= 0
+            ):
+                raise ValueError(
+                    "max_wall_time must be a finite number greater than zero"
+                )
+            if not self._jit_block_size_is_explicit:
+                raise ValueError(
+                    "max_wall_time requires an explicitly configured jit_block_size"
+                )
+            value = float(value)
+
+        self._max_wall_time = value
+
+    @property
     def current_epoch(self) -> EpochState:
         """
         Returns the current epoch.
@@ -487,7 +541,7 @@ class Engine:
 
         duration = self.current_epoch.config.duration
         epoch_type = self.current_epoch.config.type.name
-        jitted = self._jitted_sample_duration
+        jitted = self._jit_block_size
 
         if self._show_progress:
             logger.info(
@@ -500,6 +554,14 @@ class Engine:
 
     def append_epoch(self, epoch: EpochConfig):
         """Appends an epoch to the epochs that should be sampled."""
+        if (
+            epoch.type != EpochType.INITIAL_VALUES
+            and epoch.duration % self._jit_block_size
+        ):
+            raise ValueError(
+                f"jit_block_size {self._jit_block_size} must divide epoch duration "
+                f"{epoch.duration}"
+            )
         self._epoch_manager.append(epoch)
 
     def is_sampling_done(self) -> bool:
@@ -782,10 +844,10 @@ class Engine:
         if self.current_epoch.time_left() < duration:
             raise RuntimeError("Not enough time left in epoch")
 
-        if duration % self._jitted_sample_duration:
+        if duration % self._jit_block_size:
             raise RuntimeError(
                 f"Duration {duration} is not a multiple of the "
-                f"jitted sampling duration {self._jitted_sample_duration}"
+                f"jit_block_size {self._jit_block_size}"
             )
 
         # convert to non-weak device arrays to avoid recompilation
@@ -793,14 +855,14 @@ class Engine:
         self._kernel_states = as_strong_pytree(self._kernel_states)
         self._model_states = as_strong_pytree(self._model_states)
 
-        it = range(duration // self._jitted_sample_duration)
+        it = range(duration // self._jit_block_size)
 
         if self._show_progress:
             it = tqdm(it, ncols=80, unit="chunk")
 
         for dur_i in it:
             # FIXME: split for entire duration instead of each loop iteration
-            keys = self._split_prng_key(self._jitted_sample_duration)
+            keys = self._split_prng_key(self._jit_block_size)
             (
                 new_epoch,
                 new_ks,

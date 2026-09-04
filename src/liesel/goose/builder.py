@@ -13,6 +13,7 @@ import logging
 import math
 from collections.abc import Iterable
 from functools import partial
+from numbers import Integral, Real
 from typing import cast
 
 import jax
@@ -207,6 +208,8 @@ class EngineBuilder:
         self.minimize_transition_infos: bool = False
         self.show_progress: bool = True
         """Whether to show progress bars during sampling."""
+        self.jit_block_size: int | None = None
+        self.max_wall_time: float | None = None
 
         self.positions_included: list[str] = []
         """
@@ -755,7 +758,44 @@ class EngineBuilder:
         # find good jittable number
         epochs = self._epochs._configs  # FIXME: use of private field
         durations = [e.duration for e in epochs[1:]]
-        jit_duration = math.gcd(*durations)
+        if self.max_wall_time is not None:
+            if (
+                isinstance(self.max_wall_time, bool)
+                or not isinstance(self.max_wall_time, Real)
+                or not math.isfinite(self.max_wall_time)
+                or self.max_wall_time <= 0
+            ):
+                raise ValueError(
+                    "max_wall_time must be a finite number greater than zero"
+                )
+            max_wall_time = float(self.max_wall_time)
+        else:
+            max_wall_time = None
+
+        if max_wall_time is not None and self.jit_block_size is None:
+            raise ValueError(
+                "max_wall_time requires an explicit jit_block_size because limits "
+                "are checked at JIT-block boundaries and the block size controls "
+                "overshoot"
+            )
+
+        if self.jit_block_size is not None:
+            if (
+                isinstance(self.jit_block_size, bool)
+                or not isinstance(self.jit_block_size, Integral)
+                or self.jit_block_size < 1
+            ):
+                raise ValueError("jit_block_size must be an integer greater than zero")
+            jit_block_size = int(self.jit_block_size)
+        else:
+            jit_block_size = math.gcd(*durations)
+
+        for duration in durations:
+            if duration % jit_block_size:
+                raise ValueError(
+                    f"jit_block_size {jit_block_size} must divide epoch duration "
+                    f"{duration}"
+                )
 
         # seeds
         seeds = self._engine_key
@@ -838,11 +878,13 @@ class EngineBuilder:
             model_states=model_states,
             kernel_sequence=KernelSequence(self.kernels),
             epoch_configs=epochs,
-            jitted_sample_duration=jit_duration,
+            jitted_sample_duration=jit_block_size,
             model=model,
             position_keys=pos_keys,
             minimize_transition_infos=self.minimize_transition_infos,
             store_kernel_states=self.store_kernel_states,
             quantity_generators=self.quantity_generators,
             show_progress=self.show_progress,
+            max_wall_time=max_wall_time,
+            _jit_block_size_is_explicit=self.jit_block_size is not None,
         )

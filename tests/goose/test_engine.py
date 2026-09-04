@@ -61,6 +61,63 @@ class FooQauntGen:
         return FooQuant(0, (u, model_state["x"]))
 
 
+def _engine_with_block_size(jitted_sample_duration: int = 2) -> Engine:
+    num_chains = 2
+    model_states = _stack_for_multi([{"x": jnp.array(0.0)}] * num_chains)
+    model = DictInterface(lambda state: -0.5 * state["x"] ** 2)
+    kernel = DetCountingKernel(["x"], DetCountingKernelState.default())
+    kernel.set_model(model)
+    kernel.identifier = "kernel_00"
+
+    return Engine(
+        seeds=jax.random.split(jax.random.PRNGKey(1), num_chains),
+        model_states=model_states,
+        kernel_sequence=KernelSequence([kernel]),
+        epoch_configs=[
+            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
+            EpochConfig(EpochType.BURNIN, 4, 1, None),
+        ],
+        jitted_sample_duration=jitted_sample_duration,
+        model=model,
+        position_keys=["x"],
+        show_progress=False,
+    )
+
+
+def test_max_wall_time_can_be_changed_on_engine():
+    engine = _engine_with_block_size()
+
+    engine.max_wall_time = 1.5
+
+    assert engine.max_wall_time == 1.5
+
+
+@pytest.mark.parametrize("value", [True, "1", float("nan"), float("inf"), 0.0, -1.0])
+def test_engine_rejects_invalid_max_wall_time(value):
+    engine = _engine_with_block_size()
+
+    with pytest.raises(ValueError, match="max_wall_time"):
+        engine.max_wall_time = value
+
+
+def test_append_epoch_rejects_incompatible_duration():
+    engine = _engine_with_block_size(2)
+
+    with pytest.raises(ValueError, match=r"jit_block_size 2.*duration 3"):
+        engine.append_epoch(EpochConfig(EpochType.POSTERIOR, 3, 1, None))
+
+
+@pytest.mark.parametrize("value", [True, 1.5, "1", 0, -1])
+def test_engine_rejects_invalid_jitted_sample_duration(value):
+    with pytest.raises(ValueError, match="jit_block_size"):
+        _engine_with_block_size(value)
+
+
+def test_engine_rejects_block_size_incompatible_with_initial_schedule():
+    with pytest.raises(ValueError, match=r"jit_block_size 3.*duration 4"):
+        _engine_with_block_size(3)
+
+
 def test_add_time_dimension():
     def get_dims(t):
         return [t[0].shape, t[1][0].shape, t[1][1]["f"].shape]

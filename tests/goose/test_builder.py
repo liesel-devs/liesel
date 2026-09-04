@@ -12,6 +12,90 @@ import liesel.model as lsl
 from liesel.goose.builder import EngineBuilder
 from liesel.goose.interface import DictInterface
 
+from .deterministic_kernels import DetCountingKernel, DetCountingKernelState
+
+
+def _builder_with_epochs(*durations: int) -> EngineBuilder:
+    builder = EngineBuilder(seed=1, num_chains=2)
+    builder.set_model(DictInterface(lambda state: -0.5 * state["x"] ** 2))
+    builder.set_initial_values({"x": jnp.array(0.0)})
+    builder.add_kernel(DetCountingKernel(["x"], DetCountingKernelState.default()))
+    builder.set_epochs(
+        gs.EpochConfig(gs.EpochType.BURNIN, duration, 1, None) for duration in durations
+    )
+    builder.show_progress = False
+    return builder
+
+
+def test_build_infers_jit_block_size_from_epoch_durations():
+    engine = _builder_with_epochs(6, 9).build()
+
+    assert engine.jit_block_size == 3
+
+
+def test_build_uses_explicit_jit_block_size():
+    builder = _builder_with_epochs(6, 12)
+    builder.jit_block_size = 3
+
+    engine = builder.build()
+
+    assert engine.jit_block_size == 3
+
+
+@pytest.mark.parametrize("value", [True, 1.5, "1", 0, -1])
+def test_build_rejects_invalid_jit_block_size(value):
+    builder = _builder_with_epochs(6)
+    builder.jit_block_size = value
+
+    with pytest.raises(ValueError, match="jit_block_size"):
+        builder.build()
+
+
+def test_build_rejects_jit_block_size_that_does_not_divide_epoch():
+    builder = _builder_with_epochs(6)
+    builder.jit_block_size = 4
+
+    with pytest.raises(ValueError, match=r"jit_block_size 4.*duration 6"):
+        builder.build()
+
+
+def test_build_propagates_max_wall_time():
+    builder = _builder_with_epochs(6)
+    builder.jit_block_size = 3
+    builder.max_wall_time = 2.5
+
+    engine = builder.build()
+
+    assert engine.max_wall_time == 2.5
+
+
+@pytest.mark.parametrize("value", [True, "1", float("nan"), float("inf"), 0.0, -1.0])
+def test_build_rejects_invalid_max_wall_time(value):
+    builder = _builder_with_epochs(6)
+    builder.jit_block_size = 3
+    builder.max_wall_time = value
+
+    with pytest.raises(ValueError, match="max_wall_time"):
+        builder.build()
+
+
+def test_build_requires_explicit_jit_block_size_for_max_wall_time():
+    builder = _builder_with_epochs(6)
+    builder.max_wall_time = 1.0
+
+    with pytest.raises(
+        ValueError,
+        match=r"max_wall_time.*jit_block_size.*JIT-block boundaries.*overshoot",
+    ):
+        builder.build()
+
+
+def test_inferred_jit_block_size_prevents_enabling_max_wall_time_later():
+    engine = _builder_with_epochs(6).build()
+
+    with pytest.raises(ValueError, match=r"max_wall_time.*explicit.*jit_block_size"):
+        engine.max_wall_time = 1.0
+
 
 def test_seed_input():
     int_seed = 0
