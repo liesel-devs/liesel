@@ -525,22 +525,29 @@ class Engine:
 
         Auto-tuning methods are called automatically.
         """
-        while self._epoch_manager.has_more():
-            self.sample_next_epoch()
+        while self._epoch is not None or self._epoch_manager.has_more():
+            self._sample_next_epoch()
 
     def sample_next_epoch(self):
-        """Runs sampling for the next epoch assuming no epoch is active."""
-        self._start_epoch()
+        """Runs sampling for the next or currently active epoch."""
+        self._sample_next_epoch()
+
+    def _sample_next_epoch(self):
+        """Runs sampling for the next or currently active epoch."""
+        resuming = self._epoch is not None
+        if not resuming:
+            self._start_epoch()
 
         # special treatment for the initial values
         if self.current_epoch.config.type == EpochType.INITIAL_VALUES:
             self._handle_inital_values_epoch()
             return
 
-        self._kernel_start_epoch()
+        if not resuming:
+            self._kernel_start_epoch()
 
-        duration = self.current_epoch.config.duration
-        epoch_type = self.current_epoch.config.type.name
+        duration = int(self.current_epoch.time_left())
+        epoch_type = EpochType(int(self.current_epoch.config.type)).name
         jitted = self._jit_block_size
 
         if self._show_progress:
@@ -566,7 +573,7 @@ class Engine:
 
     def is_sampling_done(self) -> bool:
         """Returns true if all configured epochs have been sampled."""
-        return not self._epoch_manager.has_more()
+        return self._epoch is None and not self._epoch_manager.has_more()
 
     def get_results(self) -> SamplingResults:
         """Returns the results of the sampling process."""

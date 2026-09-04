@@ -61,27 +61,89 @@ class FooQauntGen:
         return FooQuant(0, (u, model_state["x"]))
 
 
-def _engine_with_block_size(jitted_sample_duration: int = 2) -> Engine:
+def _engine_with_block_size(
+    jitted_sample_duration: int = 2,
+    epoch_configs: list[EpochConfig] | None = None,
+) -> Engine:
     num_chains = 2
-    model_states = _stack_for_multi([{"x": jnp.array(0.0)}] * num_chains)
+    model_states = _stack_for_multi([{"x": jnp.array(0)}] * num_chains)
     model = DictInterface(lambda state: -0.5 * state["x"] ** 2)
     kernel = DetCountingKernel(["x"], DetCountingKernelState.default())
     kernel.set_model(model)
     kernel.identifier = "kernel_00"
 
+    if epoch_configs is None:
+        epoch_configs = [
+            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
+            EpochConfig(EpochType.BURNIN, 4, 1, None),
+        ]
+
     return Engine(
         seeds=jax.random.split(jax.random.PRNGKey(1), num_chains),
         model_states=model_states,
         kernel_sequence=KernelSequence([kernel]),
-        epoch_configs=[
-            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
-            EpochConfig(EpochType.BURNIN, 4, 1, None),
-        ],
+        epoch_configs=epoch_configs,
         jitted_sample_duration=jitted_sample_duration,
         model=model,
         position_keys=["x"],
         show_progress=False,
     )
+
+
+def _pause_in_second_epoch(engine: Engine) -> None:
+    """Create a partial epoch until issue 03 adds public deadline stopping."""
+    engine.sample_next_epoch()
+    engine._start_epoch()
+    engine._kernel_start_epoch()
+    engine._sample_for_duration(engine.jit_block_size)
+
+
+def test_sample_next_epoch_resumes_active_epoch():
+    engine = _engine_with_block_size()
+    _pause_in_second_epoch(engine)
+
+    assert not engine.is_sampling_done()
+
+    engine.sample_next_epoch()
+
+    samples = engine.get_results().get_samples()["x"]
+    assert np.array_equal(samples[0], np.array([0, 10000, 10001, 10002, 10003]))
+    assert engine.is_sampling_done()
+    with pytest.raises(RuntimeError, match="No active epoch"):
+        _ = engine.current_epoch
+
+
+def test_sample_all_epochs_completes_active_final_epoch():
+    engine = _engine_with_block_size()
+    _pause_in_second_epoch(engine)
+
+    engine.sample_all_epochs()
+
+    samples = engine.get_results().get_samples()["x"]
+    assert np.array_equal(samples[0], np.array([0, 10000, 10001, 10002, 10003]))
+    assert engine.is_sampling_done()
+
+
+def test_sample_all_epochs_resumes_before_pending_epochs():
+    engine = _engine_with_block_size(
+        epoch_configs=[
+            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
+            EpochConfig(EpochType.FAST_ADAPTATION, 4, 1, None),
+            EpochConfig(EpochType.POSTERIOR, 2, 1, None),
+        ]
+    )
+    _pause_in_second_epoch(engine)
+
+    engine.sample_all_epochs()
+
+    samples = engine.get_results().get_samples()["x"]
+    assert np.array_equal(
+        samples[0], np.array([0, 10000, 10001, 10002, 10003, 20000, 20001])
+    )
+    assert np.array_equal(
+        engine.get_results().get_tuning_times().unwrap(), np.array([[5], [5]])
+    )
+    assert engine.is_sampling_done()
 
 
 def test_max_wall_time_can_be_changed_on_engine():
