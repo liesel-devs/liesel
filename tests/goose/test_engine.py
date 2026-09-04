@@ -68,6 +68,7 @@ class FooQauntGen:
 def _engine_with_block_size(
     jitted_sample_duration: int = 2,
     epoch_configs: list[EpochConfig] | None = None,
+    with_quantities: bool = False,
 ) -> Engine:
     num_chains = 2
     model_states = _stack_for_multi([{"x": jnp.array(0)}] * num_chains)
@@ -90,6 +91,7 @@ def _engine_with_block_size(
         jitted_sample_duration=jitted_sample_duration,
         model=model,
         position_keys=["x"],
+        quantity_generators=[FooQauntGen("foo")] if with_quantities else [],
         show_progress=False,
     )
 
@@ -185,6 +187,123 @@ def test_engine_rejects_invalid_jitted_sample_duration(value):
 def test_engine_rejects_block_size_incompatible_with_initial_schedule():
     with pytest.raises(ValueError, match=r"jit_block_size 3.*duration 4"):
         _engine_with_block_size(3)
+
+
+def test_compile_preserves_state_and_supplies_later_sampling(monkeypatch):
+    baseline = _engine_with_block_size(with_quantities=True)
+    engine = _engine_with_block_size(with_quantities=True)
+
+    assert engine.compile() is None
+    assert engine.compile() is None
+    assert not engine.is_sampling_done()
+    with pytest.raises(RuntimeError, match="No active epoch"):
+        _ = engine.current_epoch
+
+    before = engine.get_results()
+    assert before.positions.get_epochs() == []
+    assert before.transition_infos.get_epochs() == []
+    assert before.generated_quantities.unwrap().get_epochs() == []
+    assert before.tuning_infos.unwrap().get().is_none()
+    assert before.elapsed_wall_time is None
+    assert before.stop_reason is None
+
+    def unavailable_original_jit(*args, **kwargs):
+        raise AssertionError("sampling used the original JIT wrapper")
+
+    monkeypatch.setattr(engine, "_sample_many_jitted", unavailable_original_jit)
+    engine.sample_all_epochs()
+    baseline.sample_all_epochs()
+
+    actual = engine.get_results()
+    expected = baseline.get_results()
+    jax.tree.map(
+        np.testing.assert_array_equal,
+        actual.positions.combine_all().unwrap(),
+        expected.positions.combine_all().unwrap(),
+    )
+    jax.tree.map(
+        np.testing.assert_array_equal,
+        actual.transition_infos.combine_all().unwrap(),
+        expected.transition_infos.combine_all().unwrap(),
+    )
+    jax.tree.map(
+        np.testing.assert_array_equal,
+        actual.generated_quantities.unwrap().combine_all().unwrap(),
+        expected.generated_quantities.unwrap().combine_all().unwrap(),
+    )
+
+
+def test_compiled_engine_samples_epochs_with_different_argument_signatures():
+    engine = _engine_with_block_size(
+        epoch_configs=[
+            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
+            EpochConfig(EpochType.BURNIN, 2, 1, jnp.zeros(1)),
+            EpochConfig(EpochType.POSTERIOR, 2, 1, jnp.zeros(2)),
+        ]
+    )
+
+    engine.compile()
+    engine.sample_all_epochs()
+
+    assert np.array_equal(
+        engine.get_results().get_samples()["x"][0],
+        np.array([0, 10000, 10001, 20000, 20001]),
+    )
+
+
+def test_compile_replaces_executable_for_next_argument_signature(monkeypatch):
+    engine = _engine_with_block_size(
+        epoch_configs=[
+            EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None),
+            EpochConfig(EpochType.BURNIN, 2, 1, jnp.zeros(1)),
+            EpochConfig(EpochType.POSTERIOR, 2, 1, jnp.zeros(2)),
+        ]
+    )
+    engine.compile()
+    engine.sample_next_epoch()
+    engine.sample_next_epoch()
+
+    assert engine.compile() is None
+
+    def unavailable_original_jit(*args, **kwargs):
+        raise AssertionError("sampling used the original JIT wrapper")
+
+    monkeypatch.setattr(engine, "_sample_many_jitted", unavailable_original_jit)
+    engine.sample_next_epoch()
+
+    assert np.array_equal(
+        engine.get_results().get_samples()["x"][0],
+        np.array([0, 10000, 10001, 20000, 20001]),
+    )
+
+
+@pytest.mark.parametrize("compiled_earlier", [False, True])
+def test_compile_is_a_noop_without_a_sampling_epoch(compiled_earlier):
+    if compiled_earlier:
+        engine = _engine_with_block_size()
+        engine.compile()
+        engine.sample_all_epochs()
+    else:
+        engine = _engine_with_block_size(
+            epoch_configs=[EpochConfig(EpochType.INITIAL_VALUES, 1, 1, None)]
+        )
+
+    before = engine.get_results()
+    epochs_before = before.positions.get_epochs()
+    metadata_before = (before.elapsed_wall_time, before.stop_reason)
+
+    assert engine.compile() is None
+
+    after = engine.get_results()
+    assert after.positions.get_epochs() == epochs_before
+    assert (after.elapsed_wall_time, after.stop_reason) == metadata_before
+    if compiled_earlier:
+        assert np.array_equal(
+            after.get_samples()["x"][0], np.array([0, 10000, 10001, 10002, 10003])
+        )
+    else:
+        engine.sample_all_epochs()
+        assert np.array_equal(engine.get_results().get_samples()["x"][0], np.array([0]))
 
 
 def test_add_time_dimension():

@@ -103,6 +103,17 @@ def _add_time_dimension(x: PyTree) -> PyTree:
     return initial_position
 
 
+def _arguments_signature(*args: PyTree) -> tuple[Any, ...]:
+    leaves, treedef = jax.tree_util.tree_flatten(args)
+    return (
+        treedef,
+        *(
+            (leaf.shape, leaf.dtype, getattr(leaf, "weak_type", False))
+            for leaf in leaves
+        ),
+    )
+
+
 @register_dataclass_as_pytree
 @dataclass(frozen=True)
 class Carry:
@@ -489,6 +500,8 @@ class Engine:
                 out_axes=(None, 0, 0, 0, 0, 0, 0),
             )
         )
+        self._sample_many_compiled = None
+        self._sample_many_compiled_signature = None
 
     @property
     def jit_block_size(self) -> int:
@@ -531,6 +544,39 @@ class Engine:
             raise RuntimeError("No active epoch")
 
         return self._epoch
+
+    def compile(self) -> None:
+        """Compiles the sampler without advancing the Engine state."""
+        epoch = self._epoch
+        if epoch is None:
+            configs = self._epoch_manager._configs
+            next_epoch = self._epoch_manager._next_epoch_ptr
+            time_before_epoch = sum(config.duration for config in configs[:next_epoch])
+            for nth_epoch, config in enumerate(configs[next_epoch:], next_epoch):
+                if config.type != EpochType.INITIAL_VALUES:
+                    epoch = config.to_state(nth_epoch, time_before_epoch)
+                    break
+                time_before_epoch += config.duration
+
+        if epoch is None:
+            return
+
+        args = (
+            _split_keys(self._prng_key, self._jit_block_size + 1)[:, 1:, :],
+            as_strong_pytree(epoch),
+            as_strong_pytree(self._kernel_states),
+            as_strong_pytree(self._model_states),
+        )
+        signature = _arguments_signature(*args)
+        if (
+            self._sample_many_compiled is not None
+            and self._sample_many_compiled_signature == signature
+        ):
+            return
+
+        compiled = self._sample_many_jitted.lower(*args).compile()
+        self._sample_many_compiled = compiled
+        self._sample_many_compiled_signature = signature
 
     def sample_all_epochs(self):
         """
@@ -1008,6 +1054,18 @@ class Engine:
         for dur_i in it:
             # FIXME: split for entire duration instead of each loop iteration
             keys = self._split_prng_key(self._jit_block_size)
+            args = (
+                keys,
+                self.current_epoch,
+                self._kernel_states,
+                self._model_states,
+            )
+            sample_many = self._sample_many_jitted
+            if (
+                self._sample_many_compiled is not None
+                and self._sample_many_compiled_signature == _arguments_signature(*args)
+            ):
+                sample_many = self._sample_many_compiled
             (
                 new_epoch,
                 new_ks,
@@ -1016,9 +1074,7 @@ class Engine:
                 infos,
                 ksc,
                 quants,
-            ) = self._sample_many_jitted(
-                keys, self.current_epoch, self._kernel_states, self._model_states
-            )
+            ) = sample_many(*args)
             self._epoch = new_epoch
             self._kernel_states = new_ks
             self._model_states = new_ms
