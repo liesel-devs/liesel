@@ -31,9 +31,7 @@ ELBO loss:
 ... )
 >>> p = lsl.Model([y])
 >>> vdist = opt.VDist(["mu"], p).mvn_diag().build()
->>> elbo = opt.NegElboLoss.from_vdist(
-...     vdist, opt.PositionSplit.from_model(p), nsamples=2
-... )
+>>> elbo = opt.NegElboLoss.from_vdist(vdist, nsamples=2)
 >>> repr(elbo)
 'NegElboLoss(nsamples=2)'
 >>> elbo.position(vdist.parameters).keys()
@@ -241,7 +239,7 @@ class NegElboLoss(LossMixin):
     def from_vdist(
         cls,
         vdist: VDist | CompositeVDist,
-        split: SplitConfig,
+        split: SplitConfig | None = None,
         nsamples: int = 10,
         scale: bool = False,
         regularize_q_prior: bool = True,
@@ -256,7 +254,8 @@ class NegElboLoss(LossMixin):
             already be available, usually by calling :meth:`VDist.build` or
             :meth:`CompositeVDist.build`.
         split
-            Data split for the target model. Must not contain validation data.
+            Optional data split for the target model. Must not contain validation data.
+            If omitted, :meth:`PositionSplit.from_model` is used.
         nsamples
             Number of Monte Carlo samples used for training losses.
         scale
@@ -284,9 +283,8 @@ class NegElboLoss(LossMixin):
         ...     name="y",
         ... )
         >>> p = lsl.Model([y])
-        >>> split = opt.PositionSplit.from_model(p)
         >>> vdist = opt.VDist(["mu"], p).mvn_diag().build()
-        >>> opt.NegElboLoss.from_vdist(vdist, split).vdist is vdist
+        >>> opt.NegElboLoss.from_vdist(vdist).vdist is vdist
         True
         """
         if vdist.q is None:

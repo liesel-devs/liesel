@@ -428,6 +428,17 @@ class TestNegElboLoss:
                 nsamples=1.5,  # ty: ignore[invalid-argument-type]
             )
 
+    def test_from_vdist_builds_default_split(self):
+        p = _laplace_model()
+        vdist = opt.VDist(["loc"], p).mvn_diag().build()
+
+        loss = opt.NegElboLoss.from_vdist(vdist)
+
+        assert isinstance(loss.split, opt.PositionSplit)
+        assert loss.split.train_axis_size == 2
+        assert loss.split.validate_axis_size == 0
+        assert loss.split.test_axis_size == 0
+
     def test_estimate_elbo_rejects_invalid_sample_count_override(self):
         p = _laplace_model()
         elbo = opt.NegElboLoss.mvn_diag(p, nsamples=1)
