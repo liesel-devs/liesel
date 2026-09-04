@@ -811,7 +811,11 @@ class TestSplitManager:
         )
         assert isinstance(split, PositionSplitManager)
 
-        quick = LieselOptim(model, loss_monitor=EmaTrainLossMonitor(), split=split)
+        quick = LieselOptim(
+            model,
+            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
+            split=split,
+        )
 
         assert isinstance(quick.batches, BatchManager)
         assert quick.batches.axis_size == split.train_axis_sizes
@@ -833,7 +837,7 @@ class TestSplitManager:
         with pytest.raises(ValueError, match="BatchManager"):
             LieselOptim(
                 model,
-                loss_monitor=EmaTrainLossMonitor(),
+                loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
                 split=split,
                 batches=batches,
             ).build_engine()

@@ -40,13 +40,16 @@ from liesel.optim.state import OptimCarry
 from liesel.optim.types import Position
 
 
-def test_ema_train_loss_monitor_default_and_fractional_window():
-    assert EmaTrainLossMonitor().effective_window == 1.0
+def test_ema_train_loss_monitor_required_and_explicit_windows():
+    with pytest.raises(TypeError):
+        EmaTrainLossMonitor()  # ty: ignore[missing-argument]
+
+    assert EmaTrainLossMonitor(1.0).effective_window == 1.0
     assert EmaTrainLossMonitor(0.25).effective_window == 0.25
 
 
 def test_ema_train_loss_monitor_is_frozen():
-    monitor = EmaTrainLossMonitor()
+    monitor = EmaTrainLossMonitor(effective_window=1.0)
 
     with pytest.raises(FrozenInstanceError):
         monitor.effective_window = 2.0  # ty: ignore[invalid-assignment]
@@ -101,7 +104,7 @@ def test_engine_rejects_lbfgs_with_mini_batches():
             stopper=Stopper(epochs=1, patience=1),
             seed=1,
             initial_state={},
-            loss_monitor=EmaTrainLossMonitor(),
+            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         )
 
 
@@ -467,7 +470,7 @@ def _progress_engine(
     resolved_loss = BatchSensitiveLoss(split) if loss is None else loss(split)
     return OptimEngine(
         loss=resolved_loss,
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         batches=Batches(
             ["y"],
             axis_size=n_batches,
@@ -541,7 +544,7 @@ def test_ema_result_recommends_terminal_and_retains_minimum_monitor_position(
     optimizer = _optimizer()
     engine = OptimEngine(
         loss=loss,
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
         optimizers=[optimizer],
         stopper=Stopper(epochs=4, patience=2),
@@ -573,7 +576,7 @@ def test_removed_result_and_engine_api_is_absent():
 
     result = OptimEngine(
         loss=_loss(),
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
         optimizers=[_optimizer()],
         stopper=Stopper(epochs=1, patience=1),
@@ -593,7 +596,7 @@ def test_engine_uses_loss_split():
     loss = _loss()
     engine = OptimEngine(
         loss=loss,
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
         optimizers=[_optimizer()],
         stopper=Stopper(epochs=4, patience=2),
@@ -609,7 +612,7 @@ def test_empty_optimizers_raise():
     with pytest.raises(ValueError, match="at least one optimizer"):
         OptimEngine(
             loss=_loss(),
-            loss_monitor=EmaTrainLossMonitor(),
+            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[],
             stopper=Stopper(epochs=4, patience=2),
@@ -625,7 +628,7 @@ def test_optimizer_activation_delay_must_allow_an_active_epoch():
     with pytest.raises(ValueError, match="activate_after_epochs"):
         OptimEngine(
             loss=_loss(),
-            loss_monitor=EmaTrainLossMonitor(),
+            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[optimizer],
             stopper=Stopper(epochs=4, patience=2),
@@ -644,7 +647,7 @@ def test_optimizer_activates_after_completed_epoch_delay(debug_nans):
 
     engine = OptimEngine(
         loss=loss,
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
         optimizers=[
             Optimizer(["theta"], optax.sgd(1.0), identifier="theta"),
@@ -677,7 +680,7 @@ def test_inactive_optimizer_does_not_consume_random_key():
     def first_theta_position(optimizers):
         engine = OptimEngine(
             loss=RandomGradientLoss(_split()),
-            loss_monitor=EmaTrainLossMonitor(),
+            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=optimizers,
             stopper=Stopper(epochs=2, patience=2),
@@ -706,7 +709,7 @@ def test_inactive_optimizer_does_not_consume_random_key():
 def test_fit_can_stop_before_any_optimizer_activates():
     engine = OptimEngine(
         loss=UnitGradientLoss(_split()),
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
         optimizers=[Optimizer(["theta"], optax.sgd(1.0), activate_after_epochs=3)],
         stopper=Stopper(epochs=5, patience=1),
@@ -728,7 +731,7 @@ def test_duplicate_optimizer_position_keys_raise():
     with pytest.raises(ValueError, match="Position keys"):
         OptimEngine(
             loss=_loss(),
-            loss_monitor=EmaTrainLossMonitor(),
+            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[
                 _optimizer(["theta"], identifier="a"),
@@ -745,7 +748,7 @@ def test_duplicate_optimizer_identifiers_after_naming_raise():
     with pytest.raises(ValueError, match="identifiers"):
         OptimEngine(
             loss=_loss(),
-            loss_monitor=EmaTrainLossMonitor(),
+            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[
                 _optimizer(["theta"], identifier=""),
@@ -763,7 +766,7 @@ def test_invalid_progress_n_updates_raises(progress_n_updates):
     with pytest.raises(ValueError, match="progress_n_updates"):
         OptimEngine(
             loss=_loss(),
-            loss_monitor=EmaTrainLossMonitor(),
+            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[_optimizer()],
             stopper=Stopper(epochs=4, patience=2),
@@ -783,7 +786,7 @@ def test_invalid_progress_update_interval_raises(name, value):
     with pytest.raises(ValueError, match=name):
         OptimEngine(
             loss=_loss(),
-            loss_monitor=EmaTrainLossMonitor(),
+            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[_optimizer()],
             stopper=Stopper(epochs=4, patience=2),
@@ -801,7 +804,7 @@ def test_invalid_progress_update_count_raises(name, value):
     with pytest.raises(ValueError, match=name):
         OptimEngine(
             loss=_loss(),
-            loss_monitor=EmaTrainLossMonitor(),
+            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[_optimizer()],
             stopper=Stopper(epochs=4, patience=2),
@@ -851,7 +854,7 @@ def test_debug_nans_no_active_loss_capture_reproduces_loss():
     )
     engine = OptimEngine(
         loss=DebugNaNLoss(split, trigger_batch_value=1.0),
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         batches=Batches(["y"], axis_size=3, batch_size=1, shuffle=False),
         optimizers=[DebugNoOpOptimizer(["theta"], activate_after_epochs=1)],
         stopper=Stopper(epochs=3, patience=3),
@@ -894,7 +897,7 @@ def test_debug_nans_position_after_reproduces_second_optimizer_step():
     )
     engine = OptimEngine(
         loss=DebugNaNLoss(split),
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         batches=Batches(["y"], axis_size=2, batch_size=1, shuffle=False),
         optimizers=[
             AddOneOptimizer(["theta"], identifier="add_theta"),
@@ -947,7 +950,7 @@ def test_debug_nans_later_optimizer_loss_takes_precedence_over_nan_update():
     split = _split()
     engine = OptimEngine(
         loss=DebugNaNLoss(split),
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         batches=Batches(["y"], axis_size=1, batch_size=1, shuffle=False),
         optimizers=[
             AddOneOptimizer(["theta"], identifier="add_theta"),
@@ -975,7 +978,7 @@ def test_debug_nans_position_before_capture():
     split = _split()
     engine = OptimEngine(
         loss=DebugNaNLoss(split, initial_nan=True),
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         batches=Batches(["y"], axis_size=1, batch_size=1, shuffle=False),
         optimizers=[DebugNoOpOptimizer(["theta"])],
         stopper=Stopper(epochs=3, patience=3),
@@ -1007,7 +1010,7 @@ def test_debug_nans_disabled_keeps_existing_nan_loss_behavior():
     )
     engine = OptimEngine(
         loss=DebugNaNLoss(split, trigger_batch_value=0.0),
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         batches=Batches(["y"], axis_size=2, batch_size=1, shuffle=False),
         optimizers=[DebugNoOpOptimizer(["theta"])],
         stopper=Stopper(epochs=3, patience=3),
@@ -1096,7 +1099,7 @@ def test_training_history_and_ema_use_first_active_optimizer_loss():
         seed=1,
         initial_state={},
         show_progress=False,
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
     )
 
     result = engine.fit()
@@ -1129,7 +1132,7 @@ def test_training_history_uses_fallback_then_first_active_loss():
         seed=1,
         initial_state={},
         show_progress=False,
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
     )
 
     result = engine.fit()
@@ -1154,7 +1157,7 @@ def test_nan_from_later_optimizer_stops_ordinary_fit():
         seed=1,
         initial_state={},
         show_progress=False,
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
     )
 
     result = engine.fit()
@@ -1176,7 +1179,7 @@ def test_nan_updated_position_stops_ordinary_fit():
         seed=1,
         initial_state={},
         show_progress=False,
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
     )
 
     result = engine.fit()
@@ -1198,7 +1201,7 @@ def test_ema_monitor_adds_no_full_data_evaluation():
         seed=1,
         initial_state={},
         show_progress=False,
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
     )
 
     result = engine.fit()
@@ -1279,7 +1282,7 @@ def test_ema_monitor_source_drives_epoch_stopping():
     split = _monitor_split()
     engine = OptimEngine(
         loss=EpochSequenceLoss(split, jnp.array([100.0, 0.0, 1.0, 2.0])),
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         batches=Batches(["y"], axis_size=2, batch_size=1, shuffle=False),
         optimizers=[DebugNoOpOptimizer(["theta"])],
         stopper=Stopper(epochs=4, patience=2),
@@ -1312,7 +1315,7 @@ def test_split_manager_requires_batch_manager():
     with pytest.raises(ValueError, match="BatchManager"):
         OptimEngine(
             loss=SequenceLoss(split),
-            loss_monitor=EmaTrainLossMonitor(),
+            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[_optimizer()],
             stopper=Stopper(epochs=4, patience=2),
@@ -1326,7 +1329,7 @@ def test_batch_keys_must_be_present_in_training_split():
     with pytest.raises(ValueError, match="split.train"):
         OptimEngine(
             loss=_loss(),
-            loss_monitor=EmaTrainLossMonitor(),
+            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             batches=Batches(["missing"], axis_size=1, batch_size=None, shuffle=False),
             optimizers=[_optimizer()],
             stopper=Stopper(epochs=4, patience=2),
@@ -1340,7 +1343,7 @@ def test_batch_manager_keys_must_be_present_in_training_split():
     with pytest.raises(ValueError, match="split.train"):
         OptimEngine(
             loss=_loss(),
-            loss_monitor=EmaTrainLossMonitor(),
+            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             batches=BatchManager(
                 [Batches(["missing"], axis_size=1, batch_size=None, shuffle=False)]
             ),
@@ -1375,7 +1378,7 @@ def test_progress_count_conversion_uses_a_ceiling():
 def test_progress_defaults_and_linked_count_properties():
     engine = OptimEngine(
         loss=_loss(),
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
         optimizers=[_optimizer()],
         stopper=Stopper(epochs=101, patience=10),
@@ -1406,7 +1409,7 @@ def test_progress_defaults_and_linked_count_properties():
 def test_progress_count_aliases_override_intervals():
     engine = OptimEngine(
         loss=_loss(),
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         batches=Batches(["y"], axis_size=10, batch_size=1, shuffle=False),
         optimizers=[_optimizer()],
         stopper=Stopper(epochs=10, patience=10),
@@ -1437,7 +1440,7 @@ def test_progress_count_keeps_historical_positional_slot():
         False,
         True,
         3,
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
     )
 
     assert engine.progress_update_every == 4
@@ -1664,7 +1667,7 @@ def test_epoch_progress_renders_early_stop_remainder(monkeypatch):
     monkeypatch.setattr(engine_module, "tqdm", FakeTqdm)
     engine = OptimEngine(
         loss=_loss(),
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
         optimizers=[_optimizer()],
         stopper=Stopper(epochs=4, patience=2),

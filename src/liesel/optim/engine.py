@@ -92,7 +92,7 @@ class EmaTrainLossMonitor:
     finite-step relationship also depends on the number of batches per epoch.
     """
 
-    effective_window: float = 1.0
+    effective_window: float
 
     def __post_init__(self) -> None:
         try:
@@ -478,7 +478,8 @@ class OptimEngine:
             self.loss_monitor not in ("validation", "train_full_data")
         ):
             raise ValueError(
-                "loss_monitor must be EmaTrainLossMonitor(), 'validation', or "
+                "loss_monitor must be EmaTrainLossMonitor(effective_window=...), "
+                "'validation', or "
                 f"'train_full_data', but got {self.loss_monitor!r}."
             )
 
