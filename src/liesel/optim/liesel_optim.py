@@ -125,7 +125,7 @@ class LieselOptim:
     ... )
     >>> model = lsl.Model([y])
     >>> engine = LieselOptim(
-    ...     model, loss_monitor=EmaTrainLossMonitor(), seed=1
+    ...     model, loss_monitor=EmaTrainLossMonitor(effective_window=1.0), seed=1
     ... ).build_engine()
     >>> type(engine).__name__
     'OptimEngine'
@@ -181,7 +181,8 @@ class LieselOptim:
             "train_full_data",
         ):
             raise ValueError(
-                "loss_monitor must be EmaTrainLossMonitor(), 'validation', or "
+                "loss_monitor must be EmaTrainLossMonitor(effective_window=...), "
+                "'validation', or "
                 f"'train_full_data', but got {loss_monitor!r}."
             )
         if loss_monitor == "validation" and not self.split.has_validation:

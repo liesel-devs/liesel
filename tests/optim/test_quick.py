@@ -79,7 +79,7 @@ def test_lieseloptim_rejects_unknown_loss_monitor():
 
 def test_default_build_engine_uses_opinionated_defaults():
     model = _normal_model()
-    loss_monitor = EmaTrainLossMonitor()
+    loss_monitor = EmaTrainLossMonitor(effective_window=1.0)
 
     engine = LieselOptim(model, loss_monitor=loss_monitor, seed=1).build_engine()
 
@@ -103,7 +103,7 @@ def test_batch_size_shortcut_builds_training_batches():
 
     engine = LieselOptim(
         model,
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         split=split,
         batch_size=2,
         seed=1,
@@ -118,7 +118,10 @@ def test_old_batch_axis_size_shortcut_still_works():
     model = _normal_model()
 
     engine = LieselOptim(
-        model, loss_monitor=EmaTrainLossMonitor(), batch_axis_size=2, seed=1
+        model,
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
+        batch_axis_size=2,
+        seed=1,
     ).build_engine()
 
     assert isinstance(engine.batches, Batches)
@@ -132,7 +135,7 @@ def test_batches_and_batch_size_are_mutually_exclusive():
     with pytest.raises(ValueError, match="batches or batch_size"):
         LieselOptim(
             model,
-            loss_monitor=EmaTrainLossMonitor(),
+            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             batches=batches,
             batch_size=2,
         )
@@ -144,7 +147,7 @@ def test_batch_size_and_old_keyword_are_mutually_exclusive():
     with pytest.raises(ValueError, match="batch_size or batch_axis_size"):
         LieselOptim(
             model,
-            loss_monitor=EmaTrainLossMonitor(),
+            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             batch_size=2,
             batch_axis_size=2,
         )
@@ -155,7 +158,10 @@ def test_user_provided_batches_are_not_mutated():
     batches = Batches(["y"], axis_size=2, batch_size=None)
 
     quick = LieselOptim(
-        model, loss_monitor=EmaTrainLossMonitor(), batches=batches, seed=1
+        model,
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
+        batches=batches,
+        seed=1,
     )
     engine = quick.build_engine()
 
@@ -168,7 +174,10 @@ def test_multi_size_default_split_builds_batch_manager():
     model = _two_branch_model()
 
     engine = LieselOptim(
-        model, loss_monitor=EmaTrainLossMonitor(), batch_size=None, seed=1
+        model,
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
+        batch_size=None,
+        seed=1,
     ).build_engine()
 
     assert isinstance(engine.split, PositionSplitManager)
@@ -183,7 +192,10 @@ def test_scale_loss_false_builds_unscaled_default_loss():
     model = _normal_model()
 
     engine = LieselOptim(
-        model, loss_monitor=EmaTrainLossMonitor(), scale_loss=False, seed=1
+        model,
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
+        scale_loss=False,
+        seed=1,
     ).build_engine()
 
     assert isinstance(engine.loss, NegLogProbLoss)
@@ -198,7 +210,7 @@ def test_scale_loss_is_ignored_for_custom_loss():
 
     engine = LieselOptim(
         model,
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         loss=loss,
         scale_loss=True,
         seed=1,
@@ -217,7 +229,7 @@ def test_custom_loss_and_conflicting_split_raise():
     with pytest.raises(ValueError, match="loss.split"):
         LieselOptim(
             model,
-            loss_monitor=EmaTrainLossMonitor(),
+            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             loss=loss,
             split=other_split,
         )
@@ -229,7 +241,7 @@ def test_unknown_optimizer_string_raises():
     with pytest.raises(ValueError, match="optimizers"):
         LieselOptim(
             model,
-            loss_monitor=EmaTrainLossMonitor(),
+            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             optimizers="sgd",  # ty: ignore[invalid-argument-type]
         )
 
@@ -265,7 +277,7 @@ def test_fit_returns_optim_result():
 
     result = LieselOptim(
         model,
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         stopper=Stopper(epochs=1, patience=1),
         seed=1,
     ).fit()
@@ -285,7 +297,7 @@ def test_fit_handles_float32_model_with_x64_enabled():
         model = _normal_model(to_float32=True)
         result = LieselOptim(
             model,
-            loss_monitor=EmaTrainLossMonitor(),
+            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             stopper=Stopper(epochs=1, patience=1),
             seed=1,
         ).fit()
@@ -299,7 +311,7 @@ def test_batched_fit_handles_float32_model_with_x64_enabled():
         model = _normal_model(to_float32=True)
         result = LieselOptim(
             model,
-            loss_monitor=EmaTrainLossMonitor(),
+            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             batch_size=2,
             stopper=Stopper(epochs=1, patience=1),
             seed=1,
@@ -336,7 +348,7 @@ def test_fit_can_split_response_and_batch_shared_covariate_on_different_axes():
 
     result = LieselOptim(
         model,
-        loss_monitor=EmaTrainLossMonitor(),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         split=split,
         batches=batches,
         stopper=Stopper(epochs=1, patience=1),
@@ -358,7 +370,7 @@ def test_fit_handles_float64_model_with_x64_enabled():
         model = lsl.Model([y], to_float32=False)
         result = LieselOptim(
             model,
-            loss_monitor=EmaTrainLossMonitor(),
+            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             stopper=Stopper(epochs=1, patience=1),
             seed=1,
         ).fit()

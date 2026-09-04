@@ -164,7 +164,7 @@ class LossMixin:
         """
         raise NotImplementedError(
             f"{type(self).__name__} does not implement loss_train(). Pass "
-            "EmaTrainLossMonitor() or implement loss_train() "
+            "EmaTrainLossMonitor(effective_window=...) or implement loss_train() "
             "on the custom loss."
         )
 
