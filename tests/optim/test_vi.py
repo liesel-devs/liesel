@@ -156,22 +156,26 @@ def test_vdist_can_override_target_model_to_float32():
     assert q.q.to_float32 is False
 
 
-def test_vdist_can_still_force_variational_model_to_float32():
+@pytest.mark.parametrize("initializer", ["normal", "mvn_diag", "mvn_tril"])
+def test_vdist_can_still_force_variational_model_to_float32(initializer):
     with jax.enable_x64(True):
         x = lsl.Var.new_obs(
-            jnp.array(0.0),
+            jnp.array(0.0, dtype=jnp.float32),
             name="x",
         )
         model = lsl.Model([x], to_float32=False)
 
-        q = opt.VDist(["x"], model, to_float32=True).normal(0.0, 1.0).build()
+        vdist = opt.VDist(["x"], model, to_float32=True)
+        loc = jnp.array([0.0], dtype=jnp.float64)
+        q = getattr(vdist, initializer)(loc=loc).build()
 
     assert q.q is not None
     assert q.q.to_float32 is True
     assert q.q.extract_position(q.parameters)["(x)_loc"].dtype == jnp.float32
 
 
-def test_vdist_uses_float64_under_x64_when_not_converting():
+@pytest.mark.parametrize("initializer", ["normal", "mvn_diag", "mvn_tril"])
+def test_vdist_uses_float64_under_x64_when_not_converting(initializer):
     with jax.enable_x64(True):
         x = lsl.Var.new_obs(
             jnp.array(0.0),
@@ -179,7 +183,8 @@ def test_vdist_uses_float64_under_x64_when_not_converting():
         )
         model = lsl.Model([x], to_float32=False)
 
-        q = opt.VDist(["x"], model).normal().build()
+        vdist = opt.VDist(["x"], model)
+        q = getattr(vdist, initializer)().build()
 
     assert q.q is not None
     assert q.q.to_float32 is False
@@ -395,6 +400,12 @@ class TestCompositeVDist:
         samples = q.sample(key, (1, 2, 3))
         assert samples["loc"].shape == (1, 2, 3, 1)
         assert samples["h(scale)"].shape == (1, 2, 3)
+
+        assert q.q is not None
+        at_position = q.q.extract_position(q.parameters)
+        samples = q.sample(key, (2,), at_position=at_position)
+        assert samples["loc"].shape == (2, 1)
+        assert samples["h(scale)"].shape == (2,)
 
 
 class TestNegElboLoss:

@@ -984,6 +984,12 @@ class VDist:
                 f"position shape {value_shape}."
             ) from error
 
+    def _prepare_loc(self, loc: jax.typing.ArrayLike | None) -> jax.Array:
+        loc_value = jnp.asarray(self._flat_pos if loc is None else loc)
+        if self._to_float32 and jnp.issubdtype(loc_value.dtype, jnp.floating):
+            loc_value = loc_value.astype(jnp.float32)
+        return loc_value
+
     def init(self, dist: Dist) -> Self:
         """
         Initializes this block with a custom variational distribution.
@@ -1075,12 +1081,7 @@ class VDist:
         >>> opt.VDist(["theta"], p).normal(scale=0.5)
         VDist(['theta'], dist=Normal)
         """
-        if loc is None:
-            loc_value = jnp.asarray(self._flat_pos)
-        else:
-            loc_value = jnp.asarray(loc)
-        if self._to_float32 and jnp.issubdtype(loc_value.dtype, jnp.floating):
-            loc_value = loc_value.astype(jnp.float32)
+        loc_value = self._prepare_loc(loc)
         loc_dtype = loc_value.dtype
 
         if _is_laplace_init(scale, "scale"):
@@ -1160,12 +1161,7 @@ class VDist:
         -----
         The docstring of :class:`.VDist` includes an example using this method.
         """
-        if loc is None:
-            loc_value = jnp.asarray(self._flat_pos)
-        else:
-            loc_value = jnp.asarray(loc)
-        if self._to_float32 and jnp.issubdtype(loc_value.dtype, jnp.floating):
-            loc_value = loc_value.astype(jnp.float32)
+        loc_value = self._prepare_loc(loc)
         loc_dtype = loc_value.dtype
 
         if _is_laplace_init(scale_diag, "scale_diag"):
@@ -1252,12 +1248,7 @@ class VDist:
 
         The docstring of :class:`.VDist` includes an example using this method.
         """
-        if loc is None:
-            loc_value = jnp.asarray(self._flat_pos)
-        else:
-            loc_value = jnp.asarray(loc)
-        if self._to_float32 and jnp.issubdtype(loc_value.dtype, jnp.floating):
-            loc_value = loc_value.astype(jnp.float32)
+        loc_value = self._prepare_loc(loc)
         loc_dtype = loc_value.dtype
 
         if _is_laplace_init(scale_tril, "scale_tril"):
@@ -1350,26 +1341,9 @@ class VDist:
         >>> samples["theta"].shape
         (3, 1)
         """
-        if self.q is None:
-            raise ValueError("The object has no model.")
-
-        if at_position is not None:
-            at_position = jax.tree.map(
-                lambda x: jnp.expand_dims(x, (0, 1)), at_position
-            )
-
-        q_samples = self.q.sample(
-            shape=sample_shape, seed=seed, posterior_samples=at_position
+        return _sample_variational_model(
+            self.q, self.q_to_p, seed, sample_shape, at_position
         )
-        if at_position is not None:
-            q_samples = jax.tree.map(
-                lambda x: jnp.squeeze(
-                    x, (len(sample_shape) + 0, len(sample_shape) + 1)
-                ),
-                q_samples,
-            )
-
-        return vmap_batched(Position(q_samples), self.q_to_p, batch_shape=sample_shape)
 
     def __repr__(self) -> str:
         """Returns a compact representation showing governed keys and distribution."""
@@ -1492,6 +1466,29 @@ def vmap_batched(
     flat_out_pos = jax.vmap(fun)(flat_pos)
     out_pos = unflatten_leading_batch(flat_out_pos, batch_shape)
     return out_pos
+
+
+def _sample_variational_model(
+    q: Model | None,
+    q_to_p: Callable[[Position], Position],
+    seed: jax.Array,
+    sample_shape: Sequence[int],
+    at_position: Position | None,
+) -> Position:
+    if q is None:
+        raise ValueError("The object has no model.")
+
+    if at_position is not None:
+        at_position = jax.tree.map(lambda x: jnp.expand_dims(x, (0, 1)), at_position)
+
+    q_samples = q.sample(shape=sample_shape, seed=seed, posterior_samples=at_position)
+    if at_position is not None:
+        q_samples = jax.tree.map(
+            lambda x: jnp.squeeze(x, (len(sample_shape), len(sample_shape) + 1)),
+            q_samples,
+        )
+
+    return vmap_batched(Position(q_samples), q_to_p, batch_shape=sample_shape)
 
 
 class CompositeVDist:
@@ -1654,26 +1651,9 @@ class CompositeVDist:
         sample_shape: Sequence[int] = (),
         at_position: Position | None = None,
     ) -> Position:
-        if self.q is None:
-            raise ValueError("The object has no model.")
-
-        if at_position is not None:
-            at_position = jax.tree.map(
-                lambda x: jnp.expand_dims(x, (0, 1)), at_position
-            )
-
-        q_samples = self.q.sample(
-            shape=sample_shape, seed=seed, posterior_samples=at_position
+        return _sample_variational_model(
+            self.q, self.q_to_p, seed, sample_shape, at_position
         )
-        if at_position is not None:
-            q_samples = jax.tree.map(
-                lambda x: jnp.squeeze(
-                    x, (len(sample_shape) + 0, len(sample_shape) + 1)
-                ),
-                q_samples,
-            )
-
-        return vmap_batched(Position(q_samples), self.q_to_p, batch_shape=sample_shape)
 
     def __repr__(self) -> str:
         """Returns a compact representation showing the number of blocks."""
