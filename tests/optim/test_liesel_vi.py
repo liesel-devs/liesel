@@ -21,7 +21,7 @@ from liesel.optim import (
 )
 from liesel.optim.state import OptimResult
 
-LOSS_MONITOR = EmaTrainLossMonitor()
+LOSS_MONITOR = EmaTrainLossMonitor(effective_window=1.0)
 
 
 def _normal_model(n: int = 6):

@@ -132,7 +132,7 @@ class LieselVI:
     ... )
     >>> model = lsl.Model([y])
     >>> engine = LieselVI(
-    ...     model, loss_monitor=EmaTrainLossMonitor(), seed=1
+    ...     model, loss_monitor=EmaTrainLossMonitor(effective_window=1.0), seed=1
     ... ).build_engine()
     >>> type(engine).__name__
     'OptimEngine'
@@ -203,7 +203,8 @@ class LieselVI:
             loss_monitor != "train_full_data"
         ):
             raise ValueError(
-                "loss_monitor must be EmaTrainLossMonitor() or 'train_full_data', "
+                "loss_monitor must be EmaTrainLossMonitor(effective_window=...) "
+                "or 'train_full_data', "
                 f"but got {loss_monitor!r}."
             )
         self.loss = self._resolve_loss(
