@@ -12,12 +12,13 @@ from typing import (
     ParamSpec,
     Protocol,
     assert_never,
+    cast,
 )
 
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 from .builder import EngineBuilder
-from .engine import SamplingResults
+from .engine import Engine, SamplingResults
 from .interface import LieselInterface
 from .types import Array, JitterFunctions, Kernel, KeyArray
 
@@ -78,6 +79,7 @@ class LieselMCMC:
 
     model: Model
     which: str | None = None
+    engine: Engine | None = field(default=None, init=False)
 
     def get_spec(self, var: Var) -> MCMCSpec | None:
         """
@@ -305,6 +307,8 @@ class LieselMCMC:
         positions_included: list[str] | None = None,
         positions_excluded: list[str] | None = None,
         save_path: str | Path | None = None,
+        jit_block_size: int | None = None,
+        max_wall_time: float | None = None,
     ) -> SamplingResults:
         """
         Shorthand method for quickly running MCMC for a set number of epochs.
@@ -376,6 +380,93 @@ class LieselMCMC:
             engine.get_results()
 
         """
+        return self._run(
+            time_based=False,
+            wall_time=None,
+            seed=seed,
+            num_chains=num_chains,
+            adaptation=adaptation,
+            posterior=posterior,
+            burnin=burnin,
+            adaptation_thinning=adaptation_thinning,
+            burnin_thinning=burnin_thinning,
+            posterior_thinning=posterior_thinning,
+            apply_jitter=apply_jitter,
+            store_kernel_states=store_kernel_states,
+            show_progress=show_progress,
+            positions_included=positions_included,
+            positions_excluded=positions_excluded,
+            save_path=save_path,
+            jit_block_size=jit_block_size,
+            max_wall_time=max_wall_time,
+        )
+
+    def run_for_time(
+        self,
+        *,
+        wall_time: float,
+        jit_block_size: int,
+        max_wall_time: float | None = None,
+        seed: int,
+        num_chains: int,
+        adaptation: int,
+        posterior: int,
+        burnin: int = 0,
+        adaptation_thinning: int = 1,
+        burnin_thinning: int = 1,
+        posterior_thinning: int = 1,
+        apply_jitter: bool = True,
+        store_kernel_states: bool = False,
+        show_progress: bool = True,
+        positions_included: list[str] | None = None,
+        positions_excluded: list[str] | None = None,
+        save_path: str | Path | None = None,
+    ) -> SamplingResults:
+        """Run MCMC until ``wall_time`` or the configured epochs are exhausted."""
+        return self._run(
+            time_based=True,
+            wall_time=wall_time,
+            seed=seed,
+            num_chains=num_chains,
+            adaptation=adaptation,
+            posterior=posterior,
+            burnin=burnin,
+            adaptation_thinning=adaptation_thinning,
+            burnin_thinning=burnin_thinning,
+            posterior_thinning=posterior_thinning,
+            apply_jitter=apply_jitter,
+            store_kernel_states=store_kernel_states,
+            show_progress=show_progress,
+            positions_included=positions_included,
+            positions_excluded=positions_excluded,
+            save_path=save_path,
+            jit_block_size=jit_block_size,
+            max_wall_time=max_wall_time,
+        )
+
+    def _run(
+        self,
+        *,
+        time_based: bool,
+        wall_time: float | None,
+        seed: int,
+        num_chains: int,
+        adaptation: int,
+        posterior: int,
+        burnin: int,
+        adaptation_thinning: int,
+        burnin_thinning: int,
+        posterior_thinning: int,
+        apply_jitter: bool,
+        store_kernel_states: bool,
+        show_progress: bool,
+        positions_included: list[str] | None,
+        positions_excluded: list[str] | None,
+        save_path: str | Path | None,
+        jit_block_size: int | None,
+        max_wall_time: float | None,
+    ) -> SamplingResults:
+        self.engine = None
         if save_path is not None:
             fp = Path(save_path)
             logger.info(f"Save path provided: {fp}.")
@@ -391,15 +482,20 @@ class LieselMCMC:
         eb.positions_included = positions_included or []
         eb.positions_excluded = positions_excluded or []
         eb.show_progress = show_progress
+        eb.jit_block_size = jit_block_size
+        eb.max_wall_time = max_wall_time
 
         if adaptation > 0:
             eb.add_adaptation(adaptation, thinning=adaptation_thinning)
         if burnin > 0:
             eb.add_burnin(burnin, burnin_thinning)
         eb.add_posterior(posterior, posterior_thinning)
-        engine = eb.build()
-        engine.sample_all_epochs()
-        results = engine.get_results()
+        self.engine = eb.build()
+        if time_based:
+            self.engine.sample_for_time(cast(float, wall_time))
+        else:
+            self.engine.sample_all_epochs()
+        results = self.engine.get_results()
         if save_path is not None:
             fp = Path(save_path)
             logger.info(f"Saving results to save path: {fp}.")

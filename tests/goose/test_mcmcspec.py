@@ -1,5 +1,5 @@
 import logging
-from typing import Any
+from typing import Any, cast
 
 import jax
 import jax.numpy as jnp
@@ -50,6 +50,65 @@ class DummyKernel:
 # Create a dummy kernel factory for testing
 def dummy_kernel_factory(position_keys, **kwargs):
     return DummyKernel(position_keys, **kwargs)
+
+
+class _FakeResults:
+    def __init__(self):
+        self.saved_paths = []
+
+    def pkl_save(self, path):
+        self.saved_paths.append(path)
+
+
+class _FakeEngine:
+    def __init__(self, owner, results=None, error=None, time_error=None):
+        self.owner = owner
+        self.results = results or _FakeResults()
+        self.error = error
+        self.time_error = time_error
+        self.exposed_while_sampling = False
+        self.wall_time = None
+
+    def _sample(self):
+        self.exposed_while_sampling = self.owner.engine is self
+        if self.error is not None:
+            raise self.error
+
+    def sample_all_epochs(self):
+        self._sample()
+
+    def sample_for_time(self, wall_time):
+        self.wall_time = wall_time
+        if self.time_error is not None:
+            raise self.time_error
+        self._sample()
+
+    def get_results(self):
+        return self.results
+
+
+class _FakeEngineBuilder:
+    def __init__(self, engine):
+        self.engine = engine
+        self.epochs = []
+        self.store_kernel_states = False
+        self.show_progress = True
+        self.positions_included: list[str] = []
+        self.positions_excluded: list[str] = []
+        self.jit_block_size: int | None = None
+        self.max_wall_time: float | None = None
+
+    def add_adaptation(self, duration, thinning):
+        self.epochs.append(("adaptation", duration, thinning))
+
+    def add_burnin(self, duration, thinning):
+        self.epochs.append(("burnin", duration, thinning))
+
+    def add_posterior(self, duration, thinning):
+        self.epochs.append(("posterior", duration, thinning))
+
+    def build(self):
+        return self.engine
 
 
 class TestMCMCSpec:
@@ -202,6 +261,177 @@ class TestMCMCSpec:
 
 
 class TestLieselMCMC:
+    def test_engine_is_none_before_sampling(self):
+        model = lsl.Model([])
+
+        assert gs.LieselMCMC(model).engine is None
+
+    @pytest.mark.parametrize(
+        ("method_name", "timing_arguments", "expected_wall_time"),
+        [
+            (
+                "run_for_epochs",
+                {"jit_block_size": 2, "max_wall_time": 9.5},
+                None,
+            ),
+            (
+                "run_for_time",
+                {
+                    "wall_time": 6.5,
+                    "jit_block_size": 2,
+                    "max_wall_time": 9.5,
+                },
+                6.5,
+            ),
+        ],
+    )
+    def test_run_methods_configure_schedule_retain_engine_and_save(
+        self,
+        monkeypatch,
+        tmp_path,
+        method_name,
+        timing_arguments,
+        expected_wall_time,
+    ):
+        mcmc = gs.LieselMCMC(lsl.Model([]))
+        mcmc.engine = cast(Any, _FakeEngine(mcmc))
+        engine = _FakeEngine(mcmc)
+        builder = _FakeEngineBuilder(engine)
+        builder_arguments = None
+
+        def get_engine_builder(**kwargs):
+            nonlocal builder_arguments
+            builder_arguments = kwargs
+            return builder
+
+        monkeypatch.setattr(mcmc, "get_engine_builder", get_engine_builder)
+        save_path = tmp_path / "results.pkl"
+
+        result = getattr(mcmc, method_name)(
+            seed=5,
+            num_chains=3,
+            adaptation=12,
+            posterior=8,
+            burnin=4,
+            adaptation_thinning=3,
+            burnin_thinning=2,
+            posterior_thinning=4,
+            apply_jitter=False,
+            store_kernel_states=True,
+            show_progress=False,
+            positions_included=["included"],
+            positions_excluded=["excluded"],
+            save_path=save_path,
+            **timing_arguments,
+        )
+
+        assert result is engine.results
+        assert mcmc.engine is engine
+        assert engine.exposed_while_sampling
+        assert engine.wall_time == expected_wall_time
+        assert builder_arguments == {
+            "seed": 5,
+            "num_chains": 3,
+            "apply_jitter": False,
+        }
+        assert builder.epochs == [
+            ("adaptation", 12, 3),
+            ("burnin", 4, 2),
+            ("posterior", 8, 4),
+        ]
+        assert builder.store_kernel_states is True
+        assert builder.show_progress is False
+        assert builder.positions_included == ["included"]
+        assert builder.positions_excluded == ["excluded"]
+        assert builder.jit_block_size == 2
+        assert builder.max_wall_time == 9.5
+        assert engine.results.saved_paths == [save_path]
+
+    @pytest.mark.parametrize(
+        ("method_name", "timing_arguments"),
+        [
+            ("run_for_epochs", {}),
+            ("run_for_time", {"wall_time": 1.0, "jit_block_size": 1}),
+        ],
+    )
+    def test_safety_failure_retains_engine_without_saving(
+        self, monkeypatch, tmp_path, method_name, timing_arguments
+    ):
+        mcmc = gs.LieselMCMC(lsl.Model([]))
+        engine = _FakeEngine(mcmc, error=TimeoutError("safety limit"))
+        builder = _FakeEngineBuilder(engine)
+        monkeypatch.setattr(mcmc, "get_engine_builder", lambda **_: builder)
+        save_path = tmp_path / "partial.pkl"
+
+        with pytest.raises(TimeoutError, match="safety limit"):
+            getattr(mcmc, method_name)(
+                seed=1,
+                num_chains=2,
+                adaptation=0,
+                posterior=2,
+                save_path=save_path,
+                **timing_arguments,
+            )
+
+        assert mcmc.engine is engine
+        assert engine.exposed_while_sampling
+        assert not save_path.exists()
+        assert engine.results.saved_paths == []
+
+    def test_run_for_time_delegates_none_to_engine_validation(self, monkeypatch):
+        mcmc = gs.LieselMCMC(lsl.Model([]))
+        engine = _FakeEngine(
+            mcmc, time_error=ValueError("wall_time must be greater than zero")
+        )
+        builder = _FakeEngineBuilder(engine)
+        monkeypatch.setattr(mcmc, "get_engine_builder", lambda **_: builder)
+
+        with pytest.raises(ValueError, match="wall_time"):
+            mcmc.run_for_time(
+                wall_time=cast(Any, None),
+                jit_block_size=1,
+                seed=1,
+                num_chains=2,
+                adaptation=0,
+                posterior=2,
+            )
+
+        assert engine.wall_time is None
+
+    @pytest.mark.parametrize(
+        ("method_name", "timing_arguments"),
+        [
+            ("run_for_epochs", {}),
+            ("run_for_time", {"wall_time": 1.0, "jit_block_size": 1}),
+        ],
+    )
+    def test_cache_hit_clears_stale_engine(
+        self, monkeypatch, tmp_path, method_name, timing_arguments
+    ):
+        mcmc = gs.LieselMCMC(lsl.Model([]))
+        mcmc.engine = cast(Any, _FakeEngine(mcmc))
+        cached_results = _FakeResults()
+        cache_path = tmp_path / "cached.pkl"
+        cache_path.touch()
+        monkeypatch.setattr(gs.SamplingResults, "pkl_load", lambda path: cached_results)
+        monkeypatch.setattr(
+            mcmc,
+            "get_engine_builder",
+            lambda **_: pytest.fail("cache hit must not construct an Engine"),
+        )
+
+        result = getattr(mcmc, method_name)(
+            seed=1,
+            num_chains=2,
+            adaptation=0,
+            posterior=2,
+            save_path=cache_path,
+            **timing_arguments,
+        )
+
+        assert result is cached_results
+        assert mcmc.engine is None
+
     def test_engine_validation(self, local_caplog):
         mu = lsl.Var.new_param(
             0.0,
