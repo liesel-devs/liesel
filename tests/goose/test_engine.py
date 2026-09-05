@@ -751,6 +751,33 @@ def t_test_engine():
     print(results.generated_quantities.unwrap().combine_all().unwrap())
 
 
+def test_model_states():
+    builder = EngineBuilder(seed=1, num_chains=2)
+    builder.set_model(DictInterface(lambda ms: -0.5 * ms["x"] ** 2))
+    builder.set_initial_values({"x": jnp.array(0), "unmonitored": jnp.array(7)})
+    builder.add_kernel(DetCountingKernel(["x"], DetCountingKernelState.default()))
+    builder.set_epochs([EpochConfig(EpochType.BURNIN, 4, 3, None)])
+    engine = builder.build()
+
+    initial = engine.model_states
+    np.testing.assert_array_equal(initial["x"], [0, 0])
+    initial["unmonitored"] = jnp.array([99, 99])
+    np.testing.assert_array_equal(engine.model_states["unmonitored"], [7, 7])
+
+    engine.sample_all_epochs()
+
+    np.testing.assert_array_equal(initial["x"], [0, 0])
+    np.testing.assert_array_equal(engine.model_states["x"], [10003, 10003])
+    np.testing.assert_array_equal(engine.model_states["unmonitored"], [7, 7])
+    samples = engine.get_results().get_samples()
+    assert "unmonitored" not in samples
+    np.testing.assert_array_equal(samples["x"][:, -1], [10002, 10002])
+
+    survivor = slice_leaves(engine.model_states, jnp.array([1]))
+    np.testing.assert_array_equal(survivor["x"], [10003])
+    np.testing.assert_array_equal(survivor["unmonitored"], [7])
+
+
 def test_liesel_model_in_engine_builder() -> None:
     builder = EngineBuilder(seed=1, num_chains=4)
     y = Var.new_obs(1.0, name="y")

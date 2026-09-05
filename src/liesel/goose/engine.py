@@ -617,6 +617,21 @@ class Engine:
         self._kernel_states = jax.tree_util.tree_unflatten(structure, arrays)
 
     @property
+    def model_states(self) -> ModelState:
+        """
+        Latest full model states, with a leading axis indexing the chains.
+
+        Includes unmonitored variables and the latest transition even when sample
+        storage is thinned. Before sampling, returns the initial model states.
+        Select surviving chains from every leaf to initialize a smaller engine.
+
+        Returns new pytree containers with shared array leaves. Do not mutate
+        shared leaves in place. Replacing entries in the returned containers does
+        not update the engine.
+        """
+        return jax.tree_util.tree_map(lambda x: x, self._model_states)
+
+    @property
     def current_epoch(self) -> EpochState:
         """
         Returns the current epoch.
