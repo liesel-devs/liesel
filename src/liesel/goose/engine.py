@@ -454,6 +454,48 @@ class Engine:
         )
 
     @property
+    def kernel_states(self) -> KernelStates:
+        """
+        Current kernel states in kernel-sequence order, with a leading chain axis.
+
+        Returns new containers sharing the immutable JAX array leaves. Modify the
+        returned states and pass them to :meth:`.set_kernel_states` to apply changes.
+        """
+        return jax.tree_util.tree_map(lambda x: x, self._kernel_states)
+
+    def set_kernel_states(self, kernel_states: KernelStates) -> None:
+        """
+        Replace kernel states before sampling or between completed epochs.
+
+        Supply one state per kernel in kernel-sequence order. The pytree structure,
+        leaf shapes (including the leading chain axis), and dtypes must match the
+        current states. For a new engine with fewer chains, select the surviving
+        chains from every state leaf before calling this method.
+
+        This replaces only kernel states, not model states, random keys, stored
+        history, or the epoch schedule. Normal epoch hooks still run and may reset
+        adaptation. The caller must ensure states belong to compatible kernels
+        and model states; structural validation cannot establish this.
+
+        Raises :exc:`RuntimeError` during an active epoch and :exc:`ValueError`
+        for incompatible states.
+        """
+        if self._epoch is not None:
+            raise RuntimeError("Cannot set kernel states during an active epoch")
+
+        leaves, structure = jax.tree_util.tree_flatten(kernel_states)
+        current, expected_structure = jax.tree_util.tree_flatten(self._kernel_states)
+        if structure != expected_structure:
+            raise ValueError("Kernel states must match the current pytree structure")
+
+        arrays = [jnp.asarray(leaf) for leaf in leaves]
+        for array, expected in zip(arrays, current):
+            if array.shape != expected.shape or array.dtype != expected.dtype:
+                raise ValueError("Kernel state leaf shapes and dtypes must match")
+
+        self._kernel_states = jax.tree_util.tree_unflatten(structure, arrays)
+
+    @property
     def current_epoch(self) -> EpochState:
         """
         Returns the current epoch.
