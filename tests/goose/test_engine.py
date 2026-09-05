@@ -760,6 +760,53 @@ def test_liesel_model_in_engine_builder() -> None:
         builder.set_model(model)
 
 
+def test_set_kernel_states():
+    builder = EngineBuilder(seed=1, num_chains=2)
+    builder.set_model(DictInterface(lambda ms: -0.5 * ms["x"] ** 2))
+    builder.set_initial_values({"x": jnp.array(0)})
+    builder.add_kernel(DetCountingKernel(["x"], DetCountingKernelState.default()))
+    builder.set_epochs([EpochConfig(EpochType.POSTERIOR, 3, 1, None)] * 2)
+    engine = builder.build()
+
+    states = engine.kernel_states
+    states[0].increment_per_transition = jnp.array([2, 3])
+    np.testing.assert_array_equal(engine.kernel_states[0].increment_per_transition, 1)
+    engine.set_kernel_states(states)
+    states[0].increment_per_transition = jnp.array([99, 99])
+
+    engine.sample_next_epoch()  # Initial values.
+    engine.sample_next_epoch()
+    np.testing.assert_array_equal(
+        engine.get_results().get_posterior_samples()["x"],
+        [[10000, 10002, 10004], [10000, 10003, 10006]],
+    )
+
+    states = engine.kernel_states
+    states[0].increment_per_transition = jnp.array([4, 5])
+    engine.set_kernel_states(states)
+    for invalid in (
+        [],
+        slice_leaves(states, jnp.array([0])),
+        jax.tree_util.tree_map(lambda x: x.astype(jnp.float32), states),
+    ):
+        with pytest.raises(ValueError):
+            engine.set_kernel_states(invalid)
+    np.testing.assert_array_equal(
+        engine.kernel_states[0].increment_per_transition, [4, 5]
+    )
+
+    engine._start_epoch()
+    with pytest.raises(RuntimeError, match="active epoch"):
+        engine.set_kernel_states(states)
+    engine._kernel_start_epoch()
+    engine._sample_for_duration(3)
+    engine._end_epoch()
+    np.testing.assert_array_equal(
+        engine.get_results().get_posterior_samples()["x"][:, 3:],
+        [[20000, 20004, 20008], [20000, 20005, 20010]],
+    )
+
+
 def t_test_engine_builder() -> None:
     builder = EngineBuilder(seed=1, num_chains=4)
 
