@@ -10,6 +10,7 @@ Liesel: A Probabilistic Programming Framework
    :maxdepth: 1
 
    tutorials_overview
+   time_controls
 
 
 API Reference
@@ -73,6 +74,9 @@ To draw samples from your posterior, you will want to call
 :meth:`~.goose.Engine.sample_all_epochs`. Once sampling is done, you can obtain the results
 with :meth:`~.goose.Engine.get_results`, which will return a :class:`~.goose.SamplingResults`
 instance.
+
+For soft wall-clock safety limits and normal time-based sampling, including timing,
+compilation, and recovery guidance, see :doc:`time_controls`.
 
 .. autosummary::
     :toctree: generated

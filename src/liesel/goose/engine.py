@@ -9,11 +9,14 @@ This module is experimental. Expect API changes.
 from __future__ import annotations
 
 import logging
+import math
 import pickle
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
 from functools import partial
-from typing import Any, NamedTuple, cast
+from numbers import Integral, Real
+from time import monotonic
+from typing import Any, Literal, NamedTuple, NoReturn, cast
 
 import jax
 import jax.lax
@@ -100,6 +103,17 @@ def _add_time_dimension(x: PyTree) -> PyTree:
     return initial_position
 
 
+def _arguments_signature(*args: PyTree) -> tuple[Any, ...]:
+    leaves, treedef = jax.tree_util.tree_flatten(args)
+    return (
+        treedef,
+        *(
+            (leaf.shape, leaf.dtype, getattr(leaf, "weak_type", False))
+            for leaf in leaves
+        ),
+    )
+
+
 @register_dataclass_as_pytree
 @dataclass(frozen=True)
 class Carry:
@@ -161,6 +175,27 @@ class SamplingResults:
     """
     Optional map of position key to identifier of the for sampling responsible
     kernel.
+    """
+
+    elapsed_wall_time: float | None = None
+    """
+    Elapsed seconds in the latest top-level Engine sampling call.
+
+    Includes first-use compilation and synchronized epoch finalization, but is
+    ``None`` for legacy results or before a sampling call has completed or stopped.
+    """
+
+    stop_reason: (
+        Literal["completed", "wall_time_reached", "max_wall_time_reached"] | None
+    ) = None
+    """
+    Reason why the latest top-level Engine sampling call stopped.
+
+    ``"completed"`` means the requested finite schedule (or the one epoch requested
+    by :meth:`Engine.sample_next_epoch`) completed. ``"wall_time_reached"`` is a
+    normal timed stop, and ``"max_wall_time_reached"`` records a safety stop before
+    :class:`TimeoutError` is raised. ``None`` denotes legacy results or no completed
+    top-level sampling call. Stored arrays remain authoritative for sample counts.
     """
 
     def get_samples(self) -> Position:
@@ -372,7 +407,23 @@ class SamplingResults:
 
 
 class Engine:
-    """MCMC engine capable of combining multiple transition kernels."""
+    """
+    MCMC engine capable of combining multiple transition kernels.
+
+    Sampling is dispatched in blocks of :attr:`.jit_block_size` transitions per
+    chain. Both normal time-based sampling and the exceptional
+    :attr:`.max_wall_time` safety limit check elapsed time only after a completed,
+    synchronized block. Consequently, limits are soft and can overshoot by one block
+    plus any required epoch-end hooks and adaptation tuning. A partial epoch remains
+    active and is resumed by the next sampling call; it is not finalized or tuned
+    early.
+
+    Notes
+    -----
+    The constructor argument ``jitted_sample_duration`` is retained for backwards
+    compatibility. New code should configure ``EngineBuilder.jit_block_size`` and
+    construct Engines through :class:`.EngineBuilder`.
+    """
 
     def __init__(
         self,
@@ -387,11 +438,37 @@ class Engine:
         store_kernel_states: bool = False,
         quantity_generators: Sequence[QuantityGenerator] = [],
         show_progress: bool = True,
+        max_wall_time: float | None = None,
+        _jit_block_size_is_explicit: bool = True,
     ):
+        if (
+            isinstance(jitted_sample_duration, bool)
+            or not isinstance(jitted_sample_duration, Integral)
+            or jitted_sample_duration < 1
+        ):
+            raise ValueError("jit_block_size must be an integer greater than zero")
+        jitted_sample_duration = int(jitted_sample_duration)
+        for config in epoch_configs:
+            if (
+                config.type != EpochType.INITIAL_VALUES
+                and config.duration % jitted_sample_duration
+            ):
+                raise ValueError(
+                    f"jit_block_size {jitted_sample_duration} must divide epoch "
+                    f"duration {config.duration}"
+                )
+
         # fill slots that can be filled directly
         self._inital_states = model_states
         self._seeds = seeds
-        self._jitted_sample_duration = jitted_sample_duration
+        self._jit_block_size = jitted_sample_duration
+        self._jit_block_size_is_explicit = _jit_block_size_is_explicit
+        self._max_wall_time: float | None = None
+        self.max_wall_time = max_wall_time
+        self._elapsed_wall_time: float | None = None
+        self._stop_reason: (
+            Literal["completed", "wall_time_reached", "max_wall_time_reached"] | None
+        ) = None
         self._minimize_transition_infos = minimize_transition_infos
         self._store_kernel_states = store_kernel_states
         self._model_states = model_states
@@ -452,6 +529,50 @@ class Engine:
                 out_axes=(None, 0, 0, 0, 0, 0, 0),
             )
         )
+        self._sample_many_compiled = None
+        self._sample_many_compiled_signature = None
+
+    @property
+    def jit_block_size(self) -> int:
+        """
+        Number of transitions per chain executed by one JIT call.
+
+        Smaller values improve wall-clock responsiveness at the cost of more host
+        dispatch and synchronization overhead. The value is fixed after construction.
+        """
+        return self._jit_block_size
+
+    @property
+    def max_wall_time(self) -> float | None:
+        """
+        Optional wall-clock safety limit in seconds for each sampling call.
+
+        Reaching this soft limit at a synchronized JIT-block boundary records
+        ``"max_wall_time_reached"`` and raises :class:`TimeoutError`. Assign ``None``
+        to disable the limit before resuming. A non-``None`` value requires an
+        explicitly configured :attr:`.jit_block_size`.
+        """
+        return self._max_wall_time
+
+    @max_wall_time.setter
+    def max_wall_time(self, value: float | None) -> None:
+        if value is not None:
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, Real)
+                or not math.isfinite(value)
+                or value <= 0
+            ):
+                raise ValueError(
+                    "max_wall_time must be a finite number greater than zero"
+                )
+            if not self._jit_block_size_is_explicit:
+                raise ValueError(
+                    "max_wall_time requires an explicitly configured jit_block_size"
+                )
+            value = float(value)
+
+        self._max_wall_time = value
 
     @property
     def current_epoch(self) -> EpochState:
@@ -465,29 +586,216 @@ class Engine:
 
         return self._epoch
 
+    def compile(self) -> None:
+        """
+        Compile and retain the sampling executable without advancing Engine state.
+
+        Timed sampling otherwise includes lazy JIT compilation. Call this method on
+        each Engine before starting its timer when comparing configurations under
+        equal sampling budgets. The method is idempotent for an unchanged compilation
+        signature. It does not promise to eliminate first-dispatch, allocation, or
+        hardware-cache costs.
+        """
+        epoch = self._epoch
+        if epoch is None:
+            configs = self._epoch_manager._configs
+            next_epoch = self._epoch_manager._next_epoch_ptr
+            time_before_epoch = sum(config.duration for config in configs[:next_epoch])
+            for nth_epoch, config in enumerate(configs[next_epoch:], next_epoch):
+                if config.type != EpochType.INITIAL_VALUES:
+                    epoch = config.to_state(nth_epoch, time_before_epoch)
+                    break
+                time_before_epoch += config.duration
+
+        if epoch is None:
+            return
+
+        args = (
+            _split_keys(self._prng_key, self._jit_block_size + 1)[:, 1:, :],
+            as_strong_pytree(epoch),
+            as_strong_pytree(self._kernel_states),
+            as_strong_pytree(self._model_states),
+        )
+        signature = _arguments_signature(*args)
+        if (
+            self._sample_many_compiled is not None
+            and self._sample_many_compiled_signature == signature
+        ):
+            return
+
+        compiled = self._sample_many_jitted.lower(*args).compile()
+        self._sample_many_compiled = compiled
+        self._sample_many_compiled_signature = signature
+
     def sample_all_epochs(self):
         """
         Runs sampling for all remaining epochs.
 
-        Auto-tuning methods are called automatically.
+        Auto-tuning methods are called automatically. If :attr:`.max_wall_time` is
+        reached, the method raises :class:`TimeoutError` at a completed JIT-block
+        boundary. Completed work and any active partial epoch remain available for
+        inspection or a later call that resumes sampling.
         """
-        while self._epoch_manager.has_more():
-            self.sample_next_epoch()
+        start_time = monotonic()
+        safety_limit = self._max_wall_time
+        limit_reached, elapsed = self._sample_epochs(start_time, safety_limit)
+        if limit_reached:
+            assert safety_limit is not None
+            self._raise_timeout(safety_limit, elapsed)
+
+        self._elapsed_wall_time = elapsed
+        self._stop_reason = "completed"
 
     def sample_next_epoch(self):
-        """Runs sampling for the next epoch assuming no epoch is active."""
-        self._start_epoch()
+        """
+        Run sampling for the next or currently active epoch.
+
+        The configured :attr:`.max_wall_time` applies to this call and raises
+        :class:`TimeoutError` at a completed JIT-block boundary. An interrupted epoch
+        remains active and is resumed on the next sampling call.
+        """
+        start_time = monotonic()
+        safety_limit = self._max_wall_time
+        limit_reached, elapsed = self._sample_next_epoch(start_time, safety_limit)
+        if limit_reached:
+            assert safety_limit is not None
+            assert elapsed is not None
+            self._raise_timeout(safety_limit, elapsed)
+
+        self._synchronize_top_level()
+        self._elapsed_wall_time = monotonic() - start_time
+        self._stop_reason = "completed"
+
+    def sample_for_time(self, wall_time: float) -> None:
+        """
+        Run sampling until ``wall_time`` or the finite epoch schedule is exhausted.
+
+        ``wall_time`` must be a positive, finite number of seconds, and the Engine
+        must have an explicitly configured :attr:`.jit_block_size`. When work exists,
+        at least one block is executed. Adaptation, burn-in, and posterior epochs all
+        count when present in the remaining schedule; completed epochs are never
+        repeated to fill the budget.
+
+        The timer includes lazy compilation, synchronized blocks, and required epoch
+        finalization. Checks occur only after blocks, so the horizon can be exceeded by
+        one block plus finalization work. Reaching the normal horizon returns with
+        ``stop_reason="wall_time_reached"``. Exhausting the schedule first returns
+        with ``stop_reason="completed"``.
+
+        If :attr:`.max_wall_time` is shorter than ``wall_time``, a warning is logged
+        and the safety limit controls: reaching it records
+        ``"max_wall_time_reached"`` and raises :class:`TimeoutError`. Equal limits use
+        normal time-based completion.
+
+        Parameters
+        ----------
+        wall_time
+            Positive, finite sampling horizon in seconds.
+
+        See Also
+        --------
+        compile : Compile without consuming the timed sampling budget.
+        """
+        start_time = monotonic()
+        if (
+            isinstance(wall_time, bool)
+            or not isinstance(wall_time, Real)
+            or not math.isfinite(wall_time)
+            or wall_time <= 0
+        ):
+            raise ValueError("wall_time must be a finite number greater than zero")
+        if not self._jit_block_size_is_explicit:
+            raise ValueError(
+                "sample_for_time requires the caller to configure jit_block_size "
+                "because wall-clock overshoot is controlled at JIT-block boundaries"
+            )
+
+        wall_time = float(wall_time)
+        safety_controls = (
+            self._max_wall_time is not None and self._max_wall_time < wall_time
+        )
+        if safety_controls:
+            assert self._max_wall_time is not None
+            limit = self._max_wall_time
+            logger.warning(
+                "max_wall_time %s is shorter than wall_time %s; the safety "
+                "limit controls this sampling call",
+                limit,
+                wall_time,
+            )
+        else:
+            limit = wall_time
+
+        limit_reached, elapsed = self._sample_epochs(start_time, limit)
+        if limit_reached:
+            if safety_controls:
+                self._raise_timeout(limit, elapsed)
+            self._elapsed_wall_time = elapsed
+            self._stop_reason = "wall_time_reached"
+            return
+
+        self._elapsed_wall_time = elapsed
+        self._stop_reason = "completed"
+
+    def _sample_epochs(
+        self, start_time: float, limit: float | None
+    ) -> tuple[bool, float]:
+        while self._epoch is not None or self._epoch_manager.has_more():
+            limit_reached, elapsed = self._sample_next_epoch(start_time, limit)
+            if limit_reached:
+                assert elapsed is not None
+                return True, elapsed
+
+        self._synchronize_top_level()
+        return False, monotonic() - start_time
+
+    def _raise_timeout(self, safety_limit: float, elapsed: float) -> NoReturn:
+        self._elapsed_wall_time = elapsed
+        self._stop_reason = "max_wall_time_reached"
+        raise TimeoutError(
+            f"Sampling exceeded max_wall_time {safety_limit} seconds after "
+            f"{elapsed} seconds with jit_block_size {self._jit_block_size}; "
+            "the Engine can be resumed."
+        )
+
+    def _synchronize_top_level(self) -> None:
+        outputs = [
+            self._kernel_states,
+            self._model_states,
+            self._tuning_info_chain.get().value,
+        ]
+        chains = [self._position_chain, self._transition_info_chain]
+        if self._store_kernel_states:
+            chains.append(self._kernel_state_chain)
+        if self._quantity_generators:
+            chains.append(self._quantities_chain)
+
+        outputs.extend(
+            chain.get_current_chain().get().value
+            for chain in chains
+            if chain.get_epochs()
+        )
+        jax.block_until_ready(outputs)
+
+    def _sample_next_epoch(
+        self, start_time: float | None = None, safety_limit: float | None = None
+    ) -> tuple[bool, float | None]:
+        """Runs sampling for the next or currently active epoch."""
+        resuming = self._epoch is not None
+        if not resuming:
+            self._start_epoch()
 
         # special treatment for the initial values
         if self.current_epoch.config.type == EpochType.INITIAL_VALUES:
             self._handle_inital_values_epoch()
-            return
+            return False, None
 
-        self._kernel_start_epoch()
+        if not resuming:
+            self._kernel_start_epoch()
 
-        duration = self.current_epoch.config.duration
-        epoch_type = self.current_epoch.config.type.name
-        jitted = self._jitted_sample_duration
+        duration = int(self.current_epoch.time_left())
+        epoch_type = EpochType(int(self.current_epoch.config.type)).name
+        jitted = self._jit_block_size
 
         if self._show_progress:
             logger.info(
@@ -495,19 +803,51 @@ class Engine:
                 f"{jitted} jitted together"
             )
 
-        self._sample_for_duration(duration=duration)
-        self._end_epoch()
+        limit_reached, elapsed = self._sample_for_duration(
+            duration=duration,
+            start_time=start_time,
+            safety_limit=safety_limit,
+        )
+        if self.current_epoch.time_left() == 0:
+            tuning_infos = self._end_epoch()
+            if safety_limit is not None:
+                assert start_time is not None
+                jax.block_until_ready((self._kernel_states, tuning_infos))
+                elapsed = monotonic() - start_time
+                limit_reached = elapsed >= safety_limit
+
+        return limit_reached, elapsed
 
     def append_epoch(self, epoch: EpochConfig):
-        """Appends an epoch to the epochs that should be sampled."""
+        """
+        Append an epoch to the remaining sampling schedule.
+
+        Its duration must be divisible by :attr:`.jit_block_size`. This can be used to
+        finish adaptation and burn-in first, then append a posterior epoch for a
+        posterior-only timed call.
+        """
+        if (
+            epoch.type != EpochType.INITIAL_VALUES
+            and epoch.duration % self._jit_block_size
+        ):
+            raise ValueError(
+                f"jit_block_size {self._jit_block_size} must divide epoch duration "
+                f"{epoch.duration}"
+            )
         self._epoch_manager.append(epoch)
 
     def is_sampling_done(self) -> bool:
         """Returns true if all configured epochs have been sampled."""
-        return not self._epoch_manager.has_more()
+        return self._epoch is None and not self._epoch_manager.has_more()
 
     def get_results(self) -> SamplingResults:
-        """Returns the results of the sampling process."""
+        """
+        Return the currently stored sampling results.
+
+        The result includes ``elapsed_wall_time`` and ``stop_reason`` for the latest
+        top-level sampling call, including metadata recorded before a safety
+        :class:`TimeoutError` was raised.
+        """
         if self._store_kernel_states:
             ksc = self._kernel_state_chain
         else:
@@ -538,6 +878,8 @@ class Engine:
             full_model_states=Option(None),
             kernel_classes=Option(kernels_cls),
             kernels_by_pos_key=Option(kernels_by_position),
+            elapsed_wall_time=self._elapsed_wall_time,
+            stop_reason=self._stop_reason,
         )
 
     def _split_prng_key(self, n: int = 1) -> KeyArray:
@@ -572,7 +914,6 @@ class Engine:
                 self._position_keys, self._model_states
             ),
         )
-
         self._position_chain.append(initial_position)
 
         if self._store_kernel_states:
@@ -635,7 +976,7 @@ class Engine:
 
         logger.info("Finished warmup")
 
-    def _end_epoch(self):
+    def _end_epoch(self) -> TuningInfos | None:
         """
         End epoch.
 
@@ -651,7 +992,7 @@ class Engine:
             self._kernel_sequence.end_epoch, in_axes=(0, 0, 0, None)
         )(end_keys, self._kernel_states, self._model_states, epoch)
 
-        self._tune_kernels(epoch)
+        tuning_infos = self._tune_kernels(epoch)
 
         if self._show_progress:
             ti_option = self._transition_info_chain.get_current_chain().get()
@@ -680,8 +1021,9 @@ class Engine:
 
         # no epoch is active anymore
         self._epoch = None
+        return tuning_infos
 
-    def _tune_kernels(self, epoch: EpochState):
+    def _tune_kernels(self, epoch: EpochState) -> TuningInfos | None:
         """Trigger tuning if epoch is an adaptation phase."""
         if EpochType.is_adaptation(epoch.config.type):
             tune_keys = self._split_prng_key_one()
@@ -700,7 +1042,11 @@ class Engine:
             self._kernel_states = tune_output.kernel_states
 
             # we need to add the time dimension
-            self._tuning_info_chain.append(_add_time_dimension(x=tune_output.infos))
+            tuning_infos = _add_time_dimension(x=tune_output.infos)
+            self._tuning_info_chain.append(tuning_infos)
+            return tuning_infos
+
+        return None
 
     def _sample_many(
         self,
@@ -778,14 +1124,19 @@ class Engine:
             chain[3],
         )
 
-    def _sample_for_duration(self, duration: int):
+    def _sample_for_duration(
+        self,
+        duration: int,
+        start_time: float | None = None,
+        safety_limit: float | None = None,
+    ) -> tuple[bool, float | None]:
         if self.current_epoch.time_left() < duration:
             raise RuntimeError("Not enough time left in epoch")
 
-        if duration % self._jitted_sample_duration:
+        if duration % self._jit_block_size:
             raise RuntimeError(
                 f"Duration {duration} is not a multiple of the "
-                f"jitted sampling duration {self._jitted_sample_duration}"
+                f"jit_block_size {self._jit_block_size}"
             )
 
         # convert to non-weak device arrays to avoid recompilation
@@ -793,14 +1144,26 @@ class Engine:
         self._kernel_states = as_strong_pytree(self._kernel_states)
         self._model_states = as_strong_pytree(self._model_states)
 
-        it = range(duration // self._jitted_sample_duration)
+        it = range(duration // self._jit_block_size)
 
         if self._show_progress:
             it = tqdm(it, ncols=80, unit="chunk")
 
         for dur_i in it:
             # FIXME: split for entire duration instead of each loop iteration
-            keys = self._split_prng_key(self._jitted_sample_duration)
+            keys = self._split_prng_key(self._jit_block_size)
+            args = (
+                keys,
+                self.current_epoch,
+                self._kernel_states,
+                self._model_states,
+            )
+            sample_many = self._sample_many_jitted
+            if (
+                self._sample_many_compiled is not None
+                and self._sample_many_compiled_signature == _arguments_signature(*args)
+            ):
+                sample_many = self._sample_many_compiled
             (
                 new_epoch,
                 new_ks,
@@ -809,10 +1172,7 @@ class Engine:
                 infos,
                 ksc,
                 quants,
-            ) = self._sample_many_jitted(
-                keys, self.current_epoch, self._kernel_states, self._model_states
-            )
-
+            ) = sample_many(*args)
             self._epoch = new_epoch
             self._kernel_states = new_ks
             self._model_states = new_ms
@@ -822,3 +1182,14 @@ class Engine:
                 self._kernel_state_chain.append(ksc)
             if self._quantity_generators:
                 self._quantities_chain.append(quants)
+
+            if safety_limit is not None:
+                assert start_time is not None
+                jax.block_until_ready(
+                    (new_epoch, new_ks, new_ms, position_chain, infos, ksc, quants)
+                )
+                elapsed = monotonic() - start_time
+                if elapsed >= safety_limit:
+                    return True, elapsed
+
+        return False, None
