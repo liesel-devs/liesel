@@ -325,6 +325,8 @@ class EngineBuilder:
         """
         if not multiple_chains:
             model_states = stack_leaves(model_state for _ in range(self._num_chains))
+        else:
+            model_states = model_state
 
         self._model_state = Option(model_states)
 

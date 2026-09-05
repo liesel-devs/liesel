@@ -108,6 +108,15 @@ def test_seed_input():
     assert jnp.all(builder._jitter_key == builder2._jitter_key)
 
 
+def test_initial_values_multiple_chains():
+    builder = EngineBuilder(seed=1, num_chains=2)
+    states = {"x": jnp.array([1.0, 2.0]), "y": jnp.array([[3.0], [4.0]])}
+
+    builder.set_initial_values(states, multiple_chains=True)
+
+    assert builder.model_state.unwrap() is states
+
+
 def test_jitter_fns():
     con = DictInterface(lambda ms: -0.5 * ms["x"] ** 2 - 0.5 * ms["y"])
     ms = {"x": jnp.array(1), "y": jnp.array(-1)}
