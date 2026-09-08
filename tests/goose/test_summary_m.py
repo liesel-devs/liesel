@@ -264,11 +264,15 @@ def test_per_chain_quantiles(result: SamplingResults):
     ]
     df = summary.to_dataframe().loc["baz"][cols]
 
-    assert np.allclose(df["q_0.05"], 64.449997)
-    assert np.allclose(df["q_0.5"], 176.5)
-    assert np.allclose(df["q_0.95"], 288.549988)
-    assert np.allclose(df["hdi_low"], 52.0)
-    assert np.allclose(df["hdi_high"], 277.0)
+    draws = np.asarray(result.get_posterior_samples()["baz"])
+    np.testing.assert_allclose(
+        df[["q_0.05", "q_0.5", "q_0.95"]],
+        np.quantile(draws, [0.05, 0.5, 0.95], axis=1).T,
+        rtol=1e-6,
+    )
+    np.testing.assert_allclose(
+        df[["hdi_low", "hdi_high"]], az.hdi(draws, prob=0.9, axis=1), rtol=1e-6
+    )
 
 
 def test_quantity_shape(result_for_quants: SamplingResults):
@@ -476,11 +480,15 @@ class TestSamplesSummary:
         ]
         df = summary.to_dataframe().loc["baz"][cols]
 
-        assert np.allclose(df["q_0.05"], 64.449997)
-        assert np.allclose(df["q_0.5"], 176.5)
-        assert np.allclose(df["q_0.95"], 288.549988)
-        assert np.allclose(df["hdi_low"], 52.0)
-        assert np.allclose(df["hdi_high"], 277.0)
+        draws = np.asarray(samples["baz"])
+        np.testing.assert_allclose(
+            df[["q_0.05", "q_0.5", "q_0.95"]],
+            np.quantile(draws, [0.05, 0.5, 0.95], axis=1).T,
+            rtol=1e-6,
+        )
+        np.testing.assert_allclose(
+            df[["hdi_low", "hdi_high"]], az.hdi(draws, prob=0.9, axis=1), rtol=1e-6
+        )
 
     def test_quantity_shape(self, result_for_quants: SamplingResults):
         """
@@ -602,7 +610,11 @@ def model():
     yield lsl.Model([y_var])
 
 
-def test_loo(model):
+@pytest.mark.parametrize(
+    ("scale", "multiplier"), [("log", 1), ("negative_log", -1), ("deviance", -2)]
+)
+@pytest.mark.parametrize("as_mapping", [False, True])
+def test_loo(model, scale, multiplier, as_mapping):
     samples = lsl.Position(
         {
             "sigma_hat": tfd.Normal(loc=1.0, scale=0.01).sample(
@@ -615,15 +627,35 @@ def test_loo(model):
     )
 
     lpp = lsl.log_prob_pointwise(model.observed, samples)
-    loo_ = loo(lpp, samples)
-    assert loo_.elpd_loo == pytest.approx(-727.999, abs=0.01)
-    assert loo_.p_loo == pytest.approx(5.829, abs=0.01)
-    assert loo_.se == pytest.approx(15.777, abs=0.01)
+    lpp_array = np.asarray(next(iter(lpp.values())))
+    likelihood = np.exp(lpp_array - lpp_array.max(axis=(0, 1), keepdims=True))
+    reff = float(np.mean(az.ess(likelihood, method="mean") / 400))
 
-    loo_deviance = loo(lpp, samples, scale="deviance")
-    assert loo_deviance.elpd_loo == pytest.approx(2 * 727.999, abs=0.01)
-    assert loo_deviance.p_loo == pytest.approx(5.829, abs=0.01)
-    assert loo_deviance.se == pytest.approx(2 * 15.777, abs=0.01)
+    # ArviZ owns the estimator (including its SE convention); Liesel owns the
+    # input conversion, scale conversion, and legacy attribute aliases.
+    expected = az.loo(
+        az.from_dict({"log_likelihood": {"observed": lpp_array}}), reff=reff
+    )
+    if as_mapping:
+        # Exercise concatenation and flattening of different observation shapes.
+        lpp = {
+            "vector": lpp_array[:, :, :100],
+            "matrix": lpp_array[:, :, 100:].reshape(4, 100, 20, 20),
+        }
+    else:
+        lpp = lpp_array
+
+    actual = loo(lpp, samples, scale=scale)
+    assert actual.elpd == pytest.approx(multiplier * expected.elpd, rel=1e-6)
+    assert actual.p == pytest.approx(expected.p, rel=1e-6)
+    assert actual.se == pytest.approx(abs(multiplier) * expected.se, rel=1e-6)
+    assert actual.elpd_loo == actual.elpd
+    assert actual.p_loo == actual.p
+    assert actual.scale == scale
+    assert actual.n_samples == 400
+    assert actual.n_data_points == 500
+    np.testing.assert_allclose(actual.elpd_i, multiplier * expected.elpd_i, rtol=1e-6)
+    np.testing.assert_allclose(actual.pareto_k, expected.pareto_k, rtol=1e-6)
 
 
 def test_loo_relative_efficiency(monkeypatch):
