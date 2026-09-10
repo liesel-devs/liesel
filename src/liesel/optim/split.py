@@ -2249,6 +2249,100 @@ class Split:
         return self.test_axis_size / self.axis_size
 
     @classmethod
+    def from_model(
+        cls,
+        model: Model,
+        position_keys: Sequence[str] | None = None,
+        axis_size: int | None = None,
+        validate_axis_share: float = 0.0,
+        test_axis_share: float = 0.0,
+        split_axes: dict[str, int | None] | None = None,
+        default_split_axis: int = 0,
+        shuffle: bool = False,
+        seed: jax.Array | int | None = None,
+        sample_sizes: SampleSizes | None = None,
+    ) -> Split:
+        """Builds a reusable scalar split recipe from model metadata.
+
+        The selected position entries must imply one split-axis size. Entries
+        mapped to ``None`` in ``split_axes`` are retained as passthrough data but
+        do not participate in size inference. Pass ``axis_size`` to override the
+        inferred size when the recipe will be applied to another position.
+
+        Parameters
+        ----------
+        model
+            Model containing the observed variables to configure.
+        position_keys
+            Names of observed position entries to include. If ``None``, all observed
+            variables in ``model`` are used.
+        axis_size
+            Optional split-axis size override. If omitted, the size is inferred from
+            the selected model entries.
+        validate_axis_share
+            Share of observations assigned to validation.
+        test_axis_share
+            Share of observations assigned to testing.
+        split_axes
+            Optional mapping from position key to split axis. ``None`` keeps a
+            selected key unchanged in every split part.
+        default_split_axis
+            Split axis for keys not listed in ``split_axes``.
+        shuffle
+            Whether to shuffle observations during initialization.
+        seed
+            Seed or JAX pseudo-random key used when ``shuffle=True``.
+        sample_sizes
+            Optional effective sample sizes passed to the resulting
+            :class:`PositionSplit`.
+
+        Returns
+        -------
+        Split
+            Reusable split recipe for one inferred axis-size group.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> import liesel.model as lsl
+        >>> from liesel.optim import Split
+        >>> y = lsl.Var.new_obs(jnp.arange(10.0), name="y")
+        >>> splitter = Split.from_model(lsl.Model([y]), validate_axis_share=0.2)
+        >>> splitter.axis_size, splitter.train_axis_size, splitter.validate_axis_size
+        (10, 8, 2)
+        """
+        pos_keys = (
+            list(position_keys) if position_keys is not None else list(model.observed)
+        )
+        if not pos_keys:
+            raise ValueError("Split.from_model() requires at least one position key.")
+
+        groups = position_key_groups_from_model(
+            model, pos_keys, split_axes, default_split_axis
+        )
+        if not groups:
+            raise ValueError(
+                "Split.from_model() requires at least one position key to be split."
+            )
+        if len(groups) > 1:
+            raise ValueError(
+                "Split.from_model() found observed variables with different axis "
+                f"sizes: {groups}. Use SplitManager.from_model()."
+            )
+
+        return cls.from_axis_shares(
+            position_keys=pos_keys,
+            axis_size=next(iter(groups)) if axis_size is None else axis_size,
+            validate_axis_share=validate_axis_share,
+            test_axis_share=test_axis_share,
+            split_axes=split_axes,
+            default_split_axis=default_split_axis,
+            shuffle=shuffle,
+            seed=seed,
+            sample_sizes=sample_sizes,
+        )
+
+    @classmethod
     def from_axis_shares(
         cls,
         position_keys: Sequence[str],

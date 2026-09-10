@@ -107,6 +107,104 @@ class TestSplit:
                 keep_in_train=[0, 1, 2],
             )
 
+    def test_from_model_defaults_to_all_observed_keys(self):
+        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
+        y = lsl.Var.new_obs(jnp.arange(8.0), name="y")
+
+        split = Split.from_model(lsl.Model([x, y]), validate_axis_share=0.25)
+
+        assert split.position_keys is not None
+        assert set(split.position_keys) == {"x", "y"}
+        assert split.axis_size == 8
+        assert split.train_axis_size == 6
+        assert split.validate_axis_size == 2
+
+    def test_from_model_infers_selected_nonleading_axis_and_forwards_configuration(
+        self,
+    ):
+        model, _ = _matrix_obs_model(shape=(4, 8))
+
+        split = Split.from_model(
+            model,
+            position_keys=["y"],
+            validate_axis_share=0.25,
+            test_axis_share=0.25,
+            split_axes={"y": 1},
+            shuffle=True,
+            seed=7,
+            sample_sizes={"train": 20, "validate": 5, "test": 5},
+        )
+
+        assert split.axis_size == 8
+        assert split.train_axis_size == 4
+        assert split.validate_axis_size == 2
+        assert split.test_axis_size == 2
+        assert split.sample_sizes == {"train": 20.0, "validate": 5.0, "test": 5.0}
+        assert jnp.array_equal(
+            split.indices,
+            Split.from_model(
+                model,
+                position_keys=["y"],
+                validate_axis_share=0.25,
+                test_axis_share=0.25,
+                split_axes={"y": 1},
+                shuffle=True,
+                seed=7,
+            ).indices,
+        )
+
+    def test_from_model_preserves_passthrough_keys(self):
+        y = lsl.Var.new_obs(jnp.arange(8.0), name="y")
+        shared = lsl.Var.new_obs(jnp.arange(3.0), name="shared")
+        model = lsl.Model([y, shared])
+
+        splitter = Split.from_model(model, split_axes={"shared": None})
+        assert splitter.position_keys is not None
+        split = splitter.split_position(model.extract_position(splitter.position_keys))
+
+        assert set(splitter.position_keys) == {"y", "shared"}
+        assert splitter.split_position_keys == ["y"]
+        assert splitter.passthrough_position_keys == ["shared"]
+        assert jnp.array_equal(split.train["shared"], shared.value)
+
+    def test_from_model_trusts_explicit_axis_size_for_another_position(self):
+        y = lsl.Var.new_obs(jnp.arange(8.0), name="y")
+        splitter = Split.from_model(
+            lsl.Model([y]), axis_size=6, validate_axis_share=0.5
+        )
+
+        split = splitter.split_position(Position({"y": jnp.arange(6)}))
+
+        assert splitter.axis_size == 6
+        assert split.train_axis_size == 3
+        assert split.validate_axis_size == 3
+
+    def test_from_model_rejects_invalid_model_groups(self):
+        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
+        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        model = lsl.Model([x, y])
+
+        with pytest.raises(ValueError, match="at least one position key"):
+            Split.from_model(model, position_keys=[])
+        with pytest.raises(ValueError, match="at least one position key to be split"):
+            Split.from_model(model, position_keys=["x"], split_axes={"x": None})
+        with pytest.raises(ValueError, match="SplitManager.from_model"):
+            Split.from_model(model, axis_size=8)
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"validate_axis_share": -0.1},
+            {"validate_axis_share": 0.6, "test_axis_share": 0.5},
+            {"axis_size": 0},
+        ],
+    )
+    def test_from_model_uses_existing_share_and_size_validation(self, kwargs):
+        model, _ = _matrix_obs_model()
+
+        with pytest.raises(ValueError):
+            Split.from_model(model, **kwargs)
+
     def test_no_split(self):
         m = lsl.Var.new_param(0.0, name="m")
         x = lsl.Var.new_obs(
