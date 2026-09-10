@@ -1337,14 +1337,14 @@ html&gt;body{padding:0}&lt;/style&gt;
   &lt;/section&gt;
 
   &lt;div class=&quot;nav nav-pills&quot; role=&quot;tablist&quot; aria-label=&quot;Split API classes&quot;&gt;
-    &lt;button class=&quot;nav-link active&quot; id=&quot;sco-overview-tab&quot; role=&quot;tab&quot; aria-controls=&quot;sco-overview-panel&quot; aria-selected=&quot;true&quot; type=&quot;button&quot;&gt;Choose a path&lt;/button&gt;
+    &lt;button class=&quot;nav-link&quot; id=&quot;sco-overview-tab&quot; role=&quot;tab&quot; aria-controls=&quot;sco-overview-panel&quot; aria-selected=&quot;false&quot; type=&quot;button&quot;&gt;Choose a path&lt;/button&gt;
     &lt;button class=&quot;nav-link&quot; id=&quot;sco-split-tab&quot; role=&quot;tab&quot; aria-controls=&quot;sco-split-panel&quot; aria-selected=&quot;false&quot; type=&quot;button&quot;&gt;Split&lt;/button&gt;
     &lt;button class=&quot;nav-link&quot; id=&quot;sco-position-tab&quot; role=&quot;tab&quot; aria-controls=&quot;sco-position-panel&quot; aria-selected=&quot;false&quot; type=&quot;button&quot;&gt;PositionSplit&lt;/button&gt;
     &lt;button class=&quot;nav-link&quot; id=&quot;sco-manager-tab&quot; role=&quot;tab&quot; aria-controls=&quot;sco-manager-panel&quot; aria-selected=&quot;false&quot; type=&quot;button&quot;&gt;SplitManager&lt;/button&gt;
     &lt;button class=&quot;nav-link&quot; id=&quot;sco-position-manager-tab&quot; role=&quot;tab&quot; aria-controls=&quot;sco-position-manager-panel&quot; aria-selected=&quot;false&quot; type=&quot;button&quot;&gt;PositionSplitManager&lt;/button&gt;
   &lt;/div&gt;
 
-  &lt;section class=&quot;sco-panel&quot; id=&quot;sco-overview-panel&quot; role=&quot;tabpanel&quot; aria-labelledby=&quot;sco-overview-tab&quot;&gt;
+  &lt;section class=&quot;sco-panel&quot; id=&quot;sco-overview-panel&quot; role=&quot;tabpanel&quot; aria-labelledby=&quot;sco-overview-tab&quot; hidden&gt;
     &lt;div class=&quot;table-responsive&quot;&gt;
       &lt;table class=&quot;table table-sm&quot;&gt;
         &lt;thead&gt;
@@ -2189,16 +2189,16 @@ data = manager.split_position(position)`;
 (() =&gt; {
   const selector = &#x27;.nav[role=&quot;tablist&quot;] [role=&quot;tab&quot;]&#x27;;
   const disabled = &#x27;:disabled,[aria-disabled=&quot;true&quot;]&#x27;;
-  const selectTab = (selected) =&gt; {
-    const panelId = selected.getAttribute(&quot;aria-controls&quot;);
+  const selectTab = (selected, allowCollapse = false) =&gt; {
+    const collapse = allowCollapse &amp;&amp; selected.getAttribute(&quot;aria-selected&quot;) === &quot;true&quot;;
     for (const tab of selected.closest(&#x27;[role=&quot;tablist&quot;]&#x27;).querySelectorAll(&#x27;[role=&quot;tab&quot;]&#x27;)) {
-      const active = tab === selected;
+      const active = tab === selected &amp;&amp; !collapse;
       tab.classList.toggle(&quot;active&quot;, active);
       tab.setAttribute(&quot;aria-selected&quot;, String(active));
       const id = tab.getAttribute(&quot;aria-controls&quot;);
       const panel = id &amp;&amp; document.getElementById(id);
       if (panel != null) {
-        panel.hidden = id !== panelId;
+        panel.hidden = !active;
         if (!panel.hidden &amp;&amp; selected.id) {
           panel.setAttribute(&quot;aria-labelledby&quot;, selected.id);
         }
@@ -2211,7 +2211,7 @@ data = manager.split_position(position)`;
       return;
     }
     if (event.type === &quot;click&quot;) {
-      selectTab(tab);
+      selectTab(tab, true);
       return;
     }
     const tabs = Array.from(
@@ -2238,8 +2238,7 @@ data = manager.split_position(position)`;
   for (const list of document.querySelectorAll(&#x27;.nav[role=&quot;tablist&quot;]&#x27;)) {
     const selected =
       list.querySelector(&#x27;[role=&quot;tab&quot;][aria-selected=&quot;true&quot;]&#x27;) ??
-      list.querySelector(&#x27;[role=&quot;tab&quot;].active&#x27;) ??
-      list.querySelector(&#x27;[role=&quot;tab&quot;]&#x27;);
+      list.querySelector(&#x27;[role=&quot;tab&quot;].active&#x27;);
     if (selected != null) {
       selectTab(selected);
     }
