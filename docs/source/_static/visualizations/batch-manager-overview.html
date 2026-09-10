@@ -5,18 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
-<title>Batch Manager Overview</title>
+<title>Liesel Batch API</title>
 <style>:root{color-scheme:light dark;background:light-dark(rgb(255 255 255), rgb(24 24 24))}html,body{margin:0}body{box-sizing:border-box;padding:1rem;background:inherit}iframe{display:block;width:100%;height:calc(100vh - 2rem);margin:0 auto;border:0}</style>
 </head>
 <body>
-<iframe sandbox="allow-scripts" referrerpolicy="no-referrer" title="Batch Manager Overview" srcdoc="&lt;!doctype html&gt;
+<iframe sandbox="allow-scripts" referrerpolicy="no-referrer" title="Liesel Batch API" srcdoc="&lt;!doctype html&gt;
 &lt;html lang=&quot;en&quot; data-visualize-standalone&gt;
 &lt;head&gt;
 &lt;meta charset=&quot;utf-8&quot;&gt;
 &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;&gt;
 &lt;meta name=&quot;referrer&quot; content=&quot;no-referrer&quot;&gt;
 &lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;default-src &#x27;none&#x27;; script-src &#x27;unsafe-inline&#x27; &#x27;unsafe-eval&#x27; &#x27;wasm-unsafe-eval&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src &#x27;unsafe-inline&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src &#x27;none&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;none&#x27;; form-action &#x27;none&#x27;&quot;&gt;
-&lt;title&gt;Batch Manager Overview&lt;/title&gt;
+&lt;title&gt;Liesel Batch API&lt;/title&gt;
 &lt;style&gt;:root {
   color-scheme: light dark;
   background-color: var(
@@ -1048,10 +1048,10 @@ html&gt;body{padding:0}&lt;/style&gt;
 
     #batch-manager-overview * { box-sizing: border-box; }
 
-    #batch-manager-overview h2 {
-      font-size: 17px;
-      line-height: 1.25;
-      margin: 0 0 14px;
+    #batch-manager-overview .bmo-heading {
+      display: grid;
+      gap: 0.25rem;
+      margin-bottom: 1rem;
     }
 
     #batch-manager-overview .controls {
@@ -1252,12 +1252,119 @@ html&gt;body{padding:0}&lt;/style&gt;
       background: var(--viz-series-1);
     }
 
+    #batch-manager-overview pre {
+      margin: 0;
+      padding: 0.8rem 0 0.8rem 0.9rem;
+      border-left: 3px solid var(--border);
+      color: var(--foreground);
+      background: transparent;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    #batch-manager-overview code {
+      font-family: var(--font-mono);
+    }
+
+    #batch-manager-overview .token.comment,
+    #batch-manager-overview .token.prolog,
+    #batch-manager-overview .token.doctype,
+    #batch-manager-overview .token.cdata {
+      color: var(--muted-foreground);
+      font-style: italic;
+    }
+
+    #batch-manager-overview .token.keyword {
+      color: var(--viz-series-5);
+    }
+
+    #batch-manager-overview .token.string {
+      color: var(--viz-series-3);
+    }
+
+    #batch-manager-overview .token.number,
+    #batch-manager-overview .token.boolean {
+      color: var(--viz-series-2);
+    }
+
+    #batch-manager-overview .token.function,
+    #batch-manager-overview .token.class-name {
+      color: var(--viz-series-1);
+    }
+
+    #batch-manager-overview .token.builtin {
+      color: var(--viz-series-6);
+    }
+
+    #batch-manager-overview .token.operator,
+    #batch-manager-overview .token.punctuation {
+      color: var(--foreground);
+    }
+
+    #batch-manager-overview .bmo-live-code {
+      margin-top: 1rem;
+    }
+
+    #batch-manager-overview .nav {
+      margin-top: 1.25rem;
+    }
+
+    #batch-manager-overview .bmo-panel {
+      display: grid;
+      gap: 1rem;
+      margin-top: 1.25rem;
+    }
+
+    #batch-manager-overview .bmo-panel[hidden] {
+      display: none;
+    }
+
+    #batch-manager-overview .bmo-class-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      align-items: baseline;
+      flex-wrap: wrap;
+    }
+
+    #batch-manager-overview .bmo-columns {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+    }
+
+    #batch-manager-overview .bmo-section {
+      display: grid;
+      align-content: start;
+      gap: 0.55rem;
+    }
+
+    #batch-manager-overview ul {
+      margin: 0;
+      padding-left: 1.25rem;
+    }
+
+    #batch-manager-overview li + li {
+      margin-top: 0.3rem;
+    }
+
+    #batch-manager-overview .bmo-note {
+      padding: 0.25rem 0 0.25rem 0.9rem;
+      border-left: 3px solid var(--accent-foreground);
+      color: var(--accent-foreground);
+    }
+
+    #batch-manager-overview .bmo-result {
+      color: var(--muted-foreground);
+    }
+
     @media (max-width: 680px) {
       #batch-manager-overview .controls {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
       #batch-manager-overview fieldset { grid-column: 1 / -1; }
+      #batch-manager-overview .bmo-columns { grid-template-columns: 1fr; }
       #batch-manager-overview .schedule {
         grid-template-columns: minmax(128px, 128px) repeat(var(--steps), minmax(72px, 1fr));
         min-width: calc(136px + var(--steps) * 79px);
@@ -1265,7 +1372,10 @@ html&gt;body{padding:0}&lt;/style&gt;
     }
   &lt;/style&gt;
 
-  &lt;h2&gt;BatchManager epoch overview&lt;/h2&gt;
+  &lt;div class=&quot;bmo-heading&quot;&gt;
+    &lt;h1&gt;Liesel batch API&lt;/h1&gt;
+    &lt;p class=&quot;text-muted&quot;&gt;&lt;code&gt;Batches&lt;/code&gt; assembles one observation stream; &lt;code&gt;BatchManager&lt;/code&gt; aligns several streams into joint optimizer steps.&lt;/p&gt;
+  &lt;/div&gt;
 
   &lt;div class=&quot;controls&quot;&gt;
     &lt;fieldset&gt;
@@ -1309,12 +1419,141 @@ html&gt;body{padding:0}&lt;/style&gt;
     &lt;span class=&quot;legend-item&quot;&gt;&lt;i class=&quot;swatch sampled&quot;&gt;&lt;/i&gt;independent observations sampled with replacement&lt;/span&gt;
   &lt;/div&gt;
 
+  &lt;pre class=&quot;bmo-live-code&quot;&gt;&lt;code class=&quot;language-python bmo-live-code-content&quot; aria-live=&quot;polite&quot;&gt;&lt;/code&gt;&lt;/pre&gt;
+
+  &lt;div class=&quot;nav nav-pills&quot; role=&quot;tablist&quot; aria-label=&quot;Batch API details&quot;&gt;
+    &lt;button class=&quot;nav-link&quot; id=&quot;bmo-path-tab&quot; role=&quot;tab&quot; aria-controls=&quot;bmo-path-panel&quot; aria-selected=&quot;false&quot; type=&quot;button&quot;&gt;Choose a path&lt;/button&gt;
+    &lt;button class=&quot;nav-link&quot; id=&quot;bmo-batches-tab&quot; role=&quot;tab&quot; aria-controls=&quot;bmo-batches-panel&quot; aria-selected=&quot;false&quot; type=&quot;button&quot;&gt;Batches&lt;/button&gt;
+    &lt;button class=&quot;nav-link&quot; id=&quot;bmo-manager-tab&quot; role=&quot;tab&quot; aria-controls=&quot;bmo-manager-panel&quot; aria-selected=&quot;false&quot; type=&quot;button&quot;&gt;BatchManager&lt;/button&gt;
+  &lt;/div&gt;
+
+  &lt;section class=&quot;bmo-panel&quot; id=&quot;bmo-path-panel&quot; role=&quot;tabpanel&quot; aria-labelledby=&quot;bmo-path-tab&quot; hidden&gt;
+    &lt;div class=&quot;table-responsive&quot;&gt;
+      &lt;table class=&quot;table table-sm&quot;&gt;
+        &lt;thead&gt;
+          &lt;tr&gt;
+            &lt;th&gt;Starting point&lt;/th&gt;
+            &lt;th&gt;Configuration&lt;/th&gt;
+            &lt;th&gt;Use&lt;/th&gt;
+            &lt;th&gt;Result&lt;/th&gt;
+          &lt;/tr&gt;
+        &lt;/thead&gt;
+        &lt;tbody&gt;
+          &lt;tr&gt;
+            &lt;td&gt;Model&lt;/td&gt;
+            &lt;td&gt;One observation size&lt;/td&gt;
+            &lt;td&gt;&lt;code&gt;Batches.from_model(model, …)&lt;/code&gt;&lt;/td&gt;
+            &lt;td&gt;&lt;code&gt;Batches&lt;/code&gt;&lt;/td&gt;
+          &lt;/tr&gt;
+          &lt;tr&gt;
+            &lt;td&gt;Model&lt;/td&gt;
+            &lt;td&gt;Several sizes, one batch size&lt;/td&gt;
+            &lt;td&gt;&lt;code&gt;BatchManager.from_model(model, …)&lt;/code&gt;&lt;/td&gt;
+            &lt;td&gt;&lt;code&gt;BatchManager&lt;/code&gt;&lt;/td&gt;
+          &lt;/tr&gt;
+          &lt;tr&gt;
+            &lt;td&gt;Completed split&lt;/td&gt;
+            &lt;td&gt;One or several sizes&lt;/td&gt;
+            &lt;td&gt;&lt;code&gt;Batches.from_split(split, …)&lt;/code&gt;&lt;/td&gt;
+            &lt;td&gt;&lt;code&gt;Batches&lt;/code&gt; or &lt;code&gt;BatchManager&lt;/code&gt;&lt;/td&gt;
+          &lt;/tr&gt;
+          &lt;tr&gt;
+            &lt;td&gt;Manual metadata&lt;/td&gt;
+            &lt;td&gt;Different batch sizes or sampling policies&lt;/td&gt;
+            &lt;td&gt;&lt;code&gt;BatchManager([Batches(…), …])&lt;/code&gt;&lt;/td&gt;
+            &lt;td&gt;&lt;code&gt;BatchManager&lt;/code&gt;&lt;/td&gt;
+          &lt;/tr&gt;
+        &lt;/tbody&gt;
+      &lt;/table&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;bmo-note&quot;&gt;Use a factory when its shared settings describe every branch; construct child &lt;code&gt;Batches&lt;/code&gt; explicitly for per-branch differences.&lt;/div&gt;
+  &lt;/section&gt;
+
+  &lt;section class=&quot;bmo-panel&quot; id=&quot;bmo-batches-panel&quot; role=&quot;tabpanel&quot; aria-labelledby=&quot;bmo-batches-tab&quot; hidden&gt;
+    &lt;div class=&quot;bmo-class-head&quot;&gt;
+      &lt;h2&gt;&lt;code&gt;Batches&lt;/code&gt;&lt;/h2&gt;
+      &lt;span class=&quot;viz-badge&quot;&gt;one-size recipe&lt;/span&gt;
+    &lt;/div&gt;
+    &lt;p&gt;Owns the observation indices for one stream and slices its position entries along their configured axes.&lt;/p&gt;
+    &lt;div class=&quot;bmo-columns&quot;&gt;
+      &lt;div class=&quot;bmo-section&quot;&gt;
+        &lt;h3&gt;Constructors&lt;/h3&gt;
+        &lt;pre&gt;&lt;code class=&quot;language-python&quot;&gt;opt.Batches(
+    position_keys,
+    axis_size,
+    batch_size,
+    shuffle=True,
+    batch_axes=None,
+    sample_with_replacement=False,
+)&lt;/code&gt;&lt;/pre&gt;
+        &lt;pre&gt;&lt;code class=&quot;language-python&quot;&gt;opt.Batches.from_model(
+    model, batch_size, multi_size=&quot;error&quot;,
+)
+
+opt.Batches.from_split(split, batch_size)&lt;/code&gt;&lt;/pre&gt;
+        &lt;span class=&quot;bmo-result text-small&quot;&gt;&lt;code&gt;from_split&lt;/code&gt; returns a &lt;code&gt;BatchManager&lt;/code&gt; when given a multi-size split.&lt;/span&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;bmo-section&quot;&gt;
+        &lt;h3&gt;Assembly behavior&lt;/h3&gt;
+        &lt;ul&gt;
+          &lt;li&gt;&lt;code&gt;start_epoch(key)&lt;/code&gt; assembles the natural number of complete batches.&lt;/li&gt;
+          &lt;li&gt;&lt;code&gt;start_epoch(key, n_batches=…)&lt;/code&gt; can truncate one pass or continue with fresh shuffled passes.&lt;/li&gt;
+          &lt;li&gt;Each ordinary pass drops its incomplete tail; those observations are eligible again after reshuffling.&lt;/li&gt;
+          &lt;li&gt;&lt;code&gt;sample_with_replacement=True&lt;/code&gt; draws every observation independently and requires shuffling plus an explicit batch size.&lt;/li&gt;
+        &lt;/ul&gt;
+        &lt;div class=&quot;bmo-note&quot;&gt;&lt;code&gt;scaled_log_lik()&lt;/code&gt; scales each batch by &lt;code&gt;sample_size / batch_sample_size&lt;/code&gt;, falling back to &lt;code&gt;axis_size / batch_size&lt;/code&gt;.&lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/section&gt;
+
+  &lt;section class=&quot;bmo-panel&quot; id=&quot;bmo-manager-panel&quot; role=&quot;tabpanel&quot; aria-labelledby=&quot;bmo-manager-tab&quot; hidden&gt;
+    &lt;div class=&quot;bmo-class-head&quot;&gt;
+      &lt;h2&gt;&lt;code&gt;BatchManager&lt;/code&gt;&lt;/h2&gt;
+      &lt;span class=&quot;viz-badge&quot;&gt;multi-size coordinator&lt;/span&gt;
+    &lt;/div&gt;
+    &lt;p&gt;Asks each child &lt;code&gt;Batches&lt;/code&gt; object for the same number of rows, then combines row &lt;code&gt;i&lt;/code&gt; from every child into joint step &lt;code&gt;i&lt;/code&gt;.&lt;/p&gt;
+    &lt;div class=&quot;bmo-columns&quot;&gt;
+      &lt;div class=&quot;bmo-section&quot;&gt;
+        &lt;h3&gt;Constructors&lt;/h3&gt;
+        &lt;pre&gt;&lt;code class=&quot;language-python&quot;&gt;opt.BatchManager(
+    [batches_a, batches_b],
+    epoch_size=&quot;strict&quot;,
+)&lt;/code&gt;&lt;/pre&gt;
+        &lt;pre&gt;&lt;code class=&quot;language-python&quot;&gt;opt.BatchManager.from_model(
+    model,
+    batch_size,
+    epoch_size=&quot;max&quot;,
+    sample_with_replacement=False,
+)&lt;/code&gt;&lt;/pre&gt;
+        &lt;span class=&quot;bmo-result text-small&quot;&gt;Direct construction defaults to &lt;code&gt;&quot;strict&quot;&lt;/code&gt;; automatic factories default to &lt;code&gt;&quot;max&quot;&lt;/code&gt;.&lt;/span&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;bmo-section&quot;&gt;
+        &lt;h3&gt;Epoch size&lt;/h3&gt;
+        &lt;div class=&quot;table-responsive&quot;&gt;
+          &lt;table class=&quot;table table-sm&quot;&gt;
+            &lt;tbody&gt;
+              &lt;tr&gt;&lt;th&gt;&lt;code&gt;&quot;strict&quot;&lt;/code&gt;&lt;/th&gt;&lt;td&gt;Require equal natural batch counts.&lt;/td&gt;&lt;/tr&gt;
+              &lt;tr&gt;&lt;th&gt;&lt;code&gt;&quot;min&quot;&lt;/code&gt;&lt;/th&gt;&lt;td&gt;Use the shortest natural count.&lt;/td&gt;&lt;/tr&gt;
+              &lt;tr&gt;&lt;th&gt;&lt;code&gt;&quot;max&quot;&lt;/code&gt;&lt;/th&gt;&lt;td&gt;Extend shorter children with fresh shuffled passes.&lt;/td&gt;&lt;/tr&gt;
+              &lt;tr&gt;&lt;th&gt;Integer&lt;/th&gt;&lt;td&gt;Request exactly that many batches from every child.&lt;/td&gt;&lt;/tr&gt;
+            &lt;/tbody&gt;
+          &lt;/table&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;bmo-note&quot;&gt;Children retain their own indices and likelihood scales. Use &lt;code&gt;BatchManager.scaled_log_lik()&lt;/code&gt; when branch scales differ.&lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/section&gt;
+
+  &lt;script src=&quot;https://cdn.jsdelivr.net/npm/prismjs@1.30.0/components/prism-core.min.js&quot;&gt;&lt;/script&gt;
+  &lt;script src=&quot;https://cdn.jsdelivr.net/npm/prismjs@1.30.0/components/prism-python.min.js&quot;&gt;&lt;/script&gt;
+
   &lt;script&gt;
     (() =&gt; {
       const root = document.getElementById(&quot;batch-manager-overview&quot;);
       const scheduleEl = root.querySelector(&quot;.schedule&quot;);
       const summaryEl = root.querySelector(&quot;.summary&quot;);
       const fixedControl = root.querySelector(&quot;.fixed&quot;);
+      const codeEl = root.querySelector(&quot;.bmo-live-code-content&quot;);
       const inputs = {
         aN: root.querySelector(&quot;#bmo-a-n&quot;),
         aB: root.querySelector(&quot;#bmo-a-b&quot;),
@@ -1396,6 +1635,46 @@ html&gt;body{padding:0}&lt;/style&gt;
         return node;
       }
 
+      function constructorCode(values) {
+        const epochSize = mode === &quot;fixed&quot; ? String(values.fixed) : `&quot;${mode}&quot;`;
+        const replacement = inputs.replacement.checked;
+
+        if (values.aB === values.bB) {
+          const replacementArg = replacement
+            ? &quot;\n    sample_with_replacement=True,&quot;
+            : &quot;&quot;;
+          const oversizedComment = values.aB &gt; values.aN || values.bB &gt; values.bN
+            ? &quot;\n# Oversized inferred branches use replacement automatically.&quot;
+            : &quot;&quot;;
+          return `# Shared batch size: infer branches from the model.${oversizedComment}
+manager = opt.BatchManager.from_model(
+    model,
+    batch_size=${values.aB},
+    epoch_size=${epochSize},${replacementArg}
+)`;
+        }
+
+        const childCode = (key, observations, batchSize) =&gt; {
+          const oversized = batchSize &gt; observations;
+          const replacementArg = replacement || oversized
+            ? &quot;, sample_with_replacement=True&quot;
+            : &quot;&quot;;
+          const reason = oversized &amp;&amp; !replacement
+            ? `  # required: ${batchSize} &gt; ${observations}`
+            : &quot;&quot;;
+          return `        opt.Batches([&quot;${key}&quot;], axis_size=${observations}, batch_size=${batchSize}${replacementArg}),${reason}`;
+        };
+
+        return `# Different batch sizes: configure each branch explicitly.
+manager = opt.BatchManager(
+    [
+${childCode(&quot;y_a&quot;, values.aN, values.aB)}
+${childCode(&quot;y_b&quot;, values.bN, values.bB)}
+    ],
+    epoch_size=${epochSize},
+)`;
+      }
+
       function render() {
         const values = Object.fromEntries(
           Object.entries(inputs)
@@ -1429,6 +1708,8 @@ html&gt;body{padding:0}&lt;/style&gt;
           return `${item.name}: ${item.count} natural, ${distinct} first-pass${remainder}${overflow}${oversized}`;
         }).join(&quot;   |   &quot;);
         summaryEl.append(strong, el(&quot;span&quot;, &quot;&quot;, detail));
+        codeEl.textContent = constructorCode(values);
+        globalThis.Prism?.highlightElement(codeEl);
 
         scheduleEl.append(el(&quot;div&quot;, &quot;corner&quot;, &quot;One batch per branch&quot;));
         for (let step = 1; step &lt;= steps; step += 1) {
@@ -1490,6 +1771,10 @@ html&gt;body{padding:0}&lt;/style&gt;
       });
 
       Object.values(inputs).forEach(input =&gt; input.addEventListener(&quot;input&quot;, render));
+      console.assert(constructorCode({ aN: 320, aB: 64, bN: 160, bB: 64, fixed: 4 }).includes(&quot;BatchManager.from_model&quot;));
+      console.assert(constructorCode({ aN: 320, aB: 64, bN: 150, bB: 50, fixed: 4 }).includes(&quot;configure each branch explicitly&quot;));
+      console.assert(constructorCode({ aN: 320, aB: 64, bN: 40, bB: 50, fixed: 4 }).includes(&quot;required: 50 &gt; 40&quot;));
+      root.querySelectorAll(&quot;pre code.language-python:not(.bmo-live-code-content)&quot;).forEach(block =&gt; globalThis.Prism?.highlightElement(block));
       render();
     })();
   &lt;/script&gt;
@@ -1766,16 +2051,16 @@ html&gt;body{padding:0}&lt;/style&gt;
 (() =&gt; {
   const selector = &#x27;.nav[role=&quot;tablist&quot;] [role=&quot;tab&quot;]&#x27;;
   const disabled = &#x27;:disabled,[aria-disabled=&quot;true&quot;]&#x27;;
-  const selectTab = (selected) =&gt; {
-    const panelId = selected.getAttribute(&quot;aria-controls&quot;);
+  const selectTab = (selected, allowCollapse = false) =&gt; {
+    const collapse = allowCollapse &amp;&amp; selected.getAttribute(&quot;aria-selected&quot;) === &quot;true&quot;;
     for (const tab of selected.closest(&#x27;[role=&quot;tablist&quot;]&#x27;).querySelectorAll(&#x27;[role=&quot;tab&quot;]&#x27;)) {
-      const active = tab === selected;
+      const active = tab === selected &amp;&amp; !collapse;
       tab.classList.toggle(&quot;active&quot;, active);
       tab.setAttribute(&quot;aria-selected&quot;, String(active));
       const id = tab.getAttribute(&quot;aria-controls&quot;);
       const panel = id &amp;&amp; document.getElementById(id);
       if (panel != null) {
-        panel.hidden = id !== panelId;
+        panel.hidden = !active;
         if (!panel.hidden &amp;&amp; selected.id) {
           panel.setAttribute(&quot;aria-labelledby&quot;, selected.id);
         }
@@ -1788,7 +2073,7 @@ html&gt;body{padding:0}&lt;/style&gt;
       return;
     }
     if (event.type === &quot;click&quot;) {
-      selectTab(tab);
+      selectTab(tab, true);
       return;
     }
     const tabs = Array.from(
@@ -1815,8 +2100,7 @@ html&gt;body{padding:0}&lt;/style&gt;
   for (const list of document.querySelectorAll(&#x27;.nav[role=&quot;tablist&quot;]&#x27;)) {
     const selected =
       list.querySelector(&#x27;[role=&quot;tab&quot;][aria-selected=&quot;true&quot;]&#x27;) ??
-      list.querySelector(&#x27;[role=&quot;tab&quot;].active&#x27;) ??
-      list.querySelector(&#x27;[role=&quot;tab&quot;]&#x27;);
+      list.querySelector(&#x27;[role=&quot;tab&quot;].active&#x27;);
     if (selected != null) {
       selectTab(selected);
     }
