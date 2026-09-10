@@ -10,6 +10,7 @@ Liesel: A Probabilistic Programming Framework
    :maxdepth: 1
 
    tutorials_overview
+   optimizer-data-flow
 
 
 API Reference
@@ -143,6 +144,34 @@ to run stochastic gradient descent on a liesel model.
     ~liesel.goose.history_to_df
     ~liesel.goose.OptimResult
 
+Optimizer API
+*************
+
+The :mod:`liesel.optim` module provides the newer optimization engine, data-splitting
+utilities, and optimizer helpers.
+
+The :doc:`optimizer-data-flow` guide provides interactive overviews of the splitting,
+batching, and likelihood-scaling behavior.
+
+.. autosummary::
+    :toctree: generated
+    :caption: Optimizer API
+    :recursive:
+    :nosignatures:
+
+    ~liesel.optim.LieselOptim
+    ~liesel.optim.OptimEngine
+    ~liesel.optim.NegLogProbLoss
+    ~liesel.optim.Optimizer
+    ~liesel.optim.LBFGS
+    ~liesel.optim.Stopper
+    ~liesel.optim.Batches
+    ~liesel.optim.BatchManager
+    ~liesel.optim.Split
+    ~liesel.optim.SplitManager
+    ~liesel.optim.PositionSplit
+    ~liesel.optim.PositionSplitManager
+
 Model (Advanced)
 ************************
 
@@ -244,10 +273,10 @@ Experimental API
 .. autosummary::
     :toctree: generated
     :caption: Experimental API
-    :recursive:
     :nosignatures:
 
-    ~liesel.experimental
+    ~liesel.experimental.arviz
+    ~liesel.experimental.pymc
 
 
 Effort-Based Versioning

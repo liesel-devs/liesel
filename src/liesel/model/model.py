@@ -20,6 +20,7 @@ import jax.random
 import networkx as nx
 import pandas as pd
 
+from ..goose.types import ModelState
 from ..types import Position
 from ._mapping import _KeyCompletableMapping, _KeyCompletableProperty
 from .nodes import (
@@ -2235,6 +2236,13 @@ class Model:
         """
         return self.pop_nodes_and_vars()[1]
 
+    @property
+    def to_float32(self) -> bool:
+        """
+        Whether the values of the added nodes will be converted from float64 to float32.
+        """
+        return self._to_float32
+
     def pop_nodes_and_vars(self) -> tuple[dict[str, Node], dict[str, Var]]:
         """
         Pops the nodes and variables out of this model.
@@ -2962,7 +2970,7 @@ class Model:
         inplace: bool = False,
         *,
         allow_weak_vars: bool = False,
-    ) -> dict[str, NodeState]:
+    ) -> ModelState:
         """
         Updates and returns a model state given a position.
 

@@ -30,3 +30,13 @@ a comparison of different samplers, and more:
    tutorials/md/06-pymc
    tutorials/md/07-error-correction
    tutorials/md/08-custom-kernel
+
+The optimization tutorials introduce the :mod:`liesel.optim` workflow for models with
+one or several observed-data branches:
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Optimization
+
+   tutorials/notebooks/09-liesel-optim-basic
+   tutorials/notebooks/10-liesel-optim-advanced

@@ -1,0 +1,372 @@
+"""Optimizer wrappers used by :class:`.OptimEngine`.
+
+The classes in this module adapt Optax gradient transformations to the
+position-dictionary workflow used by the experimental optimizer engine. Each
+optimizer owns a subset of parameter keys and updates only that subset during an
+engine step.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from dataclasses import dataclass
+from numbers import Integral
+from typing import TYPE_CHECKING, Any, Protocol, cast
+
+import jax
+import jax.numpy as jnp
+import optax
+
+from .types import Position
+
+if TYPE_CHECKING:
+    from .loss import Loss
+    from .state import OptimCarry
+
+
+class OptimizerLike(Protocol):
+    """Structural interface consumed by :class:`.OptimEngine`."""
+
+    @property
+    def position_keys(self) -> Sequence[str]:
+        """Names of the parameter entries owned by this optimizer."""
+        ...
+
+    @property
+    def identifier(self) -> str:
+        """Identifier used to store this optimizer's state."""
+        ...
+
+    @identifier.setter
+    def identifier(self, value: str) -> None: ...
+
+    @property
+    def activate_after_epochs(self) -> int:
+        """Number of completed epochs before this optimizer becomes active."""
+        ...
+
+    def position(self, position: Position) -> Position:
+        """Extract the entries owned by this optimizer."""
+        ...
+
+    def not_position(self, position: Position) -> Position:
+        """Extract the entries not owned by this optimizer."""
+        ...
+
+    def init(self, position: Position) -> Any:
+        """Initialize optimizer state from a full position."""
+        ...
+
+    def step(
+        self, position: Position, loss: Loss, carry: OptimCarry
+    ) -> tuple[OptimCarry, jax.Array]:
+        """Run one optimizer step and return its pre-update scalar loss.
+
+        The scalar and gradient use the same mini-batch, supplied parameter
+        position, PRNG key, and stochastic objective draw.
+        """
+        ...
+
+
+@dataclass
+class Optimizer:
+    """
+    Wraps an Optax gradient transformation for selected position entries.
+
+    ``Optimizer`` is the default adapter used by :class:`.OptimEngine`. It extracts
+    the entries named in :attr:`position_keys`, differentiates the configured loss
+    with respect to only those entries, applies an Optax update, and merges the
+    updated subset back into the full engine position.
+
+    Parameters
+    ----------
+    position_keys
+        Names of the parameter entries owned by this optimizer.
+    optimizer
+        Optax gradient transformation, for example ``optax.adam(...)`` or
+        ``optax.sgd(...)``.
+    identifier
+        Optional identifier used to store this optimizer's state in
+        :class:`.OptimCarry`. Missing identifiers are filled by
+        :class:`.OptimEngine`.
+    activate_after_epochs
+        Number of completed epochs required before this optimizer participates in
+        batch updates. ``0`` activates it from the first epoch.
+
+    Notes
+    -----
+    Multiple optimizers can be used in the same engine, but their
+    :attr:`position_keys` and identifiers must be disjoint after automatic naming.
+    ``position_keys`` are normalized to a tuple during initialization.
+
+    Examples
+    --------
+    >>> import jax.numpy as jnp
+    >>> import optax
+    >>> from liesel.optim import Optimizer
+    >>> from liesel.optim.types import Position
+    >>> optimizer = Optimizer(["x"], optax.sgd(0.1), identifier="x_opt")
+    >>> position = Position({"x": jnp.array(1.0), "y": jnp.array(2.0)})
+    >>> optimizer.position(position)["x"].tolist()
+    1.0
+    >>> sorted(optimizer.not_position(position))
+    ['y']
+    >>> repr(optimizer)
+    "Optimizer(('x',), identifier=x_opt)"
+    """
+
+    position_keys: Sequence[str]
+    optimizer: optax.GradientTransformation
+    identifier: str = ""
+    activate_after_epochs: int = 0
+
+    def __post_init__(self) -> None:
+        """
+        Validates and normalizes :attr:`position_keys`.
+
+        Raises
+        ------
+        ValueError
+            If no position keys are supplied or if any key is duplicated.
+        """
+        self.position_keys = tuple(self.position_keys)
+
+        if (
+            not isinstance(self.activate_after_epochs, Integral)
+            or isinstance(self.activate_after_epochs, bool)
+            or self.activate_after_epochs < 0
+        ):
+            raise ValueError("activate_after_epochs must be a non-negative integer.")
+        self.activate_after_epochs = int(self.activate_after_epochs)
+
+        if len(self.position_keys) == 0:
+            raise ValueError("position_keys must not be empty.")
+
+        duplicates = sorted(
+            {key for key in self.position_keys if self.position_keys.count(key) > 1}
+        )
+        if duplicates:
+            raise ValueError(f"Duplicate position_keys are not allowed: {duplicates}.")
+
+    def position(self, position: Position) -> Position:
+        """
+        Extracts the subset of ``position`` owned by this optimizer.
+
+        Parameters
+        ----------
+        position
+            Full optimizer position.
+
+        Returns
+        -------
+        Position
+            Mapping containing only keys listed in :attr:`position_keys`. Values are
+            converted with :func:`jax.numpy.asarray`.
+
+        Raises
+        ------
+        KeyError
+            If any key listed in :attr:`position_keys` is missing from ``position``.
+        """
+        missing = [key for key in self.position_keys if key not in position]
+        if missing:
+            raise KeyError(f"Position is missing keys claimed by optimizer: {missing}.")
+
+        pos = Position({k: jnp.asarray(position[k]) for k in self.position_keys})
+
+        return pos
+
+    def not_position(self, position: Position) -> Position:
+        """
+        Extracts the subset of ``position`` not owned by this optimizer.
+
+        Parameters
+        ----------
+        position
+            Full optimizer position.
+
+        Returns
+        -------
+        Position
+            Mapping containing entries whose keys are not in :attr:`position_keys`.
+            During engine updates, this subset is exposed as
+            ``carry.fixed_position`` so losses can still evaluate the full position.
+        """
+        pos = Position(
+            {k: v for k, v in position.items() if k not in self.position_keys}
+        )
+        return pos
+
+    def init(self, position: Position) -> optax.OptState:
+        """
+        Initializes the wrapped Optax transformation.
+
+        Parameters
+        ----------
+        position
+            Full optimizer position. Only :attr:`position_keys` are passed to the
+            Optax transformation.
+
+        Returns
+        -------
+        optax.OptState
+            Initial optimizer state.
+        """
+        pos = self.position(position)
+        return self.optimizer.init(pos)
+
+    def step(
+        self, position: Position, loss: Loss, carry: OptimCarry
+    ) -> tuple[OptimCarry, jax.Array]:
+        """
+        Runs one optimizer step on ``position``.
+
+        :meth:`.Loss.value_and_grad` computes the returned loss and gradient
+        together, using the same mini-batch, parameter position, PRNG key, and
+        stochastic objective draw.
+
+        Parameters
+        ----------
+        position
+            Parameter subset owned by this optimizer.
+        loss
+            Loss object providing :meth:`value_and_grad`.
+        carry
+            Current optimizer carry. The optimizer state for this object is read from
+            and written to ``carry.optimizer_states[self.identifier]``.
+
+        Returns
+        -------
+        tuple[OptimCarry, jax.Array]
+            Updated carry and the scalar loss evaluated at the supplied position
+            before the update.
+        """
+        pos = position
+
+        opt_state = carry.optimizer_states[self.identifier]
+        value, grad = loss.value_and_grad(pos, carry)
+        updates, opt_state = self.optimizer.update(grad, opt_state, params=pos)
+        updated_position = cast(Position, optax.apply_updates(pos, updates))
+
+        carry.position = Position(carry.position | updated_position)
+        carry.optimizer_states[self.identifier] = opt_state
+        return carry, value
+
+    def _tree_flatten(self):
+        """Flattens the optimizer as a JAX pytree node with static metadata."""
+        children = ()
+        aux_data = {
+            "position_keys": self.position_keys,
+            "identifier": self.identifier,
+            "optimizer": self.optimizer,
+            "activate_after_epochs": self.activate_after_epochs,
+        }
+        return (children, aux_data)
+
+    @classmethod
+    def _tree_unflatten(cls, aux_data, children):
+        """Reconstructs the optimizer from JAX pytree metadata."""
+        bi = cls(*children, **aux_data)
+        return bi
+
+    def __repr__(self) -> str:
+        """Returns a compact representation with position keys and identifier."""
+        name = type(self).__name__
+        delay = (
+            f", activate_after_epochs={self.activate_after_epochs}"
+            if self.activate_after_epochs
+            else ""
+        )
+        return f"{name}({self.position_keys}, identifier={self.identifier}{delay})"
+
+
+jax.tree_util.register_pytree_node(
+    Optimizer, Optimizer._tree_flatten, Optimizer._tree_unflatten
+)
+
+
+@dataclass(repr=False)
+class LBFGS(Optimizer):
+    """
+    Optimizer wrapper using Optax L-BFGS.
+
+    ``LBFGS`` behaves like :class:`Optimizer` but uses
+    :func:`optax.value_and_grad_from_state` inside :meth:`step`, which lets Optax
+    reuse value/gradient information stored by the L-BFGS transformation.
+
+    L-BFGS requires full-data batches and a deterministic objective. The engine
+    rejects mini-batches, but cannot detect stochastic objective evaluations. For
+    the deterministic objective, the returned scalar is the value used for the
+    update at the supplied pre-update position.
+
+    Parameters
+    ----------
+    position_keys
+        Names of the parameter entries owned by this optimizer.
+    optimizer
+        Optax L-BFGS transformation. Defaults to ``optax.lbfgs()``.
+    identifier
+        Optional optimizer-state identifier filled by :class:`.OptimEngine` when
+        omitted.
+    activate_after_epochs
+        Number of completed epochs required before this optimizer participates in
+        batch updates. ``0`` activates it from the first epoch.
+
+    Examples
+    --------
+    >>> from liesel.optim import LBFGS
+    >>> lbfgs = LBFGS(["loc"], identifier="loc_lbfgs")
+    >>> lbfgs.position_keys
+    ('loc',)
+    >>> lbfgs.identifier
+    'loc_lbfgs'
+    >>> repr(lbfgs)
+    "LBFGS(('loc',), identifier=loc_lbfgs)"
+    """
+
+    position_keys: Sequence[str]
+    optimizer: optax.GradientTransformationExtraArgs = optax.lbfgs()  # noqa: RUF009
+    identifier: str = ""
+
+    def step(
+        self, position: Position, loss: Loss, carry: OptimCarry
+    ) -> tuple[OptimCarry, jax.Array]:
+        """
+        Runs one L-BFGS optimizer step on ``position``.
+
+        Parameters
+        ----------
+        position
+            Parameter subset owned by this optimizer.
+        loss
+            Loss object providing :meth:`loss_train_batched`.
+        carry
+            Current optimizer carry. The L-BFGS state is read from and written to
+            ``carry.optimizer_states[self.identifier]``.
+
+        Returns
+        -------
+        tuple[OptimCarry, jax.Array]
+            Updated carry and the scalar loss used for the update, evaluated at
+            the supplied position before the update.
+        """
+        pos = position
+        opt_state = carry.optimizer_states[self.identifier]
+
+        def loss_fn(pos: Position) -> jax.Array:
+            return loss.loss_train_batched(pos, carry)
+
+        value_and_grad = optax.value_and_grad_from_state(loss_fn)
+        value, grad = value_and_grad(pos, state=opt_state)
+        updates, opt_state = self.optimizer.update(
+            grad, opt_state, params=pos, value=value, grad=grad, value_fn=loss_fn
+        )
+
+        updated_position = cast(Position, optax.apply_updates(pos, updates))
+
+        carry.position = Position(carry.position | updated_position)
+        carry.optimizer_states[self.identifier] = opt_state
+        return carry, cast(jax.Array, value)
+
+
+jax.tree_util.register_pytree_node(LBFGS, LBFGS._tree_flatten, LBFGS._tree_unflatten)
