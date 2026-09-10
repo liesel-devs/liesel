@@ -3,7 +3,7 @@ Diagnostic plots of the posterior samples.
 """
 
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -14,6 +14,23 @@ from arviz_stats.base import array_stats
 from liesel.goose.engine import SamplingResults
 
 from .types import Array
+
+LegendPosition = (
+    Literal[
+        "best",
+        "upper right",
+        "upper left",
+        "lower left",
+        "lower right",
+        "right",
+        "center left",
+        "center right",
+        "lower center",
+        "upper center",
+        "center",
+    ]
+    | tuple[float, float]
+)
 
 
 def _raise_chain_indices_error(
@@ -1005,7 +1022,7 @@ def plot_scatter(
     style: str = "whitegrid",
     color_list: list[str] | None = None,
     figure_size: tuple[int | float, int | float] = (9, 6),
-    legend_position: tuple[float, float] | str = "best",
+    legend_position: LegendPosition = "best",
     save_path: str | None = None,
     include_warmup: bool = False,
     show: bool = True,

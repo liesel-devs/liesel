@@ -1169,7 +1169,7 @@ def _apply_loo_scale(
 
 def loo(
     lpp: Mapping[str, jax.typing.ArrayLike] | jax.typing.ArrayLike,
-    samples: dict[str, jax.typing.ArrayLike] | None,
+    samples: dict[str, jax.typing.ArrayLike] | None = None,
     reff: float | None = None,
     scale: Literal["log", "negative_log", "deviance"] = "log",
 ) -> _LieselELPDData:
@@ -1182,20 +1182,14 @@ def loo(
     lpp
         Dictionary or array of pointwise log probability evaluations.
         If passed as a dictionary, each value is expected to have shape
-        ``(nsamples, nchains, ...)``.
-        If passed as an array, it is assumed to have shape ``(nsamples, nchains, n)``.
+        ``(nchains, ndraws, ...)``.
+        If passed as an array, it is assumed to have shape ``(nchains, ndraws, n)``.
     samples
-        Dictionary of samples at which to evaluate log probs. If ``samples``
-        contains entries for weak variables or for nodes in :attr:`.model_nodes`
-        they are ignored.
-    newdata
-        Dictionary of new data at which to evaluate log probs. The keys should \
-        correspond to variable or node names in the model whose values should be \
-        set to the given values before evaluating predictions. If ``None`` \
-        (default), the current variable values are used.
+        Retained for backwards compatibility and ignored.
     reff
         Relative MCMC efficiency, ess / n i.e. number of effective samples divided
-        by the number of actual samples. Computed from the samples by default.
+        by the number of actual samples. Computed from the likelihood values by
+        default. For independent draws, pass ``1.0``.
     scale
         Output scale. The options are:
 
@@ -1216,12 +1210,6 @@ def loo(
       https://doi.org/10.1007/s11222-016-9696-4
 
     """
-    if samples is None and reff is None:
-        raise ValueError(
-            "Both 'samples' and 'reff' are None, so relative MCMC efficiency is not "
-            "available."
-        )
-
     if isinstance(lpp, Mapping):
         lpp_by_variable = cast(Mapping[str, jax.typing.ArrayLike], lpp)
         lpp_array = concatenate_arrays_in_dict(lpp_by_variable)
@@ -1230,14 +1218,11 @@ def loo(
 
     lpp_array = np.asarray(lpp_array)
     idat = az.from_dict({"log_likelihood": {"observed": lpp_array}})
-    if reff is None and samples is not None:
-        avg_ess = (
-            SamplesSummary(samples, which=["ess_bulk"])
-            .to_dataframe()["ess_bulk"]
-            .mean()
-        )
+    if reff is None:
         nsamples = lpp_array.shape[0] * lpp_array.shape[1]
-        reff = avg_ess / nsamples
+        shift = lpp_array.max(axis=(0, 1), keepdims=True)
+        likelihood = np.exp(lpp_array - shift)
+        reff = float(np.mean(az.ess(likelihood, method="mean") / nsamples))
     # now we assume reff is not None
 
     return _apply_loo_scale(az.loo(idat, reff=reff), scale)
