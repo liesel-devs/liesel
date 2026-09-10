@@ -10,6 +10,7 @@ Liesel: A Probabilistic Programming Framework
    :maxdepth: 1
 
    tutorials_overview
+   optimizer-data-flow
 
 
 API Reference
@@ -148,6 +149,9 @@ Optimizer API
 
 The :mod:`liesel.optim` module provides the newer optimization engine, data-splitting
 utilities, and optimizer helpers.
+
+The :doc:`optimizer-data-flow` guide provides interactive overviews of the splitting,
+batching, and likelihood-scaling behavior.
 
 .. autosummary::
     :toctree: generated
