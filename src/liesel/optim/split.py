@@ -428,9 +428,11 @@ class PositionSplit:
         :meth:`add_inferred_sample_sizes_from_model` to infer these values from
         pointwise observed log-probability arrays.
     passthrough
-        Keyword-only position entries copied unchanged into ``train``, ``validate``,
-        and ``test``. These entries are excluded from split likelihood scaling and
-        from batches derived automatically from this split.
+        Keyword-only position entries included unchanged in ``train``, ``validate``,
+        and ``test``. Use this for shared data that every split needs in full, such
+        as a group-level lookup table: passthrough entries are not split, are
+        excluded from split likelihood scaling, and are not batched automatically.
+        Per-observation covariates, weights, and offsets should be split instead.
 
     Examples
     --------
@@ -934,8 +936,9 @@ class PositionSplit:
             Model containing the observed variables to split.
         position_keys
             Names of observed position entries to include. If ``None``, all observed
-            variables in ``model`` are used. Use ``split_axes={key: None}`` to keep
-            a selected entry unchanged.
+            variables in ``model`` are used. Use ``split_axes={key: None}`` to
+            include a selected entry unchanged in ``train``, ``validate``, and
+            ``test`` without splitting or batching it automatically.
         axis_size
             Number of observations along the split axis. If ``None``, the number is
             guessed from ``model`` along ``default_split_axis``.
@@ -944,9 +947,12 @@ class PositionSplit:
         test_axis_share
             Share of observations assigned to the test split.
         split_axes
-            Optional mapping from position key to split axis. ``None`` keeps a
-            selected key unchanged in every split part. Keys missing from this
-            mapping use ``default_split_axis``.
+            Optional mapping from position key to split axis. Mapping a key to
+            ``None`` makes it passthrough data: it is included unchanged in
+            ``train``, ``validate``, and ``test``, is not split, and is excluded
+            from automatically derived batches. Use this for shared lookup tables
+            or constants, not per-observation data. Keys missing from this mapping
+            use ``default_split_axis``.
         default_split_axis
             Split axis for all position keys not listed in ``split_axes``.
         shuffle
@@ -1133,8 +1139,10 @@ class PositionSplitManager:
         must contain validation data or none may contain validation data; the same
         rule applies to test data.
     passthrough
-        Keyword-only shared position entries copied unchanged into the manager's
-        merged ``train``, ``validate``, and ``test`` positions.
+        Keyword-only shared position entries included unchanged in the manager's
+        merged ``train``, ``validate``, and ``test`` positions. They are not split
+        or batched automatically. Use this for shared lookup tables or constants,
+        not per-observation data.
 
     Raises
     ------
@@ -1262,10 +1270,15 @@ class PositionSplitManager:
         applied to the model's observed position.
 
         Parameters are the same as :meth:`SplitManager.from_model`. When
-        ``sample_sizes`` is supplied, it is interpreted as total effective sample
-        sizes for the whole manager. The totals are distributed to contained
-        splits in proportion to their axis sizes for the corresponding split
-        part. For custom per-child sample sizes, construct the child
+        a selected key is mapped to ``None`` in ``split_axes``, it is included
+        unchanged in ``train``, ``validate``, and ``test`` and is not split or
+        batched automatically. This is intended for shared lookup tables or
+        constants, not per-observation data.
+
+        When ``sample_sizes`` is supplied, it is interpreted as total effective
+        sample sizes for the whole manager. The totals are distributed to contained
+        splits in proportion to their axis sizes for the corresponding split part.
+        For custom per-child sample sizes, construct the child
         :class:`PositionSplit` objects manually. When ``infer_sample_sizes=True``,
         inference counts pointwise log-probability scalars, not observed value
         elements; for multivariate observation distributions, one observed event
@@ -1725,7 +1738,10 @@ class SplitManager:
         not overlap. Either all children must define validation data or none may; the
         same rule applies to test data.
     passthrough_position_keys
-        Keyword-only names copied unchanged into every returned split part.
+        Keyword-only names included unchanged in ``train``, ``validate``, and
+        ``test``. They are not assigned to a child :class:`Split` or batched
+        automatically. Use this for shared lookup tables or constants, not
+        per-observation data.
 
     Examples
     --------
@@ -1814,15 +1830,19 @@ class SplitManager:
             Model containing the observed variables to split.
         position_keys
             Names of observed position entries to include. If ``None``, all observed
-            variables in ``model`` are used. Use ``split_axes={key: None}`` to keep
-            a selected entry unchanged.
+            variables in ``model`` are used. Use ``split_axes={key: None}`` to
+            include a selected entry unchanged in ``train``, ``validate``, and
+            ``test`` without splitting or batching it automatically.
         validate_axis_share
             Share of observations assigned to validation in every child split.
         test_axis_share
             Share of observations assigned to testing in every child split.
         split_axes
-            Optional mapping from position key to split axis. ``None`` keeps a
-            selected key unchanged in every split part.
+            Optional mapping from position key to split axis. Mapping a key to
+            ``None`` makes it passthrough data: it is included unchanged in
+            ``train``, ``validate``, and ``test``, is not split, and is excluded
+            from automatically derived batches. Use this for shared lookup tables
+            or constants, not per-observation data.
         default_split_axis
             Split axis for all position keys not listed in ``split_axes``.
         shuffle
@@ -2005,7 +2025,8 @@ class Split:
     position_keys
         Names of position entries that should be included. If omitted,
         :meth:`split_position` uses all keys in the supplied position. Entries
-        mapped to ``None`` in ``split_axes`` are passed through unchanged.
+        mapped to ``None`` in ``split_axes`` are included unchanged in ``train``,
+        ``validate``, and ``test`` and are not batched automatically.
     axis_size
         Number of observations along each split axis. Must be positive.
     validate_axis_size
@@ -2016,8 +2037,11 @@ class Split:
         Number of training observations. If left at ``None``, it is computed as
         ``axis_size - validate_axis_size - test_axis_size``.
     split_axes
-        Optional mapping from position key to split axis. ``None`` keeps a selected
-        key unchanged in every split part. Keys missing from this mapping use
+        Optional mapping from position key to split axis. Mapping a key to ``None``
+        makes it passthrough data: it is included unchanged in ``train``,
+        ``validate``, and ``test``, is not split, and is excluded from automatically
+        derived batches. Use this for shared lookup tables or constants, not
+        per-observation data. Keys missing from this mapping use
         ``default_split_axis``.
     default_split_axis
         Split axis for all position keys not listed in ``split_axes``.
@@ -2265,9 +2289,11 @@ class Split:
         """Builds a reusable scalar split recipe from model metadata.
 
         The selected position entries must imply one split-axis size. Entries
-        mapped to ``None`` in ``split_axes`` are retained as passthrough data but
-        do not participate in size inference. Pass ``axis_size`` to override the
-        inferred size when the recipe will be applied to another position.
+        mapped to ``None`` in ``split_axes`` become passthrough data: when the
+        recipe is applied, they are included unchanged in ``train``, ``validate``,
+        and ``test``, are not split or batched automatically, and do not participate
+        in size inference. Pass ``axis_size`` to override the inferred size when the
+        recipe will be applied to another position.
 
         Parameters
         ----------
@@ -2284,8 +2310,9 @@ class Split:
         test_axis_share
             Share of observations assigned to testing.
         split_axes
-            Optional mapping from position key to split axis. ``None`` keeps a
-            selected key unchanged in every split part.
+            Optional mapping from position key to split axis. Mapping a key to
+            ``None`` makes it passthrough data. Use this for shared lookup tables or
+            constants, not per-observation data.
         default_split_axis
             Split axis for keys not listed in ``split_axes``.
         shuffle

@@ -16,6 +16,29 @@ Use this overview to choose between :class:`~liesel.optim.Split`,
 :class:`~liesel.optim.PositionSplit`, and their manager variants, and to compare their
 constructors and typical use cases.
 
+Keeping shared entries unsplit
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Map a selected key to ``None`` in ``split_axes`` when every split needs that entry
+in full:
+
+.. code-block:: python
+
+   import liesel.optim as opt
+
+   split = opt.PositionSplit.from_model(
+       model,
+       position_keys=["y", "group_id", "group_table"],
+       validate_axis_share=0.2,
+       split_axes={"group_table": None},
+   )
+
+``group_table`` is included unchanged in ``split.train``, ``split.validate``, and
+``split.test``. It is not split, does not contribute to split likelihood scaling,
+and is not included in batches derived automatically from the split. Use passthrough
+for shared lookup tables or constants. Split per-observation covariates, weights,
+and offsets alongside the response.
+
 .. raw:: html
 
    <iframe
