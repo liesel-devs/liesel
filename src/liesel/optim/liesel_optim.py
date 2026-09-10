@@ -74,11 +74,11 @@ class LieselOptim:
         Split/batch axis for observed keys missing from ``split_axes``.
     shuffle_batches
         Whether default mini-batches should shuffle observations.
-    batch_mode
-        Mode used when default batches require a :class:`.BatchManager`.
     epoch_size
-        Joint epoch length used by default :class:`.BatchManager` objects in
-        ``mode="resample"``.
+        Joint epoch policy used by default :class:`.BatchManager` objects:
+        ``"strict"``, ``"min"``, ``"max"``, or a positive integer. Automatic
+        multi-size optimization defaults to ``"max"``; direct managers default to
+        ``"strict"``.
     validation_strategy
         Validation strategy passed to :class:`.NegLogProbLoss` when ``loss`` is not
         supplied.
@@ -150,8 +150,7 @@ class LieselOptim:
         split_axes: dict[str, int | None] | None = None,
         default_split_axis: int = 0,
         shuffle_batches: bool = True,
-        batch_mode: Literal["strict", "resample"] = "resample",
-        epoch_size: Literal["max", "min"] | int = "max",
+        epoch_size: Literal["strict", "min", "max"] | int = "max",
         validation_strategy: Literal["log_lik", "log_prob"] = "log_lik",
         scale_loss: bool | Literal["auto"] = "auto",
         show_progress: bool = True,
@@ -198,7 +197,6 @@ class LieselOptim:
             split_axes=split_axes,
             default_split_axis=default_split_axis,
             shuffle=shuffle_batches,
-            mode=batch_mode,
             epoch_size=epoch_size,
         )
         self.optimizers = self._resolve_optimizers(optimizers)
@@ -300,8 +298,7 @@ class LieselOptim:
         split_axes: dict[str, int | None] | None,
         default_split_axis: int,
         shuffle: bool,
-        mode: Literal["strict", "resample"],
-        epoch_size: Literal["max", "min"] | int,
+        epoch_size: Literal["strict", "min", "max"] | int,
     ) -> BatchConfig:
         if batches is not None:
             return batches
@@ -316,7 +313,6 @@ class LieselOptim:
             shuffle=shuffle,
             batch_axes=batch_axes,
             default_batch_axis=default_split_axis,
-            mode=mode,
             epoch_size=epoch_size,
         )
 

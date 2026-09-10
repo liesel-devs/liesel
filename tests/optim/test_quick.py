@@ -64,6 +64,37 @@ def test_lieseloptim_requires_explicit_loss_monitor():
         LieselOptim(_normal_model())  # ty: ignore[missing-argument]
 
 
+def test_lieseloptim_removed_batch_mode_is_rejected():
+    with pytest.raises(TypeError):
+        LieselOptim(
+            _normal_model(),
+            loss_monitor="train_full_data",
+            batch_mode="resample",  # ty: ignore[unknown-argument]
+        )
+
+
+@pytest.mark.parametrize(("epoch_size", "expected"), [("max", 4), ("min", 2), (3, 3)])
+def test_lieseloptim_resolves_multi_branch_epoch_size(epoch_size, expected):
+    optimizer = LieselOptim(
+        _two_branch_model(),
+        loss_monitor="train_full_data",
+        batch_size=2,
+        epoch_size=epoch_size,
+    )
+    assert isinstance(optimizer.batches, BatchManager)
+    assert optimizer.batches.n_full_batches == expected
+
+
+def test_lieseloptim_strict_rejects_unequal_multi_branch_counts():
+    with pytest.raises(ValueError, match="same n_full_batches"):
+        LieselOptim(
+            _two_branch_model(),
+            loss_monitor="train_full_data",
+            batch_size=2,
+            epoch_size="strict",
+        )
+
+
 def test_lieseloptim_validation_monitor_requires_validation_data():
     with pytest.raises(ValueError, match="validation"):
         LieselOptim(_normal_model(), loss_monitor="validation")
