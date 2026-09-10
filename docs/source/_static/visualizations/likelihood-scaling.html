@@ -1054,8 +1054,24 @@ html&gt;body{padding:0}&lt;/style&gt;
     }
 
     #likelihood-scaling-explorer .lse-controls {
+      gap: 0.85rem;
+    }
+
+    #likelihood-scaling-explorer .lse-choice-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1rem;
+      align-items: start;
+    }
+
+    #likelihood-scaling-explorer .lse-range-grid {
+      display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 0.85rem 1rem;
+    }
+
+    #likelihood-scaling-explorer .lse-validation-note {
+      margin: 0;
     }
 
     #likelihood-scaling-explorer fieldset {
@@ -1071,13 +1087,8 @@ html&gt;body{padding:0}&lt;/style&gt;
       font-weight: 500;
     }
 
-    #likelihood-scaling-explorer .lse-loss-setting {
-      margin-top: 0.55rem;
-    }
-
     #likelihood-scaling-explorer .lse-button-row,
-    #likelihood-scaling-explorer .lse-legend,
-    #likelihood-scaling-explorer .lse-result-line {
+    #likelihood-scaling-explorer .lse-legend {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
@@ -1089,7 +1100,10 @@ html&gt;body{padding:0}&lt;/style&gt;
       gap: 0.15rem;
     }
 
-    #likelihood-scaling-explorer .lse-range[aria-hidden=&quot;true&quot;],
+    #likelihood-scaling-explorer .lse-range[aria-hidden=&quot;true&quot;] {
+      visibility: hidden;
+    }
+
     #likelihood-scaling-explorer .lse-branch[aria-hidden=&quot;true&quot;] {
       visibility: hidden;
     }
@@ -1168,22 +1182,73 @@ html&gt;body{padding:0}&lt;/style&gt;
       background: color-mix(in srgb, var(--viz-series-3) 58%, transparent);
     }
 
+    #likelihood-scaling-explorer .lse-scale-stage &gt; .viz-grid {
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
+    }
+
+    #likelihood-scaling-explorer .lse-scale-card,
     #likelihood-scaling-explorer .lse-scale-formula,
     #likelihood-scaling-explorer .lse-factor-equations {
       display: grid;
-      gap: 0.35rem;
+      gap: 0.65rem;
+    }
+
+    #likelihood-scaling-explorer .lse-scale-label {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+    }
+
+    #likelihood-scaling-explorer .lse-scale-label .lse-swatch {
+      flex: 0 0 auto;
     }
 
     #likelihood-scaling-explorer .lse-factor-row {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: baseline;
-      gap: 0.35rem 0.55rem;
+      display: grid;
+      grid-template-columns: minmax(3.5rem, 0.45fr) repeat(3, minmax(0, 1fr));
+      gap: 0.5rem 1rem;
+      align-items: start;
+      padding: 0.25rem 0;
     }
 
-    #likelihood-scaling-explorer .lse-factor-name {
-      min-width: 2.5rem;
-      font-weight: 500;
+    #likelihood-scaling-explorer .lse-factor-row + .lse-factor-row {
+      border-top: 1px solid var(--border);
+    }
+
+    #likelihood-scaling-explorer .lse-factor-term {
+      min-width: 0;
+      display: grid;
+      gap: 0.1rem;
+    }
+
+    #likelihood-scaling-explorer .lse-factor-term code {
+      justify-self: start;
+    }
+
+    #likelihood-scaling-explorer .lse-results {
+      display: grid;
+      gap: 0.5rem;
+      padding-top: 0.65rem;
+      border-top: 1px solid var(--border);
+    }
+
+    #likelihood-scaling-explorer .lse-result-line {
+      display: grid;
+      grid-template-columns: minmax(12rem, auto) minmax(0, 1fr) auto;
+      align-items: baseline;
+      gap: 0.35rem 0.75rem;
+    }
+
+    #likelihood-scaling-explorer .lse-result-expression {
+      min-width: 0;
+    }
+
+    #likelihood-scaling-explorer .lse-result-value {
+      display: inline-flex;
+      gap: 0.45rem;
+      justify-self: end;
+      white-space: nowrap;
     }
 
     #likelihood-scaling-explorer .lse-detail-controls {
@@ -1261,7 +1326,8 @@ html&gt;body{padding:0}&lt;/style&gt;
     }
 
     @media (max-width: 720px) {
-      #likelihood-scaling-explorer .lse-controls {
+      #likelihood-scaling-explorer .lse-choice-grid,
+      #likelihood-scaling-explorer .lse-range-grid {
         grid-template-columns: 1fr;
       }
 
@@ -1278,6 +1344,26 @@ html&gt;body{padding:0}&lt;/style&gt;
         justify-self: start;
       }
     }
+
+    @media (max-width: 560px) {
+      #likelihood-scaling-explorer .lse-factor-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      #likelihood-scaling-explorer .lse-result-line {
+        grid-template-columns: minmax(0, 1fr) auto;
+      }
+
+      #likelihood-scaling-explorer .lse-result-expression {
+        grid-column: 1 / -1;
+        grid-row: 2;
+      }
+
+      #likelihood-scaling-explorer .lse-result-value {
+        grid-column: 2;
+        grid-row: 1;
+      }
+    }
   &lt;/style&gt;
 
   &lt;div class=&quot;lse-heading&quot;&gt;
@@ -1287,52 +1373,55 @@ html&gt;body{padding:0}&lt;/style&gt;
   &lt;/div&gt;
 
   &lt;section class=&quot;lse-controls&quot; aria-label=&quot;Likelihood scaling controls&quot;&gt;
-    &lt;fieldset&gt;
-      &lt;legend&gt;Observed data&lt;/legend&gt;
-      &lt;div class=&quot;lse-button-row&quot;&gt;
-        &lt;button class=&quot;btn&quot; type=&quot;button&quot; data-layout=&quot;one&quot; aria-pressed=&quot;true&quot;&gt;One branch&lt;/button&gt;
-        &lt;button class=&quot;btn&quot; type=&quot;button&quot; data-layout=&quot;two&quot; aria-pressed=&quot;false&quot;&gt;Two sizes&lt;/button&gt;
-      &lt;/div&gt;
-    &lt;/fieldset&gt;
+    &lt;div class=&quot;lse-choice-grid&quot;&gt;
+      &lt;fieldset&gt;
+        &lt;legend&gt;Observed data&lt;/legend&gt;
+        &lt;div class=&quot;lse-button-row&quot;&gt;
+          &lt;button class=&quot;btn&quot; type=&quot;button&quot; data-layout=&quot;one&quot; aria-pressed=&quot;true&quot;&gt;One branch&lt;/button&gt;
+          &lt;button class=&quot;btn&quot; type=&quot;button&quot; data-layout=&quot;two&quot; aria-pressed=&quot;false&quot;&gt;Two sizes&lt;/button&gt;
+        &lt;/div&gt;
+      &lt;/fieldset&gt;
 
-    &lt;fieldset&gt;
-      &lt;legend&gt;&lt;code&gt;NegLogProbLoss&lt;/code&gt; settings&lt;/legend&gt;
-      &lt;div&gt;
-        &lt;div class=&quot;text-small text-muted&quot;&gt;Final normalization&lt;/div&gt;
+      &lt;fieldset&gt;
+        &lt;legend&gt;Final normalization&lt;/legend&gt;
         &lt;div class=&quot;lse-button-row&quot;&gt;
           &lt;button class=&quot;btn&quot; type=&quot;button&quot; data-normalize=&quot;false&quot; aria-pressed=&quot;true&quot;&gt;&lt;code&gt;scale=False&lt;/code&gt;&lt;/button&gt;
           &lt;button class=&quot;btn&quot; type=&quot;button&quot; data-normalize=&quot;true&quot; aria-pressed=&quot;false&quot;&gt;&lt;code&gt;scale=True&lt;/code&gt;&lt;/button&gt;
         &lt;/div&gt;
-      &lt;/div&gt;
-      &lt;div class=&quot;lse-loss-setting&quot;&gt;
-        &lt;div class=&quot;text-small text-muted&quot;&gt;Validation objective&lt;/div&gt;
+      &lt;/fieldset&gt;
+
+      &lt;fieldset&gt;
+        &lt;legend&gt;Validation objective&lt;/legend&gt;
         &lt;div class=&quot;lse-button-row&quot;&gt;
           &lt;button class=&quot;btn&quot; type=&quot;button&quot; data-strategy=&quot;log_lik&quot; aria-pressed=&quot;true&quot;&gt;&lt;code&gt;log_lik&lt;/code&gt;&lt;/button&gt;
           &lt;button class=&quot;btn&quot; type=&quot;button&quot; data-strategy=&quot;log_prob&quot; aria-pressed=&quot;false&quot;&gt;&lt;code&gt;log_prob&lt;/code&gt;&lt;/button&gt;
         &lt;/div&gt;
-        &lt;div class=&quot;text-small text-muted&quot;&gt;Usually prefer &lt;code&gt;log_lik&lt;/code&gt;: validation should measure fit to held-out observations, while the log-prior is not evidence supplied by those observations.&lt;/div&gt;
-      &lt;/div&gt;
-    &lt;/fieldset&gt;
+      &lt;/fieldset&gt;
+    &lt;/div&gt;
 
-    &lt;label class=&quot;lse-range&quot; for=&quot;lse-size-a&quot;&gt;
-      &lt;span class=&quot;lse-range-head&quot;&gt;Branch A observations · &lt;output id=&quot;lse-size-a-output&quot; for=&quot;lse-size-a&quot;&gt;100&lt;/output&gt;&lt;/span&gt;
-      &lt;input class=&quot;form-range&quot; id=&quot;lse-size-a&quot; type=&quot;range&quot; min=&quot;40&quot; max=&quot;120&quot; step=&quot;10&quot; value=&quot;100&quot;&gt;
-    &lt;/label&gt;
+    &lt;p class=&quot;text-small text-muted lse-validation-note&quot;&gt;For validation, prefer &lt;code&gt;log_lik&lt;/code&gt; to measure held-out fit; &lt;code&gt;log_prob&lt;/code&gt; also includes the prior.&lt;/p&gt;
 
-    &lt;label class=&quot;lse-range&quot; for=&quot;lse-size-b&quot; data-branch-b-control aria-hidden=&quot;true&quot;&gt;
-      &lt;span class=&quot;lse-range-head&quot;&gt;Branch B observations · &lt;output id=&quot;lse-size-b-output&quot; for=&quot;lse-size-b&quot;&gt;60&lt;/output&gt;&lt;/span&gt;
-      &lt;input class=&quot;form-range&quot; id=&quot;lse-size-b&quot; type=&quot;range&quot; min=&quot;40&quot; max=&quot;100&quot; step=&quot;10&quot; value=&quot;60&quot;&gt;
-    &lt;/label&gt;
+    &lt;div class=&quot;lse-range-grid&quot;&gt;
+      &lt;label class=&quot;lse-range&quot; for=&quot;lse-size-a&quot;&gt;
+        &lt;span class=&quot;lse-range-head&quot;&gt;Branch A observations · &lt;output id=&quot;lse-size-a-output&quot; for=&quot;lse-size-a&quot;&gt;100&lt;/output&gt;&lt;/span&gt;
+        &lt;input class=&quot;form-range&quot; id=&quot;lse-size-a&quot; type=&quot;range&quot; min=&quot;40&quot; max=&quot;120&quot; step=&quot;10&quot; value=&quot;100&quot;&gt;
+      &lt;/label&gt;
 
-    &lt;label class=&quot;lse-range&quot; for=&quot;lse-validation-share&quot;&gt;
-      &lt;span class=&quot;lse-range-head&quot;&gt;Validation share · &lt;output id=&quot;lse-validation-output&quot; for=&quot;lse-validation-share&quot;&gt;20%&lt;/output&gt;&lt;/span&gt;
-      &lt;input class=&quot;form-range&quot; id=&quot;lse-validation-share&quot; type=&quot;range&quot; min=&quot;10&quot; max=&quot;40&quot; step=&quot;5&quot; value=&quot;20&quot;&gt;
-    &lt;/label&gt;
+      &lt;label class=&quot;lse-range&quot; for=&quot;lse-size-b&quot; data-branch-b-control aria-hidden=&quot;true&quot;&gt;
+        &lt;span class=&quot;lse-range-head&quot;&gt;Branch B observations · &lt;output id=&quot;lse-size-b-output&quot; for=&quot;lse-size-b&quot;&gt;60&lt;/output&gt;&lt;/span&gt;
+        &lt;input class=&quot;form-range&quot; id=&quot;lse-size-b&quot; type=&quot;range&quot; min=&quot;40&quot; max=&quot;100&quot; step=&quot;10&quot; value=&quot;60&quot;&gt;
+      &lt;/label&gt;
 
-    &lt;label class=&quot;lse-range&quot; for=&quot;lse-batch-size&quot;&gt;
-      &lt;span class=&quot;lse-range-head&quot;&gt;Batch observations · &lt;output id=&quot;lse-batch-output&quot; for=&quot;lse-batch-size&quot;&gt;10&lt;/output&gt;&lt;/span&gt;
-      &lt;input class=&quot;form-range&quot; id=&quot;lse-batch-size&quot; type=&quot;range&quot; min=&quot;5&quot; max=&quot;20&quot; step=&quot;5&quot; value=&quot;10&quot;&gt;
-    &lt;/label&gt;
+      &lt;label class=&quot;lse-range&quot; for=&quot;lse-validation-share&quot;&gt;
+        &lt;span class=&quot;lse-range-head&quot;&gt;Validation share · &lt;output id=&quot;lse-validation-output&quot; for=&quot;lse-validation-share&quot;&gt;20%&lt;/output&gt;&lt;/span&gt;
+        &lt;input class=&quot;form-range&quot; id=&quot;lse-validation-share&quot; type=&quot;range&quot; min=&quot;10&quot; max=&quot;40&quot; step=&quot;5&quot; value=&quot;20&quot;&gt;
+      &lt;/label&gt;
+
+      &lt;label class=&quot;lse-range&quot; for=&quot;lse-batch-size&quot;&gt;
+        &lt;span class=&quot;lse-range-head&quot;&gt;Batch observations · &lt;output id=&quot;lse-batch-output&quot; for=&quot;lse-batch-size&quot;&gt;10&lt;/output&gt;&lt;/span&gt;
+        &lt;input class=&quot;form-range&quot; id=&quot;lse-batch-size&quot; type=&quot;range&quot; min=&quot;5&quot; max=&quot;20&quot; step=&quot;5&quot; value=&quot;10&quot;&gt;
+      &lt;/label&gt;
+    &lt;/div&gt;
   &lt;/section&gt;
 
   &lt;section class=&quot;lse-data&quot; aria-label=&quot;Selected training batch and validation data&quot;&gt;
@@ -1346,27 +1435,33 @@ html&gt;body{padding:0}&lt;/style&gt;
 
   &lt;section class=&quot;lse-scale-stage&quot; aria-label=&quot;Central likelihood scale factors&quot; aria-live=&quot;polite&quot;&gt;
     &lt;div class=&quot;viz-grid&quot;&gt;
-      &lt;article class=&quot;card viz-stat&quot;&gt;
-        &lt;div class=&quot;text-muted&quot;&gt;&lt;code&gt;batch_sample_scale&lt;/code&gt;&lt;/div&gt;
-        &lt;div class=&quot;viz-stat-value lse-batch-scale-values&quot;&gt;&lt;/div&gt;
+      &lt;article class=&quot;card lse-scale-card&quot;&gt;
+        &lt;div class=&quot;lse-scale-label&quot;&gt;
+          &lt;i class=&quot;lse-swatch lse-swatch-train&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;
+          &lt;strong&gt;Training mini-batch scaling&lt;/strong&gt;
+        &lt;/div&gt;
         &lt;div class=&quot;lse-scale-formula&quot;&gt;
-          &lt;code&gt;train_sample_size / batch_sample_size&lt;/code&gt;
           &lt;div class=&quot;lse-factor-equations lse-batch-factor-equations&quot;&gt;&lt;/div&gt;
           &lt;div class=&quot;text-small text-muted lse-batch-scale-owner&quot;&gt;&lt;/div&gt;
-          &lt;div class=&quot;lse-result-line lse-train-likelihood&quot;&gt;&lt;/div&gt;
-          &lt;div class=&quot;lse-result-line lse-train-loss&quot;&gt;&lt;/div&gt;
+          &lt;div class=&quot;lse-results&quot;&gt;
+            &lt;div class=&quot;lse-result-line lse-train-likelihood&quot;&gt;&lt;/div&gt;
+            &lt;div class=&quot;lse-result-line lse-train-loss&quot;&gt;&lt;/div&gt;
+          &lt;/div&gt;
         &lt;/div&gt;
       &lt;/article&gt;
 
-      &lt;article class=&quot;card viz-stat&quot;&gt;
-        &lt;div class=&quot;text-muted&quot;&gt;&lt;code&gt;validate_sample_scale&lt;/code&gt;&lt;/div&gt;
-        &lt;div class=&quot;viz-stat-value lse-validation-scale-values&quot;&gt;&lt;/div&gt;
+      &lt;article class=&quot;card lse-scale-card&quot;&gt;
+        &lt;div class=&quot;lse-scale-label&quot;&gt;
+          &lt;i class=&quot;lse-swatch lse-swatch-validation&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;
+          &lt;strong&gt;Validation split scaling&lt;/strong&gt;
+        &lt;/div&gt;
         &lt;div class=&quot;lse-scale-formula&quot;&gt;
-          &lt;code&gt;train_sample_size / validate_sample_size&lt;/code&gt;
           &lt;div class=&quot;lse-factor-equations lse-validation-factor-equations&quot;&gt;&lt;/div&gt;
           &lt;div class=&quot;text-small text-muted lse-validation-scale-owner&quot;&gt;&lt;/div&gt;
-          &lt;div class=&quot;lse-result-line lse-validation-likelihood&quot;&gt;&lt;/div&gt;
-          &lt;div class=&quot;lse-result-line lse-validation-loss&quot;&gt;&lt;/div&gt;
+          &lt;div class=&quot;lse-results&quot;&gt;
+            &lt;div class=&quot;lse-result-line lse-validation-likelihood&quot;&gt;&lt;/div&gt;
+            &lt;div class=&quot;lse-result-line lse-validation-loss&quot;&gt;&lt;/div&gt;
+          &lt;/div&gt;
         &lt;/div&gt;
       &lt;/article&gt;
     &lt;/div&gt;
@@ -1420,8 +1515,6 @@ html&gt;body{padding:0}&lt;/style&gt;
       };
       const branchesEl = root.querySelector(&quot;.lse-branches&quot;);
       const branchBControl = root.querySelector(&quot;[data-branch-b-control]&quot;);
-      const batchScaleValuesEl = root.querySelector(&quot;.lse-batch-scale-values&quot;);
-      const validationScaleValuesEl = root.querySelector(&quot;.lse-validation-scale-values&quot;);
       const batchFactorEquationsEl = root.querySelector(&quot;.lse-batch-factor-equations&quot;);
       const validationFactorEquationsEl = root.querySelector(&quot;.lse-validation-factor-equations&quot;);
       const batchScaleOwnerEl = root.querySelector(&quot;.lse-batch-scale-owner&quot;);
@@ -1558,24 +1651,35 @@ html&gt;body{padding:0}&lt;/style&gt;
         const scale = kind === &quot;batch&quot; ? item.batchScale : item.validationScale;
         const scaled = raw * scale;
         const row = text(&quot;div&quot;, &quot;lse-factor-row&quot;, &quot;&quot;);
+        const term = (label, value) =&gt; {
+          const element = text(&quot;span&quot;, &quot;lse-factor-term&quot;, &quot;&quot;);
+          element.append(
+            text(&quot;span&quot;, &quot;text-small text-muted&quot;, label),
+            code(value)
+          );
+          return element;
+        };
         row.append(
-          text(&quot;span&quot;, &quot;lse-factor-name&quot;, item.name),
-          code(format(raw)),
-          text(&quot;span&quot;, &quot;&quot;, &quot;×&quot;),
-          code(`${numerator} / ${denominator}`),
-          text(&quot;span&quot;, &quot;text-small text-muted&quot;, `(×${format(scale)})`),
-          text(&quot;span&quot;, &quot;&quot;, &quot;=&quot;),
-          code(format(scaled))
+          term(&quot;branch&quot;, item.name),
+          term(&quot;raw contribution&quot;, format(raw)),
+          term(&quot;scaling factor&quot;, `${numerator} / ${denominator} = ${format(scale)}×`),
+          term(&quot;full-data estimate&quot;, format(scaled))
         );
         return row;
       }
 
       function replaceLine(element, label, expression, value) {
-        element.replaceChildren(
-          text(&quot;strong&quot;, &quot;&quot;, label),
-          code(expression),
+        const expressionElement = text(&quot;span&quot;, &quot;lse-result-expression&quot;, &quot;&quot;);
+        expressionElement.append(code(expression));
+        const result = text(&quot;span&quot;, &quot;lse-result-value&quot;, &quot;&quot;);
+        result.append(
           text(&quot;span&quot;, &quot;&quot;, &quot;=&quot;),
           text(&quot;strong&quot;, &quot;lse-number lse-loss-value&quot;, format(value))
+        );
+        element.replaceChildren(
+          text(&quot;strong&quot;, &quot;&quot;, label),
+          expressionElement,
+          result
         );
       }
 
@@ -1608,12 +1712,6 @@ html&gt;body{padding:0}&lt;/style&gt;
 
         branchesEl.replaceChildren(...branches.map(renderDataBranch));
 
-        batchScaleValuesEl.textContent = branches
-          .map(item =&gt; isManager ? `${item.name}: ${format(item.batchScale)}` : format(item.batchScale))
-          .join(&quot; · &quot;);
-        validationScaleValuesEl.textContent = branches
-          .map(item =&gt; isManager ? `${item.name}: ${format(item.validationScale)}` : format(item.validationScale))
-          .join(&quot; · &quot;);
         batchFactorEquationsEl.replaceChildren(
           ...branches.map(item =&gt; renderFactor(item, &quot;batch&quot;))
         );
