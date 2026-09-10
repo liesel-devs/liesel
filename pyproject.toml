@@ -49,7 +49,7 @@ Repository = "https://github.com/liesel-devs/liesel.git"
 
 [dependency-groups]
 dev = [
-    "ruff>=0.11.7",
+    "ruff>=0.16.0",
     "myst-nb>=1.0.0",
     "pre-commit>=4.6.0",
     "pydata-sphinx-theme>=0.18.0",
@@ -88,6 +88,9 @@ filterwarnings = [
     # Needed when testing against the minimum supported version.
     "ignore:JAXopt is no longer maintained:DeprecationWarning",
 ]
+
+[tool.ruff]
+extension = { qmd = "markdown" }
 
 [tool.ruff.lint]
 extend-select = [
