@@ -13,12 +13,6 @@ import liesel.goose as gs
 import liesel.model as lsl
 
 
-def _require_bijected_var(var: lsl.Var) -> lsl.Var:
-    bijected_var = var.bijected_var
-    assert bijected_var is not None
-    return bijected_var
-
-
 class TestBijectParametersValidation:
     """Test validation in Dist.biject_parameters."""
 
@@ -388,11 +382,29 @@ class TestBijectParametersSuccess:
         dist = lsl.Dist(tfd.Gamma, concentration, scale)
         assert dist._dtype == jnp.dtype("float64")
         dist.biject_parameters()
-        assert _require_bijected_var(concentration).value.dtype == jnp.dtype("float64")
+        assert concentration.bijected_var.value.dtype == jnp.dtype("float64")
         jax.config.update("jax_enable_x64", False)
 
 
 class TestVarBiject:
+    def test_bijected_var_requires_transformation(self):
+        variance = lsl.Var.new_param(1.0, name="variance")
+
+        assert not variance.has_bijected_var
+        assert variance.parameter
+        with pytest.raises(RuntimeError, match="variance.*has no bijected variable"):
+            _ = variance.bijected_var
+
+    def test_bijected_var_accepts_array_assignment(self):
+        variance = lsl.Var.new_param(1.0, name="variance", bijector=tfb.Exp())
+
+        assert variance.has_bijected_var
+        log_variance = variance.bijected_var
+        assert log_variance.parameter
+        log_variance.value = jnp.log(0.5)
+
+        assert variance.update().value == pytest.approx(0.5)
+
     def test_bijected_var_manually(self):
         log_scale = lsl.Var.new_param(1.0, name="log_scale")
         scale = lsl.Var.new_calc(jnp.exp, log_scale)
@@ -416,16 +428,16 @@ class TestVarBiject:
         scale = lsl.Var.new_param(1.0, name="scale")
         scale.biject(tfb.Exp())
 
-        assert _require_bijected_var(scale).name == "h(scale)"
+        assert scale.bijected_var.name == "h(scale)"
 
     def test_bijected_var_from_transform(self):
         scale = lsl.Var.new_param(1.0, name="scale")
         scale.transform(tfb.Exp())
 
-        assert _require_bijected_var(scale).name == "scale_transformed"
+        assert scale.bijected_var.name == "scale_transformed"
 
     def test_unnamed_bijected_var(self):
         scale = lsl.Var.new_param(1.0)
         scale.transform(tfb.Exp())
 
-        assert _require_bijected_var(scale).name == ""
+        assert scale.bijected_var.name == ""

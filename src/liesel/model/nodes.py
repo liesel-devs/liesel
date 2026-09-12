@@ -1958,7 +1958,7 @@ class Var:
             distribution=distribution,
         )
         var.value_node.monitor = True
-        if var.bijected_var is not None:
+        if var.has_bijected_var:
             var.bijected_var.parameter = True
         else:
             var.parameter = True
@@ -2580,11 +2580,22 @@ class Var:
         return self
 
     @property
-    def bijected_var(self) -> Var | None:
+    def bijected_var(self) -> Var:
         """
         Transformed variable.
         Either supplied manually or automatically created by :meth:`.biject`.
+
+        Raises
+        ------
+        RuntimeError
+            If no bijected variable exists. Use :attr:`.has_bijected_var` to check
+            whether one exists without raising an error.
         """
+        if self._bijected_var is None:
+            raise RuntimeError(
+                f"{self} has no bijected variable. "
+                "Apply .biject() or .transform() first, or assign .bijected_var."
+            )
         return self._bijected_var
 
     @bijected_var.setter
@@ -2598,6 +2609,11 @@ class Var:
             raise ValueError(f"{value} is on in the inputs or kwinputs of {self}")
 
         self._bijected_var = value
+
+    @property
+    def has_bijected_var(self) -> bool:
+        """Whether a transformed variable has been created or supplied manually."""
+        return self._bijected_var is not None
 
     @in_model_method
     def all_output_nodes(
