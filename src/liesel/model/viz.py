@@ -143,7 +143,7 @@ def _prepare_figure(graph, width, height, prog):
         nodes = list(graph)
         graphviz_graph = nx.convert_node_labels_to_integers(graph)
         graphviz_pos = nx.nx_pydot.pydot_layout(graphviz_graph, prog=prog)
-        pos = {nodes[node]: position for node, position in graphviz_pos.items()}
+        pos = {nodes[int(node)]: position for node, position in graphviz_pos.items()}
     except FileNotFoundError:
         logger.warning(
             "Graphviz not found in PATH. Using fallback graph layout. "
