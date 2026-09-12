@@ -1,6 +1,7 @@
 import pickle
 
 import dill
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -34,6 +35,10 @@ class TestVarTransform:
             assert x_batched_transformed.name == name
 
         assert x_batched_transformed.value == pytest.approx(jnp.log(x.value[1]))
+
+        x_batched, x_batched_transformed, batch_index = dill.loads(
+            dill.dumps((x_batched, x_batched_transformed, batch_index))
+        )
 
         batch_index.value = 2
         x_batched_transformed.update()
@@ -181,6 +186,36 @@ class TestVarTransform:
         tau = lsl.Var(10.0, prior, name="tau")
         with pytest.raises(ValueError):
             tau.transform(tfp.bijectors.Exp)
+
+    @pytest.mark.parametrize("method", ("transform", "biject"))
+    def test_bijector_instance_roundtrip(self, method, tmp_path) -> None:
+        prior = lsl.Dist(tfp.distributions.InverseGamma, concentration=2.0, scale=1.0)
+        variance = lsl.Var.new_param(2.0, prior, name="variance")
+        model = lsl.Model([variance])
+        getattr(variance, method)(tfp.bijectors.Exp(), name="log_variance")
+
+        assert variance.weak
+        assert not variance.parameter
+        assert model.vars["log_variance"].strong
+        assert model.vars["log_variance"].parameter
+        assert model.vars["log_variance"].value == pytest.approx(np.log(2.0))
+
+        filename = str(tmp_path / "model.pkl")
+        lsl.save_model(model, filename)
+        loaded = lsl.load_model(filename)
+
+        def log_prob(value, state):
+            updated = loaded.update_state({"log_variance": value}, state)
+            return updated["_model_log_prob"].value
+
+        # Pass the whole state through JIT, as Goose does during sampling.
+        value, gradient = jax.jit(jax.value_and_grad(log_prob))(
+            jnp.log(2.0), loaded.state
+        )
+        assert value == pytest.approx(-2.0 * np.log(2.0) - 0.5)
+        assert gradient == pytest.approx(-1.5)
+        loaded.vars["log_variance"].value = jnp.log(0.5)
+        assert loaded.vars["variance"].value == pytest.approx(0.5)
 
     @pytest.mark.parametrize("name", ("newname", None))
     def test_transform_class_with_args(self, name) -> None:
