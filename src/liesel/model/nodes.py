@@ -2980,8 +2980,8 @@ class Var:
         self,
         show: bool = True,
         save_path: str | None | IO = None,
-        width: int = 14,
-        height: int = 10,
+        width: float = 14,
+        height: float = 10,
         prog: Literal[
             "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
         ] = "dot",
@@ -3041,8 +3041,8 @@ class Var:
         self,
         show: bool = True,
         save_path: str | None | IO = None,
-        width: int = 14,
-        height: int = 10,
+        width: float = 14,
+        height: float = 10,
         prog: Literal[
             "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
         ] = "dot",
@@ -3274,8 +3274,8 @@ class Var:
         self,
         show: bool = True,
         save_path: str | None | IO = None,
-        width: int = 14,
-        height: int = 10,
+        width: float = 14,
+        height: float = 10,
         prog: Literal[
             "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
         ] = "dot",
