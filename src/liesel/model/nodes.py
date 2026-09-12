@@ -3334,10 +3334,11 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
     inputs = dist_node.inputs
     kwinputs: dict[str, Any] = dict(dist_node.kwinputs)
 
-    bijector_inv = jb.Invert(bijector_inst)
-
     def transform_dist(*args, **kwargs):
-        return jd.TransformedDistribution(InputDist(*args, **kwargs), bijector_inv)
+        # Construct Invert here: capturing it prevents saved models from reloading.
+        return jd.TransformedDistribution(
+            InputDist(*args, **kwargs), jb.Invert(bijector_inst)
+        )
 
     transformed_dist = Dist(
         transform_dist,
@@ -3359,7 +3360,7 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
             )
 
         def forward(*args, **kwargs):
-            return bijector_inv.forward(value_node.function(*args, **kwargs))
+            return bijector_inst.inverse(value_node.function(*args, **kwargs))
 
         value_inputs = value_node.inputs
         value_kwinputs = value_node.kwinputs
@@ -3381,7 +3382,7 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
         )
     else:
         transformed_var = Var(
-            bijector_inv.forward(var.value),
+            bijector_inst.inverse(var.value),
             transformed_dist,
             name=f"{var.name}_transformed",
         )
