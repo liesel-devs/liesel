@@ -2092,11 +2092,16 @@ class Model:
 
         return model
 
-    def copy_vars(self) -> dict[str, Var]:
-        """Returns an unfrozen deep copy of the model variables."""
+    def copy_vars(self) -> dict[str, Any]:
+        """
+        Returns an unfrozen deep copy of the model variables.
+
+        Values are dynamically typed, as in :attr:`.vars`, so callers can use
+        subclass-specific methods on variables retrieved by name.
+        """
         return self.copy_nodes_and_vars()[1]
 
-    def copy_nodes_and_vars(self) -> tuple[dict[str, Node], dict[str, Var]]:
+    def copy_nodes_and_vars(self) -> tuple[dict[str, Node], dict[str, Any]]:
         """Returns an unfrozen deep copy of the model nodes and variables."""
         nodes, _vars = deepcopy((self._nodes, self._vars))
 
@@ -2668,19 +2673,32 @@ class Model:
         return self._var_graph
 
     @_KeyCompletableProperty
-    def vars(self) -> _KeyCompletableMapping[Var]:
-        """A mapping of the model variables with their names as keys."""
+    def vars(self) -> _KeyCompletableMapping[Any]:
+        """
+        A mapping of the model variables with their names as keys.
+
+        Values are typed as :obj:`~typing.Any`: names are determined at runtime
+        and may refer to different :class:`.Var` subclasses. This permits
+        subclass-specific operations after lookup without casts. Static type
+        checking of retrieved values is therefore left to the caller.
+        """
         return _KeyCompletableMapping(self._vars)
 
     @_KeyCompletableProperty
-    def parameters(self) -> _KeyCompletableMapping[Var]:
-        """A mapping of the model parameters with their names as keys."""
+    def parameters(self) -> _KeyCompletableMapping[Any]:
+        """A mapping of the model parameters with their names as keys.
+
+        Values are dynamically typed, as in :attr:`.vars`.
+        """
         params = {k: v for k, v in self._vars.items() if v.parameter}
         return _KeyCompletableMapping(params)
 
     @_KeyCompletableProperty
-    def observed(self) -> _KeyCompletableMapping[Var]:
-        """A mapping of the observed model variables with their names as keys."""
+    def observed(self) -> _KeyCompletableMapping[Any]:
+        """A mapping of the observed model variables with their names as keys.
+
+        Values are dynamically typed, as in :attr:`.vars`.
+        """
         observed = {k: v for k, v in self._vars.items() if v.observed}
         return _KeyCompletableMapping(observed)
 
@@ -3387,7 +3405,7 @@ class TemporaryModel:
 
 
 def log_prob_pointwise(
-    vars_: dict[str, Var],
+    vars_: Mapping[str, Var],
     samples: Position,
     newdata: Position | None = None,
 ) -> dict[str, jax.Array]:
@@ -3397,7 +3415,8 @@ def log_prob_pointwise(
     Parameters
     ----------
     vars_
-        Dictionary of variables for which to evaluate log probs.
+        Mapping of variables for which to evaluate log probs, such as
+        :attr:`.Model.observed`.
     samples
         Dictionary of samples at which to evaluate log probs. If ``samples`` contains
         entries for weak variables or for nodes in :attr:`.model_nodes` they are
