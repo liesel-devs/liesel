@@ -3684,8 +3684,13 @@ class Group:
         return model_state[value_name].value
 
     @_KeyCompletableProperty
-    def vars(self) -> _KeyCompletableMapping[Var]:
-        """A mapping of the variables in the group with their names as keys."""
+    def vars(self) -> _KeyCompletableMapping[Any]:
+        """
+        A mapping of the variables in the group with their names as keys.
+
+        Values are dynamically typed to allow subclass-specific operations after
+        lookup, as in :attr:`.Model.vars`.
+        """
         return _KeyCompletableMapping(self._vars)
 
     @_KeyCompletableProperty
@@ -3694,14 +3699,19 @@ class Group:
         return _KeyCompletableMapping(self._nodes)
 
     @_KeyCompletableProperty
-    def nodes_and_vars(self) -> _KeyCompletableMapping[Node | Var]:
-        """A mapping of all group members with their names as keys."""
+    def nodes_and_vars(self) -> _KeyCompletableMapping[Any]:
+        """
+        A mapping of all group members with their names as keys.
+
+        Values are dynamically typed, as in :attr:`.vars`.
+        """
         return _KeyCompletableMapping(self._nodes_and_vars)
 
     def __contains__(self, key) -> bool:
         return key in self._nodes_and_vars
 
-    def __getitem__(self, key) -> Var | Node:
+    def __getitem__(self, key: str) -> Any:
+        """Retrieve a dynamically typed member by its group-specific name."""
         return self._nodes_and_vars[key]
 
     def __repr__(self) -> str:
