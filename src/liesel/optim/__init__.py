@@ -12,6 +12,7 @@ from .split import PositionSplit as PositionSplit
 from .split import PositionSplitManager as PositionSplitManager
 from .split import Split as Split
 from .split import SplitManager as SplitManager
+from .state import OptimCheckpoint as OptimCheckpoint
 from .state import OptimNaNDebugInfo as OptimNaNDebugInfo
 from .stop import Stopper as Stopper
 
@@ -23,6 +24,7 @@ __all__ = [
     "LieselOptim",
     "LossMonitor",
     "NegLogProbLoss",
+    "OptimCheckpoint",
     "OptimEngine",
     "OptimNaNDebugInfo",
     "Optimizer",

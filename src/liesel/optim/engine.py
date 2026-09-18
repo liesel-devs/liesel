@@ -8,11 +8,15 @@ is useful for custom losses or optimizer schedules.
 
 from __future__ import annotations
 
+import logging
 import math
+import os
 import sys
 import time
-from collections.abc import Sequence
-from dataclasses import dataclass
+import warnings
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Literal
 
 import jax
@@ -28,8 +32,8 @@ from ._engine_utils import (
     _validate_positive_int,
 )
 from .batch import Batches
-from .loss import Loss
-from .optimizer import LBFGS, OptimizerLike
+from .loss import Loss, NegLogProbLoss
+from .optimizer import LBFGS, Optimizer, OptimizerLike
 from .split import PositionSplitManager
 from .state import (
     _NAN_DEBUG_KIND_LOSS,
@@ -37,15 +41,19 @@ from .state import (
     _NAN_DEBUG_KIND_POSITION_AFTER,
     _NAN_DEBUG_KIND_POSITION_BEFORE,
     OptimCarry,
+    OptimCheckpoint,
     OptimHistory,
     OptimNaNDebugInfo,
     OptimNaNDebugState,
     OptimResult,
+    _checkpoint_versions,
 )
 from .stop import Stopper
 from .types import ModelState, Position
 
 __all__ = ["EmaTrainLossMonitor", "LossMonitor", "OptimEngine"]
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -240,7 +248,7 @@ class OptimEngine:
     indexing convention. Built-in :class:`.LBFGS` is accepted only with full-data
     batches and also requires a deterministic objective, which the engine cannot
     validate. Exact monitor minima retain the post-update position used for the
-    evaluation. An EMA minimum instead retains the associated epoch-end checkpoint;
+    evaluation. An EMA minimum instead retains the associated parameter snapshot;
     because an EMA combines losses from several positions, it is not an exact
     loss-position pairing.
 
@@ -557,19 +565,120 @@ class OptimEngine:
                 opt.identifier = f"{i:03}"
         return self.optimizers
 
-    def fit(self) -> OptimResult:
+    def fit(
+        self,
+        *,
+        checkpoint: OptimCheckpoint | str | os.PathLike[str] | None = None,
+        pause_after: int | None = None,
+        checkpoint_every: int = 10,
+        allow_version_mismatch: bool = False,
+    ) -> OptimResult:
         """
         Runs optimization and returns processed results.
+
+        Parameters
+        ----------
+        checkpoint
+            ``None`` starts fresh in memory. An :class:`.OptimCheckpoint` resumes
+            in memory. A path selects a persistent run: load it if present, or
+            start fresh if absent, and save subsequent checkpoints there. The
+            parent directory must exist. Only load trusted checkpoint files.
+        pause_after
+            Maximum additional epochs for this call. Pausing preserves optimizer
+            state in ``result.checkpoint``. The stopper still owns the total epoch
+            budget; change ``engine.stopper.epochs`` to extend it explicitly.
+        checkpoint_every
+            Save every this many completed epochs when a path is supplied, by
+            default 10. Also save at a deliberate pause or normal completion.
+            A NaN failure leaves the last saved file intact.
+        allow_version_mismatch
+            Attempt recovery despite differing Liesel, JAX, jaxlib, Optax, or
+            NumPy versions, issuing a warning. Structural checks still apply.
 
         Returns
         -------
         OptimResult
             Processed optimizer history, recommended and diagnostic positions,
-            monitoring provenance, and wall-clock runtime.
+            monitoring provenance, cumulative active runtime, status, and an
+            independent checkpoint for continuation (``None`` on NaN failure).
+
+        Notes
+        -----
+        Reconstruct the same model, data, and optimizer settings before resuming.
+        Parameter and observed-variable names, shapes, and dtypes must agree.
+        Compatibility checks cannot detect changed data or learning rates.
+        A failed checkpoint write raises and preserves the previous file.
+        Interruptions recover from the last successful periodic save.
         """
-        start = time.time()
-        carry = self._fit()
-        end = time.time()
+        self.stopper.__post_init__()
+        self.__post_init__()
+        _validate_positive_int(checkpoint_every, "checkpoint_every")
+        start = time.monotonic()
+        checkpoint_path = (
+            Path(checkpoint) if isinstance(checkpoint, (str, os.PathLike)) else None
+        )
+        if checkpoint_path is not None:
+            try:
+                checkpoint_path.lstat()
+            except FileNotFoundError:
+                checkpoint = None
+            else:
+                checkpoint = OptimCheckpoint.load(checkpoint_path)
+        if checkpoint is not None and not isinstance(checkpoint, OptimCheckpoint):
+            raise TypeError("checkpoint must be an OptimCheckpoint, path, or None.")
+        if not isinstance(allow_version_mismatch, bool):
+            raise TypeError("allow_version_mismatch must be a boolean.")
+        if checkpoint is not None:
+            versions = _checkpoint_versions()
+            differences = [
+                f"{name}: saved={checkpoint.versions.get(name)!r}, current={current!r}"
+                for name, current in versions.items()
+                if checkpoint.versions.get(name) != current
+            ]
+            if differences:
+                message = "Checkpoint version mismatch: " + "; ".join(differences)
+                if not allow_version_mismatch:
+                    raise ValueError(
+                        message
+                        + ". Set allow_version_mismatch=True to attempt recovery."
+                    )
+                warnings.warn(message, UserWarning, stacklevel=2)
+        if pause_after is not None:
+            _validate_positive_int(pause_after, "pause_after")
+        carry = (
+            self._init_carry(self.stopper.epochs)
+            if checkpoint is None
+            else self._restore_carry(checkpoint)
+        )
+        end_epoch = self.stopper.epochs
+        if pause_after is not None:
+            end_epoch = min(end_epoch, int(carry.epoch) + pause_after)
+        logger.info(
+            "%s optimization at epoch %s%s",
+            "Initializing" if checkpoint is None else "Resuming",
+            int(carry.epoch),
+            f" ({checkpoint_path})" if checkpoint_path is not None else "",
+        )
+        previous_duration = checkpoint.duration if checkpoint is not None else 0.0
+
+        def save_checkpoint(carry: OptimCarry) -> None:
+            assert checkpoint_path is not None
+            jax.block_until_ready(carry)
+            snapshot = jax.tree.map(lambda x: x, carry)
+            snapshot.history = self._process_history(snapshot.epoch, snapshot.history)
+            self._make_checkpoint(
+                snapshot, previous_duration + time.monotonic() - start
+            ).save(checkpoint_path)
+
+        carry = self._fit(
+            carry,
+            end_epoch,
+            checkpoint_every,
+            save_checkpoint if checkpoint_path is not None else None,
+        )
+        jax.block_until_ready(carry)
+        duration = previous_duration + time.monotonic() - start
+        status = self._fit_status(carry)
         nan_debug = self._nan_debug_info(carry)
         history = self._process_history(carry.epoch, carry.history)
         n_epochs = int(carry.epoch)
@@ -602,10 +711,127 @@ class OptimEngine:
             min_monitor_epoch=min_monitor_epoch,
             monitor_source=monitor_source,
             patience=self.stopper.patience,
-            duration=end - start,
+            duration=duration,
             nan_debug=nan_debug,
+            status=status,
+            checkpoint=(
+                None if status == "nan" else self._make_checkpoint(carry, duration)
+            ),
         )
+        result.duration = previous_duration + time.monotonic() - start
+        if result.checkpoint is not None:
+            result.checkpoint = replace(result.checkpoint, duration=result.duration)
+        if checkpoint_path is not None and result.checkpoint is not None:
+            result.checkpoint.save(checkpoint_path)
+            result.duration = previous_duration + time.monotonic() - start
+            result.checkpoint = replace(result.checkpoint, duration=result.duration)
         return result
+
+    def _can_rebuild_model_state(self) -> bool:
+        # Only these concrete implementations leave the evaluation template unchanged.
+        return type(self.loss) is NegLogProbLoss and all(
+            type(opt) in (Optimizer, LBFGS) for opt in self.optimizers
+        )
+
+    def _data_structure(self) -> tuple:
+        return tuple(
+            {
+                name: (jnp.shape(value), str(jnp.asarray(value).dtype))
+                for name, value in part.items()
+            }
+            for part in (self.split.train, self.split.validate, self.split.test)
+        )
+
+    def _make_checkpoint(self, carry: OptimCarry, duration: float) -> OptimCheckpoint:
+        snapshot = jax.tree.map(lambda x: x, carry)
+        rebuild_model_state = self._can_rebuild_model_state()
+        if rebuild_model_state:
+            # Reconstruct this static template from the caller's model. Internal
+            # anonymous node names may differ between otherwise identical models.
+            snapshot.model_state = {}
+            if snapshot.nan_debug_state is not None:
+                snapshot.nan_debug_state.reproduction_model_state = {}
+        return OptimCheckpoint(
+            snapshot,
+            duration,
+            _rebuild_model_state=rebuild_model_state,
+            _data_structure=self._data_structure(),
+        )
+
+    def _restore_carry(self, checkpoint: OptimCheckpoint) -> OptimCarry:
+        """Copies snapshot containers and restores the working history capacity."""
+        position = self.loss.position(self.position_keys)
+        self._validate_checkpoint_tree(checkpoint._carry.position, position, "position")
+        if checkpoint._data_structure != self._data_structure():
+            raise ValueError(
+                "Checkpoint data structure (names, shapes or dtypes) differs."
+            )
+        states = {opt.identifier: opt.init(position) for opt in self.optimizers}
+        self._validate_checkpoint_tree(
+            checkpoint._carry.optimizer_states, states, "optimizer state"
+        )
+        if checkpoint._rebuild_model_state:
+            if not self._can_rebuild_model_state():
+                raise ValueError(
+                    "Checkpoint requires the built-in loss and optimizers."
+                )
+        else:
+            self._validate_checkpoint_tree(
+                checkpoint._carry.model_state, self.initial_state, "model state"
+            )
+        if jax.tree.structure(checkpoint._carry.batches) != jax.tree.structure(
+            self.batches
+        ):
+            raise ValueError("Checkpoint batch configuration is incompatible.")
+        if (checkpoint._carry.nan_debug_state is not None) != self.debug_nans:
+            raise ValueError("Checkpoint debug_nans setting is incompatible.")
+        if (checkpoint.history.position is not None) != self.save_position_history:
+            raise ValueError(
+                "Checkpoint save_position_history setting is incompatible."
+            )
+        carry = jax.tree.map(lambda x: x, checkpoint._carry)
+        if checkpoint._rebuild_model_state:
+            carry.model_state = jax.tree.map(lambda x: x, self.initial_state)
+            if carry.nan_debug_state is not None:
+                carry.nan_debug_state.reproduction_model_state = jax.tree.map(
+                    lambda x: x, self.initial_state
+                )
+        n = int(carry.epoch)
+        capacity = max(n, self.stopper.epochs)
+        history = OptimHistory.from_epochs(
+            capacity,
+            carry.position if carry.history.position is not None else None,
+            carry.tracked if carry.history.tracked is not None else None,
+            carry.history.loss_train.dtype,
+        )
+        carry.history = jax.tree.map(
+            lambda empty, saved: empty.at[:n].set(saved[:n]), history, carry.history
+        )
+        return carry
+
+    @staticmethod
+    def _validate_checkpoint_tree(saved, expected, name: str) -> None:
+        if jax.tree.structure(saved) != jax.tree.structure(expected):
+            raise ValueError(f"Checkpoint {name} structure is incompatible.")
+        for a, b in zip(jax.tree.leaves(saved), jax.tree.leaves(expected), strict=True):
+            if (
+                jnp.shape(a) != jnp.shape(b)
+                or jnp.asarray(a).dtype != jnp.asarray(b).dtype
+            ):
+                raise ValueError(
+                    f"Checkpoint {name} shapes or dtypes are incompatible."
+                )
+
+    def _fit_status(self, carry: OptimCarry):
+        if bool(jnp.isnan(carry.loss_train) | jnp.isnan(carry.loss_monitor)) or (
+            carry.nan_debug_state is not None and bool(carry.nan_debug_state.has_nan)
+        ):
+            return "nan"
+        if int(carry.epoch) >= self.stopper.epochs:
+            return "max_epochs"
+        if not bool(self._continue_fit(carry)):
+            return "early_stopping"
+        return "paused"
 
     def _nan_debug_info(self, carry: OptimCarry) -> OptimNaNDebugInfo | None:
         if not self.debug_nans:
@@ -1345,10 +1571,10 @@ class OptimEngine:
 
         return carry
 
-    def _fit_monolithic(self, carry: OptimCarry) -> OptimCarry:
+    def _fit_monolithic(self, carry: OptimCarry, end_epoch: int) -> OptimCarry:
         """Runs the full fit as one JAX loop without host synchronization."""
         return jax.lax.while_loop(
-            cond_fun=self._continue_fit,
+            cond_fun=lambda c: self._continue_fit(c) & (c.epoch < end_epoch),
             body_fun=self._run_epoch,
             init_val=carry,
         )
@@ -1400,14 +1626,30 @@ class OptimEngine:
             # Progress display cleanup must not replace an optimization error.
             pass
 
-    def _fit_epoch_chunks(self, carry: OptimCarry, progress_bar) -> OptimCarry:
+    def _fit_epoch_chunks(
+        self,
+        carry: OptimCarry,
+        progress_bar,
+        end_epoch: int,
+        checkpoint_every: int,
+        save_checkpoint: Callable[[OptimCarry], None] | None,
+    ) -> OptimCarry:
         """Runs dynamic epoch chunks and updates progress on the host."""
-        update_every = self.progress_update_every
-        max_epochs = self.stopper.epochs
+        update_every = (
+            self.progress_update_every if progress_bar is not None else end_epoch
+        )
+        max_epochs = end_epoch
 
         @jax.jit
         def run_chunk(carry: OptimCarry):
-            target_epoch = jnp.minimum(carry.epoch + update_every, max_epochs)
+            target_epoch = jnp.minimum(
+                (carry.epoch // update_every + 1) * update_every, max_epochs
+            )
+            if save_checkpoint is not None:
+                target_epoch = jnp.minimum(
+                    target_epoch,
+                    (carry.epoch // checkpoint_every + 1) * checkpoint_every,
+                )
 
             def continue_chunk(carry: OptimCarry) -> jax.Array:
                 return jnp.logical_and(
@@ -1420,7 +1662,7 @@ class OptimEngine:
                 carry.epoch,
                 loss_train,
                 loss_monitor,
-                self._continue_fit(carry),
+                self._continue_fit(carry) & (carry.epoch < end_epoch),
             )
             return carry, status
 
@@ -1432,13 +1674,20 @@ class OptimEngine:
             completed, loss_train, loss_monitor, continue_value = jax.device_get(status)
             completed_epochs = int(completed)
             should_continue = bool(continue_value)
-            rendered_epochs = self._update_outer_progress(
-                progress_bar,
-                rendered_epochs,
-                completed_epochs,
-                loss_train,
-                loss_monitor,
-            )
+            if not should_continue or completed_epochs % update_every == 0:
+                rendered_epochs = self._update_outer_progress(
+                    progress_bar,
+                    rendered_epochs,
+                    completed_epochs,
+                    loss_train,
+                    loss_monitor,
+                )
+            if (
+                should_continue
+                and save_checkpoint is not None
+                and completed_epochs % checkpoint_every == 0
+            ):
+                save_checkpoint(carry)
 
             # A zero-length chunk can only occur when the initial carry should stop.
             if completed_epochs == 0:
@@ -1447,7 +1696,13 @@ class OptimEngine:
         return carry
 
     def _fit_nested_progress(
-        self, carry: OptimCarry, outer_progress_bar, use_nested_bars: bool
+        self,
+        carry: OptimCarry,
+        outer_progress_bar,
+        use_nested_bars: bool,
+        end_epoch: int,
+        checkpoint_every: int,
+        save_checkpoint: Callable[[OptimCarry], None] | None,
     ) -> OptimCarry:
         """Runs batch chunks and updates step progress on the host."""
         n_batches = self.batches.n_full_batches
@@ -1490,14 +1745,16 @@ class OptimEngine:
                 carry.epoch,
                 loss_train,
                 loss_monitor,
-                self._continue_fit(carry),
+                self._continue_fit(carry) & (carry.epoch < end_epoch),
             )
             return carry, status
 
         inner_progress_bar = None
         rendered_epochs = 0
-        completed_epochs = 0
-        should_continue = True
+        completed_epochs = int(carry.epoch)
+        should_continue = (
+            bool(self._continue_fit(carry)) and completed_epochs < end_epoch
+        )
 
         try:
             while should_continue:
@@ -1576,6 +1833,12 @@ class OptimEngine:
                         ) = jax.device_get(status)
                         completed_epochs = int(completed)
                         should_continue = bool(continue_value)
+                        if (
+                            should_continue
+                            and save_checkpoint is not None
+                            and completed_epochs % checkpoint_every == 0
+                        ):
+                            save_checkpoint(carry)
                         if batch_progress_bar is not None and not use_nested_bars:
                             batch_progress_bar.set_description_str(
                                 self._shared_progress_description(
@@ -1606,7 +1869,13 @@ class OptimEngine:
 
         return carry
 
-    def _fit(self) -> OptimCarry:
+    def _fit(
+        self,
+        carry: OptimCarry,
+        end_epoch: int,
+        checkpoint_every: int,
+        save_checkpoint: Callable[[OptimCarry], None] | None,
+    ) -> OptimCarry:
         """
         Runs optimization with host-controlled progress updates.
 
@@ -1615,10 +1884,12 @@ class OptimEngine:
         notebook output is never written from a JAX callback thread.
         """
         self._validate_progress_settings()
-        carry = self._init_carry(self.stopper.epochs)
-
         if not self.show_progress:
-            return self._fit_monolithic(carry)
+            if save_checkpoint is None:
+                return self._fit_monolithic(carry, end_epoch)
+            return self._fit_epoch_chunks(
+                carry, None, end_epoch, checkpoint_every, save_checkpoint
+            )
 
         use_nested_progress = (
             self.show_step_progress
@@ -1655,12 +1926,26 @@ class OptimEngine:
         try:
             if use_nested_progress:
                 carry = self._fit_nested_progress(
-                    carry, outer_progress_bar, use_nested_bars
+                    carry,
+                    outer_progress_bar,
+                    use_nested_bars,
+                    end_epoch,
+                    checkpoint_every,
+                    save_checkpoint,
                 )
-            elif self.progress_update_every < self.stopper.epochs:
-                carry = self._fit_epoch_chunks(carry, outer_progress_bar)
+            elif (
+                save_checkpoint is not None
+                or self.progress_update_every < self.stopper.epochs
+            ):
+                carry = self._fit_epoch_chunks(
+                    carry,
+                    outer_progress_bar,
+                    end_epoch,
+                    checkpoint_every,
+                    save_checkpoint,
+                )
             else:
-                carry = self._fit_monolithic(carry)
+                carry = self._fit_monolithic(carry, end_epoch)
 
             final_loss_train, final_loss_monitor = self._completed_epoch_losses(carry)
             completed, loss_train, loss_monitor = jax.device_get(

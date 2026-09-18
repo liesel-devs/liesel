@@ -11,6 +11,7 @@ Liesel: A Probabilistic Programming Framework
 
    tutorials_overview
    optimizer-data-flow
+   optimizer-checkpointing
 
 
 API Reference
@@ -152,6 +153,7 @@ utilities, and optimizer helpers.
 
 The :doc:`optimizer-data-flow` guide provides interactive overviews of the splitting,
 batching, and likelihood-scaling behavior.
+The :doc:`optimizer-checkpointing` guide covers pausing and recovering interrupted runs.
 
 .. autosummary::
     :toctree: generated
@@ -161,6 +163,8 @@ batching, and likelihood-scaling behavior.
 
     ~liesel.optim.LieselOptim
     ~liesel.optim.OptimEngine
+    ~liesel.optim.OptimCheckpoint
+    ~liesel.optim.state.OptimResult
     ~liesel.optim.NegLogProbLoss
     ~liesel.optim.Optimizer
     ~liesel.optim.LBFGS
