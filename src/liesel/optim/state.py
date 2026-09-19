@@ -635,12 +635,22 @@ class OptimCarry:
 
     loss_train: jax.Array = field(default_factory=lambda: jnp.asarray(jnp.inf))
     loss_monitor: jax.Array = field(default_factory=lambda: jnp.asarray(jnp.inf))
-    _ema_numerator: jax.Array = field(default_factory=lambda: jnp.asarray(0.0))
-    _ema_weight: jax.Array = field(default_factory=lambda: jnp.asarray(0.0))
+    _ema_mean: jax.Array = field(default_factory=lambda: jnp.asarray(0.0))
+    _ema_compensation: jax.Array = field(default_factory=lambda: jnp.asarray(0.0))
 
     epoch: int = 0  # outer while-loop index over epochs
     i_batch: int | jax.Array = 0  # inner for-loop index over batches
     nan_debug_state: OptimNaNDebugState | None = None
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        # Legacy checkpoints stored the unnormalized EMA and its weight.
+        # Preserve their last value; historical rounding cannot be recovered.
+        if "_ema_numerator" in state:
+            numerator = state.pop("_ema_numerator")
+            weight = state.pop("_ema_weight")
+            state["_ema_mean"] = numerator / jnp.where(weight == 0, 1, weight)
+            state["_ema_compensation"] = jnp.zeros_like(numerator)
+        self.__dict__.update(state)
 
     @classmethod
     def new(
@@ -722,8 +732,8 @@ class OptimCarry:
             min_monitor_loss=inf,
             loss_train=inf,
             loss_monitor=inf,
-            _ema_numerator=zero,
-            _ema_weight=zero,
+            _ema_mean=zero,
+            _ema_compensation=zero,
         )
         return inst
 

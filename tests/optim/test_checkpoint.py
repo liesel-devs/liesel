@@ -85,6 +85,32 @@ def test_unweighted_checkpoint_without_alias_state_still_resumes(tmp_path):
     assert_same_run(make_engine().fit(checkpoint=path), expected)
 
 
+@pytest.mark.parametrize("monitor", [EmaTrainLossMonitor(1.0), "train_full_data"])
+def test_legacy_ema_accumulators_are_converted_when_loading(tmp_path, monitor):
+    engine = make_model_engine("adam")
+    engine.loss_monitor = monitor
+    first = engine.fit(pause_after=2)
+    expected = engine.fit(checkpoint=first.checkpoint)
+
+    # Recreate the old pickle layout, including its two accumulator fields.
+    state = vars(first.checkpoint._carry)
+    mean = state.pop("_ema_mean")
+    state.pop("_ema_compensation")
+    weight = jnp.asarray(0.5 if isinstance(monitor, EmaTrainLossMonitor) else 0.0)
+    state.update(_ema_numerator=mean * weight, _ema_weight=weight)
+    checkpoint = replace(
+        first.checkpoint, versions={**first.checkpoint.versions, "liesel": "legacy"}
+    )
+    path = tmp_path / "legacy-ema.pkl"
+    checkpoint.save(path)
+
+    with pytest.raises(ValueError, match="version.*liesel"):
+        engine.fit(checkpoint=path)
+    with pytest.warns(UserWarning, match="version.*liesel"):
+        actual = engine.fit(checkpoint=path, allow_version_mismatch=True)
+    assert_same_run(actual, expected)
+
+
 @pytest.mark.parametrize("save_position_history", [False, True])
 def test_pause_and_resume_matches_uninterrupted_stochastic_optimization(
     save_position_history,

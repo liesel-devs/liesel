@@ -91,6 +91,20 @@ class EmaTrainLossMonitor:
     :math:`w_t = 1 - \beta^t`, the bias-correction factor :math:`1 / w_t`
     automatically approaches one without changing the update rule.
 
+    Numerically, the engine stores the normalized EMA directly and uses the
+    equivalent update
+
+    .. math::
+
+       w_t = -\operatorname{expm1}(t\operatorname{log1p}(-\alpha)), \qquad
+       \operatorname{EMA}_t = \operatorname{EMA}_{t-1}
+           + \frac{\alpha}{w_t}(L_t - \operatorname{EMA}_{t-1}).
+
+    The update uses compensated summation to retain small increments. This avoids
+    drift from repeatedly accumulating the normalization weight and reduces
+    rounding error for long windows, including with float32 and JAX 64-bit mode
+    disabled. Ordinary floating-point rounding still applies.
+
     ``effective_window`` is an EMA span measured in epoch equivalents, not a hard
     inclusion window or half-life. With a typical multi-batch epoch, a span of one
     epoch equivalent has a half-life of roughly 0.35 epoch equivalents, so recent
@@ -1379,9 +1393,24 @@ class OptimEngine:
                 * n_batches,
             )
             alpha = two / (effective_window + one)
-            beta = one - alpha
-            carry._ema_numerator = beta * carry._ema_numerator + alpha * loss
-            carry._ema_weight = beta * carry._ema_weight + alpha
+            # Cast before multiplying to avoid overflowing an integer step count.
+            t = (
+                jnp.asarray(carry.epoch, dtype=loss_dtype) * n_batches
+                + jnp.asarray(carry.i_batch, dtype=loss_dtype)
+                + one
+            )
+            # Compute bias correction directly; accumulating this weight in
+            # float32 can stall and make a flat loss appear to worsen.
+            weight = -jnp.expm1(t * jnp.log1p(-alpha))
+            # Kahan summation retains updates smaller than one float32 ULP.
+            update = (alpha / weight) * (loss - carry._ema_mean)
+            update -= carry._ema_compensation
+            mean = carry._ema_mean + update
+            compensation = (mean - carry._ema_mean) - update
+            # These cases equal the observation exactly, without subtraction.
+            use_loss = (t == one) | (alpha == one)
+            carry._ema_compensation = jnp.where(use_loss, 0, compensation)
+            carry._ema_mean = jnp.where(use_loss, loss, mean)
 
         return carry
 
@@ -1451,7 +1480,7 @@ class OptimEngine:
         carry.history.loss_train = carry.history.loss_train.at[i].set(loss_i)
 
         if isinstance(self.loss_monitor, EmaTrainLossMonitor):
-            loss_monitor_i = carry._ema_numerator / carry._ema_weight
+            loss_monitor_i = carry._ema_mean
             carry.loss_monitor = loss_monitor_i
             carry.history.loss_monitor = carry.history.loss_monitor.at[i].set(
                 loss_monitor_i

@@ -1040,6 +1040,64 @@ def test_training_history_and_ema_use_pre_update_losses_across_epochs(debug_nans
     assert result.history.loss_monitor.tolist() == pytest.approx([2.5, 5.875])
 
 
+@pytest.mark.parametrize("initial_loss", [1.416979, 2.0])
+def test_long_window_ema_tracks_float32_plateau(initial_loss, tmp_path):
+    n_batches = 4000
+    value = float(jnp.float32(1.416979))
+    split = PositionSplit(
+        Position({"y": jnp.full(n_batches, value, dtype=jnp.float32)}),
+        Position({}),
+        Position({}),
+        n_batches,
+        0,
+        0,
+    )
+
+    class PlateauLoss(BatchSensitiveLoss):
+        def position(self, position_keys):
+            return Position({key: jnp.float32(0) for key in position_keys})
+
+        def loss_train_batched(self, params, carry):
+            return jnp.where(
+                carry.epoch == 0,
+                jnp.float32(initial_loss),
+                super().loss_train_batched(params, carry),
+            )
+
+    engine = OptimEngine(
+        loss=PlateauLoss(split),
+        batches=Batches(["y"], axis_size=n_batches, batch_size=1, shuffle=False),
+        optimizers=[DebugNoOpOptimizer(["theta"])],
+        stopper=Stopper(epochs=75, patience=75),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+        loss_monitor=EmaTrainLossMonitor(effective_window=20.0),
+    )
+
+    result = engine.fit()
+
+    # Independent geometric sum of the first epoch's excess above the plateau.
+    beta = 1 - 2 / (20 * n_batches + 1)
+    excess = float(jnp.float32(initial_loss)) - value
+    expected = [
+        value
+        + excess
+        * beta ** (epoch * n_batches)
+        * (1 - beta**n_batches)
+        / (1 - beta ** ((epoch + 1) * n_batches))
+        for epoch in range(75)
+    ]
+    assert result.history.loss_monitor.tolist() == pytest.approx(
+        expected, rel=0, abs=2e-6
+    )
+
+    path = tmp_path / "plateau.pkl"
+    engine.fit(checkpoint=path, pause_after=66)
+    resumed = engine.fit(checkpoint=path)
+    assert resumed.history.loss_monitor.tolist() == result.history.loss_monitor.tolist()
+
+
 def test_train_full_data_monitor_uses_exact_training_loss():
     split = _monitor_split()
     engine = OptimEngine(
@@ -1059,8 +1117,10 @@ def test_train_full_data_monitor_uses_exact_training_loss():
     assert result.history.loss_monitor.tolist() == pytest.approx([4.0])
 
 
-def test_ema_fractional_window_uses_one_step_lower_bound():
+@pytest.mark.parametrize("first_value, expected_mean", [(1.0, 2.0), (1e10, 5e9)])
+def test_ema_fractional_window_uses_one_step_lower_bound(first_value, expected_mean):
     split = _monitor_split()
+    split.train["y"] = jnp.array([first_value, 3.0])
     engine = OptimEngine(
         loss=BatchSensitiveLoss(split),
         batches=Batches(["y"], axis_size=2, batch_size=1, shuffle=False),
@@ -1074,7 +1134,7 @@ def test_ema_fractional_window_uses_one_step_lower_bound():
 
     result = engine.fit()
 
-    assert result.history.loss_train.tolist() == pytest.approx([2.0])
+    assert result.history.loss_train.tolist() == pytest.approx([expected_mean])
     assert result.history.loss_monitor.tolist() == pytest.approx([3.0])
 
 
