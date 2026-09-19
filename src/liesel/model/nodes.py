@@ -1958,7 +1958,7 @@ class Var:
             distribution=distribution,
         )
         var.value_node.monitor = True
-        if var.bijected_var is not None:
+        if var.has_bijected_var:
             var.bijected_var.parameter = True
         else:
             var.parameter = True
@@ -2580,11 +2580,22 @@ class Var:
         return self
 
     @property
-    def bijected_var(self) -> Var | None:
+    def bijected_var(self) -> Var:
         """
         Transformed variable.
         Either supplied manually or automatically created by :meth:`.biject`.
+
+        Raises
+        ------
+        RuntimeError
+            If no bijected variable exists. Use :attr:`.has_bijected_var` to check
+            whether one exists without raising an error.
         """
+        if self._bijected_var is None:
+            raise RuntimeError(
+                f"{self} has no bijected variable. "
+                "Apply .biject() or .transform() first, or assign .bijected_var."
+            )
         return self._bijected_var
 
     @bijected_var.setter
@@ -2598,6 +2609,11 @@ class Var:
             raise ValueError(f"{value} is on in the inputs or kwinputs of {self}")
 
         self._bijected_var = value
+
+    @property
+    def has_bijected_var(self) -> bool:
+        """Whether a transformed variable has been created or supplied manually."""
+        return self._bijected_var is not None
 
     @in_model_method
     def all_output_nodes(
@@ -2964,8 +2980,8 @@ class Var:
         self,
         show: bool = True,
         save_path: str | None | IO = None,
-        width: int = 14,
-        height: int = 10,
+        width: float = 14,
+        height: float = 10,
         prog: Literal[
             "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
         ] = "dot",
@@ -3025,8 +3041,8 @@ class Var:
         self,
         show: bool = True,
         save_path: str | None | IO = None,
-        width: int = 14,
-        height: int = 10,
+        width: float = 14,
+        height: float = 10,
         prog: Literal[
             "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
         ] = "dot",
@@ -3258,8 +3274,8 @@ class Var:
         self,
         show: bool = True,
         save_path: str | None | IO = None,
-        width: int = 14,
-        height: int = 10,
+        width: float = 14,
+        height: float = 10,
         prog: Literal[
             "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
         ] = "dot",
@@ -3334,10 +3350,11 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
     inputs = dist_node.inputs
     kwinputs: dict[str, Any] = dict(dist_node.kwinputs)
 
-    bijector_inv = jb.Invert(bijector_inst)
-
     def transform_dist(*args, **kwargs):
-        return jd.TransformedDistribution(InputDist(*args, **kwargs), bijector_inv)
+        # Construct Invert here: capturing it prevents saved models from reloading.
+        return jd.TransformedDistribution(
+            InputDist(*args, **kwargs), jb.Invert(bijector_inst)
+        )
 
     transformed_dist = Dist(
         transform_dist,
@@ -3359,7 +3376,7 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
             )
 
         def forward(*args, **kwargs):
-            return bijector_inv.forward(value_node.function(*args, **kwargs))
+            return bijector_inst.inverse(value_node.function(*args, **kwargs))
 
         value_inputs = value_node.inputs
         value_kwinputs = value_node.kwinputs
@@ -3381,7 +3398,7 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
         )
     else:
         transformed_var = Var(
-            bijector_inv.forward(var.value),
+            bijector_inst.inverse(var.value),
             transformed_dist,
             name=f"{var.name}_transformed",
         )
@@ -3667,8 +3684,13 @@ class Group:
         return model_state[value_name].value
 
     @_KeyCompletableProperty
-    def vars(self) -> _KeyCompletableMapping[Var]:
-        """A mapping of the variables in the group with their names as keys."""
+    def vars(self) -> _KeyCompletableMapping[Any]:
+        """
+        A mapping of the variables in the group with their names as keys.
+
+        Values are dynamically typed to allow subclass-specific operations after
+        lookup, as in :attr:`.Model.vars`.
+        """
         return _KeyCompletableMapping(self._vars)
 
     @_KeyCompletableProperty
@@ -3677,14 +3699,19 @@ class Group:
         return _KeyCompletableMapping(self._nodes)
 
     @_KeyCompletableProperty
-    def nodes_and_vars(self) -> _KeyCompletableMapping[Node | Var]:
-        """A mapping of all group members with their names as keys."""
+    def nodes_and_vars(self) -> _KeyCompletableMapping[Any]:
+        """
+        A mapping of all group members with their names as keys.
+
+        Values are dynamically typed, as in :attr:`.vars`.
+        """
         return _KeyCompletableMapping(self._nodes_and_vars)
 
     def __contains__(self, key) -> bool:
         return key in self._nodes_and_vars
 
-    def __getitem__(self, key) -> Var | Node:
+    def __getitem__(self, key: str) -> Any:
+        """Retrieve a dynamically typed member by its group-specific name."""
         return self._nodes_and_vars[key]
 
     def __repr__(self) -> str:

@@ -16,8 +16,8 @@ def plot_nodes(
     model,
     show: bool = True,
     save_path: str | None | IO = None,
-    width: int = 14,
-    height: int = 10,
+    width: float = 14,
+    height: float = 10,
     prog: Literal[
         "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
     ] = "dot",
@@ -75,8 +75,8 @@ def plot_vars(
     model,
     show: bool = True,
     save_path: str | None | IO = None,
-    width: int = 14,
-    height: int = 10,
+    width: float = 14,
+    height: float = 10,
     prog: Literal[
         "dot", "circo", "fdp", "neato", "osage", "patchwork", "sfdp", "twopi"
     ] = "dot",
@@ -140,7 +140,10 @@ def _prepare_figure(graph, width, height, prog):
     fig.set_size_inches(width, height)
 
     try:
-        pos = nx.nx_pydot.pydot_layout(graph, prog=prog)
+        nodes = list(graph)
+        graphviz_graph = nx.convert_node_labels_to_integers(graph)
+        graphviz_pos = nx.nx_pydot.pydot_layout(graphviz_graph, prog=prog)
+        pos = {nodes[int(node)]: position for node, position in graphviz_pos.items()}
     except FileNotFoundError:
         logger.warning(
             "Graphviz not found in PATH. Using fallback graph layout. "
