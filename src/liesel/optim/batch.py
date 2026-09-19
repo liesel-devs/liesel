@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal, cast, overload
 
@@ -24,6 +24,27 @@ from .split import (
 from .types import Array, ModelInterface, ModelState, Position
 
 _MISSING = object()
+
+
+def _sampling_categories(labels: Array) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    # Object conversion preserves label identity and exposes mixed string/numeric
+    # sequences before NumPy can silently coerce them to strings or floats.
+    values = np.asarray(labels, dtype=object)
+    if values.ndim != 1 or not values.size:
+        raise ValueError("labels must be a nonempty one-dimensional sequence.")
+    strings = all(isinstance(value, str) for value in values)
+    numeric = all(
+        isinstance(value, (int, np.integer, bool, np.bool_))
+        or isinstance(value, (float, np.floating))
+        and np.isfinite(value)
+        for value in values
+    )
+    if not (strings or numeric):
+        raise ValueError(
+            "labels must contain only strings or finite numeric categories, "
+            "without missing values or mixed string/numeric labels."
+        )
+    return np.unique(values, return_inverse=True, return_counts=True)
 
 
 def _resolve_batch_size(
@@ -343,6 +364,199 @@ class Batches:
     def sampling_probabilities(self) -> jax.Array | None:
         """Normalized sampling probabilities, or None for uniform sampling."""
         return self._sampling_probabilities
+
+    @staticmethod
+    def weights_balanced(labels: Array, *, strength: float = 1.0) -> np.ndarray:
+        """Construct sampling weights from category frequencies.
+
+        Each observation in a category of size ``n`` receives weight
+        ``n ** (-strength)``. At strength one, every observed category has equal
+        total sampling probability; zero gives uniform observation sampling.
+
+        Parameters
+        ----------
+        labels
+            Nonempty one-dimensional labels in training-row order. Accepts strings,
+            booleans, integers, or finite floating labels interpreted as exact
+            categories. Missing and mixed string/numeric labels are rejected.
+        strength
+            Finite scalar between zero and one; defaults to full balancing.
+
+        Returns
+        -------
+        numpy.ndarray
+            Float64 relative weights in input order. This helper runs on the host,
+            outside JIT. Pass its output to ``Batches(..., sampling_weights=...)``
+            with ``sample_with_replacement=True``. The existing importance
+            correction preserves the objective; balancing sampling does not
+            reweight the likelihood objective.
+
+        Examples
+        --------
+        >>> Batches.weights_balanced(["a", "b", "a"]).tolist()
+        [0.5, 1.0, 0.5]
+        >>> Batches.weights_balanced(["a", "b", "a"], strength=0).tolist()
+        [1.0, 1.0, 1.0]
+        """
+        strength_array = np.asarray(strength)
+        if (
+            strength_array.ndim != 0
+            or strength_array.dtype.kind not in "biuf"
+            or not np.isfinite(strength_array)
+            or not 0 <= strength_array <= 1
+        ):
+            raise ValueError("strength must be a finite scalar between 0 and 1.")
+        _, inverse, counts = _sampling_categories(labels)
+        return counts[inverse].astype(np.float64) ** (-float(strength_array))
+
+    @staticmethod
+    def weights_for_shares(
+        labels: Array,
+        shares: Mapping[str | int | float, float],
+        *,
+        check_sum: bool = True,
+    ) -> np.ndarray:
+        """Divide each category's target sampling share among its observations.
+
+        Parameters
+        ----------
+        labels
+            One-dimensional category labels in training-row order, with the same
+            requirements as :meth:`weights_balanced`.
+        shares
+            Mapping from every observed category to its finite, strictly positive
+            sampling share. Missing or extra categories are rejected. A category
+            with share ``s`` and count ``n`` gives each observation weight ``s / n``.
+        check_sum
+            Require shares to sum to one within absolute tolerance ``1e-6`` and
+            zero relative tolerance. Set to ``False`` to supply relative category
+            masses. Only this sum check is skipped; all other validation remains.
+
+        Returns
+        -------
+        numpy.ndarray
+            Float64 weights in input order, computed on the host outside JIT.
+            Weights are not normalized here; :class:`Batches` normalizes them into
+            sampling probabilities. Unrepresentable zero weights are rejected.
+            Shares describe expected frequencies, not fixed quotas per minibatch.
+
+        Examples
+        --------
+        >>> Batches.weights_for_shares(["a", "b", "a"], {"a": 0.6, "b": 0.4}).tolist()
+        [0.3, 0.4, 0.3]
+        >>> Batches.weights_for_shares(
+        ...     ["a", "b", "a"], {"a": 60, "b": 40}, check_sum=False
+        ... ).tolist()
+        [30.0, 40.0, 30.0]
+        """
+        categories, inverse, counts = _sampling_categories(labels)
+        if not isinstance(shares, Mapping) or set(shares) != set(categories):
+            raise ValueError("shares must contain exactly the observed categories.")
+        masses = np.asarray([shares[label] for label in categories])
+        if masses.shape != counts.shape or masses.dtype.kind not in "biuf":
+            raise ValueError(
+                "shares must be finite, strictly positive numeric scalars."
+            )
+        with np.errstate(over="ignore", invalid="ignore"):
+            masses = masses.astype(np.float64)
+        if not np.all(np.isfinite(masses) & (masses > 0)):
+            raise ValueError("shares must be finite and strictly positive.")
+        if check_sum:
+            with np.errstate(over="ignore"):
+                total = masses.sum()
+            if not np.isclose(total, 1.0, rtol=0.0, atol=1e-6):
+                raise ValueError(
+                    "shares must sum to one within absolute tolerance 1e-6."
+                )
+        with np.errstate(under="ignore"):
+            weights = masses / counts
+        if not np.all(np.isfinite(weights) & (weights > 0)):
+            raise ValueError("shares produce weights that are not representable.")
+        return weights[inverse]
+
+    @staticmethod
+    def weights_binned(
+        values: Array,
+        *,
+        bins: int | Sequence[float] | np.ndarray,
+        strength: float = 0.5,
+    ) -> np.ndarray:
+        """Construct sampling weights by balancing one-dimensional bin counts.
+
+        Parameters
+        ----------
+        values
+            Nonempty, finite one-dimensional numeric values in training-row order.
+        bins
+            Required positive integer count or strictly increasing numeric edges.
+            Integer counts give equal-width bins across the observed range.
+            Explicit edges must cover all observations; only the outer endpoints
+            may be infinite. Intervals include their left endpoint and exclude
+            their right, except that the final right endpoint is included.
+        strength
+            Finite scalar between zero and one, as in :meth:`weights_balanced`.
+            Defaults to partial balancing with strength ``0.5``.
+
+        Returns
+        -------
+        numpy.ndarray
+            Float64 weights in input order. Each observation receives its bin's
+            count raised to ``-strength``. Empty bins get no sampling mass;
+            constant data get uniform weights. Unequal-width bins are balanced
+            by counts without a width adjustment: this is not density estimation.
+            Values are processed as float64 on the host, outside JIT. Degenerate
+            generated edges are rejected; supply explicit edges in that case.
+
+        Examples
+        --------
+        >>> Batches.weights_binned([0, 0, 0, 0, 10], bins=2).tolist()
+        [0.5, 0.5, 0.5, 0.5, 1.0]
+        >>> Batches.weights_binned([0, 1, 4], bins=[0, 1, 4], strength=1).tolist()
+        [1.0, 0.5, 0.5]
+        """
+        values = np.asarray(values)
+        if (
+            values.ndim != 1
+            or not values.size
+            or values.dtype.kind not in "biuf"
+            or not np.all(np.isfinite(values))
+        ):
+            raise ValueError("values must be a nonempty, finite numeric vector.")
+        with np.errstate(over="ignore", invalid="ignore"):
+            values = values.astype(np.float64)
+        if not np.all(np.isfinite(values)):
+            raise ValueError("values must be representable as finite float64 values.")
+        if isinstance(bins, (int, np.integer)) and not isinstance(
+            bins, (bool, np.bool_)
+        ):
+            if bins < 1:
+                raise ValueError("bins must be a positive integer.")
+            if np.all(values == values[0]):
+                return Batches.weights_balanced(
+                    np.zeros(values.size), strength=strength
+                )
+            with np.errstate(over="ignore", invalid="ignore"):
+                edges = np.histogram_bin_edges(values, bins=bins)
+            if not np.all(np.isfinite(edges)):
+                raise ValueError("bins cannot be represented; supply explicit edges.")
+        else:
+            edges = np.asarray(bins)
+            if edges.ndim != 1 or edges.dtype.kind not in "iuf":
+                raise ValueError("bins must be a positive integer or numeric edges.")
+        if (
+            edges.size < 2
+            or not np.all(edges[1:] > edges[:-1])
+            or not np.all(np.isfinite(edges[1:-1]))
+        ):
+            raise ValueError(
+                "bins must have strictly increasing edges and finite interior edges."
+            )
+        if values.min() < edges[0] or values.max() > edges[-1]:
+            raise ValueError("bins must cover every observation in values.")
+        categories = np.searchsorted(edges, values, side="right") - 1
+        # Only the final right edge is inclusive; outside values were rejected above.
+        categories = np.minimum(categories, len(edges) - 2)
+        return Batches.weights_balanced(categories, strength=strength)
 
     def __post_init__(self):
         if self.axis_size < 1:

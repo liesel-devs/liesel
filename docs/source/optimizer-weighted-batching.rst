@@ -68,6 +68,79 @@ structure and sampling mode must remain compatible. Adaptive priorities,
 weighted sampling without replacement, and automatic weight routing through
 ``LieselOptim`` are outside this API.
 
+Choosing sampling weights
+-------------------------
+
+Three static helpers construct NumPy float64 weight arrays before fitting, outside
+JIT. They preserve input row order and do not modify a ``Batches`` object. Supply
+labels or values from the **training split**, then pass the returned array to
+``Batches(..., sampling_weights=weights, sample_with_replacement=True)``.
+
+**Balance categories.** :meth:`~liesel.optim.Batches.weights_balanced` assigns each
+observation weight ``count(label) ** (-strength)``:
+
+.. code-block:: python
+
+   train_labels = ["common"] * 5 + ["rare"]
+   weights = opt.Batches.weights_balanced(train_labels, strength=1.0)
+
+The default ``strength=1.0`` gives each observed category equal total sampling
+probability. Strength zero samples observations uniformly; intermediate strengths
+partially balance categories. Labels may be strings, booleans, integers, or finite
+floating values treated as exact categories. Missing labels and mixed numeric/string
+labels are rejected.
+
+**Choose category shares.** :meth:`~liesel.optim.Batches.weights_for_shares` divides
+each category's requested share equally among its observations:
+
+.. code-block:: python
+
+   weights = opt.Batches.weights_for_shares(
+       train_labels, shares={"common": 0.7, "rare": 0.3}
+   )
+
+These shares specify expected draw frequencies, not fixed counts per minibatch.
+The mapping must cover exactly the observed categories with finite, strictly
+positive shares. By default, their total must be within ``1e-6`` of one, with no
+relative tolerance. Set ``check_sum=False`` to supply relative allocations such as
+``{"common": 70, "rare": 30}``. This skips only the sum check; category coverage,
+positivity, finiteness, and representability checks still apply. ``Batches``
+normalizes the resulting weights into sampling probabilities.
+
+**Emphasize sparsely populated intervals.**
+:meth:`~liesel.optim.Batches.weights_binned` assigns weight
+``bin_count ** (-strength)`` to each observation of a one-dimensional numeric
+variable:
+
+.. code-block:: python
+
+   weights = opt.Batches.weights_binned(split.train["y"], bins=20, strength=0.5)
+   # Or choose explicit interval boundaries:
+   weights = opt.Batches.weights_binned(
+       split.train["y"], bins=[-float("inf"), 0, 1, float("inf")]
+   )
+
+``bins`` is required. An integer requests equal-width intervals across the observed
+range; explicit edges must be strictly increasing and cover every observation.
+Only the outer endpoints may be infinite. Intervals include their left endpoint
+and exclude their right endpoint, except that the final right endpoint is included.
+Empty bins receive no mass, and constant data receive uniform weights. Empty,
+nonfinite, or multidimensional values are rejected. Data are processed as float64;
+if equal-width edges cannot be represented distinctly, supply explicit edges.
+
+The default strength is ``0.5``. At strength one, all occupied bins have equal
+sampling mass, including when their widths differ. This balances counts rather
+than estimating a density. Bin resolution determines which observations appear
+rare, and stronger balancing can emphasize outliers. Quantile bins contain similar
+counts and therefore provide little balancing. Both balancing helpers require a
+finite strength between zero and one.
+
+Sampling categories and bins belong within a single batch group; they do not
+create additional manager branches. With importance correction, all three helpers
+preserve the original likelihood objective in expectation. They do not turn it
+into a class-balanced objective. Their output uses the existing fixed-probability
+and checkpoint behavior described above.
+
 Sampling and numerical precision
 --------------------------------
 

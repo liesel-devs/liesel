@@ -11,6 +11,218 @@ from liesel.optim import Batches, BatchManager
 from liesel.optim.types import Position
 
 
+@pytest.mark.parametrize(
+    "strength, expected",
+    [
+        (0.0, [1, 1, 1, 1, 1]),
+        (0.5, [0.5, 1, 0.5, 0.5, 0.5]),
+        (1.0, [0.25, 1, 0.25, 0.25, 0.25]),
+    ],
+)
+def test_balanced_weights_preserve_row_order_and_control_category_mass(
+    strength, expected
+):
+    weights = Batches.weights_balanced(["a", "b", "a", "a", "a"], strength=strength)
+    assert isinstance(weights, np.ndarray)
+    assert weights.dtype == np.float64
+    np.testing.assert_allclose(weights, expected)
+
+
+@pytest.mark.parametrize(
+    "labels",
+    [
+        [1, 2, 1],
+        [True, False, True],
+        [1.5, 2.5, 1.5],
+        np.array(["a", "b", "a"], dtype=object),
+        jnp.array([1, 2, 1]),
+        [2**60, 2**60 + 1, 2**60],
+    ],
+)
+def test_balanced_weights_accept_discrete_labels_without_losing_identity(labels):
+    np.testing.assert_allclose(Batches.weights_balanced(labels), [0.5, 1, 0.5])
+
+
+@pytest.mark.parametrize(
+    "labels",
+    [
+        [],
+        "abc",
+        [[1, 2]],
+        [1, "1"],
+        [1, None],
+        [float("nan"), 1],
+        [float("inf"), 1],
+        [1j, 2j],
+        np.array([1, "1"], dtype=object),
+    ],
+)
+def test_balanced_weights_reject_invalid_labels(labels):
+    with pytest.raises(ValueError, match="labels"):
+        Batches.weights_balanced(labels)
+
+
+@pytest.mark.parametrize("strength", [-0.1, 1.1, float("nan"), float("inf"), [0.5]])
+def test_balanced_weights_reject_invalid_strength(strength):
+    with pytest.raises(ValueError, match="strength"):
+        Batches.weights_balanced([1, 2], strength=strength)
+
+
+def test_weights_for_shares_allocate_category_mass_and_allow_relative_shares():
+    labels = ["a", "b", "a", "a"]
+    weights = Batches.weights_for_shares(labels, {"a": 0.6, "b": 0.4})
+    assert weights.dtype == np.float64
+    np.testing.assert_allclose(weights, [0.2, 0.4, 0.2, 0.2])
+    relative = Batches.weights_for_shares(labels, {"a": 60, "b": 40}, check_sum=False)
+    np.testing.assert_allclose(relative, [20, 40, 20, 20])
+    with pytest.raises(ValueError, match="sum"):
+        Batches.weights_for_shares(labels, {"a": 60, "b": 40})
+    Batches.weights_for_shares(labels, {"a": 0.6, "b": 0.4000005})
+    with pytest.raises(ValueError, match="sum"):
+        Batches.weights_for_shares(labels, {"a": 0.6, "b": 0.400002})
+
+
+@pytest.mark.parametrize("check_sum", [True, False])
+@pytest.mark.parametrize(
+    "shares",
+    [
+        {"a": 1.0},
+        {"a": 0.5, "b": 0.5, "c": 0.2},
+        {"a": 1.0, "b": 0.0},
+        {"a": 2.0, "b": -1.0},
+        {"a": float("nan"), "b": 0.5},
+        {"a": float("inf"), "b": 0.5},
+        {"a": "0.5", "b": "0.5"},
+        {"a": [0.5], "b": [0.5]},
+    ],
+)
+def test_weights_for_shares_always_require_exact_coverage_and_positive_masses(
+    shares, check_sum
+):
+    with pytest.raises(ValueError, match="shares"):
+        Batches.weights_for_shares(["a", "b"], shares, check_sum=check_sum)
+
+
+def test_weights_for_shares_reject_unrepresentable_output_and_handle_large_masses():
+    with pytest.raises(ValueError, match="representable"):
+        Batches.weights_for_shares(["a", "a", "b"], {"a": 5e-324, "b": 1.0})
+    np.testing.assert_allclose(
+        Batches.weights_for_shares([1, 2, 1], {1: 1e308, 2: 1e308}, check_sum=False),
+        [5e307, 1e308, 5e307],
+    )
+    with pytest.raises(ValueError, match="sum"):
+        Batches.weights_for_shares([1, 2], {1: 1e308, 2: 1e308})
+
+
+def test_binned_weights_balance_occupied_intervals_and_include_final_edge():
+    values = [4.0, 0.0, 1.0, 0.5, 0.25]
+    # Equal-width bins [0, 1), [1, 2), [2, 3), [3, 4].
+    full = Batches.weights_binned(values, bins=4, strength=1.0)
+    assert full.dtype == np.float64
+    np.testing.assert_allclose(full, [1, 1 / 3, 1, 1 / 3, 1 / 3])
+    partial = Batches.weights_binned([0, 0, 0, 0, 10], bins=2)
+    np.testing.assert_allclose(partial, [0.5, 0.5, 0.5, 0.5, 1])
+    # Unequal widths still balance counts; 1 is in the second bin.
+    np.testing.assert_allclose(
+        Batches.weights_binned(values, bins=[0, 1, 4], strength=1.0),
+        [0.5, 1 / 3, 0.5, 1 / 3, 1 / 3],
+    )
+    np.testing.assert_array_equal(
+        Batches.weights_binned(values, bins=4, strength=0), np.ones(5)
+    )
+
+
+@pytest.mark.parametrize(
+    "values,bins,expected",
+    [
+        ([7], 20, [1]),
+        ([7, 7, 7, 7], 20, [0.5] * 4),
+        ([1e308] * 4, 20, [0.5] * 4),
+        ([7] * 4, [0, 7], [0.5] * 4),
+        ([-10, -5, 0, 1], [-np.inf, 0, np.inf], [0.5] * 4),
+    ],
+)
+def test_binned_weights_support_constant_data_and_open_ended_bins(
+    values, bins, expected
+):
+    strength = 1 if bins == [-np.inf, 0, np.inf] else 0.5
+    np.testing.assert_allclose(
+        Batches.weights_binned(values, bins=bins, strength=strength), expected
+    )
+
+
+@pytest.mark.parametrize(
+    "bins",
+    [
+        0,
+        -2,
+        1.5,
+        True,
+        "auto",
+        [],
+        [0],
+        [0, 0, 2],
+        [2, 0],
+        [0, np.nan, 2],
+        [-np.inf, np.inf, np.inf],
+        [[0, 2]],
+        [0, 1],
+        [1, 2],
+        ["0", "2"],
+    ],
+)
+def test_binned_weights_reject_invalid_or_noncovering_bins(bins):
+    with pytest.raises(ValueError, match="bins"):
+        Batches.weights_binned([0, 2], bins=bins)
+
+
+@pytest.mark.parametrize(
+    "values",
+    [[], 1, [[0, 1]], [np.nan, 1], [np.inf, 1], [1j, 2j], ["0", "1"], [None, 1]],
+)
+def test_binned_weights_require_finite_one_dimensional_values(values):
+    with pytest.raises(ValueError, match="values"):
+        Batches.weights_binned(values, bins=[-np.inf, np.inf])
+
+
+def test_binned_weights_reject_degenerate_generated_edges():
+    with pytest.raises(ValueError, match="bins"):
+        Batches.weights_binned([1, np.nextafter(1.0, 2.0)], bins=10)
+    with pytest.raises(ValueError, match="bins"):
+        Batches.weights_binned([-1e308, 1e308], bins=10)
+
+
+@pytest.mark.parametrize("strategy", ["balanced", "shares", "binned"])
+def test_helper_weights_preserve_expected_objective_and_gradient(strategy):
+    labels = ["rare", "common", "common", "common"]
+    values = jnp.array([10.0, 0.0, 1.0, 2.0])
+    if strategy == "balanced":
+        weights = Batches.weights_balanced(labels)
+    elif strategy == "shares":
+        weights = Batches.weights_for_shares(labels, {"rare": 0.5, "common": 0.5})
+    else:
+        weights = Batches.weights_binned(values, bins=[0, 3, 10], strength=1)
+    batches = Batches(
+        ["y"], 4, 1, sample_with_replacement=True, sampling_weights=weights
+    )
+    probabilities = jnp.array([0.5, 1 / 6, 1 / 6, 1 / 6])
+    assert batches.sampling_probabilities is not None
+    np.testing.assert_allclose(batches.sampling_probabilities, probabilities)
+
+    # The initial indices enumerate every possible draw, allowing an exact
+    # expectation check without statistical sampling error.
+    def estimate(theta, index):
+        value = batches.get_batched_position(Position({"y": values}), index)["y"][0]
+        return 4 * batches.correction_factors(index)[0] * (value - theta) ** 2
+
+    losses, gradients = jax.jit(
+        jax.vmap(jax.value_and_grad(estimate), in_axes=(None, 0))
+    )(jnp.array(3.0), jnp.arange(4))
+    # Squared errors: 49 + 9 + 4 + 1. Gradient: -14 + 6 + 4 + 2.
+    np.testing.assert_allclose(jnp.dot(probabilities, losses), 63, rtol=1e-6)
+    np.testing.assert_allclose(jnp.dot(probabilities, gradients), -2, rtol=1e-6)
+
+
 def test_float16_weights_reach_all_indices_and_preserve_indicator_mean():
     batches = Batches(
         ["y"],
