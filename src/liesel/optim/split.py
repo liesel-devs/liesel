@@ -6,7 +6,7 @@ import math
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, overload
 
 import jax
 import jax.numpy as jnp
@@ -2339,10 +2339,11 @@ class Split:
         return self.test_axis_size / self.axis_size
 
     @classmethod
+    @overload
     def from_model(
         cls,
         model: Model,
-        position_keys: Sequence[str] | None = None,
+        position_keys: Sequence[str] | Sequence[Sequence[str]] | None = None,
         axis_size: int | None = None,
         validate_axis_share: float = 0.0,
         test_axis_share: float = 0.0,
@@ -2351,10 +2352,46 @@ class Split:
         shuffle: bool = True,
         seed: jax.Array | int | None = None,
         sample_sizes: SampleSizes | None = None,
-    ) -> Split:
-        """Builds a reusable scalar split recipe from model metadata.
+        multi_size: Literal["error"] = "error",
+    ) -> Split: ...
 
-        The selected position entries must imply one split-axis size. Entries
+    @classmethod
+    @overload
+    def from_model(
+        cls,
+        model: Model,
+        position_keys: Sequence[str] | Sequence[Sequence[str]] | None = None,
+        axis_size: int | None = None,
+        validate_axis_share: float = 0.0,
+        test_axis_share: float = 0.0,
+        split_axes: dict[str, int | None] | None = None,
+        default_split_axis: int = 0,
+        shuffle: bool = True,
+        seed: jax.Array | int | None = None,
+        sample_sizes: SampleSizes | None = None,
+        multi_size: Literal["manager"] = "manager",
+    ) -> Split | SplitManager: ...
+
+    @classmethod
+    def from_model(
+        cls,
+        model: Model,
+        position_keys: Sequence[str] | Sequence[Sequence[str]] | None = None,
+        axis_size: int | None = None,
+        validate_axis_share: float = 0.0,
+        test_axis_share: float = 0.0,
+        split_axes: dict[str, int | None] | None = None,
+        default_split_axis: int = 0,
+        shuffle: bool = True,
+        seed: jax.Array | int | None = None,
+        sample_sizes: SampleSizes | None = None,
+        multi_size: Literal["error", "manager"] = "error",
+    ) -> Split | SplitManager:
+        """Builds reusable split recipes from inferred or explicit groups.
+
+        By default, selected entries must form one observation group. Set
+        ``multi_size="manager"`` to return a :class:`SplitManager` for multiple
+        groups. One group still returns a :class:`Split`. Entries
         mapped to ``None`` in ``split_axes`` become passthrough data: when the
         recipe is applied, they are included unchanged in ``train``, ``validate``,
         and ``test``, are not split or batched automatically, and do not participate
@@ -2367,10 +2404,11 @@ class Split:
             Model containing the observed variables to configure.
         position_keys
             Names of observed position entries to include. If ``None``, all observed
-            variables in ``model`` are used.
+            variables in ``model`` are used. Flat keys group automatically by axis
+            length; nested keys define exact groups, including equal-sized groups.
         axis_size
             Optional split-axis size override. If omitted, the size is inferred from
-            the selected model entries.
+            the selected model entries. Only supported for a single group.
         validate_axis_share
             Share of observations assigned to validation.
         test_axis_share
@@ -2389,12 +2427,18 @@ class Split:
             the current Unix time is used. Ignored for full-data splits.
         sample_sizes
             Optional effective sample sizes passed to the resulting
-            :class:`PositionSplit`.
+            :class:`PositionSplit`. Only supported for a single group; construct
+            child :class:`Split` recipes explicitly for per-group overrides.
+        multi_size
+            How to handle multiple observation groups. The default ``"error"``
+            raises; ``"manager"`` returns a :class:`SplitManager` for multiple
+            groups. One group always returns :class:`Split`.
 
         Returns
         -------
-        Split
-            Reusable split recipe for one inferred axis-size group.
+        Split or SplitManager
+            One reusable recipe, or a manager when ``multi_size="manager"`` and
+            multiple groups are selected.
 
         Examples
         --------
@@ -2407,17 +2451,26 @@ class Split:
         ... )
         >>> splitter.axis_size, splitter.train_axis_size, splitter.validate_axis_size
         (10, 8, 2)
+
+        >>> z = lsl.Var.new_obs(jnp.arange(6.0), name="z")
+        >>> managed = Split.from_model(
+        ...     lsl.Model([y, z]),
+        ...     multi_size="manager",
+        ...     validate_axis_share=0.2,
+        ...     shuffle=True,
+        ...     seed=42,
+        ... )
+        >>> type(managed).__name__
+        'SplitManager'
         """
+        if multi_size not in ("error", "manager"):
+            raise ValueError("multi_size must be 'error' or 'manager'.")
+
         pos_keys = (
             list(position_keys) if position_keys is not None else list(model.observed)
         )
         if not pos_keys:
             raise ValueError("Split.from_model() requires at least one position key.")
-        if any(not isinstance(key, str) for key in pos_keys):
-            raise TypeError(
-                "Split.from_model() requires flat position_keys. "
-                "Use SplitManager.from_model() for explicit groups."
-            )
 
         pos_keys, groups = position_key_groups_from_model(
             model, pos_keys, split_axes, default_split_axis
@@ -2426,10 +2479,30 @@ class Split:
             raise ValueError(
                 "Split.from_model() requires at least one position key to be split."
             )
+        if len(groups) > 1 and multi_size == "manager":
+            if axis_size is not None or sample_sizes is not None:
+                raise ValueError(
+                    "A single axis_size or sample_sizes value cannot configure "
+                    "multiple observation groups. Omit these overrides when using "
+                    "multi_size='manager', or construct child Split recipes explicitly."
+                )
+            return SplitManager.from_model(
+                model,
+                position_keys=position_keys,
+                validate_axis_share=validate_axis_share,
+                test_axis_share=test_axis_share,
+                split_axes=split_axes,
+                default_split_axis=default_split_axis,
+                shuffle=shuffle,
+                seed=seed,
+            )
+
         if len(groups) > 1:
             raise ValueError(
-                "Split.from_model() found observed variables with different axis "
-                f"sizes: {groups}. Use SplitManager.from_model()."
+                "Split.from_model() found multiple observation groups "
+                f"with axis sizes {[size for size, _ in groups]}. Use "
+                "Split.from_model(..., multi_size='manager') or "
+                "SplitManager.from_model(...)."
             )
 
         return cls.from_axis_shares(

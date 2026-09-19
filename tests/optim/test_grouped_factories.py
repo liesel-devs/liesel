@@ -34,10 +34,31 @@ def _model(*, shared=False):
     return lsl.Model(variables)
 
 
-def test_explicit_split_groups_preserve_alignment_and_equal_size_boundaries():
+def test_split_recipe_infers_multiple_groups_and_materializes_them():
+    model = lsl.Model(
+        [
+            lsl.Var.new_obs(jnp.arange(12.0), name="a"),
+            lsl.Var.new_obs(jnp.arange(8.0), name="b"),
+        ]
+    )
+    recipe = Split.from_model(
+        model, validate_axis_share=0.25, shuffle=False, multi_size="manager"
+    )
+    assert isinstance(recipe, SplitManager)
+    data = recipe.split_position(model.extract_position(recipe.position_keys))
+    assert data.train["a"].tolist() == list(range(9))
+    assert data.train["b"].tolist() == list(range(6))
+    batches = Batches.from_split(data, batch_size=3)
+    assert isinstance(batches, BatchManager)
+    assert {tuple(child.position_keys) for child in batches.batches} == {("a",), ("b",)}
+
+
+@pytest.mark.parametrize("factory", [SplitManager, Split])
+def test_explicit_split_groups_preserve_alignment_and_equal_size_boundaries(factory):
     model = _model()
     groups = [["x_b", "y_b"], ["x_a", "y_a"]]
-    manager = SplitManager.from_model(
+    kwargs = {"multi_size": "manager"} if factory is Split else {}
+    manager = factory.from_model(
         model,
         position_keys=groups,
         split_axes={"x_a": 1},
@@ -45,6 +66,7 @@ def test_explicit_split_groups_preserve_alignment_and_equal_size_boundaries():
         test_axis_share=0.125,
         shuffle=True,
         seed=42,
+        **kwargs,
     )
     split = manager.split_position(model.extract_position(manager.position_keys))
 
@@ -56,7 +78,7 @@ def test_explicit_split_groups_preserve_alignment_and_equal_size_boundaries():
     assert not jnp.array_equal(split.train["y_a"], split.train["y_b"] - 100)
 
 
-@pytest.mark.parametrize("factory", [SplitManager, BatchManager])
+@pytest.mark.parametrize("factory", [SplitManager, BatchManager, Split])
 @pytest.mark.parametrize(
     "keys, error, message",
     [
@@ -74,15 +96,16 @@ def test_explicit_groups_reject_invalid_keys(factory, keys, error, message):
         factory.from_model(_model(), position_keys=keys, **kwargs)
 
 
-def test_single_split_factory_requires_flat_keys():
-    with pytest.raises(TypeError, match="flat"):
-        Split.from_model(_model(), position_keys=[["y_a"]])  # ty: ignore[invalid-argument-type]
+def test_single_split_factory_accepts_one_explicit_group_by_default():
+    recipe = Split.from_model(_model(), position_keys=[["y_a"]])
+    assert isinstance(recipe, Split)
+    assert recipe.position_keys == ["y_a"]
 
 
-@pytest.mark.parametrize("factory", [PositionSplit, PositionSplitManager])
+@pytest.mark.parametrize("factory", [PositionSplit, PositionSplitManager, Split])
 def test_groups_and_passthrough_survive_position_splits_and_automatic_batches(factory):
     model = _model(shared=True)
-    kwargs = {"multi_size": "manager"} if factory is PositionSplit else {}
+    kwargs = {"multi_size": "manager"} if factory in (PositionSplit, Split) else {}
     split = factory.from_model(
         model,
         position_keys=[["x_a", "y_a", "shared"], ["x_b", "y_b"]],
@@ -92,6 +115,8 @@ def test_groups_and_passthrough_survive_position_splits_and_automatic_batches(fa
         seed=42,
         **kwargs,
     )
+    if isinstance(split, SplitManager):
+        split = split.split_position(model.extract_position(split.position_keys))
     assert isinstance(split, PositionSplitManager)
     for part in (split.train, split.validate, split.test):
         assert part["shared"] == 7
@@ -149,7 +174,7 @@ def test_passthrough_requires_a_real_group(keys):
             )
 
 
-@pytest.mark.parametrize("factory", [Batches, PositionSplit])
+@pytest.mark.parametrize("factory", [Batches, PositionSplit, Split])
 def test_single_group_return_types_and_multiple_group_opt_in(factory):
     model = _model()
     kwargs = {"batch_size": 4} if factory is Batches else {}
@@ -200,6 +225,24 @@ def test_multiple_equal_size_groups_reject_scalar_split_axis_override():
             multi_size="manager",
             axis_size=32,
         )
+
+
+@pytest.mark.parametrize(
+    "kwargs, message",
+    [
+        ({"multi_size": "invalid"}, "multi_size must"),
+        ({"multi_size": "manager", "axis_size": 32}, "axis_size"),
+        (
+            {"multi_size": "manager", "sample_sizes": {"train": 64}},
+            "sample_sizes",
+        ),
+    ],
+)
+def test_split_recipe_rejects_invalid_mode_and_ambiguous_group_overrides(
+    kwargs, message
+):
+    with pytest.raises(ValueError, match=message):
+        Split.from_model(_model(), position_keys=[["y_a"], ["y_b"]], **kwargs)
 
 
 SPLIT_FACTORIES = [

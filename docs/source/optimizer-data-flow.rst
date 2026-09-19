@@ -44,9 +44,9 @@ appropriate ``batch_axes`` as well. Group order is preserved and affects the ran
 keys assigned to children; repeating the same grouping and seed repeats the split.
 
 The same nested syntax is accepted by ``BatchManager.from_model`` and
-``PositionSplitManager.from_model``. ``Batches.from_model`` and
-``PositionSplit.from_model`` require ``multi_size="manager"`` for multiple groups,
-including equal-sized groups. With one group, these two factories still return a
+``PositionSplitManager.from_model``. ``Split.from_model``, ``Batches.from_model``,
+and ``PositionSplit.from_model`` require ``multi_size="manager"`` for multiple groups,
+including equal-sized groups. With one group, these factories still return a
 single object; manager factories always return a manager.
 
 Flat keys retain automatic grouping by axis length. Omitting ``position_keys``
@@ -54,6 +54,23 @@ selects all observed variables and groups them automatically. Mixed flat/nested
 inputs, empty groups, duplicate keys, and incompatible lengths within an explicit
 group are rejected. Factory options apply to all groups; construct child objects
 manually when different groups need different settings or scalar size overrides.
+
+The same factory can handle either one or several inferred groups:
+
+.. code-block:: python
+
+   recipe = opt.Split.from_model(
+       model,
+       validate_axis_share=0.20,
+       shuffle=True,
+       seed=42,
+       multi_size="manager",
+   )
+   split = recipe.split_position(model.extract_position(recipe.position_keys))
+   batches = opt.Batches.from_split(split, batch_size=64)
+
+``Split.from_model`` rejects ``axis_size`` and ``sample_sizes`` overrides when
+multiple groups are selected. Configure child recipes explicitly for those cases.
 
 Shuffling and reproducibility
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
