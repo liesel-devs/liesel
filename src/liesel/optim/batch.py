@@ -10,6 +10,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from ..model import Model
+from . import _alias
 from ._log_lik import scaled_common_log_lik as _scaled_common_log_lik
 from ._log_lik import scaled_liesel_log_lik as _scaled_liesel_log_lik
 from ._model_utils import position_key_groups_from_model
@@ -166,7 +167,8 @@ class Batches:
         Optional finite, strictly positive relative weights of length ``axis_size``,
         aligned with the training data in its current order. Requires
         ``sample_with_replacement=True``. Normalized probabilities remain fixed
-        during a run; saved probabilities take precedence on checkpoint recovery.
+        during a run; saved probabilities and alias tables take precedence on
+        checkpoint recovery. Probabilities and corrections use at least float32.
         Values whose probabilities or correction factors cannot be represented in
         the working dtype are rejected. No probability floor or clipping is applied.
     likelihood_axes
@@ -256,6 +258,7 @@ class Batches:
     batch_sample_size: int | float | None = None
     likelihood_axes: dict[str, int]
     _sampling_probabilities: jax.Array | None
+    _alias_table: _alias.AliasTable | None
 
     def __init__(
         self,
@@ -293,6 +296,7 @@ class Batches:
             raise ValueError("likelihood_axes values must be integers.")
         self.__post_init__()
         self._sampling_probabilities = None
+        self._alias_table = None
         if sampling_weights is not None:
             if not self.sample_with_replacement:
                 raise ValueError(
@@ -314,8 +318,11 @@ class Batches:
             # which underflows for large, otherwise valid relative weights.
             relative = np.asarray(weights, dtype=np.float64)
             relative = relative / relative.max()
-            dtype = jax.dtypes.canonicalize_dtype(weights.dtype)
-            probabilities = jnp.asarray(relative / relative.sum(), dtype=dtype)
+            dtype = jax.dtypes.canonicalize_dtype(
+                jnp.promote_types(weights.dtype, jnp.float32)
+            )
+            normalized = relative / relative.sum()
+            probabilities = jnp.asarray(normalized, dtype=dtype)
             corrections = 1.0 / (self.axis_size * probabilities)
             if not bool(
                 jnp.all(
@@ -330,6 +337,7 @@ class Batches:
                     "are not representable."
                 )
             self._sampling_probabilities = probabilities
+            self._alias_table = _alias.build_table(normalized)
 
     @property
     def sampling_probabilities(self) -> jax.Array | None:
@@ -864,13 +872,9 @@ class Batches:
     def _draw_indices(self, key: jax.Array, size: int) -> jax.Array:
         if self.sampling_probabilities is None:
             return jax.random.randint(key, (size,), 0, self.axis_size)
-        return jax.random.choice(
-            key,
-            self.axis_size,
-            shape=(size,),
-            replace=True,
-            p=self.sampling_probabilities,
-        )
+        assert self._alias_table is not None
+        # Match the default index dtype used by the epoch's initial carry.
+        return _alias.sample(key, size, self._alias_table).astype(int)
 
     def start_epoch(self, key: jax.Array, n_batches: int | None = None) -> Batches:
         """
@@ -1190,7 +1194,14 @@ class Batches:
         return _scaled_common_log_lik(model_state, self.batch_sample_scale)
 
     def _tree_flatten(self):
-        children = (self.indices, self.sampling_probabilities)
+        # Unweighted checkpoints from before alias sampling remain compatible.
+        table = getattr(self, "_alias_table", None)
+        if self.sampling_probabilities is not None and table is None:
+            raise ValueError(
+                "Weighted checkpoint predates alias sampling and cannot be resumed. "
+                "Start a new run with an unused checkpoint path."
+            )
+        children = (self.indices, self.sampling_probabilities, table)
         aux_data = {
             "position_keys": self.position_keys,
             "axis_size": self.axis_size,
@@ -1210,7 +1221,7 @@ class Batches:
         bi = object.__new__(cls)
         for name, value in aux_data.items():
             setattr(bi, name, value)
-        bi.indices, bi._sampling_probabilities = children
+        bi.indices, bi._sampling_probabilities, bi._alias_table = children
         return bi
 
     def __repr__(self) -> str:

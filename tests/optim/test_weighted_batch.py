@@ -11,6 +11,42 @@ from liesel.optim import Batches, BatchManager
 from liesel.optim.types import Position
 
 
+def test_float16_weights_reach_all_indices_and_preserve_indicator_mean():
+    batches = Batches(
+        ["y"],
+        axis_size=4096,
+        batch_size=65536,
+        sample_with_replacement=True,
+        sampling_weights=np.ones(4096, dtype=np.float16),
+    )
+    sampled = jax.jit(lambda b: b.start_epoch(jax.random.key(42)))(batches)
+    indices = np.asarray(sampled.indices)
+    assert np.unique(indices).size == 4096
+    estimate = np.mean((indices % 4 != 3) * np.asarray(sampled.correction_factors(0)))
+    assert estimate == pytest.approx(0.75, abs=0.01)
+    assert batches.sampling_probabilities is not None
+    assert batches.sampling_probabilities.dtype == jnp.float32
+
+
+@pytest.mark.parametrize("dtype", [np.float16, np.float32, np.float64])
+def test_probability_and_correction_precision_respects_jax_configuration(dtype):
+    batches = Batches(
+        ["y"],
+        3,
+        3,
+        sample_with_replacement=True,
+        sampling_weights=np.array([1, 2, 7], dtype=dtype),
+    )
+    expected_dtype = (
+        jnp.float64
+        if dtype == np.float64 and jax.config.read("jax_enable_x64")
+        else jnp.float32
+    )
+    assert batches.sampling_probabilities is not None
+    assert batches.sampling_probabilities.dtype == expected_dtype
+    assert batches.correction_factors(0).dtype == expected_dtype
+
+
 def test_weighted_replacement_sampling_uses_relative_priorities():
     batches = Batches(
         ["y"],
@@ -39,7 +75,7 @@ def test_weighted_replacement_sampling_uses_relative_priorities():
         [1.0, float("inf")],
         [1.0],
         [[1.0, 2.0]],
-        [1.0, 1e-45],
+        np.array([1.0, 1e-45], dtype=np.float32),
     ],
 )
 def test_weights_must_be_positive_finite_and_representable(weights):
@@ -85,7 +121,7 @@ def test_expected_corrected_likelihood_and_gradient_preserve_full_objective(scal
             + tfd.Normal(0.0, 1.0).log_prob(theta)
         )
 
-    theta = jnp.array(0.7)
+    theta = jnp.array(0.7, dtype=loc.value.dtype)
     values, gradients = jax.vmap(jax.value_and_grad(estimate), in_axes=(None, 0))(
         theta, jnp.arange(2)
     )
@@ -112,7 +148,7 @@ def test_expected_corrected_likelihood_and_gradient_preserve_full_objective(scal
 def test_likelihood_axes_follow_event_reduction_and_broadcasting(
     shape, axis, event_dim
 ):
-    data = jnp.arange(np.prod(shape), dtype=float).reshape(shape) / 10
+    data = jnp.arange(np.prod(shape), dtype=jnp.float32).reshape(shape) / 10
     if event_dim:
         dist = lsl.Dist(
             tfd.MultivariateNormalDiag,
@@ -274,7 +310,9 @@ def make_weighted_engine(*, epochs=3, weights=None, debug=False, loss_type=None)
             8,
             2,
             sample_with_replacement=True,
-            sampling_weights=jnp.arange(1.0, 9.0) if weights is None else weights,
+            sampling_weights=(
+                jnp.arange(1.0, 9.0, dtype=jnp.float32) if weights is None else weights
+            ),
         ),
         optimizers=[Optimizer(["loc"], optax.sgd(0.01))],
         stopper=Stopper(epochs=epochs, min_epochs=epochs, patience=epochs),
@@ -333,6 +371,19 @@ def test_checkpoint_restores_sampling_probabilities_over_new_weights(
         actual.position_final["loc"], expected.position_final["loc"], rtol=1e-6
     )
     assert actual.status == expected.status
+
+
+@pytest.mark.parametrize("allow_version_mismatch", [False, True])
+def test_pre_alias_weighted_checkpoint_is_rejected(tmp_path, allow_version_mismatch):
+    path = tmp_path / "legacy-weighted.pkl"
+    checkpoint = make_weighted_engine().fit(pause_after=1).checkpoint
+    # Reproduce the serialized state from before alias tables were introduced.
+    vars(checkpoint._carry.batches).pop("_alias_table", None)
+    checkpoint.save(path)
+    with pytest.raises(ValueError, match="predates alias sampling"):
+        make_weighted_engine().fit(
+            checkpoint=path, allow_version_mismatch=allow_version_mismatch
+        )
 
 
 @pytest.mark.parametrize("axis", [0, -2, 2])

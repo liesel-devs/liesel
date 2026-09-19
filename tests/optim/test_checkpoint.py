@@ -75,6 +75,16 @@ def assert_same_run(actual, expected):
     assert actual.min_monitor_epoch == expected.min_monitor_epoch
 
 
+def test_unweighted_checkpoint_without_alias_state_still_resumes(tmp_path):
+    expected = make_engine().fit()
+    checkpoint = make_engine().fit(pause_after=2).checkpoint
+    # Old unweighted Batches instances had no alias-table attribute.
+    vars(checkpoint._carry.batches).pop("_alias_table", None)
+    path = tmp_path / "legacy-unweighted.pkl"
+    checkpoint.save(path)
+    assert_same_run(make_engine().fit(checkpoint=path), expected)
+
+
 @pytest.mark.parametrize("save_position_history", [False, True])
 def test_pause_and_resume_matches_uninterrupted_stochastic_optimization(
     save_position_history,

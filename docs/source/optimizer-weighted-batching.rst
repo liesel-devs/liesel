@@ -63,10 +63,44 @@ not guarantee that every observation appears. A manager can combine weighted
 groups with different probability vectors and ordinary uniform groups.
 
 Probabilities are fixed throughout a run. On checkpoint recovery, the saved
-probabilities take precedence over newly supplied weights. Batch structure and
-sampling mode must remain compatible. Adaptive priorities, weighted sampling
-without replacement, and automatic weight routing through ``LieselOptim`` are
-outside this API.
+probabilities and alias table take precedence over newly supplied weights. Batch
+structure and sampling mode must remain compatible. Adaptive priorities,
+weighted sampling without replacement, and automatic weight routing through
+``LieselOptim`` are outside this API.
+
+Sampling and numerical precision
+--------------------------------
+
+Weighted groups prepare a `Vose alias table
+<https://www.keithschwarz.com/darts-dice-coins/>`_ once on the host using NumPy
+float64 arithmetic. Each draw selects a uniform integer table entry and flips
+a biased coin to choose that entry or its stored alternative. Preparation and
+table storage are linear in the observation count; draws do not scan the weight
+vector. The engine draws an epoch's indices together, then slices them into
+minibatches, reusing the table across epochs.
+
+The table occupies 16 bytes per observation, in addition to the probability
+vector (4 bytes per observation, or 8 with float64) and the epoch's indices.
+Thus one million observations require about 16 MB for the alias table.
+Integer rejection sampling avoids modulo bias when selecting entries. Coin
+decisions use random integer bits, drawing additional words when needed, rather
+than comparing a float32 uniform draw with a tiny threshold. Sampling uses JAX
+keys throughout and works with JAX's 64-bit mode disabled.
+
+Coin decisions are exact for the stored binary thresholds, assuming uniform
+independent random bits. Normalization and table construction still involve
+ordinary floating-point rounding; this is not exact arithmetic for the original
+weight ratios. Probabilities and importance corrections use at least float32,
+including when input weights are float16. Float64 inputs retain float64 when
+JAX's 64-bit mode is enabled. There is no probability floor or correction cap;
+representability checks still apply.
+
+Weighted random sequences differ from the earlier cumulative-probability
+sampler. New checkpoints save the alias table along with the probabilities and
+random state, allowing continuation to match an uninterrupted run under the
+same supported runtime. Old weighted checkpoints without alias state cannot be
+resumed, even with ``allow_version_mismatch=True``; start a new run with an unused
+checkpoint path. Old unweighted checkpoints remain supported.
 
 How correction works
 --------------------
