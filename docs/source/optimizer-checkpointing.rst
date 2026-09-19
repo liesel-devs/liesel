@@ -85,13 +85,9 @@ default. To attempt recovery across versions, pass
 ``allow_version_mismatch=True`` to ``fit()``. This warns about version differences
 and leaves structural checks enabled; it does not guarantee compatibility.
 
-Legacy EMA checkpoints that stored a numerator and accumulated weight are
-converted to the normalized EMA when loaded. Conversion preserves the saved EMA
-value but cannot undo previous rounding errors in that value, history, or stopping
-state. Subsequent updates use the more stable calculation, so results can differ
-from continuation with the old implementation. Newly created checkpoints retain
-the EMA's rounding compensation and continue the same calculation as an
-uninterrupted run under the same runtime and configuration.
+Checkpoints retain the EMA monitoring state, including rounding compensation.
+Resuming continues the same calculation as an uninterrupted run under the same
+runtime and configuration.
 
 Manual save and load
 --------------------

@@ -75,7 +75,7 @@ multiple groups are selected. Configure child recipes explicitly for those cases
 Shuffling and reproducibility
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**The split default is now** ``shuffle=True`` **instead of** ``False``. This applies
+Splits default to ``shuffle=True``. This applies
 to ``Split`` and all split factories, for both flat and nested selections. Set
 ``shuffle=False`` explicitly to retain ordered train/validation/test partitions,
 for example in a chronological evaluation. Supply a seed for reproducible random

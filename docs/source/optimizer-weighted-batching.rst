@@ -95,12 +95,10 @@ including when input weights are float16. Float64 inputs retain float64 when
 JAX's 64-bit mode is enabled. There is no probability floor or correction cap;
 representability checks still apply.
 
-Weighted random sequences differ from the earlier cumulative-probability
-sampler. New checkpoints save the alias table along with the probabilities and
-random state, allowing continuation to match an uninterrupted run under the
-same supported runtime. Old weighted checkpoints without alias state cannot be
-resumed, even with ``allow_version_mismatch=True``; start a new run with an unused
-checkpoint path. Old unweighted checkpoints remain supported.
+Checkpoints save the alias table along with the probabilities and random state,
+allowing continuation to match an uninterrupted run under the same supported
+runtime. Weighted checkpoints require alias state to resume, even with
+``allow_version_mismatch=True``.
 
 How correction works
 --------------------
