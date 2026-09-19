@@ -687,16 +687,11 @@ class OptimEngine:
         position_final = carry.position
 
         if n_epochs == 0:
-            position = None
             position_min_monitor = None
             min_monitor_epoch = None
         else:
             position_min_monitor = carry.position_min_monitor
             min_monitor_epoch = int(carry.min_monitor_epoch)
-            if isinstance(self.loss_monitor, EmaTrainLossMonitor):
-                position = position_final
-            else:
-                position = position_min_monitor
 
         monitor_source: Literal["train_ema", "validation", "train_full_data"]
         if isinstance(self.loss_monitor, EmaTrainLossMonitor):
@@ -706,7 +701,6 @@ class OptimEngine:
 
         result = OptimResult(
             history=history,
-            position=position,
             position_final=position_final,
             position_min_monitor=position_min_monitor,
             n_epochs=n_epochs,

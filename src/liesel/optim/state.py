@@ -190,11 +190,12 @@ class OptimHistory:
         optimization trajectory; it is not a full-data loss evaluated at the
         epoch's final position.
     loss_monitor
-        Epoch-level series used for stopping and result selection, with shape
-        ``(epochs,)``. Depending on the configured source, this is a training EMA,
-        complete validation loss, or complete training loss. Exact losses use the
-        post-update epoch position. An EMA snapshot summarizes several positions,
-        so its associated parameter snapshot is not an exact loss-position pair.
+        Epoch-level series used for stopping and identifying the minimum-monitor
+        position, with shape ``(epochs,)``. Depending on the source, this is a
+        training EMA, complete validation loss, or complete training loss. Exact
+        losses use the post-update epoch position. An EMA snapshot summarizes
+        several positions, so its associated parameter snapshot is not an exact
+        loss-position pair.
     position
         Optional parameter position history. Each array has a leading epoch
         dimension.
@@ -895,19 +896,16 @@ class OptimResult:
     """
     Result returned by an optimizer run.
 
-    ``OptimResult`` bundles the processed history, the recommended continuation
-    position, the terminal and minimum-monitor positions, and small metadata about
-    the run. It also provides convenience plotting methods for losses and saved
-    parameter histories.
+    ``OptimResult`` bundles the processed history, the terminal and minimum-monitor
+    positions, and small metadata about the run. Choose explicitly between
+    ``position_final`` and ``position_min_monitor`` when using fitted parameters.
+    It also provides convenience plotting methods for losses and saved parameter
+    histories.
 
     Parameters
     ----------
     history
         Processed optimizer history.
-    position
-        Recommended continuation position. This is the terminal position for EMA
-        monitoring and the minimum-monitor position for exact epoch-level sources.
-        It is ``None`` if no epoch completed.
     position_final
         Actual terminal position, including an interrupted partial epoch.
     position_min_monitor
@@ -949,7 +947,6 @@ class OptimResult:
     >>> position_min_monitor = Position({"theta": jnp.array(1.0)})
     >>> result = OptimResult(
     ...     history=history,
-    ...     position=position_min_monitor,
     ...     position_final=position_final,
     ...     position_min_monitor=position_min_monitor,
     ...     n_epochs=2,
@@ -964,7 +961,6 @@ class OptimResult:
 
     history: OptimHistory
 
-    position: Position | None
     position_final: Position
     position_min_monitor: Position | None
     n_epochs: int

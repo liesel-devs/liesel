@@ -532,7 +532,7 @@ class FakeTqdm:
 
 
 @pytest.mark.parametrize("save_position_history", [True, False])
-def test_ema_result_recommends_terminal_and_retains_minimum_monitor_position(
+def test_ema_result_retains_terminal_and_minimum_monitor_positions(
     save_position_history,
 ):
     loss = _loss()
@@ -556,11 +556,8 @@ def test_ema_result_recommends_terminal_and_retains_minimum_monitor_position(
     assert result.patience == 2
     assert result.monitor_source == "train_ema"
     assert result.min_monitor_epoch == 0
-    position = result.position
     position_min_monitor = result.position_min_monitor
-    assert position is not None
     assert position_min_monitor is not None
-    assert position["theta"] == pytest.approx(6.0)
     assert result.position_final["theta"] == pytest.approx(6.0)
     assert position_min_monitor["theta"] == pytest.approx(0.0)
 
@@ -579,7 +576,9 @@ def test_removed_result_and_engine_api_is_absent():
         initial_state={},
         show_progress=False,
     ).fit()
+    assert "position" not in inspect.signature(type(result)).parameters
     for removed_field in (
+        "position",
         "best_" + "position",
         "best_" + "epoch",
         "final_" + "epoch",
@@ -864,7 +863,6 @@ def test_debug_nans_no_active_loss_capture_reproduces_loss():
     info = result.nan_debug
     assert info is not None
     assert result.n_epochs == 0
-    assert result.position is None
     assert result.position_min_monitor is None
     assert result.min_monitor_epoch is None
     assert result.position_final["theta"] == pytest.approx(0.0)
@@ -910,7 +908,6 @@ def test_debug_nans_position_after_reproduces_second_optimizer_step():
     info = result.nan_debug
     assert info is not None
     assert result.n_epochs == 0
-    assert result.position is None
     assert result.position_min_monitor is None
     assert result.min_monitor_epoch is None
     assert result.position_final["theta"] == pytest.approx(1.0)
@@ -1263,11 +1260,8 @@ def test_exact_monitor_source_drives_epoch_stopping(loss_monitor):
     assert result.history.loss_monitor.tolist() == pytest.approx([0.0, 5.0, 6.0])
     assert result.monitor_source == loss_monitor
     assert result.min_monitor_epoch == 0
-    position = result.position
     position_min_monitor = result.position_min_monitor
-    assert position is not None
     assert position_min_monitor is not None
-    assert position["theta"] == pytest.approx(0.0)
     assert position_min_monitor["theta"] == pytest.approx(0.0)
     assert result.position_final["theta"] == pytest.approx(6.0)
     assert result.history.position is None

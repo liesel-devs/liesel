@@ -118,7 +118,6 @@ class TestOptimResult:
         position = Position({})
         result = OptimResult(
             history=history,
-            position=position,
             position_final=position,
             position_min_monitor=position,
             n_epochs=2,
@@ -150,7 +149,6 @@ class TestOptimResult:
         position = Position({})
         result = OptimResult(
             history=history,
-            position=position,
             position_final=position,
             position_min_monitor=position,
             n_epochs=2,
@@ -186,7 +184,6 @@ class TestOptimResult:
         position = Position({})
         result = OptimResult(
             history=history,
-            position=position,
             position_final=position,
             position_min_monitor=position,
             n_epochs=10,
@@ -230,7 +227,6 @@ class TestOptimResult:
         position = Position({})
         result = OptimResult(
             history=history,
-            position=None,
             position_final=position,
             position_min_monitor=None,
             n_epochs=0,
@@ -250,7 +246,6 @@ class TestOptimResult:
         history = OptimHistory.from_epochs(epochs=2, position=position, tracked=None)
         result = OptimResult(
             history=history,
-            position=position,
             position_final=position,
             position_min_monitor=position,
             n_epochs=2,
