@@ -73,7 +73,7 @@ class TestSplit:
             Split(["land"], axis_size=4, split_axes={"land": None})
 
     def test_split_position_infers_position_keys_when_omitted(self):
-        splitter = Split(axis_size=4, validate_axis_size=1)
+        splitter = Split(axis_size=4, validate_axis_size=1, shuffle=False)
 
         split = splitter.split_position(
             Position({"x": jnp.arange(4), "y": jnp.arange(4) + 10})
@@ -575,8 +575,20 @@ class TestSplitManager:
     def test_combines_different_size_branches(self):
         manager = SplitManager(
             [
-                Split(["x"], axis_size=10, validate_axis_size=2, test_axis_size=1),
-                Split(["y"], axis_size=6, validate_axis_size=1, test_axis_size=1),
+                Split(
+                    ["x"],
+                    axis_size=10,
+                    validate_axis_size=2,
+                    test_axis_size=1,
+                    shuffle=False,
+                ),
+                Split(
+                    ["y"],
+                    axis_size=6,
+                    validate_axis_size=1,
+                    test_axis_size=1,
+                    shuffle=False,
+                ),
             ]
         )
         position = Position({"x": jnp.arange(10), "y": jnp.arange(6)})

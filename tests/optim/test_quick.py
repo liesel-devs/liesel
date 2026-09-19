@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import jax
 import jax.numpy as jnp
 import pytest
@@ -7,6 +9,7 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.model as lsl
 import liesel.optim as opt
+import liesel.optim.split as split_module
 from liesel.optim import (
     Batches,
     BatchManager,
@@ -57,6 +60,37 @@ def test_lieseloptim_imports():
     assert opt.LieselOptim is LieselOptim
     assert LieselOptimFromQuick is LieselOptim
     assert not hasattr(opt, "QuickOptim")
+
+
+@pytest.mark.parametrize("make_model", [_normal_model, _two_branch_model])
+def test_seeded_automatic_full_data_setup_preserves_rows_and_repeats_fit(
+    make_model, monkeypatch
+):
+    def unexpected_clock_read():
+        raise AssertionError("Automatic full-data setup must not generate a split seed")
+
+    monkeypatch.setattr(
+        split_module, "time", SimpleNamespace(time=unexpected_clock_read)
+    )
+
+    def run():
+        model = make_model()
+        quick = LieselOptim(
+            model,
+            seed=42,
+            batch_size=2,
+            loss_monitor=EmaTrainLossMonitor(1),
+            stopper=Stopper(epochs=3, patience=3),
+            show_progress=False,
+        )
+        original = model.extract_position(quick.split.position_keys)
+        for key, value in original.items():
+            assert jnp.array_equal(quick.split.train[key], value)
+        return quick.fit()
+
+    first, second = run(), run()
+    assert jnp.array_equal(first.history.loss_train, second.history.loss_train)
+    assert jnp.array_equal(first.position_final["loc"], second.position_final["loc"])
 
 
 def test_lieseloptim_requires_explicit_loss_monitor():

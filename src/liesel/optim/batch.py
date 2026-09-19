@@ -94,7 +94,7 @@ def _axis_size_for_empty_position_keys(
     batch_axes: dict[str, int] | None,
     default_batch_axis: int,
 ) -> int:
-    groups = position_key_groups_from_model(
+    _, groups = position_key_groups_from_model(
         model,
         list(model.observed),
         batch_axes,
@@ -113,7 +113,7 @@ def _axis_size_for_empty_position_keys(
             "observed variables have different axis sizes. Provide axis_size manually."
         )
 
-    return int(next(iter(groups)))
+    return int(groups[0][0])
 
 
 @dataclass(init=False)
@@ -434,7 +434,7 @@ class Batches:
         cls,
         model: Model,
         batch_size: int | None | object = _MISSING,
-        position_keys: Sequence[str] | None = None,
+        position_keys: Sequence[str] | Sequence[Sequence[str]] | None = None,
         axis_size: int | None = None,
         shuffle: bool = True,
         batch_axes: dict[str, int] | None = None,
@@ -455,7 +455,7 @@ class Batches:
         cls,
         model: Model,
         batch_size: int | None | object = _MISSING,
-        position_keys: Sequence[str] | None = None,
+        position_keys: Sequence[str] | Sequence[Sequence[str]] | None = None,
         axis_size: int | None = None,
         shuffle: bool = True,
         batch_axes: dict[str, int] | None = None,
@@ -475,7 +475,7 @@ class Batches:
         cls,
         model: Model,
         batch_size: int | None | object = _MISSING,
-        position_keys: Sequence[str] | None = None,
+        position_keys: Sequence[str] | Sequence[Sequence[str]] | None = None,
         axis_size: int | None = None,
         shuffle: bool = True,
         batch_axes: dict[str, int] | None = None,
@@ -501,7 +501,10 @@ class Batches:
             the returned object uses one full-data batch.
         position_keys
             Names of the observed position entries to batch. If ``None``, all observed
-            variables in ``model`` are used. Pass an empty sequence only with
+            variables in ``model`` are used. Flat keys are grouped by axis length;
+            nested keys specify exact groups, including equal-sized groups. Keys
+            in a group must have matching lengths along their batching axes.
+            Pass an empty sequence only with
             ``batch_size=None`` to build a full-data adapter that does not replace
             observed entries.
         axis_size
@@ -516,10 +519,11 @@ class Batches:
             Axis used for guessing ``axis_size`` and for position keys missing
             from ``batch_axes``.
         multi_size
-            How to handle observed variables with different inferred axis sizes.
+            How to handle multiple inferred or explicit observation groups.
             The default ``"error"`` keeps :class:`Batches` scalar and raises a
             helpful error. Use ``"manager"`` to return a :class:`BatchManager` when
-            multiple axis sizes are detected.
+            multiple groups are detected, even with equal axis sizes. One group
+            still returns a scalar :class:`Batches` object.
         epoch_size
             Batch manager epoch size used only when ``multi_size="manager"``.
         sample_size
@@ -550,7 +554,8 @@ class Batches:
         Batches or BatchManager
             Batch configuration for the model's observed data. A
             :class:`BatchManager` is returned only when ``multi_size="manager"`` and
-            multiple axis sizes are detected.
+            multiple groups are detected, even with equal axis sizes. One group
+            still returns a scalar :class:`Batches` object.
 
         Examples
         --------
@@ -601,7 +606,7 @@ class Batches:
         if not pos_keys and batch_size is not None:
             raise ValueError("position_keys may be empty only when batch_size=None.")
 
-        groups = position_key_groups_from_model(
+        pos_keys, groups = position_key_groups_from_model(
             model, pos_keys, batch_axes, default_batch_axis
         )
 
@@ -621,7 +626,7 @@ class Batches:
                 return BatchManager.from_model(
                     model,
                     batch_size=batch_size,
-                    position_keys=pos_keys,
+                    position_keys=position_keys,
                     shuffle=shuffle,
                     batch_axes=batch_axes,
                     default_batch_axis=default_batch_axis,
@@ -631,15 +636,15 @@ class Batches:
                 )
 
             raise ValueError(
-                "Batches.from_model() found observed variables with different "
-                f"axis sizes: {groups}. Use "
+                "Batches.from_model() found multiple observation groups "
+                f"with axis sizes {[size for size, _ in groups]}. Use "
                 "Batches.from_model(..., multi_size='manager') or "
                 "BatchManager.from_model(...)."
             )
 
         if axis_size is None:
             axis_size = (
-                next(iter(groups))
+                groups[0][0]
                 if groups
                 else _axis_size_for_empty_position_keys(
                     model, batch_axes, default_batch_axis
@@ -1375,7 +1380,7 @@ class BatchManager:
         cls,
         model: Model,
         batch_size: int | None | object = _MISSING,
-        position_keys: Sequence[str] | None = None,
+        position_keys: Sequence[str] | Sequence[Sequence[str]] | None = None,
         shuffle: bool = True,
         batch_axes: dict[str, int] | None = None,
         default_batch_axis: int = 0,
@@ -1386,10 +1391,10 @@ class BatchManager:
         batch_axis_size: int | None | object = _MISSING,
     ) -> BatchManager:
         """
-        Builds a :class:`BatchManager` by grouping observed variables by size.
+        Builds a :class:`BatchManager` from inferred or explicit groups.
 
-        Observed variables are grouped by inferred length along their batching axis.
-        One child :class:`Batches` object is created for each axis-size group using
+        Flat keys are grouped by inferred length along their batching axes; nested
+        keys specify exact groups. One child :class:`Batches` is created per group using
         the same ``batch_size``. With the default ``epoch_size="max"``, shorter
         branches assemble additional shuffled passes for the joint steps.
 
@@ -1405,7 +1410,9 @@ class BatchManager:
             full-data batch and shuffling is disabled.
         position_keys
             Names of observed position entries to batch. If ``None``, all observed
-            variables in ``model`` are used.
+            variables in ``model`` are used. Flat keys are grouped by axis length;
+            nested keys preserve exact groups in the supplied order. Each group
+            must have matching lengths along its configured batching axes.
         shuffle
             Whether each child should shuffle observation indices at epoch start.
         batch_axes
@@ -1430,8 +1437,8 @@ class BatchManager:
         Returns
         -------
         BatchManager
-            Batch manager with one child :class:`Batches` object per inferred
-            axis size.
+            Batch manager with one child :class:`Batches` object per observation
+            group, including separate groups of equal size.
 
         Examples
         --------
@@ -1467,13 +1474,13 @@ class BatchManager:
         pos_keys = (
             list(position_keys) if position_keys is not None else list(model.observed)
         )
-        groups = position_key_groups_from_model(
+        pos_keys, groups = position_key_groups_from_model(
             model, pos_keys, batch_axes, default_batch_axis
         )
         shuffle = False if batch_size is None else shuffle
 
         batches = []
-        for axis_size, keys in groups.items():
+        for axis_size, keys in groups:
             batch = Batches.from_model(
                 model,
                 batch_size=batch_size,

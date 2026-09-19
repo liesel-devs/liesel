@@ -266,6 +266,7 @@ class LieselOptim:
             split_axes=split_axes,
             default_split_axis=default_split_axis,
             multi_size="manager",
+            shuffle=False,
         )
 
     def _resolve_loss(
