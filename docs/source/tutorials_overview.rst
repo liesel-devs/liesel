@@ -31,7 +31,8 @@ a comparison of different samplers, and more:
    tutorials/md/07-error-correction
    tutorials/md/08-custom-kernel
 
-Optimization and variational inference:
+The optimization and variational inference tutorials introduce the :mod:`liesel.optim`
+workflow for models with one or several observed-data branches:
 
 .. toctree::
    :maxdepth: 1

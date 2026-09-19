@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import math
-import warnings
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal, cast, overload
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from ..model import Model
+from . import _alias
 from ._log_lik import scaled_common_log_lik as _scaled_common_log_lik
 from ._log_lik import scaled_liesel_log_lik as _scaled_liesel_log_lik
 from ._model_utils import position_key_groups_from_model
@@ -23,6 +24,27 @@ from .split import (
 from .types import Array, ModelInterface, ModelState, Position
 
 _MISSING = object()
+
+
+def _sampling_categories(labels: Array) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    # Object conversion preserves label identity and exposes mixed string/numeric
+    # sequences before NumPy can silently coerce them to strings or floats.
+    values = np.asarray(labels, dtype=object)
+    if values.ndim != 1 or not values.size:
+        raise ValueError("labels must be a nonempty one-dimensional sequence.")
+    strings = all(isinstance(value, str) for value in values)
+    numeric = all(
+        isinstance(value, (int, np.integer, bool, np.bool_))
+        or isinstance(value, (float, np.floating))
+        and np.isfinite(value)
+        for value in values
+    )
+    if not (strings or numeric):
+        raise ValueError(
+            "labels must contain only strings or finite numeric categories, "
+            "without missing values or mixed string/numeric labels."
+        )
+    return np.unique(values, return_inverse=True, return_counts=True)
 
 
 def _resolve_batch_size(
@@ -93,7 +115,7 @@ def _axis_size_for_empty_position_keys(
     batch_axes: dict[str, int] | None,
     default_batch_axis: int,
 ) -> int:
-    groups = position_key_groups_from_model(
+    _, groups = position_key_groups_from_model(
         model,
         list(model.observed),
         batch_axes,
@@ -112,7 +134,7 @@ def _axis_size_for_empty_position_keys(
             "observed variables have different axis sizes. Provide axis_size manually."
         )
 
-    return int(next(iter(groups)))
+    return int(groups[0][0])
 
 
 @dataclass(init=False)
@@ -120,8 +142,8 @@ class Batches:
     """
     Defines mini-batches for observed entries in an optimizer position.
 
-    ``Batches`` stores an index vector of length ``axis_size`` and reshapes the first
-    complete part of that vector into batches. The observed position entries named in
+    ``Batches`` owns the observation indices for the current epoch and reshapes complete
+    parts of shuffled passes into batches. The observed position entries named in
     ``position_keys`` are sliced with these indices. By default, every entry is
     sliced along axis ``0``; use ``default_batch_axis`` or ``batch_axes`` for
     arrays where observations live on another axis.
@@ -146,9 +168,9 @@ class Batches:
     default_batch_axis
         Batching axis for all position keys not listed in ``batch_axes``.
     sample_with_replacement
-        Whether an oversized batch may be filled by sampling observations with
-        replacement. This is mainly used by :meth:`BatchManager.from_model` when
-        ``mode="resample"`` and a common ``batch_size`` is larger than a branch's
+        Whether every assembled batch draws observations independently with
+        replacement. This is useful for explicit replacement sampling and is enabled
+        automatically for an oversized child when a common batch size exceeds its
         observation count.
     sample_size
         Optional effective likelihood sample size represented by the full data. If
@@ -162,6 +184,20 @@ class Batches:
     batch_axis_size
         Backwards-compatible keyword-only alias for ``batch_size``. Pass only one
         of ``batch_size`` and ``batch_axis_size``.
+    sampling_weights
+        Optional finite, strictly positive relative weights of length ``axis_size``,
+        aligned with the training data in its current order. Requires
+        ``sample_with_replacement=True``. Normalized probabilities remain fixed
+        during a run; saved probabilities and alias tables take precedence on
+        checkpoint recovery. Probabilities and corrections use at least float32.
+        Values whose probabilities or correction factors cannot be represented in
+        the working dtype are rejected. No probability floor or clipping is applied.
+    likelihood_axes
+        Optional mapping from observed-variable name to its pointwise log-likelihood
+        axis. Weighted correction normally infers this axis using trailing event
+        reduction and leading broadcasting. Declare it explicitly for custom
+        reductions or transpositions. The declared axis must enumerate the sampled
+        observations; matching dimension sizes alone cannot establish this.
 
     Attributes
     ----------
@@ -173,7 +209,16 @@ class Batches:
     Notes
     -----
     If ``axis_size`` is not divisible by ``batch_size``, only full batches
-    are used and the final incomplete batch is dropped.
+    are used and the final incomplete tail is dropped independently from each
+    shuffled pass. When more batches are requested, another independent shuffled pass
+    supplies fresh rows; prior batches are never copied wholesale.
+
+    With replacement sampling, an epoch retains the same number of batches but
+    does not guarantee coverage. Weighted groups apply an extra per-index factor
+    ``1 / (axis_size * p_i)`` through :meth:`scaled_log_lik`, preserving the
+    original objective in expectation. :class:`.NegLogProbLoss` applies this
+    automatically. Other losses must use that
+    method or apply :meth:`correction_factors` before summing likelihood values.
 
     A no-key full-data adapter can be useful when an optimizer workflow expects a
     :class:`Batches` object but the model should always be evaluated on the full
@@ -232,6 +277,9 @@ class Batches:
     sample_with_replacement: bool = False
     sample_size: int | float | None = None
     batch_sample_size: int | float | None = None
+    likelihood_axes: dict[str, int]
+    _sampling_probabilities: jax.Array | None
+    _alias_table: _alias.AliasTable | None
 
     def __init__(
         self,
@@ -246,17 +294,269 @@ class Batches:
         batch_sample_size: float | None = None,
         *,
         batch_axis_size: int | None | object = _MISSING,
+        sampling_weights: Array | None = None,
+        likelihood_axes: dict[str, int] | None = None,
     ) -> None:
         self.position_keys = position_keys
         self.axis_size = axis_size
         self.batch_size = _resolve_batch_size(batch_size, batch_axis_size)
+        if sample_with_replacement and self.batch_size is None:
+            raise ValueError(
+                "sample_with_replacement=True requires an explicit batch_size."
+            )
+        if sample_with_replacement and not shuffle:
+            raise ValueError("sample_with_replacement=True requires shuffle=True.")
         self.shuffle = shuffle
         self.batch_axes = batch_axes
         self.default_batch_axis = default_batch_axis
         self.sample_with_replacement = sample_with_replacement
         self.sample_size = sample_size
         self.batch_sample_size = batch_sample_size
+        self.likelihood_axes = dict(likelihood_axes or {})
+        if any(not isinstance(axis, int) for axis in self.likelihood_axes.values()):
+            raise ValueError("likelihood_axes values must be integers.")
         self.__post_init__()
+        self._sampling_probabilities = None
+        self._alias_table = None
+        if sampling_weights is not None:
+            if not self.sample_with_replacement:
+                raise ValueError(
+                    "sampling_weights requires sample_with_replacement=True."
+                )
+            weights = np.asarray(sampling_weights)
+            if jnp.issubdtype(weights.dtype, jnp.integer):
+                weights = weights.astype(float)
+            if (
+                not jnp.issubdtype(weights.dtype, jnp.floating)
+                or weights.shape != (self.axis_size,)
+                or not np.all(np.isfinite(weights) & (weights > 0))
+            ):
+                raise ValueError(
+                    "sampling_weights must be a finite, positive vector "
+                    "of length axis_size."
+                )
+            # Normalize on the host: XLA can replace division by a reciprocal,
+            # which underflows for large, otherwise valid relative weights.
+            relative = np.asarray(weights, dtype=np.float64)
+            relative = relative / relative.max()
+            dtype = jax.dtypes.canonicalize_dtype(
+                jnp.promote_types(weights.dtype, jnp.float32)
+            )
+            normalized = relative / relative.sum()
+            probabilities = jnp.asarray(normalized, dtype=dtype)
+            corrections = 1.0 / (self.axis_size * probabilities)
+            if not bool(
+                jnp.all(
+                    jnp.isfinite(probabilities)
+                    & (probabilities > 0)
+                    & jnp.isfinite(corrections)
+                    & (corrections > 0)
+                )
+            ):
+                raise ValueError(
+                    "sampling_weights probabilities or corrections "
+                    "are not representable."
+                )
+            self._sampling_probabilities = probabilities
+            self._alias_table = _alias.build_table(normalized)
+
+    @property
+    def sampling_probabilities(self) -> jax.Array | None:
+        """Normalized sampling probabilities, or None for uniform sampling."""
+        return self._sampling_probabilities
+
+    @staticmethod
+    def weights_balanced(labels: Array, *, strength: float = 1.0) -> np.ndarray:
+        """Construct sampling weights from category frequencies.
+
+        Each observation in a category of size ``n`` receives weight
+        ``n ** (-strength)``. At strength one, every observed category has equal
+        total sampling probability; zero gives uniform observation sampling.
+
+        Parameters
+        ----------
+        labels
+            Nonempty one-dimensional labels in training-row order. Accepts strings,
+            booleans, integers, or finite floating labels interpreted as exact
+            categories. Missing and mixed string/numeric labels are rejected.
+        strength
+            Finite scalar between zero and one; defaults to full balancing.
+
+        Returns
+        -------
+        numpy.ndarray
+            Float64 relative weights in input order. This helper runs on the host,
+            outside JIT. Pass its output to ``Batches(..., sampling_weights=...)``
+            with ``sample_with_replacement=True``. The existing importance
+            correction preserves the objective; balancing sampling does not
+            reweight the likelihood objective.
+
+        Examples
+        --------
+        >>> Batches.weights_balanced(["a", "b", "a"]).tolist()
+        [0.5, 1.0, 0.5]
+        >>> Batches.weights_balanced(["a", "b", "a"], strength=0).tolist()
+        [1.0, 1.0, 1.0]
+        """
+        strength_array = np.asarray(strength)
+        if (
+            strength_array.ndim != 0
+            or strength_array.dtype.kind not in "biuf"
+            or not np.isfinite(strength_array)
+            or not 0 <= strength_array <= 1
+        ):
+            raise ValueError("strength must be a finite scalar between 0 and 1.")
+        _, inverse, counts = _sampling_categories(labels)
+        return counts[inverse].astype(np.float64) ** (-float(strength_array))
+
+    @staticmethod
+    def weights_for_shares(
+        labels: Array,
+        shares: Mapping[str | int | float, float],
+        *,
+        check_sum: bool = True,
+    ) -> np.ndarray:
+        """Divide each category's target sampling share among its observations.
+
+        Parameters
+        ----------
+        labels
+            One-dimensional category labels in training-row order, with the same
+            requirements as :meth:`weights_balanced`.
+        shares
+            Mapping from every observed category to its finite, strictly positive
+            sampling share. Missing or extra categories are rejected. A category
+            with share ``s`` and count ``n`` gives each observation weight ``s / n``.
+        check_sum
+            Require shares to sum to one within absolute tolerance ``1e-6`` and
+            zero relative tolerance. Set to ``False`` to supply relative category
+            masses. Only this sum check is skipped; all other validation remains.
+
+        Returns
+        -------
+        numpy.ndarray
+            Float64 weights in input order, computed on the host outside JIT.
+            Weights are not normalized here; :class:`Batches` normalizes them into
+            sampling probabilities. Unrepresentable zero weights are rejected.
+            Shares describe expected frequencies, not fixed quotas per minibatch.
+
+        Examples
+        --------
+        >>> Batches.weights_for_shares(["a", "b", "a"], {"a": 0.6, "b": 0.4}).tolist()
+        [0.3, 0.4, 0.3]
+        >>> Batches.weights_for_shares(
+        ...     ["a", "b", "a"], {"a": 60, "b": 40}, check_sum=False
+        ... ).tolist()
+        [30.0, 40.0, 30.0]
+        """
+        categories, inverse, counts = _sampling_categories(labels)
+        if not isinstance(shares, Mapping) or set(shares) != set(categories):
+            raise ValueError("shares must contain exactly the observed categories.")
+        masses = np.asarray([shares[label] for label in categories])
+        if masses.shape != counts.shape or masses.dtype.kind not in "biuf":
+            raise ValueError(
+                "shares must be finite, strictly positive numeric scalars."
+            )
+        with np.errstate(over="ignore", invalid="ignore"):
+            masses = masses.astype(np.float64)
+        if not np.all(np.isfinite(masses) & (masses > 0)):
+            raise ValueError("shares must be finite and strictly positive.")
+        if check_sum:
+            with np.errstate(over="ignore"):
+                total = masses.sum()
+            if not np.isclose(total, 1.0, rtol=0.0, atol=1e-6):
+                raise ValueError(
+                    "shares must sum to one within absolute tolerance 1e-6."
+                )
+        with np.errstate(under="ignore"):
+            weights = masses / counts
+        if not np.all(np.isfinite(weights) & (weights > 0)):
+            raise ValueError("shares produce weights that are not representable.")
+        return weights[inverse]
+
+    @staticmethod
+    def weights_binned(
+        values: Array,
+        *,
+        bins: int | Sequence[float] | np.ndarray,
+        strength: float = 0.5,
+    ) -> np.ndarray:
+        """Construct sampling weights by balancing one-dimensional bin counts.
+
+        Parameters
+        ----------
+        values
+            Nonempty, finite one-dimensional numeric values in training-row order.
+        bins
+            Required positive integer count or strictly increasing numeric edges.
+            Integer counts give equal-width bins across the observed range.
+            Explicit edges must cover all observations; only the outer endpoints
+            may be infinite. Intervals include their left endpoint and exclude
+            their right, except that the final right endpoint is included.
+        strength
+            Finite scalar between zero and one, as in :meth:`weights_balanced`.
+            Defaults to partial balancing with strength ``0.5``.
+
+        Returns
+        -------
+        numpy.ndarray
+            Float64 weights in input order. Each observation receives its bin's
+            count raised to ``-strength``. Empty bins get no sampling mass;
+            constant data get uniform weights. Unequal-width bins are balanced
+            by counts without a width adjustment: this is not density estimation.
+            Values are processed as float64 on the host, outside JIT. Degenerate
+            generated edges are rejected; supply explicit edges in that case.
+
+        Examples
+        --------
+        >>> Batches.weights_binned([0, 0, 0, 0, 10], bins=2).tolist()
+        [0.5, 0.5, 0.5, 0.5, 1.0]
+        >>> Batches.weights_binned([0, 1, 4], bins=[0, 1, 4], strength=1).tolist()
+        [1.0, 0.5, 0.5]
+        """
+        values = np.asarray(values)
+        if (
+            values.ndim != 1
+            or not values.size
+            or values.dtype.kind not in "biuf"
+            or not np.all(np.isfinite(values))
+        ):
+            raise ValueError("values must be a nonempty, finite numeric vector.")
+        with np.errstate(over="ignore", invalid="ignore"):
+            values = values.astype(np.float64)
+        if not np.all(np.isfinite(values)):
+            raise ValueError("values must be representable as finite float64 values.")
+        if isinstance(bins, (int, np.integer)) and not isinstance(
+            bins, (bool, np.bool_)
+        ):
+            if bins < 1:
+                raise ValueError("bins must be a positive integer.")
+            if np.all(values == values[0]):
+                return Batches.weights_balanced(
+                    np.zeros(values.size), strength=strength
+                )
+            with np.errstate(over="ignore", invalid="ignore"):
+                edges = np.histogram_bin_edges(values, bins=bins)
+            if not np.all(np.isfinite(edges)):
+                raise ValueError("bins cannot be represented; supply explicit edges.")
+        else:
+            edges = np.asarray(bins)
+            if edges.ndim != 1 or edges.dtype.kind not in "iuf":
+                raise ValueError("bins must be a positive integer or numeric edges.")
+        if (
+            edges.size < 2
+            or not np.all(edges[1:] > edges[:-1])
+            or not np.all(np.isfinite(edges[1:-1]))
+        ):
+            raise ValueError(
+                "bins must have strictly increasing edges and finite interior edges."
+            )
+        if values.min() < edges[0] or values.max() > edges[-1]:
+            raise ValueError("bins must cover every observation in values.")
+        categories = np.searchsorted(edges, values, side="right") - 1
+        # Only the final right edge is inclusive; outside values were rejected above.
+        categories = np.minimum(categories, len(edges) - 2)
+        return Batches.weights_balanced(categories, strength=strength)
 
     def __post_init__(self):
         if self.axis_size < 1:
@@ -298,15 +598,10 @@ class Batches:
 
     @property
     def _uses_replacement(self) -> bool:
-        assert self.batch_size is not None
-        return self.sample_with_replacement and self.axis_size < self.batch_size
+        return self.sample_with_replacement
 
     def _default_indices(self) -> jax.Array:
-        if self._uses_replacement:
-            assert self.batch_size is not None
-            return jnp.arange(self.n_full_batches * self.batch_size) % self.axis_size
-
-        return jnp.arange(self.axis_size)
+        return self._assemble_indices(None, None)
 
     @classmethod
     def from_split(
@@ -316,8 +611,7 @@ class Batches:
         shuffle: bool = True,
         batch_axes: dict[str, int] | None = None,
         default_batch_axis: int = 0,
-        mode: Literal["strict", "resample"] = "resample",
-        epoch_size: Literal["max", "min"] | int = "max",
+        epoch_size: Literal["strict", "min", "max"] | int = "max",
     ) -> Batches | BatchManager:
         """Build training batches directly from a completed position split."""
         if isinstance(split, PositionSplitManager):
@@ -331,14 +625,12 @@ class Batches:
                     default_batch_axis=default_batch_axis,
                     sample_size=child.train_sample_size,
                     sample_with_replacement=(
-                        mode == "resample"
-                        and batch_size is not None
-                        and batch_size > child.train_axis_size
+                        batch_size is not None and batch_size > child.train_axis_size
                     ),
                 )
                 for child in split.splits
             ]
-            return BatchManager(children, mode=mode, epoch_size=epoch_size)
+            return BatchManager(children, epoch_size=epoch_size)
 
         return cls(
             position_keys=split.split_position_keys,
@@ -356,14 +648,13 @@ class Batches:
         cls,
         model: Model,
         batch_size: int | None | object = _MISSING,
-        position_keys: Sequence[str] | None = None,
+        position_keys: Sequence[str] | Sequence[Sequence[str]] | None = None,
         axis_size: int | None = None,
         shuffle: bool = True,
         batch_axes: dict[str, int] | None = None,
         default_batch_axis: int = 0,
         multi_size: Literal["error"] = "error",
-        mode: Literal["strict", "resample"] = "resample",
-        epoch_size: Literal["max", "min"] | int = "max",
+        epoch_size: Literal["strict", "min", "max"] | int = "max",
         sample_size: float | None = None,
         batch_sample_size: float | None = None,
         infer_sample_size: bool = True,
@@ -378,14 +669,13 @@ class Batches:
         cls,
         model: Model,
         batch_size: int | None | object = _MISSING,
-        position_keys: Sequence[str] | None = None,
+        position_keys: Sequence[str] | Sequence[Sequence[str]] | None = None,
         axis_size: int | None = None,
         shuffle: bool = True,
         batch_axes: dict[str, int] | None = None,
         default_batch_axis: int = 0,
         multi_size: Literal["manager"] = "manager",
-        mode: Literal["strict", "resample"] = "resample",
-        epoch_size: Literal["max", "min"] | int = "max",
+        epoch_size: Literal["strict", "min", "max"] | int = "max",
         sample_size: float | None = None,
         batch_sample_size: float | None = None,
         infer_sample_size: bool = True,
@@ -399,14 +689,13 @@ class Batches:
         cls,
         model: Model,
         batch_size: int | None | object = _MISSING,
-        position_keys: Sequence[str] | None = None,
+        position_keys: Sequence[str] | Sequence[Sequence[str]] | None = None,
         axis_size: int | None = None,
         shuffle: bool = True,
         batch_axes: dict[str, int] | None = None,
         default_batch_axis: int = 0,
         multi_size: Literal["error", "manager"] = "error",
-        mode: Literal["strict", "resample"] = "resample",
-        epoch_size: Literal["max", "min"] | int = "max",
+        epoch_size: Literal["strict", "min", "max"] | int = "max",
         sample_size: float | None = None,
         batch_sample_size: float | None = None,
         infer_sample_size: bool = True,
@@ -426,7 +715,10 @@ class Batches:
             the returned object uses one full-data batch.
         position_keys
             Names of the observed position entries to batch. If ``None``, all observed
-            variables in ``model`` are used. Pass an empty sequence only with
+            variables in ``model`` are used. Flat keys are grouped by axis length;
+            nested keys specify exact groups, including equal-sized groups. Keys
+            in a group must have matching lengths along their batching axes.
+            Pass an empty sequence only with
             ``batch_size=None`` to build a full-data adapter that does not replace
             observed entries.
         axis_size
@@ -441,14 +733,11 @@ class Batches:
             Axis used for guessing ``axis_size`` and for position keys missing
             from ``batch_axes``.
         multi_size
-            How to handle observed variables with different inferred axis sizes.
+            How to handle multiple inferred or explicit observation groups.
             The default ``"error"`` keeps :class:`Batches` scalar and raises a
             helpful error. Use ``"manager"`` to return a :class:`BatchManager` when
-            multiple axis sizes are detected.
-        mode
-            Batch manager mode used only when ``multi_size="manager"``. The default
-            ``"resample"`` allows branches with fewer complete batches to sample
-            batch rows with replacement.
+            multiple groups are detected, even with equal axis sizes. One group
+            still returns a scalar :class:`Batches` object.
         epoch_size
             Batch manager epoch size used only when ``multi_size="manager"``.
         sample_size
@@ -466,7 +755,10 @@ class Batches:
             Whether to infer missing effective sample sizes from observed
             log-probability values.
         sample_with_replacement
-            Whether an oversized scalar batch may be sampled with replacement.
+            Whether every assembled batch draws observations independently with
+            replacement. With ``multi_size="manager"``, this applies to every
+            inferred child; automatic construction also enables it for an oversized
+            child when the common batch size exceeds its observation count.
         batch_axis_size
             Backwards-compatible keyword-only alias for ``batch_size``. Pass only
             one of ``batch_size`` and ``batch_axis_size``.
@@ -476,7 +768,8 @@ class Batches:
         Batches or BatchManager
             Batch configuration for the model's observed data. A
             :class:`BatchManager` is returned only when ``multi_size="manager"`` and
-            multiple axis sizes are detected.
+            multiple groups are detected, even with equal axis sizes. One group
+            still returns a scalar :class:`Batches` object.
 
         Examples
         --------
@@ -527,7 +820,7 @@ class Batches:
         if not pos_keys and batch_size is not None:
             raise ValueError("position_keys may be empty only when batch_size=None.")
 
-        groups = position_key_groups_from_model(
+        pos_keys, groups = position_key_groups_from_model(
             model, pos_keys, batch_axes, default_batch_axis
         )
 
@@ -547,25 +840,25 @@ class Batches:
                 return BatchManager.from_model(
                     model,
                     batch_size=batch_size,
-                    position_keys=pos_keys,
+                    position_keys=position_keys,
                     shuffle=shuffle,
                     batch_axes=batch_axes,
                     default_batch_axis=default_batch_axis,
-                    mode=mode,
                     epoch_size=epoch_size,
                     infer_sample_size=infer_sample_size,
+                    sample_with_replacement=sample_with_replacement,
                 )
 
             raise ValueError(
-                "Batches.from_model() found observed variables with different "
-                f"axis sizes: {groups}. Use "
+                "Batches.from_model() found multiple observation groups "
+                f"with axis sizes {[size for size, _ in groups]}. Use "
                 "Batches.from_model(..., multi_size='manager') or "
                 "BatchManager.from_model(...)."
             )
 
         if axis_size is None:
             axis_size = (
-                next(iter(groups))
+                groups[0][0]
                 if groups
                 else _axis_size_for_empty_position_keys(
                     model, batch_axes, default_batch_axis
@@ -635,7 +928,8 @@ class Batches:
         Returns
         -------
         int
-            The integer quotient ``axis_size // batch_size``.
+            The integer quotient ``axis_size // batch_size``. An oversized batch
+            configured for replacement has one complete batch.
 
         Examples
         --------
@@ -644,7 +938,7 @@ class Batches:
         2
         """
         assert self.batch_size is not None
-        if self._uses_replacement:
+        if self.axis_size < self.batch_size:
             return 1
 
         return int(self.axis_size // self.batch_size)
@@ -690,7 +984,7 @@ class Batches:
         >>> Batches(["y"], axis_size=5, batch_size=None).is_full_data
         True
         """
-        return self.axis_size == self.batch_size
+        return self.axis_size == self.batch_size and not self.sample_with_replacement
 
     def permute_indices(self, key: jax.Array) -> jax.Array:
         """
@@ -707,8 +1001,10 @@ class Batches:
         Returns
         -------
         jax.Array
-            A vector of indices from ``0`` to ``axis_size - 1``. The order is random if
-            ``shuffle=True`` and unchanged otherwise.
+            For ordinary batching, a vector of indices from ``0`` to
+            ``axis_size - 1``. With replacement, ``n_full_batches * batch_size``
+            independent in-range draws. The order is random if ``shuffle=True`` and
+            unchanged otherwise.
 
         Examples
         --------
@@ -728,25 +1024,89 @@ class Batches:
             assert self.batch_size is not None
             n_indices = self.n_full_batches * self.batch_size
             if self.shuffle:
-                return jax.random.randint(key, (n_indices,), 0, self.axis_size)
+                return self._draw_indices(key, n_indices)
 
             return self._default_indices()
 
-        if self.shuffle:
-            all_indices = jax.random.permutation(key, self.indices)
-        else:
-            all_indices = self.indices
+        indices = jnp.arange(self.axis_size)
+        all_indices = jax.random.permutation(key, indices) if self.shuffle else indices
 
         return all_indices
 
-    def start_epoch(self, key: jax.Array) -> Batches:
+    def _validate_n_batches(self, n_batches: int | None) -> int:
+        if n_batches is None:
+            return self.n_full_batches
+        if isinstance(n_batches, bool) or not isinstance(n_batches, int):
+            raise TypeError("n_batches must be a positive integer or None.")
+        if n_batches <= 0:
+            raise ValueError("n_batches must be a positive integer or None.")
+        return n_batches
+
+    def _assemble_indices(
+        self, key: jax.Array | None, n_batches: int | None
+    ) -> jax.Array:
+        assert self.batch_size is not None
+        if key is None and n_batches is None:
+            if self._uses_replacement:
+                return (
+                    jnp.arange(self.n_full_batches * self.batch_size) % self.axis_size
+                )
+            return jnp.arange(self.axis_size)
+
+        if n_batches is None and not self._uses_replacement:
+            assert key is not None
+            return (
+                jax.random.permutation(key, self.axis_size)
+                if self.shuffle
+                else jnp.arange(self.axis_size)
+            )
+
+        n_batches = self._validate_n_batches(n_batches)
+        n_indices = n_batches * self.batch_size
+        if self._uses_replacement:
+            if key is None:
+                return jnp.arange(n_indices) % self.axis_size
+            return self._draw_indices(key, n_indices)
+
+        if not self.shuffle:
+            if n_batches > self.n_full_batches:
+                raise ValueError(
+                    "shuffle=False cannot assemble more than the natural number "
+                    "of complete batches."
+                )
+            return jnp.arange(n_indices)
+
+        n_per_pass = self.n_full_batches * self.batch_size
+        if key is None:
+            return jnp.tile(jnp.arange(n_per_pass), math.ceil(n_indices / n_per_pass))[
+                :n_indices
+            ]
+        keys = jax.random.split(key, math.ceil(n_batches / self.n_full_batches))
+        passes = [
+            jax.random.permutation(pass_key, self.axis_size)[:n_per_pass]
+            for pass_key in keys
+        ]
+        return jnp.concatenate(passes)[:n_indices]
+
+    def _draw_indices(self, key: jax.Array, size: int) -> jax.Array:
+        if self.sampling_probabilities is None:
+            return jax.random.randint(key, (size,), 0, self.axis_size)
+        assert self._alias_table is not None
+        # Match the default index dtype used by the epoch's initial carry.
+        return _alias.sample(key, size, self._alias_table).astype(int)
+
+    def start_epoch(self, key: jax.Array, n_batches: int | None = None) -> Batches:
         """
         Starts a new epoch by updating the observation order.
 
         Parameters
         ----------
         key
-            JAX pseudo-random key passed to :meth:`permute_indices`.
+            JAX pseudo-random key used for epoch assembly.
+        n_batches
+            ``None`` assembles the natural epoch. For ordinary batching, the
+            unused incomplete tail remains in :attr:`indices`. A positive integer
+            requests exactly that many complete batch rows.
 
         Returns
         -------
@@ -761,7 +1121,11 @@ class Batches:
         >>> batches.start_epoch(jax.random.key(0)).indices.tolist()
         [0, 1, 2, 3, 4]
         """
-        self.indices = self.permute_indices(key)
+        self.indices = self._assemble_indices(key, n_batches)
+        return self
+
+    def _replace_indices_for_manager(self, n_batches: int) -> Batches:
+        self.indices = self._assemble_indices(None, n_batches)
         return self
 
     @property
@@ -772,8 +1136,9 @@ class Batches:
         Returns
         -------
         jax.Array
-            Integer array with shape ``(n_full_batches, batch_size)``. Each
-            row gives the observation indices for one full batch.
+            Integer array with shape ``(n_assembled_batches, batch_size)``. Each
+            row gives one complete batch; the first dimension can exceed natural
+            ``n_full_batches`` when a manager requests overflow rows.
 
         Examples
         --------
@@ -784,8 +1149,8 @@ class Batches:
         [[0, 1, 2], [3, 4, 5]]
         """
         assert self.batch_size is not None
-        idx = self.indices[: self.n_full_batches * self.batch_size]
-        batch_indices = jnp.reshape(idx, (self.n_full_batches, self.batch_size))
+        n_indices = (self.indices.size // self.batch_size) * self.batch_size
+        batch_indices = jnp.reshape(self.indices[:n_indices], (-1, self.batch_size))
         return batch_indices
 
     def get_batched_position(
@@ -892,8 +1257,101 @@ class Batches:
         obs = interface.extract_position(self.position_keys, model_state)
         return self.get_batched_position(obs, batch_number)
 
+    def correction_factors(self, batch_index: int | jax.Array) -> jax.Array:
+        """Return extra factors ``1 / (axis_size * p_i)`` for the selected batch.
+
+        Uniform sampling returns ones. These factors do not include
+        :attr:`batch_sample_scale`.
+        """
+        indices = self.batch_indices[batch_index]
+        if self.sampling_probabilities is None:
+            return jnp.ones(indices.shape)
+        return 1.0 / (self.axis_size * self.sampling_probabilities[indices])
+
+    def _likelihood_corrections(
+        self,
+        model: Model | ModelInterface,
+        model_state: ModelState,
+        batch_index: int | jax.Array | None,
+    ) -> dict[str, tuple[jax.Array, int]]:
+        if self.sampling_probabilities is None:
+            return {}
+        if batch_index is None:
+            raise ValueError("Weighted likelihood correction requires batch_index.")
+        if not isinstance(model, Model):
+            raise TypeError(
+                "Weighted likelihood correction requires a liesel.model.Model."
+            )
+        if _has_custom_model_log_lik(model):
+            raise ValueError(
+                "Weighted correction cannot decompose a custom log_lik_node. "
+                "Apply correction_factors in a custom loss instead."
+            )
+        observed_names = {
+            var.name
+            for var in model.observed.values()
+            if var.name in self.position_keys
+            or var.value_node.name in self.position_keys
+        }
+        unknown = self.likelihood_axes.keys() - observed_names
+        if unknown:
+            raise ValueError(
+                f"likelihood_axes names are not in this batch group: {sorted(unknown)}."
+            )
+        factors = self.correction_factors(batch_index)
+        corrections = {}
+        assert isinstance(self.batch_axes, dict)
+        for var in model.observed.values():
+            if var.dist_node is None:
+                continue
+            key = next(
+                (
+                    key
+                    for key in self.position_keys
+                    if key in (var.name, var.value_node.name)
+                ),
+                None,
+            )
+            if key is None:
+                continue
+            value = jnp.asarray(model_state[var.dist_node.name].value)
+            if not value.ndim:
+                raise ValueError(f"{var.name!r} needs a pointwise likelihood axis.")
+            if var.name in self.likelihood_axes:
+                axis = self.likelihood_axes[var.name]
+            else:
+                data_ndim = model_state[var.value_node.name].value.ndim
+                event_ndim = len(var.dist_node.init_dist().event_shape)
+                axis = self.batch_axes.get(key, self.default_batch_axis)
+                if not -data_ndim <= axis < data_ndim:
+                    raise ValueError(f"{var.name!r} has an invalid data batching axis.")
+                axis %= data_ndim
+                # Standard log_prob removes trailing event dimensions and may
+                # add leading broadcast dimensions; it preserves the rest.
+                shift = value.ndim - (data_ndim - event_ndim)
+                if axis >= data_ndim - event_ndim or shift < 0:
+                    raise ValueError(
+                        f"Cannot infer a pointwise likelihood axis for {var.name!r}. "
+                        "Set likelihood_axes explicitly if the likelihood still "
+                        "enumerates the sampled observations."
+                    )
+                axis += shift
+            if not -value.ndim <= axis < value.ndim:
+                raise ValueError(f"{var.name!r} has an invalid likelihood_axes entry.")
+            axis %= value.ndim
+            if value.shape[axis] != self.batch_size:
+                raise ValueError(
+                    f"{var.name!r} likelihood axis must have batch_size entries."
+                )
+            corrections[var.dist_node.name] = (factors, axis)
+        return corrections
+
     def scaled_log_lik(
-        self, model: Model | ModelInterface, model_state: ModelState
+        self,
+        model: Model | ModelInterface,
+        model_state: ModelState,
+        *,
+        batch_index: int | jax.Array | None = None,
     ) -> jax.Array:
         """
         Returns the log likelihood with this batch group's likelihood scaled.
@@ -908,6 +1366,11 @@ class Batches:
             Liesel model or compatible model interface.
         model_state
             Updated model state containing the current log-likelihood values.
+        batch_index
+            Row of :attr:`batch_indices` used to produce ``model_state``. Required
+            for weighted sampling. Applies :meth:`correction_factors` before
+            summation in addition to :attr:`batch_sample_scale`. Reduced scalar
+            likelihoods and ambiguous axis mappings are rejected.
 
         Returns
         -------
@@ -938,15 +1401,26 @@ class Batches:
         ... )
         True
         """
+        corrections = self._likelihood_corrections(model, model_state, batch_index)
         if isinstance(model, Model):
             return _scaled_liesel_log_lik(
-                model, model_state, [(self.position_keys, self.batch_sample_scale)]
+                model,
+                model_state,
+                [(self.position_keys, self.batch_sample_scale)],
+                corrections,
             )
 
         return _scaled_common_log_lik(model_state, self.batch_sample_scale)
 
     def _tree_flatten(self):
-        children = (self.indices,)
+        # Unweighted checkpoints from before alias sampling remain compatible.
+        table = getattr(self, "_alias_table", None)
+        if self.sampling_probabilities is not None and table is None:
+            raise ValueError(
+                "Weighted checkpoint predates alias sampling and cannot be resumed. "
+                "Start a new run with an unused checkpoint path."
+            )
+        children = (self.indices, self.sampling_probabilities, table)
         aux_data = {
             "position_keys": self.position_keys,
             "axis_size": self.axis_size,
@@ -957,13 +1431,16 @@ class Batches:
             "sample_with_replacement": self.sample_with_replacement,
             "sample_size": self.sample_size,
             "batch_sample_size": self.batch_sample_size,
+            "likelihood_axes": self.likelihood_axes,
         }
         return (children, aux_data)
 
     @classmethod
     def _tree_unflatten(cls, aux_data, children):
-        bi = cls(**aux_data)
-        bi.indices = children[0]
+        bi = object.__new__(cls)
+        for name, value in aux_data.items():
+            setattr(bi, name, value)
+        bi.indices, bi._sampling_probabilities, bi._alias_table = children
         return bi
 
     def __repr__(self) -> str:
@@ -991,31 +1468,21 @@ class BatchManager:
     batches
         Non-empty sequence of :class:`Batches` objects. Their ``position_keys`` must
         not overlap.
-    mode
-        If ``"strict"``, all contained batch objects must have the same
-        :attr:`Batches.n_full_batches`. If ``"resample"``, unequal numbers of batches
-        are allowed and child batch rows are selected for the joint epoch.
     epoch_size
-        Epoch length in ``"resample"`` mode. ``"max"`` uses the longest child
-        epoch, ``"min"`` uses the shortest child epoch, and a positive integer sets
-        the epoch length manually. ``"max"`` and ``"min"`` are accepted in
-        ``"strict"`` mode but do not change the strict epoch length.
+        Epoch length policy: ``"strict"``, ``"min"``, ``"max"``, or a positive
+        integer.
 
     Attributes
     ----------
     batches
         Tuple of contained :class:`Batches` objects.
-    batch_numbers
-        Integer array with shape ``(n_full_batches, len(batches))``. Row ``i`` maps
-        the manager's joint batch ``i`` to one batch row in each contained
-        :class:`Batches` object.
 
     Raises
     ------
     ValueError
         If ``batches`` is empty, if any ``position_keys`` are claimed by more than
-        one child, if ``mode`` or ``epoch_size`` are invalid, or if ``mode="strict"``
-        is used with unequal child :attr:`Batches.n_full_batches`.
+        one child, if ``epoch_size`` is invalid, or if strict sizing is used with
+        unequal child :attr:`Batches.n_full_batches`.
 
     Notes
     -----
@@ -1032,7 +1499,7 @@ class BatchManager:
 
     Examples
     --------
-    Combine two equally long batch sequences in strict mode:
+    Combine two equally long batch sequences:
 
     >>> import jax.numpy as jnp
     >>> from liesel.optim import BatchManager, Batches
@@ -1050,22 +1517,18 @@ class BatchManager:
     >>> batched["x"].tolist(), batched["y"].tolist()
     ([2, 3], [3, 4, 5])
 
-    In ``"resample"`` mode, branches with fewer batches can be sampled with
-    replacement to match a chosen epoch length:
+    With ``epoch_size="max"``, shorter branches assemble additional shuffled passes:
 
     >>> import jax
     >>> manager = BatchManager(
     ...     [
-    ...         Batches(["x"], axis_size=6, batch_size=2, shuffle=False),
-    ...         Batches(["y"], axis_size=8, batch_size=4, shuffle=False),
+    ...         Batches(["x"], axis_size=6, batch_size=2, shuffle=True),
+    ...         Batches(["y"], axis_size=8, batch_size=4, shuffle=True),
     ...     ],
-    ...     mode="resample",
     ...     epoch_size="max",
     ... ).start_epoch(jax.random.key(0))
     >>> manager.n_full_batches
     3
-    >>> manager.batch_numbers.shape
-    (3, 2)
 
     Per-branch scaling agrees with a manual scaled log-likelihood calculation:
 
@@ -1084,10 +1547,9 @@ class BatchManager:
     >>> model = lsl.Model([y1, y2])
     >>> manager = BatchManager(
     ...     [
-    ...         Batches(["y1"], axis_size=6, batch_size=2, shuffle=False),
-    ...         Batches(["y2"], axis_size=8, batch_size=4, shuffle=False),
+    ...         Batches(["y1"], axis_size=6, batch_size=2, shuffle=True),
+    ...         Batches(["y2"], axis_size=8, batch_size=4, shuffle=True),
     ...     ],
-    ...     mode="resample",
     ...     epoch_size="max",
     ... )
     >>> batch = manager.get_batched_position(model.extract_position(["y1", "y2"]), 0)
@@ -1101,8 +1563,7 @@ class BatchManager:
     """
 
     batches: Sequence[Batches]
-    mode: Literal["strict", "resample"] = "strict"
-    epoch_size: Literal["max", "min"] | int = "max"
+    epoch_size: Literal["strict", "min", "max"] | int = "strict"
 
     def __post_init__(self):
         self.batches = tuple(self.batches)
@@ -1110,50 +1571,46 @@ class BatchManager:
         if len(self.batches) == 0:
             raise ValueError("BatchManager requires at least one Batches object.")
 
-        if self.mode not in ("strict", "resample"):
-            raise ValueError(f"Unrecognized {self.mode=}.")
-
         if isinstance(self.epoch_size, bool) or (
             not isinstance(self.epoch_size, int)
-            and self.epoch_size not in ("max", "min")
+            and self.epoch_size not in ("strict", "max", "min")
         ):
-            raise ValueError("epoch_size must be 'max', 'min', or a positive integer.")
+            raise ValueError(
+                "epoch_size must be 'strict', 'min', 'max', or a positive integer."
+            )
 
         if isinstance(self.epoch_size, int) and self.epoch_size < 1:
             raise ValueError("Manual epoch_size must be a positive integer.")
 
-        if self.mode == "strict" and isinstance(self.epoch_size, int):
-            raise ValueError(
-                "Manual epoch_size is only supported with mode='resample'."
-            )
-
         self._validate_position_keys()
         self._validate_batch_counts()
-        self.batch_numbers = self._default_batch_numbers()
+        count = self.n_full_batches
+        self.batches = tuple(
+            batch._replace_indices_for_manager(count) for batch in self.batches
+        )
 
     @classmethod
     def from_model(
         cls,
         model: Model,
         batch_size: int | None | object = _MISSING,
-        position_keys: Sequence[str] | None = None,
+        position_keys: Sequence[str] | Sequence[Sequence[str]] | None = None,
         shuffle: bool = True,
         batch_axes: dict[str, int] | None = None,
         default_batch_axis: int = 0,
-        mode: Literal["strict", "resample"] = "resample",
-        epoch_size: Literal["max", "min"] | int = "max",
+        epoch_size: Literal["strict", "min", "max"] | int = "max",
         infer_sample_size: bool = True,
+        sample_with_replacement: bool = False,
         *,
         batch_axis_size: int | None | object = _MISSING,
     ) -> BatchManager:
         """
-        Builds a :class:`BatchManager` by grouping observed variables by size.
+        Builds a :class:`BatchManager` from inferred or explicit groups.
 
-        Observed variables are grouped by inferred length along their batching axis.
-        One child :class:`Batches` object is created for each axis-size group using
-        the same ``batch_size``. With the default ``mode="resample"`` and
-        ``epoch_size="max"``, branches with fewer complete batches sample batch rows
-        with replacement for the additional joint steps.
+        Flat keys are grouped by inferred length along their batching axes; nested
+        keys specify exact groups. One child :class:`Batches` is created per group using
+        the same ``batch_size``. With the default ``epoch_size="max"``, shorter
+        branches assemble additional shuffled passes for the joint steps.
 
         Use manual ``BatchManager([Batches(...)])`` construction when child groups
         need custom per-branch ``sample_size`` or ``batch_sample_size`` values.
@@ -1167,33 +1624,35 @@ class BatchManager:
             full-data batch and shuffling is disabled.
         position_keys
             Names of observed position entries to batch. If ``None``, all observed
-            variables in ``model`` are used.
+            variables in ``model`` are used. Flat keys are grouped by axis length;
+            nested keys preserve exact groups in the supplied order. Each group
+            must have matching lengths along its configured batching axes.
         shuffle
             Whether each child should shuffle observation indices at epoch start.
         batch_axes
             Optional mapping from position key to batching axis.
         default_batch_axis
             Batching axis for all position keys not listed in ``batch_axes``.
-        mode
-            Batch manager mode. ``"resample"`` allows unequal numbers of child
-            batches; ``"strict"`` requires all child groups to have the same number
-            of complete batches.
         epoch_size
-            Epoch length in ``"resample"`` mode. ``"max"`` uses the longest child
-            epoch, ``"min"`` uses the shortest child epoch, and a positive integer
-            sets the epoch length manually.
+            Epoch length policy: ``"strict"``, ``"min"``, ``"max"``, or a positive
+            integer.
         infer_sample_size
             Whether child batches should infer missing effective sample sizes from
             observed log-probability values. Inference counts log-probability
             scalars, not observed value elements; for multivariate observation
             distributions, one observed event may have several value dimensions but
             one pointwise log-probability scalar.
+        sample_with_replacement
+            Whether every assembled batch draws observations independently with
+            replacement. This applies to every inferred child; automatic construction
+            also enables it for an oversized child when the common batch size exceeds
+            its observation count.
 
         Returns
         -------
         BatchManager
-            Batch manager with one child :class:`Batches` object per inferred
-            axis size.
+            Batch manager with one child :class:`Batches` object per observation
+            group, including separate groups of equal size.
 
         Examples
         --------
@@ -1212,8 +1671,8 @@ class BatchManager:
         >>> manager.axis_size, manager.batch_size, manager.n_full_batches
         ((8, 5), (2, 2), 4)
         >>> started = manager.start_epoch(jax.random.key(1))
-        >>> bool(jnp.all(started.batch_numbers[:, 1] < 2))
-        True
+        >>> started.batch_indices[1].shape
+        (4, 2)
 
         Passing ``batch_size=None`` creates one full-data child batch per group:
 
@@ -1229,23 +1688,13 @@ class BatchManager:
         pos_keys = (
             list(position_keys) if position_keys is not None else list(model.observed)
         )
-        groups = position_key_groups_from_model(
+        pos_keys, groups = position_key_groups_from_model(
             model, pos_keys, batch_axes, default_batch_axis
         )
         shuffle = False if batch_size is None else shuffle
 
-        if mode == "resample" and batch_size is not None and not shuffle:
-            warnings.warn(
-                "BatchManager.from_model(..., mode='resample', shuffle=False) "
-                "resamples child batch rows but leaves observations within each "
-                "child in deterministic order. Set shuffle=True for stochastic "
-                "observation-level batches.",
-                UserWarning,
-                stacklevel=2,
-            )
-
         batches = []
-        for axis_size, keys in groups.items():
+        for axis_size, keys in groups:
             batch = Batches.from_model(
                 model,
                 batch_size=batch_size,
@@ -1256,15 +1705,17 @@ class BatchManager:
                 default_batch_axis=default_batch_axis,
                 infer_sample_size=infer_sample_size,
                 sample_with_replacement=(
-                    mode == "resample"
-                    and batch_size is not None
-                    and batch_size > axis_size
+                    sample_with_replacement
+                    or (batch_size is not None and batch_size > axis_size)
                 ),
             )
             assert isinstance(batch, Batches)
             batches.append(batch)
 
-        return cls(batches=batches, mode=mode, epoch_size=epoch_size)
+        return cls(
+            batches=batches,
+            epoch_size=epoch_size,
+        )
 
     def _validate_position_keys(self) -> None:
         counts: dict[str, int] = {}
@@ -1278,14 +1729,18 @@ class BatchManager:
             raise ValueError(f"Position keys claimed by multiple batches: {duplicates}")
 
     def _validate_batch_counts(self) -> None:
-        if self.mode == "resample":
-            return
-
         counts = [batch.n_full_batches for batch in self.batches]
-        if len(set(counts)) != 1:
+        if self.epoch_size == "strict" and len(set(counts)) != 1:
             raise ValueError(
-                "mode='strict' requires all contained Batches objects to have the "
+                "epoch_size='strict' requires all contained Batches objects to have "
                 f"same n_full_batches, but got {counts}."
+            )
+        count = self.n_full_batches
+        if any(
+            not batch.shuffle and count > batch.n_full_batches for batch in self.batches
+        ):
+            raise ValueError(
+                "epoch_size requires additional batches from a shuffle=False child."
             )
 
     @property
@@ -1396,7 +1851,7 @@ class BatchManager:
         ...         Batches(["x"], axis_size=6, batch_size=2),
         ...         Batches(["y"], axis_size=8, batch_size=4),
         ...     ],
-        ...     mode="resample",
+        ...     epoch_size="min",
         ... ).batch_sample_scales
         (3.0, 2.0)
         """
@@ -1439,7 +1894,7 @@ class BatchManager:
         ...         Batches(["x"], axis_size=6, batch_size=2),
         ...         Batches(["y"], axis_size=8, batch_size=4),
         ...     ],
-        ...     mode="resample",
+        ...     epoch_size="min",
         ... )
         >>> try:
         ...     unequal.batch_sample_scale
@@ -1466,8 +1921,8 @@ class BatchManager:
         """
         Number of joint batch steps in one epoch.
 
-        In ``"strict"`` mode, this is the common child
-        :attr:`Batches.n_full_batches`. In ``"resample"`` mode, it is determined by
+        With ``epoch_size="strict"``, this is the common child
+        :attr:`Batches.n_full_batches`; otherwise it is determined by
         :attr:`epoch_size`.
 
         Returns
@@ -1483,7 +1938,6 @@ class BatchManager:
         ...         Batches(["x"], axis_size=6, batch_size=2),
         ...         Batches(["y"], axis_size=8, batch_size=4),
         ...     ],
-        ...     mode="resample",
         ...     epoch_size="max",
         ... ).n_full_batches
         3
@@ -1492,7 +1946,6 @@ class BatchManager:
         ...         Batches(["x"], axis_size=6, batch_size=2),
         ...         Batches(["y"], axis_size=8, batch_size=4),
         ...     ],
-        ...     mode="resample",
         ...     epoch_size="min",
         ... ).n_full_batches
         2
@@ -1501,14 +1954,13 @@ class BatchManager:
         ...         Batches(["x"], axis_size=6, batch_size=2),
         ...         Batches(["y"], axis_size=8, batch_size=4),
         ...     ],
-        ...     mode="resample",
         ...     epoch_size=5,
         ... ).n_full_batches
         5
         """
         counts = [batch.n_full_batches for batch in self.batches]
 
-        if self.mode == "strict":
+        if self.epoch_size == "strict":
             return counts[0]
 
         if self.epoch_size == "max":
@@ -1546,40 +1998,11 @@ class BatchManager:
         ...         Batches(["x"], axis_size=6, batch_size=None),
         ...         Batches(["y"], axis_size=8, batch_size=4),
         ...     ],
-        ...     mode="resample",
+        ...     epoch_size="min",
         ... ).is_full_data
         False
         """
         return all(batch.is_full_data for batch in self.batches)
-
-    def _default_batch_numbers(self) -> jax.Array:
-        rows = []
-
-        for batch in self.batches:
-            rows.append(jnp.arange(self.n_full_batches) % batch.n_full_batches)
-
-        return jnp.stack(rows, axis=1)
-
-    def _draw_batch_numbers(self, batch: Batches, key: jax.Array) -> jax.Array:
-        n_manager_batches = self.n_full_batches
-        n_child_batches = batch.n_full_batches
-
-        if self.mode == "strict":
-            return jnp.arange(n_manager_batches)
-
-        key_base, key_extra = jax.random.split(key)
-        shuffled = jax.random.permutation(key_base, jnp.arange(n_child_batches))
-
-        if n_manager_batches <= n_child_batches:
-            return shuffled[:n_manager_batches]
-
-        extra = jax.random.randint(
-            key_extra,
-            shape=(n_manager_batches - n_child_batches,),
-            minval=0,
-            maxval=n_child_batches,
-        )
-        return jnp.concatenate([shuffled, extra])
 
     def permute_indices(self, key: jax.Array) -> tuple[jax.Array, ...]:
         """
@@ -1623,22 +2046,17 @@ class BatchManager:
         Starts a new joint epoch.
 
         The manager updates every child via :meth:`Batches.start_epoch` and
-        recomputes :attr:`batch_numbers`. In ``"strict"`` mode, joint batch ``i``
-        uses child batch row ``i`` for every child. In ``"resample"`` mode, each
-        child uses shuffled rows without replacement where possible and samples
-        additional rows with replacement if the joint epoch is longer than that
-        child's own epoch.
+        updates every child with exactly the joint number of assembled rows.
 
         Parameters
         ----------
         key
-            JAX pseudo-random key used for child permutations and, in
-            ``"resample"`` mode, row selection.
+            JAX pseudo-random key used for child permutations and replacement draws.
 
         Returns
         -------
         BatchManager
-            This object with updated child ``indices`` and :attr:`batch_numbers`.
+            This object with updated child indices.
 
         Examples
         --------
@@ -1650,29 +2068,14 @@ class BatchManager:
         ...         Batches(["x"], axis_size=4, batch_size=2, shuffle=True),
         ...         Batches(["y"], axis_size=6, batch_size=3, shuffle=True),
         ...     ],
-        ...     mode="resample",
         ...     epoch_size=4,
         ... ).start_epoch(jax.random.key(1))
-        >>> manager.batch_numbers.shape
-        (4, 2)
-        >>> bool(jnp.all(manager.batch_numbers[:, 0] < 2))
-        True
-        >>> bool(jnp.all(manager.batch_numbers[:, 1] < 2))
-        True
         """
-        keys = jax.random.split(key, len(self.batches) * 2)
-        batches = []
-        batch_numbers = []
-
-        for i, batch in enumerate(self.batches):
-            index_key = keys[2 * i]
-            row_key = keys[2 * i + 1]
-            batch = batch.start_epoch(index_key)
-            batches.append(batch)
-            batch_numbers.append(self._draw_batch_numbers(batch, row_key))
-
-        self.batches = tuple(batches)
-        self.batch_numbers = jnp.stack(batch_numbers, axis=1)
+        keys = jax.random.split(key, len(self.batches))
+        self.batches = tuple(
+            batch.start_epoch(child_key, n_batches=self.n_full_batches)
+            for batch, child_key in zip(self.batches, keys, strict=True)
+        )
         return self
 
     @property
@@ -1699,10 +2102,7 @@ class BatchManager:
         >>> tuple(idx.tolist() for idx in manager.batch_indices)
         ([[0, 1], [2, 3], [4, 5]], [[0, 1, 2], [3, 4, 5], [6, 7, 8]])
         """
-        return tuple(
-            batch.batch_indices[self.batch_numbers[:, i]]
-            for i, batch in enumerate(self.batches)
-        )
+        return tuple(batch.batch_indices for batch in self.batches)
 
     def get_batched_position(
         self, position: Position, batch_index: int | jax.Array
@@ -1758,9 +2158,8 @@ class BatchManager:
         """
         batched_position: dict[str, Array] = {}
 
-        for i, batch in enumerate(self.batches):
-            child_batch_index = self.batch_numbers[batch_index, i]
-            batched_position |= batch.get_batched_position(position, child_batch_index)
+        for batch in self.batches:
+            batched_position |= batch.get_batched_position(position, batch_index)
 
         return Position(batched_position)
 
@@ -1808,8 +2207,16 @@ class BatchManager:
         obs = interface.extract_position(self.position_keys, model_state)
         return self.get_batched_position(obs, batch_number)
 
+    def correction_factors(self, batch_index: int | jax.Array) -> tuple[jax.Array, ...]:
+        """Return extra per-index correction factors for each child, in order."""
+        return tuple(batch.correction_factors(batch_index) for batch in self.batches)
+
     def scaled_log_lik(
-        self, model: Model | ModelInterface, model_state: ModelState
+        self,
+        model: Model | ModelInterface,
+        model_state: ModelState,
+        *,
+        batch_index: int | jax.Array | None = None,
     ) -> jax.Array:
         """
         Returns a log likelihood with per-child batch scaling.
@@ -1829,6 +2236,10 @@ class BatchManager:
             Liesel model or compatible model interface.
         model_state
             Updated model state containing the current log-likelihood values.
+        batch_index
+            Current batch row, required when any child uses weighted sampling.
+            Each weighted child corrects its own pointwise likelihood terms before
+            summation. Priors and unbatched terms receive no per-index correction.
 
         Returns
         -------
@@ -1862,10 +2273,10 @@ class BatchManager:
         >>> model = lsl.Model([x, y])
         >>> manager = BatchManager(
         ...     [
-        ...         Batches(["x"], axis_size=6, batch_size=2, shuffle=False),
-        ...         Batches(["y"], axis_size=8, batch_size=4, shuffle=False),
+        ...         Batches(["x"], axis_size=6, batch_size=2, shuffle=True),
+        ...         Batches(["y"], axis_size=8, batch_size=4, shuffle=True),
         ...     ],
-        ...     mode="resample",
+        ...     epoch_size="min",
         ... )
         >>> batch = manager.get_batched_position(model.extract_position(["x", "y"]), 0)
         >>> state = model.update_state(batch, model.state)
@@ -1877,28 +2288,31 @@ class BatchManager:
         >>> bool(jnp.allclose(manager.scaled_log_lik(model, state), manual))
         True
         """
+        corrections = {}
+        for batch in self.batches:
+            corrections.update(
+                batch._likelihood_corrections(model, model_state, batch_index)
+            )
         if isinstance(model, Model):
             groups = [
                 (batch.position_keys, batch.batch_sample_scale)
                 for batch in self.batches
             ]
-            return _scaled_liesel_log_lik(model, model_state, groups)
+            return _scaled_liesel_log_lik(model, model_state, groups, corrections)
 
         return _scaled_common_log_lik(model_state, self.batch_sample_scale)
 
     def _tree_flatten(self):
-        children = (tuple(self.batches), self.batch_numbers)
-        aux_data = {
-            "mode": self.mode,
-            "epoch_size": self.epoch_size,
-        }
+        children = (tuple(self.batches),)
+        aux_data = {"epoch_size": self.epoch_size}
         return (children, aux_data)
 
     @classmethod
     def _tree_unflatten(cls, aux_data, children):
-        batches, batch_numbers = children
-        bm = cls(batches=batches, **aux_data)
-        bm.batch_numbers = batch_numbers
+        (batches,) = children
+        bm = object.__new__(cls)
+        bm.batches = tuple(batches)
+        bm.epoch_size = aux_data["epoch_size"]
         return bm
 
     def __repr__(self) -> str:
@@ -1906,7 +2320,7 @@ class BatchManager:
         return (
             f"{name}(axis_size={self.axis_size}, "
             f"batch_size={self.batch_size}, "
-            f"mode={self.mode!r}, n_full_batches={self.n_full_batches})"
+            f"epoch_size={self.epoch_size!r}, n_full_batches={self.n_full_batches})"
         )
 
 

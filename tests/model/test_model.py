@@ -1779,7 +1779,8 @@ class TestSample:
 
 
 class TestPointwiseLogLik:
-    def test_pointwise_ll(self, model) -> None:
+    @pytest.mark.parametrize("as_dict", [False, True])
+    def test_pointwise_ll(self, model: Model, as_dict: bool) -> None:
         samples = Position(
             {
                 "sigma_hat": tfd.Normal(loc=1.0, scale=0.01).sample(
@@ -1791,5 +1792,8 @@ class TestPointwiseLogLik:
             }
         )
 
-        pll = log_prob_pointwise(model.observed, samples)
+        variables: Mapping[str, Var] = (
+            dict(model.observed) if as_dict else model.observed
+        )
+        pll = log_prob_pointwise(variables, samples)
         assert pll["y_var_log_prob"].shape == (4, 100, 500)

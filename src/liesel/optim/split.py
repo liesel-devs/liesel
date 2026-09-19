@@ -6,7 +6,7 @@ import math
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, overload
 
 import jax
 import jax.numpy as jnp
@@ -144,8 +144,8 @@ def _validate_child_split_availability(
     >>> from liesel.optim import Split
     >>> from liesel.optim.split import _validate_child_split_availability
     >>> splits = [
-    ...     Split(["x"], axis_size=5, validate_axis_size=1),
-    ...     Split(["y"], axis_size=4, validate_axis_size=1),
+    ...     Split(["x"], axis_size=5, validate_axis_size=1, shuffle=False),
+    ...     Split(["y"], axis_size=4, validate_axis_size=1, shuffle=False),
     ... ]
     >>> _validate_child_split_availability(splits, 0.2, 0.0) is None
     True
@@ -364,9 +364,9 @@ def _infer_sample_size_for_part(
     ...     name="y",
     ... )
     >>> model = lsl.Model([y])
-    >>> split = Split(["y"], axis_size=4, validate_axis_size=1).split_position(
-    ...     model.extract_position(["y"])
-    ... )
+    >>> split = Split(
+    ...     ["y"], axis_size=4, validate_axis_size=1, shuffle=False
+    ... ).split_position(model.extract_position(["y"]))
     >>> state = model.update_state(split.validate, model.state)
     >>> _infer_sample_size_for_part(model, state, split, "validate")
     1
@@ -428,9 +428,11 @@ class PositionSplit:
         :meth:`add_inferred_sample_sizes_from_model` to infer these values from
         pointwise observed log-probability arrays.
     passthrough
-        Keyword-only position entries copied unchanged into ``train``, ``validate``,
-        and ``test``. These entries are excluded from split likelihood scaling and
-        from batches derived automatically from this split.
+        Keyword-only position entries included unchanged in ``train``, ``validate``,
+        and ``test``. Use this for shared data that every split needs in full, such
+        as a group-level lookup table: passthrough entries are not split, are
+        excluded from split likelihood scaling, and are not batched automatically.
+        Per-observation covariates, weights, and offsets should be split instead.
 
     Examples
     --------
@@ -635,9 +637,9 @@ class PositionSplit:
         ...     name="y",
         ... )
         >>> model = lsl.Model([y])
-        >>> split = Split(["y"], axis_size=4, validate_axis_size=1).split_position(
-        ...     model.extract_position(["y"])
-        ... )
+        >>> split = Split(
+        ...     ["y"], axis_size=4, validate_axis_size=1, shuffle=False
+        ... ).split_position(model.extract_position(["y"]))
         >>> split.add_inferred_sample_sizes_from_model(model) is split
         True
         >>> split.sample_sizes
@@ -875,9 +877,9 @@ class PositionSplit:
         ...     name="y",
         ... )
         >>> model = lsl.Model([y])
-        >>> split = Split(["y"], axis_size=10, validate_axis_size=2).split_position(
-        ...     model.extract_position(["y"])
-        ... )
+        >>> split = Split(
+        ...     ["y"], axis_size=10, validate_axis_size=2, shuffle=False
+        ... ).split_position(model.extract_position(["y"]))
         >>> state = model.update_state(split.validate, model.state)
         >>> bool(
         ...     jnp.allclose(
@@ -913,13 +915,13 @@ class PositionSplit:
     @staticmethod
     def from_model(
         model: Model,
-        position_keys: Sequence[str] | None = None,
+        position_keys: Sequence[str] | Sequence[Sequence[str]] | None = None,
         axis_size: int | None = None,
         validate_axis_share: float = 0.0,
         test_axis_share: float = 0.0,
         split_axes: dict[str, int | None] | None = None,
         default_split_axis: int = 0,
-        shuffle: bool = False,
+        shuffle: bool = True,
         seed: jax.Array | int | None = None,
         multi_size: Literal["error", "manager"] = "error",
         sample_sizes: SampleSizes | None = None,
@@ -934,8 +936,12 @@ class PositionSplit:
             Model containing the observed variables to split.
         position_keys
             Names of observed position entries to include. If ``None``, all observed
-            variables in ``model`` are used. Use ``split_axes={key: None}`` to keep
-            a selected entry unchanged.
+            variables in ``model`` are used. Flat keys are grouped by axis length;
+            nested keys specify exact groups, including equal-sized groups. Each
+            group must have matching lengths along its configured axes. Use
+            ``split_axes={key: None}`` to
+            include a selected entry unchanged in ``train``, ``validate``, and
+            ``test`` without splitting or batching it automatically.
         axis_size
             Number of observations along the split axis. If ``None``, the number is
             guessed from ``model`` along ``default_split_axis``.
@@ -944,20 +950,26 @@ class PositionSplit:
         test_axis_share
             Share of observations assigned to the test split.
         split_axes
-            Optional mapping from position key to split axis. ``None`` keeps a
-            selected key unchanged in every split part. Keys missing from this
-            mapping use ``default_split_axis``.
+            Optional mapping from position key to split axis. Mapping a key to
+            ``None`` makes it passthrough data: it is included unchanged in
+            ``train``, ``validate``, and ``test``, is not split, and is excluded
+            from automatically derived batches. Use this for shared lookup tables
+            or constants, not per-observation data. Keys missing from this mapping
+            use ``default_split_axis``.
         default_split_axis
             Split axis for all position keys not listed in ``split_axes``.
         shuffle
-            Whether observations are shuffled before splitting.
+            Whether observations are shuffled before splitting; defaults to ``True``.
+            Full-data splits preserve order regardless of this setting.
         seed
-            Seed or JAX pseudo-random key used when ``shuffle=True``.
+            Seed or JAX pseudo-random key used for shuffled holdouts. If omitted,
+            the current Unix time is used. Ignored for full-data splits.
         multi_size
-            How to handle observed variables with different inferred axis sizes.
+            How to handle multiple inferred or explicit observation groups.
             The default ``"error"`` keeps :class:`PositionSplit` scalar and raises
             a helpful error. Use ``"manager"`` to return a
-            :class:`PositionSplitManager` when multiple axis sizes are detected.
+            :class:`PositionSplitManager` when multiple groups are detected, even
+            if they have equal axis sizes. One group still returns a scalar split.
         sample_sizes
             Optional effective sample sizes for train, validation, and test
             scaling. If supplied, these values are used instead of automatic
@@ -986,6 +998,7 @@ class PositionSplit:
         ...     position_keys=["y"],
         ...     validate_axis_share=0.2,
         ...     test_axis_share=0.1,
+        ...     shuffle=False,
         ... )
         >>> split.train_axis_size, split.validate_axis_size, split.test_axis_size
         (7, 2, 1)
@@ -1002,6 +1015,8 @@ class PositionSplit:
         ...     position_keys=["y1_multi", "y2_multi"],
         ...     validate_axis_share=0.2,
         ...     multi_size="manager",
+        ...     shuffle=True,
+        ...     seed=42,
         ... )
         >>> type(managed).__name__
         'PositionSplitManager'
@@ -1017,7 +1032,7 @@ class PositionSplit:
                 "PositionSplit.from_model() requires at least one position key."
             )
 
-        groups = position_key_groups_from_model(
+        pos_keys, groups = position_key_groups_from_model(
             model, pos_keys, split_axes, default_split_axis
         )
         if not groups:
@@ -1028,13 +1043,13 @@ class PositionSplit:
         if len(groups) > 1 and multi_size == "manager":
             if axis_size is not None:
                 raise ValueError(
-                    "A single axis_size value cannot configure multiple axis-size "
+                    "A single axis_size value cannot configure multiple observation "
                     "groups. Omit axis_size when using multi_size='manager'."
                 )
 
             return PositionSplitManager.from_model(
                 model,
-                position_keys=pos_keys,
+                position_keys=position_keys,
                 validate_axis_share=validate_axis_share,
                 test_axis_share=test_axis_share,
                 split_axes=split_axes,
@@ -1047,14 +1062,14 @@ class PositionSplit:
 
         if len(groups) > 1:
             raise ValueError(
-                "PositionSplit.from_model() found observed variables with different "
-                f"axis sizes: {groups}. Use "
+                "PositionSplit.from_model() found multiple observation groups "
+                f"with axis sizes {[size for size, _ in groups]}. Use "
                 "PositionSplit.from_model(..., multi_size='manager') or "
                 "PositionSplitManager.from_model(...)."
             )
 
         if axis_size is None:
-            axis_size = next(iter(groups))
+            axis_size = groups[0][0]
 
         splitter = Split.from_axis_shares(
             position_keys=pos_keys,
@@ -1133,8 +1148,10 @@ class PositionSplitManager:
         must contain validation data or none may contain validation data; the same
         rule applies to test data.
     passthrough
-        Keyword-only shared position entries copied unchanged into the manager's
-        merged ``train``, ``validate``, and ``test`` positions.
+        Keyword-only shared position entries included unchanged in the manager's
+        merged ``train``, ``validate``, and ``test`` positions. They are not split
+        or batched automatically. Use this for shared lookup tables or constants,
+        not per-observation data.
 
     Raises
     ------
@@ -1161,12 +1178,12 @@ class PositionSplitManager:
     >>> import jax.numpy as jnp
     >>> from liesel.optim import PositionSplitManager, Split
     >>> position = {"x": jnp.arange(10), "y": jnp.arange(6)}
-    >>> split_x = Split(["x"], axis_size=10, validate_axis_size=2).split_position(
-    ...     position
-    ... )
-    >>> split_y = Split(["y"], axis_size=6, validate_axis_size=1).split_position(
-    ...     position
-    ... )
+    >>> split_x = Split(
+    ...     ["x"], axis_size=10, validate_axis_size=2, shuffle=False
+    ... ).split_position(position)
+    >>> split_y = Split(
+    ...     ["y"], axis_size=6, validate_axis_size=1, shuffle=False
+    ... ).split_position(position)
     >>> manager = PositionSplitManager([split_x, split_y])
     >>> manager.position_keys
     ['x', 'y']
@@ -1190,7 +1207,11 @@ class PositionSplitManager:
     >>> y2 = lsl.Var.new_obs(jnp.arange(6.0), name="y2")
     >>> model = lsl.Model([y1, y2])
     >>> managed = PositionSplitManager.from_model(
-    ...     model, position_keys=["y1", "y2"], validate_axis_share=0.2
+    ...     model,
+    ...     position_keys=["y1", "y2"],
+    ...     validate_axis_share=0.2,
+    ...     shuffle=True,
+    ...     seed=42,
     ... )
     >>> managed.validate_axis_sizes
     (2, 1)
@@ -1244,12 +1265,12 @@ class PositionSplitManager:
     def from_model(
         cls,
         model: Model,
-        position_keys: Sequence[str] | None = None,
+        position_keys: Sequence[str] | Sequence[Sequence[str]] | None = None,
         validate_axis_share: float = 0.0,
         test_axis_share: float = 0.0,
         split_axes: dict[str, int | None] | None = None,
         default_split_axis: int = 0,
-        shuffle: bool = False,
+        shuffle: bool = True,
         seed: jax.Array | int | None = None,
         sample_sizes: SampleSizes | None = None,
         infer_sample_sizes: bool = True,
@@ -1257,15 +1278,20 @@ class PositionSplitManager:
         """
         Builds grouped position splits from a model.
 
-        Observed variables are grouped by inferred axis size along their split
-        axes. One :class:`Split` is constructed for each group and immediately
+        Flat position keys are grouped by inferred axis size; nested position keys
+        preserve explicit groups. One :class:`Split` is constructed per group and
         applied to the model's observed position.
 
         Parameters are the same as :meth:`SplitManager.from_model`. When
-        ``sample_sizes`` is supplied, it is interpreted as total effective sample
-        sizes for the whole manager. The totals are distributed to contained
-        splits in proportion to their axis sizes for the corresponding split
-        part. For custom per-child sample sizes, construct the child
+        a selected key is mapped to ``None`` in ``split_axes``, it is included
+        unchanged in ``train``, ``validate``, and ``test`` and is not split or
+        batched automatically. This is intended for shared lookup tables or
+        constants, not per-observation data.
+
+        When ``sample_sizes`` is supplied, it is interpreted as total effective
+        sample sizes for the whole manager. The totals are distributed to contained
+        splits in proportion to their axis sizes for the corresponding split part.
+        For custom per-child sample sizes, construct the child
         :class:`PositionSplit` objects manually. When ``infer_sample_sizes=True``,
         inference counts pointwise log-probability scalars, not observed value
         elements; for multivariate observation distributions, one observed event
@@ -1280,7 +1306,11 @@ class PositionSplitManager:
         >>> y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
         >>> model = lsl.Model([x, y])
         >>> split = PositionSplitManager.from_model(
-        ...     model, position_keys=["x", "y"], validate_axis_share=0.2
+        ...     model,
+        ...     position_keys=["x", "y"],
+        ...     validate_axis_share=0.2,
+        ...     shuffle=True,
+        ...     seed=42,
         ... )
         >>> split.axis_sizes
         (8, 5)
@@ -1379,8 +1409,12 @@ class PositionSplitManager:
         >>> pos = {"x": jnp.arange(5), "y": jnp.arange(6)}
         >>> manager = PositionSplitManager(
         ...     [
-        ...         Split(["x"], axis_size=5, validate_axis_size=1).split_position(pos),
-        ...         Split(["y"], axis_size=6, validate_axis_size=1).split_position(pos),
+        ...         Split(
+        ...             ["x"], axis_size=5, validate_axis_size=1, shuffle=False
+        ...         ).split_position(pos),
+        ...         Split(
+        ...             ["y"], axis_size=6, validate_axis_size=1, shuffle=False
+        ...         ).split_position(pos),
         ...     ]
         ... )
         >>> sorted(manager.validate)
@@ -1400,8 +1434,12 @@ class PositionSplitManager:
         >>> pos = {"x": jnp.arange(5), "y": jnp.arange(6)}
         >>> manager = PositionSplitManager(
         ...     [
-        ...         Split(["x"], axis_size=5, test_axis_size=1).split_position(pos),
-        ...         Split(["y"], axis_size=6, test_axis_size=1).split_position(pos),
+        ...         Split(
+        ...             ["x"], axis_size=5, test_axis_size=1, shuffle=False
+        ...         ).split_position(pos),
+        ...         Split(
+        ...             ["y"], axis_size=6, test_axis_size=1, shuffle=False
+        ...         ).split_position(pos),
         ...     ]
         ... )
         >>> sorted(manager.test)
@@ -1495,8 +1533,12 @@ class PositionSplitManager:
         >>> pos = {"x": jnp.arange(5), "y": jnp.arange(6)}
         >>> manager = PositionSplitManager(
         ...     [
-        ...         Split(["x"], axis_size=5, validate_axis_size=1).split_position(pos),
-        ...         Split(["y"], axis_size=6, validate_axis_size=1).split_position(pos),
+        ...         Split(
+        ...             ["x"], axis_size=5, validate_axis_size=1, shuffle=False
+        ...         ).split_position(pos),
+        ...         Split(
+        ...             ["y"], axis_size=6, validate_axis_size=1, shuffle=False
+        ...         ).split_position(pos),
         ...     ]
         ... )
         >>> manager.has_validation
@@ -1665,12 +1707,12 @@ class PositionSplitManager:
         >>> pos = model.extract_position(["y1", "y2"])
         >>> split = PositionSplitManager(
         ...     [
-        ...         Split(["y1"], axis_size=10, validate_axis_size=2).split_position(
-        ...             pos
-        ...         ),
-        ...         Split(["y2"], axis_size=6, validate_axis_size=1).split_position(
-        ...             pos
-        ...         ),
+        ...         Split(
+        ...             ["y1"], axis_size=10, validate_axis_size=2, shuffle=False
+        ...         ).split_position(pos),
+        ...         Split(
+        ...             ["y2"], axis_size=6, validate_axis_size=1, shuffle=False
+        ...         ).split_position(pos),
         ...     ]
         ... )
         >>> state = model.update_state(split.validate, model.state)
@@ -1725,7 +1767,10 @@ class SplitManager:
         not overlap. Either all children must define validation data or none may; the
         same rule applies to test data.
     passthrough_position_keys
-        Keyword-only names copied unchanged into every returned split part.
+        Keyword-only names included unchanged in ``train``, ``validate``, and
+        ``test``. They are not assigned to a child :class:`Split` or batched
+        automatically. Use this for shared lookup tables or constants, not
+        per-observation data.
 
     Examples
     --------
@@ -1733,8 +1778,8 @@ class SplitManager:
     >>> from liesel.optim import SplitManager, Split
     >>> manager = SplitManager(
     ...     [
-    ...         Split(["x"], axis_size=10, validate_axis_size=2),
-    ...         Split(["y"], axis_size=6, validate_axis_size=1),
+    ...         Split(["x"], axis_size=10, validate_axis_size=2, shuffle=False),
+    ...         Split(["y"], axis_size=6, validate_axis_size=1, shuffle=False),
     ...     ]
     ... )
     >>> split = manager.split_position({"x": jnp.arange(10), "y": jnp.arange(6)})
@@ -1750,7 +1795,11 @@ class SplitManager:
     >>> y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
     >>> model = lsl.Model([x, y])
     >>> manager = SplitManager.from_model(
-    ...     model, position_keys=["x", "y"], validate_axis_share=0.2
+    ...     model,
+    ...     position_keys=["x", "y"],
+    ...     validate_axis_share=0.2,
+    ...     shuffle=True,
+    ...     seed=42,
     ... )
     >>> manager.axis_sizes
     (8, 5)
@@ -1797,16 +1846,16 @@ class SplitManager:
     def from_model(
         cls,
         model: Model,
-        position_keys: Sequence[str] | None = None,
+        position_keys: Sequence[str] | Sequence[Sequence[str]] | None = None,
         validate_axis_share: float = 0.0,
         test_axis_share: float = 0.0,
         split_axes: dict[str, int | None] | None = None,
         default_split_axis: int = 0,
-        shuffle: bool = False,
+        shuffle: bool = True,
         seed: jax.Array | int | None = None,
     ) -> SplitManager:
         """
-        Builds a :class:`SplitManager` by grouping observed variables by size.
+        Builds a :class:`SplitManager` from inferred or explicit groups.
 
         Parameters
         ----------
@@ -1814,26 +1863,35 @@ class SplitManager:
             Model containing the observed variables to split.
         position_keys
             Names of observed position entries to include. If ``None``, all observed
-            variables in ``model`` are used. Use ``split_axes={key: None}`` to keep
-            a selected entry unchanged.
+            variables in ``model`` are used. Flat keys are grouped by axis length;
+            nested keys specify exact groups, including equal-sized groups. Each
+            group must have matching lengths along its configured axes. Use
+            ``split_axes={key: None}`` to
+            include a selected entry unchanged in ``train``, ``validate``, and
+            ``test`` without splitting or batching it automatically.
         validate_axis_share
             Share of observations assigned to validation in every child split.
         test_axis_share
             Share of observations assigned to testing in every child split.
         split_axes
-            Optional mapping from position key to split axis. ``None`` keeps a
-            selected key unchanged in every split part.
+            Optional mapping from position key to split axis. Mapping a key to
+            ``None`` makes it passthrough data: it is included unchanged in
+            ``train``, ``validate``, and ``test``, is not split, and is excluded
+            from automatically derived batches. Use this for shared lookup tables
+            or constants, not per-observation data.
         default_split_axis
             Split axis for all position keys not listed in ``split_axes``.
         shuffle
-            Whether each child split shuffles observations.
+            Whether each child split shuffles observations; defaults to ``True``.
+            Full-data splits preserve order regardless of this setting.
         seed
-            Seed or JAX pseudo-random key used when ``shuffle=True``.
+            Seed or JAX pseudo-random key used for shuffled holdouts. If omitted,
+            the current Unix time is used. Ignored for full-data splits.
 
         Returns
         -------
         SplitManager
-            Split manager with one child :class:`Split` per inferred axis size.
+            Split manager with one child :class:`Split` per observation group.
 
         Examples
         --------
@@ -1844,7 +1902,11 @@ class SplitManager:
         >>> y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
         >>> model = lsl.Model([x, y])
         >>> manager = SplitManager.from_model(
-        ...     model, position_keys=["x", "y"], validate_axis_share=0.2
+        ...     model,
+        ...     position_keys=["x", "y"],
+        ...     validate_axis_share=0.2,
+        ...     shuffle=True,
+        ...     seed=42,
         ... )
         >>> manager.position_keys
         ['x', 'y']
@@ -1854,7 +1916,7 @@ class SplitManager:
         pos_keys = (
             list(position_keys) if position_keys is not None else list(model.observed)
         )
-        groups = position_key_groups_from_model(
+        pos_keys, groups = position_key_groups_from_model(
             model, pos_keys, split_axes, default_split_axis
         )
         if not groups:
@@ -1867,10 +1929,19 @@ class SplitManager:
         passthrough_position_keys = [
             key for key in pos_keys if split_axes.get(key, default_split_axis) is None
         ]
-        seeds = _child_seeds(seed, len(groups)) if shuffle else (seed,) * len(groups)
+        # Positive shares can still round down to zero observations.
+        has_holdout = any(
+            axis_size * validate_axis_share >= 1 or axis_size * test_axis_share >= 1
+            for axis_size, _ in groups
+        )
+        seeds = (
+            _child_seeds(seed, len(groups))
+            if shuffle and has_holdout
+            else (seed,) * len(groups)
+        )
         splits = []
 
-        for (axis_size, keys), child_seed in zip(groups.items(), seeds, strict=True):
+        for (axis_size, keys), child_seed in zip(groups, seeds, strict=True):
             splits.append(
                 Split.from_axis_shares(
                     position_keys=keys,
@@ -1959,9 +2030,13 @@ class SplitManager:
         >>> manager = SplitManager(
         ...     [
         ...         Split(
-        ...             ["x"], axis_size=4, validate_axis_size=1, default_split_axis=1
+        ...             ["x"],
+        ...             axis_size=4,
+        ...             validate_axis_size=1,
+        ...             default_split_axis=1,
+        ...             shuffle=False,
         ...         ),
-        ...         Split(["y"], axis_size=6, validate_axis_size=2),
+        ...         Split(["y"], axis_size=6, validate_axis_size=2, shuffle=False),
         ...     ]
         ... )
         >>> split = manager.split_position(
@@ -1998,14 +2073,16 @@ class Split:
     ``train_axis_size`` indices become the training split, the next
     ``validate_axis_size`` indices become the validation split, and the final
     ``test_axis_size`` indices become the test split. If ``shuffle=True``, the
-    index vector is permuted once during initialization.
+    index vector is permuted once during initialization when a validation or test
+    part is nonempty. Full-data splits preserve row order and do not use a seed.
 
     Parameters
     ----------
     position_keys
         Names of position entries that should be included. If omitted,
         :meth:`split_position` uses all keys in the supplied position. Entries
-        mapped to ``None`` in ``split_axes`` are passed through unchanged.
+        mapped to ``None`` in ``split_axes`` are included unchanged in ``train``,
+        ``validate``, and ``test`` and are not batched automatically.
     axis_size
         Number of observations along each split axis. Must be positive.
     validate_axis_size
@@ -2016,16 +2093,20 @@ class Split:
         Number of training observations. If left at ``None``, it is computed as
         ``axis_size - validate_axis_size - test_axis_size``.
     split_axes
-        Optional mapping from position key to split axis. ``None`` keeps a selected
-        key unchanged in every split part. Keys missing from this mapping use
+        Optional mapping from position key to split axis. Mapping a key to ``None``
+        makes it passthrough data: it is included unchanged in ``train``,
+        ``validate``, and ``test``, is not split, and is excluded from automatically
+        derived batches. Use this for shared lookup tables or constants, not
+        per-observation data. Keys missing from this mapping use
         ``default_split_axis``.
     default_split_axis
         Split axis for all position keys not listed in ``split_axes``.
     shuffle
-        Whether to shuffle observations during initialization.
+        Whether to shuffle observations during initialization; defaults to ``True``.
+        Full-data splits preserve order regardless of this setting.
     seed
-        Seed or JAX pseudo-random key used when ``shuffle=True``. If ``None``, the
-        current time is used.
+        Seed or JAX pseudo-random key used for shuffled holdouts. If omitted,
+        the current Unix time is used. Ignored for full-data splits.
     sample_sizes
         Optional effective sample sizes passed to the resulting
         :class:`PositionSplit`.
@@ -2096,7 +2177,7 @@ class Split:
     train_axis_size: int | None = None
     split_axes: dict[str, int | None] | None = field(default_factory=dict)
     default_split_axis: int = 0
-    shuffle: bool = False
+    shuffle: bool = True
     seed: jax.Array | int | None = None
     sample_sizes: SampleSizes | None = None
     keep_in_train: Sequence[int] | None = None
@@ -2168,6 +2249,11 @@ class Split:
             )
         self.keep_in_train = reserved.tolist()
 
+        # Every row is already in training, including reserved rows. No random
+        # partition or reordering is needed, regardless of the shuffle setting.
+        if not self.has_validation and not self.has_test:
+            return
+
         if self.shuffle:
             if isinstance(self.seed, jax.Array):
                 key = self.seed
@@ -2194,7 +2280,9 @@ class Split:
         Examples
         --------
         >>> from liesel.optim import Split
-        >>> Split(["x"], axis_size=10, validate_axis_size=2).has_validation
+        >>> Split(
+        ...     ["x"], axis_size=10, validate_axis_size=2, shuffle=False
+        ... ).has_validation
         True
         """
         return self.validate_axis_size > 0
@@ -2225,7 +2313,9 @@ class Split:
         Examples
         --------
         >>> from liesel.optim import Split
-        >>> Split(["x"], axis_size=10, validate_axis_size=2).validate_axis_share
+        >>> Split(
+        ...     ["x"], axis_size=10, validate_axis_size=2, shuffle=False
+        ... ).validate_axis_share
         0.2
         """
         return self.validate_axis_size / self.axis_size
@@ -2243,10 +2333,189 @@ class Split:
         Examples
         --------
         >>> from liesel.optim import Split
-        >>> Split(["x"], axis_size=10, test_axis_size=3).test_axis_share
+        >>> Split(["x"], axis_size=10, test_axis_size=3, shuffle=False).test_axis_share
         0.3
         """
         return self.test_axis_size / self.axis_size
+
+    @classmethod
+    @overload
+    def from_model(
+        cls,
+        model: Model,
+        position_keys: Sequence[str] | Sequence[Sequence[str]] | None = None,
+        axis_size: int | None = None,
+        validate_axis_share: float = 0.0,
+        test_axis_share: float = 0.0,
+        split_axes: dict[str, int | None] | None = None,
+        default_split_axis: int = 0,
+        shuffle: bool = True,
+        seed: jax.Array | int | None = None,
+        sample_sizes: SampleSizes | None = None,
+        multi_size: Literal["error"] = "error",
+    ) -> Split: ...
+
+    @classmethod
+    @overload
+    def from_model(
+        cls,
+        model: Model,
+        position_keys: Sequence[str] | Sequence[Sequence[str]] | None = None,
+        axis_size: int | None = None,
+        validate_axis_share: float = 0.0,
+        test_axis_share: float = 0.0,
+        split_axes: dict[str, int | None] | None = None,
+        default_split_axis: int = 0,
+        shuffle: bool = True,
+        seed: jax.Array | int | None = None,
+        sample_sizes: SampleSizes | None = None,
+        multi_size: Literal["manager"] = "manager",
+    ) -> Split | SplitManager: ...
+
+    @classmethod
+    def from_model(
+        cls,
+        model: Model,
+        position_keys: Sequence[str] | Sequence[Sequence[str]] | None = None,
+        axis_size: int | None = None,
+        validate_axis_share: float = 0.0,
+        test_axis_share: float = 0.0,
+        split_axes: dict[str, int | None] | None = None,
+        default_split_axis: int = 0,
+        shuffle: bool = True,
+        seed: jax.Array | int | None = None,
+        sample_sizes: SampleSizes | None = None,
+        multi_size: Literal["error", "manager"] = "error",
+    ) -> Split | SplitManager:
+        """Builds reusable split recipes from inferred or explicit groups.
+
+        By default, selected entries must form one observation group. Set
+        ``multi_size="manager"`` to return a :class:`SplitManager` for multiple
+        groups. One group still returns a :class:`Split`. Entries
+        mapped to ``None`` in ``split_axes`` become passthrough data: when the
+        recipe is applied, they are included unchanged in ``train``, ``validate``,
+        and ``test``, are not split or batched automatically, and do not participate
+        in size inference. Pass ``axis_size`` to override the inferred size when the
+        recipe will be applied to another position.
+
+        Parameters
+        ----------
+        model
+            Model containing the observed variables to configure.
+        position_keys
+            Names of observed position entries to include. If ``None``, all observed
+            variables in ``model`` are used. Flat keys group automatically by axis
+            length; nested keys define exact groups, including equal-sized groups.
+        axis_size
+            Optional split-axis size override. If omitted, the size is inferred from
+            the selected model entries. Only supported for a single group.
+        validate_axis_share
+            Share of observations assigned to validation.
+        test_axis_share
+            Share of observations assigned to testing.
+        split_axes
+            Optional mapping from position key to split axis. Mapping a key to
+            ``None`` makes it passthrough data. Use this for shared lookup tables or
+            constants, not per-observation data.
+        default_split_axis
+            Split axis for keys not listed in ``split_axes``.
+        shuffle
+            Whether to shuffle observations during initialization; defaults to
+            ``True``. Full-data splits preserve order regardless of this setting.
+        seed
+            Seed or JAX pseudo-random key used for shuffled holdouts. If omitted,
+            the current Unix time is used. Ignored for full-data splits.
+        sample_sizes
+            Optional effective sample sizes passed to the resulting
+            :class:`PositionSplit`. Only supported for a single group; construct
+            child :class:`Split` recipes explicitly for per-group overrides.
+        multi_size
+            How to handle multiple observation groups. The default ``"error"``
+            raises; ``"manager"`` returns a :class:`SplitManager` for multiple
+            groups. One group always returns :class:`Split`.
+
+        Returns
+        -------
+        Split or SplitManager
+            One reusable recipe, or a manager when ``multi_size="manager"`` and
+            multiple groups are selected.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> import liesel.model as lsl
+        >>> from liesel.optim import Split
+        >>> y = lsl.Var.new_obs(jnp.arange(10.0), name="y")
+        >>> splitter = Split.from_model(
+        ...     lsl.Model([y]), validate_axis_share=0.2, shuffle=True, seed=42
+        ... )
+        >>> splitter.axis_size, splitter.train_axis_size, splitter.validate_axis_size
+        (10, 8, 2)
+
+        >>> z = lsl.Var.new_obs(jnp.arange(6.0), name="z")
+        >>> managed = Split.from_model(
+        ...     lsl.Model([y, z]),
+        ...     multi_size="manager",
+        ...     validate_axis_share=0.2,
+        ...     shuffle=True,
+        ...     seed=42,
+        ... )
+        >>> type(managed).__name__
+        'SplitManager'
+        """
+        if multi_size not in ("error", "manager"):
+            raise ValueError("multi_size must be 'error' or 'manager'.")
+
+        pos_keys = (
+            list(position_keys) if position_keys is not None else list(model.observed)
+        )
+        if not pos_keys:
+            raise ValueError("Split.from_model() requires at least one position key.")
+
+        pos_keys, groups = position_key_groups_from_model(
+            model, pos_keys, split_axes, default_split_axis
+        )
+        if not groups:
+            raise ValueError(
+                "Split.from_model() requires at least one position key to be split."
+            )
+        if len(groups) > 1 and multi_size == "manager":
+            if axis_size is not None or sample_sizes is not None:
+                raise ValueError(
+                    "A single axis_size or sample_sizes value cannot configure "
+                    "multiple observation groups. Omit these overrides when using "
+                    "multi_size='manager', or construct child Split recipes explicitly."
+                )
+            return SplitManager.from_model(
+                model,
+                position_keys=position_keys,
+                validate_axis_share=validate_axis_share,
+                test_axis_share=test_axis_share,
+                split_axes=split_axes,
+                default_split_axis=default_split_axis,
+                shuffle=shuffle,
+                seed=seed,
+            )
+
+        if len(groups) > 1:
+            raise ValueError(
+                "Split.from_model() found multiple observation groups "
+                f"with axis sizes {[size for size, _ in groups]}. Use "
+                "Split.from_model(..., multi_size='manager') or "
+                "SplitManager.from_model(...)."
+            )
+
+        return cls.from_axis_shares(
+            position_keys=pos_keys,
+            axis_size=groups[0][0] if axis_size is None else axis_size,
+            validate_axis_share=validate_axis_share,
+            test_axis_share=test_axis_share,
+            split_axes=split_axes,
+            default_split_axis=default_split_axis,
+            shuffle=shuffle,
+            seed=seed,
+            sample_sizes=sample_sizes,
+        )
 
     @classmethod
     def from_axis_shares(
@@ -2257,7 +2526,7 @@ class Split:
         test_axis_share: float = 0.0,
         split_axes: dict[str, int | None] | None = None,
         default_split_axis: int = 0,
-        shuffle: bool = False,
+        shuffle: bool = True,
         seed: jax.Array | int | None = None,
         sample_sizes: SampleSizes | None = None,
     ) -> Split:
@@ -2285,9 +2554,11 @@ class Split:
         default_split_axis
             Split axis for all position keys not listed in ``split_axes``.
         shuffle
-            Whether to shuffle observations during initialization.
+            Whether to shuffle observations during initialization; defaults to
+            ``True``. Full-data splits preserve order regardless of this setting.
         seed
-            Seed or JAX pseudo-random key used when ``shuffle=True``.
+            Seed or JAX pseudo-random key used for shuffled holdouts. If omitted,
+            the current Unix time is used. Ignored for full-data splits.
         sample_sizes
             Optional effective sample sizes passed to the resulting
             :class:`PositionSplit`.
@@ -2305,6 +2576,8 @@ class Split:
         ...     axis_size=10,
         ...     validate_axis_share=0.25,
         ...     test_axis_share=0.25,
+        ...     shuffle=True,
+        ...     seed=42,
         ... )
         >>> (
         ...     splitter.train_axis_size,
@@ -2385,7 +2658,11 @@ class Split:
         --------
         >>> from liesel.optim import Split
         >>> Split(
-        ...     ["x"], axis_size=6, validate_axis_size=2, test_axis_size=1
+        ...     ["x"],
+        ...     axis_size=6,
+        ...     validate_axis_size=2,
+        ...     test_axis_size=1,
+        ...     shuffle=False,
         ... ).indices_train.tolist()
         [0, 1, 2]
         """
@@ -2400,7 +2677,11 @@ class Split:
         --------
         >>> from liesel.optim import Split
         >>> Split(
-        ...     ["x"], axis_size=6, validate_axis_size=2, test_axis_size=1
+        ...     ["x"],
+        ...     axis_size=6,
+        ...     validate_axis_size=2,
+        ...     test_axis_size=1,
+        ...     shuffle=False,
         ... ).indices_validate.tolist()
         [3, 4]
         """
@@ -2417,7 +2698,11 @@ class Split:
         --------
         >>> from liesel.optim import Split
         >>> Split(
-        ...     ["x"], axis_size=6, validate_axis_size=2, test_axis_size=1
+        ...     ["x"],
+        ...     axis_size=6,
+        ...     validate_axis_size=2,
+        ...     test_axis_size=1,
+        ...     shuffle=False,
         ... ).indices_test.tolist()
         [5]
         """
@@ -2450,7 +2735,13 @@ class Split:
         --------
         >>> import jax.numpy as jnp
         >>> from liesel.optim import Split
-        >>> splitter = Split(["x"], axis_size=5, validate_axis_size=1, test_axis_size=1)
+        >>> splitter = Split(
+        ...     ["x"],
+        ...     axis_size=5,
+        ...     validate_axis_size=1,
+        ...     test_axis_size=1,
+        ...     shuffle=False,
+        ... )
         >>> split = splitter.split_position({"x": jnp.arange(5)})
         >>> split.train["x"].tolist()
         [0, 1, 2]
@@ -2460,7 +2751,11 @@ class Split:
         Use ``split_axes`` to split an array along a non-leading axis:
 
         >>> splitter = Split(
-        ...     ["x"], axis_size=4, validate_axis_size=1, split_axes={"x": 1}
+        ...     ["x"],
+        ...     axis_size=4,
+        ...     validate_axis_size=1,
+        ...     split_axes={"x": 1},
+        ...     shuffle=False,
         ... )
         >>> split = splitter.split_position({"x": jnp.arange(8).reshape(2, 4)})
         >>> split.train["x"].tolist()

@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+import jax
+import jax.numpy as jnp
+
 from ..model import Model
 from .types import ModelState
 
@@ -49,6 +52,7 @@ def scaled_liesel_log_lik(
     model: Model,
     model_state: ModelState,
     groups: Sequence[tuple[Sequence[str], float]],
+    corrections: dict[str, tuple[jax.Array, int]] | None = None,
 ):
     """Return the model log likelihood with per-group scaling.
 
@@ -56,6 +60,9 @@ def scaled_liesel_log_lik(
     belong to one batched data group and the scaling factor for that group. The
     corresponding observed log-likelihood nodes are summed and multiplied by the
     group scale.
+
+    Optional ``corrections`` maps likelihood node names to per-index factors and
+    the likelihood axis they apply to. These factors are applied before summation.
 
     Observed likelihood contributions that are not covered by any group are
     still included with scale 1.0. This supports partially batched models, where
@@ -80,7 +87,13 @@ def scaled_liesel_log_lik(
                     "more than one data group."
                 )
 
-            scaled_log_lik += scale * sum_state_value(model_state, node_name)
+            value = model_state[node_name].value
+            if corrections and node_name in corrections:
+                factors, axis = corrections[node_name]
+                shape = [1] * value.ndim
+                shape[axis] = factors.size
+                value = value * jnp.reshape(factors, shape)
+            scaled_log_lik += scale * sum_value(value)
             covered_nodes.add(node_name)
 
     for node_name in all_observed_log_lik_node_names(model):

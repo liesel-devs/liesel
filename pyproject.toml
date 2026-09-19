@@ -32,7 +32,7 @@ dependencies = [
     "networkx>=3.4.2",
     "numpy>=2.0",
     "optax>=0.1.7",
-    "pandas>=1.4",
+    "pandas>=2.2.3",
     "plotnine>=0.15.0",
     "pydot>=3.0",
     "scipy>=1.14.1",
@@ -49,7 +49,7 @@ Repository = "https://github.com/liesel-devs/liesel.git"
 
 [dependency-groups]
 dev = [
-    "ruff>=0.11.7",
+    "ruff>=0.16.0",
     "myst-nb>=1.0.0",
     "pre-commit>=4.6.0",
     "pydata-sphinx-theme>=0.18.0",
@@ -88,6 +88,9 @@ filterwarnings = [
     # Needed when testing against the minimum supported version.
     "ignore:JAXopt is no longer maintained:DeprecationWarning",
 ]
+
+[tool.ruff]
+extension = { qmd = "markdown" }
 
 [tool.ruff.lint]
 extend-select = [

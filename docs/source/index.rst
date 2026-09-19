@@ -10,6 +10,9 @@ Liesel: A Probabilistic Programming Framework
    :maxdepth: 1
 
    tutorials_overview
+   optimizer-data-flow
+   optimizer-weighted-batching
+   optimizer-checkpointing
 
 
 API Reference
@@ -149,6 +152,10 @@ Optimizer API
 The :mod:`liesel.optim` module provides the newer optimization engine, data-splitting
 utilities, and variational inference helpers.
 
+The :doc:`optimizer-data-flow` guide provides interactive overviews of the splitting,
+batching, and likelihood-scaling behavior.
+The :doc:`optimizer-checkpointing` guide covers pausing and recovering interrupted runs.
+
 .. autosummary::
     :toctree: generated
     :caption: Optimizer API
@@ -159,6 +166,8 @@ utilities, and variational inference helpers.
     ~liesel.optim.LieselVI
     ~liesel.optim.OptimEngine
     ~liesel.optim.EmaTrainLossMonitor
+    ~liesel.optim.OptimCheckpoint
+    ~liesel.optim.state.OptimResult
     ~liesel.optim.NegLogProbLoss
     ~liesel.optim.NegElboLoss
     ~liesel.optim.VDist

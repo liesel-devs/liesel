@@ -20,9 +20,12 @@ def test_input_group():
         _name="c",
     )
 
-    assert c.update().value == pytest.approx(-0.6067796945571899)
+    expected = tfd.TransformedDistribution(
+        tfd.Normal(0.0, 1.0), tfb.Softplus(hinge_softness=1.0)
+    ).log_prob(1.0)
+    assert c.update().value == pytest.approx(expected)
 
     m = Model([c])
     m.update()
 
-    assert m.nodes["c"].value == pytest.approx(-0.6067796945571899)
+    assert m.nodes["c"].value == pytest.approx(expected)

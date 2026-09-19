@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
@@ -83,7 +84,7 @@ def test_default_build_engine_uses_opinionated_defaults():
 
 def test_batch_size_shortcut_builds_training_batches():
     model = _normal_model()
-    split = PositionSplit.from_model(model, test_axis_share=0.25)
+    split = PositionSplit.from_model(model, test_axis_share=0.25, seed=1)
 
     engine = LieselVI(
         model, loss_monitor=LOSS_MONITOR, split=split, batch_size=2, seed=1
@@ -107,7 +108,7 @@ def test_old_batch_axis_size_shortcut_still_works():
 
 def test_validation_split_raises():
     model = _normal_model()
-    split = PositionSplit.from_model(model, validate_axis_share=0.25)
+    split = PositionSplit.from_model(model, validate_axis_share=0.25, seed=1)
 
     with pytest.raises(ValueError, match="validation data"):
         LieselVI(model, loss_monitor=LOSS_MONITOR, split=split)
@@ -180,6 +181,55 @@ def test_multi_size_default_split_builds_batch_manager():
     assert isinstance(engine.loss, NegElboLoss)
     assert engine.loss.scale is True
     assert engine.loss.scalar == sum(engine.split.train_axis_sizes)
+
+
+@pytest.mark.parametrize("epoch_size,expected", [("max", 4), ("min", 2), (3, 3)])
+def test_multi_size_minibatches_use_joint_epoch_size(epoch_size, expected):
+    engine = LieselVI(
+        _two_branch_model(),
+        loss_monitor=LOSS_MONITOR,
+        batch_size=2,
+        epoch_size=epoch_size,
+        seed=1,
+    ).build_engine()
+    assert engine.batches.n_full_batches == expected
+
+
+@pytest.mark.parametrize("managed", [False, True])
+def test_weighted_vi_checkpoint_continues_same_run(tmp_path, managed):
+    def engine():
+        model = _two_branch_model() if managed else _normal_model()
+        children = [
+            Batches(
+                [name],
+                axis_size=len(var.value),
+                batch_size=2,
+                sample_with_replacement=True,
+                sampling_weights=jnp.arange(1, len(var.value) + 1),
+            )
+            for name, var in model.observed.items()
+        ]
+        batches = BatchManager(children, epoch_size="max") if managed else children[0]
+        return LieselVI(
+            model,
+            batches=batches,
+            loss_monitor=LOSS_MONITOR,
+            stopper=Stopper(epochs=3, patience=3),
+            nsamples=1,
+            seed=1,
+            show_progress=False,
+        ).build_engine()
+
+    expected = engine().fit()
+    path = tmp_path / "vi.pkl"
+    engine().fit(checkpoint=path, pause_after=1)
+    actual = engine().fit(checkpoint=path)
+    for a, b in zip(
+        jax.tree.leaves((actual.position_final, actual.history)),
+        jax.tree.leaves((expected.position_final, expected.history)),
+        strict=True,
+    ):
+        np.testing.assert_allclose(a, b, rtol=1e-6, atol=1e-6)
 
 
 def test_scale_loss_false_builds_unscaled_default_loss():
@@ -302,7 +352,6 @@ def test_fit_returns_optim_result():
     assert isinstance(result, OptimResult)
     assert result.monitor_source == "train_ema"
     assert result.n_epochs == 1
-    assert result.position is not None
     assert result.position_final is not None
     assert result.position_min_monitor is not None
 
@@ -319,7 +368,7 @@ def test_fit_with_full_data_monitor_returns_minimum_monitor_position():
     ).fit()
 
     assert result.monitor_source == "train_full_data"
-    assert result.position is result.position_min_monitor
+    assert result.position_min_monitor is not None
 
 
 def test_fit_handles_float64_model_with_x64_enabled():

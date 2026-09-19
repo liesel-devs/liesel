@@ -1,5 +1,6 @@
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 import tensorflow_probability.substrates.jax as tfp
 import tensorflow_probability.substrates.jax.bijectors as tfb
@@ -53,6 +54,39 @@ def _two_parameter_model():
         name="y",
     )
     return lsl.Model([y, beta])
+
+
+def test_weighted_elbo_expectation_and_gradient_match_full_data():
+    model = _laplace_model()
+    model.vars["y"].value = jnp.array([1.0, 4.0])
+    loss = opt.NegElboLoss.mvn_diag(model, nsamples=3)
+    params = loss.position(list(loss.q.parameters))
+    batches = opt.Batches(
+        ["y"], 2, 1, sample_with_replacement=True, sampling_weights=[1.0, 3.0]
+    )
+    batches.indices = jnp.array([0, 1])
+    key = jax.random.key(12)
+
+    def estimate(position, index):
+        return loss.estimate_elbo(
+            position,
+            key,
+            model.state,
+            obs=batches.get_batched_position(loss.split.train, index),
+            batches=batches,
+            batch_index=index,
+        )
+
+    def weighted(position):
+        values = jax.vmap(estimate, in_axes=(None, 0))(position, jnp.arange(2))
+        return jnp.dot(jnp.array([0.25, 0.75]), values)
+
+    expected = jax.value_and_grad(
+        lambda position: loss.estimate_elbo(position, key, model.state)
+    )(params)
+    actual = jax.jit(jax.value_and_grad(weighted))(params)
+    for a, b in zip(jax.tree.leaves(actual), jax.tree.leaves(expected), strict=True):
+        np.testing.assert_allclose(a, b, rtol=1e-5, atol=1e-5)
 
 
 def test_neg_elbo_from_vdist_scale_uses_total_branch_training_size():
@@ -462,7 +496,7 @@ class TestNegElboLoss:
 
     def test_rejects_split_with_validation_data(self):
         p = _laplace_model()
-        split = opt.PositionSplit.from_model(p, validate_axis_share=0.5)
+        split = opt.PositionSplit.from_model(p, validate_axis_share=0.5, seed=1)
 
         with pytest.raises(ValueError, match="validation data"):
             opt.NegElboLoss.mvn_diag(p, split=split)

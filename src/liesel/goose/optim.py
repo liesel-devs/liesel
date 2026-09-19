@@ -369,7 +369,7 @@ def optim_flat(
 
     See Also
     --------
-    .history_to_df : A helper function to turn the :attr:`.OptimResult.history` into
+    .history_to_df : A helper to turn :attr:`liesel.goose.OptimResult.history` into
         a ``pandas.DataFrame`` - nice for quickly plotting results.
 
     Notes
@@ -819,7 +819,7 @@ def optim_flat(
 
 def history_to_df(history: Mapping[str, Any]) -> pd.DataFrame:
     """
-    Turns a :attr:`.OptimResult.history` dictionary into a ``pandas.DataFrame``.
+    Turns :attr:`liesel.goose.OptimResult.history` into a ``pandas.DataFrame``.
     """
     data: dict[str, Array] = {}
 

@@ -3,7 +3,7 @@ Diagnostic plots of the posterior samples.
 """
 
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -14,6 +14,23 @@ from arviz_stats.base import array_stats
 from liesel.goose.engine import SamplingResults
 
 from .types import Array
+
+LegendPosition = (
+    Literal[
+        "best",
+        "upper right",
+        "upper left",
+        "lower left",
+        "lower right",
+        "right",
+        "center left",
+        "center right",
+        "lower center",
+        "upper center",
+        "center",
+    ]
+    | tuple[float, float]
+)
 
 
 def _raise_chain_indices_error(
@@ -399,7 +416,7 @@ def plot_trace(
     style: str = "whitegrid",
     color_palette: str | list[str] | dict[int, str] | None = None,
     ncol: int = 3,
-    height: int = 3,
+    height: float = 3,
     aspect_ratio: float = 1.0,
     save_path: str | None = None,
     include_warmup: bool = False,
@@ -525,7 +542,7 @@ def plot_density(
     style: str = "whitegrid",
     color_palette: str | list[str] | dict[int, str] | None = None,
     ncol: int = 3,
-    height: int = 3,
+    height: float = 3,
     aspect_ratio: float = 1.0,
     save_path: str | None = None,
     show: bool = True,
@@ -657,7 +674,7 @@ def plot_cor(
     style: str = "whitegrid",
     color_palette: str | list[str] | dict[int, str] | None = None,
     ncol: int = 3,
-    height: int = 3,
+    height: float = 3,
     aspect_ratio: float = 1.0,
     save_path: str | None = None,
     show: bool = True,
@@ -1005,7 +1022,7 @@ def plot_scatter(
     style: str = "whitegrid",
     color_list: list[str] | None = None,
     figure_size: tuple[int | float, int | float] = (9, 6),
-    legend_position: tuple[float, float] | str = "best",
+    legend_position: LegendPosition = "best",
     save_path: str | None = None,
     include_warmup: bool = False,
     show: bool = True,
@@ -1128,7 +1145,7 @@ def plot_pairs(
     style: str = "whitegrid",
     diag_kind: str = "kde",
     color_palette: str | list[str] | dict[int, str] | None = None,
-    height: int = 3,
+    height: float = 3,
     aspect_ratio: float = 1.0,
     save_path: str | None = None,
     include_warmup: bool = False,

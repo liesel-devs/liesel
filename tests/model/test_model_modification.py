@@ -13,12 +13,6 @@ def _require_dist_node(var: lsl.Var) -> lsl.Dist:
     return dist_node
 
 
-def _require_bijected_var(var: lsl.Var) -> lsl.Var:
-    bijected_var = var.bijected_var
-    assert bijected_var is not None
-    return bijected_var
-
-
 class TestBasicModifyModel:
     def test_biject_variable(self):
         x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
@@ -37,8 +31,8 @@ class TestBasicModifyModel:
 
         scale.biject(tfb.Exp())
 
-        assert _require_bijected_var(scale).name in model.vars
-        assert _require_bijected_var(scale).name in model.parameters
+        assert scale.bijected_var.name in model.vars
+        assert scale.bijected_var.name in model.parameters
         assert scale.name not in model.parameters
 
     def test_rename_variable(self):

@@ -588,6 +588,7 @@ class NegElboLoss(LossMixin):
         split_part: Literal["train", "validate", "test"] = "train",
         batches=None,
         nsamples: int | None = None,
+        batch_index: int | jax.Array | None = None,
     ) -> jax.Array:
         """
         Estimates the ELBO at a variational parameter position.
@@ -623,6 +624,8 @@ class NegElboLoss(LossMixin):
             Optional batch object used to compute mini-batch-scaled log likelihoods.
         nsamples
             Number of Monte Carlo samples. Defaults to ``self.nsamples``.
+        batch_index
+            Current batch row. Required when ``batches`` uses weighted sampling.
 
         Returns
         -------
@@ -647,7 +650,9 @@ class NegElboLoss(LossMixin):
                         self.p, p_state_new, part=split_part
                     )
             else:
-                log_lik_p = batches.scaled_log_lik(self.p, p_state_new)
+                log_lik_p = batches.scaled_log_lik(
+                    self.p, p_state_new, batch_index=batch_index
+                )
             log_prior_p = p_state_new["_model_log_prior"].value
             log_prob_p = log_lik_p + log_prior_p
 
@@ -696,6 +701,7 @@ class NegElboLoss(LossMixin):
             q_state=self.q.state,
             batches=carry.batches,
             nsamples=self.nsamples,
+            batch_index=carry.i_batch,
         )
         return -elbo / self.scalar
 

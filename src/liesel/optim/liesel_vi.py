@@ -16,10 +16,10 @@ from ._engine_utils import (
     _progress_print_rate,
     _validate_positive_int,
 )
-from .batch import Batches, BatchManager
+from .batch import Batches
 from .engine import EmaTrainLossMonitor, LossMonitor
 from .optimizer import Optimizer, OptimizerLike
-from .split import PositionSplit, PositionSplitManager
+from .split import PositionSplit
 from .stop import Stopper
 from .vi import NegElboLoss
 
@@ -81,11 +81,9 @@ class LieselVI:
         Split/batch axis for observed keys missing from ``split_axes``.
     shuffle_batches
         Whether default mini-batches should shuffle observations.
-    batch_mode
-        Mode used when default batches require a :class:`.BatchManager`.
     epoch_size
-        Joint epoch length used by default :class:`.BatchManager` objects in
-        ``mode="resample"``.
+        Joint epoch length used by default :class:`.BatchManager` objects:
+        ``"strict"``, ``"min"``, ``"max"``, or a positive integer.
     nsamples
         Monte Carlo sample count for internally constructed training ELBOs.
     scale_loss
@@ -162,8 +160,7 @@ class LieselVI:
         split_axes: dict[str, int | None] | None = None,
         default_split_axis: int = 0,
         shuffle_batches: bool = True,
-        batch_mode: Literal["strict", "resample"] = "resample",
-        epoch_size: Literal["max", "min"] | int = "max",
+        epoch_size: Literal["strict", "min", "max"] | int = "max",
         nsamples: int = 10,
         scale_loss: bool | Literal["auto"] = "auto",
         regularize_q_prior: bool = True,
@@ -219,7 +216,6 @@ class LieselVI:
             split_axes=split_axes,
             default_split_axis=default_split_axis,
             shuffle=shuffle_batches,
-            mode=batch_mode,
             epoch_size=epoch_size,
         )
         self.optimizers = self._resolve_optimizers(optimizers)
@@ -285,6 +281,7 @@ class LieselVI:
 
         return PositionSplit.from_model(
             self.model,
+            shuffle=False,
             axis_size=axis_size,
             split_axes=split_axes,
             default_split_axis=default_split_axis,
@@ -346,8 +343,7 @@ class LieselVI:
         split_axes: dict[str, int | None] | None,
         default_split_axis: int,
         shuffle: bool,
-        mode: Literal["strict", "resample"],
-        epoch_size: Literal["max", "min"] | int,
+        epoch_size: Literal["strict", "min", "max"] | int,
     ) -> BatchConfig:
         if batches is not None:
             return batches
@@ -355,36 +351,13 @@ class LieselVI:
         batch_axes = {
             key: axis for key, axis in (split_axes or {}).items() if axis is not None
         }
-        shuffle = False if batch_size is None else shuffle
-        if isinstance(self.split, PositionSplitManager):
-            children = [
-                Batches(
-                    position_keys=child.split_position_keys,
-                    axis_size=child.train_axis_size,
-                    batch_size=batch_size,
-                    shuffle=shuffle,
-                    batch_axes=batch_axes,
-                    default_batch_axis=default_split_axis,
-                    sample_size=child.train_sample_size,
-                    sample_with_replacement=(
-                        mode == "resample"
-                        and batch_size is not None
-                        and batch_size > child.train_axis_size
-                    ),
-                )
-                for child in self.split.splits
-            ]
-            return BatchManager(children, mode=mode, epoch_size=epoch_size)
-
-        position_keys = self.split.split_position_keys
-        return Batches(
-            position_keys=position_keys,
-            axis_size=self.split.train_axis_size,
+        return Batches.from_split(
+            self.split,
             batch_size=batch_size,
             shuffle=shuffle,
             batch_axes=batch_axes,
             default_batch_axis=default_split_axis,
-            sample_size=self.split.train_sample_size,
+            epoch_size=epoch_size,
         )
 
     def _resolve_optimizers(

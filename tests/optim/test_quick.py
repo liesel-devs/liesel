@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import jax
 import jax.numpy as jnp
 import pytest
@@ -7,6 +9,7 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.model as lsl
 import liesel.optim as opt
+import liesel.optim.split as split_module
 from liesel.optim import (
     Batches,
     BatchManager,
@@ -59,9 +62,71 @@ def test_lieseloptim_imports():
     assert not hasattr(opt, "QuickOptim")
 
 
+@pytest.mark.parametrize("make_model", [_normal_model, _two_branch_model])
+def test_seeded_automatic_full_data_setup_preserves_rows_and_repeats_fit(
+    make_model, monkeypatch
+):
+    def unexpected_clock_read():
+        raise AssertionError("Automatic full-data setup must not generate a split seed")
+
+    monkeypatch.setattr(
+        split_module, "time", SimpleNamespace(time=unexpected_clock_read)
+    )
+
+    def run():
+        model = make_model()
+        quick = LieselOptim(
+            model,
+            seed=42,
+            batch_size=2,
+            loss_monitor=EmaTrainLossMonitor(1),
+            stopper=Stopper(epochs=3, patience=3),
+            show_progress=False,
+        )
+        original = model.extract_position(quick.split.position_keys)
+        for key, value in original.items():
+            assert jnp.array_equal(quick.split.train[key], value)
+        return quick.fit()
+
+    first, second = run(), run()
+    assert jnp.array_equal(first.history.loss_train, second.history.loss_train)
+    assert jnp.array_equal(first.position_final["loc"], second.position_final["loc"])
+
+
 def test_lieseloptim_requires_explicit_loss_monitor():
     with pytest.raises(TypeError, match="loss_monitor"):
         LieselOptim(_normal_model())  # ty: ignore[missing-argument]
+
+
+def test_lieseloptim_removed_batch_mode_is_rejected():
+    with pytest.raises(TypeError):
+        LieselOptim(
+            _normal_model(),
+            loss_monitor="train_full_data",
+            batch_mode="resample",  # ty: ignore[unknown-argument]
+        )
+
+
+@pytest.mark.parametrize(("epoch_size", "expected"), [("max", 4), ("min", 2), (3, 3)])
+def test_lieseloptim_resolves_multi_branch_epoch_size(epoch_size, expected):
+    optimizer = LieselOptim(
+        _two_branch_model(),
+        loss_monitor="train_full_data",
+        batch_size=2,
+        epoch_size=epoch_size,
+    )
+    assert isinstance(optimizer.batches, BatchManager)
+    assert optimizer.batches.n_full_batches == expected
+
+
+def test_lieseloptim_strict_rejects_unequal_multi_branch_counts():
+    with pytest.raises(ValueError, match="same n_full_batches"):
+        LieselOptim(
+            _two_branch_model(),
+            loss_monitor="train_full_data",
+            batch_size=2,
+            epoch_size="strict",
+        )
 
 
 def test_lieseloptim_validation_monitor_requires_validation_data():
@@ -285,11 +350,9 @@ def test_fit_returns_optim_result():
     assert isinstance(result, OptimResult)
     assert result.monitor_source == "train_ema"
     assert result.n_epochs == 1
-    assert result.position is not None
+    assert result.position_final.keys() == model.parameters.keys()
     assert result.position_min_monitor is not None
-    assert result.position.keys() == result.position_final.keys()
-    for key in result.position:
-        assert jnp.array_equal(result.position[key], result.position_final[key])
+    assert result.position_min_monitor.keys() == result.position_final.keys()
 
 
 def test_fit_handles_float32_model_with_x64_enabled():

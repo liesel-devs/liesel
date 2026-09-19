@@ -8,9 +8,15 @@ user-facing pieces are :class:`OptimResult`, returned by optimizer runs, and
 
 from __future__ import annotations
 
+import os
+import pickle
+import tempfile
+import time
 from collections.abc import Sequence
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from importlib.metadata import version
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 import jax
@@ -22,6 +28,7 @@ from mizani.breaks import breaks_extended
 
 from liesel.goose.types import ModelState
 
+from ..__version__ import __version__
 from ..goose.pytree import register_dataclass_as_pytree
 from .batch import Batches, BatchManager
 from .optimizer import OptimizerLike
@@ -183,11 +190,12 @@ class OptimHistory:
         optimization trajectory; it is not a full-data loss evaluated at the
         epoch's final position.
     loss_monitor
-        Epoch-level series used for stopping and result selection, with shape
-        ``(epochs,)``. Depending on the configured source, this is a training EMA,
-        complete validation loss, or complete training loss. Exact losses use the
-        post-update epoch position. An EMA snapshot summarizes several positions,
-        so its associated minimum checkpoint is not an exact loss-position pair.
+        Epoch-level series used for stopping and identifying the minimum-monitor
+        position, with shape ``(epochs,)``. Depending on the source, this is a
+        training EMA, complete validation loss, or complete training loss. Exact
+        losses use the post-update epoch position. An EMA snapshot summarizes
+        several positions, so its associated parameter snapshot is not an exact
+        loss-position pair.
     position
         Optional parameter position history. Each array has a leading epoch
         dimension.
@@ -627,12 +635,22 @@ class OptimCarry:
 
     loss_train: jax.Array = field(default_factory=lambda: jnp.asarray(jnp.inf))
     loss_monitor: jax.Array = field(default_factory=lambda: jnp.asarray(jnp.inf))
-    _ema_numerator: jax.Array = field(default_factory=lambda: jnp.asarray(0.0))
-    _ema_weight: jax.Array = field(default_factory=lambda: jnp.asarray(0.0))
+    _ema_mean: jax.Array = field(default_factory=lambda: jnp.asarray(0.0))
+    _ema_compensation: jax.Array = field(default_factory=lambda: jnp.asarray(0.0))
 
     epoch: int = 0  # outer while-loop index over epochs
     i_batch: int | jax.Array = 0  # inner for-loop index over batches
     nan_debug_state: OptimNaNDebugState | None = None
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        # Legacy checkpoints stored the unnormalized EMA and its weight.
+        # Preserve their last value; historical rounding cannot be recovered.
+        if "_ema_numerator" in state:
+            numerator = state.pop("_ema_numerator")
+            weight = state.pop("_ema_weight")
+            state["_ema_mean"] = numerator / jnp.where(weight == 0, 1, weight)
+            state["_ema_compensation"] = jnp.zeros_like(numerator)
+        self.__dict__.update(state)
 
     @classmethod
     def new(
@@ -714,8 +732,8 @@ class OptimCarry:
             min_monitor_loss=inf,
             loss_train=inf,
             loss_monitor=inf,
-            _ema_numerator=zero,
-            _ema_weight=zero,
+            _ema_mean=zero,
+            _ema_compensation=zero,
         )
         return inst
 
@@ -799,31 +817,112 @@ class OptimNaNDebugInfo:
         return loss
 
 
+def _checkpoint_versions() -> dict[str, str]:
+    return {
+        "liesel": __version__,
+        **{name: version(name) for name in ("jax", "jaxlib", "optax", "numpy")},
+    }
+
+
+_CHECKPOINT_HEADER = b"liesel.optim.checkpoint\x00\x01\n"
+
+
+@dataclass(frozen=True)
+class OptimCheckpoint:
+    """An explicit snapshot from which an optimization run can continue.
+
+    Pass a result's ``checkpoint`` to :meth:`.OptimEngine.fit`. The snapshot
+    retains optimizer and random state as well as the completed history; it does
+    not retain an engine or loss callable. Treat snapshots as read-only. Mutable
+    containers are independent of the result, but their immutable JAX arrays are
+    shared. Continuing a snapshot does not mutate it or its original result.
+    """
+
+    _carry: OptimCarry
+    duration: float = 0.0
+    versions: dict[str, str] = field(default_factory=_checkpoint_versions)
+    _rebuild_model_state: bool = False
+    _data_structure: tuple = ()
+
+    @property
+    def history(self) -> OptimHistory:
+        """History retained by this snapshot, sharing arrays with its result."""
+        return self._carry.history
+
+    @property
+    def n_epochs(self) -> int:
+        """Number of completed epochs in this snapshot."""
+        return int(self._carry.epoch)
+
+    def save(self, path: str | os.PathLike[str]) -> None:
+        """Atomically saves this snapshot, replacing an existing file.
+
+        The parent directory must exist. A failed write preserves the previous
+        file. This does not associate the in-memory snapshot with a destination.
+        """
+        path = Path(path)
+        temporary = None
+        start = time.monotonic()
+        try:
+            with tempfile.NamedTemporaryFile(
+                dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False
+            ) as handle:
+                temporary = Path(handle.name)
+                handle.write(_CHECKPOINT_HEADER)
+                pickle.dump(self, handle, protocol=pickle.HIGHEST_PROTOCOL)
+                handle.flush()
+                os.fsync(handle.fileno())
+                # Sample after writing the state so recovery includes its I/O cost.
+                pickle.dump(self.duration + time.monotonic() - start, handle)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, path)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+
+    @classmethod
+    def load(cls, path: str | os.PathLike[str]) -> OptimCheckpoint:
+        """Loads a trusted checkpoint file onto the current JAX device.
+
+        Pickle files can execute code: only load files from trusted sources.
+        Runtime version and state compatibility are checked by ``fit()`` when
+        resuming, so a checkpoint can be loaded for inspection independently.
+        """
+        with Path(path).open("rb") as handle:
+            if handle.read(len(_CHECKPOINT_HEADER)) != _CHECKPOINT_HEADER:
+                raise ValueError(
+                    "Invalid or unsupported optimization checkpoint format."
+                )
+            checkpoint = pickle.load(handle)
+            duration = pickle.load(handle)
+        if not isinstance(checkpoint, cls):
+            raise ValueError("File does not contain an OptimCheckpoint.")  # noqa: TRY004
+        return replace(checkpoint, duration=duration)
+
+
 @dataclass
 class OptimResult:
     """
     Result returned by an optimizer run.
 
-    ``OptimResult`` bundles the processed history, the recommended continuation
-    position, the terminal and minimum-monitor positions, and small metadata about
-    the run. It also provides convenience plotting methods for losses and saved
-    parameter histories.
+    ``OptimResult`` bundles the processed history, the terminal and minimum-monitor
+    positions, and small metadata about the run. Choose explicitly between
+    ``position_final`` and ``position_min_monitor`` when using fitted parameters.
+    It also provides convenience plotting methods for losses and saved parameter
+    histories.
 
     Parameters
     ----------
     history
         Processed optimizer history.
-    position
-        Recommended continuation position. This is the terminal position for EMA
-        monitoring and the minimum-monitor position for exact epoch-level sources.
-        It is ``None`` if no epoch completed.
     position_final
         Actual terminal position, including an interrupted partial epoch.
     position_min_monitor
         Position with the smallest recorded monitoring loss, or ``None`` if no
         epoch completed. For exact validation and full-training monitors, this is
         the post-update position used for that loss evaluation. For an EMA, it is
-        the associated epoch-end checkpoint, not a position whose exact loss equals
+        the associated parameter snapshot, not a position whose exact loss equals
         the EMA.
     n_epochs
         Number of completed epochs included in the processed history.
@@ -836,10 +935,17 @@ class OptimResult:
     patience
         Patience configured for early stopping, measured in epochs.
     duration
-        Wall-clock runtime in seconds.
+        Cumulative active runtime in seconds, including checkpoint writes and
+        excluding time paused between calls.
     nan_debug
         Reproduction data for the first captured NaN when engine NaN debugging was
         enabled, otherwise ``None``.
+    checkpoint
+        Explicit resumable state. ``None`` on NaN failure. History arrays are shared
+        with this result; continuation leaves earlier results unchanged.
+    status
+        Why fitting returned: ``"paused"``, ``"max_epochs"``, ``"early_stopping"``,
+        or ``"nan"``. Stopping conditions take precedence over a pause boundary.
 
     Examples
     --------
@@ -851,7 +957,6 @@ class OptimResult:
     >>> position_min_monitor = Position({"theta": jnp.array(1.0)})
     >>> result = OptimResult(
     ...     history=history,
-    ...     position=position_min_monitor,
     ...     position_final=position_final,
     ...     position_min_monitor=position_min_monitor,
     ...     n_epochs=2,
@@ -866,7 +971,6 @@ class OptimResult:
 
     history: OptimHistory
 
-    position: Position | None
     position_final: Position
     position_min_monitor: Position | None
     n_epochs: int
@@ -875,6 +979,8 @@ class OptimResult:
     patience: int
     duration: float
     nan_debug: OptimNaNDebugInfo | None = None
+    checkpoint: OptimCheckpoint | None = None
+    status: Literal["paused", "max_epochs", "early_stopping", "nan"] = "max_epochs"
 
     def plot_loss(
         self, legend: bool = True, title: str | None = None, window: int | None = None
@@ -888,7 +994,7 @@ class OptimResult:
         corresponding series is a training EMA, validation loss, or full-data
         training loss. For exact monitors, the minimum line identifies the saved
         post-update position used for that value. For an EMA, it identifies only the
-        associated epoch-end checkpoint.
+        associated parameter snapshot.
 
         Parameters
         ----------

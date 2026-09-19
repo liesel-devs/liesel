@@ -40,8 +40,12 @@ class TestLieselInterface:
         new_state = gm.update_state(pos, model.state)
         lp_after = gm.log_prob(new_state)
 
-        assert lp_before == pytest.approx(-719.46875)
-        assert lp_after == pytest.approx(-25616.779296875)
+        # Evaluate the normal log density independently on the actual draws.
+        x = np.asarray(model.vars["x"].value, dtype=np.float64)
+        expected_before = -0.5 * np.sum(np.log(2 * np.pi) + x**2)
+        expected_after = -0.5 * np.sum(np.log(2 * np.pi) + (x - 10.0) ** 2)
+        assert lp_before == pytest.approx(expected_before, rel=1e-6)
+        assert lp_after == pytest.approx(expected_after, rel=1e-6)
 
 
 @pytest.mark.mcmc
