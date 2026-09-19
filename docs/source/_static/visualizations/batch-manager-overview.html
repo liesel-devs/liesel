@@ -1377,6 +1377,7 @@ html&gt;body{padding:0}&lt;/style&gt;
     &lt;p class=&quot;text-muted&quot;&gt;&lt;code&gt;Batches&lt;/code&gt; assembles one observation stream; &lt;code&gt;BatchManager&lt;/code&gt; aligns several streams into joint optimizer steps.&lt;/p&gt;
   &lt;/div&gt;
 
+  &lt;p class=&quot;text-small text-muted&quot; id=&quot;bmo-group-help&quot;&gt;A and B are separate observation groups. Matching their observation counts keeps them separate.&lt;/p&gt;
   &lt;div class=&quot;controls&quot;&gt;
     &lt;fieldset&gt;
       &lt;legend&gt;Epoch size&lt;/legend&gt;
@@ -1388,7 +1389,7 @@ html&gt;body{padding:0}&lt;/style&gt;
     &lt;/fieldset&gt;
     &lt;div class=&quot;control&quot;&gt;
       &lt;label for=&quot;bmo-a-n&quot;&gt;A observations&lt;/label&gt;
-      &lt;input id=&quot;bmo-a-n&quot; type=&quot;number&quot; min=&quot;1&quot; max=&quot;640&quot; step=&quot;1&quot; value=&quot;320&quot;&gt;
+      &lt;input id=&quot;bmo-a-n&quot; aria-describedby=&quot;bmo-group-help&quot; type=&quot;number&quot; min=&quot;1&quot; max=&quot;640&quot; step=&quot;1&quot; value=&quot;320&quot;&gt;
     &lt;/div&gt;
     &lt;div class=&quot;control&quot;&gt;
       &lt;label for=&quot;bmo-a-b&quot;&gt;A batch size&lt;/label&gt;
@@ -1396,7 +1397,7 @@ html&gt;body{padding:0}&lt;/style&gt;
     &lt;/div&gt;
     &lt;div class=&quot;control&quot;&gt;
       &lt;label for=&quot;bmo-b-n&quot;&gt;B observations&lt;/label&gt;
-      &lt;input id=&quot;bmo-b-n&quot; type=&quot;number&quot; min=&quot;1&quot; max=&quot;640&quot; step=&quot;1&quot; value=&quot;150&quot;&gt;
+      &lt;input id=&quot;bmo-b-n&quot; aria-describedby=&quot;bmo-group-help&quot; type=&quot;number&quot; min=&quot;1&quot; max=&quot;640&quot; step=&quot;1&quot; value=&quot;150&quot;&gt;
     &lt;/div&gt;
     &lt;div class=&quot;control&quot;&gt;
       &lt;label for=&quot;bmo-b-b&quot;&gt;B batch size&lt;/label&gt;
@@ -1441,19 +1442,25 @@ html&gt;body{padding:0}&lt;/style&gt;
         &lt;tbody&gt;
           &lt;tr&gt;
             &lt;td&gt;Model&lt;/td&gt;
-            &lt;td&gt;One observation size&lt;/td&gt;
+            &lt;td&gt;One observation group&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;Batches.from_model(model, …)&lt;/code&gt;&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;Batches&lt;/code&gt;&lt;/td&gt;
           &lt;/tr&gt;
           &lt;tr&gt;
             &lt;td&gt;Model&lt;/td&gt;
-            &lt;td&gt;Several sizes, one batch size&lt;/td&gt;
+            &lt;td&gt;Several groups, one batch size&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;BatchManager.from_model(model, …)&lt;/code&gt;&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;BatchManager&lt;/code&gt;&lt;/td&gt;
           &lt;/tr&gt;
           &lt;tr&gt;
+            &lt;td&gt;Model&lt;/td&gt;
+            &lt;td&gt;One or several groups, one batch size&lt;/td&gt;
+            &lt;td&gt;&lt;code&gt;Batches.from_model(model, …, multi_size=&quot;manager&quot;)&lt;/code&gt;&lt;/td&gt;
+            &lt;td&gt;&lt;code&gt;Batches&lt;/code&gt; or &lt;code&gt;BatchManager&lt;/code&gt;&lt;/td&gt;
+          &lt;/tr&gt;
+          &lt;tr&gt;
             &lt;td&gt;Completed split&lt;/td&gt;
-            &lt;td&gt;One or several sizes&lt;/td&gt;
+            &lt;td&gt;One or several groups&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;Batches.from_split(split, …)&lt;/code&gt;&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;Batches&lt;/code&gt; or &lt;code&gt;BatchManager&lt;/code&gt;&lt;/td&gt;
           &lt;/tr&gt;
@@ -1466,13 +1473,17 @@ html&gt;body{padding:0}&lt;/style&gt;
         &lt;/tbody&gt;
       &lt;/table&gt;
     &lt;/div&gt;
-    &lt;div class=&quot;bmo-note&quot;&gt;Use a factory when its shared settings describe every branch; construct child &lt;code&gt;Batches&lt;/code&gt; explicitly for per-branch differences.&lt;/div&gt;
+    &lt;div class=&quot;bmo-note&quot;&gt;Nested &lt;code&gt;position_keys&lt;/code&gt; choose groups explicitly: &lt;code&gt;[[&quot;x_a&quot;, &quot;y_a&quot;], [&quot;x_b&quot;, &quot;y_b&quot;]]&lt;/code&gt; keeps aligned arrays together.
+      Flat or omitted keys group automatically by axis length.
+      &lt;code&gt;Batches.from_model(…, multi_size=&quot;manager&quot;)&lt;/code&gt; returns &lt;code&gt;Batches&lt;/code&gt; for one group and &lt;code&gt;BatchManager&lt;/code&gt; for several; &lt;code&gt;BatchManager.from_model&lt;/code&gt; always returns a manager.
+      &lt;code&gt;Batches.from_split(split, …)&lt;/code&gt; follows the split representation automatically, with no &lt;code&gt;multi_size&lt;/code&gt; argument.
+      Use a factory when its shared settings describe every branch; construct child &lt;code&gt;Batches&lt;/code&gt; explicitly for per-branch differences.&lt;/div&gt;
   &lt;/section&gt;
 
   &lt;section class=&quot;bmo-panel&quot; id=&quot;bmo-batches-panel&quot; role=&quot;tabpanel&quot; aria-labelledby=&quot;bmo-batches-tab&quot; hidden&gt;
     &lt;div class=&quot;bmo-class-head&quot;&gt;
       &lt;h2&gt;&lt;code&gt;Batches&lt;/code&gt;&lt;/h2&gt;
-      &lt;span class=&quot;viz-badge&quot;&gt;one-size recipe&lt;/span&gt;
+      &lt;span class=&quot;viz-badge&quot;&gt;single-group recipe&lt;/span&gt;
     &lt;/div&gt;
     &lt;p&gt;Owns the observation indices for one stream and slices its position entries along their configured axes.&lt;/p&gt;
     &lt;div class=&quot;bmo-columns&quot;&gt;
@@ -1490,8 +1501,15 @@ html&gt;body{padding:0}&lt;/style&gt;
     model, batch_size, multi_size=&quot;error&quot;,
 )
 
-opt.Batches.from_split(split, batch_size)&lt;/code&gt;&lt;/pre&gt;
-        &lt;span class=&quot;bmo-result text-small&quot;&gt;&lt;code&gt;from_split&lt;/code&gt; returns a &lt;code&gt;BatchManager&lt;/code&gt; when given a multi-size split.&lt;/span&gt;
+# Automatically follow an existing split&#x27;s groups:
+opt.Batches.from_split(split, batch_size)
+
+# Automatically infer groups from a model:
+opt.Batches.from_model(
+    model, batch_size, multi_size=&quot;manager&quot;,
+)&lt;/code&gt;&lt;/pre&gt;
+        &lt;p class=&quot;text-small&quot;&gt;&lt;code&gt;Batches.from_model&lt;/code&gt; requires &lt;code&gt;multi_size=&quot;manager&quot;&lt;/code&gt; for multiple groups, even if equally sized. One group still returns &lt;code&gt;Batches&lt;/code&gt;.&lt;/p&gt;
+        &lt;span class=&quot;bmo-result text-small&quot;&gt;&lt;code&gt;from_split&lt;/code&gt; returns a &lt;code&gt;BatchManager&lt;/code&gt; when given a managed split, preserving its groups even at equal sizes.&lt;/span&gt;
       &lt;/div&gt;
       &lt;div class=&quot;bmo-section&quot;&gt;
         &lt;h3&gt;Assembly behavior&lt;/h3&gt;
@@ -1509,7 +1527,7 @@ opt.Batches.from_split(split, batch_size)&lt;/code&gt;&lt;/pre&gt;
   &lt;section class=&quot;bmo-panel&quot; id=&quot;bmo-manager-panel&quot; role=&quot;tabpanel&quot; aria-labelledby=&quot;bmo-manager-tab&quot; hidden&gt;
     &lt;div class=&quot;bmo-class-head&quot;&gt;
       &lt;h2&gt;&lt;code&gt;BatchManager&lt;/code&gt;&lt;/h2&gt;
-      &lt;span class=&quot;viz-badge&quot;&gt;multi-size coordinator&lt;/span&gt;
+      &lt;span class=&quot;viz-badge&quot;&gt;group coordinator&lt;/span&gt;
     &lt;/div&gt;
     &lt;p&gt;Asks each child &lt;code&gt;Batches&lt;/code&gt; object for the same number of rows, then combines row &lt;code&gt;i&lt;/code&gt; from every child into joint step &lt;code&gt;i&lt;/code&gt;.&lt;/p&gt;
     &lt;div class=&quot;bmo-columns&quot;&gt;
@@ -1522,6 +1540,7 @@ opt.Batches.from_split(split, batch_size)&lt;/code&gt;&lt;/pre&gt;
         &lt;pre&gt;&lt;code class=&quot;language-python&quot;&gt;opt.BatchManager.from_model(
     model,
     batch_size,
+    position_keys=[[&quot;y_a&quot;], [&quot;y_b&quot;]],
     epoch_size=&quot;max&quot;,
     sample_with_replacement=False,
 )&lt;/code&gt;&lt;/pre&gt;
@@ -1646,12 +1665,24 @@ opt.Batches.from_split(split, batch_size)&lt;/code&gt;&lt;/pre&gt;
           const oversizedComment = values.aB &gt; values.aN || values.bB &gt; values.bN
             ? &quot;\n# Oversized inferred branches use replacement automatically.&quot;
             : &quot;&quot;;
-          return `# Shared batch size: infer branches from the model.${oversizedComment}
+          return `# Shared batch size: explicitly keep the two groups independent.${oversizedComment}
 manager = opt.BatchManager.from_model(
     model,
+    position_keys=[[&quot;y_a&quot;], [&quot;y_b&quot;]],
     batch_size=${values.aB},
     epoch_size=${epochSize},${replacementArg}
-)`;
+)
+
+# Alternatively, let Batches select the return type:
+manager = opt.Batches.from_model(
+    model,
+    position_keys=[[&quot;y_a&quot;], [&quot;y_b&quot;]],
+    batch_size=${values.aB},
+    multi_size=&quot;manager&quot;,
+    epoch_size=${epochSize},${replacementArg}
+)
+# One group returns Batches; multiple groups return BatchManager.
+# Omit position_keys to infer groups by observed axis length.`;
         }
 
         const childCode = (key, observations, batchSize) =&gt; {
@@ -1771,6 +1802,10 @@ ${childCode(&quot;y_b&quot;, values.bN, values.bB)}
       });
 
       Object.values(inputs).forEach(input =&gt; input.addEventListener(&quot;input&quot;, render));
+      const groupedExample = constructorCode({ aN: 320, aB: 64, bN: 320, bB: 64, fixed: 4 });
+      console.assert(groupedExample.includes(&#x27;position_keys=[[&quot;y_a&quot;], [&quot;y_b&quot;]]&#x27;));
+      console.assert(groupedExample.includes(&quot;opt.Batches.from_model(&quot;));
+      console.assert(groupedExample.includes(&#x27;multi_size=&quot;manager&quot;&#x27;));
       console.assert(constructorCode({ aN: 320, aB: 64, bN: 160, bB: 64, fixed: 4 }).includes(&quot;BatchManager.from_model&quot;));
       console.assert(constructorCode({ aN: 320, aB: 64, bN: 150, bB: 50, fixed: 4 }).includes(&quot;configure each branch explicitly&quot;));
       console.assert(constructorCode({ aN: 320, aB: 64, bN: 40, bB: 50, fixed: 4 }).includes(&quot;required: 50 &gt; 40&quot;));

@@ -1290,19 +1290,20 @@ html&gt;body{padding:0}&lt;/style&gt;
         &lt;/div&gt;
       &lt;/fieldset&gt;
       &lt;fieldset&gt;
-        &lt;legend&gt;Observation sizes&lt;/legend&gt;
+        &lt;legend&gt;Observation groups&lt;/legend&gt;
         &lt;div class=&quot;sco-button-row&quot;&gt;
-          &lt;button class=&quot;btn&quot; type=&quot;button&quot; data-shape=&quot;one&quot; aria-pressed=&quot;true&quot;&gt;One size&lt;/button&gt;
-          &lt;button class=&quot;btn&quot; type=&quot;button&quot; data-shape=&quot;many&quot; aria-pressed=&quot;false&quot;&gt;Several sizes&lt;/button&gt;
+          &lt;button class=&quot;btn&quot; type=&quot;button&quot; data-shape=&quot;one&quot; aria-pressed=&quot;true&quot;&gt;One group&lt;/button&gt;
+          &lt;button class=&quot;btn&quot; type=&quot;button&quot; data-shape=&quot;many&quot; aria-pressed=&quot;false&quot;&gt;Several groups&lt;/button&gt;
         &lt;/div&gt;
+        &lt;p class=&quot;text-small text-muted&quot; id=&quot;sco-group-help&quot;&gt;Separate groups stay independent even when their observation counts match.&lt;/p&gt;
       &lt;/fieldset&gt;
       &lt;label class=&quot;sco-range&quot; for=&quot;sco-a-size&quot;&gt;
         &lt;span class=&quot;sco-range-head&quot;&gt;Branch A observations · &lt;output id=&quot;sco-a-output&quot; for=&quot;sco-a-size&quot;&gt;30&lt;/output&gt;&lt;/span&gt;
-        &lt;input class=&quot;form-range&quot; id=&quot;sco-a-size&quot; type=&quot;range&quot; min=&quot;2&quot; max=&quot;60&quot; step=&quot;1&quot; value=&quot;30&quot;&gt;
+        &lt;input class=&quot;form-range&quot; id=&quot;sco-a-size&quot; aria-describedby=&quot;sco-group-help&quot; type=&quot;range&quot; min=&quot;2&quot; max=&quot;60&quot; step=&quot;1&quot; value=&quot;30&quot;&gt;
       &lt;/label&gt;
       &lt;label class=&quot;sco-range&quot; for=&quot;sco-b-size&quot; data-branch-b-control aria-hidden=&quot;true&quot;&gt;
         &lt;span class=&quot;sco-range-head&quot;&gt;Branch B observations · &lt;output id=&quot;sco-b-output&quot; for=&quot;sco-b-size&quot;&gt;12&lt;/output&gt;&lt;/span&gt;
-        &lt;input class=&quot;form-range&quot; id=&quot;sco-b-size&quot; type=&quot;range&quot; min=&quot;2&quot; max=&quot;60&quot; step=&quot;1&quot; value=&quot;12&quot;&gt;
+        &lt;input class=&quot;form-range&quot; id=&quot;sco-b-size&quot; aria-describedby=&quot;sco-group-help&quot; type=&quot;range&quot; min=&quot;2&quot; max=&quot;60&quot; step=&quot;1&quot; value=&quot;12&quot;&gt;
       &lt;/label&gt;
       &lt;label class=&quot;sco-range&quot; for=&quot;sco-validation-share&quot;&gt;
         &lt;span class=&quot;sco-range-head&quot;&gt;Validation share · &lt;output id=&quot;sco-validation-output&quot; for=&quot;sco-validation-share&quot;&gt;20%&lt;/output&gt;&lt;/span&gt;
@@ -1313,10 +1314,16 @@ html&gt;body{padding:0}&lt;/style&gt;
         &lt;input class=&quot;form-range&quot; id=&quot;sco-test-share&quot; type=&quot;range&quot; min=&quot;0&quot; max=&quot;50&quot; step=&quot;5&quot; value=&quot;10&quot;&gt;
       &lt;/label&gt;
       &lt;label class=&quot;form-check form-switch&quot;&gt;
-        &lt;input class=&quot;form-check-input&quot; id=&quot;sco-shuffle&quot; type=&quot;checkbox&quot;&gt;
+        &lt;input class=&quot;form-check-input&quot; id=&quot;sco-shuffle&quot; type=&quot;checkbox&quot; checked&gt;
         &lt;span class=&quot;form-check-label&quot;&gt;Shuffle index order&lt;/span&gt;
       &lt;/label&gt;
     &lt;/div&gt;
+
+    &lt;p class=&quot;text-small&quot;&gt;Nested keys such as &lt;code&gt;[[&quot;x_a&quot;, &quot;y_a&quot;], [&quot;x_b&quot;, &quot;y_b&quot;]]&lt;/code&gt; share indices within each group.
+      Flat or omitted &lt;code&gt;position_keys&lt;/code&gt; instead group automatically by axis length.
+    &lt;/p&gt;
+    &lt;p class=&quot;text-small&quot;&gt;Holdouts shuffle by default; use &lt;code&gt;shuffle=False&lt;/code&gt; for ordered splits.
+      Full-data splits preserve order and need no split seed, including when holdout shares round down to zero.&lt;/p&gt;
 
     &lt;div class=&quot;card sco-live-summary&quot; aria-live=&quot;polite&quot;&gt;
       &lt;span class=&quot;text-small&quot;&gt;Recommended path&lt;/span&gt;
@@ -1358,55 +1365,67 @@ html&gt;body{padding:0}&lt;/style&gt;
         &lt;tbody&gt;
           &lt;tr&gt;
             &lt;td&gt;Position + exact counts&lt;/td&gt;
-            &lt;td&gt;One size&lt;/td&gt;
+            &lt;td&gt;One group&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;Split(…).split_position(position)&lt;/code&gt;&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;PositionSplit&lt;/code&gt;&lt;/td&gt;
           &lt;/tr&gt;
           &lt;tr&gt;
             &lt;td&gt;Position + proportions&lt;/td&gt;
-            &lt;td&gt;One size&lt;/td&gt;
+            &lt;td&gt;One group&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;Split.from_axis_shares(…).split_position(position)&lt;/code&gt;&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;PositionSplit&lt;/code&gt;&lt;/td&gt;
           &lt;/tr&gt;
           &lt;tr&gt;
             &lt;td&gt;Model&lt;/td&gt;
-            &lt;td&gt;One size&lt;/td&gt;
+            &lt;td&gt;One group&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;PositionSplit.from_model(model, …)&lt;/code&gt;&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;PositionSplit&lt;/code&gt;&lt;/td&gt;
           &lt;/tr&gt;
           &lt;tr&gt;
+            &lt;td&gt;Model&lt;/td&gt;
+            &lt;td&gt;One or several groups&lt;/td&gt;
+            &lt;td&gt;&lt;code&gt;PositionSplit.from_model(model, …, multi_size=&quot;manager&quot;)&lt;/code&gt;&lt;/td&gt;
+            &lt;td&gt;&lt;code&gt;PositionSplit&lt;/code&gt; or &lt;code&gt;PositionSplitManager&lt;/code&gt;&lt;/td&gt;
+          &lt;/tr&gt;
+          &lt;tr&gt;
             &lt;td&gt;Already partitioned&lt;/td&gt;
-            &lt;td&gt;One size&lt;/td&gt;
+            &lt;td&gt;One group&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;PositionSplit(train, validate, test, …)&lt;/code&gt;&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;PositionSplit&lt;/code&gt;&lt;/td&gt;
           &lt;/tr&gt;
           &lt;tr&gt;
             &lt;td&gt;Position + child recipes&lt;/td&gt;
-            &lt;td&gt;Several sizes&lt;/td&gt;
+            &lt;td&gt;Several groups&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;SplitManager([split_a, split_b]).split_position(position)&lt;/code&gt;&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;PositionSplitManager&lt;/code&gt;&lt;/td&gt;
           &lt;/tr&gt;
           &lt;tr&gt;
             &lt;td&gt;Position + model metadata&lt;/td&gt;
-            &lt;td&gt;One size&lt;/td&gt;
+            &lt;td&gt;One group&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;Split.from_model(model, …).split_position(position)&lt;/code&gt;&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;PositionSplit&lt;/code&gt;&lt;/td&gt;
           &lt;/tr&gt;
           &lt;tr&gt;
             &lt;td&gt;Position + model metadata&lt;/td&gt;
-            &lt;td&gt;Several sizes&lt;/td&gt;
+            &lt;td&gt;Several groups&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;SplitManager.from_model(model, …)&lt;/code&gt;, then &lt;code&gt;.split_position(…)&lt;/code&gt;&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;PositionSplitManager&lt;/code&gt;&lt;/td&gt;
           &lt;/tr&gt;
           &lt;tr&gt;
+            &lt;td&gt;Position + model metadata&lt;/td&gt;
+            &lt;td&gt;One or several groups&lt;/td&gt;
+            &lt;td&gt;&lt;code&gt;Split.from_model(model, …, multi_size=&quot;manager&quot;).split_position(position)&lt;/code&gt;&lt;/td&gt;
+            &lt;td&gt;&lt;code&gt;PositionSplit&lt;/code&gt; or &lt;code&gt;PositionSplitManager&lt;/code&gt;&lt;/td&gt;
+          &lt;/tr&gt;
+          &lt;tr&gt;
             &lt;td&gt;Model + data now&lt;/td&gt;
-            &lt;td&gt;Several sizes&lt;/td&gt;
+            &lt;td&gt;Several groups&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;PositionSplitManager.from_model(model, …)&lt;/code&gt;&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;PositionSplitManager&lt;/code&gt;&lt;/td&gt;
           &lt;/tr&gt;
           &lt;tr&gt;
             &lt;td&gt;Already partitioned branches&lt;/td&gt;
-            &lt;td&gt;Several sizes&lt;/td&gt;
+            &lt;td&gt;Several groups&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;PositionSplitManager([data_a, data_b])&lt;/code&gt;&lt;/td&gt;
             &lt;td&gt;&lt;code&gt;PositionSplitManager&lt;/code&gt;&lt;/td&gt;
           &lt;/tr&gt;
@@ -1414,14 +1433,16 @@ html&gt;body{padding:0}&lt;/style&gt;
       &lt;/table&gt;
     &lt;/div&gt;
     &lt;div class=&quot;sco-note&quot;&gt;
-      Default: use &lt;code&gt;PositionSplit.from_model&lt;/code&gt; for one observation size and &lt;code&gt;PositionSplitManager.from_model&lt;/code&gt; for several. To reuse the split on another position, use &lt;code&gt;Split.from_model&lt;/code&gt; for one size or &lt;code&gt;SplitManager.from_model&lt;/code&gt; for several.
+      Use &lt;code&gt;PositionSplit.from_model(…, multi_size=&quot;manager&quot;)&lt;/code&gt; to handle one or several groups automatically. Omit &lt;code&gt;position_keys&lt;/code&gt; to infer groups from observed axis lengths; use nested keys to choose groups explicitly.
+      &lt;code&gt;PositionSplitManager.from_model&lt;/code&gt; always returns a manager.
+      For reusable recipes, &lt;code&gt;Split.from_model(…, multi_size=&quot;manager&quot;)&lt;/code&gt; similarly returns &lt;code&gt;Split&lt;/code&gt; for one group and &lt;code&gt;SplitManager&lt;/code&gt; for several. &lt;code&gt;SplitManager.from_model&lt;/code&gt; always returns a manager.
     &lt;/div&gt;
   &lt;/section&gt;
 
   &lt;section class=&quot;sco-panel&quot; id=&quot;sco-split-panel&quot; role=&quot;tabpanel&quot; aria-labelledby=&quot;sco-split-tab&quot; hidden&gt;
     &lt;div class=&quot;sco-class-head&quot;&gt;
       &lt;h2&gt;&lt;code&gt;Split&lt;/code&gt;&lt;/h2&gt;
-      &lt;span class=&quot;viz-badge&quot;&gt;one-size recipe&lt;/span&gt;
+      &lt;span class=&quot;viz-badge&quot;&gt;single-group recipe&lt;/span&gt;
     &lt;/div&gt;
     &lt;p&gt;Defines a single train/validation/test index partition; calling &lt;code&gt;split_position()&lt;/code&gt; materializes it.&lt;/p&gt;
     &lt;div class=&quot;sco-columns&quot;&gt;
@@ -1435,7 +1456,7 @@ html&gt;body{padding:0}&lt;/style&gt;
     train_axis_size=None,
     split_axes=None,
     default_split_axis=0,
-    shuffle=False,
+    shuffle=True,
     seed=None,
     sample_sizes=None,
     keep_in_train=None,
@@ -1460,11 +1481,12 @@ html&gt;body{padding:0}&lt;/style&gt;
     test_axis_share=0.0,
     split_axes=None,
     default_split_axis=0,
-    shuffle=False,
+    shuffle=True,
     seed=None,
     sample_sizes=None,
+    multi_size=&quot;error&quot;,
 )&lt;/code&gt;&lt;/pre&gt;
-        &lt;span class=&quot;sco-result text-small&quot;&gt;Infers one shared observation size from model metadata and returns a reusable &lt;code&gt;Split&lt;/code&gt;. Use &lt;code&gt;SplitManager.from_model&lt;/code&gt; when selected variables have several sizes.&lt;/span&gt;
+        &lt;span class=&quot;sco-result text-small&quot;&gt;Use &lt;code&gt;multi_size=&quot;manager&quot;&lt;/code&gt; to return a &lt;code&gt;SplitManager&lt;/code&gt; for multiple inferred or explicit groups, including equal-sized groups. One group still returns &lt;code&gt;Split&lt;/code&gt;. Multiple groups cannot use &lt;code&gt;axis_size&lt;/code&gt; or &lt;code&gt;sample_sizes&lt;/code&gt; overrides; configure child recipes for those cases.&lt;/span&gt;
       &lt;/div&gt;
       &lt;div class=&quot;sco-section&quot;&gt;
         &lt;h3&gt;Use it when&lt;/h3&gt;
@@ -1492,7 +1514,7 @@ splitter.indices_validate&lt;/code&gt;&lt;/pre&gt;
   &lt;section class=&quot;sco-panel&quot; id=&quot;sco-position-panel&quot; role=&quot;tabpanel&quot; aria-labelledby=&quot;sco-position-tab&quot; hidden&gt;
     &lt;div class=&quot;sco-class-head&quot;&gt;
       &lt;h2&gt;&lt;code&gt;PositionSplit&lt;/code&gt;&lt;/h2&gt;
-      &lt;span class=&quot;viz-badge&quot;&gt;one-size data&lt;/span&gt;
+      &lt;span class=&quot;viz-badge&quot;&gt;single-group data&lt;/span&gt;
     &lt;/div&gt;
     &lt;p&gt;Stores materialized train, validation, and test positions together with axis sizes and effective likelihood scales.&lt;/p&gt;
     &lt;div class=&quot;sco-columns&quot;&gt;
@@ -1518,7 +1540,7 @@ splitter.indices_validate&lt;/code&gt;&lt;/pre&gt;
     test_axis_share=0.0,
     split_axes=None,
     default_split_axis=0,
-    shuffle=False,
+    shuffle=True,
     seed=None,
     multi_size=&quot;error&quot;,
     sample_sizes=None,
@@ -1528,7 +1550,7 @@ splitter.indices_validate&lt;/code&gt;&lt;/pre&gt;
       &lt;div class=&quot;sco-section&quot;&gt;
         &lt;h3&gt;Use it when&lt;/h3&gt;
         &lt;ul&gt;
-          &lt;li&gt;Your model has one observation size.&lt;/li&gt;
+          &lt;li&gt;Selected arrays form one aligned observation group.&lt;/li&gt;
           &lt;li&gt;You need &lt;code&gt;.train&lt;/code&gt;, &lt;code&gt;.validate&lt;/code&gt;, or &lt;code&gt;.test&lt;/code&gt;.&lt;/li&gt;
           &lt;li&gt;You need validation/test likelihoods scaled to the training sample size.&lt;/li&gt;
           &lt;li&gt;You already partitioned the data outside Liesel.&lt;/li&gt;
@@ -1544,7 +1566,7 @@ splitter.indices_validate&lt;/code&gt;&lt;/pre&gt;
 
 state = model.update_state(data.validate, model.state)
 validation_log_lik = data.scaled_log_lik(model, state)&lt;/code&gt;&lt;/pre&gt;
-        &lt;div class=&quot;sco-note&quot;&gt;&lt;code&gt;multi_size=&quot;manager&quot;&lt;/code&gt; is an opt-in shortcut: the same call returns a &lt;code&gt;PositionSplitManager&lt;/code&gt; when the selected model variables have different axis sizes.&lt;/div&gt;
+        &lt;div class=&quot;sco-note&quot;&gt;&lt;code&gt;PositionSplit.from_model&lt;/code&gt; requires &lt;code&gt;multi_size=&quot;manager&quot;&lt;/code&gt; for multiple groups, including explicitly separated groups of equal size. One group still returns &lt;code&gt;PositionSplit&lt;/code&gt;.&lt;/div&gt;
       &lt;/div&gt;
     &lt;/div&gt;
   &lt;/section&gt;
@@ -1552,7 +1574,7 @@ validation_log_lik = data.scaled_log_lik(model, state)&lt;/code&gt;&lt;/pre&gt;
   &lt;section class=&quot;sco-panel&quot; id=&quot;sco-manager-panel&quot; role=&quot;tabpanel&quot; aria-labelledby=&quot;sco-manager-tab&quot; hidden&gt;
     &lt;div class=&quot;sco-class-head&quot;&gt;
       &lt;h2&gt;&lt;code&gt;SplitManager&lt;/code&gt;&lt;/h2&gt;
-      &lt;span class=&quot;viz-badge&quot;&gt;multi-size recipe&lt;/span&gt;
+      &lt;span class=&quot;viz-badge&quot;&gt;grouped recipes&lt;/span&gt;
     &lt;/div&gt;
     &lt;p&gt;Coordinates several independent &lt;code&gt;Split&lt;/code&gt; recipes whose position keys do not overlap.&lt;/p&gt;
     &lt;div class=&quot;sco-columns&quot;&gt;
@@ -1571,22 +1593,22 @@ validation_log_lik = data.scaled_log_lik(model, state)&lt;/code&gt;&lt;/pre&gt;
     test_axis_share=0.0,
     split_axes=None,
     default_split_axis=0,
-    shuffle=False,
+    shuffle=True,
     seed=None,
 )&lt;/code&gt;&lt;/pre&gt;
       &lt;/div&gt;
       &lt;div class=&quot;sco-section&quot;&gt;
         &lt;h3&gt;Use it when&lt;/h3&gt;
         &lt;ul&gt;
-          &lt;li&gt;Model branches have different observation counts.&lt;/li&gt;
+          &lt;li&gt;Model branches need independent splits, even with equal observation counts.&lt;/li&gt;
           &lt;li&gt;You need custom counts, axes, seeds, or indices per branch.&lt;/li&gt;
           &lt;li&gt;You want to create the grouped recipe first and apply it later.&lt;/li&gt;
           &lt;li&gt;Every child either has validation/test data or none does.&lt;/li&gt;
         &lt;/ul&gt;
         &lt;h3&gt;Typical use&lt;/h3&gt;
         &lt;pre&gt;&lt;code class=&quot;language-python&quot;&gt;manager = opt.SplitManager([
-    opt.Split([&quot;y_long&quot;], axis_size=100, validate_axis_size=20),
-    opt.Split([&quot;y_short&quot;], axis_size=40, validate_axis_size=8),
+    opt.Split([&quot;y_long&quot;], axis_size=100, validate_axis_size=20, shuffle=True, seed=42),
+    opt.Split([&quot;y_short&quot;], axis_size=40, validate_axis_size=8, shuffle=True, seed=43),
 ], passthrough_position_keys=[&quot;offset&quot;])
 
 data = manager.split_position(position)
@@ -1599,9 +1621,9 @@ data.train_axis_sizes  # (80, 32)&lt;/code&gt;&lt;/pre&gt;
   &lt;section class=&quot;sco-panel&quot; id=&quot;sco-position-manager-panel&quot; role=&quot;tabpanel&quot; aria-labelledby=&quot;sco-position-manager-tab&quot; hidden&gt;
     &lt;div class=&quot;sco-class-head&quot;&gt;
       &lt;h2&gt;&lt;code&gt;PositionSplitManager&lt;/code&gt;&lt;/h2&gt;
-      &lt;span class=&quot;viz-badge&quot;&gt;multi-size data&lt;/span&gt;
+      &lt;span class=&quot;viz-badge&quot;&gt;grouped data&lt;/span&gt;
     &lt;/div&gt;
-    &lt;p&gt;Merges several &lt;code&gt;PositionSplit&lt;/code&gt; branches into shared positions without erasing their different sizes or likelihood scales.&lt;/p&gt;
+    &lt;p&gt;Merges several &lt;code&gt;PositionSplit&lt;/code&gt; branches into shared positions while preserving their groups, sizes, and likelihood scales.&lt;/p&gt;
     &lt;div class=&quot;sco-columns&quot;&gt;
       &lt;div class=&quot;sco-section&quot;&gt;
         &lt;h3&gt;Direct constructor&lt;/h3&gt;
@@ -1618,7 +1640,7 @@ data.train_axis_sizes  # (80, 32)&lt;/code&gt;&lt;/pre&gt;
     test_axis_share=0.0,
     split_axes=None,
     default_split_axis=0,
-    shuffle=False,
+    shuffle=True,
     seed=None,
     sample_sizes=None,
     infer_sample_sizes=True,
@@ -1627,7 +1649,7 @@ data.train_axis_sizes  # (80, 32)&lt;/code&gt;&lt;/pre&gt;
       &lt;div class=&quot;sco-section&quot;&gt;
         &lt;h3&gt;Use it when&lt;/h3&gt;
         &lt;ul&gt;
-          &lt;li&gt;Your model has independent observed branches of different lengths.&lt;/li&gt;
+          &lt;li&gt;Your model has independent observed groups of equal or different lengths.&lt;/li&gt;
           &lt;li&gt;You want merged &lt;code&gt;.train&lt;/code&gt;, &lt;code&gt;.validate&lt;/code&gt;, and &lt;code&gt;.test&lt;/code&gt; positions.&lt;/li&gt;
           &lt;li&gt;You need branch-specific likelihood scaling.&lt;/li&gt;
           &lt;li&gt;You need plural sizes such as &lt;code&gt;train_axis_sizes&lt;/code&gt;.&lt;/li&gt;
@@ -1635,7 +1657,7 @@ data.train_axis_sizes  # (80, 32)&lt;/code&gt;&lt;/pre&gt;
         &lt;h3&gt;Typical use&lt;/h3&gt;
         &lt;pre&gt;&lt;code class=&quot;language-python&quot;&gt;data = opt.PositionSplitManager.from_model(
     model,
-    position_keys=[&quot;y_long&quot;, &quot;y_short&quot;],
+    position_keys=[[&quot;y_long&quot;], [&quot;y_short&quot;]],
     validate_axis_share=0.2,
     test_axis_share=0.1,
     shuffle=True,
@@ -1712,7 +1734,7 @@ validation_log_lik = data.scaled_log_lik(model, state)&lt;/code&gt;&lt;/pre&gt;
           train,
           validate,
           test,
-          indices: shuffle
+          indices: shuffle &amp;&amp; (validate &gt; 0 || test &gt; 0)
             ? shuffledIndices(size, seed)
             : Array.from({ length: size }, (_, index) =&gt; index)
         };
@@ -1721,24 +1743,42 @@ validation_log_lik = data.scaled_log_lik(model, state)&lt;/code&gt;&lt;/pre&gt;
       function constructorCode(values) {
         const validation = values.validation.toFixed(2);
         const test = values.test.toFixed(2);
-        const shuffleArgs = values.shuffle ? &quot;, shuffle=True, seed=42&quot; : &quot;&quot;;
+        const sizes = shape === &quot;one&quot; ? [values.a] : [values.a, values.b];
+        const hasHoldout = sizes.some(size =&gt;
+          Math.floor(size * values.validation) &gt; 0 || Math.floor(size * values.test) &gt; 0
+        );
+        const shuffleArgs = seed =&gt; values.shuffle &amp;&amp; hasHoldout
+          ? `, shuffle=True, seed=${seed}`
+          : &quot;, shuffle=False&quot;;
 
         if (source === &quot;model&quot; &amp;&amp; shape === &quot;one&quot;) {
           return `data = opt.PositionSplit.from_model(
     model,
     position_keys=[&quot;y&quot;],
     validate_axis_share=${validation},
-    test_axis_share=${test}${shuffleArgs},
+    test_axis_share=${test}${shuffleArgs(42)},
 )`;
         }
 
         if (source === &quot;model&quot;) {
-          return `data = opt.PositionSplitManager.from_model(
+          return `# Explicit manager constructor:
+data = opt.PositionSplitManager.from_model(
     model,
-    position_keys=[&quot;y_a&quot;, &quot;y_b&quot;],
+    position_keys=[[&quot;y_a&quot;], [&quot;y_b&quot;]],
     validate_axis_share=${validation},
-    test_axis_share=${test}${shuffleArgs},
-)`;
+    test_axis_share=${test}${shuffleArgs(42)},
+)
+
+# Alternatively, let PositionSplit select the return type:
+data = opt.PositionSplit.from_model(
+    model,
+    position_keys=[[&quot;y_a&quot;], [&quot;y_b&quot;]],
+    validate_axis_share=${validation},
+    test_axis_share=${test}${shuffleArgs(42)},
+    multi_size=&quot;manager&quot;,
+)
+# One group returns PositionSplit; multiple groups return PositionSplitManager.
+# Omit position_keys to infer groups by observed axis length.`;
         }
 
         if (source === &quot;position-model&quot; &amp;&amp; shape === &quot;one&quot;) {
@@ -1746,26 +1786,39 @@ validation_log_lik = data.scaled_log_lik(model, state)&lt;/code&gt;&lt;/pre&gt;
     model,
     position_keys=[&quot;y&quot;],
     validate_axis_share=${validation},
-    test_axis_share=${test}${shuffleArgs},
+    test_axis_share=${test}${shuffleArgs(42)},
 )
 data = splitter.split_position(position)`;
         }
 
         if (source === &quot;position-model&quot;) {
-          return `manager = opt.SplitManager.from_model(
+          return `# Explicit manager constructor:
+manager = opt.SplitManager.from_model(
     model,
-    position_keys=[&quot;y_a&quot;, &quot;y_b&quot;],
+    position_keys=[[&quot;y_a&quot;], [&quot;y_b&quot;]],
     validate_axis_share=${validation},
-    test_axis_share=${test}${shuffleArgs},
+    test_axis_share=${test}${shuffleArgs(42)},
 )
-data = manager.split_position(position)`;
+data = manager.split_position(position)
+
+# Alternatively, let Split select the return type:
+recipe = opt.Split.from_model(
+    model,
+    position_keys=[[&quot;y_a&quot;], [&quot;y_b&quot;]],
+    validate_axis_share=${validation},
+    test_axis_share=${test}${shuffleArgs(42)},
+    multi_size=&quot;manager&quot;,
+)
+data = recipe.split_position(position)
+# One group returns Split; multiple groups return SplitManager.
+# Omit position_keys to infer groups by observed axis length.`;
         }
 
         if (shape === &quot;one&quot;) {
           return `splitter = opt.Split.from_axis_shares(
     [&quot;y&quot;], axis_size=${values.a},
     validate_axis_share=${validation},
-    test_axis_share=${test}${shuffleArgs},
+    test_axis_share=${test}${shuffleArgs(42)},
 )
 data = splitter.split_position(position)`;
         }
@@ -1773,11 +1826,11 @@ data = splitter.split_position(position)`;
         return `manager = opt.SplitManager([
     opt.Split.from_axis_shares(
         [&quot;y_a&quot;], axis_size=${values.a},
-        validate_axis_share=${validation}, test_axis_share=${test}${shuffleArgs},
+        validate_axis_share=${validation}, test_axis_share=${test}${shuffleArgs(42)},
     ),
     opt.Split.from_axis_shares(
         [&quot;y_b&quot;], axis_size=${values.b},
-        validate_axis_share=${validation}, test_axis_share=${test}${shuffleArgs},
+        validate_axis_share=${validation}, test_axis_share=${test}${shuffleArgs(137)},
     ),
 ])
 data = manager.split_position(position)`;
@@ -1788,13 +1841,13 @@ data = manager.split_position(position)`;
           return &quot;model metadata + position → Split.from_model → PositionSplit&quot;;
         }
         if (source === &quot;position-model&quot;) {
-          return &quot;model + position → SplitManager.from_model → PositionSplitManager&quot;;
+          return &#x27;model + position → SplitManager.from_model or Split.from_model(multi_size=&quot;manager&quot;) → PositionSplitManager&#x27;;
         }
         if (source === &quot;model&quot; &amp;&amp; shape === &quot;one&quot;) {
           return &quot;model → PositionSplit.from_model → PositionSplit&quot;;
         }
         if (source === &quot;model&quot;) {
-          return &quot;model → PositionSplitManager.from_model → PositionSplitManager&quot;;
+          return &#x27;model → PositionSplitManager.from_model or PositionSplit.from_model(multi_size=&quot;manager&quot;) → PositionSplitManager&#x27;;
         }
         if (shape === &quot;one&quot;) {
           return &quot;position → Split → PositionSplit&quot;;
@@ -1854,7 +1907,9 @@ data = manager.split_position(position)`;
         pathEl.textContent = recommendedPath();
         codeEl.textContent = constructorCode(values);
         Prism.highlightElement(codeEl);
-        orderNoteEl.textContent = values.shuffle
+        orderNoteEl.textContent = splits.every(split =&gt; split.validate === 0 &amp;&amp; split.test === 0)
+          ? &quot;full-data split: original order; no split seed needed&quot;
+          : values.shuffle
           ? &quot;cells show an illustrative shuffled index order&quot;
           : &quot;cells show the original index order&quot;;
 
@@ -1905,12 +1960,24 @@ data = manager.split_position(position)`;
 
       Object.values(controls).forEach(control =&gt; control.addEventListener(&quot;input&quot;, render));
       console.assert(splitFor(&quot;check&quot;, 10, 0.2, 0.1, false, 1).train === 7);
+      console.assert(splitFor(&quot;full&quot;, 10, 0, 0, true, 1).indices.every((id, i) =&gt; id === i));
+      console.assert(splitFor(&quot;rounded&quot;, 2, 0.2, 0.1, true, 1).indices.every((id, i) =&gt; id === i));
+      console.assert(constructorCode({ a: 30, b: 30, validation: 0.2, test: 0.1, shuffle: false }).includes(&quot;shuffle=False&quot;));
+      console.assert(!constructorCode({ a: 2, b: 2, validation: 0.2, test: 0.1, shuffle: true }).includes(&quot;seed=&quot;));
       source = &quot;position-model&quot;;
       shape = &quot;one&quot;;
       console.assert(constructorCode({ a: 30, b: 12, validation: 0.2, test: 0.1, shuffle: false }).includes(&quot;Split.from_model&quot;));
       shape = &quot;many&quot;;
       console.assert(constructorCode({ a: 30, b: 12, validation: 0.2, test: 0.1, shuffle: false }).includes(&quot;SplitManager.from_model&quot;));
+      console.assert(constructorCode({ a: 30, b: 30, validation: 0.2, test: 0.1, shuffle: true }).includes(&#x27;position_keys=[[&quot;y_a&quot;], [&quot;y_b&quot;]]&#x27;));
+      const recipeExample = constructorCode({ a: 30, b: 30, validation: 0.2, test: 0.1, shuffle: true });
+      console.assert(recipeExample.includes(&quot;opt.Split.from_model(&quot;));
+      console.assert(recipeExample.includes(&#x27;multi_size=&quot;manager&quot;&#x27;));
       source = &quot;model&quot;;
+      const groupedExample = constructorCode({ a: 30, b: 30, validation: 0.2, test: 0.1, shuffle: true });
+      console.assert(groupedExample.includes(&quot;opt.PositionSplitManager.from_model(&quot;));
+      console.assert(groupedExample.includes(&quot;opt.PositionSplit.from_model(&quot;));
+      console.assert(groupedExample.includes(&#x27;multi_size=&quot;manager&quot;&#x27;));
       shape = &quot;one&quot;;
       root.querySelectorAll(&quot;pre code.language-python:not(.sco-live-code)&quot;).forEach(block =&gt; Prism.highlightElement(block));
       render();
