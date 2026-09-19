@@ -189,3 +189,4 @@ review-liesel-optim.md
 docs/batch-and-split-design.md
 /.scratch
 /.checkpoint-notes
+/.weighted-batching-notes
