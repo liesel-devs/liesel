@@ -24,6 +24,7 @@ from .kernel import (
     TuningOutcome,
     WarmupOutcome,
 )
+from .mala import MALAKernel, SMMALAKernel
 from .mcmc_spec import LieselMCMC, MCMCSpec
 from .mh import mh_step
 from .mh_kernel import MHKernel, MHProposal
@@ -71,6 +72,7 @@ __all__ = [
     "KernelState",
     "LieselInterface",
     "LieselMCMC",
+    "MALAKernel",
     "MCMCSpec",
     "MHKernel",
     "MHProposal",
@@ -82,6 +84,7 @@ __all__ = [
     "OptimResult",
     "Position",
     "RWKernel",
+    "SMMALAKernel",
     "SamplesSummary",
     "SamplingResults",
     "Stopper",

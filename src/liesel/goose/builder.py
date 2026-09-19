@@ -103,7 +103,8 @@ class EngineBuilder:
     ~.goose.Engine : The MCMC engine, output of :meth:`.build`. ~.goose.LieselInterface
     : Interface for a :class:`~liesel.model.model.Model` object. ~.goose.NUTSKernel :
     The NUTS kernel. ~.goose.HMCKernel : The HMC kernel. ~.goose.IWLSKernel : The IWLS
-    kernel. ~.goose.RWKernel : The random walk kernel.
+    kernel. ~.goose.MALAKernel : The MALA kernel. ~.goose.SMMALAKernel : The simplified
+    manifold MALA kernel. ~.goose.RWKernel : The random walk kernel.
 
     Notes
     -----
@@ -524,12 +525,12 @@ class EngineBuilder:
 
         If you use any MCMC kernel that expects hyperparameter tuning an adaptation
         phase, like :class:`.NUTSKernel`, :class:`.HMCKernel` or
-        our default implementation of :class:`.IWLSKernel`, you *must* add
+        the default :class:`.MALAKernel` or :class:`.SMMALAKernel`, you *must* add
         an adaptation phase via :meth:`.add_adaptation`. Pure burnin
         epochs like the ones added with :meth:`.add_burnin` do not perform any
         adaptation during warmup. They are only applicable if you *exclusively* use
         MCMC kernels that do not require adaptation, such as :class:`.GibbsKernel`
-        or classic, untuned IWLS kernels via :meth:`.IWLSKernel.untuned`.
+        or :class:`.IWLSKernel`, or Langevin kernels with step-size adaptation disabled.
 
 
         See Also
@@ -626,12 +627,12 @@ class EngineBuilder:
 
         If you use any MCMC kernel that expects hyperparameter tuning an adaptation
         phase, like :class:`.NUTSKernel`, :class:`.HMCKernel` or
-        our default implementation of :class:`.IWLSKernel`, you *must* add
+        the default :class:`.MALAKernel` or :class:`.SMMALAKernel`, you *must* add
         an adaptation phase via :meth:`.add_adaptation`. Pure burnin
         epochs like the ones added with :meth:`.add_burnin` do not perform any
         adaptation during warmup. They are only applicable if you *exclusively* use
         MCMC kernels that do not require adaptation, such as :class:`.GibbsKernel`
-        or classic, untuned IWLS kernels via :meth:`.IWLSKernel.untuned`.
+        or :class:`.IWLSKernel`, or Langevin kernels with step-size adaptation disabled.
 
         See Also
         --------

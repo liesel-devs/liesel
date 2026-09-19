@@ -12,12 +12,7 @@ import jax.numpy.linalg as jnpla
 from jax import grad, jacfwd
 from jax.flatten_util import ravel_pytree
 
-from .da import (
-    DualAvgState,
-    da_finalize,
-    da_init,
-    da_step,
-)
+from .da import DualAvgState
 from .epoch import EpochState
 from .iwls_utils import mvn_log_prob, mvn_sample, solve
 from .kernel import (
@@ -32,15 +27,16 @@ from .kernel import (
 )
 from .mh import mh_step
 from .pytree import register_dataclass_as_pytree
-from .types import Array, KeyArray, ModelState, Position, Scalar
+from .types import Array, KernelState, KeyArray, ModelState, Position, Scalar
 
 
 @register_dataclass_as_pytree
 @dataclass
 class IWLSKernelState:
     """
-    A dataclass for the state of a :class:`.IWLSKernel`, implementing the
-    :class:`.liesel.goose.da.DAKernelState` protocol.
+    Legacy adaptive IWLS state, retained for loading pre-0.6 sampling results.
+
+    Also used by the Langevin kernels, implementing :class:`.DAKernelState`.
     """
 
     step_size: Scalar
@@ -58,51 +54,10 @@ IWLSTuningInfo = DefaultTuningInfo
 CholInfoFallbackOptions = Literal["identity", "chol_of_modified_info"]
 
 
-class IWLSKernel(
-    ModelMixin, TransitionMixin[IWLSKernelState, IWLSTransitionInfo], ReprMixin
+class _GaussianKernel(
+    ModelMixin, TransitionMixin[KernelState, IWLSTransitionInfo], ReprMixin
 ):
-    """
-    An IWLS kernel with dual averaging and an (optional) user-defined function for
-    computing the Cholesky decomposition of the Fisher information matrix, implementing
-    the :class:`.liesel.goose.types.Kernel` protocol.
-
-    Parameters
-    ----------
-    position_keys
-        Sequence of position keys (variable names) handled by this kernel.
-    chol_info_fn
-        A custom function that takes a model state and returns the Cholesky
-        decomposition of the information matrix to produce the IWLS proposal. By
-        default, this will be the Cholesky decomposition of the observed negative
-        hessian at the current values, i.e. the current observed information.
-    initial_step_size
-        Value at which to start step size tuning.
-    da_tune_step_step_size
-        Whether to tune the step size using dual averaging.
-    da_target_accept
-        Target acceptance probability for dual averaging algorithm.
-    da_gamma
-        The adaptation regularization scale.
-    da_kappa
-        The adaptation relaxation exponent.
-    da_t0
-        The adaptation iteration offset.
-    identifier
-        An string acting as a unique identifier for this kernel.
-    fallback_chol_info
-        What do do if the Cholesky decomposition of the observed information matrix
-        fails. If ``"identity"``, uses an identity matrix as the Cholesky factor. If
-        ``"chol_of_modified_info"``, performs an eigendecomposition of the negative
-        Hessian and clips the eigenvalues to ``1e-5``. This can be interpreted as
-        replacing the observed negative Hessian with a very similar positive definite
-        matrix. This is slow, because it performs an eigendecomposition and two cholesky
-        factorizations. If ``None``, does nothing.
-
-    Notes
-    -----
-    For more information on step size tuning via dual averaging,
-    see :func:`.da_step` and :class:`.DAKernelState`.
-    """
+    """Shared Gaussian proposal, precision calculation, and MH correction."""
 
     error_book: ClassVar[dict[int, str]] = {
         0: "no errors",
@@ -131,26 +86,13 @@ class IWLSKernel(
         self,
         position_keys: Sequence[str],
         chol_info_fn: Callable[[ModelState], Array] | None = None,
-        initial_step_size: float = 0.01,
-        da_tune_step_size=True,
-        da_target_accept: float = 0.8,
-        da_gamma: float = 0.05,
-        da_kappa: float = 0.75,
-        da_t0: int = 10,
+        *,
         identifier: str = "",
         fallback_chol_info: CholInfoFallbackOptions | None = "identity",
     ):
         self._model = None
         self.position_keys = tuple(position_keys)
         self.chol_info_fn = chol_info_fn
-
-        self.initial_step_size = initial_step_size
-
-        self.da_tune_step_size = da_tune_step_size
-        self.da_target_accept = da_target_accept
-        self.da_gamma = da_gamma
-        self.da_kappa = da_kappa
-        self.da_t0 = da_t0
         self.identifier = identifier
         self.fallback_chol_info = fallback_chol_info
 
@@ -167,26 +109,6 @@ class IWLSKernel(
                 f"got {value}"
             )
         self._fallback_chol_info = value
-
-    @classmethod
-    def untuned(
-        cls,
-        position_keys: Sequence[str],
-        chol_info_fn: Callable[[ModelState], Array] | None = None,
-        fallback_chol_info: CholInfoFallbackOptions | None = "identity",
-    ) -> Self:
-        """
-        Initializes an IWLS kernel that does not conduct step size tuning during warmup.
-        Instead, the step size is fixed to 1.
-        """
-        kernel = cls(
-            position_keys=position_keys,
-            chol_info_fn=chol_info_fn,
-            initial_step_size=1.0,
-            da_tune_step_size=False,
-            fallback_chol_info=fallback_chol_info,
-        )
-        return kernel
 
     def _flat_log_prob_fn(
         self, model_state: ModelState, unravel_fn: Callable[[Array], Position]
@@ -219,7 +141,7 @@ class IWLSKernel(
         self, model_state: ModelState, flat_hessian_fn: Callable[[Array], Array]
     ) -> tuple[Array, int]:
         """
-        Computes the Cholesky decomposition of the Fisher information matrix via
+        Computes a Cholesky factor of the posterior precision approximation via
         :attr:`.flat_hessian_fn`.
 
         The flat position is extracted from the :attr:`.model_state`. If the user
@@ -294,21 +216,23 @@ class IWLSKernel(
         Initializes the kernel state.
         """
 
-        return IWLSKernelState(self.initial_step_size)
+        return {}
+
+    def _proposal_parameters(self, position, score, chol_info, kernel_state):
+        return position + solve(chol_info, score), chol_info
 
     def _standard_transition(
         self,
         prng_key: KeyArray,
-        kernel_state: IWLSKernelState,
+        kernel_state: KernelState,
         model_state: ModelState,
         epoch: EpochState,
-    ) -> TransitionOutcome[IWLSKernelState, IWLSTransitionInfo]:
+    ) -> TransitionOutcome[KernelState, IWLSTransitionInfo]:
         """
         Performs an MCMC transition *without* dual averaging.
         """
 
         key, subkey = jax.random.split(prng_key)
-        step_size = kernel_state.step_size
 
         flat_pos, unravel_fn = ravel_pytree(self.position(model_state))
         flat_log_prob_fn = self._flat_log_prob_fn(model_state, unravel_fn)
@@ -320,11 +244,13 @@ class IWLSKernel(
         score_pos = self._score(model_state, flat_score_fn)
         chol_info_pos, error_code_pos = self._chol_info(model_state, flat_hessian_fn)
 
-        mu_pos = flat_pos + ((step_size**2) / 2) * solve(chol_info_pos, score_pos)
-        flat_prop = mvn_sample(key, mu_pos, chol_info_pos / step_size)
+        mu_pos, chol_prop_pos = self._proposal_parameters(
+            flat_pos, score_pos, chol_info_pos, kernel_state
+        )
+        flat_prop = mvn_sample(key, mu_pos, chol_prop_pos)
         proposal = unravel_fn(flat_prop)
 
-        fwd_log_prob = mvn_log_prob(flat_prop, mu_pos, chol_info_pos / step_size)
+        fwd_log_prob = mvn_log_prob(flat_prop, mu_pos, chol_prop_pos)
 
         # backward probability
 
@@ -332,8 +258,10 @@ class IWLSKernel(
 
         score_prop = self._score(model_state_prop, flat_score_fn)
         chol_info_prop, _ = self._chol_info(model_state_prop, flat_hessian_fn)
-        mu_prop = flat_prop + ((step_size**2) / 2) * solve(chol_info_prop, score_prop)
-        bwd_log_prob = mvn_log_prob(flat_pos, mu_prop, chol_info_prop / step_size)
+        mu_prop, chol_prop_prop = self._proposal_parameters(
+            flat_prop, score_prop, chol_info_prop, kernel_state
+        )
+        bwd_log_prob = mvn_log_prob(flat_pos, mu_prop, chol_prop_prop)
 
         correction = bwd_log_prob - fwd_log_prob
 
@@ -347,37 +275,24 @@ class IWLSKernel(
     def _adaptive_transition(
         self,
         prng_key: KeyArray,
-        kernel_state: IWLSKernelState,
+        kernel_state: KernelState,
         model_state: ModelState,
         epoch: EpochState,
-    ) -> TransitionOutcome[IWLSKernelState, IWLSTransitionInfo]:
+    ) -> TransitionOutcome[KernelState, IWLSTransitionInfo]:
         """
-        Performs an MCMC transition *with* dual averaging.
+        Performs the same transition during adaptation epochs.
         """
 
-        outcome = self._standard_transition(prng_key, kernel_state, model_state, epoch)
-
-        if self.da_tune_step_size:
-            da_step(
-                outcome.kernel_state,
-                outcome.info.acceptance_prob,
-                epoch.time_in_epoch,
-                self.da_target_accept,
-                self.da_gamma,
-                self.da_kappa,
-                self.da_t0,
-            )
-
-        return outcome
+        return self._standard_transition(prng_key, kernel_state, model_state, epoch)
 
     def tune(
         self,
         prng_key: KeyArray,
-        kernel_state: IWLSKernelState,
+        kernel_state: KernelState,
         model_state: ModelState,
         epoch: EpochState,
         history: Position | None = None,
-    ) -> TuningOutcome[IWLSKernelState, IWLSTuningInfo]:
+    ) -> TuningOutcome[KernelState, IWLSTuningInfo]:
         """
         Currently does nothing.
         """
@@ -388,40 +303,87 @@ class IWLSKernel(
     def start_epoch(
         self,
         prng_key: KeyArray,
-        kernel_state: IWLSKernelState,
+        kernel_state: KernelState,
         model_state: ModelState,
         epoch: EpochState,
-    ) -> IWLSKernelState:
+    ) -> KernelState:
         """
-        Resets the state of the dual averaging algorithm.
+        Leaves the kernel state unchanged.
         """
 
-        da_init(kernel_state)
         return kernel_state
 
     def end_epoch(
         self,
         prng_key: KeyArray,
-        kernel_state: IWLSKernelState,
+        kernel_state: KernelState,
         model_state: ModelState,
         epoch: EpochState,
-    ) -> IWLSKernelState:
+    ) -> KernelState:
         """
-        Sets the step size as found by the dual averaging algorithm.
+        Leaves the kernel state unchanged.
         """
 
-        da_finalize(kernel_state)
         return kernel_state
 
     def end_warmup(
         self,
         prng_key: KeyArray,
-        kernel_state: IWLSKernelState,
+        kernel_state: KernelState,
         model_state: ModelState,
         tuning_history: IWLSTuningInfo | None,
-    ) -> WarmupOutcome[IWLSKernelState]:
+    ) -> WarmupOutcome[KernelState]:
         """
         Currently does nothing.
         """
 
         return WarmupOutcome(error_code=0, kernel_state=kernel_state)
+
+
+class IWLSKernel(_GaussianKernel):
+    r"""Gaussian IWLS proposals with Metropolis-Hastings correction.
+
+    For block score g and precision P, the proposal has mean beta + P^{-1} g
+    and covariance P^{-1}. This kernel has no step size or adaptation.
+
+    Parameters
+    ----------
+    position_keys
+        Names of the variables sampled together.
+    chol_info_fn
+        Optional function mapping a model state to the lower Cholesky factor of P.
+        By default, use the negative block Hessian of the log posterior, adding
+        ``1e-6 * mean(diag(P)) * I`` before factorization. A custom factor bypasses
+        this jitter.
+    identifier
+        Unique identifier, normally assigned by :class:`.EngineBuilder`.
+    fallback_chol_info
+        On failed factorization, use ``"identity"`` (default), or
+        ``"chol_of_modified_info"`` to clip eigenvalues to ``1e-5``. The latter
+        is unavailable with a custom factor. With ``None``, reject the invalid
+        proposal and report the error in transition diagnostics.
+
+    Notes
+    -----
+    With the exact precision of a Gaussian full conditional, this is a Gibbs
+    update up to numerical error. The default jitter perturbs that conditional;
+    retain the MH correction for regularized and non-Gaussian proposals.
+
+    Before 0.6 this class implemented simplified manifold MALA. Use
+    :class:`.SMMALAKernel` with an explicit initial step size to preserve that
+    behavior (``0.01`` was the old default).
+    """
+
+    @classmethod
+    def untuned(
+        cls,
+        position_keys: Sequence[str],
+        chol_info_fn: Callable[[ModelState], Array] | None = None,
+        fallback_chol_info: CholInfoFallbackOptions | None = "identity",
+    ) -> Self:
+        """Compatibility constructor; all IWLS kernels are now untuned."""
+        return cls(
+            position_keys,
+            chol_info_fn,
+            fallback_chol_info=fallback_chol_info,
+        )
