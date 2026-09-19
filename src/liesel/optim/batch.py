@@ -7,6 +7,7 @@ from typing import Literal, cast, overload
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from ..model import Model
 from ._log_lik import scaled_common_log_lik as _scaled_common_log_lik
@@ -161,6 +162,19 @@ class Batches:
     batch_axis_size
         Backwards-compatible keyword-only alias for ``batch_size``. Pass only one
         of ``batch_size`` and ``batch_axis_size``.
+    sampling_weights
+        Optional finite, strictly positive relative weights of length ``axis_size``,
+        aligned with the training data in its current order. Requires
+        ``sample_with_replacement=True``. Normalized probabilities remain fixed
+        during a run; saved probabilities take precedence on checkpoint recovery.
+        Values whose probabilities or correction factors cannot be represented in
+        the working dtype are rejected. No probability floor or clipping is applied.
+    likelihood_axes
+        Optional mapping from observed-variable name to its pointwise log-likelihood
+        axis. Weighted correction normally infers this axis using trailing event
+        reduction and leading broadcasting. Declare it explicitly for custom
+        reductions or transpositions. The declared axis must enumerate the sampled
+        observations; matching dimension sizes alone cannot establish this.
 
     Attributes
     ----------
@@ -175,6 +189,13 @@ class Batches:
     are used and the final incomplete tail is dropped independently from each
     shuffled pass. When more batches are requested, another independent shuffled pass
     supplies fresh rows; prior batches are never copied wholesale.
+
+    With replacement sampling, an epoch retains the same number of batches but
+    does not guarantee coverage. Weighted groups apply an extra per-index factor
+    ``1 / (axis_size * p_i)`` through :meth:`scaled_log_lik`, preserving the
+    original objective in expectation. :class:`.NegLogProbLoss` applies this
+    automatically. Other losses must use that
+    method or apply :meth:`correction_factors` before summing likelihood values.
 
     A no-key full-data adapter can be useful when an optimizer workflow expects a
     :class:`Batches` object but the model should always be evaluated on the full
@@ -233,6 +254,8 @@ class Batches:
     sample_with_replacement: bool = False
     sample_size: int | float | None = None
     batch_sample_size: int | float | None = None
+    likelihood_axes: dict[str, int]
+    _sampling_probabilities: jax.Array | None
 
     def __init__(
         self,
@@ -247,6 +270,8 @@ class Batches:
         batch_sample_size: float | None = None,
         *,
         batch_axis_size: int | None | object = _MISSING,
+        sampling_weights: Array | None = None,
+        likelihood_axes: dict[str, int] | None = None,
     ) -> None:
         self.position_keys = position_keys
         self.axis_size = axis_size
@@ -263,7 +288,53 @@ class Batches:
         self.sample_with_replacement = sample_with_replacement
         self.sample_size = sample_size
         self.batch_sample_size = batch_sample_size
+        self.likelihood_axes = dict(likelihood_axes or {})
+        if any(not isinstance(axis, int) for axis in self.likelihood_axes.values()):
+            raise ValueError("likelihood_axes values must be integers.")
         self.__post_init__()
+        self._sampling_probabilities = None
+        if sampling_weights is not None:
+            if not self.sample_with_replacement:
+                raise ValueError(
+                    "sampling_weights requires sample_with_replacement=True."
+                )
+            weights = np.asarray(sampling_weights)
+            if jnp.issubdtype(weights.dtype, jnp.integer):
+                weights = weights.astype(float)
+            if (
+                not jnp.issubdtype(weights.dtype, jnp.floating)
+                or weights.shape != (self.axis_size,)
+                or not np.all(np.isfinite(weights) & (weights > 0))
+            ):
+                raise ValueError(
+                    "sampling_weights must be a finite, positive vector "
+                    "of length axis_size."
+                )
+            # Normalize on the host: XLA can replace division by a reciprocal,
+            # which underflows for large, otherwise valid relative weights.
+            relative = np.asarray(weights, dtype=np.float64)
+            relative = relative / relative.max()
+            dtype = jax.dtypes.canonicalize_dtype(weights.dtype)
+            probabilities = jnp.asarray(relative / relative.sum(), dtype=dtype)
+            corrections = 1.0 / (self.axis_size * probabilities)
+            if not bool(
+                jnp.all(
+                    jnp.isfinite(probabilities)
+                    & (probabilities > 0)
+                    & jnp.isfinite(corrections)
+                    & (corrections > 0)
+                )
+            ):
+                raise ValueError(
+                    "sampling_weights probabilities or corrections "
+                    "are not representable."
+                )
+            self._sampling_probabilities = probabilities
+
+    @property
+    def sampling_probabilities(self) -> jax.Array | None:
+        """Normalized sampling probabilities, or None for uniform sampling."""
+        return self._sampling_probabilities
 
     def __post_init__(self):
         if self.axis_size < 1:
@@ -726,7 +797,7 @@ class Batches:
             assert self.batch_size is not None
             n_indices = self.n_full_batches * self.batch_size
             if self.shuffle:
-                return jax.random.randint(key, (n_indices,), 0, self.axis_size)
+                return self._draw_indices(key, n_indices)
 
             return self._default_indices()
 
@@ -768,7 +839,7 @@ class Batches:
         if self._uses_replacement:
             if key is None:
                 return jnp.arange(n_indices) % self.axis_size
-            return jax.random.randint(key, (n_indices,), 0, self.axis_size)
+            return self._draw_indices(key, n_indices)
 
         if not self.shuffle:
             if n_batches > self.n_full_batches:
@@ -789,6 +860,17 @@ class Batches:
             for pass_key in keys
         ]
         return jnp.concatenate(passes)[:n_indices]
+
+    def _draw_indices(self, key: jax.Array, size: int) -> jax.Array:
+        if self.sampling_probabilities is None:
+            return jax.random.randint(key, (size,), 0, self.axis_size)
+        return jax.random.choice(
+            key,
+            self.axis_size,
+            shape=(size,),
+            replace=True,
+            p=self.sampling_probabilities,
+        )
 
     def start_epoch(self, key: jax.Array, n_batches: int | None = None) -> Batches:
         """
@@ -952,8 +1034,101 @@ class Batches:
         obs = interface.extract_position(self.position_keys, model_state)
         return self.get_batched_position(obs, batch_number)
 
+    def correction_factors(self, batch_index: int | jax.Array) -> jax.Array:
+        """Return extra factors ``1 / (axis_size * p_i)`` for the selected batch.
+
+        Uniform sampling returns ones. These factors do not include
+        :attr:`batch_sample_scale`.
+        """
+        indices = self.batch_indices[batch_index]
+        if self.sampling_probabilities is None:
+            return jnp.ones(indices.shape)
+        return 1.0 / (self.axis_size * self.sampling_probabilities[indices])
+
+    def _likelihood_corrections(
+        self,
+        model: Model | ModelInterface,
+        model_state: ModelState,
+        batch_index: int | jax.Array | None,
+    ) -> dict[str, tuple[jax.Array, int]]:
+        if self.sampling_probabilities is None:
+            return {}
+        if batch_index is None:
+            raise ValueError("Weighted likelihood correction requires batch_index.")
+        if not isinstance(model, Model):
+            raise TypeError(
+                "Weighted likelihood correction requires a liesel.model.Model."
+            )
+        if _has_custom_model_log_lik(model):
+            raise ValueError(
+                "Weighted correction cannot decompose a custom log_lik_node. "
+                "Apply correction_factors in a custom loss instead."
+            )
+        observed_names = {
+            var.name
+            for var in model.observed.values()
+            if var.name in self.position_keys
+            or var.value_node.name in self.position_keys
+        }
+        unknown = self.likelihood_axes.keys() - observed_names
+        if unknown:
+            raise ValueError(
+                f"likelihood_axes names are not in this batch group: {sorted(unknown)}."
+            )
+        factors = self.correction_factors(batch_index)
+        corrections = {}
+        assert isinstance(self.batch_axes, dict)
+        for var in model.observed.values():
+            if var.dist_node is None:
+                continue
+            key = next(
+                (
+                    key
+                    for key in self.position_keys
+                    if key in (var.name, var.value_node.name)
+                ),
+                None,
+            )
+            if key is None:
+                continue
+            value = jnp.asarray(model_state[var.dist_node.name].value)
+            if not value.ndim:
+                raise ValueError(f"{var.name!r} needs a pointwise likelihood axis.")
+            if var.name in self.likelihood_axes:
+                axis = self.likelihood_axes[var.name]
+            else:
+                data_ndim = model_state[var.value_node.name].value.ndim
+                event_ndim = len(var.dist_node.init_dist().event_shape)
+                axis = self.batch_axes.get(key, self.default_batch_axis)
+                if not -data_ndim <= axis < data_ndim:
+                    raise ValueError(f"{var.name!r} has an invalid data batching axis.")
+                axis %= data_ndim
+                # Standard log_prob removes trailing event dimensions and may
+                # add leading broadcast dimensions; it preserves the rest.
+                shift = value.ndim - (data_ndim - event_ndim)
+                if axis >= data_ndim - event_ndim or shift < 0:
+                    raise ValueError(
+                        f"Cannot infer a pointwise likelihood axis for {var.name!r}. "
+                        "Set likelihood_axes explicitly if the likelihood still "
+                        "enumerates the sampled observations."
+                    )
+                axis += shift
+            if not -value.ndim <= axis < value.ndim:
+                raise ValueError(f"{var.name!r} has an invalid likelihood_axes entry.")
+            axis %= value.ndim
+            if value.shape[axis] != self.batch_size:
+                raise ValueError(
+                    f"{var.name!r} likelihood axis must have batch_size entries."
+                )
+            corrections[var.dist_node.name] = (factors, axis)
+        return corrections
+
     def scaled_log_lik(
-        self, model: Model | ModelInterface, model_state: ModelState
+        self,
+        model: Model | ModelInterface,
+        model_state: ModelState,
+        *,
+        batch_index: int | jax.Array | None = None,
     ) -> jax.Array:
         """
         Returns the log likelihood with this batch group's likelihood scaled.
@@ -968,6 +1143,11 @@ class Batches:
             Liesel model or compatible model interface.
         model_state
             Updated model state containing the current log-likelihood values.
+        batch_index
+            Row of :attr:`batch_indices` used to produce ``model_state``. Required
+            for weighted sampling. Applies :meth:`correction_factors` before
+            summation in addition to :attr:`batch_sample_scale`. Reduced scalar
+            likelihoods and ambiguous axis mappings are rejected.
 
         Returns
         -------
@@ -998,15 +1178,19 @@ class Batches:
         ... )
         True
         """
+        corrections = self._likelihood_corrections(model, model_state, batch_index)
         if isinstance(model, Model):
             return _scaled_liesel_log_lik(
-                model, model_state, [(self.position_keys, self.batch_sample_scale)]
+                model,
+                model_state,
+                [(self.position_keys, self.batch_sample_scale)],
+                corrections,
             )
 
         return _scaled_common_log_lik(model_state, self.batch_sample_scale)
 
     def _tree_flatten(self):
-        children = (self.indices,)
+        children = (self.indices, self.sampling_probabilities)
         aux_data = {
             "position_keys": self.position_keys,
             "axis_size": self.axis_size,
@@ -1017,13 +1201,16 @@ class Batches:
             "sample_with_replacement": self.sample_with_replacement,
             "sample_size": self.sample_size,
             "batch_sample_size": self.batch_sample_size,
+            "likelihood_axes": self.likelihood_axes,
         }
         return (children, aux_data)
 
     @classmethod
     def _tree_unflatten(cls, aux_data, children):
-        bi = cls(**aux_data)
-        bi.indices = children[0]
+        bi = object.__new__(cls)
+        for name, value in aux_data.items():
+            setattr(bi, name, value)
+        bi.indices, bi._sampling_probabilities = children
         return bi
 
     def __repr__(self) -> str:
@@ -1788,8 +1975,16 @@ class BatchManager:
         obs = interface.extract_position(self.position_keys, model_state)
         return self.get_batched_position(obs, batch_number)
 
+    def correction_factors(self, batch_index: int | jax.Array) -> tuple[jax.Array, ...]:
+        """Return extra per-index correction factors for each child, in order."""
+        return tuple(batch.correction_factors(batch_index) for batch in self.batches)
+
     def scaled_log_lik(
-        self, model: Model | ModelInterface, model_state: ModelState
+        self,
+        model: Model | ModelInterface,
+        model_state: ModelState,
+        *,
+        batch_index: int | jax.Array | None = None,
     ) -> jax.Array:
         """
         Returns a log likelihood with per-child batch scaling.
@@ -1809,6 +2004,10 @@ class BatchManager:
             Liesel model or compatible model interface.
         model_state
             Updated model state containing the current log-likelihood values.
+        batch_index
+            Current batch row, required when any child uses weighted sampling.
+            Each weighted child corrects its own pointwise likelihood terms before
+            summation. Priors and unbatched terms receive no per-index correction.
 
         Returns
         -------
@@ -1857,12 +2056,17 @@ class BatchManager:
         >>> bool(jnp.allclose(manager.scaled_log_lik(model, state), manual))
         True
         """
+        corrections = {}
+        for batch in self.batches:
+            corrections.update(
+                batch._likelihood_corrections(model, model_state, batch_index)
+            )
         if isinstance(model, Model):
             groups = [
                 (batch.position_keys, batch.batch_sample_scale)
                 for batch in self.batches
             ]
-            return _scaled_liesel_log_lik(model, model_state, groups)
+            return _scaled_liesel_log_lik(model, model_state, groups, corrections)
 
         return _scaled_common_log_lik(model_state, self.batch_sample_scale)
 

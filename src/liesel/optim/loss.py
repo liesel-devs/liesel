@@ -365,7 +365,9 @@ class NegLogProbLoss(LossMixin):
         position = Position(params | carry.batch | carry.fixed_position)
         new_state = self.model.update_state(position, carry.model_state)
 
-        log_lik = carry.batches.scaled_log_lik(self.model, new_state)
+        log_lik = carry.batches.scaled_log_lik(
+            self.model, new_state, batch_index=carry.i_batch
+        )
         log_prior = new_state["_model_log_prior"].value
         return -(log_lik + log_prior) / self.scalar
 

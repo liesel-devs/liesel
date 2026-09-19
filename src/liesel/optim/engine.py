@@ -17,7 +17,7 @@ import warnings
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 import jax
 import jax.numpy as jnp
@@ -615,7 +615,9 @@ class OptimEngine:
         _validate_positive_int(checkpoint_every, "checkpoint_every")
         start = time.monotonic()
         checkpoint_path = (
-            Path(checkpoint) if isinstance(checkpoint, (str, os.PathLike)) else None
+            Path(cast(str | os.PathLike[str], checkpoint))
+            if isinstance(checkpoint, (str, os.PathLike))
+            else None
         )
         if checkpoint_path is not None:
             try:
@@ -1115,6 +1117,7 @@ class OptimEngine:
         else:
             obs_batch = Position({})
         carry.batch = obs_batch
+        carry.i_batch = j
 
         loss = jnp.zeros_like(carry.loss_train)
         has_active_optimizer = jnp.asarray(False)
@@ -1145,7 +1148,6 @@ class OptimEngine:
         loss = jnp.where(batch_has_nan, jnp.nan, loss)
         carry = self._accumulate_loss(loss, carry)
 
-        carry.i_batch = j
         carry.batch = Position({})
 
         return carry

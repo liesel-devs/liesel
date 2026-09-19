@@ -11,6 +11,7 @@ Liesel: A Probabilistic Programming Framework
 
    tutorials_overview
    optimizer-data-flow
+   optimizer-weighted-batching
    optimizer-checkpointing
 
 

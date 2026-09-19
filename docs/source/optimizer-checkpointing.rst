@@ -71,6 +71,10 @@ stable names, shapes, and dtypes. With the built-in negative log-probability los
 and optimizers, anonymous internal nodes and constants do not need stable names:
 their read-only evaluation state is rebuilt from the caller's model.
 
+For weighted minibatches, saved sampling probabilities take precedence over newly
+supplied weights. Reconstruct the same batch groups and sampling mode; the recovered
+run continues with its original probabilities and random state.
+
 Custom losses and optimizers can evolve ``carry.model_state``. For these, the
 checkpoint retains that state and checks its keys, structure, shapes, and dtypes
 against the reconstructed engine. This includes subclasses of the built-ins,
