@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from copy import copy
+from dataclasses import InitVar, dataclass, field
 from typing import Literal, cast, overload
 
 import jax
@@ -58,6 +59,38 @@ def _resolve_batch_size(
         raise TypeError("Pass either batch_size or batch_axis_size, not both.")
 
     return cast(int | None, batch_axis_size if batch_size is _MISSING else batch_size)
+
+
+def _sampling_weights_for_groups(
+    sampling_weights: Array | Mapping[str, Array] | None,
+    groups: Sequence[Sequence[str]],
+) -> list[Array | None]:
+    """Route one weight vector to each group, without broadcasting across groups."""
+    if sampling_weights is None:
+        return [None] * len(groups)
+    if not isinstance(sampling_weights, Mapping):
+        if len(groups) != 1:
+            raise ValueError(
+                "Multiple batch groups require sampling_weights as a mapping "
+                "from one position key per group to its weight vector."
+            )
+        return [sampling_weights]
+
+    unknown = sampling_weights.keys() - {key for group in groups for key in group}
+    if unknown:
+        raise ValueError(f"Unknown sampling_weights position keys: {list(unknown)}.")
+    weights = []
+    for group in groups:
+        keys = [key for key in group if key in sampling_weights]
+        if len(keys) > 1:
+            raise ValueError(
+                "Provide sampling_weights for only one position key per group; "
+                f"got {keys} in group {list(group)}."
+            )
+        if keys and sampling_weights[keys[0]] is None:
+            raise ValueError("sampling_weights entries must be weight vectors.")
+        weights.append(sampling_weights[keys[0]] if keys else None)
+    return weights
 
 
 def _normalize_positive_size(size: float | None, name: str) -> float | None:
@@ -316,6 +349,9 @@ class Batches:
         if any(not isinstance(axis, int) for axis in self.likelihood_axes.values()):
             raise ValueError("likelihood_axes values must be integers.")
         self.__post_init__()
+        self._set_sampling_weights(sampling_weights)
+
+    def _set_sampling_weights(self, sampling_weights: Array | None) -> None:
         self._sampling_probabilities = None
         self._alias_table = None
         if sampling_weights is not None:
@@ -661,6 +697,7 @@ class Batches:
         sample_with_replacement: bool = False,
         *,
         batch_axis_size: int | None | object = _MISSING,
+        sampling_weights: Array | Mapping[str, Array] | None = None,
     ) -> Batches: ...
 
     @classmethod
@@ -682,6 +719,7 @@ class Batches:
         sample_with_replacement: bool = False,
         *,
         batch_axis_size: int | None | object = _MISSING,
+        sampling_weights: Array | Mapping[str, Array] | None = None,
     ) -> Batches | BatchManager: ...
 
     @classmethod
@@ -702,6 +740,7 @@ class Batches:
         sample_with_replacement: bool = False,
         *,
         batch_axis_size: int | None | object = _MISSING,
+        sampling_weights: Array | Mapping[str, Array] | None = None,
     ) -> Batches | BatchManager:
         """
         Builds a :class:`Batches` object from a Liesel model.
@@ -762,6 +801,13 @@ class Batches:
         batch_axis_size
             Backwards-compatible keyword-only alias for ``batch_size``. Pass only
             one of ``batch_size`` and ``batch_axis_size``.
+        sampling_weights
+            Positive relative sampling weights in current data order. Supply a vector
+            for one group, or a mapping from one selected position key per group to
+            its vector. The vector applies to all aligned entries in that group.
+            Unknown keys and multiple entries for one group are rejected; omitted
+            groups use uniform sampling. Weighted groups require replacement
+            sampling. See :class:`Batches` for validation and likelihood correction.
 
         Returns
         -------
@@ -847,6 +893,7 @@ class Batches:
                     epoch_size=epoch_size,
                     infer_sample_size=infer_sample_size,
                     sample_with_replacement=sample_with_replacement,
+                    sampling_weights=sampling_weights,
                 )
 
             raise ValueError(
@@ -868,6 +915,7 @@ class Batches:
         if batch_size is None:
             shuffle = False
 
+        (weights,) = _sampling_weights_for_groups(sampling_weights, [pos_keys])
         batches = cls(
             pos_keys,
             batch_size=batch_size,
@@ -878,6 +926,7 @@ class Batches:
             sample_size=sample_size,
             batch_sample_size=batch_sample_size,
             sample_with_replacement=sample_with_replacement,
+            sampling_weights=weights,
         )
 
         if infer_sample_size and sample_size is None:
@@ -1471,6 +1520,13 @@ class BatchManager:
     epoch_size
         Epoch length policy: ``"strict"``, ``"min"``, ``"max"``, or a positive
         integer.
+    sampling_weights
+        Optional keyword-only weights: a vector for a single child, or a mapping
+        from one child position key per group to its vector. Each vector applies
+        to the entire group and requires that child's
+        ``sample_with_replacement=True``. Unknown keys and multiple entries for
+        one group are rejected. Supplied weights override existing child weights
+        on a copy; omitted groups retain their existing sampling configuration.
 
     Attributes
     ----------
@@ -1564,8 +1620,11 @@ class BatchManager:
 
     batches: Sequence[Batches]
     epoch_size: Literal["strict", "min", "max"] | int = "strict"
+    sampling_weights: InitVar[Array | Mapping[str, Array] | None] = field(
+        default=None, kw_only=True
+    )
 
-    def __post_init__(self):
+    def __post_init__(self, sampling_weights):
         self.batches = tuple(self.batches)
 
         if len(self.batches) == 0:
@@ -1584,6 +1643,16 @@ class BatchManager:
 
         self._validate_position_keys()
         self._validate_batch_counts()
+        weights = _sampling_weights_for_groups(
+            sampling_weights, [batch.position_keys for batch in self.batches]
+        )
+        batches = []
+        for batch, weight in zip(self.batches, weights, strict=True):
+            if weight is not None:
+                batch = copy(batch)
+                batch._set_sampling_weights(weight)
+            batches.append(batch)
+        self.batches = tuple(batches)
         count = self.n_full_batches
         self.batches = tuple(
             batch._replace_indices_for_manager(count) for batch in self.batches
@@ -1603,6 +1672,7 @@ class BatchManager:
         sample_with_replacement: bool = False,
         *,
         batch_axis_size: int | None | object = _MISSING,
+        sampling_weights: Array | Mapping[str, Array] | None = None,
     ) -> BatchManager:
         """
         Builds a :class:`BatchManager` from inferred or explicit groups.
@@ -1647,6 +1717,14 @@ class BatchManager:
             replacement. This applies to every inferred child; automatic construction
             also enables it for an oversized child when the common batch size exceeds
             its observation count.
+        sampling_weights
+            A vector for a single group, or a mapping from one selected position
+            key per group to its weight vector. Vectors apply to all aligned entries
+            in the group, in current data order. Omitted groups use uniform sampling.
+            Unknown keys and multiple entries for one group are rejected. Weighted
+            groups must use replacement sampling; normally set
+            ``sample_with_replacement=True``. See :class:`Batches` for validation
+            and likelihood correction.
 
         Returns
         -------
@@ -1715,6 +1793,7 @@ class BatchManager:
         return cls(
             batches=batches,
             epoch_size=epoch_size,
+            sampling_weights=sampling_weights,
         )
 
     def _validate_position_keys(self) -> None:

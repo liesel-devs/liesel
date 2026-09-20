@@ -68,6 +68,51 @@ structure and sampling mode must remain compatible. Adaptive priorities,
 weighted sampling without replacement, and automatic weight routing through
 ``LieselOptim`` are outside this API.
 
+Constructing from a model
+-------------------------
+
+When the model contains the training data, pass weights directly to
+:meth:`~liesel.optim.Batches.from_model`:
+
+.. code-block:: python
+
+   weights = opt.Batches.weights_binned(model.vars["y"].value, bins=10)
+   batches = opt.Batches.from_model(
+       model,
+       batch_size=2,
+       sample_with_replacement=True,
+       sampling_weights=weights,
+   )
+
+With multiple groups, supply a mapping from one selected position key per group
+to its weight vector. The vector applies to every aligned entry in that group.
+For example, ``x`` and ``y`` below share indices and weights:
+
+.. code-block:: python
+
+   manager = opt.BatchManager.from_model(
+       model,
+       batch_size=128,
+       position_keys=[["x", "y"], ["z"]],
+       sample_with_replacement=True,
+       sampling_weights={"y": weights_y, "z": weights_z},
+   )
+
+The same mapping works with
+``Batches.from_model(..., multi_size="manager", sampling_weights=...)`` and
+``BatchManager([batch_xy, batch_z], sampling_weights=...)``. A plain vector is
+accepted only when there is one group; it is never broadcast across groups.
+Unknown keys and multiple entries for the same group are errors, even if their
+vectors agree. Mapping keys must match the selected ``position_keys`` exactly.
+
+Omitted groups retain their sampling configuration: uniform for model factories,
+or the existing child configuration for direct manager construction. Explicit
+manager weights override a child's existing weights on a copy, leaving the
+original child's probabilities unchanged. Every weighted child must use
+replacement sampling; when passing existing children, configure
+``sample_with_replacement=True`` on those children. Model factories also retain
+the existing automatic replacement behavior for oversized child batches.
+
 Choosing sampling weights
 -------------------------
 
