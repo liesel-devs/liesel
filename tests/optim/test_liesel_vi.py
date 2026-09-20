@@ -67,6 +67,7 @@ def test_default_build_engine_uses_opinionated_defaults():
     assert engine.loss.scale is True
     assert engine.loss.scalar == engine.split.train_axis_size
     assert engine.loss.nsamples == 10
+    assert engine.loss.entropy == "auto"
     assert isinstance(engine.loss.vdist, opt.VDist)
     assert engine.loss.vdist.var is not None
     assert engine.loss.vdist.var.dist_node is not None
@@ -257,7 +258,9 @@ def test_custom_loss_and_conflicting_split_raise():
 def test_custom_loss_is_passed_through_unchanged():
     model = _normal_model()
     split = PositionSplit.from_model(model)
-    loss = NegElboLoss.mvn_diag(model, split=split, nsamples=3, scale=False)
+    loss = NegElboLoss.mvn_diag(
+        model, split=split, nsamples=3, scale=False, entropy="mc"
+    )
 
     engine = LieselVI(
         model,
@@ -271,6 +274,25 @@ def test_custom_loss_is_passed_through_unchanged():
     assert engine.loss is loss
     assert loss.nsamples == 3
     assert loss.scale is False
+    assert loss.entropy == "mc"
+
+
+@pytest.mark.parametrize("family", ["mvn_diag", "mvn_tril", "mvn_blocked"])
+def test_entropy_option_is_forwarded(family):
+    engine = LieselVI(
+        _normal_model(), loss=family, entropy="mc", loss_monitor=LOSS_MONITOR
+    ).build_engine()
+    assert isinstance(engine.loss, NegElboLoss)
+    assert engine.loss.entropy == "mc"
+
+
+def test_invalid_entropy_option_raises():
+    with pytest.raises(ValueError, match="entropy"):
+        LieselVI(
+            _normal_model(),
+            entropy="invalid",  # ty: ignore[invalid-argument-type]
+            loss_monitor=LOSS_MONITOR,
+        )
 
 
 def test_unknown_loss_string_raises():

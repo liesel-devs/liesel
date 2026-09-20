@@ -42,6 +42,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from functools import partial
+from math import prod
 from typing import Literal, Self, cast
 
 import jax
@@ -55,7 +56,7 @@ from ..model import Dist, Model, Var
 from ..model.logprob import FlatLogProb
 from ..model.model import TemporaryModel
 from .loss import LossMixin, _training_loss_scalar, _validate_bool
-from .split import PositionSplit, PositionSplitManager
+from .split import PositionSplit, PositionSplitManager, _has_custom_model_log_lik
 from .state import OptimCarry
 from .types import ModelState, Position
 
@@ -167,6 +168,14 @@ class NegElboLoss(LossMixin):
         Whether priors in ``q`` should be added to the ELBO as regularization terms.
         The default preserves the historical behavior of this class. Set to
         ``False`` to subtract only the variational likelihood term.
+    entropy
+        ``"auto"`` (default) uses differentiable distribution entropies where
+        implemented, falling back to Monte Carlo per term on ``NotImplementedError``.
+        Independent block entropies add exactly; conditional entropies are averaged
+        over sampled parents. Custom aggregate likelihoods in ``q`` use Monte Carlo.
+        ``"mc"`` retains the original sampled log-density estimator. The default
+        changes seeded optimization trajectories and can improve numerical stability;
+        it does not guarantee faster convergence.
 
     Attributes
     ----------
@@ -221,9 +230,13 @@ class NegElboLoss(LossMixin):
         scale: bool = False,
         vdist: VDist | CompositeVDist | None = None,
         regularize_q_prior: bool = True,
+        entropy: Literal["auto", "mc"] = "auto",
     ):
         _validate_positive_int(nsamples, "nsamples")
         _validate_bool(scale, "scale")
+        if entropy not in ("auto", "mc"):
+            raise ValueError("entropy must be 'auto' or 'mc'.")
+        self.entropy = entropy
         self.p = p
         self.q = q
         self.split = split or PositionSplit.from_model(self.p)
@@ -243,6 +256,7 @@ class NegElboLoss(LossMixin):
         nsamples: int = 10,
         scale: bool = False,
         regularize_q_prior: bool = True,
+        entropy: Literal["auto", "mc"] = "auto",
     ) -> NegElboLoss:
         """
         Constructs a negative ELBO loss from a built variational distribution.
@@ -264,6 +278,10 @@ class NegElboLoss(LossMixin):
         regularize_q_prior
             Whether priors in ``vdist.q`` should be added to the ELBO as
             regularization terms.
+
+        entropy
+            ``"auto"`` uses analytic entropy where supported, with per-term Monte
+            Carlo fallback. ``"mc"`` retains the sampled log-density estimator.
 
         Returns
         -------
@@ -302,6 +320,7 @@ class NegElboLoss(LossMixin):
             q_to_p=vdist.q_to_p,
             vdist=vdist,
             regularize_q_prior=regularize_q_prior,
+            entropy=entropy,
         )
 
     @classmethod
@@ -316,6 +335,7 @@ class NegElboLoss(LossMixin):
         scale_diag: Literal["laplace"] | jax.typing.ArrayLike = 0.01,
         scale_diag_bijector: ScaleBijectorConfig = "auto",
         to_float32: bool | None = None,
+        entropy: Literal["auto", "mc"] = "auto",
     ) -> Self:
         """
         Builds a diagonal multivariate normal ELBO over all parameters of ``p``.
@@ -355,6 +375,10 @@ class NegElboLoss(LossMixin):
             Whether to convert values in the variational model to ``float32``. If
             ``None``, inherits ``p.to_float32``.
 
+        entropy
+            ``"auto"`` uses analytic entropy where supported, with per-term Monte
+            Carlo fallback. ``"mc"`` retains the sampled log-density estimator.
+
         Returns
         -------
         NegElboLoss
@@ -382,6 +406,7 @@ class NegElboLoss(LossMixin):
             q_to_p=vi_dist.q_to_p,
             vdist=vi_dist,
             regularize_q_prior=regularize_q_prior,
+            entropy=entropy,
         )
 
     @classmethod
@@ -396,6 +421,7 @@ class NegElboLoss(LossMixin):
         scale_tril: Literal["laplace"] | jax.typing.ArrayLike = 0.01,
         scale_tril_bijector: ScaleBijectorConfig = "auto",
         to_float32: bool | None = None,
+        entropy: Literal["auto", "mc"] = "auto",
     ) -> Self:
         """
         Builds a dense multivariate normal ELBO over all parameters of ``p``.
@@ -435,6 +461,10 @@ class NegElboLoss(LossMixin):
             Whether to convert values in the variational model to ``float32``. If
             ``None``, inherits ``p.to_float32``.
 
+        entropy
+            ``"auto"`` uses analytic entropy where supported, with per-term Monte
+            Carlo fallback. ``"mc"`` retains the sampled log-density estimator.
+
         Returns
         -------
         NegElboLoss
@@ -461,6 +491,7 @@ class NegElboLoss(LossMixin):
             q_to_p=vi_dist.q_to_p,
             vdist=vi_dist,
             regularize_q_prior=regularize_q_prior,
+            entropy=entropy,
         )
 
     @classmethod
@@ -474,6 +505,7 @@ class NegElboLoss(LossMixin):
         scale_tril: Literal["laplace"] | jax.typing.ArrayLike = 0.01,
         scale_tril_bijector: ScaleBijectorConfig = "auto",
         to_float32: bool | None = None,
+        entropy: Literal["auto", "mc"] = "auto",
     ) -> Self:
         """
         Builds an ELBO with one dense normal variational block per parameter.
@@ -512,6 +544,10 @@ class NegElboLoss(LossMixin):
             Whether to convert values in the variational model to ``float32``. If
             ``None``, inherits ``p.to_float32``.
 
+        entropy
+            ``"auto"`` uses analytic entropy where supported, with per-term Monte
+            Carlo fallback. ``"mc"`` retains the sampled log-density estimator.
+
         Returns
         -------
         NegElboLoss
@@ -537,6 +573,7 @@ class NegElboLoss(LossMixin):
             q_to_p=vi_dist.q_to_p,
             vdist=vi_dist,
             regularize_q_prior=regularize_q_prior,
+            entropy=entropy,
         )
 
     @property
@@ -594,7 +631,11 @@ class NegElboLoss(LossMixin):
         Estimates the ELBO at a variational parameter position.
 
         The method draws ``nsamples`` samples from ``q`` at ``params`` and computes
-        ``E_q[log p(theta, y) - log q(theta)]``. Mini-batch training passes
+        ``E_q[log p(theta, y)] + H(q)``. In automatic entropy mode, supported
+        variational terms use analytic entropy; other terms use sampled negative
+        log densities. Conditional entropies are averaged over sampled parents.
+        Priors in ``q`` remain a separate regularization contribution.
+        Mini-batch training passes
         ``batches`` so observed log-likelihood terms can be scaled by the active
         batch configuration. ``NegElboLoss`` rejects validation splits, so any
         ``split`` supplied here is expected to have no validation part.
@@ -638,6 +679,9 @@ class NegElboLoss(LossMixin):
         nsamples = nsamples if nsamples is not None else self.nsamples
         _validate_positive_int(nsamples, "nsamples")
         samples = self.q.sample((nsamples,), seed=key, newdata=params)
+        use_analytic_entropy = self.entropy == "auto" and not _has_custom_model_log_lik(
+            self.q
+        )
 
         @partial(jax.vmap)
         def log_prob_of_p(sample):
@@ -661,7 +705,25 @@ class NegElboLoss(LossMixin):
         @partial(jax.vmap)
         def log_prob_of_q(sample):
             q_state_new = self.q.update_state(sample | params, q_state)
-            log_lik_q = q_state_new["_model_log_lik"].value
+            if use_analytic_entropy:
+                q_updated = self.q._copy_computational_model()
+                q_updated.state = q_state_new
+                log_lik_q = 0.0
+                for var in q_updated.observed.values():
+                    if var.dist_node is None:
+                        continue
+                    distribution = var.dist_node.init_dist()
+                    try:
+                        entropy_value = distribution.entropy()
+                    except NotImplementedError:
+                        log_lik_q += jnp.sum(q_state_new[var.dist_node.name].value)
+                    else:
+                        sample_shape = _distribution_sample_shape(
+                            distribution, jnp.shape(var.value)
+                        )
+                        log_lik_q -= prod(sample_shape) * jnp.sum(entropy_value)
+            else:
+                log_lik_q = q_state_new["_model_log_lik"].value
             log_prior_q = q_state_new["_model_log_prior"].value
             # Here, I subtract the prior from the likelihood, which may be somewhat
             # surprising.

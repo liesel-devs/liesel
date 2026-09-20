@@ -443,6 +443,34 @@ class TestCompositeVDist:
 
 
 class TestNegElboLoss:
+    def test_ill_conditioned_gaussian_has_finite_elbo_and_gradients(self):
+        n = 64
+        theta = lsl.Var.new_param(
+            jnp.zeros(n),
+            lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=1.0),
+            name="theta",
+        )
+        y = lsl.Var.new_obs(
+            jnp.zeros(n),
+            lsl.Dist(tfp.distributions.Normal, loc=theta, scale=1.0),
+            name="y",
+        )
+        p = lsl.Model([y])
+        scale = 0.01 * jnp.eye(n) + 0.04 * jnp.eye(n, k=-1)
+        loss = opt.NegElboLoss.mvn_tril(p, scale_tril=scale, nsamples=4)
+        params = loss.position(list(loss.q.parameters))
+
+        value, grad = jax.jit(
+            jax.value_and_grad(
+                lambda position: loss.estimate_elbo(
+                    position, jax.random.key(84), p.state
+                )
+            )
+        )(params)
+
+        assert jnp.isfinite(value)
+        assert all(jnp.isfinite(v).all() for v in grad.values())
+
     @pytest.mark.parametrize("nsamples", [0, True, 1.5, "2"])
     def test_rejects_invalid_sample_counts(self, nsamples):
         p = _laplace_model()
@@ -501,7 +529,8 @@ class TestNegElboLoss:
         with pytest.raises(ValueError, match="validation data"):
             opt.NegElboLoss.mvn_diag(p, split=split)
 
-    def test_regularize_q_prior_controls_variational_prior_contribution(self):
+    @pytest.mark.parametrize("entropy", ["auto", "mc"])
+    def test_regularize_q_prior_controls_variational_prior_contribution(self, entropy):
         p = _laplace_model()
         split = opt.PositionSplit.from_model(p)
         q_loc = lsl.Var.new_param(
@@ -521,10 +550,10 @@ class TestNegElboLoss:
         key = jax.random.key(1)
 
         elbo_with_prior = opt.NegElboLoss.from_vdist(
-            vdist, split, nsamples=2, regularize_q_prior=True
+            vdist, split, nsamples=2, regularize_q_prior=True, entropy=entropy
         )
         elbo_without_prior = opt.NegElboLoss.from_vdist(
-            vdist, split, nsamples=2, regularize_q_prior=False
+            vdist, split, nsamples=2, regularize_q_prior=False, entropy=entropy
         )
         value_with_prior = elbo_with_prior.estimate_elbo(params, key, p.state)
         value_without_prior = elbo_without_prior.estimate_elbo(params, key, p.state)
@@ -534,3 +563,178 @@ class TestNegElboLoss:
             value_with_prior - value_without_prior,
             q_state["_model_log_prior"].value,
         )
+
+
+def _entropy_test_loss(q, **kwargs):
+    # A constant target isolates the entropy contribution of the actual ELBO.
+    return opt.NegElboLoss(_laplace_model(), q, q_to_p=lambda sample: {}, **kwargs)
+
+
+def _estimated_entropy(loss, params):
+    return (
+        loss.estimate_elbo(params, jax.random.key(84), loss.p.state) - loss.p.log_prob
+    )
+
+
+@pytest.mark.parametrize("family", ["scalar_normal", "batched_normal", "gamma"])
+def test_entropy_values_and_gradients_with_replication(family):
+    parameter = lsl.Var.new_param(1.2, name="parameter")
+    if family == "gamma":
+        distribution = tfp.distributions.Gamma
+        kwargs = {"concentration": jnp.array([2.0, 3.0])}
+        parameter_name = "rate"
+        value = jnp.ones((3, 2))
+    else:
+        distribution = tfp.distributions.Normal
+        kwargs = {"loc": 0.0 if family == "scalar_normal" else jnp.zeros(2)}
+        parameter_name = "scale"
+        value = jnp.zeros((3, 2))
+    z = lsl.Var.new_obs(
+        value, lsl.Dist(distribution, *kwargs.values(), parameter), name="z"
+    )
+    loss = _entropy_test_loss(lsl.Model([z]))
+    actual = jax.jit(
+        jax.value_and_grad(lambda x: _estimated_entropy(loss, {"parameter": x}))
+    )(jnp.array(1.2))
+    repeats = 6 if family == "scalar_normal" else 3
+    expected = jax.value_and_grad(
+        lambda x: (
+            repeats * jnp.sum(distribution(**kwargs, **{parameter_name: x}).entropy())
+        )
+    )(jnp.array(1.2))
+    np.testing.assert_allclose(actual, expected, rtol=1e-5, atol=1e-5)
+
+
+@pytest.mark.parametrize("factory", ["mvn_diag", "mvn_tril", "mvn_blocked"])
+def test_gaussian_factories_forward_entropy_and_sum_blocks(factory):
+    built = getattr(opt.NegElboLoss, factory)(_two_parameter_model(), entropy="mc")
+    assert built.entropy == "mc"
+    loss = _entropy_test_loss(built.q)
+    params = loss.position(list(loss.q.parameters))
+    actual = jax.jit(lambda x: _estimated_entropy(loss, x))(params)
+    expected = sum(
+        jnp.sum(v.dist_node.init_dist().entropy()) for v in built.q.observed.values()
+    )
+    np.testing.assert_allclose(actual, expected, atol=1e-5)
+
+
+def test_mixed_entropy_fallback_and_gradient(monkeypatch):
+    scale = lsl.Var.new_param(1.2, name="scale")
+    normal = lsl.Var.new_obs(
+        0.0, lsl.Dist(tfp.distributions.Normal, 0.0, scale), name="normal"
+    )
+    gamma = lsl.Var.new_obs(
+        1.0, lsl.Dist(tfp.distributions.Gamma, 2.0, scale), name="gamma"
+    )
+    q = lsl.Model([normal, gamma])
+    loss = _entropy_test_loss(q, nsamples=4)
+
+    def unsupported(self):
+        raise NotImplementedError
+
+    monkeypatch.setattr(tfp.distributions.Normal, "_entropy", unsupported)
+
+    def expected(x):
+        samples = q.sample((4,), seed=jax.random.key(84), newdata={"scale": x})
+        return tfp.distributions.Gamma(2.0, x).entropy() - jnp.mean(
+            tfp.distributions.Normal(0.0, x).log_prob(samples["normal"])
+        )
+
+    actual = jax.jit(
+        jax.value_and_grad(lambda x: _estimated_entropy(loss, {"scale": x}))
+    )(jnp.array(1.2))
+    expected_value = jax.jit(jax.value_and_grad(expected))(jnp.array(1.2))
+    np.testing.assert_allclose(actual, expected_value, rtol=1e-5, atol=1e-5)
+
+
+@pytest.mark.parametrize("behavior", ["error", "nan", "inf"])
+def test_entropy_failures_are_not_silently_replaced(monkeypatch, behavior):
+    loss = opt.NegElboLoss.mvn_diag(_laplace_model())
+
+    def broken(self, *args, **kwargs):
+        if behavior == "error":
+            raise ValueError("invalid entropy")
+        return jnp.asarray(float(behavior))
+
+    monkeypatch.setattr(tfp.distributions.MultivariateNormalDiag, "entropy", broken)
+    params = loss.position(list(loss.q.parameters))
+    evaluate = jax.jit(lambda x: loss.estimate_elbo(x, jax.random.key(0), loss.p.state))
+    if behavior == "error":
+        with pytest.raises(ValueError, match="invalid entropy"):
+            evaluate(params)
+    else:
+        assert not jnp.isfinite(evaluate(params))
+
+
+def test_conditional_entropy_averages_over_sampled_parents():
+    mean = lsl.Var.new_param(0.2, name="mean")
+    parent = lsl.Var.new_obs(
+        0.0, lsl.Dist(tfp.distributions.Normal, mean, 1.0), name="parent"
+    )
+    scale = lsl.Var.new_calc(jnp.exp, parent, name="scale")
+    child = lsl.Var.new_obs(
+        0.0, lsl.Dist(tfp.distributions.Normal, 0.0, scale), name="child"
+    )
+    q = lsl.Model([child])
+    loss = _entropy_test_loss(q, nsamples=1024)
+    params = {"mean": jnp.array(0.2)}
+    actual, grad = jax.jit(jax.value_and_grad(lambda x: _estimated_entropy(loss, x)))(
+        params
+    )
+    samples = q.sample((1024,), seed=jax.random.key(84), newdata=params)
+    base_entropy = 2 * tfp.distributions.Normal(0.0, 1.0).entropy()
+    np.testing.assert_allclose(
+        actual, base_entropy + samples["parent"].mean(), atol=1e-5
+    )
+    # E[parent] = mean, so H(q) = 2 H(N(0, 1)) + mean and dH/dmean = 1.
+    np.testing.assert_allclose(actual, base_entropy + params["mean"], atol=0.1)
+    np.testing.assert_allclose(grad["mean"], 1.0, atol=1e-5)
+
+
+def test_custom_variational_likelihood_uses_mc():
+    z = lsl.Var.new_obs(0.0, lsl.Dist(tfp.distributions.Normal, 0.0, 1.0), name="z")
+    gb = lsl.GraphBuilder().add(z)
+    gb.log_lik_node = lsl.Calc(lambda lp: 2 * lp, z.dist_node)
+    q = gb.build_model()
+    automatic = _entropy_test_loss(q)
+    sampled = _entropy_test_loss(q, entropy="mc")
+    samples = q.sample((10,), seed=jax.random.key(84))
+    expected = -2 * tfp.distributions.Normal(0.0, 1.0).log_prob(samples["z"]).mean()
+    np.testing.assert_allclose(_estimated_entropy(automatic, {}), expected, atol=1e-5)
+    np.testing.assert_allclose(_estimated_entropy(sampled, {}), expected, atol=1e-5)
+
+
+def test_mc_mode_matches_original_elbo_and_gradients():
+    p = _laplace_model()
+    vdist = opt.VDist(["loc"], p).mvn_tril().build()
+    loss = opt.NegElboLoss.from_vdist(vdist, entropy="mc", nsamples=4)
+    assert loss.entropy == "mc"
+    key = jax.random.key(84)
+    params = loss.position(list(loss.q.parameters))
+
+    def original(position):
+        samples = loss.q.sample((4,), seed=key, newdata=position)
+
+        def log_ratio(sample):
+            ps = p.update_state(loss.q_to_p(sample), p.state)
+            qs = loss.q.update_state(sample | position, loss.q.state)
+            return (
+                ps["_model_log_prob"].value
+                - qs["_model_log_lik"].value
+                + qs["_model_log_prior"].value
+            )
+
+        return jax.vmap(log_ratio)(samples).mean()
+
+    expected = jax.jit(jax.value_and_grad(original))(params)
+    actual = jax.jit(jax.value_and_grad(lambda x: loss.estimate_elbo(x, key, p.state)))(
+        params
+    )
+    for a, b in zip(jax.tree.leaves(actual), jax.tree.leaves(expected), strict=True):
+        np.testing.assert_allclose(a, b, rtol=1e-5, atol=1e-5)
+
+
+@pytest.mark.parametrize("entropy", [True, None, "analytic", 1])
+def test_rejects_invalid_entropy_mode(entropy):
+    with pytest.raises(ValueError, match="entropy"):
+        opt.NegElboLoss.mvn_diag(_laplace_model(), entropy=entropy)

@@ -99,6 +99,11 @@ class LieselVI:
         ``"train_full_data"`` for one complete training-loss evaluation after each
         epoch. Validation monitoring is unavailable because ELBO losses do not
         support validation splits.
+    entropy
+        Entropy estimator for internally constructed losses: ``"auto"`` uses
+        analytic entropy where supported with per-term Monte Carlo fallback;
+        ``"mc"`` keeps the original sampled estimator. An explicit loss retains
+        its own entropy setting.
     show_progress
         Whether the built engine should show ``tqdm`` progress bars.
     progress_n_updates
@@ -170,6 +175,7 @@ class LieselVI:
         show_step_progress: bool = False,
         step_progress_update_every: int = 10,
         step_progress_n_updates: int | None = None,
+        entropy: Literal["auto", "mc"] = "auto",
     ) -> None:
         if batch_axis_size is not _MISSING:
             if batch_size is not None:
@@ -209,6 +215,7 @@ class LieselVI:
             nsamples=nsamples,
             scale_loss=scale_loss,
             regularize_q_prior=regularize_q_prior,
+            entropy=entropy,
         )
         self.batches = self._resolve_batches(
             batches=batches,
@@ -294,6 +301,7 @@ class LieselVI:
         nsamples: int,
         scale_loss: bool | Literal["auto"],
         regularize_q_prior: bool,
+        entropy: Literal["auto", "mc"],
     ) -> NegElboLoss:
         if isinstance(loss, NegElboLoss):
             return loss
@@ -313,6 +321,7 @@ class LieselVI:
                     nsamples=nsamples,
                     scale=scale,
                     regularize_q_prior=regularize_q_prior,
+                    entropy=entropy,
                 )
             case "mvn_tril":
                 return NegElboLoss.mvn_tril(
@@ -321,6 +330,7 @@ class LieselVI:
                     nsamples=nsamples,
                     scale=scale,
                     regularize_q_prior=regularize_q_prior,
+                    entropy=entropy,
                 )
             case "mvn_blocked":
                 return NegElboLoss.mvn_blocked(
@@ -329,6 +339,7 @@ class LieselVI:
                     nsamples=nsamples,
                     scale=scale,
                     regularize_q_prior=regularize_q_prior,
+                    entropy=entropy,
                 )
             case _:
                 raise ValueError(
