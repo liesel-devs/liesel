@@ -721,3 +721,186 @@ def test_weighted_correction_rejects_custom_aggregate_log_likelihood():
     )
     with pytest.raises(ValueError, match="custom log_lik_node"):
         batches.scaled_log_lik(model, state, batch_index=0)
+
+
+@pytest.mark.parametrize("constructor", ["batches", "manager", "init"])
+@pytest.mark.parametrize("as_mapping", [False, True])
+def test_from_model_sampling_weights(constructor, as_mapping):
+    y = lsl.Var.new_obs(
+        jnp.arange(12.0).reshape(2, 6),
+        lsl.Dist(tfd.Normal, 0.0, 1.0),
+        name="y",
+    )
+    model = lsl.Model([y])
+    weights = np.arange(1.0, 7.0)
+    supplied = {"y": weights} if as_mapping else weights
+    expected = Batches.from_model(
+        model, batch_size=2, batch_axes={"y": 1}, sample_with_replacement=True
+    )
+    if constructor == "init":
+        result = BatchManager([expected], sampling_weights=supplied)
+    else:
+        cls = Batches if constructor == "batches" else BatchManager
+        result = cls.from_model(
+            model,
+            batch_size=2,
+            batch_axes={"y": 1},
+            sample_with_replacement=True,
+            sampling_weights=supplied,
+        )
+    child = result if isinstance(result, Batches) else result.batches[0]
+    assert child.sampling_probabilities is not None
+    np.testing.assert_allclose(child.sampling_probabilities, weights / weights.sum())
+    assert child.sample_size == 12
+    assert child.batch_sample_size == 4
+    assert child.batch_axes == {"y": 1}
+    result.start_epoch(jax.random.key(37))
+    state = model.update_state(
+        result.get_batched_position(model.extract_position(["y"]), 0), model.state
+    )
+    factors = child.correction_factors(0)
+    expected_loss = 3 * (state["y_log_prob"].value * factors[None, :]).sum()
+    np.testing.assert_allclose(
+        result.scaled_log_lik(model, state, batch_index=0), expected_loss
+    )
+    # Pytree/JIT reconstruction must keep probabilities and alias tables.
+    restored = jax.jit(lambda batches: batches)(result)
+    for actual, expected_indices in zip(
+        jax.tree.leaves(restored.permute_indices(jax.random.key(12))),
+        jax.tree.leaves(result.permute_indices(jax.random.key(12))),
+        strict=True,
+    ):
+        np.testing.assert_array_equal(actual, expected_indices)
+
+
+@pytest.mark.parametrize("constructor", ["batches", "manager", "init"])
+@pytest.mark.parametrize("same_size", [False, True])
+def test_grouped_sampling_weights(constructor, same_size):
+    n_b = 4 if same_size else 6
+    variables = [
+        lsl.Var.new_obs(jnp.arange(float(n)), lsl.Dist(tfd.Normal, 0.0, 1.0), name=name)
+        for name, n in [("a", 4), ("x", 4), ("b", n_b), ("c", 8)]
+    ]
+    model = lsl.Model(variables)
+    groups = [["a", "x"], ["b"], ["c"]]
+    weights = {"x": np.arange(1.0, 5.0), "b": np.arange(n_b, 0, -1.0)}
+    expected = BatchManager(
+        [
+            Batches(
+                group,
+                n,
+                2,
+                sample_with_replacement=True,
+                sampling_weights=weights.get(group[-1]),
+            )
+            for group, n in zip(groups, [4, n_b, 8], strict=True)
+        ],
+        epoch_size="max",
+    ).start_epoch(jax.random.key(7))
+    if constructor == "init":
+        result = BatchManager(
+            [
+                Batches(group, n, 2, sample_with_replacement=True)
+                for group, n in zip(groups, [4, n_b, 8], strict=True)
+            ],
+            epoch_size="max",
+            sampling_weights=weights,
+        )
+    else:
+        cls = Batches if constructor == "batches" else BatchManager
+        extra = {"multi_size": "manager"} if constructor == "batches" else {}
+        result = cls.from_model(
+            model,
+            batch_size=2,
+            position_keys=groups if same_size else ["a", "x", "b", "c"],
+            sample_with_replacement=True,
+            sampling_weights=weights,
+            **extra,
+        )
+    assert isinstance(result, BatchManager)
+    result.start_epoch(jax.random.key(7))
+    assert result.batches[2].sampling_probabilities is None
+    for actual, reference in zip(result.batches, expected.batches, strict=True):
+        np.testing.assert_array_equal(actual.batch_indices, reference.batch_indices)
+    position = model.extract_position(["a", "x", "b", "c"])
+    for i in range(result.n_full_batches):
+        state = model.update_state(
+            result.get_batched_position(position, i), model.state
+        )
+        np.testing.assert_allclose(
+            result.scaled_log_lik(model, state, batch_index=i),
+            expected.scaled_log_lik(model, state, batch_index=i),
+        )
+
+
+@pytest.mark.parametrize("constructor", ["batches", "manager", "init"])
+@pytest.mark.parametrize(
+    "weights, message",
+    [
+        ([1, 2, 3, 4], "Multiple batch groups"),
+        ({"unknown": [1, 2, 3, 4]}, "Unknown sampling_weights"),
+        ({"a": [1, 2, 3, 4], "x": [1, 2, 3, 4]}, "only one position key"),
+        ({"a": [1, 2]}, "length axis_size"),
+        ({"a": [1, 2, 0, 4]}, "finite, positive"),
+        ({"a": [1, 2, float("nan"), 4]}, "finite, positive"),
+        ({"a": None}, "must be weight vectors"),
+    ],
+)
+def test_grouped_sampling_weights_validation(constructor, weights, message):
+    groups = [["a", "x"], ["b"]]
+    with pytest.raises(ValueError, match=message):
+        if constructor == "init":
+            BatchManager(
+                [
+                    Batches(group, 4, 2, sample_with_replacement=True)
+                    for group in groups
+                ],
+                sampling_weights=weights,
+            )
+        else:
+            model = lsl.Model(
+                [
+                    lsl.Var.new_obs(jnp.arange(4.0), name=name)
+                    for name in ["a", "x", "b"]
+                ]
+            )
+            cls = Batches if constructor == "batches" else BatchManager
+            extra = {"multi_size": "manager"} if constructor == "batches" else {}
+            cls.from_model(
+                model,
+                2,
+                position_keys=groups,
+                sample_with_replacement=True,
+                sampling_weights=weights,
+                **extra,
+            )
+
+
+@pytest.mark.parametrize("constructor", ["batches", "manager", "init"])
+def test_factory_weights_require_replacement(constructor):
+    with pytest.raises(ValueError, match="requires sample_with_replacement=True"):
+        if constructor == "init":
+            BatchManager([Batches(["y"], 4, 2)], sampling_weights=[1, 2, 3, 4])
+        else:
+            model = lsl.Model([lsl.Var.new_obs(jnp.arange(4.0), name="y")])
+            cls = Batches if constructor == "batches" else BatchManager
+            cls.from_model(model, 2, sampling_weights=[1, 2, 3, 4])
+
+
+def test_manager_weight_overrides_preserve_originals_and_unspecified_children():
+    a = Batches(
+        ["a"], 4, 2, sample_with_replacement=True, sampling_weights=[4, 3, 2, 1]
+    )
+    b = Batches(
+        ["b"], 4, 2, sample_with_replacement=True, sampling_weights=[1, 3, 1, 3]
+    )
+    c = Batches(["c"], 4, 2)
+    manager = BatchManager([a, b, c], sampling_weights={"a": [1, 2, 3, 4]})
+    assert a.sampling_probabilities is not None
+    assert manager.batches[0].sampling_probabilities is not None
+    np.testing.assert_allclose(a.sampling_probabilities, [0.4, 0.3, 0.2, 0.1])
+    np.testing.assert_allclose(
+        manager.batches[0].sampling_probabilities, [0.1, 0.2, 0.3, 0.4]
+    )
+    assert manager.batches[1] is b
+    assert manager.batches[2] is c
