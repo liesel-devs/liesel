@@ -1450,6 +1450,45 @@ def test_split_manager_requires_batch_manager():
         )
 
 
+@pytest.mark.parametrize("axis", [1, -2])
+def test_batch_axis_must_exist_in_training_array(axis):
+    with pytest.raises(ValueError, match="batch axis.*shape"):
+        OptimEngine(
+            loss=_loss(),
+            loss_monitor="train_full_data",
+            batches=Batches(
+                ["y"], axis_size=1, batch_size=None, default_batch_axis=axis
+            ),
+            optimizers=[_optimizer()],
+            stopper=Stopper(epochs=4, patience=2),
+            seed=1,
+            initial_state={},
+        )
+
+
+@pytest.mark.parametrize(
+    "batches",
+    [
+        Batches([], axis_size=10, batch_size=None),
+        Batches(
+            ["y"], axis_size=1, batch_size=None, sample_size=10, batch_sample_size=10
+        ),
+    ],
+)
+def test_batch_validation_allows_full_data_adapters_and_custom_sample_sizes(batches):
+    engine = OptimEngine(
+        loss=_loss(),
+        loss_monitor="train_full_data",
+        batches=batches,
+        optimizers=[_optimizer()],
+        stopper=Stopper(epochs=4, patience=2),
+        seed=1,
+        initial_state={},
+    )
+
+    assert engine.batches is batches
+
+
 def test_batch_keys_must_be_present_in_training_split():
     with pytest.raises(ValueError, match="split.train"):
         OptimEngine(
@@ -1532,8 +1571,11 @@ def test_progress_defaults_and_linked_count_properties():
 
 
 def test_progress_count_aliases_override_intervals():
+    split = PositionSplit(
+        Position({"y": jnp.arange(10.0)}), Position({}), Position({}), 10, 0, 0
+    )
     engine = OptimEngine(
-        loss=_loss(),
+        loss=SequenceLoss(split),
         loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         batches=Batches(["y"], axis_size=10, batch_size=1, shuffle=False),
         optimizers=[_optimizer()],

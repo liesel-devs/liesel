@@ -31,7 +31,7 @@ from ._engine_utils import (
     _progress_print_rate,
     _validate_positive_int,
 )
-from .batch import Batches
+from .batch import Batches, BatchManager
 from .loss import Loss, NegLogProbLoss
 from .optimizer import LBFGS, Optimizer, OptimizerLike
 from .split import PositionSplitManager
@@ -206,7 +206,10 @@ class OptimEngine:
     stopper
         Early-stopping and maximum-epoch configuration.
     seed
-        Integer seed or JAX PRNG key used for batching and stochastic losses.
+        Integer seed or JAX PRNG key for batch shuffling or random batch sampling,
+        and for losses or optimizers that use ``carry.key``. Starting parameters
+        come from ``loss.position()``; the data split is already defined. Resuming
+        a checkpoint uses its saved random key.
     initial_state
         Initial model state passed into :class:`.OptimCarry`.
     prune_history
@@ -557,8 +560,8 @@ class OptimEngine:
         ------
         ValueError
             If a multi-size split is paired with single-size batches, or if batches
-            reference keys missing from the training split, or if built-in L-BFGS
-            is paired with mini-batches.
+            reference missing keys or incompatible array shapes in the training
+            split, or if built-in L-BFGS is paired with mini-batches.
         """
         if isinstance(self.split, PositionSplitManager) and isinstance(
             self.batches, Batches
@@ -584,6 +587,14 @@ class OptimEngine:
                 "Batch position keys must be present in split.train, but these keys "
                 f"are missing: {missing}."
             )
+
+        batches = (
+            self.batches.batches
+            if isinstance(self.batches, BatchManager)
+            else (self.batches,)
+        )
+        for batch in batches:
+            batch._validate_position(self.split.train)
 
     def _name_optimizers(self) -> Sequence[OptimizerLike]:
         """

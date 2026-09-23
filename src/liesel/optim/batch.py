@@ -649,7 +649,33 @@ class Batches:
         default_batch_axis: int = 0,
         epoch_size: Literal["strict", "min", "max"] | int = "max",
     ) -> Batches | BatchManager:
-        """Build training batches directly from a completed position split."""
+        """Build training batches directly from a completed position split.
+
+        Parameters
+        ----------
+        split
+            Training, validation, and test data. Only training data is batched.
+        batch_size
+            Rows per batch in each group. ``None`` uses all training rows.
+        shuffle
+            Shuffle training rows each epoch. Ignored for full-data batches.
+        batch_axes
+            Mapping from observed variable names to batch axes. Set this explicitly
+            for non-leading axes; axes are not copied from the split.
+        default_batch_axis
+            Axis for variables missing from ``batch_axes``.
+        epoch_size
+            For multiple groups, choose ``"max"``, ``"min"``, ``"strict"``, or a
+            positive number of steps. The default ``"max"`` follows the group with
+            the most batches. See :class:`BatchManager` for the policies.
+
+        Returns
+        -------
+        Batches or BatchManager
+            One batch configuration, or a manager for multiple groups. A group
+            smaller than ``batch_size`` uses sampling with replacement when
+            building a manager.
+        """
         if isinstance(split, PositionSplitManager):
             children = [
                 cls(
@@ -1202,6 +1228,24 @@ class Batches:
         batch_indices = jnp.reshape(self.indices[:n_indices], (-1, self.batch_size))
         return batch_indices
 
+    def _validate_position(self, position: Position) -> None:
+        """Check array shapes without slicing data or changing batch indices."""
+        assert isinstance(self.batch_axes, dict)
+        for key in self.position_keys:
+            axis = self.batch_axes.get(key, self.default_batch_axis)
+            shape = jnp.shape(position[key])
+            if not -len(shape) <= axis < len(shape):
+                raise ValueError(
+                    f"{key!r} has invalid batch axis {axis} for shape {shape}."
+                )
+            if shape[axis] != self.axis_size:
+                raise ValueError(
+                    f"{key!r} has length {shape[axis]} on batch axis {axis}, "
+                    f"but batches.axis_size={self.axis_size}. "
+                    "If data were split on this axis, build batches from the training "
+                    "split with Batches.from_split(split, batch_size=...)."
+                )
+
     def get_batched_position(
         self, position: Position, batch_index: int | jax.Array
     ) -> Position:
@@ -1225,7 +1269,8 @@ class Batches:
         Raises
         ------
         ValueError
-            If an entry's length along its batching axis is not equal to ``axis_size``.
+            If a batching axis is invalid or an entry's length along that axis
+            is not equal to ``axis_size``.
 
         Examples
         --------
@@ -1250,18 +1295,12 @@ class Batches:
         >>> batches.get_batched_position(position, batch_index=0)["x"].tolist()
         [[0, 1], [4, 5], [8, 9]]
         """
+        self._validate_position(position)
         idx = self.batch_indices[batch_index]
         batched_position = {}
         assert isinstance(self.batch_axes, dict)
         for key in self.position_keys:
             axis = self.batch_axes.get(key, self.default_batch_axis)
-
-            n_this_key = jnp.shape(position[key])[axis]
-            if not jnp.shape(position[key])[axis] == self.axis_size:
-                raise ValueError(
-                    f"{key} has axis_size={n_this_key}, which is incompatible with the "
-                    f"given axis_size={self.axis_size}."
-                )
 
             batched = jnp.take(position[key], idx, axis=axis)
             batched_position[key] = batched

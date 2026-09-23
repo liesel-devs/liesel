@@ -28,7 +28,13 @@ Split responses and their covariates together. For an existing ``model``:
 
 This puts 70% of rows in training, 20% in validation, and 10% in testing, subject
 to rounding. Splits shuffle by default; set ``shuffle=False`` for an ordered
-split. Give both the split and ``LieselOptim`` a seed to repeat a run.
+split.
+
+The split's ``seed`` chooses which rows go into each part. The seed passed to
+``LieselOptim`` controls batch shuffling or random batch sampling during fitting.
+Custom losses and optimizers can also use its random key through ``carry.key``.
+Starting parameter values come from the model. Set both seeds to repeat the
+split and fitting randomness; seed any random data or starting values separately.
 
 For separate groups, make the grouping explicit:
 
@@ -46,10 +52,11 @@ even if their lengths happen to match. Flat or omitted ``position_keys`` group
 observed arrays by length; use nested groups when equal length does not mean
 matching rows. Every group must have validation data if any group does.
 
-Use ``split_axes`` for observations on an axis other than zero. A value of
-``None`` keeps a shared table unchanged in every split and out of automatic
-batches. Keep per-observation covariates, weights, and offsets with the response.
-When building batches yourself, set their ``batch_axes`` too.
+Set ``split_axes`` when creating a split for observations on an axis other than
+zero. A value of ``None`` keeps a shared table unchanged in every split and out
+of automatic batches. Keep per-observation covariates, weights, and offsets with
+the response.
+Set the corresponding ``batch_axes`` when creating batches too.
 
 ``PositionSplit`` holds the split data. ``Split`` holds reusable row indices;
 call ``split_position()`` to apply them. Manager classes handle several groups.
@@ -74,20 +81,37 @@ See :meth:`~liesel.optim.PositionSplit.from_model` for the factory options.
 Batch one or several groups
 ---------------------------
 
-Pass ``split=split`` and ``batch_size=32`` to ``LieselOptim``. It builds the
-batches for you. ``batch_size=None`` uses all training data in each update.
+Create batches from the training split, then pass both to ``LieselOptim``:
+
+.. code-block:: python
+
+   batches = opt.Batches.from_split(split, batch_size=32)
+   result = opt.LieselOptim(
+       model,
+       split=split,
+       batches=batches,
+       loss_monitor="validation",
+       seed=43,
+   ).fit()
+
+Omit ``batches`` to use all training data in each update. Set batch size,
+shuffling, axes, and epoch policy when creating the batches.
+
+The engine checks each training array's length along its batch axis before
+fitting. Splitting and batching may use different axes. When holding out rows
+on the same axis, build batches from the split so they use the training size.
 
 Only complete batches are used. With shuffling, the leftover rows can change
 between epochs. For multiple groups, a :class:`~liesel.optim.BatchManager`
 supplies one batch from each group at every update.
 
-The automatic ``epoch_size="max"`` setting follows the group with the most
-batches. Smaller groups start another shuffled pass as needed. Other choices
-are ``"min"`` (stop with the shortest group), ``"strict"`` (require equal batch
+The ``Batches.from_split`` default, ``epoch_size="max"``, follows the group with
+the most batches. Smaller groups start another shuffled pass as needed. Other
+choices are ``"min"`` (stop with the shortest group), ``"strict"`` (require equal batch
 counts), or a positive number of steps. Direct managers default to ``"strict"``.
 
 ``sample_with_replacement=True`` draws rows independently, so duplicates are
-possible. Automatic batching uses this for a group smaller than the requested
+possible. ``Batches.from_split`` uses this for a group smaller than the requested
 batch size. Such an epoch need not visit every row.
 
 .. raw:: html

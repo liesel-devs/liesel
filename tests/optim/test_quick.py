@@ -78,7 +78,7 @@ def test_seeded_automatic_full_data_setup_preserves_rows_and_repeats_fit(
         quick = LieselOptim(
             model,
             seed=42,
-            batch_size=2,
+            batches=Batches.from_model(model, batch_size=2, multi_size="manager"),
             loss_monitor=EmaTrainLossMonitor(1),
             stopper=Stopper(epochs=3, patience=3),
             show_progress=False,
@@ -98,35 +98,42 @@ def test_lieseloptim_requires_explicit_loss_monitor():
         LieselOptim(_normal_model())  # ty: ignore[missing-argument]
 
 
-def test_lieseloptim_removed_batch_mode_is_rejected():
-    with pytest.raises(TypeError):
+@pytest.mark.parametrize(
+    "keyword",
+    [
+        "batch_mode",
+        "axis_size",
+        "split_axes",
+        "default_split_axis",
+        "batch_size",
+        "shuffle_batches",
+        "epoch_size",
+        "batch_axis_size",
+    ],
+)
+def test_lieseloptim_removed_data_shortcuts_are_rejected(keyword):
+    with pytest.raises(TypeError, match=keyword):
         LieselOptim(
             _normal_model(),
             loss_monitor="train_full_data",
-            batch_mode="resample",  # ty: ignore[unknown-argument]
+            **{keyword: None},  # ty: ignore[invalid-argument-type]
         )
 
 
 @pytest.mark.parametrize(("epoch_size", "expected"), [("max", 4), ("min", 2), (3, 3)])
-def test_lieseloptim_resolves_multi_branch_epoch_size(epoch_size, expected):
+def test_lieseloptim_preserves_explicit_multi_branch_batches(epoch_size, expected):
+    model = _two_branch_model()
+    split = PositionSplit.from_model(model, multi_size="manager")
+    batches = Batches.from_split(split, batch_size=2, epoch_size=epoch_size)
     optimizer = LieselOptim(
-        _two_branch_model(),
+        model,
         loss_monitor="train_full_data",
-        batch_size=2,
-        epoch_size=epoch_size,
+        split=split,
+        batches=batches,
     )
+    assert optimizer.batches is batches
     assert isinstance(optimizer.batches, BatchManager)
     assert optimizer.batches.n_full_batches == expected
-
-
-def test_lieseloptim_strict_rejects_unequal_multi_branch_counts():
-    with pytest.raises(ValueError, match="same n_full_batches"):
-        LieselOptim(
-            _two_branch_model(),
-            loss_monitor="train_full_data",
-            batch_size=2,
-            epoch_size="strict",
-        )
 
 
 def test_lieseloptim_validation_monitor_requires_validation_data():
@@ -162,7 +169,16 @@ def test_default_build_engine_uses_opinionated_defaults():
     assert engine.step_progress_update_every == 10
 
 
-def test_batch_size_shortcut_builds_training_batches():
+def test_default_stopper_is_independent_between_instances():
+    model = _normal_model()
+    first = LieselOptim(model, loss_monitor="train_full_data", seed=1).build_engine()
+    second = LieselOptim(model, loss_monitor="train_full_data", seed=1).build_engine()
+
+    first.stopper.epochs = 50
+    assert second.stopper.epochs == 1000
+
+
+def test_explicit_batches_use_training_split():
     model = _normal_model()
     split = PositionSplit.from_model(model, validate_axis_share=0.25)
 
@@ -170,7 +186,7 @@ def test_batch_size_shortcut_builds_training_batches():
         model,
         loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         split=split,
-        batch_size=2,
+        batches=Batches.from_split(split, batch_size=2),
         seed=1,
     ).build_engine()
 
@@ -179,48 +195,9 @@ def test_batch_size_shortcut_builds_training_batches():
     assert engine.batches.batch_size == 2
 
 
-def test_old_batch_axis_size_shortcut_still_works():
-    model = _normal_model()
-
-    engine = LieselOptim(
-        model,
-        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
-        batch_axis_size=2,
-        seed=1,
-    ).build_engine()
-
-    assert isinstance(engine.batches, Batches)
-    assert engine.batches.batch_size == 2
-
-
-def test_batches_and_batch_size_are_mutually_exclusive():
-    model = _normal_model()
-    batches = Batches(["y"], axis_size=6, batch_size=None)
-
-    with pytest.raises(ValueError, match="batches or batch_size"):
-        LieselOptim(
-            model,
-            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
-            batches=batches,
-            batch_size=2,
-        )
-
-
-def test_batch_size_and_old_keyword_are_mutually_exclusive():
-    model = _normal_model()
-
-    with pytest.raises(ValueError, match="batch_size or batch_axis_size"):
-        LieselOptim(
-            model,
-            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
-            batch_size=2,
-            batch_axis_size=2,
-        )
-
-
 def test_user_provided_batches_are_not_mutated():
     model = _normal_model()
-    batches = Batches(["y"], axis_size=2, batch_size=None)
+    batches = Batches(["y"], axis_size=6, batch_size=None)
 
     quick = LieselOptim(
         model,
@@ -232,7 +209,7 @@ def test_user_provided_batches_are_not_mutated():
 
     assert quick.batches is batches
     assert engine.batches is batches
-    assert batches.axis_size == 2
+    assert batches.axis_size == 6
 
 
 def test_multi_size_default_split_builds_batch_manager():
@@ -241,7 +218,6 @@ def test_multi_size_default_split_builds_batch_manager():
     engine = LieselOptim(
         model,
         loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
-        batch_size=None,
         seed=1,
     ).build_engine()
 
@@ -317,7 +293,7 @@ def test_progress_and_loss_monitor_are_passed_to_engine():
 
     engine = LieselOptim(
         model,
-        batch_size=1,
+        batches=Batches.from_model(model, batch_size=1),
         loss_monitor=loss_monitor,
         show_progress=False,
         progress_n_updates=7,
@@ -375,7 +351,7 @@ def test_batched_fit_handles_float32_model_with_x64_enabled():
         result = LieselOptim(
             model,
             loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
-            batch_size=2,
+            batches=Batches.from_model(model, batch_size=2),
             stopper=Stopper(epochs=1, patience=1),
             seed=1,
         ).fit()
@@ -384,7 +360,26 @@ def test_batched_fit_handles_float32_model_with_x64_enabled():
     assert result.history.loss_train.dtype == jnp.float32
 
 
-def test_fit_can_split_response_and_batch_shared_covariate_on_different_axes():
+@pytest.mark.parametrize("make_model", [_normal_model, _two_branch_model])
+@pytest.mark.parametrize("batch_size", [None, 2])
+def test_batches_from_unsplit_model_are_rejected_before_fitting(make_model, batch_size):
+    model = make_model()
+    split = PositionSplit.from_model(
+        model, validate_axis_share=0.25, seed=42, multi_size="manager"
+    )
+    batches = Batches.from_model(model, batch_size=batch_size, multi_size="manager")
+    optim = LieselOptim(
+        model, split=split, batches=batches, loss_monitor="validation", seed=1
+    )
+
+    with pytest.raises(ValueError, match=r"batch axis.*axis_size.*Batches\.from_split"):
+        optim.build_engine()
+
+
+@pytest.mark.parametrize("batch_axis", [1, -1])
+def test_fit_can_split_response_and_batch_shared_covariate_on_different_axes(
+    batch_axis,
+):
     loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
     response = lsl.Var.new_obs(
         jnp.arange(24.0).reshape(4, 6),
@@ -405,7 +400,7 @@ def test_fit_can_split_response_and_batch_shared_covariate_on_different_axes():
         batch_size=3,
         position_keys=["response", "land"],
         axis_size=6,
-        batch_axes={"response": 1, "land": 0},
+        batch_axes={"response": batch_axis, "land": 0},
         shuffle=False,
     )
 
@@ -420,6 +415,27 @@ def test_fit_can_split_response_and_batch_shared_covariate_on_different_axes():
     ).fit()
 
     assert jnp.isfinite(result.history.loss_train[0])
+
+
+def test_batch_manager_validates_later_groups_too():
+    model = _two_branch_model()
+    split = PositionSplitManager.from_model(
+        model, position_keys=[["y1"], ["y2"]], validate_axis_share=0.25, seed=42
+    )
+    batches = Batches.from_split(split, batch_size=2)
+    assert isinstance(batches, BatchManager)
+    batches = BatchManager(
+        [
+            batches.batches[0],
+            Batches.from_model(model, batch_size=2, position_keys=["y2"]),
+        ],
+        epoch_size="max",
+    )
+
+    with pytest.raises(ValueError, match="y2.*batch axis.*axis_size"):
+        LieselOptim(
+            model, split=split, batches=batches, loss_monitor="validation", seed=1
+        ).build_engine()
 
 
 def test_fit_handles_float64_model_with_x64_enabled():

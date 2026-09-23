@@ -343,10 +343,16 @@ def make_model_engine(optimizer):
         )
         for n in (8, 5)
     ]
+    model = lsl.Model(observations)
+    batches = (
+        Batches.from_model(model, batch_size=2, multi_size="manager")
+        if optimizer == "adam"
+        else None
+    )
     return LieselOptim(
-        lsl.Model(observations),
+        model,
         loss_monitor="train_full_data",
-        batch_size=2 if optimizer == "adam" else None,
+        batches=batches,
         optimizers=optimizer,
         stopper=Stopper(epochs=6, patience=2, min_epochs=6),
         seed=21,

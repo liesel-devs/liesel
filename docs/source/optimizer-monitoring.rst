@@ -64,9 +64,12 @@ For an existing ``model``:
 
 .. code-block:: python
 
+   split = opt.PositionSplit.from_model(model)
+   batches = opt.Batches.from_split(split, batch_size=32)
    result = opt.LieselOptim(
        model,
-       batch_size=32,
+       split=split,
+       batches=batches,
        loss_monitor=opt.EmaTrainLossMonitor(effective_window=2.0),
        stopper=stopper,
        seed=42,

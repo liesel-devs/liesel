@@ -103,7 +103,7 @@ def test_single_split_factory_accepts_one_explicit_group_by_default():
 
 
 @pytest.mark.parametrize("factory", [PositionSplit, PositionSplitManager, Split])
-def test_groups_and_passthrough_survive_position_splits_and_automatic_batches(factory):
+def test_groups_and_passthrough_survive_position_splits_and_explicit_batches(factory):
     model = _model(shared=True)
     kwargs = {"multi_size": "manager"} if factory in (PositionSplit, Split) else {}
     split = factory.from_model(
@@ -124,8 +124,7 @@ def test_groups_and_passthrough_survive_position_splits_and_automatic_batches(fa
         model,
         split=split,
         optimizers=[],
-        split_axes={"x_a": 1, "shared": None},
-        batch_size=4,
+        batches=Batches.from_split(split, batch_size=4, batch_axes={"x_a": 1}),
         loss_monitor=EmaTrainLossMonitor(1),
         seed=42,
     )
