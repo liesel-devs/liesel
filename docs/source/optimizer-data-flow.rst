@@ -110,9 +110,15 @@ the most batches. Smaller groups start another shuffled pass as needed. Other
 choices are ``"min"`` (stop with the shortest group), ``"strict"`` (require equal batch
 counts), or a positive number of steps. Direct managers default to ``"strict"``.
 
-``sample_with_replacement=True`` draws rows independently, so duplicates are
-possible. ``Batches.from_split`` uses this for a group smaller than the requested
-batch size. Such an epoch need not visit every row.
+Pass ``sample_with_replacement=True`` to draw rows independently, allowing
+duplicates. Managers also enable this for groups smaller than the requested batch
+size. Such an epoch need not visit every row. For weighted sampling, pass
+``sampling_weights`` in training-row order.
+
+:meth:`~liesel.optim.Batches.from_split` also accepts custom sample sizes and
+likelihood axes. :meth:`~liesel.optim.BatchManager.from_split` accepts the same
+options and always returns a manager. For different settings per group, create
+each child with ``Batches.from_split`` and combine them with ``BatchManager``.
 
 .. raw:: html
 

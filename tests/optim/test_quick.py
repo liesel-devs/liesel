@@ -377,8 +377,12 @@ def test_batches_from_unsplit_model_are_rejected_before_fitting(make_model, batc
 
 
 @pytest.mark.parametrize("batch_axis", [1, -1])
+@pytest.mark.parametrize(
+    "factory", [Batches.from_model, Batches.from_split, BatchManager.from_split]
+)
 def test_fit_can_split_response_and_batch_shared_covariate_on_different_axes(
     batch_axis,
+    factory,
 ):
     loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
     response = lsl.Var.new_obs(
@@ -395,8 +399,8 @@ def test_fit_can_split_response_and_batch_shared_covariate_on_different_axes(
         validate_axis_share=0.25,
         split_axes={"response": 0, "land": None},
     )
-    batches = Batches.from_model(
-        model,
+    batches = factory(
+        model if factory == Batches.from_model else split,
         batch_size=3,
         position_keys=["response", "land"],
         axis_size=6,

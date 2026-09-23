@@ -80,6 +80,160 @@ class TestBatches:
         assert batches.axis_size == (6, 4)
         assert batches.n_full_batches == 3
 
+    @pytest.mark.parametrize("factory", [Batches.from_split, BatchManager.from_split])
+    @pytest.mark.parametrize("managed", [False, True])
+    def test_from_split_supports_weighted_sampling_and_scaling(self, factory, managed):
+        split = PositionSplit(
+            Position({"x": jnp.arange(12).reshape(2, 6)}),
+            Position({}),
+            Position({}),
+            6,
+            0,
+            0,
+            sample_sizes={"train": 24},
+        )
+        result = factory(
+            PositionSplitManager([split]) if managed else split,
+            batch_axis_size=2,
+            batch_axes={"x": -1},
+            sample_with_replacement=True,
+            sampling_weights={"x": jnp.arange(1.0, 7.0)},
+            sample_size=30,
+            batch_sample_size=5,
+            likelihood_axes={"x": -1},
+            epoch_size=4,
+        )
+        started = result.start_epoch(key(1))
+        child = started.batches[0] if isinstance(started, BatchManager) else started
+        assert child.axis_size == 6
+        assert child.batch_sample_scale == 6
+        assert child.likelihood_axes == {"x": -1}
+        assert jnp.allclose(child.sampling_probabilities, jnp.arange(1.0, 7.0) / 21)
+        assert child.get_batched_position(split.train, 0)["x"].shape == (2, 2)
+        assert jnp.all((child.batch_indices >= 0) & (child.batch_indices < 6))
+        if isinstance(started, BatchManager):
+            assert started.n_full_batches == 4
+
+    @pytest.mark.parametrize("factory", [Batches.from_split, BatchManager.from_split])
+    def test_from_split_preserves_equal_sized_groups_and_routes_weights(self, factory):
+        split = PositionSplitManager(
+            [
+                PositionSplit(
+                    Position({"x": jnp.arange(4)}),
+                    Position({}),
+                    Position({}),
+                    4,
+                    0,
+                    0,
+                    sample_sizes={"train": 8},
+                ),
+                PositionSplit(
+                    Position({"y": jnp.arange(4)}),
+                    Position({}),
+                    Position({}),
+                    4,
+                    0,
+                    0,
+                    sample_sizes={"train": 12},
+                ),
+            ]
+        )
+        batches = factory(
+            split,
+            batch_size=2,
+            sample_with_replacement=True,
+            sampling_weights={"y": jnp.array([1.0, 2.0, 3.0, 4.0])},
+        )
+        assert isinstance(batches, BatchManager)
+        assert [child.position_keys for child in batches.batches] == [["x"], ["y"]]
+        assert batches.sample_sizes == (8, 12)
+        assert batches.batch_sample_sizes == (4, 6)
+        assert batches.batches[0].sampling_probabilities is None
+        assert jnp.allclose(
+            batches.batches[1].sampling_probabilities, jnp.array([0.1, 0.2, 0.3, 0.4])
+        )
+        selected = factory(
+            split, batch_size=2, position_keys=["y"], infer_sample_size=False
+        )
+        assert isinstance(selected, BatchManager)
+        assert selected.position_keys == ["y"]
+        assert selected.sample_sizes == (None,)
+        assert selected.batch_sample_scales == (2.0,)
+
+    @pytest.mark.parametrize("factory", [Batches.from_split, BatchManager.from_split])
+    def test_from_split_batches_different_axes_and_passthrough_data(self, factory):
+        split = PositionSplit(
+            Position({"y": jnp.arange(24).reshape(3, 8)}),
+            Position({"y": jnp.empty((0, 8))}),
+            Position({"y": jnp.empty((0, 8))}),
+            3,
+            0,
+            0,
+            passthrough=Position({"x": jnp.arange(8)}),
+        )
+        batches = factory(
+            split,
+            batch_size=2,
+            position_keys=["y", "x"],
+            batch_axes={"y": -1},
+            shuffle=False,
+        )
+        child = batches.batches[0] if isinstance(batches, BatchManager) else batches
+        assert child.axis_size == 8
+        assert child.batch_sample_scale == 4
+        result = child.get_batched_position(split.train, 0)
+        assert result["y"].shape == (3, 2)
+        assert result["x"].tolist() == [0, 1]
+
+    @pytest.mark.parametrize("factory", [Batches.from_split, BatchManager.from_split])
+    @pytest.mark.parametrize(
+        "kwargs, message",
+        [
+            ({"axis_size": 7}, "axis_size"),
+            ({"default_batch_axis": 1}, "invalid batch axis"),
+            ({"position_keys": ["missing"]}, "missing from split.train"),
+            ({"position_keys": ["x", "x"]}, "Duplicate position_keys"),
+            ({"sample_with_replacement": True, "shuffle": False}, "shuffle=True"),
+            ({"sampling_weights": jnp.ones(6)}, "sample_with_replacement=True"),
+            (
+                {"sample_with_replacement": True, "sampling_weights": jnp.ones(8)},
+                "length axis_size",
+            ),
+            (
+                {"sampling_weights": {"missing": jnp.ones(6)}},
+                "Unknown sampling_weights",
+            ),
+            ({"batch_axis_size": 2}, "batch_size or batch_axis_size"),
+        ],
+    )
+    def test_from_split_rejects_invalid_options(self, factory, kwargs, message):
+        split = PositionSplit(
+            Position({"x": jnp.arange(6)}), Position({}), Position({}), 6, 0, 0
+        )
+        with pytest.raises((ValueError, TypeError), match=message):
+            factory(split, batch_size=2, **kwargs)
+
+    def test_manager_from_split_enables_oversized_replacement(self):
+        split = PositionSplit(
+            Position({"x": jnp.arange(3)}), Position({}), Position({}), 3, 0, 0
+        )
+        batches = BatchManager.from_split(split, batch_size=5)
+        assert batches.batches[0].sample_with_replacement
+        assert batches.batch_size == (5,)
+
+    @pytest.mark.parametrize("factory", [Batches.from_split, BatchManager.from_split])
+    @pytest.mark.parametrize("keys", [None, []])
+    def test_from_split_full_data_and_empty_key_adapters(self, factory, keys):
+        split = PositionSplit(
+            Position({"x": jnp.arange(6)}), Position({}), Position({}), 6, 0, 0
+        )
+        batches = factory(split, batch_size=None, position_keys=keys)
+        child = batches.batches[0] if isinstance(batches, BatchManager) else batches
+        assert child.is_full_data
+        assert not child.shuffle
+        assert child.batch_sample_scale == 1
+        assert child.position_keys == (["x"] if keys is None else [])
+
     def test_runs(self):
         Bi = Batches(["x"], axis_size=30, batch_size=4, shuffle=True)
         assert Bi.batch_indices.shape == (7, 4)

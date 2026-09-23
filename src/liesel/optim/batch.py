@@ -27,6 +27,13 @@ from .types import Array, ModelInterface, ModelState, Position
 _MISSING = object()
 
 
+def _position_axis_size(position: Position, key: str, axis: int) -> int:
+    shape = jnp.shape(position[key])
+    if not -len(shape) <= axis < len(shape):
+        raise ValueError(f"{key!r} has invalid batch axis {axis} for shape {shape}.")
+    return shape[axis]
+
+
 def _sampling_categories(labels: Array) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     # Object conversion preserves label identity and exposes mixed string/numeric
     # sequences before NumPy can silently coerce them to strings or floats.
@@ -643,66 +650,172 @@ class Batches:
     def from_split(
         cls,
         split: PositionSplit | PositionSplitManager,
-        batch_size: int | None,
+        batch_size: int | None | object = _MISSING,
         shuffle: bool = True,
         batch_axes: dict[str, int] | None = None,
         default_batch_axis: int = 0,
         epoch_size: Literal["strict", "min", "max"] | int = "max",
+        *,
+        position_keys: Sequence[str] | None = None,
+        axis_size: int | None = None,
+        sample_size: float | None = None,
+        batch_sample_size: float | None = None,
+        infer_sample_size: bool = True,
+        sample_with_replacement: bool = False,
+        sampling_weights: Array | Mapping[str, Array] | None = None,
+        likelihood_axes: dict[str, int] | None = None,
+        batch_axis_size: int | None | object = _MISSING,
     ) -> Batches | BatchManager:
-        """Build training batches directly from a completed position split.
+        """Build batches from training data, preserving the split's groups.
 
         Parameters
         ----------
         split
-            Training, validation, and test data. Only training data is batched.
+            Completed split. Only training data is batched.
         batch_size
             Rows per batch in each group. ``None`` uses all training rows.
         shuffle
             Shuffle training rows each epoch. Ignored for full-data batches.
         batch_axes
-            Mapping from observed variable names to batch axes. Set this explicitly
-            for non-leading axes; axes are not copied from the split.
+            Mapping from variable names to batch axes. Set this explicitly for
+            non-leading axes; axes are not copied from the split.
         default_batch_axis
             Axis for variables missing from ``batch_axes``.
         epoch_size
             For multiple groups, choose ``"max"``, ``"min"``, ``"strict"``, or a
-            positive number of steps. The default ``"max"`` follows the group with
-            the most batches. See :class:`BatchManager` for the policies.
+            positive number of steps. See :class:`BatchManager` for the policies.
+        position_keys
+            Entries to batch. Defaults to the split's partitioned entries, leaving
+            passthrough data untouched. Explicit keys may include passthrough data.
+            A manager keeps existing groups and omits groups with no selected keys.
+            An empty sequence creates full-data adapters.
+        axis_size
+            Override the axis length. By default, read it from each group's training
+            arrays along their batching axes. All selected entries must match it.
+        sample_size
+            Effective training sample size. Defaults to the split's training sample
+            size when ``infer_sample_size=True``; otherwise uses the axis length.
+        batch_sample_size
+            Effective sample size per batch. Defaults to ``sample_size`` times the
+            fraction of rows in a batch.
+        infer_sample_size
+            Reuse sample sizes stored on the split. No model is evaluated.
+        sample_with_replacement
+            Draw rows independently with replacement. Requires shuffling and an
+            explicit batch size. Managers also enable this for oversized batches.
+        sampling_weights
+            Positive weights in training-row order. Supply a vector for one group,
+            or a mapping from one selected key per group to its vector. Omitted
+            groups use uniform sampling. Requires replacement sampling.
+        likelihood_axes
+            Map observed variable names to axes of their pointwise log probabilities
+            for weighted likelihood correction. See :class:`Batches`.
+        batch_axis_size
+            Alias for ``batch_size``. Pass only one of the two names.
 
         Returns
         -------
         Batches or BatchManager
-            One batch configuration, or a manager for multiple groups. A group
-            smaller than ``batch_size`` uses sampling with replacement when
-            building a manager.
+            A manager for a :class:`PositionSplitManager`, otherwise one batch
+            configuration. Explicit size overrides apply to every selected group.
+            For different settings per group, build children from individual splits
+            and pass them to ``BatchManager([...])``.
         """
+        batch_size = _resolve_batch_size(batch_size, batch_axis_size)
+        keys = list(
+            split.split_position_keys if position_keys is None else position_keys
+        )
+        missing = set(keys) - split.train.keys()
+        if missing:
+            raise ValueError(
+                f"Batch position keys missing from split.train: {missing}."
+            )
+
         if isinstance(split, PositionSplitManager):
-            children = [
-                cls(
-                    position_keys=child.split_position_keys,
-                    axis_size=child.train_axis_size,
-                    batch_size=batch_size,
-                    shuffle=False if batch_size is None else shuffle,
-                    batch_axes=batch_axes,
-                    default_batch_axis=default_batch_axis,
-                    sample_size=child.train_sample_size,
-                    sample_with_replacement=(
-                        batch_size is not None and batch_size > child.train_axis_size
-                    ),
+            groups = [
+                (
+                    child,
+                    child.split_position_keys
+                    if position_keys is None
+                    else [key for key in keys if key in child.train],
                 )
                 for child in split.splits
+                if not keys or any(key in child.train for key in keys)
             ]
+            unassigned = set(keys) - {key for _, group in groups for key in group}
+            if unassigned:
+                raise ValueError(
+                    f"Batch keys {unassigned} belong to no child split. "
+                    "Build batches for shared passthrough data separately."
+                )
+            weights = _sampling_weights_for_groups(
+                sampling_weights, [group_keys for _, group_keys in groups]
+            )
+            children = []
+            for (child, group_keys), weight in zip(groups, weights):
+                child_axis_size = axis_size
+                if child_axis_size is None:
+                    child_axis_size = (
+                        _position_axis_size(
+                            child.train,
+                            group_keys[0],
+                            (batch_axes or {}).get(group_keys[0], default_batch_axis),
+                        )
+                        if group_keys
+                        else child.train_axis_size
+                    )
+                batch = cls.from_split(
+                    child,
+                    batch_size=batch_size,
+                    shuffle=shuffle,
+                    batch_axes=batch_axes,
+                    default_batch_axis=default_batch_axis,
+                    position_keys=group_keys,
+                    axis_size=child_axis_size,
+                    sample_size=sample_size,
+                    batch_sample_size=batch_sample_size,
+                    infer_sample_size=infer_sample_size,
+                    sample_with_replacement=(
+                        sample_with_replacement
+                        or (batch_size is not None and batch_size > child_axis_size)
+                    ),
+                    sampling_weights=weight,
+                    likelihood_axes=likelihood_axes,
+                )
+                assert isinstance(batch, Batches)
+                children.append(batch)
             return BatchManager(children, epoch_size=epoch_size)
 
-        return cls(
-            position_keys=split.split_position_keys,
-            axis_size=split.train_axis_size,
+        if axis_size is None:
+            axis_size = (
+                _position_axis_size(
+                    split.train,
+                    keys[0],
+                    (batch_axes or {}).get(keys[0], default_batch_axis),
+                )
+                if keys
+                else split.train_axis_size
+            )
+        (weights,) = _sampling_weights_for_groups(sampling_weights, [keys])
+        batches = cls(
+            position_keys=keys,
+            axis_size=axis_size,
             batch_size=batch_size,
             shuffle=False if batch_size is None else shuffle,
             batch_axes=batch_axes,
             default_batch_axis=default_batch_axis,
-            sample_size=split.train_sample_size,
+            sample_size=(
+                split.train_sample_size
+                if infer_sample_size and sample_size is None
+                else sample_size
+            ),
+            batch_sample_size=batch_sample_size,
+            sample_with_replacement=sample_with_replacement,
+            sampling_weights=weights,
+            likelihood_axes=likelihood_axes,
         )
+        batches._validate_position(split.train)
+        return batches
 
     @classmethod
     @overload
@@ -1233,14 +1346,10 @@ class Batches:
         assert isinstance(self.batch_axes, dict)
         for key in self.position_keys:
             axis = self.batch_axes.get(key, self.default_batch_axis)
-            shape = jnp.shape(position[key])
-            if not -len(shape) <= axis < len(shape):
+            size = _position_axis_size(position, key, axis)
+            if size != self.axis_size:
                 raise ValueError(
-                    f"{key!r} has invalid batch axis {axis} for shape {shape}."
-                )
-            if shape[axis] != self.axis_size:
-                raise ValueError(
-                    f"{key!r} has length {shape[axis]} on batch axis {axis}, "
+                    f"{key!r} has length {size} on batch axis {axis}, "
                     f"but batches.axis_size={self.axis_size}. "
                     "If data were split on this axis, build batches from the training "
                     "split with Batches.from_split(split, batch_size=...)."
@@ -1696,6 +1805,56 @@ class BatchManager:
         self.batches = tuple(
             batch._replace_indices_for_manager(count) for batch in self.batches
         )
+
+    @classmethod
+    def from_split(
+        cls,
+        split: PositionSplit | PositionSplitManager,
+        batch_size: int | None | object = _MISSING,
+        shuffle: bool = True,
+        batch_axes: dict[str, int] | None = None,
+        default_batch_axis: int = 0,
+        epoch_size: Literal["strict", "min", "max"] | int = "max",
+        *,
+        position_keys: Sequence[str] | None = None,
+        axis_size: int | None = None,
+        sample_size: float | None = None,
+        batch_sample_size: float | None = None,
+        infer_sample_size: bool = True,
+        sample_with_replacement: bool = False,
+        sampling_weights: Array | Mapping[str, Array] | None = None,
+        likelihood_axes: dict[str, int] | None = None,
+        batch_axis_size: int | None | object = _MISSING,
+    ) -> BatchManager:
+        """Build a manager from training data, including a single split.
+
+        Accepts the same options as :meth:`Batches.from_split` and always returns
+        a manager. Split groups stay separate, even when their lengths match.
+        Weights must follow training-row order; size overrides apply to each group.
+        For different options per group, use
+        ``BatchManager([Batches.from_split(child, ...), ...])``.
+        """
+        if isinstance(split, PositionSplit):
+            split = PositionSplitManager([split])
+        batches = Batches.from_split(
+            split,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            batch_axes=batch_axes,
+            default_batch_axis=default_batch_axis,
+            epoch_size=epoch_size,
+            position_keys=position_keys,
+            axis_size=axis_size,
+            sample_size=sample_size,
+            batch_sample_size=batch_sample_size,
+            infer_sample_size=infer_sample_size,
+            sample_with_replacement=sample_with_replacement,
+            sampling_weights=sampling_weights,
+            likelihood_axes=likelihood_axes,
+            batch_axis_size=batch_axis_size,
+        )
+        assert isinstance(batches, BatchManager)
+        return cls(batches.batches, epoch_size=epoch_size)
 
     @classmethod
     def from_model(
