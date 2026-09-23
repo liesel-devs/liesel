@@ -10,6 +10,7 @@ Liesel: A Probabilistic Programming Framework
    :maxdepth: 1
 
    tutorials_overview
+   optimizer-migration
    optimizer-data-flow
    optimizer-weighted-batching
    optimizer-checkpointing
@@ -128,16 +129,16 @@ acccess to important diagnostics.
     ~liesel.goose.plot_density
     ~liesel.goose.plot_param
 
-Optimization
-*************
+Legacy optimization (deprecated)
+********************************
 
-It can often be beneficial to find good starting values to get your MCMC sampling scheme
-going. Goose provides the function :func:`.optim_flat` for this purpose, which allows you
-to run stochastic gradient descent on a liesel model.
+:func:`liesel.goose.optim_flat` is deprecated and emits a ``FutureWarning``.
+Use :class:`liesel.optim.LieselOptim` for new code, including finding starting
+values for MCMC. See :doc:`optimizer-migration` for a before-and-after example.
 
 .. autosummary::
     :toctree: generated
-    :caption: Optimization
+    :caption: Legacy optimization (deprecated)
     :recursive:
     :nosignatures:
 
@@ -149,8 +150,9 @@ to run stochastic gradient descent on a liesel model.
 Optimizer API
 *************
 
-The :mod:`liesel.optim` module provides the newer optimization engine, data-splitting
-utilities, and optimizer helpers.
+The :mod:`liesel.optim` module provides the recommended optimization API. Start
+with :class:`~liesel.optim.LieselOptim` and the
+:doc:`basic tutorial <tutorials/notebooks/09-liesel-optim-basic>`.
 
 The :doc:`optimizer-data-flow` guide provides interactive overviews of the splitting,
 batching, and likelihood-scaling behavior.

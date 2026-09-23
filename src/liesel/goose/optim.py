@@ -1,3 +1,4 @@
+import warnings
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, NotRequired, TypedDict
@@ -286,6 +287,10 @@ def optim_flat(
     """
     Optimize the parameters of a  Liesel :class:`.Model`.
 
+    .. deprecated:: 0.8.0
+        Use :class:`liesel.optim.LieselOptim` instead. See
+        :doc:`/optimizer-migration` for a migration example.
+
     Approximates maximum a posteriori (MAP) parameter estimates by minimizing the
     negative log posterior probability of the model. If you use batching, be aware that
     the batching functionality implemented here assumes a "flat" model structure.
@@ -419,7 +424,11 @@ def optim_flat(
     Now, we are ready to run the optimization.
 
     >>> stopper = gs.Stopper(max_iter=1000, patience=10, atol=0.01)
-    >>> result = gs.optim_flat(model, params=["coef"], stopper=stopper)
+    >>> with warnings.catch_warnings(record=True) as caught:
+    ...     warnings.simplefilter("always", FutureWarning)
+    ...     result = gs.optim_flat(model, params=["coef"], stopper=stopper)
+    >>> caught[0].category is FutureWarning
+    True
     >>> {name: jnp.round(value, 2) for name, value in result.position.items()}
     {'coef': Array([0.38, 1.24], dtype=float32)}
 
@@ -428,6 +437,11 @@ def optim_flat(
     sampling.
 
     """
+    warnings.warn(
+        "liesel.goose.optim_flat is deprecated; use liesel.optim.LieselOptim instead.",
+        FutureWarning,
+        stacklevel=2,
+    )
     track_keys = track_keys if track_keys is not None else []
     # ---------------------------------------------------------------------------------
     # Validation input
