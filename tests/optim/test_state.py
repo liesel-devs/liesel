@@ -113,6 +113,25 @@ class TestOptimCarry:
 
 
 class TestOptimResult:
+    @pytest.mark.parametrize("value", [float("nan"), float("inf"), -float("inf")])
+    @pytest.mark.parametrize("name", ["position_final", "position_min_monitor"])
+    def test_position_access_rejects_nonfinite_parameters(self, value, name):
+        history = OptimHistory.from_epochs(epochs=1, position=None, tracked=None)
+        result = OptimResult(
+            history=history,
+            position_final=Position({"theta": jnp.array([1.0, value])}),
+            position_min_monitor=Position({"theta": jnp.array([1.0, value])}),
+            n_epochs=1,
+            min_monitor_epoch=0,
+            monitor_source="validation",
+            patience=1,
+            duration=0.0,
+        )
+
+        with pytest.raises(RuntimeError, match=f"{name}.*NaN or infinity"):
+            getattr(result, name)
+        assert result.history is history
+
     def test_n_epochs_is_completed_epoch_count(self):
         history = OptimHistory.from_epochs(epochs=2, position=None, tracked=None)
         position = Position({})

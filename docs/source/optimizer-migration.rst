@@ -65,36 +65,32 @@ Optimization does not assign the fitted state to the original model.
 What changes
 ------------
 
-* Wrap the old ``params`` and Optax optimizer in :class:`liesel.optim.Optimizer`.
-  This preserves the selected parameter subset. The default builder instead
-  optimizes all model parameters with Adam at learning rate ``0.001``; the old
-  default learning rate was ``0.01``.
+* Wrap ``params`` and the Optax optimizer in :class:`liesel.optim.Optimizer`.
+  Without this, the builder fits all parameters with Adam at learning rate
+  ``0.001``. The old default rate was ``0.01``.
 * Replace ``gs.Stopper(max_iter=...)`` with ``opt.Stopper(epochs=...)``. An epoch
-  runs all configured batches. The old history included the initial position at
-  iteration zero; the new history records completed epochs. Budgets and early
-  stopping therefore need not produce identical runs.
+  runs all configured batches. The new history starts after the first epoch;
+  the old history started before any updates. Runs need not stop at the same time.
 * Choose ``loss_monitor`` explicitly. ``"train_full_data"`` evaluates the full
-  training objective after each epoch, matching the old monitoring choice when
-  no separate validation model was supplied.
+  training objective after each epoch, as before when no validation model was used.
 * Keep ``scale_loss=False`` to retain the old default objective scale. The new
-  builder otherwise divides the loss by the training sample size. Set tolerances
-  explicitly when migrating; the stopper defaults also differ.
+  builder otherwise divides by the training sample size. Set stopping tolerances
+  explicitly too; their defaults differ.
 * Use ``position_final`` to replace ``restore_best_position=False``. Use
-  ``position_min_monitor`` for the best recorded monitoring loss across the run;
-  the old ``restore_best_position=True`` selected within the final patience
-  window. Rebuild a model state with ``model.update_state`` as shown above.
+  ``position_min_monitor`` for the best monitoring loss across the run. The old
+  default selected within the final patience window. Use ``model.update_state``
+  to get a fitted model state.
 * Use ``result.plot_loss()`` or ``result.history.loss_df()`` instead of
   ``gs.history_to_df(result.history)``.
 
 Validation and minibatches
 --------------------------
 
-Replace ``model_validation`` with a :class:`liesel.optim.PositionSplit` holding
-training and validation data, and select ``loss_monitor="validation"``. Include
-responses and their matching covariates in the split. To retain an existing
-holdout, construct the split from those data rather than drawing a new split.
-The new default validation objective uses likelihood only; set
-``validation_strategy="log_prob"`` to include priors as ``optim_flat`` did.
+Use :class:`liesel.optim.PositionSplit` instead of ``model_validation`` and set
+``loss_monitor="validation"``. Keep responses and matching covariates together.
+Build the split from your existing holdout to keep the same evaluation data.
+Validation now uses likelihood only; set ``validation_strategy="log_prob"`` to
+include priors as before.
 
 ``batch_size`` remains available; ``batch_seed`` becomes ``seed``. See the
 :doc:`basic tutorial <tutorials/notebooks/09-liesel-optim-basic>` for a complete

@@ -1,98 +1,18 @@
 .. _optimizer-data-flow:
 
-Splitting, batching, and likelihood scaling
-============================================
+Splitting, batching, and loss scaling
+=====================================
 
-These interactive diagrams show how the optimizer represents data splits, coordinates
-mini-batches with different sample sizes, and scales likelihood contributions during
-training and validation.
+A split decides which data belong to training, validation, and testing.
+Batches take smaller pieces of the training data for each update. These are
+separate choices: shuffling batches never changes the held-out data.
 
 .. _optimizer-split-overview:
 
-Choosing a split representation
--------------------------------
+Keep matching rows together
+---------------------------
 
-Use this overview to choose between :class:`~liesel.optim.Split`,
-:class:`~liesel.optim.PositionSplit`, and their manager variants, and to compare their
-constructors and typical use cases.
-
-Explicit observation groups
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Pass nested ``position_keys`` to choose which arrays share split or minibatch
-indices. Separate groups stay separate even when they contain equally many rows:
-
-.. code-block:: python
-
-   import liesel.optim as opt
-
-   manager = opt.SplitManager.from_model(
-       model,
-       position_keys=[["x_a", "y_a"], ["x_b", "y_b"]],
-       validate_axis_share=0.20,
-       test_axis_share=0.10,
-       shuffle=True,
-       seed=42,
-   )
-   split = manager.split_position(model.extract_position(manager.position_keys))
-   batches = opt.Batches.from_split(split, batch_size=64)
-
-Arrays within each group must have matching lengths along their configured axes,
-but their complete shapes may differ. Use ``split_axes`` and ``batch_axes`` for
-non-leading observation axes. When using ``Batches.from_split`` directly, pass the
-appropriate ``batch_axes`` as well. Group order is preserved and affects the random
-keys assigned to children; repeating the same grouping and seed repeats the split.
-
-The same nested syntax is accepted by ``BatchManager.from_model`` and
-``PositionSplitManager.from_model``. ``Split.from_model``, ``Batches.from_model``,
-and ``PositionSplit.from_model`` require ``multi_size="manager"`` for multiple groups,
-including equal-sized groups. With one group, these factories still return a
-single object; manager factories always return a manager.
-
-Flat keys retain automatic grouping by axis length. Omitting ``position_keys``
-selects all observed variables and groups them automatically. Mixed flat/nested
-inputs, empty groups, duplicate keys, and incompatible lengths within an explicit
-group are rejected. Factory options apply to all groups; construct child objects
-manually when different groups need different settings or scalar size overrides.
-
-The same factory can handle either one or several inferred groups:
-
-.. code-block:: python
-
-   recipe = opt.Split.from_model(
-       model,
-       validate_axis_share=0.20,
-       shuffle=True,
-       seed=42,
-       multi_size="manager",
-   )
-   split = recipe.split_position(model.extract_position(recipe.position_keys))
-   batches = opt.Batches.from_split(split, batch_size=64)
-
-``Split.from_model`` rejects ``axis_size`` and ``sample_sizes`` overrides when
-multiple groups are selected. Configure child recipes explicitly for those cases.
-
-Shuffling and reproducibility
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Splits default to ``shuffle=True``. This applies
-to ``Split`` and all split factories, for both flat and nested selections. Set
-``shuffle=False`` explicitly to retain ordered train/validation/test partitions,
-for example in a chronological evaluation. Supply a seed for reproducible random
-holdouts; without one, shuffled splits use the current Unix time in seconds.
-
-Full-data splits, with no validation or test observations, preserve row order and
-do not generate or use a split seed, regardless of ``shuffle``. This also applies
-when requested shares round down to zero observations. ``LieselOptim`` explicitly
-uses ``shuffle=False`` for its automatic full-data setup. Minibatch shuffling is
-separate and remains controlled by the optimizer's seed; it does not change which
-observations belong to training or validation.
-
-Keeping shared entries unsplit
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Map a selected key to ``None`` in ``split_axes`` when every split needs that entry
-in full:
+Split responses and their covariates together. For an existing ``model``:
 
 .. code-block:: python
 
@@ -100,22 +20,40 @@ in full:
 
    split = opt.PositionSplit.from_model(
        model,
-       position_keys=["y", "group_id", "group_table"],
+       position_keys=["X", "y"],
        validate_axis_share=0.2,
-       split_axes={"group_table": None},
-       shuffle=True,
+       test_axis_share=0.1,
        seed=42,
    )
 
-``group_table`` is included unchanged in ``split.train``, ``split.validate``, and
-``split.test``. It is not split, does not contribute to split likelihood scaling,
-and is not included in batches derived automatically from the split. Use passthrough
-for shared lookup tables or constants. Split per-observation covariates, weights,
-and offsets alongside the response.
+This puts 70% of rows in training, 20% in validation, and 10% in testing, subject
+to rounding. Splits shuffle by default; set ``shuffle=False`` for an ordered
+split. Give both the split and ``LieselOptim`` a seed to repeat a run.
 
-Passthrough entries can accompany any explicit observation group and remain global
-to the resulting split. A group containing only passthrough entries is rejected;
-each explicit group must contain at least one entry that is actually split.
+For separate groups, make the grouping explicit:
+
+.. code-block:: python
+
+   split = opt.PositionSplitManager.from_model(
+       model,
+       position_keys=[["X_a", "y_a"], ["X_b", "y_b"]],
+       validate_axis_share=0.2,
+       seed=42,
+   )
+
+Arrays within a group share row indices. Different groups split independently,
+even if their lengths happen to match. Flat or omitted ``position_keys`` group
+observed arrays by length; use nested groups when equal length does not mean
+matching rows. Every group must have validation data if any group does.
+
+Use ``split_axes`` for observations on an axis other than zero. A value of
+``None`` keeps a shared table unchanged in every split and out of automatic
+batches. Keep per-observation covariates, weights, and offsets with the response.
+When building batches yourself, set their ``batch_axes`` too.
+
+``PositionSplit`` holds the split data. ``Split`` holds reusable row indices;
+call ``split_position()`` to apply them. Manager classes handle several groups.
+See :meth:`~liesel.optim.PositionSplit.from_model` for the factory options.
 
 .. raw:: html
 
@@ -133,12 +71,24 @@ each explicit group must contain at least one entry that is actually split.
 
 .. _optimizer-batch-manager-overview:
 
-Coordinating multiple batch streams
------------------------------------
+Batch one or several groups
+---------------------------
 
-A :class:`~liesel.optim.BatchManager` combines child batches into joint optimizer
-steps. Change the sample sizes, batch sizes, and epoch-size strategy to see which
-observations contribute to each step.
+Pass ``split=split`` and ``batch_size=32`` to ``LieselOptim``. It builds the
+batches for you. ``batch_size=None`` uses all training data in each update.
+
+Only complete batches are used. With shuffling, the leftover rows can change
+between epochs. For multiple groups, a :class:`~liesel.optim.BatchManager`
+supplies one batch from each group at every update.
+
+The automatic ``epoch_size="max"`` setting follows the group with the most
+batches. Smaller groups start another shuffled pass as needed. Other choices
+are ``"min"`` (stop with the shortest group), ``"strict"`` (require equal batch
+counts), or a positive number of steps. Direct managers default to ``"strict"``.
+
+``sample_with_replacement=True`` draws rows independently, so duplicates are
+possible. Automatic batching uses this for a group smaller than the requested
+batch size. Such an epoch need not visit every row.
 
 .. raw:: html
 
@@ -156,12 +106,21 @@ observations contribute to each step.
 
 .. _optimizer-likelihood-scaling:
 
-Understanding likelihood scaling
---------------------------------
+What the loss means
+-------------------
 
-Explore how :class:`~liesel.optim.NegLogProbLoss` combines likelihood and prior
-contributions for mini-batch training, validation, and full-data training. The diagram
-also identifies the methods that supply each scaling factor and likelihood value.
+The default training loss combines likelihood and priors. A minibatch likelihood
+is scaled up to represent its full training group; priors are not scaled up.
+Each group gets its own factor, so different batch sizes do not change the
+relative weight of the groups.
+
+Validation and test likelihoods are scaled to the corresponding training size.
+``LieselOptim`` then divides losses by the total training sample size by default;
+use ``scale_loss=False`` to keep the sum. Sample size counts likelihood terms,
+which need not equal the number of array elements.
+
+Validation leaves out priors by default. Use ``validation_strategy="log_prob"``
+to include them. See :class:`~liesel.optim.NegLogProbLoss` for details.
 
 .. raw:: html
 

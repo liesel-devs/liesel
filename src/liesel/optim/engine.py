@@ -182,8 +182,8 @@ class OptimEngine:
     """
     Runs an optimization loop over epochs, batches, and optimizers.
 
-    ``OptimEngine`` is the low-level execution object behind the experimental
-    optimization API. Each epoch starts by asking ``batches`` for fresh batch indices,
+    ``OptimEngine`` runs the fit configured by :class:`.LieselOptim`.
+    Each epoch starts by asking ``batches`` for fresh batch indices,
     then iterates over all full batches. For each batch, each optimizer gets a turn
     to update the subset of parameters named in its ``position_keys``. The first
     active optimizer's pre-update loss supplies the batch observation; if none is
@@ -258,7 +258,7 @@ class OptimEngine:
     Notes
     -----
     ``OptimEngine`` uses ``carry.epoch`` as the number of completed epochs and as the
-    next history index to be written. This matches :class:`.Stopper`'s experimental
+    next history index to be written. This matches :class:`.Stopper`'s
     indexing convention. Built-in :class:`.LBFGS` is accepted only with full-data
     batches and also requires a deterministic objective, which the engine cannot
     validate. Exact monitor minima retain the post-update position used for the
@@ -268,11 +268,35 @@ class OptimEngine:
 
     Examples
     --------
-    ``OptimEngine`` is usually constructed through a convenience wrapper:
+    Start with :class:`.LieselOptim` for ordinary fits. To assemble the pieces
+    yourself:
 
-    >>> from liesel.optim import LieselOptim
-    >>> LieselOptim.__name__
-    'LieselOptim'
+    >>> import jax.numpy as jnp
+    >>> import optax
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+    >>> import liesel.model as lsl
+    >>> import liesel.optim as opt
+    >>> loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
+    >>> y = lsl.Var.new_obs(
+    ...     jnp.array([1.0, 2.0, 3.0]),
+    ...     lsl.Dist(tfd.Normal, loc=loc, scale=1.0),
+    ...     name="y",
+    ... )
+    >>> model = lsl.Model([y])
+    >>> split = opt.PositionSplit.from_model(model)
+    >>> engine = opt.OptimEngine(
+    ...     loss=opt.NegLogProbLoss(model, split, scale=True),
+    ...     batches=opt.Batches.from_split(split, batch_size=None),
+    ...     optimizers=[opt.Optimizer(["loc"], optax.adam(0.01))],
+    ...     stopper=opt.Stopper(epochs=5, patience=5),
+    ...     initial_state=model.state,
+    ...     loss_monitor="train_full_data",
+    ...     seed=42,
+    ...     show_progress=False,
+    ... )
+    >>> result = engine.fit()
+    >>> result.n_epochs
+    5
     """
 
     loss: Loss
@@ -612,8 +636,8 @@ class OptimEngine:
         Returns
         -------
         OptimResult
-            Processed optimizer history, recommended and diagnostic positions,
-            monitoring provenance, cumulative active runtime, status, and an
+            Processed history, final and best-monitor positions,
+            monitoring source, cumulative active runtime, status, and an
             independent checkpoint for continuation (``None`` on NaN failure).
 
         Notes
@@ -700,7 +724,7 @@ class OptimEngine:
         n_epochs = int(carry.epoch)
         position_final = carry.position
 
-        if n_epochs == 0:
+        if n_epochs == 0 or not bool(jnp.isfinite(carry.min_monitor_loss)):
             position_min_monitor = None
             min_monitor_epoch = None
         else:
@@ -1520,7 +1544,8 @@ class OptimEngine:
             return carry
 
         carry = jax.lax.cond(
-            carry.loss_monitor < carry.min_monitor_loss,
+            jnp.isfinite(carry.loss_monitor)
+            & (carry.loss_monitor < carry.min_monitor_loss),
             update_carry,
             lambda carry: carry,
             carry,

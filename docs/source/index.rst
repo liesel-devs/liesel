@@ -10,10 +10,7 @@ Liesel: A Probabilistic Programming Framework
    :maxdepth: 1
 
    tutorials_overview
-   optimizer-migration
-   optimizer-data-flow
-   optimizer-weighted-batching
-   optimizer-checkpointing
+   optimization
 
 
 API Reference
@@ -129,6 +126,36 @@ acccess to important diagnostics.
     ~liesel.goose.plot_density
     ~liesel.goose.plot_param
 
+.. _optimizer-api:
+
+Optimizer API
+*************
+
+Start with the :doc:`optimization` guide. These pages describe the arguments
+and defaults.
+
+.. autosummary::
+    :toctree: generated
+    :caption: Optimizer API
+    :recursive:
+    :nosignatures:
+
+    ~liesel.optim.LieselOptim
+    ~liesel.optim.OptimEngine
+    ~liesel.optim.OptimCheckpoint
+    ~liesel.optim.state.OptimResult
+    ~liesel.optim.NegLogProbLoss
+    ~liesel.optim.Optimizer
+    ~liesel.optim.LBFGS
+    ~liesel.optim.Stopper
+    ~liesel.optim.EmaTrainLossMonitor
+    ~liesel.optim.Batches
+    ~liesel.optim.BatchManager
+    ~liesel.optim.Split
+    ~liesel.optim.SplitManager
+    ~liesel.optim.PositionSplit
+    ~liesel.optim.PositionSplitManager
+
 Legacy optimization (deprecated)
 ********************************
 
@@ -146,38 +173,6 @@ values for MCMC. See :doc:`optimizer-migration` for a before-and-after example.
     ~liesel.goose.Stopper
     ~liesel.goose.history_to_df
     ~liesel.goose.OptimResult
-
-Optimizer API
-*************
-
-The :mod:`liesel.optim` module provides the recommended optimization API. Start
-with :class:`~liesel.optim.LieselOptim` and the
-:doc:`basic tutorial <tutorials/notebooks/09-liesel-optim-basic>`.
-
-The :doc:`optimizer-data-flow` guide provides interactive overviews of the splitting,
-batching, and likelihood-scaling behavior.
-The :doc:`optimizer-checkpointing` guide covers pausing and recovering interrupted runs.
-
-.. autosummary::
-    :toctree: generated
-    :caption: Optimizer API
-    :recursive:
-    :nosignatures:
-
-    ~liesel.optim.LieselOptim
-    ~liesel.optim.OptimEngine
-    ~liesel.optim.OptimCheckpoint
-    ~liesel.optim.state.OptimResult
-    ~liesel.optim.NegLogProbLoss
-    ~liesel.optim.Optimizer
-    ~liesel.optim.LBFGS
-    ~liesel.optim.Stopper
-    ~liesel.optim.Batches
-    ~liesel.optim.BatchManager
-    ~liesel.optim.Split
-    ~liesel.optim.SplitManager
-    ~liesel.optim.PositionSplit
-    ~liesel.optim.PositionSplitManager
 
 Model (Advanced)
 ************************

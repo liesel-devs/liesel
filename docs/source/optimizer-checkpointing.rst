@@ -1,111 +1,63 @@
-Pausing and checkpointing optimization
-======================================
+Pause and resume a fit
+======================
 
-:meth:`liesel.optim.OptimEngine.fit` can return control after a chosen number of
-epochs while retaining the optimizer state needed to continue the same run.
-Construct an engine with ``optim.build_engine()`` when using
-:class:`~liesel.optim.LieselOptim`.
+Build an engine to pause a run or save progress. Here, ``optim`` is a configured
+:class:`liesel.optim.LieselOptim`.
 
-Inspect and continue
---------------------
+Pause in memory
+---------------
 
 .. code-block:: python
 
    engine = optim.build_engine()
    first = engine.fit(pause_after=100)
    first.plot_loss()
+   result = engine.fit(checkpoint=first.checkpoint)
 
-   second = engine.fit(checkpoint=first.checkpoint, pause_after=100)
-   second.plot_loss()  # History includes both segments.
+``pause_after`` limits additional epochs in that call. Early stopping still
+applies. To extend the total budget, change ``engine.stopper.epochs`` before
+resuming. Calling ``fit()`` without a checkpoint starts a new run.
 
-   final = engine.fit(checkpoint=second.checkpoint)
+The result's ``status`` tells you why fitting stopped: ``"paused"``,
+``"max_epochs"``, ``"early_stopping"``, or ``"nan"``. A NaN result has no
+checkpoint; recover from an earlier saved checkpoint instead.
 
-``pause_after`` limits additional epochs in this call. The stopper alone controls
-the total budget. To extend an exhausted budget, set ``engine.stopper.epochs``
-before resuming. Automatic early stopping still applies. Calling ``fit()`` without
-a checkpoint starts a fresh run.
+Save progress to disk
+---------------------
 
-The returned :class:`~liesel.optim.state.OptimResult` has a ``status`` of ``"paused"``,
-``"max_epochs"``, ``"early_stopping"``, or ``"nan"``. A stopping condition takes
-precedence over a coinciding pause boundary. A NaN result has ``checkpoint=None``;
-use a previously retained or saved checkpoint for recovery.
-
-Results contain cumulative history and active duration, excluding time spent
-paused. Continuing leaves earlier results unchanged. Result and checkpoint share
-their history arrays; retaining checkpoints also retains optimizer and runtime
-state. Treat checkpoint contents as read-only. Extending history or retaining
-many snapshots can require additional memory.
-
-Recover after an HPC timeout
-----------------------------
-
-Reconstruct the same model, data, and optimization settings, then use the same
-call on the initial run and on subsequent job allocations:
+Run the same call on the first job and after an interruption:
 
 .. code-block:: python
 
    result = engine.fit(checkpoint="optim.pkl", checkpoint_every=10)
 
-A missing file starts a persistent run. An existing file resumes that run and
-receives subsequent saves. Invalid or incompatible files raise an error. Choose
-a different path for a new experiment. The parent directory must exist.
+A missing file starts a new run. An existing file resumes it. The engine saves
+every ten epochs here, plus at deliberate pauses and normal completion. A crash
+or timeout loses work since the last successful save. Failed writes and NaN
+failures leave the previous file intact.
 
-Saving happens every ten completed epochs by default, independently of progress
-display, and also at deliberate pauses and normal completion. Each successful
-write atomically replaces the previous file. A failed write stops fitting and
-preserves the previous file. A NaN failure also preserves the previous file.
-Ctrl+C, crashes, and timeouts recover from the last successful save; work after
-that checkpoint must be repeated. If no checkpoint was written, recovery starts
-fresh. Use one writer per checkpoint path.
+Use a different path for a new experiment and only one writer per path. The
+parent directory must exist.
 
-Recovery can use another compute node; saved arrays load onto the current JAX
-device. Results need not be bitwise identical across different hardware.
+Resume safely
+-------------
 
-Model identity and compatibility
---------------------------------
+* Recreate the same model, data, and optimizer settings. Checks cover structure,
+  names, shapes, dtypes, and batching, but cannot detect changed data or learning
+  rates. Weighted sampling resumes with its saved probabilities.
+* Keep the same Liesel, JAX, jaxlib, Optax, and NumPy versions. The option
+  ``allow_version_mismatch=True`` attempts recovery across versions without
+  promising compatibility. Different hardware can also change results.
+* Load only trusted files: checkpoints use Python pickle, which can execute code.
+  They save run state, not model code, and are meant for recovery rather than
+  long-term model storage.
 
-Restoration checks state structure, shapes, dtypes, and batch configuration.
-It does not fingerprint data, loss functions, or optimizer settings: callers must
-keep these consistent. Optimized parameters and variables in data splits need
-stable names, shapes, and dtypes. With the built-in negative log-probability loss
-and optimizers, anonymous internal nodes and constants do not need stable names:
-their read-only evaluation state is rebuilt from the caller's model.
+History and monitoring continue across pauses. Earlier results stay unchanged;
+keeping many snapshots uses extra memory. Treat checkpoint contents as read-only.
+Custom losses that change model state must keep that state compatible and
+serializable with pickle.
 
-For weighted minibatches, saved sampling probabilities take precedence over newly
-supplied weights. Reconstruct the same batch groups and sampling mode; the recovered
-run continues with its original probabilities and random state.
-
-Custom losses and optimizers can evolve ``carry.model_state``. For these, the
-checkpoint retains that state and checks its keys, structure, shapes, and dtypes
-against the reconstructed engine. This includes subclasses of the built-ins,
-whose behavior may differ. Custom state must be pickle-compatible for disk saves.
-
-Resumption requires identical versions of Liesel, JAX, jaxlib, Optax, and NumPy by
-default. To attempt recovery across versions, pass
-``allow_version_mismatch=True`` to ``fit()``. This warns about version differences
-and leaves structural checks enabled; it does not guarantee compatibility.
-
-Checkpoints retain the EMA monitoring state, including rounding compensation.
-Resuming continues the same calculation as an uninterrupted run under the same
-runtime and configuration.
-
-Manual save and load
---------------------
-
-.. code-block:: python
-
-   from liesel.optim import OptimCheckpoint
-
-   first.checkpoint.save("snapshot.pkl")
-   snapshot = OptimCheckpoint.load("snapshot.pkl")
-   result = engine.fit(checkpoint=snapshot)
-
-Passing an object continues in memory without writing files. An object carries no
-save destination. Pass a path to ``fit()`` whenever automatic disk saves are wanted.
-Manual ``save()`` atomically replaces an existing file without rebinding the
-object. Runtime-version checks occur when fitting resumes, so ``load()`` can also
-be used to inspect a checkpoint.
-
-The versioned checkpoint format uses Python pickle. Only load trusted files;
-unpickling can execute code. Checkpoints contain state, not the model or optimizer
-callables, and are intended for run recovery rather than portable model archives.
+For manual snapshots, use :meth:`liesel.optim.OptimCheckpoint.save` and
+:meth:`liesel.optim.OptimCheckpoint.load`. Passing a checkpoint object resumes
+in memory; pass a path to ``fit()`` for automatic disk saves. See
+:meth:`liesel.optim.OptimEngine.fit` for all recovery options.

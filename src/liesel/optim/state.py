@@ -901,7 +901,7 @@ class OptimCheckpoint:
         return replace(checkpoint, duration=duration)
 
 
-@dataclass
+@dataclass(init=False)
 class OptimResult:
     """
     Result returned by an optimizer run.
@@ -909,8 +909,9 @@ class OptimResult:
     ``OptimResult`` bundles the processed history, the terminal and minimum-monitor
     positions, and small metadata about the run. Choose explicitly between
     ``position_final`` and ``position_min_monitor`` when using fitted parameters.
-    It also provides convenience plotting methods for losses and saved parameter
-    histories.
+    Accessing an unavailable position or one containing NaN or infinity raises
+    :class:`RuntimeError`. History, status, and diagnostics remain available.
+    It also provides plotting methods for losses and saved parameter histories.
 
     Parameters
     ----------
@@ -919,16 +920,17 @@ class OptimResult:
     position_final
         Actual terminal position, including an interrupted partial epoch.
     position_min_monitor
-        Position with the smallest recorded monitoring loss, or ``None`` if no
-        epoch completed. For exact validation and full-training monitors, this is
+        Position with the smallest finite monitoring loss, or ``None`` if no
+        finite monitoring loss was recorded. For exact validation and full-training
+        monitors, this is
         the post-update position used for that loss evaluation. For an EMA, it is
         the associated parameter snapshot, not a position whose exact loss equals
         the EMA.
     n_epochs
         Number of completed epochs included in the processed history.
     min_monitor_epoch
-        Epoch at which the smallest monitoring loss was recorded, or ``None`` if no
-        epoch completed.
+        Epoch at which the smallest finite monitoring loss was recorded, or
+        ``None`` if no finite monitoring loss was recorded.
     monitor_source
         Configured monitoring source: ``"train_ema"``, ``"validation"``, or
         ``"train_full_data"``.
@@ -971,8 +973,8 @@ class OptimResult:
 
     history: OptimHistory
 
-    position_final: Position
-    position_min_monitor: Position | None
+    _position_final: Position
+    _position_min_monitor: Position | None
     n_epochs: int
     min_monitor_epoch: int | None
     monitor_source: Literal["train_ema", "validation", "train_full_data"]
@@ -981,6 +983,67 @@ class OptimResult:
     nan_debug: OptimNaNDebugInfo | None = None
     checkpoint: OptimCheckpoint | None = None
     status: Literal["paused", "max_epochs", "early_stopping", "nan"] = "max_epochs"
+
+    def __init__(
+        self,
+        history: OptimHistory,
+        position_final: Position,
+        position_min_monitor: Position | None,
+        n_epochs: int,
+        min_monitor_epoch: int | None,
+        monitor_source: Literal["train_ema", "validation", "train_full_data"],
+        patience: int,
+        duration: float,
+        nan_debug: OptimNaNDebugInfo | None = None,
+        checkpoint: OptimCheckpoint | None = None,
+        status: Literal["paused", "max_epochs", "early_stopping", "nan"] = "max_epochs",
+    ):
+        self.history = history
+        self._position_final = position_final
+        self._position_min_monitor = position_min_monitor
+        self.n_epochs = n_epochs
+        self.min_monitor_epoch = min_monitor_epoch
+        self.monitor_source = monitor_source
+        self.patience = patience
+        self.duration = duration
+        self.nan_debug = nan_debug
+        self.checkpoint = checkpoint
+        self.status = status
+
+    @staticmethod
+    def _checked_position(position: Position, name: str) -> Position:
+        if any(not bool(jnp.all(jnp.isfinite(x))) for x in jax.tree.leaves(position)):
+            raise RuntimeError(
+                f"{name} contains NaN or infinity. "
+                "Inspect result.status, result.history, and result.nan_debug."
+            )
+        return position
+
+    @property
+    def position_final(self) -> Position:
+        """Terminal parameters, including a finite interrupted partial epoch.
+
+        Raises :class:`RuntimeError` if any parameter contains NaN or infinity.
+        """
+        return self._checked_position(self._position_final, "position_final")
+
+    @property
+    def position_min_monitor(self) -> Position:
+        """Parameters saved at the smallest finite monitoring loss.
+
+        An earlier best position remains available after a later failure.
+        Raises :class:`RuntimeError` if no finite monitoring loss was recorded,
+        or if the saved parameters contain NaN or infinity.
+        """
+        if self._position_min_monitor is None:
+            raise RuntimeError(
+                "No finite monitoring loss was recorded; "
+                "position_min_monitor is unavailable. "
+                "Inspect result.status, result.history, and result.nan_debug."
+            )
+        return self._checked_position(
+            self._position_min_monitor, "position_min_monitor"
+        )
 
     def plot_loss(
         self, legend: bool = True, title: str | None = None, window: int | None = None

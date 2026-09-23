@@ -863,7 +863,8 @@ def test_debug_nans_no_active_loss_capture_reproduces_loss():
     info = result.nan_debug
     assert info is not None
     assert result.n_epochs == 0
-    assert result.position_min_monitor is None
+    with pytest.raises(RuntimeError, match="No finite monitoring loss"):
+        _ = result.position_min_monitor
     assert result.min_monitor_epoch is None
     assert result.position_final["theta"] == pytest.approx(0.0)
     assert info.kind == "loss"
@@ -908,10 +909,11 @@ def test_debug_nans_position_after_reproduces_second_optimizer_step():
     info = result.nan_debug
     assert info is not None
     assert result.n_epochs == 0
-    assert result.position_min_monitor is None
+    with pytest.raises(RuntimeError, match="No finite monitoring loss"):
+        _ = result.position_min_monitor
     assert result.min_monitor_epoch is None
-    assert result.position_final["theta"] == pytest.approx(1.0)
-    assert bool(jnp.isnan(result.position_final["eta"]))
+    with pytest.raises(RuntimeError, match="position_final.*NaN or infinity"):
+        _ = result.position_final
     assert info.kind == "position_after"
     assert info.batch == 0
     assert info.optimizer_index == 1
@@ -989,6 +991,77 @@ def test_debug_nans_position_before_capture():
     assert info.optimizer_index is None
     assert info.nan_position is not None
     assert bool(jnp.isnan(info.nan_position["theta"]))
+
+
+@pytest.mark.parametrize("debug_nans", [False, True])
+@pytest.mark.parametrize("trigger_epoch", [0, 1])
+def test_result_positions_after_nan_loss(debug_nans, trigger_epoch):
+    split = PositionSplit(
+        train=Position({"y": jnp.array([0.0, 1.0])}),
+        validate=Position({}),
+        test=Position({}),
+        train_axis_size=2,
+        validate_axis_size=0,
+        test_axis_size=0,
+    )
+    result = OptimEngine(
+        loss=DebugNaNLoss(split, trigger_batch_value=0.0, trigger_epoch=trigger_epoch),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
+        batches=Batches(["y"], axis_size=2, batch_size=1, shuffle=False),
+        optimizers=[AddOneOptimizer(["theta"])],
+        stopper=Stopper(epochs=3, patience=3),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+        debug_nans=debug_nans,
+    ).fit()
+
+    assert result.status == "nan"
+    assert bool(jnp.isfinite(result.position_final["theta"]))
+    if trigger_epoch == 0:
+        assert result.min_monitor_epoch is None
+        with pytest.raises(RuntimeError, match="No finite monitoring loss"):
+            _ = result.position_min_monitor
+    else:
+        assert result.min_monitor_epoch == 0
+        assert result.position_min_monitor["theta"] == pytest.approx(2.0)
+
+
+@pytest.mark.parametrize("loss", [float("nan"), float("inf"), -float("inf")])
+def test_result_has_no_best_position_without_finite_monitor_loss(loss):
+    result = OptimEngine(
+        loss=EpochSequenceLoss(_split(), epoch_losses=jnp.array([loss])),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
+        batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
+        optimizers=[DebugNoOpOptimizer(["theta"])],
+        stopper=Stopper(epochs=1, patience=1),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+    ).fit()
+
+    assert result.min_monitor_epoch is None
+    with pytest.raises(RuntimeError, match="No finite monitoring loss"):
+        _ = result.position_min_monitor
+    assert result.position_final["theta"] == pytest.approx(-1.0)
+    assert len(result.history.loss_monitor) == 1
+
+
+@pytest.mark.parametrize("loss", [float("inf"), -float("inf")])
+def test_finite_monitor_loss_can_follow_infinite_loss(loss):
+    result = OptimEngine(
+        loss=EpochSequenceLoss(_split(), epoch_losses=jnp.array([loss, 3.0])),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
+        batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
+        optimizers=[_optimizer()],
+        stopper=Stopper(epochs=2, patience=2),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+    ).fit()
+
+    assert result.min_monitor_epoch == 1
+    assert result.position_min_monitor["theta"] == pytest.approx(5.0)
 
 
 def test_debug_nans_disabled_keeps_existing_nan_loss_behavior():
@@ -1239,8 +1312,11 @@ def test_nan_updated_position_stops_ordinary_fit():
     assert result.n_epochs == 1
     assert bool(jnp.isnan(result.history.loss_train[0]))
     assert bool(jnp.isnan(result.history.loss_monitor[0]))
-    assert result.position_final["theta"] == pytest.approx(1.0)
-    assert bool(jnp.isnan(result.position_final["eta"]))
+    with pytest.raises(RuntimeError, match="position_final.*NaN or infinity"):
+        _ = result.position_final
+    assert result.history.position is not None
+    assert result.history.position["theta"][-1] == pytest.approx(1.0)
+    assert bool(jnp.isnan(result.history.position["eta"][-1]))
 
 
 def test_ema_monitor_adds_no_full_data_evaluation():
