@@ -1067,7 +1067,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "liesel-gam", specifier = ">=0.1.3" },
+    { name = "liesel-gam", specifier = ">=0.2.4" },
     { name = "myst-nb", specifier = ">=1.0.0" },
     { name = "pre-commit", specifier = ">=4.6.0" },
     { name = "pydata-sphinx-theme", specifier = ">=0.18.0" },
@@ -1086,17 +1086,20 @@ pymc = [{ name = "pymc", specifier = ">=6.0" }]
 
 [[package]]
 name = "liesel-gam"
-version = "0.1.4"
+version = "0.2.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "formulaic" },
+    { name = "jax" },
     { name = "liesel" },
+    { name = "numpy" },
+    { name = "pandas" },
     { name = "plotnine" },
     { name = "smoothcon" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/43/d5/fa3e412c8ebd34512aaa9f8159477587e45dff4b2c06baff67b6a824a3f3/liesel_gam-0.1.4.tar.gz", hash = "sha256:4bac5cd80de70fa2cb1f10189f6d671113fc66ce78ff15d5965564bba3cc9d33", size = 1540556, upload-time = "2026-05-29T05:37:08.293Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/6d/de/5aab0b6860b6f390063700c83103b8029d4a9ff60f2295b0ae5448b4db4d/liesel_gam-0.2.4.tar.gz", hash = "sha256:91dda867414d2d4084a415300289a575fda856d029e9de4fa44bb5a861238dbc", size = 1617809, upload-time = "2026-09-13T17:12:42.266Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b8/28/57648ecc5a871d065cf4caea4b3cb3d4dd0b7fa87a84926abec6441def22/liesel_gam-0.1.4-py3-none-any.whl", hash = "sha256:b1338098b5206a05be2ab31f5385fbf36a34f48d7ce6b92f139321b671cd83b1", size = 104257, upload-time = "2026-05-29T05:37:06.898Z" },
+    { url = "https://files.pythonhosted.org/packages/92/56/2d068343342a27b84e3c368156abc21b22a63907d76844fe2a596421ac5b/liesel_gam-0.2.4-py3-none-any.whl", hash = "sha256:4cc6d117f007fdf3b4697fd77c80f8d501d74def8346dd116364ae80fdcb3f33", size = 166281, upload-time = "2026-09-13T17:12:40.426Z" },
 ]
 
 [[package]]
