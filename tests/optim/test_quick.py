@@ -105,7 +105,6 @@ def test_lieseloptim_requires_explicit_loss_monitor():
         "axis_size",
         "split_axes",
         "default_split_axis",
-        "batch_size",
         "shuffle_batches",
         "epoch_size",
         "batch_axis_size",
@@ -193,6 +192,45 @@ def test_explicit_batches_use_training_split():
     assert isinstance(engine.batches, Batches)
     assert engine.batches.axis_size == split.train_axis_size
     assert engine.batches.batch_size == 2
+
+
+@pytest.mark.parametrize("make_model", [_normal_model, _two_branch_model])
+@pytest.mark.parametrize("batch_size", [None, 2])
+def test_batch_size_shortcut_uses_training_split_defaults(make_model, batch_size):
+    model = make_model()
+    split = PositionSplit.from_model(
+        model, validate_axis_share=0.25, seed=42, multi_size="manager"
+    )
+    expected = Batches.from_split(split, batch_size=batch_size)
+    engine = LieselOptim(
+        model,
+        split=split,
+        batch_size=batch_size,
+        loss_monitor="validation",
+        seed=1,
+    ).build_engine()
+
+    assert type(engine.batches) is type(expected)
+    assert engine.batches.axis_size == expected.axis_size
+    assert engine.batches.batch_size == expected.batch_size
+    assert engine.batches.batch_sample_scales == expected.batch_sample_scales
+    assert engine.batches.n_full_batches == expected.n_full_batches
+    actual_children = (
+        engine.batches.batches
+        if isinstance(engine.batches, BatchManager)
+        else (engine.batches,)
+    )
+    assert all(child.shuffle == (batch_size is not None) for child in actual_children)
+
+
+def test_batch_size_cannot_be_combined_with_explicit_batches():
+    with pytest.raises(ValueError, match="either batch_size or batches"):
+        LieselOptim(
+            _normal_model(),
+            batch_size=2,
+            batches=Batches(["y"], axis_size=6, batch_size=3),
+            loss_monitor="train_full_data",
+        )
 
 
 def test_user_provided_batches_are_not_mutated():

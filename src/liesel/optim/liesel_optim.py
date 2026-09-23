@@ -66,11 +66,13 @@ class LieselOptim:
         data is used for training. Multi-size observed data automatically uses
         :class:`.PositionSplitManager`. With a custom loss, an explicit split must
         be the same object as ``loss.split``.
+    batch_size
+        Rows per batch in each training group. Uses :meth:`.Batches.from_split`
+        with otherwise default settings. ``None`` uses all training data.
+        Pass ``batches`` instead for custom settings, such as non-leading axes.
     batches
-        Explicit batch configuration. If omitted, each update uses all training
-        data, with one full-data batch per group. For minibatches, pass batches
-        created with :meth:`.Batches.from_split`. Configure non-leading batch
-        axes on the batches themselves.
+        Explicit batch configuration. Cannot be combined with a non-``None``
+        ``batch_size``.
     loss
         Custom loss. Uses ``loss.split`` and overrides ``validation_strategy`` and
         ``scale_loss``.
@@ -129,6 +131,7 @@ class LieselOptim:
         stopper: Stopper | None = None,
         seed: int | None = None,
         split: SplitConfig | None = None,
+        batch_size: int | None = None,
         batches: BatchConfig | None = None,
         loss: Loss | None = None,
         validation_strategy: Literal["log_lik", "log_prob"] = "log_lik",
@@ -140,6 +143,8 @@ class LieselOptim:
         progress_n_updates: int | None = None,
         step_progress_n_updates: int | None = None,
     ) -> None:
+        if batches is not None and batch_size is not None:
+            raise ValueError("Pass either batch_size or batches, not both.")
         self.model = model
         self.seed = int(time.time()) if seed is None else seed
         self.stopper = (
@@ -164,7 +169,7 @@ class LieselOptim:
             loss, validation_strategy=validation_strategy, scale_loss=scale_loss
         )
         self.batches = (
-            Batches.from_split(self.split, batch_size=None)
+            Batches.from_split(self.split, batch_size=batch_size)
             if batches is None
             else batches
         )

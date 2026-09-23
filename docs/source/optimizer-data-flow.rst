@@ -94,8 +94,10 @@ Create batches from the training split, then pass both to ``LieselOptim``:
        seed=43,
    ).fit()
 
-Omit ``batches`` to use all training data in each update. Set batch size,
-shuffling, axes, and epoch policy when creating the batches.
+For default batch settings, pass ``batch_size=32`` directly to ``LieselOptim``.
+This calls ``Batches.from_split(split, batch_size=32)``. Omit both ``batch_size``
+and ``batches`` to use all training data in each update. For custom shuffling,
+axes, or epoch policy, create ``batches`` explicitly instead.
 
 The engine checks each training array's length along its batch axis before
 fitting. Splitting and batching may use different axes. When holding out rows
