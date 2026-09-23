@@ -18,7 +18,15 @@ from liesel.goose.mcmc_spec import LieselMCMC, MCMCSpec
 from liesel.option import Option
 
 from .model import GraphBuilder, Model
-from .nodes import Array, Bijector, Dist, Distribution, Group, NodeState, Var
+from .nodes import (
+    Array,
+    Bijector,
+    Dist,
+    Distribution,
+    Group,
+    LieselModelStateInput,
+    Var,
+)
 
 matrix_rank = np.linalg.matrix_rank
 
@@ -280,7 +288,7 @@ def tau2_gibbs_kernel(group: Group) -> GibbsKernel:
     """Builds a Gibbs kernel for a smoothing parameter with an inverse gamma prior."""
     position_key = group["tau2"].name
 
-    def transition(prng_key, model_state: dict[str, NodeState]):
+    def transition(prng_key, model_state: LieselModelStateInput):
         a_prior = group.value_from(model_state, "a")
         rank = group.value_from(model_state, "rank")
 

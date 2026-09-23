@@ -22,7 +22,7 @@ from .kernel import (
 )
 from .mh import mh_step
 from .rw import RWKernelState
-from .types import KeyArray, ModelState, Position, Scalar, TuningInfo
+from .types import KeyArray, ModelState, Position, PositionInput, Scalar, TuningInfo
 
 
 class MHProposal(NamedTuple):
@@ -241,7 +241,7 @@ class MHKernel(ModelMixin, TransitionMixin[RWKernelState, MHTransitionInfo], Rep
         kernel_state: RWKernelState,
         model_state: ModelState,
         epoch: EpochState,
-        history: Position | None = None,
+        history: PositionInput | None = None,
     ) -> TuningOutcome[RWKernelState, DefaultTuningInfo]:
         """Currently does nothing."""
 

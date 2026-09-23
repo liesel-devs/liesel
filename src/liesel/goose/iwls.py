@@ -32,7 +32,7 @@ from .kernel import (
 )
 from .mh import mh_step
 from .pytree import register_dataclass_as_pytree
-from .types import Array, KeyArray, ModelState, Position, Scalar
+from .types import Array, KeyArray, ModelState, Position, PositionInput, Scalar
 
 
 @register_dataclass_as_pytree
@@ -376,7 +376,7 @@ class IWLSKernel(
         kernel_state: IWLSKernelState,
         model_state: ModelState,
         epoch: EpochState,
-        history: Position | None = None,
+        history: PositionInput | None = None,
     ) -> TuningOutcome[IWLSKernelState, IWLSTuningInfo]:
         """
         Currently does nothing.

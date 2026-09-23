@@ -5,6 +5,7 @@ import jax
 import jax.flatten_util
 
 from ..goose.types import Array
+from ..types import PositionInput
 from .model import Model
 
 
@@ -13,6 +14,10 @@ class LogProb:
     Interface for evaluating the unnormalized log probability of a Liesel model.
 
     Also provides access to the first and second derivatives.
+
+    Position mappings are not modified. Derivative methods convert the mapping to a
+    dictionary before differentiation. When applying JAX transformations externally,
+    pass a dictionary or another registered pytree to the transformed function.
 
     Parameters
     ----------
@@ -78,33 +83,33 @@ class LogProb:
         self.component = component
         self.diff_mode = diff_mode
 
-    def __call__(self, position: dict[str, Array | float]) -> Array:
+    def __call__(self, position: PositionInput) -> Array:
         """
         Log probability function evaluated at provided ``position``.
         """
         return self.log_prob(position=position)
 
-    def log_prob(self, position: dict[str, Array | float]) -> Array:
+    def log_prob(self, position: PositionInput) -> Array:
         """
         Log probability function evaluated at provided ``position``.
         """
         updated_state = self.model.update_state(position, self.model.state)
         return updated_state[f"_model_{self.component}"].value
 
-    def grad(self, position: dict[str, Array | float]) -> dict[str, Array]:
+    def grad(self, position: PositionInput) -> dict[str, Array]:
         """
         Gradient of the log probability function with respect to the ``position``.
         """
-        return self._grad_fn(position)
+        return self._grad_fn(dict(position))
 
     def hessian(
         self,
-        position: dict[str, Array | float],
+        position: PositionInput,
     ) -> dict[str, Array]:
         """
         Hessian of the log probability function with respect to the ``position``.
         """
-        return self._hessian_fn(position)
+        return self._hessian_fn(dict(position))
 
 
 class FlatLogProb:

@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 
 from .kernel import DefaultTransitionInfo
-from .types import KeyArray, ModelInterface, ModelState, Position, Scalar
+from .types import KeyArray, ModelInterface, ModelState, PositionInput, Scalar
 
 mh_error_book = {0: "no errors", 90: "nan acceptance prob"}
 """The error book of the :func:`.mh_step` function."""
@@ -17,7 +17,7 @@ mh_error_book = {0: "no errors", 90: "nan acceptance prob"}
 def mh_step(
     prng_key: KeyArray,
     model: ModelInterface,
-    proposal: Position,
+    proposal: PositionInput,
     model_state: ModelState,
     log_correction: Scalar = 0.0,
 ) -> tuple[DefaultTransitionInfo, ModelState]:

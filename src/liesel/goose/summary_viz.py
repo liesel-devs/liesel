@@ -273,7 +273,7 @@ def _collect_subparam_dfs(
 
 
 def _collect_param_dfs(
-    results: SamplingResults | dict[str, Array],
+    results: SamplingResults | Mapping[str, Array],
     params: str | list[str] | None = None,
     param_indices: int | Sequence[int] | None = None,
     chain_indices: int | Sequence[int] | None = None,
@@ -303,7 +303,7 @@ def _collect_param_dfs(
 
 
 def _setup_plot_df(
-    results: SamplingResults | dict[str, Array],
+    results: SamplingResults | Mapping[str, Array],
     params: str | list[str] | None,
     param_indices: int | Sequence[int] | None,
     chain_indices: int | Sequence[int] | None,
@@ -323,7 +323,7 @@ def _setup_plot_df(
 
 
 def _setup_scatterplot_df(
-    results: SamplingResults | dict[str, Array],
+    results: SamplingResults | Mapping[str, Array],
     params: str | list[str] | None,
     param_indices: int | Sequence[int] | None,
     chain_indices: int | Sequence[int] | None,
@@ -405,7 +405,7 @@ def save_figure(g: sns.FacetGrid | None = None, save_path: str | None = None) ->
 
 
 def plot_trace(
-    results: SamplingResults | dict[str, Array],
+    results: SamplingResults | Mapping[str, Array],
     params: str | list[str] | None = None,
     param_indices: int | Sequence[int] | None = None,
     chain_indices: int | Sequence[int] | None = None,
@@ -414,7 +414,7 @@ def plot_trace(
     title_spacing: float = 0.85,
     xlabel: str = "Iteration",
     style: str = "whitegrid",
-    color_palette: str | list[str] | dict[int, str] | None = None,
+    color_palette: str | list[str] | Mapping[int, str] | None = None,
     ncol: int = 3,
     height: float = 3,
     aspect_ratio: float = 1.0,
@@ -515,7 +515,9 @@ def plot_trace(
             col="param_label",
             col_wrap=_set_plot_cols(plot_df, ncol),
             facet_kws={"sharex": True, "sharey": False},
-            palette=color_palette,
+            palette=dict(color_palette)
+            if isinstance(color_palette, Mapping)
+            else color_palette,
             height=height,
             aspect=aspect_ratio,
             alpha=alpha,
@@ -531,7 +533,7 @@ def plot_trace(
 
 
 def plot_density(
-    results: SamplingResults | dict[str, Array],
+    results: SamplingResults | Mapping[str, Array],
     params: str | list[str] | None = None,
     param_indices: int | Sequence[int] | None = None,
     chain_indices: int | Sequence[int] | None = None,
@@ -540,7 +542,7 @@ def plot_density(
     title_spacing: float = 0.85,
     xlabel: str = "Value",
     style: str = "whitegrid",
-    color_palette: str | list[str] | dict[int, str] | None = None,
+    color_palette: str | list[str] | Mapping[int, str] | None = None,
     ncol: int = 3,
     height: float = 3,
     aspect_ratio: float = 1.0,
@@ -633,7 +635,9 @@ def plot_density(
             col="param_label",
             col_wrap=_set_plot_cols(plot_df, ncol),
             facet_kws={"sharex": False, "sharey": False},
-            palette=color_palette,
+            palette=dict(color_palette)
+            if isinstance(color_palette, Mapping)
+            else color_palette,
             height=height,
             aspect=aspect_ratio,
             **kwargs,
@@ -662,7 +666,7 @@ def _compute_max_lags(
 
 
 def plot_cor(
-    results: SamplingResults | dict[str, Array],
+    results: SamplingResults | Mapping[str, Array],
     params: str | list[str] | None = None,
     param_indices: int | Sequence[int] | None = None,
     chain_indices: int | Sequence[int] | None = None,
@@ -672,7 +676,7 @@ def plot_cor(
     title_spacing: float = 0.85,
     xlabel: str = "Lag",
     style: str = "whitegrid",
-    color_palette: str | list[str] | dict[int, str] | None = None,
+    color_palette: str | list[str] | Mapping[int, str] | None = None,
     ncol: int = 3,
     height: float = 3,
     aspect_ratio: float = 1.0,
@@ -773,7 +777,9 @@ def plot_cor(
                 hue="chain_index",
                 col="param_label",
                 col_wrap=_set_plot_cols(plot_df, ncol),
-                palette=color_palette,
+                palette=dict(color_palette)
+                if isinstance(color_palette, Mapping)
+                else color_palette,
                 height=height,
                 aspect=aspect_ratio,
                 **kwargs,
@@ -905,7 +911,7 @@ def _get_title(plot_df: pd.DataFrame, title: str | None) -> str:
 
 
 def plot_param(
-    results: SamplingResults | dict[str, Array],
+    results: SamplingResults | Mapping[str, Array],
     param: str,
     param_index: int | None = None,
     chain_indices: int | Sequence[int] | None = None,
@@ -1011,7 +1017,7 @@ def plot_param(
 
 
 def plot_scatter(
-    results: SamplingResults | dict[str, Array],
+    results: SamplingResults | Mapping[str, Array],
     params: list[str],
     param_indices: tuple[int, int],
     chain_indices: int | Sequence[int] | None = None,
@@ -1134,7 +1140,7 @@ def plot_scatter(
 
 
 def plot_pairs(
-    results: SamplingResults | dict[str, Array],
+    results: SamplingResults | Mapping[str, Array],
     params: str | list[str] | None = None,
     param_indices: int | Sequence[int] | None = None,
     chain_indices: int | Sequence[int] | None = None,
@@ -1144,7 +1150,7 @@ def plot_pairs(
     title_spacing: float = 0.9,
     style: str = "whitegrid",
     diag_kind: str = "kde",
-    color_palette: str | list[str] | dict[int, str] | None = None,
+    color_palette: str | list[str] | Mapping[int, str] | None = None,
     height: float = 3,
     aspect_ratio: float = 1.0,
     save_path: str | None = None,
@@ -1243,7 +1249,9 @@ def plot_pairs(
             diag_kind=diag_kind,
             height=height,
             aspect=aspect_ratio,
-            palette=color_palette,
+            palette=dict(color_palette)
+            if isinstance(color_palette, Mapping)
+            else color_palette,
         )
 
     if title is not None:

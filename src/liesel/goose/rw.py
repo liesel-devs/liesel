@@ -28,7 +28,7 @@ from .kernel import (
 )
 from .mh import mh_step
 from .pytree import register_dataclass_as_pytree
-from .types import KeyArray, ModelState, Position, Scalar, TuningInfo
+from .types import KeyArray, ModelState, PositionInput, Scalar, TuningInfo
 
 
 @register_dataclass_as_pytree
@@ -173,7 +173,7 @@ class RWKernel(ModelMixin, TransitionMixin[RWKernelState, RWTransitionInfo], Rep
         kernel_state: RWKernelState,
         model_state: ModelState,
         epoch: EpochState,
-        history: Position | None = None,
+        history: PositionInput | None = None,
     ) -> TuningOutcome[RWKernelState, DefaultTuningInfo]:
         """
         Currently does nothing.

@@ -15,7 +15,15 @@ from .kernel import (
     TuningOutcome,
     WarmupOutcome,
 )
-from .types import Kernel, KernelState, KeyArray, ModelState, Position, TuningInfo
+from .types import (
+    Kernel,
+    KernelState,
+    KeyArray,
+    ModelState,
+    Position,
+    PositionInput,
+    TuningInfo,
+)
 
 GibbsKernelState = KernelState
 GibbsTransitionInfo = DefaultTransitionInfo
@@ -189,7 +197,7 @@ class GibbsKernel(
         kernel_state: KernelState,
         model_state: ModelState,
         epoch: EpochState,
-        history: Position | None = None,
+        history: PositionInput | None = None,
     ) -> TuningOutcome[KernelState, GibbsTuningInfo]:
         """
         Currently does nothing.

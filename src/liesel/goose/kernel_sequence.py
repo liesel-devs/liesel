@@ -2,7 +2,7 @@
 Kernel sequence.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 import jax
@@ -15,7 +15,7 @@ from .types import (
     KernelState,
     KeyArray,
     ModelState,
-    Position,
+    PositionInput,
     TransitionInfo,
     TuningInfo,
 )
@@ -149,7 +149,7 @@ class KernelSequence:
         kernel_states: KernelStates,
         model_state: ModelState,
         phase: EpochState,
-        history: Position | None,
+        history: PositionInput | None,
     ) -> KerSeqTuningOutput:
         keys = jax.random.split(prng_key, len(self._kernels))
         infos: TuningInfos = {}
@@ -169,7 +169,7 @@ class KernelSequence:
         prng_key: KeyArray,
         kernel_states: KernelStates,
         model_state: ModelState,
-        tuning_history: None | TuningInfos,
+        tuning_history: Mapping[str, TuningInfo] | None,
     ) -> KerSeqFinalizeWarmupOutput:
         keys = jax.random.split(prng_key, len(self._kernels))
         new_states = []

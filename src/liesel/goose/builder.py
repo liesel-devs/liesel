@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 import math
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from functools import partial
 from typing import cast
 
@@ -25,6 +25,7 @@ from .epoch import EpochConfig, EpochManager, EpochType
 from .kernel_sequence import KernelSequence
 from .pytree import stack_leaves
 from .types import (
+    JitterFunction,
     JitterFunctions,
     Kernel,
     KeyArray,
@@ -309,7 +310,7 @@ class EngineBuilder:
 
         self._model_state = Option(model_states)
 
-    def set_jitter_fns(self, jitter_fns: JitterFunctions | None):
+    def set_jitter_fns(self, jitter_fns: Mapping[str, JitterFunction] | None):
         """
         Set the jittering functions.
 
@@ -322,7 +323,9 @@ class EngineBuilder:
         Parameters
         ----------
         jitter_fns
-            A dictionary where a jittering function is assigned to each position key.
+            A mapping where a jittering function is assigned to each position key.
+            A shallow copy is stored. Later changes to the supplied mapping do not
+            change the builder's configuration; call this method again to update it.
 
         Examples
         --------
@@ -379,7 +382,7 @@ class EngineBuilder:
 
         >>> builder.set_jitter_fns({"mu": jitter_fn})
         """
-        self._jitter_fns = Option(jitter_fns)
+        self._jitter_fns = Option(dict(jitter_fns) if jitter_fns is not None else None)
 
     @property
     def jitter_fns(self) -> Option[JitterFunctions]:

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Protocol, TypeVar
 import jax
 from jax.typing import ArrayLike
 
-from ..types import Position
+from ..types import Position, PositionInput
 
 if TYPE_CHECKING:
     from .epoch import EpochState
@@ -98,7 +98,9 @@ class ModelInterface(Protocol):
         raise NotImplementedError
 
     @abstractmethod
-    def update_state(self, position: Position, model_state: ModelState) -> ModelState:
+    def update_state(
+        self, position: PositionInput, model_state: ModelState
+    ) -> ModelState:
         """Updates the model state with the values in the position."""
 
         raise NotImplementedError
@@ -167,7 +169,7 @@ class Kernel(Protocol[TKernelState, TTransitionInfo, TTuningInfo]):
         kernel_state: TKernelState,
         model_state: ModelState,
         epoch: EpochState,
-        history: Position | None,
+        history: PositionInput | None,
     ) -> TuningOutcome[TKernelState, TTuningInfo]:
         """
         The method can perform automatic tuning of the kernel and is called

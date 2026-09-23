@@ -17,7 +17,7 @@ from liesel.__version__ import __version__
 from liesel.goose.engine import ErrorLog, SamplingResults
 from liesel.goose.epoch import EpochType
 from liesel.goose.pytree import slice_leaves, stack_leaves
-from liesel.goose.types import Array, Position, TransitionInfo
+from liesel.goose.types import Array, Position, PositionInput, TransitionInfo
 from liesel.option import Option
 
 
@@ -122,7 +122,7 @@ summary_quantities: Sequence[SummaryQuantities] = (
 
 
 def _summarize_acceptance_probabilities(
-    transition_infos: dict[str, TransitionInfo], phase: str
+    transition_infos: Mapping[str, TransitionInfo], phase: str
 ) -> list[dict[str, Any]]:
     data = []
     for k, tinfo in transition_infos.items():
@@ -289,7 +289,7 @@ class Summary:
     def __init__(
         self,
         results: SamplingResults,
-        additional_chain: Position | None = None,
+        additional_chain: PositionInput | None = None,
         quantiles: Sequence[float] = (0.05, 0.5, 0.95),
         hdi_prob: float = 0.9,
         selected: list[str] | None = None,
@@ -785,6 +785,8 @@ class SamplesSummary:
     """
     Posterior summary and diagnostics for a dictionary of sample arrays.
 
+    Accepts read-only mappings and does not modify the supplied mapping or its arrays.
+
     See :class:`.Summary` for the full description of the computed statistics, their
     interpretation, the ``quantities`` layout, and the behavior of ``quantiles``,
     ``hdi_prob``, ``per_chain``, and ``which``. This class computes the same
@@ -830,7 +832,7 @@ class SamplesSummary:
 
     def __init__(
         self,
-        samples: dict[str, Array],
+        samples: PositionInput,
         quantiles: Sequence[float] = (0.05, 0.5, 0.95),
         hdi_prob: float = 0.9,
         selected: list[str] | None = None,
@@ -851,7 +853,7 @@ class SamplesSummary:
                     f"Supported keys are: {summary_quantities}"
                 )
 
-        posterior_chain = Position(samples)
+        posterior_chain = Position(dict(samples))
 
         if selected:
             posterior_chain = Position(
@@ -1169,7 +1171,7 @@ def _apply_loo_scale(
 
 def loo(
     lpp: Mapping[str, jax.typing.ArrayLike] | jax.typing.ArrayLike,
-    samples: dict[str, jax.typing.ArrayLike] | None = None,
+    samples: Mapping[str, jax.typing.ArrayLike] | None = None,
     reff: float | None = None,
     scale: Literal["log", "negative_log", "deviance"] = "log",
 ) -> _LieselELPDData:
