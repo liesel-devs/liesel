@@ -14,12 +14,13 @@ from typing import (
     assert_never,
 )
 
+import jax.numpy as jnp
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 from .builder import EngineBuilder
 from .engine import SamplingResults
 from .interface import LieselInterface
-from .types import Array, JitterFunctions, Kernel, KeyArray
+from .types import JitterFunctions, Kernel, KeyArray, PyTree
 
 if TYPE_CHECKING:
     from liesel.model import Model, Var
@@ -511,7 +512,7 @@ class MCMCSpec:
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.kernel}, {self.kernel_group=})"
 
-    def apply_jitter(self, seed: KeyArray, value: Array) -> Array:
+    def apply_jitter(self, seed: KeyArray, value: PyTree) -> PyTree:
         """
         Apply random jitter to a given value using the specified jitter distribution.
 
@@ -532,6 +533,8 @@ class MCMCSpec:
         """
         if self.jitter_dist is None:
             return value
+
+        value = jnp.asarray(value)
 
         # check compatibility of shapes
         if (

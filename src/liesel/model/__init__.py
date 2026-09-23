@@ -2,7 +2,7 @@
 Liesel modeling framework.
 """
 
-from ..types import Position, PositionInput
+from ..types import Position, PositionInput, PyTree
 from .distreg import DistRegBuilder, dist_reg_mcmc, tau2_gibbs_kernel
 from .legacy import (
     PIT,
@@ -71,6 +71,7 @@ __all__ = [
     "Position",
     "PositionInput",
     "Predictor",
+    "PyTree",
     "RegressionCoef",
     "Response",
     "Smooth",

@@ -6,7 +6,9 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import ClassVar
 
+import jax
 import jax.numpy as jnp
+import numpy as np
 from blackjax import hmc as hmc_kernel
 from blackjax.adaptation.step_size import find_reasonable_step_size
 from blackjax.mcmc import hmc
@@ -33,7 +35,7 @@ from .kernel import (
 )
 from .mm import tune_inv_mm_diag, tune_inv_mm_full
 from .pytree import register_dataclass_as_pytree
-from .types import Array, KeyArray, ModelState, Position, PositionInput, Scalar
+from .types import KeyArray, ModelState, Position, PositionInput, Scalar
 
 
 @register_dataclass_as_pytree
@@ -45,7 +47,7 @@ class HMCKernelState:
     """
 
     step_size: Scalar
-    inverse_mass_matrix: Array
+    inverse_mass_matrix: jax.Array | np.ndarray
     da_state: DualAvgState | None = None
 
     def __post_init__(self):
@@ -142,7 +144,7 @@ class HMCKernel(
         self,
         position_keys: Sequence[str],
         initial_step_size: float | None = None,
-        initial_inverse_mass_matrix: Array | None = None,
+        initial_inverse_mass_matrix: ArrayLike | None = None,
         num_integration_steps: int = 10,
         da_target_accept: float = 0.8,
         da_gamma: float = 0.05,
@@ -188,7 +190,7 @@ class HMCKernel(
             else:
                 inverse_mass_matrix = jnp.eye(flat_position.size)
         else:
-            inverse_mass_matrix = self.initial_inverse_mass_matrix
+            inverse_mass_matrix = jnp.asarray(self.initial_inverse_mass_matrix)
 
         if self.initial_step_size is None:
             blackjax_kernel = self._blackjax_kernel

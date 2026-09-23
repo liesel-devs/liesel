@@ -12,12 +12,13 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pandas as pd
+from numpy.typing import ArrayLike
 
 from liesel.__version__ import __version__
 from liesel.goose.engine import ErrorLog, SamplingResults
 from liesel.goose.epoch import EpochType
 from liesel.goose.pytree import slice_leaves, stack_leaves
-from liesel.goose.types import Array, Position, PositionInput, TransitionInfo
+from liesel.goose.types import Position, PositionInput, TransitionInfo
 from liesel.option import Option
 
 
@@ -832,7 +833,7 @@ class SamplesSummary:
 
     def __init__(
         self,
-        samples: PositionInput,
+        samples: Mapping[str, ArrayLike],
         quantiles: Sequence[float] = (0.05, 0.5, 0.95),
         hdi_prob: float = 0.9,
         selected: list[str] | None = None,
@@ -869,7 +870,7 @@ class SamplesSummary:
                 del posterior_chain[key]
 
         # get some general infos on the sampling
-        param_chain = next(iter(posterior_chain.values()))
+        param_chain = np.asarray(next(iter(posterior_chain.values())))
 
         sample_info = {
             "num_chains": param_chain.shape[0],
@@ -914,7 +915,7 @@ class SamplesSummary:
     @classmethod
     def from_array(
         cls,
-        a: Array,
+        a: ArrayLike,
         quantiles: Sequence[float] = (0.05, 0.5, 0.95),
         hdi_prob: float = 0.9,
         selected: list[str] | None = None,

@@ -10,10 +10,9 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from arviz_stats.base import array_stats
+from numpy.typing import ArrayLike
 
 from liesel.goose.engine import SamplingResults
-
-from .types import Array
 
 LegendPosition = (
     Literal[
@@ -122,7 +121,7 @@ def _move_col_first(df: pd.DataFrame, colname: str) -> pd.DataFrame:
 
 
 def _validate_params(
-    posterior_samples: Mapping[str, Array], params: str | list[str] | None
+    posterior_samples: Mapping[str, ArrayLike], params: str | list[str] | None
 ) -> list[str]:
     """Convert ``str`` or ``None`` input of ``params`` to sequence of strings."""
     posterior_keys = list(posterior_samples.keys())
@@ -160,7 +159,7 @@ def _subparam_chains_to_df(
 
 
 def _preprocess_param_chains(
-    posterior_samples: Mapping[str, Array], param: str
+    posterior_samples: Mapping[str, ArrayLike], param: str
 ) -> np.ndarray:
     """Convert array of posteror samples for each parameter to equal dimensions."""
 
@@ -241,7 +240,7 @@ def _postprocess_param_df(
 
 
 def _collect_subparam_dfs(
-    posterior_samples: Mapping[str, Array],
+    posterior_samples: Mapping[str, ArrayLike],
     param: str,
     param_indices: int | Sequence[int] | None,
     chain_indices: int | Sequence[int] | None,
@@ -273,7 +272,7 @@ def _collect_subparam_dfs(
 
 
 def _collect_param_dfs(
-    results: SamplingResults | Mapping[str, Array],
+    results: SamplingResults | Mapping[str, ArrayLike],
     params: str | list[str] | None = None,
     param_indices: int | Sequence[int] | None = None,
     chain_indices: int | Sequence[int] | None = None,
@@ -282,7 +281,7 @@ def _collect_param_dfs(
 ) -> pd.DataFrame:
     """Combines individual data frames for each parameter into a single data frame."""
 
-    samples: Mapping[str, Array]
+    samples: Mapping[str, ArrayLike]
     if isinstance(results, SamplingResults):
         samples = (
             results.get_samples() if include_warmup else results.get_posterior_samples()
@@ -303,7 +302,7 @@ def _collect_param_dfs(
 
 
 def _setup_plot_df(
-    results: SamplingResults | Mapping[str, Array],
+    results: SamplingResults | Mapping[str, ArrayLike],
     params: str | list[str] | None,
     param_indices: int | Sequence[int] | None,
     chain_indices: int | Sequence[int] | None,
@@ -323,7 +322,7 @@ def _setup_plot_df(
 
 
 def _setup_scatterplot_df(
-    results: SamplingResults | Mapping[str, Array],
+    results: SamplingResults | Mapping[str, ArrayLike],
     params: str | list[str] | None,
     param_indices: int | Sequence[int] | None,
     chain_indices: int | Sequence[int] | None,
@@ -405,7 +404,7 @@ def save_figure(g: sns.FacetGrid | None = None, save_path: str | None = None) ->
 
 
 def plot_trace(
-    results: SamplingResults | Mapping[str, Array],
+    results: SamplingResults | Mapping[str, ArrayLike],
     params: str | list[str] | None = None,
     param_indices: int | Sequence[int] | None = None,
     chain_indices: int | Sequence[int] | None = None,
@@ -533,7 +532,7 @@ def plot_trace(
 
 
 def plot_density(
-    results: SamplingResults | Mapping[str, Array],
+    results: SamplingResults | Mapping[str, ArrayLike],
     params: str | list[str] | None = None,
     param_indices: int | Sequence[int] | None = None,
     chain_indices: int | Sequence[int] | None = None,
@@ -666,7 +665,7 @@ def _compute_max_lags(
 
 
 def plot_cor(
-    results: SamplingResults | Mapping[str, Array],
+    results: SamplingResults | Mapping[str, ArrayLike],
     params: str | list[str] | None = None,
     param_indices: int | Sequence[int] | None = None,
     chain_indices: int | Sequence[int] | None = None,
@@ -911,7 +910,7 @@ def _get_title(plot_df: pd.DataFrame, title: str | None) -> str:
 
 
 def plot_param(
-    results: SamplingResults | Mapping[str, Array],
+    results: SamplingResults | Mapping[str, ArrayLike],
     param: str,
     param_index: int | None = None,
     chain_indices: int | Sequence[int] | None = None,
@@ -1017,7 +1016,7 @@ def plot_param(
 
 
 def plot_scatter(
-    results: SamplingResults | Mapping[str, Array],
+    results: SamplingResults | Mapping[str, ArrayLike],
     params: list[str],
     param_indices: tuple[int, int],
     chain_indices: int | Sequence[int] | None = None,
@@ -1140,7 +1139,7 @@ def plot_scatter(
 
 
 def plot_pairs(
-    results: SamplingResults | Mapping[str, Array],
+    results: SamplingResults | Mapping[str, ArrayLike],
     params: str | list[str] | None = None,
     param_indices: int | Sequence[int] | None = None,
     chain_indices: int | Sequence[int] | None = None,

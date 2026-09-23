@@ -11,19 +11,19 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
 from numbers import Integral
-from typing import IO, Any, Literal, Self, TypedDict
+from typing import IO, Any, Literal, Self, TypedDict, cast
 
 import dill
 import jax
 import jax.numpy as jnp
 import jax.random
 import networkx as nx
+import numpy as np
 import pandas as pd
 
-from ..types import Position, PositionInput
+from ..types import Position, PositionInput, PyTree
 from ._mapping import _KeyCompletableMapping, _KeyCompletableProperty
 from .nodes import (
-    Array,
     Calc,
     Dist,
     Group,
@@ -58,9 +58,11 @@ class _SamplingSpec(TypedDict):
     value_node: Node
 
 
-def _reduced_sum(*args: Array) -> Array:
+def _reduced_sum(
+    *args: float | np.number | np.ndarray | jax.Array,
+) -> float | np.number | jax.Array:
     """Computes the sum after reducing arrays to scalars."""
-    reduced = (arg.sum() if hasattr(arg, "sum") else arg for arg in args)
+    reduced = (cast(Any, arg).sum() if hasattr(arg, "sum") else arg for arg in args)
     return sum(reduced)
 
 
@@ -87,7 +89,7 @@ def _transform_back(var_transformed: Var) -> Calc:
     return Calc(fn, var_transformed.value_node, *inputs, **kwinputs)
 
 
-def _set_weak_var_value(var: Var, value: Array) -> None:
+def _set_weak_var_value(var: Var, value: Any) -> None:
     """
     Sets the cached value of a weak variable's value node.
 
@@ -128,8 +130,8 @@ def _compile_prediction(
     predict_names = tuple(predict_names)
 
     def predict_one(
-        samples: dict[str, Array], model_state: LieselModelState
-    ) -> dict[str, Array]:
+        samples: dict[str, PyTree], model_state: LieselModelState
+    ) -> dict[str, PyTree]:
         updated_state = model.update_state(samples, model_state, inplace=False)
         return model.extract_position(predict_names, updated_state)
 
@@ -138,8 +140,8 @@ def _compile_prediction(
     else:
 
         def predict_batched(
-            samples: dict[str, Array], model_state: LieselModelState
-        ) -> dict[str, Array]:
+            samples: dict[str, PyTree], model_state: LieselModelState
+        ) -> dict[str, PyTree]:
             def predict_from_samples(samples):
                 return predict_one(samples, model_state)
 
@@ -180,11 +182,11 @@ def _compile_sampling(
     """
 
     def one_draw(
-        draw_index: Array,
-        seeds: Array,
-        posterior_samples: dict[str, Array],
+        draw_index: jax.Array,
+        seeds: jax.Array,
+        posterior_samples: dict[str, PyTree],
         model_state: LieselModelState,
-    ) -> dict[str, Array]:
+    ) -> dict[str, PyTree]:
         posterior_index = draw_index % posterior_size
         position = jax.tree.map(
             lambda value: value[posterior_index],
@@ -208,11 +210,11 @@ def _compile_sampling(
         return sampled_position
 
     def draw_all(
-        draw_indices: Array,
-        seeds: Array,
-        posterior_samples: dict[str, Array],
+        draw_indices: jax.Array,
+        seeds: jax.Array,
+        posterior_samples: dict[str, PyTree],
         model_state: LieselModelState,
-    ) -> dict[str, Array]:
+    ) -> dict[str, PyTree]:
         def draw(draw_index):
             return one_draw(
                 draw_index,
@@ -2195,7 +2197,7 @@ class Model:
         return model
 
     @property
-    def log_lik(self) -> Array:
+    def log_lik(self) -> float | np.number | jax.Array:
         """
         The log-likelihood of the model.
 
@@ -2205,7 +2207,7 @@ class Model:
         return self._nodes["_model_log_lik"].value
 
     @property
-    def log_prior(self) -> Array:
+    def log_prior(self) -> float | np.number | jax.Array:
         """
         The log-prior of the model.
 
@@ -2215,7 +2217,7 @@ class Model:
         return self._nodes["_model_log_prior"].value
 
     @property
-    def log_prob(self) -> Array:
+    def log_prob(self) -> float | np.number | jax.Array:
         """
         The (unnormalized) log-probability / log-posterior of the model.
 
@@ -3072,7 +3074,7 @@ class Model:
         predict: Sequence[str] | None = None,
         newdata: PositionInput | None = None,
         chunk_size: int | None = 64,
-    ) -> dict[str, Array]:
+    ) -> dict[str, PyTree]:
         """
         Returns a dictionary of predictions.
 
@@ -3456,10 +3458,10 @@ def log_prob_pointwise(
                 "all variables contributing to the likelihood."
             )
 
-        if var.value.shape != var.log_prob.shape:
+        if var.value.shape != jnp.shape(var.log_prob):
             msg = (
                 f"{var}.value has shape {var.value.shape}, "
-                f"while {var}.log_prob has shape {var.log_prob.shape}. This "
+                f"while {var}.log_prob has shape {jnp.shape(var.log_prob)}. This "
                 f"suggests that the pointwise log prob for {var} may not be "
                 "available, or that you may be using a multivariate distribution. "
                 "Please double check."

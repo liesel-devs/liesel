@@ -3,10 +3,13 @@ from typing import Any, Literal
 
 import jax
 import jax.flatten_util
+import jax.numpy as jnp
+from jax.typing import ArrayLike
 
-from .types import ModelInterface, ModelState, PositionInput
+from .types import ModelInterface, ModelState, PositionInput, PyTree, Scalar
 
 Array = Any
+"""Deprecated compatibility alias for Any; use PyTree or an array-specific type."""
 
 
 class InterfaceLogProb:
@@ -54,23 +57,23 @@ class InterfaceLogProb:
             raise ValueError(f"Unrecognized argument value {diff_mode=}")
         self.diff_mode = diff_mode
 
-    def __call__(self, position: PositionInput) -> Array:
+    def __call__(self, position: PositionInput) -> Scalar:
         return self.log_prob(position=position)
 
-    def log_prob(self, position: PositionInput) -> Array:
+    def log_prob(self, position: PositionInput) -> Scalar:
         """
         Log probability function evaluated at provided ``position``.
         """
         updated_state = self.model.update_state(position, self.model_state)
         return self.model.log_prob(updated_state)
 
-    def grad(self, position: PositionInput) -> dict[str, Array]:
+    def grad(self, position: PositionInput) -> dict[str, PyTree]:
         """
         Gradient of the log probability function with respect to the ``position``.
         """
         return self._grad_fn(dict(position))
 
-    def hessian(self, position: PositionInput) -> dict[str, Array]:
+    def hessian(self, position: PositionInput) -> dict[str, PyTree]:
         """
         Hessian of the log probability function with respect to the ``position``.
         """
@@ -131,25 +134,25 @@ class FlatInterfaceLogProb:
             raise ValueError(f"Unrecognized argument value {diff_mode=}")
         self.diff_mode = diff_mode
 
-    def __call__(self, flat_position: Array) -> Array:
+    def __call__(self, flat_position: ArrayLike) -> Scalar:
         return self.log_prob(flat_position=flat_position)
 
-    def log_prob(self, flat_position: Array) -> Array:
+    def log_prob(self, flat_position: ArrayLike) -> Scalar:
         """
         Log probability function evaluated at provided ``position``.
         """
-        position = self.unravel_fn(flat_position)
+        position = self.unravel_fn(jnp.asarray(flat_position))
         updated_state = self.model.update_state(position, self.model_state)
         return self.model.log_prob(updated_state)
 
-    def grad(self, flat_position: Array) -> Array:
+    def grad(self, flat_position: ArrayLike) -> jax.Array:
         """
         Gradient of the log probability function with respect to the ``position``.
         """
-        return self._grad_fn(flat_position)
+        return self._grad_fn(jnp.asarray(flat_position))
 
-    def hessian(self, flat_position: Array) -> Array:
+    def hessian(self, flat_position: ArrayLike) -> jax.Array:
         """
         Hessian of the log probability function with respect to the ``position``.
         """
-        return self._hessian_fn(flat_position)
+        return self._hessian_fn(jnp.asarray(flat_position))
