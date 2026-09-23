@@ -24,7 +24,6 @@ import jax.numpy as jnp
 import optax
 import pandas as pd
 import plotnine as p9
-from mizani.breaks import breaks_extended
 
 from liesel.goose.types import ModelState
 
@@ -1136,21 +1135,6 @@ class OptimResult:
         recent = self.plot_loss(window=window, legend=False) + p9.labs(
             subtitle="Recent loss history"
         )
-
-        if self.n_epochs:
-            first_epoch = max(self.n_epochs - window, 0)
-            last_epoch = self.n_epochs - 1
-            default_breaks = breaks_extended()
-            recent += p9.scale_x_continuous(
-                breaks=lambda limits: sorted(
-                    {first_epoch, last_epoch}
-                    | {
-                        value
-                        for value in default_breaks(limits)
-                        if first_epoch < value < last_epoch
-                    }
-                )
-            )
 
         overview = (self.plot_loss() + p9.labs(subtitle="Full loss history")) / recent
         return overview + p9.theme(figure_size=(8, 7))

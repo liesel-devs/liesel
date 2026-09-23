@@ -80,7 +80,7 @@ What changes
   ``position_min_monitor`` for the best monitoring loss across the run. The old
   default selected within the final patience window. Use ``model.update_state``
   to get a fitted model state.
-* Use ``result.plot_loss()`` or ``result.history.loss_df()`` instead of
+* Use ``result.plot_loss_overview()`` or ``result.history.loss_df()`` instead of
   ``gs.history_to_df(result.history)``.
 
 Validation and minibatches

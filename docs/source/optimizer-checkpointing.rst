@@ -11,7 +11,7 @@ Pause in memory
 
    engine = optim.build_engine()
    first = engine.fit(pause_after=100)
-   first.plot_loss()
+   first.plot_loss_overview()
    result = engine.fit(checkpoint=first.checkpoint)
 
 ``pause_after`` limits additional epochs in that call. Early stopping still

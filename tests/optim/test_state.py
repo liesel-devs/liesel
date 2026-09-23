@@ -4,7 +4,6 @@ import jax
 import jax.numpy as jnp
 import optax
 import pytest
-from mizani.breaks import breaks_extended
 
 from liesel.optim import Batches, Optimizer
 from liesel.optim.state import OptimCarry, OptimHistory, OptimResult
@@ -221,25 +220,11 @@ class TestOptimResult:
         assert recent.labels.subtitle == "Recent loss history"
         assert recent.theme.getp("legend_position") == "none"
 
-        x_scale = recent.scales.get_scales("x")
-        assert x_scale is not None
-        breaks = x_scale.breaks((expected_epochs[0], expected_epochs[-1]))
-        default_between = {
-            value
-            for value in breaks_extended()((expected_epochs[0], expected_epochs[-1]))
-            if expected_epochs[0] < value < expected_epochs[-1]
-        }
-        assert set(breaks) == {
-            expected_epochs[0],
-            expected_epochs[-1],
-            *default_between,
-        }
+        assert recent.scales.get_scales("x") is None
 
         if window is None:
             figure = overview.draw()
             assert figure.get_size_inches() == pytest.approx((8, 7))
-            labels = {tick.get_text() for tick in figure.axes[-1].get_xticklabels()}
-            assert {"6", "9"} <= labels
 
     def test_plot_loss_overview_handles_no_completed_epochs(self):
         history = OptimHistory.from_epochs(epochs=0, position=None, tracked=None)

@@ -46,7 +46,8 @@ Read the result
   the lowest finite monitoring loss. It raises ``RuntimeError`` if no such loss
   was recorded. An earlier best position remains available after a later failure.
 * ``result.position_final`` holds the parameters at the end of the run.
-* ``result.plot_loss()`` shows training and monitoring loss.
+* ``result.plot_loss_overview()`` shows the full loss history and a closer
+  view of recent epochs.
 * ``result.plot_params()`` shows saved parameter paths.
 
 Both position properties raise ``RuntimeError`` if their parameters contain NaN
@@ -70,7 +71,7 @@ For an existing ``model``:
        stopper=stopper,
        seed=42,
    ).fit()
-   result.plot_loss()
+   result.plot_loss_overview()
 
 A larger ``effective_window`` smooths more and reacts more slowly. Its unit is
 an epoch's worth of batches. Older losses fade gradually; they are not dropped
