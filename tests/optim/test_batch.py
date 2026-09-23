@@ -94,7 +94,7 @@ class TestBatches:
         )
         result = factory(
             PositionSplitManager([split]) if managed else split,
-            batch_axis_size=2,
+            batch_size=2,
             batch_axes={"x": -1},
             sample_with_replacement=True,
             sampling_weights={"x": jnp.arange(1.0, 7.0)},
@@ -203,7 +203,6 @@ class TestBatches:
                 {"sampling_weights": {"missing": jnp.ones(6)}},
                 "Unknown sampling_weights",
             ),
-            ({"batch_axis_size": 2}, "batch_size or batch_axis_size"),
         ],
     )
     def test_from_split_rejects_invalid_options(self, factory, kwargs, message):
@@ -233,6 +232,26 @@ class TestBatches:
         assert not child.shuffle
         assert child.batch_sample_scale == 1
         assert child.position_keys == (["x"] if keys is None else [])
+
+    @pytest.mark.parametrize(
+        "factory, source",
+        [
+            (Batches, ["x"]),
+            (Batches.from_model, None),
+            (BatchManager.from_model, None),
+            (Batches.from_split, "split"),
+            (BatchManager.from_split, "split"),
+        ],
+    )
+    def test_batch_axis_size_is_rejected(self, factory, source):
+        if source is None:
+            source = lsl.Model([lsl.Var.new_obs(jnp.arange(6.0), name="x")])
+        elif source == "split":
+            source = PositionSplit(
+                Position({"x": jnp.arange(6)}), Position({}), Position({}), 6, 0, 0
+            )
+        with pytest.raises(TypeError, match="batch_axis_size"):
+            factory(source, batch_size=2, batch_axis_size=2)
 
     def test_runs(self):
         Bi = Batches(["x"], axis_size=30, batch_size=4, shuffle=True)
@@ -265,16 +284,6 @@ class TestBatches:
 
         assert indices.shape == (10,)
         assert jnp.array_equal(jnp.sort(indices), jnp.arange(10))
-
-    def test_old_batch_axis_size_keyword_still_works(self):
-        batches = Batches(["x"], axis_size=10, batch_axis_size=4, shuffle=False)
-
-        assert batches.batch_size == 4
-        assert batches.batch_indices.shape == (2, 4)
-
-    def test_batch_size_and_old_keyword_are_mutually_exclusive(self):
-        with pytest.raises(TypeError, match="batch_size or batch_axis_size"):
-            Batches(["x"], axis_size=10, batch_size=4, batch_axis_size=4)
 
     def test_no_batching(self):
         Bi = Batches(["x"], axis_size=30, batch_size=None, shuffle=False)
@@ -364,17 +373,6 @@ class TestBatches:
 
         with pytest.raises(ValueError, match="multi_size"):
             Batches.from_model(model, batch_size=2, position_keys=["x", "y"])
-
-    def test_from_model_accepts_old_batch_axis_size_keyword(self):
-        y = lsl.Var.new_obs(jnp.arange(6.0), name="y")
-        model = lsl.Model([y])
-
-        batches = Batches.from_model(
-            model, batch_axis_size=2, position_keys=["y"], shuffle=False
-        )
-
-        assert isinstance(batches, Batches)
-        assert batches.batch_size == 2
 
     def test_from_model_empty_position_keys_allow_full_data_adapter(self):
         y = lsl.Var.new_obs(jnp.arange(6.0), name="y")
@@ -775,19 +773,6 @@ class TestBatchManager:
         assert manager.axis_size == (8, 5)
         assert manager.batch_size == (2, 2)
         assert manager.n_full_batches == 4
-
-    def test_from_model_accepts_old_batch_axis_size_keyword(self):
-        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
-        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
-        model = lsl.Model([x, y])
-
-        manager = BatchManager.from_model(
-            model,
-            batch_axis_size=2,
-            position_keys=["x", "y"],
-        )
-
-        assert manager.batch_size == (2, 2)
 
     def test_from_model_supports_full_data_multi_size_batches(self):
         x = lsl.Var.new_obs(jnp.arange(8.0), name="x")

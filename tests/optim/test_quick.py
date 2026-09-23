@@ -108,6 +108,8 @@ def test_lieseloptim_requires_explicit_loss_monitor():
         "shuffle_batches",
         "epoch_size",
         "batch_axis_size",
+        "progress_n_updates",
+        "step_progress_n_updates",
     ],
 )
 def test_lieseloptim_removed_data_shortcuts_are_rejected(keyword):
@@ -334,21 +336,17 @@ def test_progress_and_loss_monitor_are_passed_to_engine():
         batches=Batches.from_model(model, batch_size=1),
         loss_monitor=loss_monitor,
         show_progress=False,
-        progress_n_updates=7,
         progress_update_every=3,
         show_step_progress=True,
         step_progress_update_every=4,
-        step_progress_n_updates=4,
         seed=1,
     ).build_engine()
 
     assert engine.loss_monitor is loss_monitor
     assert engine.show_progress is False
-    assert engine.progress_n_updates == 7
-    assert engine.progress_update_every == 143
+    assert engine.progress_update_every == 3
     assert engine.show_step_progress is True
-    assert engine.step_progress_update_every == 2
-    assert engine.step_progress_n_updates == 3
+    assert engine.step_progress_update_every == 4
 
 
 def test_fit_returns_optim_result():

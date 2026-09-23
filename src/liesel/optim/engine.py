@@ -27,8 +27,6 @@ from tqdm import tqdm
 from ._engine_utils import (
     BatchConfig,
     SplitConfig,
-    _progress_n_updates,
-    _progress_print_rate,
     _validate_positive_int,
 )
 from .batch import Batches, BatchManager
@@ -220,10 +218,6 @@ class OptimEngine:
     save_position_history
         Whether to store the full position history. The minimum-monitor position is
         tracked independently of this setting.
-    progress_n_updates
-        Compatibility alias for configuring an approximate maximum number of epoch
-        progress-bar updates. The value is converted to ``progress_update_every``;
-        reading it returns the resulting effective number of updates.
     loss_monitor
         Source for the epoch-level stopping and progress loss. Pass
         :class:`EmaTrainLossMonitor` for a continuous EMA of pre-update losses,
@@ -246,10 +240,6 @@ class OptimEngine:
     step_progress_update_every
         Update the batch progress bar after this many completed batches. Defaults to
         10. The final state of an interrupted epoch is always rendered.
-    step_progress_n_updates
-        Compatibility alias for configuring an approximate maximum number of batch
-        progress-bar updates per epoch. Reading it returns the resulting effective
-        number of updates.
 
     Attributes
     ----------
@@ -328,21 +318,14 @@ class OptimEngine:
         prune_history: bool = True,
         show_progress: bool = True,
         save_position_history: bool = True,
-        progress_n_updates: int | None = None,
-        debug_nans: bool = False,
         *,
+        debug_nans: bool = False,
         loss_monitor: LossMonitor,
         progress_update_every: int = 10,
         show_step_progress: bool = False,
         step_progress_update_every: int = 10,
-        step_progress_n_updates: int | None = None,
     ) -> None:
-        """Initializes an optimization engine.
-
-        ``progress_n_updates`` retains its historical positional and keyword slot.
-        When supplied, it takes precedence over ``progress_update_every``. The batch
-        aliases follow the same rule.
-        """
+        """Initializes an optimization engine."""
         self.loss = loss
         self.batches = batches
         self.optimizers = optimizers
@@ -357,11 +340,6 @@ class OptimEngine:
         self.debug_nans = debug_nans
         self.show_step_progress = show_step_progress
         self.step_progress_update_every = step_progress_update_every
-
-        if progress_n_updates is not None:
-            self.progress_n_updates = progress_n_updates
-        if step_progress_n_updates is not None:
-            self.step_progress_n_updates = step_progress_n_updates
 
         self.__post_init__()
 
@@ -400,34 +378,6 @@ class OptimEngine:
             The split object stored on ``self.loss.split``.
         """
         return self.loss.split
-
-    @property
-    def progress_n_updates(self) -> int:
-        """Effective number of epoch updates implied by the update interval."""
-        _validate_positive_int(self.progress_update_every, "progress_update_every")
-        return _progress_n_updates(self.stopper.epochs, self.progress_update_every)
-
-    @progress_n_updates.setter
-    def progress_n_updates(self, value: int) -> None:
-        _validate_positive_int(value, "progress_n_updates")
-        self.progress_update_every = _progress_print_rate(self.stopper.epochs, value)
-
-    @property
-    def step_progress_n_updates(self) -> int:
-        """Effective number of batch updates implied by the update interval."""
-        _validate_positive_int(
-            self.step_progress_update_every, "step_progress_update_every"
-        )
-        return _progress_n_updates(
-            self.batches.n_full_batches, self.step_progress_update_every
-        )
-
-    @step_progress_n_updates.setter
-    def step_progress_n_updates(self, value: int) -> None:
-        _validate_positive_int(value, "step_progress_n_updates")
-        self.step_progress_update_every = _progress_print_rate(
-            self.batches.n_full_batches, value
-        )
 
     @property
     def position_keys(self) -> list[str]:

@@ -12,8 +12,6 @@ from ..model import Model
 from ._engine_utils import (
     BatchConfig,
     SplitConfig,
-    _progress_n_updates,
-    _progress_print_rate,
     _validate_positive_int,
 )
 from .batch import Batches
@@ -93,14 +91,6 @@ class LieselOptim:
         progress is active, the epoch bar advances after every epoch.
     step_progress_update_every
         Update the batch progress bar after this many completed batches.
-    progress_n_updates
-        Compatibility alias for an approximate maximum number of epoch updates.
-        Overrides ``progress_update_every``. Reading it returns the effective
-        update count after interval conversion.
-    step_progress_n_updates
-        Compatibility alias for an approximate maximum number of batch updates.
-        Overrides ``step_progress_update_every``. Reading it returns the effective
-        update count after interval conversion.
 
     Examples
     --------
@@ -140,8 +130,6 @@ class LieselOptim:
         show_step_progress: bool = False,
         progress_update_every: int = 10,
         step_progress_update_every: int = 10,
-        progress_n_updates: int | None = None,
-        step_progress_n_updates: int | None = None,
     ) -> None:
         if batches is not None and batch_size is not None:
             raise ValueError("Pass either batch_size or batches, not both.")
@@ -178,41 +166,9 @@ class LieselOptim:
         self.progress_update_every = progress_update_every
         self.show_step_progress = show_step_progress
         self.step_progress_update_every = step_progress_update_every
-        if progress_n_updates is not None:
-            self.progress_n_updates = progress_n_updates
-        if step_progress_n_updates is not None:
-            self.step_progress_n_updates = step_progress_n_updates
         _validate_positive_int(self.progress_update_every, "progress_update_every")
         _validate_positive_int(
             self.step_progress_update_every, "step_progress_update_every"
-        )
-
-    @property
-    def progress_n_updates(self) -> int:
-        """Effective number of epoch updates implied by the update interval."""
-        _validate_positive_int(self.progress_update_every, "progress_update_every")
-        return _progress_n_updates(self.stopper.epochs, self.progress_update_every)
-
-    @progress_n_updates.setter
-    def progress_n_updates(self, value: int) -> None:
-        _validate_positive_int(value, "progress_n_updates")
-        self.progress_update_every = _progress_print_rate(self.stopper.epochs, value)
-
-    @property
-    def step_progress_n_updates(self) -> int:
-        """Effective number of batch updates implied by the update interval."""
-        _validate_positive_int(
-            self.step_progress_update_every, "step_progress_update_every"
-        )
-        return _progress_n_updates(
-            self.batches.n_full_batches, self.step_progress_update_every
-        )
-
-    @step_progress_n_updates.setter
-    def step_progress_n_updates(self, value: int) -> None:
-        _validate_positive_int(value, "step_progress_n_updates")
-        self.step_progress_update_every = _progress_print_rate(
-            self.batches.n_full_batches, value
         )
 
     def _resolve_split(

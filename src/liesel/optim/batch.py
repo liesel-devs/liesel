@@ -4,7 +4,7 @@ import math
 from collections.abc import Mapping, Sequence
 from copy import copy
 from dataclasses import InitVar, dataclass, field
-from typing import Literal, cast, overload
+from typing import Literal, overload
 
 import jax
 import jax.numpy as jnp
@@ -23,8 +23,6 @@ from .split import (
     _observed_dist_infos,
 )
 from .types import Array, ModelInterface, ModelState, Position
-
-_MISSING = object()
 
 
 def _position_axis_size(position: Position, key: str, axis: int) -> int:
@@ -53,19 +51,6 @@ def _sampling_categories(labels: Array) -> tuple[np.ndarray, np.ndarray, np.ndar
             "without missing values or mixed string/numeric labels."
         )
     return np.unique(values, return_inverse=True, return_counts=True)
-
-
-def _resolve_batch_size(
-    batch_size: int | None | object,
-    batch_axis_size: int | None | object,
-) -> int | None:
-    if batch_size is _MISSING and batch_axis_size is _MISSING:
-        raise TypeError("missing required argument: 'batch_size'")
-
-    if batch_size is not _MISSING and batch_axis_size is not _MISSING:
-        raise TypeError("Pass either batch_size or batch_axis_size, not both.")
-
-    return cast(int | None, batch_axis_size if batch_size is _MISSING else batch_size)
 
 
 def _sampling_weights_for_groups(
@@ -221,9 +206,6 @@ class Batches:
         Optional effective likelihood sample size represented by one batch. If
         ``sample_size`` is supplied and ``batch_sample_size`` is omitted, it is
         derived as ``sample_size * batch_size / axis_size``.
-    batch_axis_size
-        Backwards-compatible keyword-only alias for ``batch_size``. Pass only one
-        of ``batch_size`` and ``batch_axis_size``.
     sampling_weights
         Optional finite, strictly positive relative weights of length ``axis_size``,
         aligned with the training data in its current order. Requires
@@ -325,7 +307,7 @@ class Batches:
         self,
         position_keys: Sequence[str],
         axis_size: int,
-        batch_size: int | None | object = _MISSING,
+        batch_size: int | None,
         shuffle: bool = True,
         batch_axes: dict[str, int] | None = None,
         default_batch_axis: int = 0,
@@ -333,13 +315,12 @@ class Batches:
         sample_size: float | None = None,
         batch_sample_size: float | None = None,
         *,
-        batch_axis_size: int | None | object = _MISSING,
         sampling_weights: Array | None = None,
         likelihood_axes: dict[str, int] | None = None,
     ) -> None:
         self.position_keys = position_keys
         self.axis_size = axis_size
-        self.batch_size = _resolve_batch_size(batch_size, batch_axis_size)
+        self.batch_size = batch_size
         if sample_with_replacement and self.batch_size is None:
             raise ValueError(
                 "sample_with_replacement=True requires an explicit batch_size."
@@ -650,7 +631,7 @@ class Batches:
     def from_split(
         cls,
         split: PositionSplit | PositionSplitManager,
-        batch_size: int | None | object = _MISSING,
+        batch_size: int | None,
         shuffle: bool = True,
         batch_axes: dict[str, int] | None = None,
         default_batch_axis: int = 0,
@@ -664,7 +645,6 @@ class Batches:
         sample_with_replacement: bool = False,
         sampling_weights: Array | Mapping[str, Array] | None = None,
         likelihood_axes: dict[str, int] | None = None,
-        batch_axis_size: int | None | object = _MISSING,
     ) -> Batches | BatchManager:
         """Build batches from training data, preserving the split's groups.
 
@@ -710,8 +690,6 @@ class Batches:
         likelihood_axes
             Map observed variable names to axes of their pointwise log probabilities
             for weighted likelihood correction. See :class:`Batches`.
-        batch_axis_size
-            Alias for ``batch_size``. Pass only one of the two names.
 
         Returns
         -------
@@ -721,7 +699,6 @@ class Batches:
             For different settings per group, build children from individual splits
             and pass them to ``BatchManager([...])``.
         """
-        batch_size = _resolve_batch_size(batch_size, batch_axis_size)
         keys = list(
             split.split_position_keys if position_keys is None else position_keys
         )
@@ -822,7 +799,7 @@ class Batches:
     def from_model(
         cls,
         model: Model,
-        batch_size: int | None | object = _MISSING,
+        batch_size: int | None,
         position_keys: Sequence[str] | Sequence[Sequence[str]] | None = None,
         axis_size: int | None = None,
         shuffle: bool = True,
@@ -835,7 +812,6 @@ class Batches:
         infer_sample_size: bool = True,
         sample_with_replacement: bool = False,
         *,
-        batch_axis_size: int | None | object = _MISSING,
         sampling_weights: Array | Mapping[str, Array] | None = None,
     ) -> Batches: ...
 
@@ -844,7 +820,7 @@ class Batches:
     def from_model(
         cls,
         model: Model,
-        batch_size: int | None | object = _MISSING,
+        batch_size: int | None,
         position_keys: Sequence[str] | Sequence[Sequence[str]] | None = None,
         axis_size: int | None = None,
         shuffle: bool = True,
@@ -857,7 +833,6 @@ class Batches:
         infer_sample_size: bool = True,
         sample_with_replacement: bool = False,
         *,
-        batch_axis_size: int | None | object = _MISSING,
         sampling_weights: Array | Mapping[str, Array] | None = None,
     ) -> Batches | BatchManager: ...
 
@@ -865,7 +840,7 @@ class Batches:
     def from_model(
         cls,
         model: Model,
-        batch_size: int | None | object = _MISSING,
+        batch_size: int | None,
         position_keys: Sequence[str] | Sequence[Sequence[str]] | None = None,
         axis_size: int | None = None,
         shuffle: bool = True,
@@ -878,7 +853,6 @@ class Batches:
         infer_sample_size: bool = True,
         sample_with_replacement: bool = False,
         *,
-        batch_axis_size: int | None | object = _MISSING,
         sampling_weights: Array | Mapping[str, Array] | None = None,
     ) -> Batches | BatchManager:
         """
@@ -937,9 +911,6 @@ class Batches:
             replacement. With ``multi_size="manager"``, this applies to every
             inferred child; automatic construction also enables it for an oversized
             child when the common batch size exceeds its observation count.
-        batch_axis_size
-            Backwards-compatible keyword-only alias for ``batch_size``. Pass only
-            one of ``batch_size`` and ``batch_axis_size``.
         sampling_weights
             Positive relative sampling weights in current data order. Supply a vector
             for one group, or a mapping from one selected position key per group to
@@ -995,7 +966,6 @@ class Batches:
         >>> type(manager).__name__, manager.axis_size, manager.n_full_batches
         ('BatchManager', (8, 5), 4)
         """
-        batch_size = _resolve_batch_size(batch_size, batch_axis_size)
         if multi_size not in ("error", "manager"):
             raise ValueError("multi_size must be 'error' or 'manager'.")
 
@@ -1810,7 +1780,7 @@ class BatchManager:
     def from_split(
         cls,
         split: PositionSplit | PositionSplitManager,
-        batch_size: int | None | object = _MISSING,
+        batch_size: int | None,
         shuffle: bool = True,
         batch_axes: dict[str, int] | None = None,
         default_batch_axis: int = 0,
@@ -1824,7 +1794,6 @@ class BatchManager:
         sample_with_replacement: bool = False,
         sampling_weights: Array | Mapping[str, Array] | None = None,
         likelihood_axes: dict[str, int] | None = None,
-        batch_axis_size: int | None | object = _MISSING,
     ) -> BatchManager:
         """Build a manager from training data, including a single split.
 
@@ -1851,7 +1820,6 @@ class BatchManager:
             sample_with_replacement=sample_with_replacement,
             sampling_weights=sampling_weights,
             likelihood_axes=likelihood_axes,
-            batch_axis_size=batch_axis_size,
         )
         assert isinstance(batches, BatchManager)
         return cls(batches.batches, epoch_size=epoch_size)
@@ -1860,7 +1828,7 @@ class BatchManager:
     def from_model(
         cls,
         model: Model,
-        batch_size: int | None | object = _MISSING,
+        batch_size: int | None,
         position_keys: Sequence[str] | Sequence[Sequence[str]] | None = None,
         shuffle: bool = True,
         batch_axes: dict[str, int] | None = None,
@@ -1869,7 +1837,6 @@ class BatchManager:
         infer_sample_size: bool = True,
         sample_with_replacement: bool = False,
         *,
-        batch_axis_size: int | None | object = _MISSING,
         sampling_weights: Array | Mapping[str, Array] | None = None,
     ) -> BatchManager:
         """
@@ -1960,7 +1927,6 @@ class BatchManager:
         >>> full_data.is_full_data, full_data.n_full_batches
         (True, 1)
         """
-        batch_size = _resolve_batch_size(batch_size, batch_axis_size)
         pos_keys = (
             list(position_keys) if position_keys is not None else list(model.observed)
         )

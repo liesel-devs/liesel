@@ -95,3 +95,14 @@ include priors as before.
 ``batch_size`` remains available; ``batch_seed`` becomes ``seed``. See the
 :doc:`basic tutorial <tutorials/notebooks/09-liesel-optim-basic>` for a complete
 validation and minibatch example.
+
+Earlier ``liesel.optim`` argument aliases have been removed:
+
+* Use ``batch_size`` instead of ``batch_axis_size``.
+* Use ``progress_update_every`` instead of ``progress_n_updates``.
+* Use ``step_progress_update_every`` instead of ``step_progress_n_updates``.
+
+The progress settings specify an interval, not a target number of updates.
+For example, ``progress_update_every=10`` updates the display every ten epochs.
+Pass ``debug_nans`` by name when constructing ``OptimEngine``; it is now
+keyword-only.

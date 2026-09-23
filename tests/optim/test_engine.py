@@ -28,7 +28,6 @@ from liesel.optim import (
     PositionSplitManager,
     Stopper,
 )
-from liesel.optim.engine import _progress_print_rate
 from liesel.optim.liesel_optim import LieselOptim as LieselOptimFromQuick
 from liesel.optim.loss import Loss, LossMixin
 from liesel.optim.state import OptimCarry
@@ -755,22 +754,6 @@ def test_duplicate_optimizer_identifiers_after_naming_raise():
         )
 
 
-@pytest.mark.parametrize("progress_n_updates", [0, True, 1.5, "100"])
-def test_invalid_progress_n_updates_raises(progress_n_updates):
-    with pytest.raises(ValueError, match="progress_n_updates"):
-        OptimEngine(
-            loss=_loss(),
-            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
-            batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
-            optimizers=[_optimizer()],
-            stopper=Stopper(epochs=4, patience=2),
-            seed=1,
-            initial_state={},
-            show_progress=False,
-            progress_n_updates=progress_n_updates,
-        )
-
-
 @pytest.mark.parametrize(
     "name", ["progress_update_every", "step_progress_update_every"]
 )
@@ -792,10 +775,9 @@ def test_invalid_progress_update_interval_raises(name, value):
 
 
 @pytest.mark.parametrize("name", ["progress_n_updates", "step_progress_n_updates"])
-@pytest.mark.parametrize("value", [0, True, 1.5, "10"])
-def test_invalid_progress_update_count_raises(name, value):
-    kwargs = {name: value}
-    with pytest.raises(ValueError, match=name):
+def test_removed_progress_count_arguments_are_rejected(name):
+    kwargs = {name: 10}
+    with pytest.raises(TypeError, match=name):
         OptimEngine(
             loss=_loss(),
             loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
@@ -805,7 +787,7 @@ def test_invalid_progress_update_count_raises(name, value):
             seed=1,
             initial_state={},
             show_progress=False,
-            **kwargs,
+            **kwargs,  # ty: ignore[invalid-argument-type]
         )
 
 
@@ -1533,13 +1515,7 @@ def test_api_imports_after_engine_refactor():
     assert not hasattr(engine_module, "LieselVI")
 
 
-def test_progress_count_conversion_uses_a_ceiling():
-    assert _progress_print_rate(100, 10) == 10
-    assert _progress_print_rate(101, 100) == 2
-    assert _progress_print_rate(201, 100) == 3
-
-
-def test_progress_defaults_and_linked_count_properties():
+def test_progress_defaults():
     engine = OptimEngine(
         loss=_loss(),
         loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
@@ -1550,68 +1526,28 @@ def test_progress_defaults_and_linked_count_properties():
         initial_state={},
         show_progress=False,
     )
-
     assert engine.progress_update_every == 10
     assert engine.step_progress_update_every == 10
     assert engine.show_step_progress is False
-    assert engine.progress_n_updates == 11
-    assert engine.step_progress_n_updates == 1
-
-    engine.progress_n_updates = 100
-    assert engine.progress_update_every == 2
-    assert engine.progress_n_updates == 51
-
-    engine.stopper = Stopper(epochs=201, patience=10)
-    assert engine.progress_n_updates == 101
-
-    engine.batches = Batches(["y"], axis_size=23, batch_size=1, shuffle=False)
-    engine.step_progress_n_updates = 10
-    assert engine.step_progress_update_every == 3
-    assert engine.step_progress_n_updates == 8
+    assert not hasattr(engine, "progress_n_updates")
+    assert not hasattr(engine, "step_progress_n_updates")
 
 
-def test_progress_count_aliases_override_intervals():
-    split = PositionSplit(
-        Position({"y": jnp.arange(10.0)}), Position({}), Position({}), 10, 0, 0
-    )
-    engine = OptimEngine(
-        loss=SequenceLoss(split),
-        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
-        batches=Batches(["y"], axis_size=10, batch_size=1, shuffle=False),
-        optimizers=[_optimizer()],
-        stopper=Stopper(epochs=10, patience=10),
-        seed=1,
-        initial_state={},
-        show_progress=False,
-        progress_update_every=2,
-        progress_n_updates=3,
-        step_progress_update_every=2,
-        step_progress_n_updates=4,
-    )
-
-    assert engine.progress_update_every == 4
-    assert engine.progress_n_updates == 3
-    assert engine.step_progress_update_every == 3
-    assert engine.step_progress_n_updates == 4
-
-
-def test_progress_count_keeps_historical_positional_slot():
-    engine = OptimEngine(
-        _loss(),
-        Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
-        [_optimizer()],
-        Stopper(epochs=10, patience=10),
-        1,
-        {},
-        True,
-        False,
-        True,
-        3,
-        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
-    )
-
-    assert engine.progress_update_every == 4
-    assert engine.progress_n_updates == 3
+def test_removed_progress_count_positional_argument_is_rejected():
+    with pytest.raises(TypeError):
+        OptimEngine(
+            _loss(),
+            Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
+            [_optimizer()],
+            Stopper(epochs=10, patience=10),
+            1,
+            {},
+            True,
+            False,
+            True,
+            3,  # ty: ignore[too-many-positional-arguments]
+            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
+        )
 
 
 def test_nested_progress_matches_monolithic_and_never_uses_callback(monkeypatch):
