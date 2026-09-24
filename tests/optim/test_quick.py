@@ -738,3 +738,67 @@ def test_lbfgs_preserves_model_dtype_during_line_search_and_resume(
             assert float(result.position_final["loc"]) == pytest.approx(3.5, abs=1e-5)
         assert jnp.allclose(resumed.history.loss_train, whole.history.loss_train)
         assert jnp.allclose(resumed.history.loss_monitor, whole.history.loss_monitor)
+
+
+def _independent_parameter_model():
+    observations = []
+    for name, target in (("a", 3.0), ("b", 5.0)):
+        parameter = lsl.Var.new_param(jnp.array(0.0), name=name)
+        observations.append(
+            lsl.Var.new_obs(
+                jnp.full(4, target),
+                lsl.Dist(tfd.Normal, loc=parameter, scale=1.0),
+                name=f"y_{name}",
+            )
+        )
+    return lsl.Model(observations)
+
+
+@pytest.mark.parametrize(
+    "kinds", [("lbfgs", "adam"), ("adam", "lbfgs"), ("lbfgs", "lbfgs")]
+)
+@pytest.mark.parametrize("delay", [0, 2])
+@pytest.mark.parametrize("boundary", ["wrapper", "engine", "fit"])
+def test_lbfgs_must_be_sole_optimizer(kinds, delay, boundary):
+    model = _independent_parameter_model()
+    optimizers = [
+        opt.LBFGS([name], activate_after_epochs=delay)
+        if kind == "lbfgs"
+        else opt.Optimizer([name], optax.adam(0.01))
+        for name, kind in zip(("a", "b"), kinds, strict=True)
+    ]
+    if boundary == "wrapper":
+        with pytest.raises(ValueError, match="LBFGS must be the sole optimizer"):
+            LieselOptim(model, optimizers=optimizers, loss_monitor="train_full_data")
+    else:
+        quick = LieselOptim(
+            model,
+            optimizers="lbfgs",
+            loss_monitor="train_full_data",
+            show_progress=False,
+        )
+        if boundary == "engine":
+            quick.optimizers = optimizers
+            with pytest.raises(ValueError, match="LBFGS must be the sole optimizer"):
+                quick.build_engine()
+        else:
+            engine = quick.build_engine()
+            engine.optimizers = optimizers
+            with pytest.raises(ValueError, match="LBFGS must be the sole optimizer"):
+                engine.fit()
+
+
+@pytest.mark.parametrize("keys", [["a"], ["a", "b"]])
+def test_single_lbfgs_can_select_a_subset_or_all_parameters(keys):
+    result = LieselOptim(
+        _independent_parameter_model(),
+        optimizers=[opt.LBFGS(keys)],
+        loss_monitor="train_full_data",
+        stopper=Stopper(epochs=10, patience=3),
+        show_progress=False,
+    ).fit()
+    assert float(result.position_final["a"]) == pytest.approx(3.0, abs=1e-5)
+    if "b" in keys:
+        assert float(result.position_final["b"]) == pytest.approx(5.0, abs=1e-5)
+    else:
+        assert "b" not in result.position_final

@@ -51,6 +51,12 @@ Pass this list as ``optimizers=optimizers`` to ``LieselOptim``. Each optimizer
 updates its own parameters in list order on every batch. Their parameter names
 must not overlap. Parameters left out of the list stay fixed.
 
+L-BFGS must be the only optimizer because other parameter updates invalidate its
+cached objective and curvature history. Use ``optimizers="lbfgs"`` for all model
+parameters, or ``optimizers=[opt.LBFGS(["beta", "log_sigma"])]`` for a selected
+subset. The remaining parameters stay fixed. Use ordinary Optax optimizers for
+separate blocks, as above.
+
 Control history memory
 ----------------------
 

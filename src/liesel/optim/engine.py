@@ -509,15 +509,17 @@ class OptimEngine:
         """
         Validates batch, split, and built-in L-BFGS compatibility.
 
-        L-BFGS requires full-data batches and a deterministic objective. Only the
-        batch requirement can be validated here.
+        L-BFGS must be the sole optimizer and requires full-data batches and a
+        deterministic objective. Stochastic objective evaluations cannot be
+        detected here.
 
         Raises
         ------
         ValueError
             If a multi-size split is paired with single-size batches, or if batches
             reference missing keys or incompatible array shapes in the training
-            split, or if built-in L-BFGS is paired with mini-batches.
+            split, or if built-in L-BFGS is paired with mini-batches or another
+            optimizer.
         """
         if isinstance(self.split, PositionSplitManager) and isinstance(
             self.batches, Batches
