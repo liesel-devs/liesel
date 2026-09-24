@@ -6,6 +6,7 @@ from typing import assert_type
 import jax
 import jax.numpy as jnp
 import pytest
+import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.model as lsl
 import liesel.optim.split as split_module
@@ -26,9 +27,9 @@ def _model(*, shared=False):
     b = a + 100
     variables = [
         lsl.Var.new_obs(jnp.stack([a, a + 10]), name="x_a"),
-        lsl.Var.new_obs(a, name="y_a"),
+        lsl.Var.new_obs(a, lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y_a"),
         lsl.Var.new_obs(b[:, None], name="x_b"),
-        lsl.Var.new_obs(b, name="y_b"),
+        lsl.Var.new_obs(b, lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y_b"),
     ]
     if shared:
         variables.append(lsl.Var.new_obs(jnp.array(7.0), name="shared"))
@@ -38,8 +39,12 @@ def _model(*, shared=False):
 def test_split_recipe_infers_multiple_groups_and_materializes_them():
     model = lsl.Model(
         [
-            lsl.Var.new_obs(jnp.arange(12.0), name="a"),
-            lsl.Var.new_obs(jnp.arange(8.0), name="b"),
+            lsl.Var.new_obs(
+                jnp.arange(12.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="a"
+            ),
+            lsl.Var.new_obs(
+                jnp.arange(8.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="b"
+            ),
         ]
     )
     recipe = Split.from_model(
@@ -104,7 +109,13 @@ def test_single_split_factory_accepts_one_explicit_group_by_default():
 
 
 def test_factory_overloads_preserve_scalar_defaults_and_positional_calls():
-    model = lsl.Model([lsl.Var.new_obs(jnp.arange(4.0), name="y")])
+    model = lsl.Model(
+        [
+            lsl.Var.new_obs(
+                jnp.arange(4.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y"
+            )
+        ]
+    )
     assert_type(Split.from_model(model), Split)
     assert_type(Batches.from_model(model, 2), Batches)
     assert_type(Split.from_model(model, multi_size="manager"), Split | SplitManager)
