@@ -245,7 +245,15 @@ class Optimizer:
 
         opt_state = carry.optimizer_states[self.identifier]
         value, grad = loss.value_and_grad(pos, carry)
-        updates, opt_state = self.optimizer.update(grad, opt_state, params=pos)
+        try:
+            updates, opt_state = self.optimizer.update(grad, opt_state, params=pos)
+        except TypeError as error:
+            raise TypeError(
+                "Optax update failed with gradients, state and parameters only. "
+                "If the transformation requires objective evaluations, use "
+                "optimizers='lbfgs' or a custom OptimizerLike. "
+                f"Original error: {error}"
+            ) from error
         updated_position = cast(Position, optax.apply_updates(pos, updates))
 
         carry.position = Position(carry.position | updated_position)

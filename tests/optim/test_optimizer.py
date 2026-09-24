@@ -168,3 +168,38 @@ def test_optimizer_pytree_round_trip_preserves_activation_delay():
     rebuilt = jax.tree.map(lambda value: value, optimizer)
 
     assert rebuilt.activate_after_epochs == 3
+
+
+@pytest.mark.parametrize("source", ["update", "objective"])
+def test_optimizer_type_errors_preserve_the_original_cause(source, monkeypatch):
+    original = TypeError("deliberate test error")
+
+    def fail(*args, **kwargs):
+        raise original
+
+    loss = QuadraticLoss()
+    transformation = optax.sgd(0.1)
+    if source == "update":
+        transformation = optax.GradientTransformation(transformation.init, fail)
+    else:
+        monkeypatch.setattr(loss, "value_and_grad", fail)
+    optimizer = Optimizer(["x"], transformation)
+    position = Position({"x": jnp.array(1.0)})
+    carry = OptimCarry.new(
+        key=jax.random.key(0),
+        epochs=1,
+        position=position,
+        tracked=None,
+        batches=Batches([], axis_size=1, batch_size=None),
+        optimizers=[optimizer],
+        model_state={},
+        save_position_history=False,
+    )
+    with pytest.raises(TypeError, match="deliberate test error") as caught:
+        optimizer.step(position, loss, carry)
+    if source == "update":
+        assert caught.value.__cause__ is original
+        assert "If the transformation requires" in str(caught.value)
+    else:
+        assert caught.value is original
+        assert caught.value.__cause__ is None

@@ -257,6 +257,14 @@ class LieselOptim:
                 "Optax transformation as optimizers=optax.adam(learning_rate=...)."
             )
         if isinstance(optimizers, Sequence):
+            for index, optimizer in enumerate(optimizers):
+                if isinstance(optimizer, optax.GradientTransformation):
+                    raise TypeError(
+                        f"optimizers[{index}] is a bare Optax transformation. Pass "
+                        "a single transformation directly for all parameters, or "
+                        "wrap each one in Optimizer(keys, transformation) for "
+                        "separate parameter blocks."
+                    )
             return optimizers
         raise TypeError(
             "optimizers must be a configured Optax transformation such as "

@@ -682,6 +682,7 @@ def test_wrapper_requires_explicit_optimizer():
         optax.sgd(0.1),
         optax.adam(optax.exponential_decay(0.02, transition_steps=2, decay_rate=0.5)),
         optax.GradientTransformation(*optax.sgd(0.1)),
+        optax.chain(optax.clip(1.0), optax.adam(0.01)),
     ],
 )
 def test_direct_optax_transformation_matches_explicit_wrapper(transformation):
@@ -802,3 +803,32 @@ def test_single_lbfgs_can_select_a_subset_or_all_parameters(keys):
         assert float(result.position_final["b"]) == pytest.approx(5.0, abs=1e-5)
     else:
         assert "b" not in result.position_final
+
+
+@pytest.mark.parametrize("index", [0, 1])
+def test_wrapper_rejects_bare_transformations_in_sequences(index):
+    optimizers = [opt.Optimizer(["loc"], optax.adam(0.1))] * index + [optax.adam(0.1)]
+    with pytest.raises(
+        TypeError, match=rf"optimizers\[{index}\].*single transformation.*Optimizer"
+    ):
+        LieselOptim(
+            _normal_model(), optimizers=optimizers, loss_monitor="train_full_data"
+        )
+
+
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_unsupported_optax_lbfgs_has_actionable_update_error(wrapped):
+    transformation = optax.lbfgs()
+    optimizers = [opt.Optimizer(["loc"], transformation)] if wrapped else transformation
+    quick = LieselOptim(
+        _normal_model(),
+        optimizers=optimizers,
+        loss_monitor="train_full_data",
+        show_progress=False,
+    )
+    with pytest.raises(
+        TypeError, match="objective evaluations.*optimizers='lbfgs'"
+    ) as caught:
+        quick.fit()
+    assert isinstance(caught.value.__cause__, TypeError)
+    assert "value_fn" in str(caught.value.__cause__)
