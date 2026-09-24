@@ -16,6 +16,8 @@ Split responses and their covariates together. For an existing ``model``:
 
 .. code-block:: python
 
+   import optax
+
    import liesel.optim as opt
 
    split = opt.PositionSplit.from_model(
@@ -84,7 +86,10 @@ automatic sample-size inference is unavailable. Construct the split explicitly:
    split = opt.PositionSplit.from_model(
        model, infer_sample_sizes=False, multi_size="manager", shuffle=False
    )
-   optim = opt.LieselOptim(model, split=split, loss_monitor="train_full_data")
+   optim = opt.LieselOptim(
+       model, split=split, optimizers=optax.adam(0.01),
+       loss_monitor="train_full_data",
+   )
 
 This chooses split-axis counts for scaling. Alternatively, supply effective
 ``sample_sizes`` to the split factory. Setting ``scale_loss=False`` on
@@ -117,6 +122,7 @@ Create batches from the training split, then pass both to ``LieselOptim``:
    batches = opt.Batches.from_split(split, batch_size=32)
    result = opt.LieselOptim(
        model,
+       optimizers=optax.adam(0.01),
        split=split,
        batches=batches,
        loss_monitor="validation",

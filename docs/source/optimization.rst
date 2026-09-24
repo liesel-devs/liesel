@@ -19,7 +19,8 @@ For an existing Liesel ``model``, a full-data fit takes:
    position = result.position_min_monitor
 
 L-BFGS needs the full data and a deterministic loss. For minibatches, use Adam.
-Omitting ``optimizers`` selects Adam with learning rate ``0.02``.
+The ``optimizers`` argument is required. Pass a configured Optax transformation,
+such as ``optimizers=optax.adam(0.01)``, to optimize all parameters with it.
 The fitted values are returned separately; fitting does not change your model.
 
 Start here

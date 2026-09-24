@@ -2,6 +2,7 @@ import math
 
 import jax
 import jax.numpy as jnp
+import optax
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
@@ -1007,6 +1008,7 @@ class TestSplitManager:
 
         quick = LieselOptim(
             model,
+            optimizers=optax.adam(0.02),
             loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             split=split,
         )
@@ -1031,6 +1033,7 @@ class TestSplitManager:
         with pytest.raises(ValueError, match="BatchManager"):
             LieselOptim(
                 model,
+                optimizers=optax.adam(0.02),
                 loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
                 split=split,
                 batches=batches,
@@ -1079,9 +1082,11 @@ def test_scalar_observations_require_explicit_passthrough(has_likelihood):
     )
     model = lsl.Model([y])
     with pytest.raises(ValueError, match="fixed.*shape.*axis"):
-        LieselOptim(model, loss_monitor="train_full_data")
+        LieselOptim(model, optimizers=optax.adam(0.02), loss_monitor="train_full_data")
     split = PositionSplit.from_model(model, split_axes={"fixed": None})
-    quick = LieselOptim(model, split=split, loss_monitor="train_full_data")
+    quick = LieselOptim(
+        model, optimizers=optax.adam(0.02), split=split, loss_monitor="train_full_data"
+    )
     assert quick.batches.position_keys == ["y"]
     assert split.train["fixed"] == 0.5
     assert jnp.allclose(
@@ -1107,12 +1112,21 @@ def test_lookup_model_uses_manual_passthrough(holdout, batch_size):
     )
     model = lsl.Model([y])
     with pytest.raises(ValueError, match="no observed likelihood"):
-        LieselOptim(model, batch_size=batch_size, loss_monitor="train_full_data")
+        LieselOptim(
+            model,
+            optimizers=optax.adam(0.02),
+            batch_size=batch_size,
+            loss_monitor="train_full_data",
+        )
     split = PositionSplit.from_model(
         model, split_axes={"z": None}, validate_axis_share=holdout
     )
     engine = LieselOptim(
-        model, split=split, batch_size=batch_size, loss_monitor="train_full_data"
+        model,
+        optimizers=optax.adam(0.02),
+        split=split,
+        batch_size=batch_size,
+        loss_monitor="train_full_data",
     ).build_engine()
     loss = engine.loss
     assert isinstance(loss, NegLogProbLoss)

@@ -1,15 +1,15 @@
 Choose optimizers
 =================
 
-:class:`liesel.optim.LieselOptim` uses Adam with learning rate ``0.02`` by default.
-Pass ``optimizers="lbfgs"``
-for a full-data, deterministic fit. L-BFGS cannot use minibatches.
+:class:`liesel.optim.LieselOptim` requires an explicit optimizer. Pass a
+configured Optax transformation, such as ``optimizers=optax.adam(0.01)``, to use
+it for all parameters, or ``optimizers="lbfgs"`` for a full-data, deterministic
+fit. L-BFGS cannot use minibatches.
 
 Set a learning rate or schedule
 -------------------------------
 
-For an existing ``model``, wrap an Optax optimizer in
-:class:`liesel.optim.Optimizer`:
+For an existing ``model``, pass a configured Optax optimizer directly:
 
 .. code-block:: python
 
@@ -19,15 +19,21 @@ For an existing ``model``, wrap an Optax optimizer in
    schedule = optax.exponential_decay(
        init_value=0.01, transition_steps=100, decay_rate=0.9
    )
-   optimizer = opt.Optimizer(list(model.parameters), optax.adam(schedule))
    result = opt.LieselOptim(
        model,
-       optimizers=[optimizer],
+       optimizers=optax.adam(schedule),
        loss_monitor="train_full_data",
    ).fit()
 
 The schedule advances on optimizer updates, not epochs. With minibatches, it can
 advance several times per epoch. For a constant rate, use ``optax.adam(0.01)``.
+Constant-rate minibatch fits can retain optimization noise. For precise point
+estimates, check convergence and consider a smaller or decaying rate, or an
+explicit full-data optimizer. A schedule alone does not guarantee convergence.
+
+Pass the result of ``optax.adam(...)``, not the ``optax.adam`` factory function.
+Transformations must support updates using gradients, state and parameters;
+use ``"lbfgs"`` for L-BFGS, which also requires objective evaluations.
 
 Use different optimizers for different parameters
 -------------------------------------------------
@@ -53,7 +59,8 @@ Disable parameter history when you only need the final and best positions:
 .. code-block:: python
 
    result = opt.LieselOptim(
-       model, loss_monitor="train_full_data", save_position_history=False
+       model, optimizers=optax.adam(0.01),
+       loss_monitor="train_full_data", save_position_history=False
    ).fit()
 
 History reserves memory for the maximum epoch budget before fitting, even when

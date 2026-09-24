@@ -14,6 +14,8 @@ Starting with a ``model`` and its ``split``, build batches and pass them to
 
 .. code-block:: python
 
+   import optax
+
    import liesel.optim as opt
 
    weights = opt.Batches.weights_binned(split.train["y"], bins=10)
@@ -27,6 +29,7 @@ Starting with a ``model`` and its ``split``, build batches and pass them to
    )
    result = opt.LieselOptim(
        model,
+       optimizers=optax.adam(0.01),
        split=split,
        batches=batches,
        loss_monitor="train_full_data",

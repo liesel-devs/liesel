@@ -30,6 +30,8 @@ Choose when to stop
 
 .. code-block:: python
 
+   import optax
+
    import liesel.optim as opt
 
    stopper = opt.Stopper(epochs=500, patience=20, rtol=1e-4)
@@ -68,6 +70,7 @@ For an existing ``model``:
    batches = opt.Batches.from_split(split, batch_size=32)
    result = opt.LieselOptim(
        model,
+       optimizers=optax.adam(0.01),
        split=split,
        batches=batches,
        loss_monitor=opt.EmaTrainLossMonitor(effective_window=2.0),

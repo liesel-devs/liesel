@@ -317,7 +317,7 @@ def make_model_engine(optimizer):
         model,
         loss_monitor="train_full_data",
         batches=batches,
-        optimizers=optimizer,
+        optimizers=optax.adam(0.02) if optimizer == "adam" else optimizer,
         stopper=Stopper(epochs=6, patience=2, min_epochs=6),
         seed=21,
         show_progress=False,

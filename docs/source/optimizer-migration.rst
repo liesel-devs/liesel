@@ -49,7 +49,7 @@ After:
 
    result = opt.LieselOptim(
        model,
-       optimizers=[opt.Optimizer(["loc"], optax.adam(0.01))],
+       optimizers=optax.adam(0.01),
        stopper=opt.Stopper(epochs=1000, patience=20, atol=0.001),
        loss_monitor="train_full_data",
        scale_loss=False,
@@ -68,6 +68,8 @@ What changes
 * Wrap ``params`` and the Optax optimizer in :class:`liesel.optim.Optimizer`.
   Without this, the builder fits all parameters with Adam at learning rate
   ``0.02``. The old default rate was ``0.01``.
+* ``LieselOptim`` requires ``optimizers``. Pass a configured Optax transformation
+  for all parameters, ``"lbfgs"``, or explicit per-parameter optimizers.
 * Splits and ``LieselOptim`` now default to ``seed=0``. Explicit ``seed=None``
   retains time-based seeding. A separately constructed split has its own seed.
 * Replace ``gs.Stopper(max_iter=...)`` with ``opt.Stopper(epochs=...)``. An epoch

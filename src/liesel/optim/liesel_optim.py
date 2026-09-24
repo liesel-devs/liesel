@@ -33,8 +33,8 @@ class LieselOptim:
 
     ``LieselOptim`` is the quick-start wrapper for regular model optimization. It
     creates a negative log-posterior loss, full-data training batches,
-    and a single optimizer over all model parameters unless these pieces are supplied
-    explicitly. Call :meth:`build_engine` to inspect or modify the low-level engine
+    and wraps a supplied Optax transformation over all model parameters. Call
+    :meth:`build_engine` to inspect or modify the low-level engine
     before fitting, or :meth:`fit` for the direct path.
 
     Parameters
@@ -50,8 +50,12 @@ class LieselOptim:
         ``"train_full_data"`` always adds the full-data evaluation, including with
         one full-data optimization batch.
     optimizers
-        Either explicit optimizers or one of ``"adam"`` and ``"lbfgs"``.
-        Defaults to Adam with learning rate ``0.02``.
+        Required optimizer choice. An Optax transformation such as
+        ``optax.adam(0.01)`` applies to all model parameters. Pass ``"lbfgs"``
+        for the built-in full-data L-BFGS optimizer, or a sequence of explicit
+        optimizers for selected parameters. Pass a configured transformation,
+        not an optimizer factory. Transformations must support updates from
+        gradients, state and parameters without extra objective arguments.
     stopper
         Maximum-epoch and early-stopping configuration. ``None`` creates a new
         :class:`.Stopper` with ``epochs=1000``, ``patience=10``, and ``rtol=1e-6``.
@@ -106,6 +110,7 @@ class LieselOptim:
     Examples
     --------
     >>> import jax.numpy as jnp
+    >>> import optax
     >>> import liesel.model as lsl
     >>> import tensorflow_probability.substrates.jax.distributions as tfd
     >>> from liesel.optim import EmaTrainLossMonitor, LieselOptim
@@ -117,7 +122,10 @@ class LieselOptim:
     ... )
     >>> model = lsl.Model([y])
     >>> engine = LieselOptim(
-    ...     model, loss_monitor=EmaTrainLossMonitor(effective_window=1.0), seed=1
+    ...     model,
+    ...     optimizers=optax.adam(0.01),
+    ...     loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
+    ...     seed=1,
     ... ).build_engine()
     >>> type(engine).__name__
     'OptimEngine'
@@ -128,7 +136,9 @@ class LieselOptim:
         model: Model,
         *,
         loss_monitor: LossMonitor,
-        optimizers: Sequence[OptimizerLike] | Literal["adam", "lbfgs"] = "adam",
+        optimizers: optax.GradientTransformation
+        | Sequence[OptimizerLike]
+        | Literal["lbfgs"],
         stopper: Stopper | None = None,
         seed: int | None = 0,
         split: SplitConfig | None = None,
@@ -231,24 +241,28 @@ class LieselOptim:
         )
 
     def _resolve_optimizers(
-        self, optimizers: Sequence[OptimizerLike] | Literal["adam", "lbfgs"]
+        self,
+        optimizers: optax.GradientTransformation
+        | Sequence[OptimizerLike]
+        | Literal["lbfgs"],
     ) -> Sequence[OptimizerLike]:
-        if not isinstance(optimizers, str):
-            return optimizers
-
         position_keys = list(self.model.parameters)
-        match optimizers:
-            case "adam":
-                return [
-                    Optimizer(
-                        position_keys,
-                        optimizer=optax.adam(learning_rate=0.02),
-                    )
-                ]
-            case "lbfgs":
+        if isinstance(optimizers, optax.GradientTransformation):
+            return [Optimizer(position_keys, optimizers)]
+        if isinstance(optimizers, str):
+            if optimizers == "lbfgs":
                 return [LBFGS(position_keys)]
-            case _:
-                raise ValueError("optimizers must be 'adam', 'lbfgs', or a sequence.")
+            raise ValueError(
+                "The only optimizer string is 'lbfgs'. For Adam, pass a configured "
+                "Optax transformation as optimizers=optax.adam(learning_rate=...)."
+            )
+        if isinstance(optimizers, Sequence):
+            return optimizers
+        raise TypeError(
+            "optimizers must be a configured Optax transformation such as "
+            "optax.adam(learning_rate=...), 'lbfgs', or a sequence of optimizers. "
+            "Pass the transformation, not the optimizer factory."
+        )
 
     def build_engine(self) -> OptimEngine:
         """

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import jax
 import jax.numpy as jnp
 import numpy as np
+import optax
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
@@ -83,6 +84,7 @@ def test_seeded_automatic_full_data_setup_preserves_rows_and_repeats_fit(
         model = make_model()
         quick = LieselOptim(
             model,
+            optimizers=optax.adam(0.02),
             **seed_kwargs,
             batches=Batches.from_model(model, batch_size=2, multi_size="manager"),
             loss_monitor=EmaTrainLossMonitor(1),
@@ -101,13 +103,18 @@ def test_seeded_automatic_full_data_setup_preserves_rows_and_repeats_fit(
 
 def test_explicit_none_seed_uses_clock(monkeypatch):
     monkeypatch.setattr(quick_module, "time", SimpleNamespace(time=lambda: 1234.5))
-    optim = LieselOptim(_normal_model(), loss_monitor="train_full_data", seed=None)
+    optim = LieselOptim(
+        _normal_model(),
+        optimizers=optax.adam(0.02),
+        loss_monitor="train_full_data",
+        seed=None,
+    )
     assert optim.seed == 1234
 
 
 def test_lieseloptim_requires_explicit_loss_monitor():
     with pytest.raises(TypeError, match="loss_monitor"):
-        LieselOptim(_normal_model())  # ty: ignore[missing-argument]
+        LieselOptim(_normal_model(), optimizers=optax.adam(0.02))  # ty: ignore[missing-argument]
 
 
 @pytest.mark.parametrize("optimizers", ["lbfgs", [opt.LBFGS(["loc"])]])
@@ -127,6 +134,7 @@ def test_lbfgs_rejects_minibatches_during_wrapper_construction(optimizers):
 def test_engine_accepts_integer_and_jax_seeds(seed):
     engine = LieselOptim(
         _normal_model(),
+        optimizers=optax.adam(0.02),
         loss_monitor="train_full_data",
         stopper=Stopper(epochs=2, patience=2),
         show_progress=False,
@@ -161,7 +169,12 @@ def test_automatic_inference_error_explains_manual_split(kind):
         )
     model = builder.build_model()
     with pytest.raises(ValueError, match=r"PositionSplit.from_model.*split=split"):
-        LieselOptim(model, loss_monitor="train_full_data", scale_loss=False)
+        LieselOptim(
+            model,
+            optimizers=optax.adam(0.02),
+            loss_monitor="train_full_data",
+            scale_loss=False,
+        )
     for split in (
         PositionSplit.from_model(model, infer_sample_sizes=False),
         PositionSplit.from_model(model, sample_sizes={"train": 4}),
@@ -195,6 +208,7 @@ def test_lieseloptim_removed_data_shortcuts_are_rejected(keyword):
     with pytest.raises(TypeError, match=keyword):
         LieselOptim(
             _normal_model(),
+            optimizers=optax.adam(0.02),
             loss_monitor="train_full_data",
             **{keyword: None},  # ty: ignore[invalid-argument-type]
         )
@@ -207,6 +221,7 @@ def test_lieseloptim_preserves_explicit_multi_branch_batches(epoch_size, expecte
     batches = Batches.from_split(split, batch_size=2, epoch_size=epoch_size)
     optimizer = LieselOptim(
         model,
+        optimizers=optax.adam(0.02),
         loss_monitor="train_full_data",
         split=split,
         batches=batches,
@@ -218,13 +233,16 @@ def test_lieseloptim_preserves_explicit_multi_branch_batches(epoch_size, expecte
 
 def test_lieseloptim_validation_monitor_requires_validation_data():
     with pytest.raises(ValueError, match="validation"):
-        LieselOptim(_normal_model(), loss_monitor="validation")
+        LieselOptim(
+            _normal_model(), optimizers=optax.adam(0.02), loss_monitor="validation"
+        )
 
 
 def test_lieseloptim_rejects_unknown_loss_monitor():
     with pytest.raises(ValueError, match="loss_monitor"):
         LieselOptim(
             _normal_model(),
+            optimizers=optax.adam(0.02),
             loss_monitor="sometimes",  # ty: ignore[invalid-argument-type]
         )
 
@@ -233,7 +251,9 @@ def test_default_build_engine_uses_opinionated_defaults():
     model = _normal_model()
     loss_monitor = EmaTrainLossMonitor(effective_window=1.0)
 
-    engine = LieselOptim(model, loss_monitor=loss_monitor, seed=1).build_engine()
+    engine = LieselOptim(
+        model, optimizers=optax.adam(0.02), loss_monitor=loss_monitor, seed=1
+    ).build_engine()
 
     assert isinstance(engine, OptimEngine)
     assert isinstance(engine.loss, NegLogProbLoss)
@@ -251,7 +271,7 @@ def test_default_build_engine_uses_opinionated_defaults():
 
 @pytest.mark.parametrize("batch_size", [None, 20])
 @pytest.mark.parametrize("spread", [0.0, 0.5])
-def test_default_adam_fits_normal_mean_within_default_budget(batch_size, spread):
+def test_explicit_adam_fits_normal_mean_within_default_budget(batch_size, spread):
     loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
     y = lsl.Var.new_obs(
         5.13 + jnp.linspace(-spread, spread, 200),
@@ -260,6 +280,7 @@ def test_default_adam_fits_normal_mean_within_default_budget(batch_size, spread)
     )
     result = LieselOptim(
         lsl.Model([y]),
+        optimizers=optax.adam(0.02),
         batch_size=batch_size,
         loss_monitor="train_full_data",
         seed=0,
@@ -271,8 +292,12 @@ def test_default_adam_fits_normal_mean_within_default_budget(batch_size, spread)
 
 def test_default_stopper_is_independent_between_instances():
     model = _normal_model()
-    first = LieselOptim(model, loss_monitor="train_full_data", seed=1).build_engine()
-    second = LieselOptim(model, loss_monitor="train_full_data", seed=1).build_engine()
+    first = LieselOptim(
+        model, optimizers=optax.adam(0.02), loss_monitor="train_full_data", seed=1
+    ).build_engine()
+    second = LieselOptim(
+        model, optimizers=optax.adam(0.02), loss_monitor="train_full_data", seed=1
+    ).build_engine()
 
     first.stopper.epochs = 50
     assert second.stopper.epochs == 1000
@@ -284,6 +309,7 @@ def test_explicit_batches_use_training_split():
 
     engine = LieselOptim(
         model,
+        optimizers=optax.adam(0.02),
         loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         split=split,
         batches=Batches.from_split(split, batch_size=2),
@@ -305,6 +331,7 @@ def test_batch_size_shortcut_uses_training_split_defaults(make_model, batch_size
     expected = Batches.from_split(split, batch_size=batch_size)
     engine = LieselOptim(
         model,
+        optimizers=optax.adam(0.02),
         split=split,
         batch_size=batch_size,
         loss_monitor="validation",
@@ -328,6 +355,7 @@ def test_batch_size_cannot_be_combined_with_explicit_batches():
     with pytest.raises(ValueError, match="either batch_size or batches"):
         LieselOptim(
             _normal_model(),
+            optimizers=optax.adam(0.02),
             batch_size=2,
             batches=Batches(["y"], axis_size=6, batch_size=3),
             loss_monitor="train_full_data",
@@ -340,6 +368,7 @@ def test_user_provided_batches_are_not_mutated():
 
     quick = LieselOptim(
         model,
+        optimizers=optax.adam(0.02),
         loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         batches=batches,
         seed=1,
@@ -356,6 +385,7 @@ def test_multi_size_default_split_builds_batch_manager():
 
     engine = LieselOptim(
         model,
+        optimizers=optax.adam(0.02),
         loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         seed=1,
     ).build_engine()
@@ -373,6 +403,7 @@ def test_scale_loss_false_builds_unscaled_default_loss():
 
     engine = LieselOptim(
         model,
+        optimizers=optax.adam(0.02),
         loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         scale_loss=False,
         seed=1,
@@ -390,6 +421,7 @@ def test_scale_loss_is_ignored_for_custom_loss():
 
     engine = LieselOptim(
         model,
+        optimizers=optax.adam(0.02),
         loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         loss=loss,
         scale_loss=True,
@@ -409,6 +441,7 @@ def test_custom_loss_and_conflicting_split_raise():
     with pytest.raises(ValueError, match="loss.split"):
         LieselOptim(
             model,
+            optimizers=optax.adam(0.02),
             loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             loss=loss,
             split=other_split,
@@ -432,6 +465,7 @@ def test_progress_and_loss_monitor_are_passed_to_engine():
 
     engine = LieselOptim(
         model,
+        optimizers=optax.adam(0.02),
         batches=Batches.from_model(model, batch_size=1),
         loss_monitor=loss_monitor,
         show_progress=False,
@@ -453,6 +487,7 @@ def test_fit_returns_optim_result():
 
     result = LieselOptim(
         model,
+        optimizers=optax.adam(0.02),
         loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         stopper=Stopper(epochs=1, patience=1),
         seed=1,
@@ -471,6 +506,7 @@ def test_fit_handles_float32_model_with_x64_enabled():
         model = _normal_model(to_float32=True)
         result = LieselOptim(
             model,
+            optimizers=optax.adam(0.02),
             loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             stopper=Stopper(epochs=1, patience=1),
             seed=1,
@@ -485,6 +521,7 @@ def test_batched_fit_handles_float32_model_with_x64_enabled():
         model = _normal_model(to_float32=True)
         result = LieselOptim(
             model,
+            optimizers=optax.adam(0.02),
             loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             batches=Batches.from_model(model, batch_size=2),
             stopper=Stopper(epochs=1, patience=1),
@@ -504,7 +541,12 @@ def test_batches_from_unsplit_model_are_rejected_before_fitting(make_model, batc
     )
     batches = Batches.from_model(model, batch_size=batch_size, multi_size="manager")
     optim = LieselOptim(
-        model, split=split, batches=batches, loss_monitor="validation", seed=1
+        model,
+        optimizers=optax.adam(0.02),
+        split=split,
+        batches=batches,
+        loss_monitor="validation",
+        seed=1,
     )
 
     with pytest.raises(ValueError, match=r"batch axis.*axis_size.*Batches\.from_split"):
@@ -545,6 +587,7 @@ def test_fit_can_split_response_and_batch_shared_covariate_on_different_axes(
 
     result = LieselOptim(
         model,
+        optimizers=optax.adam(0.02),
         loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         split=split,
         batches=batches,
@@ -573,7 +616,12 @@ def test_batch_manager_validates_later_groups_too():
 
     with pytest.raises(ValueError, match="y2.*batch axis.*axis_size"):
         LieselOptim(
-            model, split=split, batches=batches, loss_monitor="validation", seed=1
+            model,
+            optimizers=optax.adam(0.02),
+            split=split,
+            batches=batches,
+            loss_monitor="validation",
+            seed=1,
         ).build_engine()
 
 
@@ -588,6 +636,7 @@ def test_fit_handles_float64_model_with_x64_enabled():
         model = lsl.Model([y], to_float32=False)
         result = LieselOptim(
             model,
+            optimizers=optax.adam(0.02),
             loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             stopper=Stopper(epochs=1, patience=1),
             seed=1,
@@ -601,6 +650,7 @@ def test_fit_handles_float64_model_with_x64_enabled():
 def test_wrapper_history_setting_preserves_positions_and_resume(save_history):
     quick = LieselOptim(
         _normal_model(),
+        optimizers=optax.adam(0.02),
         loss_monitor="train_full_data",
         save_position_history=save_history,
         stopper=Stopper(epochs=4, patience=4),
@@ -618,3 +668,43 @@ def test_wrapper_history_setting_preserves_positions_and_resume(save_history):
     assert jnp.array_equal(
         resumed.position_min_monitor["loc"], whole.position_min_monitor["loc"]
     )
+
+
+def test_wrapper_requires_explicit_optimizer():
+    with pytest.raises(TypeError, match="optimizers"):
+        LieselOptim(_normal_model(), loss_monitor="train_full_data")  # ty: ignore[missing-argument]
+
+
+@pytest.mark.parametrize(
+    "transformation",
+    [
+        optax.adam(0.01),
+        optax.sgd(0.1),
+        optax.adam(optax.exponential_decay(0.02, transition_steps=2, decay_rate=0.5)),
+        optax.GradientTransformation(*optax.sgd(0.1)),
+    ],
+)
+def test_direct_optax_transformation_matches_explicit_wrapper(transformation):
+    model = _normal_model()
+
+    def fit(optimizers):
+        return LieselOptim(
+            model,
+            optimizers=optimizers,
+            loss_monitor="train_full_data",
+            stopper=Stopper(epochs=4, patience=4),
+            show_progress=False,
+        ).fit()
+
+    direct = fit(transformation)
+    wrapped = fit([opt.Optimizer(list(model.parameters), transformation)])
+    assert jnp.array_equal(direct.position_final["loc"], wrapped.position_final["loc"])
+    assert jnp.array_equal(direct.history.loss_monitor, wrapped.history.loss_monitor)
+
+
+@pytest.mark.parametrize(
+    "invalid, error", [("adam", ValueError), (None, TypeError), (optax.adam, TypeError)]
+)
+def test_wrapper_rejects_unconfigured_optimizer(invalid, error):
+    with pytest.raises(error, match="configured Optax transformation"):
+        LieselOptim(_normal_model(), optimizers=invalid, loss_monitor="train_full_data")
