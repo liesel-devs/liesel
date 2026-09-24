@@ -608,6 +608,10 @@ class OptimEngine:
         Reconstruct the same model, data, and optimizer settings before resuming.
         Parameter and observed-variable names, shapes, and dtypes must agree.
         Compatibility checks cannot detect changed data or learning rates.
+        Resuming a checkpoint that permits no further epochs under the current
+        stopper settings issues a warning and returns its result. Use a new path
+        or call ``fit()`` without a checkpoint to start a fresh run. Extending the
+        epoch budget permits continuation only if early stopping does not apply.
         A failed checkpoint write raises and preserves the previous file.
         Interruptions recover from the last successful periodic save.
         """
@@ -653,6 +657,21 @@ class OptimEngine:
             if checkpoint is None
             else self._restore_carry(checkpoint)
         )
+        if checkpoint is not None:
+            status = self._fit_status(carry)
+            if status in ("max_epochs", "early_stopping"):
+                location = (
+                    f" at {checkpoint_path}" if checkpoint_path is not None else ""
+                )
+                warnings.warn(
+                    f"Checkpoint{location} is already complete under the current "
+                    f"stopper settings ({int(carry.epoch)} epochs, {status}); "
+                    "returning its result without running additional epochs. "
+                    "Use a new path or call fit() without a checkpoint to start "
+                    "a fresh run.",
+                    UserWarning,
+                    stacklevel=2,
+                )
         end_epoch = self.stopper.epochs
         if pause_after is not None:
             end_epoch = min(end_epoch, int(carry.epoch) + pause_after)

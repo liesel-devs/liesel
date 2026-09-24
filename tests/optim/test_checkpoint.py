@@ -116,12 +116,14 @@ def test_snapshots_survive_continuation_and_budget_extension(progress, prune):
     assert first.history is not first.checkpoint.history
     assert first.history.position is not first.checkpoint.history.position
     assert first.history.position["theta"] is first.checkpoint.history.position["theta"]
-    assert_same_run(engine.fit(checkpoint=first.checkpoint), first)
+    with pytest.warns(UserWarning, match="already complete.*max_epochs"):
+        assert_same_run(engine.fit(checkpoint=first.checkpoint), first)
 
     engine.stopper.epochs = 6
+    engine.stopper.min_epochs = 6
     resumed = engine.fit(checkpoint=first.checkpoint)
     reference = make_engine(prune_history=prune)
-    reference.stopper.min_epochs = 3
+    assert resumed.n_epochs == 6
     assert_same_run(resumed, reference.fit())
     np.testing.assert_array_equal(first.history.position["theta"], saved)
 
@@ -282,6 +284,39 @@ def test_nan_failure_preserves_last_successful_checkpoint(
     assert OptimCheckpoint.load(path).n_epochs == 2
 
 
+@pytest.mark.parametrize("on_disk", [False, True])
+@pytest.mark.parametrize("early_stop", [False, True])
+def test_completed_checkpoint_warns_after_learning_rate_change(
+    tmp_path, on_disk, early_stop
+):
+    path = tmp_path / "optim.pkl"
+    engine = make_engine(epochs=6 if early_stop else 3)
+    if early_stop:
+        engine.stopper.min_epochs = 0
+        engine.stopper.atol = 1e9
+    first = engine.fit(checkpoint=path if on_disk else None)
+    checkpoint = path if on_disk else first.checkpoint
+    engine.optimizers = [Optimizer(["theta"], optax.adam(0.5))]
+
+    with pytest.warns(UserWarning, match=f"already complete.*{first.status}") as caught:
+        resumed = engine.fit(checkpoint=checkpoint)
+
+    assert len(caught) == 1
+    message = str(caught[0].message)
+    assert f"{first.n_epochs} epochs" in message
+    assert "new path" in message and "fit() without a checkpoint" in message
+    if on_disk:
+        assert str(path) in message
+    assert resumed.status == first.status
+    assert_same_run(resumed, first)
+    for actual, expected in zip(
+        jax.tree.leaves(resumed.checkpoint._carry.optimizer_states),
+        jax.tree.leaves(first.checkpoint._carry.optimizer_states),
+        strict=True,
+    ):
+        np.testing.assert_array_equal(actual, expected)
+
+
 def test_early_stop_takes_precedence_over_pause_and_survives_budget_extension(tmp_path):
     path = tmp_path / "optim.pkl"
     engine = make_engine()
@@ -292,7 +327,8 @@ def test_early_stop_takes_precedence_over_pause_and_survives_budget_extension(tm
     assert result.n_epochs == 3
     assert OptimCheckpoint.load(path).n_epochs == 3
     engine.stopper.epochs = 20
-    resumed = engine.fit(checkpoint=path)
+    with pytest.warns(UserWarning, match="already complete.*early_stopping"):
+        resumed = engine.fit(checkpoint=path)
     assert resumed.status == "early_stopping"
     assert_same_run(resumed, result)
 
@@ -347,7 +383,8 @@ def test_model_checkpoint_recovers_in_a_fresh_python_process(tmp_path, optimizer
         timeout=60,
     )
     assert recovery.returncode == 0, recovery.stderr
-    actual = make_model_engine(optimizer).fit(checkpoint=path)
+    with pytest.warns(UserWarning, match="already complete.*max_epochs"):
+        actual = make_model_engine(optimizer).fit(checkpoint=path)
     assert_same_run(actual, make_model_engine(optimizer).fit())
 
 

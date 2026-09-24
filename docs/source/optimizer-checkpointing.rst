@@ -39,6 +39,13 @@ failures leave the previous file intact.
 Use a different path for a new experiment and only one writer per path. The
 parent directory must exist.
 
+If the checkpoint permits no additional epochs under the current stopper
+settings, ``fit`` warns and returns its result without further optimization.
+This applies to both paths and in-memory checkpoints. Increasing
+``engine.stopper.epochs`` allows continuation only if early stopping does not
+apply. Use a new path or call ``fit()`` without a checkpoint for a fresh run,
+including when changing data or optimizer settings for a new experiment.
+
 Resume safely
 -------------
 
