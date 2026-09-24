@@ -638,19 +638,6 @@ def test_checkpoint_restores_sampling_probabilities_over_new_weights(
     assert actual.status == expected.status
 
 
-@pytest.mark.parametrize("allow_version_mismatch", [False, True])
-def test_pre_alias_weighted_checkpoint_is_rejected(tmp_path, allow_version_mismatch):
-    path = tmp_path / "legacy-weighted.pkl"
-    checkpoint = make_weighted_engine().fit(pause_after=1).checkpoint
-    # Reproduce the serialized state from before alias tables were introduced.
-    vars(checkpoint._carry.batches).pop("_alias_table", None)
-    checkpoint.save(path)
-    with pytest.raises(ValueError, match="predates alias sampling"):
-        make_weighted_engine().fit(
-            checkpoint=path, allow_version_mismatch=allow_version_mismatch
-        )
-
-
 @pytest.mark.parametrize("axis", [0, -2, 2])
 def test_explicit_likelihood_axis_must_be_valid_and_have_batch_length(axis):
     y = lsl.Var.new_obs(jnp.ones((3, 4)), lsl.Dist(tfd.Normal, 0.0, 1.0), name="y")

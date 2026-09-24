@@ -1590,14 +1590,7 @@ class Batches:
         return _scaled_common_log_lik(model_state, self.batch_sample_scale)
 
     def _tree_flatten(self):
-        # Unweighted checkpoints from before alias sampling remain compatible.
-        table = getattr(self, "_alias_table", None)
-        if self.sampling_probabilities is not None and table is None:
-            raise ValueError(
-                "Weighted checkpoint predates alias sampling and cannot be resumed. "
-                "Start a new run with an unused checkpoint path."
-            )
-        children = (self.indices, self.sampling_probabilities, table)
+        children = (self.indices, self.sampling_probabilities, self._alias_table)
         aux_data = {
             "position_keys": self.position_keys,
             "axis_size": self.axis_size,

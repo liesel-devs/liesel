@@ -641,16 +641,6 @@ class OptimCarry:
     i_batch: int | jax.Array = 0  # inner for-loop index over batches
     nan_debug_state: OptimNaNDebugState | None = None
 
-    def __setstate__(self, state: dict[str, Any]) -> None:
-        # Legacy checkpoints stored the unnormalized EMA and its weight.
-        # Preserve their last value; historical rounding cannot be recovered.
-        if "_ema_numerator" in state:
-            numerator = state.pop("_ema_numerator")
-            weight = state.pop("_ema_weight")
-            state["_ema_mean"] = numerator / jnp.where(weight == 0, 1, weight)
-            state["_ema_compensation"] = jnp.zeros_like(numerator)
-        self.__dict__.update(state)
-
     @classmethod
     def new(
         cls,

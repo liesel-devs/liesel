@@ -97,7 +97,6 @@ exclude_patterns = [
     "generated/liesel.distributions.GaussianCopula.kl_divergence.rst",
     "generated/liesel.distributions.MultivariateNormalDegenerate.cross_entropy.rst",
     "generated/liesel.distributions.MultivariateNormalDegenerate.kl_divergence.rst",
-    "generated/liesel.experimental.optim*.rst",
 ]
 
 

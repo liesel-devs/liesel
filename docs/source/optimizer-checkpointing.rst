@@ -57,6 +57,9 @@ keeping many snapshots uses extra memory. Treat checkpoint contents as read-only
 Custom losses that change model state must keep that state compatible and
 serializable with pickle.
 
+Checkpoint layouts from optimizer development before its first public release
+are unsupported. Start a new run instead of attempting to migrate those files.
+
 For manual snapshots, use :meth:`liesel.optim.OptimCheckpoint.save` and
 :meth:`liesel.optim.OptimCheckpoint.load`. Passing a checkpoint object resumes
 in memory; pass a path to ``fit()`` for automatic disk saves. See
