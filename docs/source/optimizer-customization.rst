@@ -1,7 +1,8 @@
 Choose optimizers
 =================
 
-:class:`liesel.optim.LieselOptim` uses Adam by default. Pass ``optimizers="lbfgs"``
+:class:`liesel.optim.LieselOptim` uses Adam with learning rate ``0.02`` by default.
+Pass ``optimizers="lbfgs"``
 for a full-data, deterministic fit. L-BFGS cannot use minibatches.
 
 Set a learning rate or schedule

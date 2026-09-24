@@ -51,6 +51,7 @@ class LieselOptim:
         one full-data optimization batch.
     optimizers
         Either explicit optimizers or one of ``"adam"`` and ``"lbfgs"``.
+        Defaults to Adam with learning rate ``0.02``.
     stopper
         Maximum-epoch and early-stopping configuration. ``None`` creates a new
         :class:`.Stopper` with ``epochs=1000``, ``patience=10``, and ``rtol=1e-6``.
@@ -233,7 +234,7 @@ class LieselOptim:
                 return [
                     Optimizer(
                         position_keys,
-                        optimizer=optax.adam(learning_rate=1e-3),
+                        optimizer=optax.adam(learning_rate=0.02),
                     )
                 ]
             case "lbfgs":

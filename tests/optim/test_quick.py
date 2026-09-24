@@ -238,6 +238,26 @@ def test_default_build_engine_uses_opinionated_defaults():
     assert engine.step_progress_update_every == 10
 
 
+@pytest.mark.parametrize("batch_size", [None, 20])
+@pytest.mark.parametrize("spread", [0.0, 0.5])
+def test_default_adam_fits_normal_mean_within_default_budget(batch_size, spread):
+    loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
+    y = lsl.Var.new_obs(
+        5.13 + jnp.linspace(-spread, spread, 200),
+        lsl.Dist(tfd.Normal, loc=loc, scale=1.0),
+        name="y",
+    )
+    result = LieselOptim(
+        lsl.Model([y]),
+        batch_size=batch_size,
+        loss_monitor="train_full_data",
+        seed=0,
+        show_progress=False,
+    ).fit()
+    tolerance = 0.05 if spread and batch_size else 0.01
+    assert float(result.position_final["loc"]) == pytest.approx(5.13, abs=tolerance)
+
+
 def test_default_stopper_is_independent_between_instances():
     model = _normal_model()
     first = LieselOptim(model, loss_monitor="train_full_data", seed=1).build_engine()
