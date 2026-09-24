@@ -50,6 +50,9 @@ For the ``beta`` and ``log_sigma`` parameters in the basic tutorial:
 Pass this list as ``optimizers=optimizers`` to ``LieselOptim``. Each optimizer
 updates its own parameters in list order on every batch. Their parameter names
 must not overlap. Parameters left out of the list stay fixed.
+Each active standard optimizer evaluates its own objective and gradient per batch,
+so separate blocks add work compared with one joint optimizer; custom optimizers
+and line searches can have different costs.
 
 L-BFGS must be the only optimizer because other parameter updates invalidate its
 cached objective and curvature history. Use ``optimizers="lbfgs"`` for all model

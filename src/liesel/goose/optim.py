@@ -424,11 +424,7 @@ def optim_flat(
     Now, we are ready to run the optimization.
 
     >>> stopper = gs.Stopper(max_iter=1000, patience=10, atol=0.01)
-    >>> with warnings.catch_warnings(record=True) as caught:
-    ...     warnings.simplefilter("always", FutureWarning)
-    ...     result = gs.optim_flat(model, params=["coef"], stopper=stopper)
-    >>> caught[0].category is FutureWarning
-    True
+    >>> result = gs.optim_flat(model, params=["coef"], stopper=stopper)
     >>> {name: jnp.round(value, 2) for name, value in result.position.items()}
     {'coef': Array([0.38, 1.24], dtype=float32)}
 

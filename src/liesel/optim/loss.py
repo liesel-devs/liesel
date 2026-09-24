@@ -108,14 +108,6 @@ class LossMixin:
     mixin provides validation-position helpers and JAX gradient methods used by
     :class:`.Optimizer`.
 
-    Attributes
-    ----------
-    split
-        Train/validation/test split used by the loss.
-    loss_train_batched
-        Callable training objective differentiated by :meth:`grad` and
-        :meth:`value_and_grad`.
-
     Examples
     --------
     A minimal quadratic loss can inherit from ``LossMixin`` and immediately use the
@@ -146,7 +138,10 @@ class LossMixin:
     """
 
     split: SplitConfig
+    """Train/validation/test split used by the loss."""
+
     loss_train_batched: Callable[[Position, "OptimCarry"], jax.Array]
+    """Training objective differentiated by :meth:`grad` and :meth:`value_and_grad`."""
 
     def loss_train(self, params: Position, carry: "OptimCarry") -> jax.Array:
         """

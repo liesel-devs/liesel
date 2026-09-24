@@ -739,6 +739,11 @@ class OptimNaNDebugInfo:
     Use :meth:`reproduce_step` for NaNs introduced by an optimizer update and
     :meth:`reproduce_loss` for NaNs returned by an optimizer's pre-update loss or
     by the explicit batched loss evaluation when no optimizer is active.
+
+    The reported optimizer is where NaN was first detected. An earlier update
+    may have produced finite values outside the model's valid parameter domain.
+    Inspect ``last_non_nan_position``: it is free of NaNs, but is not necessarily
+    a valid model state.
     """
 
     kind: OptimNaNKind
