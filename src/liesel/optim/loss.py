@@ -4,12 +4,15 @@ This module defines the interface consumed by :class:`.OptimEngine` and provides
 the default negative log-probability loss for Liesel models.
 """
 
+from collections import Counter
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Literal, Protocol
 
 import jax
 
-from ..model import Model
+from ..model import Calc, Model
+from ..model.model import _reduced_sum
+from ._log_lik import validate_likelihood_groups
 from .split import PositionSplit, PositionSplitManager
 from .types import Position
 
@@ -31,6 +34,38 @@ def _validate_bool(value: bool, name: str) -> None:
         raise ValueError(  # noqa: TRY004
             f"{name} must be True or False, but got {value!r}."
         )
+
+
+def _validate_model_decomposition(model: Model) -> None:
+    """Require the factorization used by the built-in split/batch loss."""
+    likelihood = Counter(
+        var.dist_node.name for var in model.observed.values() if var.has_dist
+    )
+    prior = Counter(
+        var.dist_node.name for var in model.parameters.values() if var.has_dist
+    )
+    for name, expected in (
+        ("_model_log_lik", likelihood),
+        ("_model_log_prior", prior),
+        ("_model_log_prob", likelihood + prior),
+    ):
+        node = model.nodes[name]
+        actual = Counter(parent.name for parent in node.inputs)
+        if (
+            not isinstance(node, Calc)
+            or node.function is not _reduced_sum
+            or node.kwinputs
+            or actual != expected
+        ):
+            raise ValueError(
+                f"NegLogProbLoss cannot decompose {name!r}: expected the standard "
+                "sum of observed likelihoods and parameter priors. "
+                f"Unexpected inputs: {list((actual - expected).elements())}; "
+                f"missing inputs: {list((expected - actual).elements())}. "
+                "Custom aggregate nodes or distribution factors that are neither "
+                "observed nor parameter priors require a custom Loss. "
+                "A manual split does not change the objective decomposition."
+            )
 
 
 class Loss(Protocol):
@@ -248,6 +283,12 @@ class NegLogProbLoss(LossMixin):
     branch-specific scaling for multi-size observed data. Validation loss uses
     ``split.scaled_log_lik(...)`` for the same reason.
 
+    The model must use the standard sums of observed distribution factors and
+    parameter priors. Weak observed variables and weak parameters contribute
+    their likelihoods and priors like strong ones.
+    Custom aggregate nodes or additional unclassified distribution factors
+    require a custom :class:`Loss`; supplying a manual split is not sufficient.
+
     Parameters
     ----------
     model
@@ -292,6 +333,9 @@ class NegLogProbLoss(LossMixin):
         validation_strategy: Literal["log_lik", "log_prob"] = "log_lik",
         scale: bool = False,
     ):
+        _validate_model_decomposition(model)
+        splits = split.splits if isinstance(split, PositionSplitManager) else (split,)
+        validate_likelihood_groups(model, [part.split_position_keys for part in splits])
         self._model = model
         self.split = split
         if validation_strategy not in ("log_lik", "log_prob"):

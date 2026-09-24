@@ -12,9 +12,10 @@ import numpy as np
 
 from ..model import Model
 from . import _alias
+from ._log_lik import observed_log_lik_sources
 from ._log_lik import scaled_common_log_lik as _scaled_common_log_lik
 from ._log_lik import scaled_liesel_log_lik as _scaled_liesel_log_lik
-from ._model_utils import position_key_groups_from_model
+from ._model_utils import position_key_groups_from_model, strong_observed_keys
 from .split import (
     PositionSplit,
     PositionSplitManager,
@@ -142,7 +143,7 @@ def _axis_size_for_empty_position_keys(
 ) -> int:
     _, groups = position_key_groups_from_model(
         model,
-        list(model.observed),
+        strong_observed_keys(model),
         batch_axes,
         default_batch_axis,
     )
@@ -869,8 +870,10 @@ class Batches:
             Number of observations per batch. If ``None``, batching is disabled and
             the returned object uses one full-data batch.
         position_keys
-            Names of the observed position entries to batch. If ``None``, all observed
-            variables in ``model`` are used. Flat keys are grouped by axis length;
+            Names of observed position entries to batch. If ``None``, strong observed
+            variables in ``model`` are used. Weak observations are recomputed from
+            their strong inputs and cannot be selected directly.
+            Flat keys are grouped by axis length;
             nested keys specify exact groups, including equal-sized groups. Keys
             in a group must have matching lengths along their batching axes.
             Pass an empty sequence only with
@@ -978,7 +981,9 @@ class Batches:
             raise ValueError("multi_size must be 'error' or 'manager'.")
 
         pos_keys = (
-            list(position_keys) if position_keys is not None else list(model.observed)
+            list(position_keys)
+            if position_keys is not None
+            else strong_observed_keys(model)
         )
         if not pos_keys and batch_size is not None:
             raise ValueError("position_keys may be empty only when batch_size=None.")
@@ -1464,13 +1469,8 @@ class Batches:
                 "Weighted correction cannot decompose a custom log_lik_node. "
                 "Apply correction_factors in a custom loss instead."
             )
-        observed_names = {
-            var.name
-            for var in model.observed.values()
-            if var.name in self.position_keys
-            or var.value_node.name in self.position_keys
-        }
-        unknown = self.likelihood_axes.keys() - observed_names
+        sources = observed_log_lik_sources(model, self.position_keys)
+        unknown = self.likelihood_axes.keys() - sources.keys()
         if unknown:
             raise ValueError(
                 f"likelihood_axes names are not in this batch group: {sorted(unknown)}."
@@ -1478,24 +1478,22 @@ class Batches:
         factors = self.correction_factors(batch_index)
         corrections = {}
         assert isinstance(self.batch_axes, dict)
-        for var in model.observed.values():
-            if var.dist_node is None:
-                continue
-            key = next(
-                (
-                    key
-                    for key in self.position_keys
-                    if key in (var.name, var.value_node.name)
-                ),
-                None,
-            )
-            if key is None:
-                continue
+        for name, keys in sources.items():
+            var = model.observed[name]
+            assert var.dist_node is not None
+            key = keys[0]
             value = jnp.asarray(model_state[var.dist_node.name].value)
             if not value.ndim:
                 raise ValueError(f"{var.name!r} needs a pointwise likelihood axis.")
             if var.name in self.likelihood_axes:
                 axis = self.likelihood_axes[var.name]
+            elif var.weak:
+                if value.ndim != 1:
+                    raise ValueError(
+                        f"Set likelihood_axes for weak observed variable {var.name!r}; "
+                        "its likelihood axis cannot be inferred from its inputs."
+                    )
+                axis = 0
             else:
                 data_ndim = model_state[var.value_node.name].value.ndim
                 event_ndim = len(var.dist_node.init_dist().event_shape)
@@ -1856,8 +1854,10 @@ class BatchManager:
             Common batch size for every child group. If ``None``, each child uses one
             full-data batch and shuffling is disabled.
         position_keys
-            Names of observed position entries to batch. If ``None``, all observed
-            variables in ``model`` are used. Flat keys are grouped by axis length;
+            Names of observed position entries to batch. If ``None``, strong observed
+            variables in ``model`` are used. Weak observations are recomputed from
+            their strong inputs and cannot be selected directly.
+            Flat keys are grouped by axis length;
             nested keys preserve exact groups in the supplied order. Each group
             must have matching lengths along its configured batching axes.
         shuffle
@@ -1931,18 +1931,16 @@ class BatchManager:
         (True, 1)
         """
         pos_keys = (
-            list(position_keys) if position_keys is not None else list(model.observed)
+            list(position_keys)
+            if position_keys is not None
+            else strong_observed_keys(model)
         )
         pos_keys, groups = position_key_groups_from_model(
             model, pos_keys, batch_axes, default_batch_axis
         )
         shuffle = False if batch_size is None else shuffle
         likelihood_axes = likelihood_axes or {}
-        observed_names = {
-            var.name
-            for var in model.observed.values()
-            if var.name in pos_keys or var.value_node.name in pos_keys
-        }
+        observed_names = observed_log_lik_sources(model, pos_keys).keys()
         unknown = likelihood_axes.keys() - observed_names
         if unknown:
             raise ValueError(
@@ -1962,10 +1960,9 @@ class BatchManager:
                 default_batch_axis=default_batch_axis,
                 infer_sample_size=infer_sample_size,
                 likelihood_axes={
-                    var.name: likelihood_axes[var.name]
-                    for var in model.observed.values()
-                    if var.name in likelihood_axes
-                    and (var.name in keys or var.value_node.name in keys)
+                    name: likelihood_axes[name]
+                    for name in observed_log_lik_sources(model, keys)
+                    if name in likelihood_axes
                 },
                 sample_with_replacement=(
                     sample_with_replacement

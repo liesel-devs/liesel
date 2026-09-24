@@ -23,19 +23,61 @@ def observed_log_lik_node_names(
     model: Model, position_keys: Sequence[str]
 ) -> list[str]:
     """
-    Retrieve names of the log prob nodes of variables named in ``position_keys``.
+    Retrieve likelihood factors associated with the selected data inputs.
     """
-    keys = set(position_keys)
-    node_names: list[str] = []
+    return [
+        model.observed[name].dist_node.name
+        for name in observed_log_lik_sources(model, position_keys)
+    ]
+
+
+def observed_log_lik_sources(
+    model: Model, position_keys: Sequence[str]
+) -> dict[str, list[str]]:
+    """Map observed factors to selected data keys, following weak value inputs.
+
+    Weak observations are recomputed from their strong inputs. Their likelihoods
+    therefore belong to the same row group as those inputs, not to a separately
+    writable copy of the weak value. Multiple groups claiming a factor are rejected
+    by :func:`validate_likelihood_groups`.
+    """
+    selected = {
+        key: model.vars[key].value_node if key in model.vars else model.nodes[key]
+        for key in position_keys
+    }
+    sources = {}
 
     for var in model.observed.values():
         if var.dist_node is None:
             continue
+        nodes = {var.value_node}
+        if var.weak:
+            pending = list(nodes)
+            while pending:
+                node = pending.pop()
+                for parent in node.all_input_nodes():
+                    if parent not in nodes:
+                        nodes.add(parent)
+                        pending.append(parent)
+        keys = [key for key, node in selected.items() if node in nodes]
+        if keys:
+            sources[var.name] = keys
+    return sources
 
-        if var.name in keys or var.value_node.name in keys:
-            node_names.append(var.dist_node.name)
 
-    return node_names
+def validate_likelihood_groups(model: Model, groups: Sequence[Sequence[str]]) -> None:
+    """Reject likelihood factors shared by independently sampled row groups."""
+    covered = set()
+    for keys in groups:
+        names = set(observed_log_lik_node_names(model, keys))
+        repeated = covered & names
+        if repeated:
+            raise ValueError(
+                f"Observed likelihood factors {sorted(repeated)} are covered by more "
+                "than one data group. Put aligned strong inputs of weak observed "
+                "variables in one explicit group, or use a custom Loss."
+            )
+        covered.update(names)
 
 
 def all_observed_log_lik_node_names(model: Model) -> list[str]:
@@ -77,6 +119,7 @@ def scaled_liesel_log_lik(
     ValueError
         If one observed log-likelihood node is covered by more than one group.
     """
+    validate_likelihood_groups(model, [keys for keys, _ in groups])
     scaled_log_lik = 0.0
     covered_nodes: set[str] = set()
 
@@ -84,12 +127,6 @@ def scaled_liesel_log_lik(
         node_names = observed_log_lik_node_names(model, position_keys)
 
         for node_name in node_names:
-            if node_name in covered_nodes:
-                raise ValueError(
-                    f"The observed log-likelihood node {node_name!r} is covered by "
-                    "more than one data group."
-                )
-
             value = model_state[node_name].value
             if corrections and node_name in corrections:
                 factors, axis = corrections[node_name]

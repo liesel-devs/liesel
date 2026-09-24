@@ -31,6 +31,7 @@ from ._engine_utils import (
     _validate_optimizer_batches,
     _validate_positive_int,
 )
+from ._log_lik import validate_likelihood_groups
 from .batch import Batches, BatchManager
 from .loss import Loss, LossMixin, NegLogProbLoss
 from .optimizer import LBFGS, Optimizer, OptimizerLike
@@ -548,6 +549,10 @@ class OptimEngine:
             if isinstance(self.batches, BatchManager)
             else (self.batches,)
         )
+        if isinstance(self.loss, NegLogProbLoss):
+            validate_likelihood_groups(
+                self.loss.model, [batch.position_keys for batch in batches]
+            )
         for batch in batches:
             batch._validate_position(self.split.train)
 

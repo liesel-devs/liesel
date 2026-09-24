@@ -91,6 +91,12 @@ What changes
 Validation and minibatches
 --------------------------
 
+Models with custom aggregate likelihood, prior, or probability nodes require a
+custom :class:`~liesel.optim.Loss`. The built-in loss supports only the standard
+sum of observed likelihoods and parameter priors. A manual split alone does not
+replace ``optim_flat``'s handling of custom aggregate objectives or its optional
+decomposition-check override.
+
 Use :class:`liesel.optim.PositionSplit` instead of ``model_validation`` and set
 ``loss_monitor="validation"``. Keep responses and matching covariates together.
 Build the split from your existing holdout to keep the same evaluation data.

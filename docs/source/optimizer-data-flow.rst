@@ -78,7 +78,7 @@ without a likelihood instead of guessing how to split them.
 call ``split_position()`` to apply them. Manager classes handle several groups.
 See :meth:`~liesel.optim.PositionSplit.from_model` for the factory options.
 
-For observed distributions with ``per_obs=False`` or a custom ``log_lik_node``,
+For observed distributions with ``per_obs=False``,
 automatic sample-size inference is unavailable. Construct the split explicitly:
 
 .. code-block:: python
@@ -95,6 +95,14 @@ This chooses split-axis counts for scaling. Alternatively, supply effective
 ``sample_sizes`` to the split factory. Setting ``scale_loss=False`` on
 ``LieselOptim`` only disables final loss normalization; it does not disable
 split inference or specify batch scaling.
+
+Custom aggregate likelihood, prior, or probability nodes require a custom
+:class:`~liesel.optim.Loss` and an explicit split. A manual split specifies data
+grouping and scaling; it does not change the objective used by
+:class:`~liesel.optim.NegLogProbLoss`. The built-in loss accepts the standard sums
+of observed distribution factors and parameter priors, including weak observed
+variables. Other distribution factors must be classified appropriately or handled
+by a custom loss.
 
 .. raw:: html
 
@@ -170,6 +178,41 @@ each child with ``Batches.from_split`` and combine them with ``BatchManager``.
 
 `Open the BatchManager overview in a separate page
 <_static/visualizations/batch-manager-overview.html>`__.
+
+Weak observed variables
+-----------------------
+
+Weak observed variables, such as copula observations computed from marginal PITs,
+are supported. The model factories select strong observed inputs as writable data;
+weak values and their likelihoods are recomputed as parameters or data change.
+Automatic grouping also supports inputs whose only likelihood comes from a weak
+observed variable; the strong inputs need not have their own distributions.
+Explicitly selecting a weak variable or its value node for splitting or batching
+raises an error: select its strong source data instead.
+
+Keep aligned inputs of a weak observation in one group, for example
+``position_keys=[["x1", "x2"]]`` for two copula margins. The weak likelihood then
+shares that group's split, scaling, and weighted sampling corrections. It also
+contributes to validation and test scores when its source group is held out.
+A factor spanning independently split or batched groups is rejected.
+
+Graph dependencies identify which group supplies a weak observation, but do not
+establish arbitrary transformation or row semantics. Supply explicit grouping
+and axes when needed. In weighted batches, a multidimensional weak likelihood
+requires ``likelihood_axes={"copula": 0}`` (with the appropriate factor name and
+likelihood axis); the strong input's axis is not assumed to be its likelihood axis.
+Use a custom loss if the transformation does not preserve the group's rows.
+
+Weak parameters and priors
+--------------------------
+
+A prior may be attached to a weak parameter computed from a strong source variable.
+That prior remains in the default loss, including its derivatives through the weak
+parameter. Automatic optimizer selection cannot decide which source to estimate
+and raises an informative error. Supply the strong names explicitly, for example
+``optimizers=[opt.Optimizer(["source"], optax.adam(0.01))]`` or
+``optimizers=[opt.LBFGS(["source"])]``. The source does not need to be marked as a
+parameter. The weak parameter itself is recomputed during fitting.
 
 .. _optimizer-likelihood-scaling:
 

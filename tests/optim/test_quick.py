@@ -162,17 +162,12 @@ def test_engine_accepts_integer_and_jax_seeds(seed):
     assert engine.fit().status == "max_epochs"
 
 
-@pytest.mark.parametrize("kind", ["per_obs", "custom_log_lik"])
-def test_automatic_inference_error_explains_manual_split(kind):
+def test_automatic_inference_error_explains_manual_split():
     loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
     dist = lsl.Dist(tfd.Normal, loc=loc, scale=1.0)
-    dist.per_obs = kind != "per_obs"
+    dist.per_obs = False
     y = lsl.Var.new_obs(jnp.arange(4.0), dist, name="y")
     builder = lsl.GraphBuilder().add(y)
-    if kind == "custom_log_lik":
-        builder.log_lik_node = lsl.Calc(
-            lambda value: value.sum(), dist, _name="custom_log_lik"
-        )
     model = builder.build_model()
     with pytest.raises(ValueError, match=r"PositionSplit.from_model.*split=split"):
         LieselOptim(

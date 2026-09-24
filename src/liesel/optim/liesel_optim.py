@@ -53,8 +53,12 @@ class LieselOptim:
         Required optimizer choice. An Optax transformation such as
         ``optax.adam(0.01)`` applies to all model parameters. Pass ``"lbfgs"``
         for the built-in full-data L-BFGS optimizer, or a sequence of explicit
-        optimizers for selected parameters. Pass a configured transformation,
-        not an optimizer factory. Transformations must support updates from
+        optimizers for selected parameters. If a parameter is weak (computed),
+        automatic selection raises an error. Explicitly name its strong source
+        variables with :class:`.Optimizer` or :class:`.LBFGS`; those sources need
+        not be marked as parameters. Priors on weak parameters remain in the loss.
+        Pass a configured transformation, not an optimizer factory.
+        Transformations must support updates from
         gradients, state and parameters without extra objective arguments.
     stopper
         Maximum-epoch and early-stopping configuration. ``None`` creates a new
@@ -67,12 +71,15 @@ class LieselOptim:
         ``None`` uses the current Unix time in whole seconds.
     split
         Optional split. If neither ``split`` nor ``loss`` is supplied, all observed
-        data is used for training. Multi-size observed data automatically uses
+        data is used for training; weak observations are recomputed from their
+        strong inputs. Multi-size observed data automatically uses
         :class:`.PositionSplitManager`. With a custom loss, an explicit split must
-        be the same object as ``loss.split``. Models with ``per_obs=False`` or a
-        custom ``log_lik_node`` require an explicitly constructed split: use
+        be the same object as ``loss.split``. Models with ``per_obs=False``
+        require an explicitly constructed split: use
         :meth:`.PositionSplit.from_model` with ``infer_sample_sizes=False`` for
-        axis counts, or supply effective ``sample_sizes`` there.
+        axis counts, or supply effective ``sample_sizes`` there. Custom aggregate
+        likelihood or probability nodes require a custom loss as well as an
+        explicit split.
     batch_size
         Rows per batch in each training group. Uses :meth:`.Batches.from_split`
         with otherwise default settings. ``None`` uses all training data.
@@ -241,6 +248,20 @@ class LieselOptim:
         | Literal["lbfgs"],
     ) -> Sequence[OptimizerLike]:
         position_keys = list(self.model.parameters)
+        if isinstance(optimizers, optax.GradientTransformation) or (
+            isinstance(optimizers, str) and optimizers == "lbfgs"
+        ):
+            weak = [name for name, var in self.model.parameters.items() if var.weak]
+            if weak:
+                raise ValueError(
+                    f"Cannot automatically select weak parameters {weak}: their "
+                    "values are computed from other variables. Explicitly name the "
+                    "strong variables to estimate with "
+                    "optimizers=[Optimizer(['strong_name'], optax.adam(0.01))] "
+                    "or optimizers=[LBFGS(['strong_name'])]. Those strong variables "
+                    "need not be marked as parameters; priors on weak parameters "
+                    "remain part of the loss."
+                )
         if isinstance(optimizers, optax.GradientTransformation):
             return [Optimizer(position_keys, optimizers)]
         if isinstance(optimizers, str):

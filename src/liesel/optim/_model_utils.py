@@ -7,7 +7,12 @@ from collections.abc import Mapping, Sequence
 import jax.numpy as jnp
 
 from ..model import Model
-from ._log_lik import observed_log_lik_node_names
+from ._log_lik import observed_log_lik_node_names, validate_likelihood_groups
+
+
+def strong_observed_keys(model: Model) -> list[str]:
+    """Observed inputs whose values can be replaced by split or batch data."""
+    return [name for name, var in model.observed.items() if not var.weak]
 
 
 def position_key_groups_from_model(
@@ -43,6 +48,13 @@ def position_key_groups_from_model(
     flat_keys = [key for group in selections for key in group]
     if len(set(flat_keys)) != len(flat_keys):
         raise ValueError(f"Duplicate position_keys are not allowed: {flat_keys}")
+    for var in model.vars.values():
+        if var.weak and (var.name in flat_keys or var.value_node.name in flat_keys):
+            raise ValueError(
+                f"Cannot split or batch weak variable {var.name!r} directly. "
+                "Select its strong source data instead; weak observed values "
+                "and their likelihoods are recomputed from those inputs."
+            )
     position = model.extract_position(flat_keys)
     groups = []
 
@@ -90,4 +102,5 @@ def position_key_groups_from_model(
                     "explicit nested position_keys."
                 )
 
+    validate_likelihood_groups(model, [keys for _, keys in groups])
     return flat_keys, groups

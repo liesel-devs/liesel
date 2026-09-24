@@ -12,8 +12,12 @@ import jax
 import jax.numpy as jnp
 
 from ..model import Model
-from ._log_lik import scaled_common_log_lik, scaled_liesel_log_lik
-from ._model_utils import position_key_groups_from_model
+from ._log_lik import (
+    observed_log_lik_sources,
+    scaled_common_log_lik,
+    scaled_liesel_log_lik,
+)
+from ._model_utils import position_key_groups_from_model, strong_observed_keys
 from .types import Array, ModelInterface, ModelState, Position
 
 SplitPart = Literal["train", "validate", "test"]
@@ -280,8 +284,7 @@ def _observed_dist_infos(
     """
     Return observed-variable names, log-prob node names, and ``per_obs`` flags.
 
-    Only observed variables whose variable name or value-node name appears in
-    ``position_keys`` are included.
+    Includes weak observed factors whose strong inputs are in ``position_keys``.
 
     Examples
     --------
@@ -298,17 +301,14 @@ def _observed_dist_infos(
     >>> _observed_dist_infos(model, ["y"])
     [('y', 'y_log_prob', True)]
     """
-    keys = set(position_keys)
-    infos: list[tuple[str, str, bool]] = []
-
-    for var in model.observed.values():
-        if var.dist_node is None:
-            continue
-
-        if var.name in keys or var.value_node.name in keys:
-            infos.append((var.name, var.dist_node.name, var.dist_node.per_obs))
-
-    return infos
+    return [
+        (
+            name,
+            model.observed[name].dist_node.name,
+            model.observed[name].dist_node.per_obs,
+        )
+        for name in observed_log_lik_sources(model, position_keys)
+    ]
 
 
 def _has_custom_model_log_lik(model: Model) -> bool:
@@ -661,8 +661,9 @@ class PositionSplit:
             raise ValueError(
                 "Cannot infer sample sizes for a model with a custom log_lik_node. "
                 "Set infer_sample_sizes=False or provide sample_sizes manually in "
-                "PositionSplit.from_model(...). If using LieselOptim, pass it as "
-                "LieselOptim(..., split=split)."
+                "PositionSplit.from_model(...). For optimization, use a custom "
+                "Loss with this split: a manual split does not make NegLogProbLoss "
+                "support custom aggregate likelihoods."
             )
 
         sizes: dict[SplitPart, int] = {}
@@ -947,8 +948,10 @@ class PositionSplit:
         model
             Model containing the observed variables to split.
         position_keys
-            Names of observed position entries to include. If ``None``, all observed
-            variables in ``model`` are used. Flat keys are grouped by axis length;
+            Names of observed position entries to include. If ``None``, strong observed
+            variables in ``model`` are used. Weak observations are recomputed from
+            their strong inputs and cannot be selected directly.
+            Flat keys are grouped by axis length;
             nested keys specify exact groups, including equal-sized groups. Each
             group must have matching lengths along its configured axes. Use
             ``split_axes={key: None}`` to
@@ -1038,7 +1041,9 @@ class PositionSplit:
             raise ValueError("multi_size must be 'error' or 'manager'.")
 
         pos_keys = (
-            list(position_keys) if position_keys is not None else list(model.observed)
+            list(position_keys)
+            if position_keys is not None
+            else strong_observed_keys(model)
         )
         if not pos_keys:
             raise ValueError(
@@ -1878,8 +1883,10 @@ class SplitManager:
         model
             Model containing the observed variables to split.
         position_keys
-            Names of observed position entries to include. If ``None``, all observed
-            variables in ``model`` are used. Flat keys are grouped by axis length;
+            Names of observed position entries to include. If ``None``, strong observed
+            variables in ``model`` are used. Weak observations are recomputed from
+            their strong inputs and cannot be selected directly.
+            Flat keys are grouped by axis length;
             nested keys specify exact groups, including equal-sized groups. Each
             group must have matching lengths along its configured axes. Use
             ``split_axes={key: None}`` to
@@ -1931,7 +1938,9 @@ class SplitManager:
         (1, 1)
         """
         pos_keys = (
-            list(position_keys) if position_keys is not None else list(model.observed)
+            list(position_keys)
+            if position_keys is not None
+            else strong_observed_keys(model)
         )
         pos_keys, groups = position_key_groups_from_model(
             model, pos_keys, split_axes, default_split_axis
@@ -2422,8 +2431,10 @@ class Split:
         model
             Model containing the observed variables to configure.
         position_keys
-            Names of observed position entries to include. If ``None``, all observed
-            variables in ``model`` are used. Flat keys group automatically by axis
+            Names of observed position entries to include. If ``None``, strong observed
+            variables in ``model`` are used. Weak observations are recomputed from
+            their strong inputs and cannot be selected directly.
+            Flat keys group automatically by axis
             length; nested keys define exact groups, including equal-sized groups.
         axis_size
             Optional split-axis size override. If omitted, the size is inferred from
@@ -2488,7 +2499,9 @@ class Split:
             raise ValueError("multi_size must be 'error' or 'manager'.")
 
         pos_keys = (
-            list(position_keys) if position_keys is not None else list(model.observed)
+            list(position_keys)
+            if position_keys is not None
+            else strong_observed_keys(model)
         )
         if not pos_keys:
             raise ValueError("Split.from_model() requires at least one position key.")
