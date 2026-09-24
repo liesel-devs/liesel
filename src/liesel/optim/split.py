@@ -858,7 +858,8 @@ class PositionSplit:
 
         For a :class:`.Model`, observed likelihood terms belonging to this split's
         :attr:`position_keys` are multiplied by the branch scale for ``part``.
-        Other observed likelihood terms are left unscaled. For a generic model
+        Other observed likelihood terms are included unscaled only for training;
+        validation and test scores exclude them. For a generic model
         interface, the scalar ``"_model_log_lik"`` state entry is scaled.
 
         Parameters
@@ -906,14 +907,11 @@ class PositionSplit:
         scale = self.sample_scale(part)
 
         if isinstance(model, Model):
-            # A scalar split scale applies only to likelihood nodes covered by this
-            # split. Other observed model branches may still be evaluated on full
-            # data and must remain unscaled; scaling "_model_log_lik" would scale
-            # them too.
             return scaled_liesel_log_lik(
                 model=model,
                 model_state=model_state,
                 groups=[(self.split_position_keys, scale)],
+                include_uncovered=part == "train",
             )
 
         return scaled_common_log_lik(model_state, scale)
@@ -1684,9 +1682,10 @@ class PositionSplitManager:
         by each branch's ``train_sample_size / sample_size(part)``.
 
         For a Liesel :class:`.Model`, each child split scales the observed
-        likelihood terms belonging to its own ``position_keys``. For a generic
-        :class:`.ModelInterface`, observed-variable decomposition is unavailable, so
-        a common scalar scale is required.
+        likelihood terms belonging to its own ``position_keys``. Uncovered terms
+        are included unscaled only for training, not validation or testing. For a
+        :class:`.ModelInterface`, a common scalar scale is required because observed
+        likelihood terms cannot be separated.
 
         Parameters
         ----------
@@ -1745,7 +1744,9 @@ class PositionSplitManager:
                 (split.split_position_keys, scale)
                 for split, scale in zip(self.splits, scales, strict=True)
             ]
-            return scaled_liesel_log_lik(model, model_state, groups)
+            return scaled_liesel_log_lik(
+                model, model_state, groups, include_uncovered=part == "train"
+            )
 
         try:
             scale = _common_value(scales, f"{part}_scale", f"{part}_scales")

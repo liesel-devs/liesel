@@ -414,7 +414,8 @@ class NegLogProbLoss(LossMixin):
         """
         position = Position(params | self.obs_validate | carry.fixed_position)
         new_state = self.model.update_state(position, carry.model_state)
-        loss = -self.split.scaled_log_lik(self.model, new_state, part="validate")
+        part = "validate" if self.split.has_validation else "train"
+        loss = -self.split.scaled_log_lik(self.model, new_state, part=part)
         if self.validation_strategy == "log_prob":
             loss -= new_state["_model_log_prior"].value
 

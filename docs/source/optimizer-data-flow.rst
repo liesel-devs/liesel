@@ -175,7 +175,9 @@ is scaled up to represent its full training group; priors are not scaled up.
 Each group gets its own factor, so different batch sizes do not change the
 relative weight of the groups.
 
-Validation and test likelihoods are scaled to the corresponding training size.
+Validation and test likelihoods include only the split branches and are scaled
+to the corresponding training size. Unsplit observed likelihoods contribute to
+training only, including observations explicitly marked as passthrough.
 ``LieselOptim`` then divides losses by the total training sample size by default;
 use ``scale_loss=False`` to keep the sum. Sample size counts likelihood terms,
 which need not equal the number of array elements.

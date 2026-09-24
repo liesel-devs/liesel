@@ -133,10 +133,7 @@ def test_passthrough_likelihood_is_not_split_scaled_or_batched_by_default():
 
     state = model.update_state(split.validate, model.state)
     value = split.scaled_log_lik(model, state)
-    manual = (
-        split.validate_sample_scale * state["y_log_prob"].value.sum()
-        + state["z_log_prob"].value.sum()
-    )
+    manual = split.validate_sample_scale * state["y_log_prob"].value.sum()
     batches = Batches.from_split(split, batch_size=2, shuffle=False)
 
     assert jnp.allclose(value, manual)
@@ -196,3 +193,106 @@ def test_neg_log_prob_loss_rejects_non_bool_scale():
 
     with pytest.raises(ValueError, match="scale"):
         NegLogProbLoss(model, split, scale="yes")  # ty: ignore[invalid-argument-type]
+
+
+@pytest.mark.parametrize("managed", [False, True])
+@pytest.mark.parametrize("passthrough", [False, True])
+@pytest.mark.parametrize("strategy", ["log_lik", "log_prob"])
+def test_held_out_scores_exclude_unsplit_likelihoods(managed, passthrough, strategy):
+    held_out_scores = []
+    training_scores = []
+    for offset in (0.0, 100.0):
+        loc = lsl.Var.new_param(
+            jnp.array(0.5), lsl.Dist(tfd.Normal, loc=0.0, scale=2.0), name="loc"
+        )
+        ys = [
+            lsl.Var.new_obs(
+                jnp.arange(float(n)),
+                lsl.Dist(tfd.Normal, loc=loc, scale=1.0),
+                name=f"y{i}",
+            )
+            for i, n in enumerate((10, 6) if managed else (10,))
+        ]
+        z = lsl.Var.new_obs(
+            jnp.full(100, offset), lsl.Dist(tfd.Normal, loc=loc, scale=1.0), name="z"
+        )
+        model = lsl.Model([*ys, z])
+        keys = [y.name for y in ys] + (["z"] if passthrough else [])
+        split = PositionSplit.from_model(
+            model,
+            position_keys=keys,
+            split_axes={"z": None},
+            validate_axis_share=0.2,
+            test_axis_share=0.2,
+            multi_size="manager",
+            shuffle=False,
+        )
+        loss = NegLogProbLoss(model, split, validation_strategy=strategy, scale=True)
+        carry = _empty_carry(model)
+        params = Position({"loc": loc.value})
+        children = split.splits if isinstance(split, PositionSplitManager) else [split]
+        scores = []
+        for part in ("validate", "test"):
+            state = model.update_state(getattr(split, part), model.state)
+            manual = sum(
+                child.sample_scale(part)
+                * tfd.Normal(loc=loc.value, scale=1.0)
+                .log_prob(getattr(child, part)[y.name])
+                .sum()
+                for child, y in zip(children, ys, strict=True)
+            )
+            actual = split.scaled_log_lik(model, state, part=part)
+            assert jnp.allclose(actual, manual)
+            scores.append(float(actual))
+            if part == "validate":
+                prior = tfd.Normal(loc=0.0, scale=2.0).log_prob(loc.value)
+                expected = -(manual + (prior if strategy == "log_prob" else 0.0))
+                assert jnp.allclose(
+                    loss.loss_monitor(params, carry), expected / loss.scalar
+                )
+        held_out_scores.append(scores)
+        training_scores.append(float(loss.loss_train(params, carry)))
+        full_split = PositionSplit.from_model(
+            model, position_keys=keys, split_axes={"z": None}, multi_size="manager"
+        )
+        fallback = NegLogProbLoss(model, full_split, validation_strategy="log_prob")
+        assert jnp.allclose(
+            fallback.loss_monitor(params, carry), fallback.loss_train(params, carry)
+        )
+    assert held_out_scores[0] == held_out_scores[1]
+    assert training_scores[0] != training_scores[1]
+
+
+def test_validation_best_position_ignores_unsplit_training_branch():
+    import optax
+
+    from liesel.optim import LieselOptim, Optimizer, Stopper
+
+    loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
+    y = lsl.Var.new_obs(
+        jnp.zeros(4), lsl.Dist(tfd.Normal, loc=loc, scale=1.0), name="y"
+    )
+    z = lsl.Var.new_obs(
+        jnp.full(100, 10.0), lsl.Dist(tfd.Normal, loc=loc, scale=1.0), name="z"
+    )
+    model = lsl.Model([y, z])
+    split = PositionSplit.from_model(
+        model, position_keys=["y"], validate_axis_share=0.5
+    )
+    result = LieselOptim(
+        model,
+        split=split,
+        optimizers=[Optimizer(["loc"], optax.sgd(0.0001))],
+        loss_monitor="validation",
+        stopper=Stopper(epochs=4, patience=4),
+        scale_loss=False,
+        show_progress=False,
+    ).fit()
+    # Training moves toward z=10; validation is best at the first completed epoch.
+    assert result.min_monitor_epoch == 0
+    assert result.position_min_monitor["loc"] < result.position_final["loc"]
+    assert result.history.position is not None
+    expected = -2 * tfd.Normal(loc=result.history.position["loc"], scale=1.0).log_prob(
+        0.0
+    )
+    assert jnp.allclose(result.history.loss_monitor, expected)

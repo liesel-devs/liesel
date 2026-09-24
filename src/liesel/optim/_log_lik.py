@@ -53,6 +53,8 @@ def scaled_liesel_log_lik(
     model_state: ModelState,
     groups: Sequence[tuple[Sequence[str], float]],
     corrections: dict[str, tuple[jax.Array, int]] | None = None,
+    *,
+    include_uncovered: bool = True,
 ):
     """Return the model log likelihood with per-group scaling.
 
@@ -67,7 +69,8 @@ def scaled_liesel_log_lik(
     Observed likelihood contributions that are not covered by any group are
     still included with scale 1.0. This supports partially batched models, where
     some observed variables are evaluated on a batch while other observed
-    variables are evaluated on their full data.
+    variables are evaluated on their full data. Set ``include_uncovered=False``
+    for held-out scores, which must exclude unsplit training likelihoods.
 
     Raises
     ------
@@ -96,12 +99,10 @@ def scaled_liesel_log_lik(
             scaled_log_lik += scale * sum_value(value)
             covered_nodes.add(node_name)
 
-    for node_name in all_observed_log_lik_node_names(model):
-        if node_name not in covered_nodes:
-            # Nodes not linked to a batched data group are assumed to be full-data
-            # likelihood terms. Include them unscaled so partial batching does not
-            # silently drop observed model branches.
-            scaled_log_lik += sum_state_value(model_state, node_name)
+    if include_uncovered:
+        for node_name in all_observed_log_lik_node_names(model):
+            if node_name not in covered_nodes:
+                scaled_log_lik += sum_state_value(model_state, node_name)
 
     return scaled_log_lik
 
