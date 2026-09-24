@@ -333,7 +333,9 @@ class OptimEngine:
         self.optimizers = optimizers
         self.stopper = stopper
         self.seed = (
-            jax.random.key(int(seed)) if isinstance(seed, (int, Integral)) else seed
+            jax.random.key(int(seed))
+            if isinstance(seed, Integral)
+            else cast(jax.Array, seed)
         )
         self.initial_state = initial_state
         self.prune_history = prune_history
