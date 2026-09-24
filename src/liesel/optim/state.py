@@ -941,7 +941,8 @@ class OptimResult:
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from liesel.optim.state import OptimHistory, OptimResult
+    >>> from liesel.optim import OptimResult
+    >>> from liesel.optim.state import OptimHistory
     >>> from liesel.optim.types import Position
     >>> history = OptimHistory.from_epochs(epochs=2, position=None, tracked=None)
     >>> position_final = Position({"theta": jnp.array(2.0)})

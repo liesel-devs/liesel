@@ -20,11 +20,11 @@ from liesel.optim import (
     LieselOptim,
     NegLogProbLoss,
     OptimEngine,
+    OptimResult,
     PositionSplit,
     PositionSplitManager,
     Stopper,
 )
-from liesel.optim.state import OptimResult
 
 
 def _normal_model(n: int = 6, *, to_float32: bool | None = None):
@@ -59,10 +59,16 @@ def test_lieseloptim_imports():
     from liesel.optim.liesel_optim import (
         LieselOptim as LieselOptimFromQuick,
     )
+    from liesel.optim.loss import Loss, LossMixin
+    from liesel.optim.state import OptimResult as StateOptimResult
 
     assert opt.LieselOptim is LieselOptim
     assert LieselOptimFromQuick is LieselOptim
     assert not hasattr(opt, "QuickOptim")
+    assert opt.Loss is Loss
+    assert opt.LossMixin is LossMixin
+    assert opt.OptimResult is StateOptimResult
+    assert {"Loss", "LossMixin", "OptimResult"} <= set(opt.__all__)
 
 
 @pytest.mark.parametrize("make_model", [_normal_model, _two_branch_model])

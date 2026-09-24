@@ -1649,11 +1649,6 @@ class BatchManager:
         one group are rejected. Supplied weights override existing child weights
         on a copy; omitted groups retain their existing sampling configuration.
 
-    Attributes
-    ----------
-    batches
-        Tuple of contained :class:`Batches` objects.
-
     Raises
     ------
     ValueError

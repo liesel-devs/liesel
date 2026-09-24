@@ -143,12 +143,17 @@ and defaults.
     ~liesel.optim.LieselOptim
     ~liesel.optim.OptimEngine
     ~liesel.optim.OptimCheckpoint
-    ~liesel.optim.state.OptimResult
+    ~liesel.optim.OptimResult
+    ~liesel.optim.OptimNaNDebugInfo
+    ~liesel.optim.Loss
+    ~liesel.optim.LossMixin
     ~liesel.optim.NegLogProbLoss
     ~liesel.optim.Optimizer
+    ~liesel.optim.OptimizerLike
     ~liesel.optim.LBFGS
     ~liesel.optim.Stopper
     ~liesel.optim.EmaTrainLossMonitor
+    ~liesel.optim.LossMonitor
     ~liesel.optim.Batches
     ~liesel.optim.BatchManager
     ~liesel.optim.Split

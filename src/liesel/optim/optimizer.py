@@ -197,7 +197,7 @@ class Optimizer:
         )
         return pos
 
-    def init(self, position: Position) -> optax.OptState:
+    def init(self, position: Position) -> Any:
         """
         Initializes the wrapped Optax transformation.
 

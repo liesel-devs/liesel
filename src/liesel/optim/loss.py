@@ -42,11 +42,6 @@ class Loss(Protocol):
     for training and validation, provide initial parameter positions, compute
     training and validation losses, and provide gradients for optimizer updates.
 
-    Attributes
-    ----------
-    split
-        Train/validation/test split used by the loss.
-
     Notes
     -----
     The standard built-in optimizer calls :meth:`value_and_grad` so the objective
@@ -127,8 +122,7 @@ class LossMixin:
     gradient helpers:
 
     >>> import jax.numpy as jnp
-    >>> from liesel.optim import PositionSplit
-    >>> from liesel.optim.loss import LossMixin
+    >>> from liesel.optim import LossMixin, PositionSplit
     >>> from liesel.optim.types import Position
     >>> class Quadratic(LossMixin):
     ...     def __init__(self):

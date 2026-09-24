@@ -243,13 +243,6 @@ class OptimEngine:
         Update the batch progress bar after this many completed batches. Defaults to
         10. The final state of an interrupted epoch is always rendered.
 
-    Attributes
-    ----------
-    position_keys
-        Flattened list of all parameter keys claimed by the optimizers.
-    split
-        Train/validation/test split provided by ``loss.split``.
-
     Notes
     -----
     ``OptimEngine`` uses ``carry.epoch`` as the number of completed epochs and as the
