@@ -708,3 +708,33 @@ def test_direct_optax_transformation_matches_explicit_wrapper(transformation):
 def test_wrapper_rejects_unconfigured_optimizer(invalid, error):
     with pytest.raises(error, match="configured Optax transformation"):
         LieselOptim(_normal_model(), optimizers=invalid, loss_monitor="train_full_data")
+
+
+@pytest.mark.parametrize(
+    "x64, to_float32", [(False, True), (True, True), (True, False)]
+)
+@pytest.mark.parametrize("debug", [False, True])
+def test_lbfgs_preserves_model_dtype_during_line_search_and_resume(
+    x64, to_float32, debug
+):
+    with jax.enable_x64(x64):
+        model = _normal_model(8, to_float32=to_float32)
+        engine = LieselOptim(
+            model,
+            optimizers="lbfgs",
+            loss_monitor="train_full_data",
+            stopper=Stopper(epochs=8, patience=4, min_epochs=8),
+            show_progress=False,
+        ).build_engine()
+        engine.debug_nans = debug
+        whole = engine.fit()
+        paused = engine.fit(pause_after=1)
+        resumed = engine.fit(checkpoint=paused.checkpoint)
+        dtype = jnp.dtype("float64" if x64 and not to_float32 else "float32")
+        for result in (whole, resumed):
+            assert result.position_final["loc"].dtype == dtype
+            assert result.history.position is not None
+            assert result.history.position["loc"].dtype == dtype
+            assert float(result.position_final["loc"]) == pytest.approx(3.5, abs=1e-5)
+        assert jnp.allclose(resumed.history.loss_train, whole.history.loss_train)
+        assert jnp.allclose(resumed.history.loss_monitor, whole.history.loss_monitor)

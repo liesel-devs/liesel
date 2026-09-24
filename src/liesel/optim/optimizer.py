@@ -353,8 +353,14 @@ class LBFGS(Optimizer):
         pos = position
         opt_state = carry.optimizer_states[self.identifier]
 
-        def loss_fn(pos: Position) -> jax.Array:
-            return loss.loss_train_batched(pos, carry)
+        def loss_fn(candidate: Position) -> jax.Array:
+            # Line-search step sizes can promote float32 parameters under x64.
+            candidate = jax.tree.map(
+                lambda value, ref: jnp.asarray(value, dtype=jnp.asarray(ref).dtype),
+                candidate,
+                pos,
+            )
+            return loss.loss_train_batched(candidate, carry)
 
         value_and_grad = optax.value_and_grad_from_state(loss_fn)
         value, grad = value_and_grad(pos, state=opt_state)
