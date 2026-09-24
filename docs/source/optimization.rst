@@ -40,7 +40,9 @@ Common tasks
 
    optimizer-monitoring
    optimizer-customization
-   optimizer-data-flow
+   optimizer-splitting
+   optimizer-batching
+   optimizer-loss-scaling
    optimizer-weighted-batching
    optimizer-checkpointing
    optimizer-migration
