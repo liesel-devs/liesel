@@ -11,6 +11,7 @@ Liesel: A Probabilistic Programming Framework
 
    tutorials_overview
    optimization
+   missing-values
 
 
 API Reference

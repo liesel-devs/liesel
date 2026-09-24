@@ -49,6 +49,7 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx_copybutton",
     "myst_nb",
+    "matplotlib.sphinxext.plot_directive",
 ]
 
 # for making copying code from doctests more convenient

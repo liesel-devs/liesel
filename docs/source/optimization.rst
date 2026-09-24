@@ -48,5 +48,6 @@ Common tasks
    optimizer-migration
 
 For arguments and defaults, see the :ref:`optimizer-api`.
+For latent covariates, see :doc:`missing-values` for full-data and minibatch fits.
 ``goose.optim_flat`` is deprecated as of version 0.8.0; use the migration guide
 above to update existing code.
