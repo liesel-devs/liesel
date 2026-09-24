@@ -49,7 +49,7 @@ After:
 
    result = opt.LieselOptim(
        model,
-       optimizers=optax.adam(0.01),
+       optimizers=[opt.Optimizer(["loc"], optax.adam(0.01))],
        stopper=opt.Stopper(epochs=1000, patience=20, atol=0.001),
        loss_monitor="train_full_data",
        scale_loss=False,
@@ -65,9 +65,9 @@ Optimization does not assign the fitted state to the original model.
 What changes
 ------------
 
-* Wrap ``params`` and the Optax optimizer in :class:`liesel.optim.Optimizer`.
-  Without this, the builder fits all parameters with Adam at learning rate
-  ``0.02``. The old default rate was ``0.01``.
+* To optimize only selected parameters (the old ``params=``), wrap the
+  transformation in ``opt.Optimizer(params, transformation)`` as above. A bare
+  Optax transformation optimizes all model parameters.
 * ``LieselOptim`` requires ``optimizers``. Pass a configured Optax transformation
   for all parameters, ``"lbfgs"``, or explicit per-parameter optimizers.
 * Splits and ``LieselOptim`` now default to ``seed=0``. Explicit ``seed=None``
