@@ -295,6 +295,32 @@ def _split_via(factory, *, share=0.25, **kwargs):
 
 
 @pytest.mark.parametrize("factory", SPLIT_FACTORIES)
+def test_split_factories_default_to_seed_zero(factory, monkeypatch):
+    def unexpected_clock_read():
+        raise AssertionError("Default splitting must not read the clock")
+
+    monkeypatch.setattr(
+        split_module, "time", SimpleNamespace(time=unexpected_clock_read)
+    )
+    default = _split_via(factory)
+    repeated = _split_via(factory)
+    explicit = _split_via(factory, seed=0)
+    other = _split_via(factory, seed=42)
+    for name in default.train:
+        assert jnp.array_equal(default.train[name], repeated.train[name])
+        assert jnp.array_equal(default.train[name], explicit.train[name])
+    assert not jnp.array_equal(default.train["y_a"], other.train["y_a"])
+
+
+@pytest.mark.parametrize("factory", SPLIT_FACTORIES)
+def test_split_factories_allow_explicit_time_seed(factory, monkeypatch):
+    monkeypatch.setattr(split_module, "time", SimpleNamespace(time=lambda: 1234.5))
+    timed = _split_via(factory, seed=None)
+    explicit = _split_via(factory, seed=1234)
+    assert jnp.array_equal(timed.train["y_a"], explicit.train["y_a"])
+
+
+@pytest.mark.parametrize("factory", SPLIT_FACTORIES)
 def test_split_factories_shuffle_holdouts_by_default_with_reproducible_seed(factory):
     default = _split_via(factory, seed=42)
     explicit = _split_via(factory, shuffle=True, seed=42)

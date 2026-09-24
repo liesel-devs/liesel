@@ -936,7 +936,7 @@ class PositionSplit:
         split_axes: dict[str, int | None] | None = None,
         default_split_axis: int = 0,
         shuffle: bool = True,
-        seed: jax.Array | int | None = None,
+        seed: jax.Array | int | None = 0,
         multi_size: Literal["error", "manager"] = "error",
         sample_sizes: SampleSizes | None = None,
         infer_sample_sizes: bool = True,
@@ -976,8 +976,9 @@ class PositionSplit:
             Whether observations are shuffled before splitting; defaults to ``True``.
             Full-data splits preserve order regardless of this setting.
         seed
-            Seed or JAX pseudo-random key used for shuffled holdouts. If omitted,
-            the current Unix time is used. Ignored for full-data splits.
+            Seed or JAX pseudo-random key used for shuffled holdouts. Defaults to
+            ``0``. Explicit ``None`` uses Unix time in whole seconds. Ignored for
+            full-data splits.
         multi_size
             How to handle multiple inferred or explicit observation groups.
             The default ``"error"`` keeps :class:`PositionSplit` scalar and raises
@@ -1285,7 +1286,7 @@ class PositionSplitManager:
         split_axes: dict[str, int | None] | None = None,
         default_split_axis: int = 0,
         shuffle: bool = True,
-        seed: jax.Array | int | None = None,
+        seed: jax.Array | int | None = 0,
         sample_sizes: SampleSizes | None = None,
         infer_sample_sizes: bool = True,
     ) -> PositionSplitManager:
@@ -1866,7 +1867,7 @@ class SplitManager:
         split_axes: dict[str, int | None] | None = None,
         default_split_axis: int = 0,
         shuffle: bool = True,
-        seed: jax.Array | int | None = None,
+        seed: jax.Array | int | None = 0,
     ) -> SplitManager:
         """
         Builds a :class:`SplitManager` from inferred or explicit groups.
@@ -1899,8 +1900,9 @@ class SplitManager:
             Whether each child split shuffles observations; defaults to ``True``.
             Full-data splits preserve order regardless of this setting.
         seed
-            Seed or JAX pseudo-random key used for shuffled holdouts. If omitted,
-            the current Unix time is used. Ignored for full-data splits.
+            Seed or JAX pseudo-random key used for shuffled holdouts. Defaults to
+            ``0``. Explicit ``None`` uses Unix time in whole seconds. Ignored for
+            full-data splits.
 
         Returns
         -------
@@ -2120,8 +2122,9 @@ class Split:
         Whether to shuffle observations during initialization; defaults to ``True``.
         Full-data splits preserve order regardless of this setting.
     seed
-        Seed or JAX pseudo-random key used for shuffled holdouts. If omitted,
-        the current Unix time is used. Ignored for full-data splits.
+        Seed or JAX pseudo-random key used for shuffled holdouts. Defaults to
+        ``0``. Explicit ``None`` uses Unix time in whole seconds. Ignored for
+        full-data splits.
     sample_sizes
         Optional effective sample sizes passed to the resulting
         :class:`PositionSplit`.
@@ -2193,7 +2196,7 @@ class Split:
     split_axes: dict[str, int | None] | None = field(default_factory=dict)
     default_split_axis: int = 0
     shuffle: bool = True
-    seed: jax.Array | int | None = None
+    seed: jax.Array | int | None = 0
     sample_sizes: SampleSizes | None = None
     keep_in_train: Sequence[int] | None = None
 
@@ -2365,7 +2368,7 @@ class Split:
         split_axes: dict[str, int | None] | None = None,
         default_split_axis: int = 0,
         shuffle: bool = True,
-        seed: jax.Array | int | None = None,
+        seed: jax.Array | int | None = 0,
         sample_sizes: SampleSizes | None = None,
         multi_size: Literal["error"] = "error",
     ) -> Split: ...
@@ -2382,7 +2385,7 @@ class Split:
         split_axes: dict[str, int | None] | None = None,
         default_split_axis: int = 0,
         shuffle: bool = True,
-        seed: jax.Array | int | None = None,
+        seed: jax.Array | int | None = 0,
         sample_sizes: SampleSizes | None = None,
         multi_size: Literal["error", "manager"] = "error",
     ) -> Split | SplitManager: ...
@@ -2398,7 +2401,7 @@ class Split:
         split_axes: dict[str, int | None] | None = None,
         default_split_axis: int = 0,
         shuffle: bool = True,
-        seed: jax.Array | int | None = None,
+        seed: jax.Array | int | None = 0,
         sample_sizes: SampleSizes | None = None,
         multi_size: Literal["error", "manager"] = "error",
     ) -> Split | SplitManager:
@@ -2438,8 +2441,9 @@ class Split:
             Whether to shuffle observations during initialization; defaults to
             ``True``. Full-data splits preserve order regardless of this setting.
         seed
-            Seed or JAX pseudo-random key used for shuffled holdouts. If omitted,
-            the current Unix time is used. Ignored for full-data splits.
+            Seed or JAX pseudo-random key used for shuffled holdouts. Defaults to
+            ``0``. Explicit ``None`` uses Unix time in whole seconds. Ignored for
+            full-data splits.
         sample_sizes
             Optional effective sample sizes passed to the resulting
             :class:`PositionSplit`. Only supported for a single group; construct
@@ -2542,7 +2546,7 @@ class Split:
         split_axes: dict[str, int | None] | None = None,
         default_split_axis: int = 0,
         shuffle: bool = True,
-        seed: jax.Array | int | None = None,
+        seed: jax.Array | int | None = 0,
         sample_sizes: SampleSizes | None = None,
     ) -> Split:
         """
@@ -2573,8 +2577,9 @@ class Split:
             Whether to shuffle observations during initialization; defaults to
             ``True``. Full-data splits preserve order regardless of this setting.
         seed
-            Seed or JAX pseudo-random key used for shuffled holdouts. If omitted,
-            the current Unix time is used. Ignored for full-data splits.
+            Seed or JAX pseudo-random key used for shuffled holdouts. Defaults to
+            ``0``. Explicit ``None`` uses Unix time in whole seconds. Ignored for
+            full-data splits.
         sample_sizes
             Optional effective sample sizes passed to the resulting
             :class:`PositionSplit`.

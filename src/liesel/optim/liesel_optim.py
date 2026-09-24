@@ -59,8 +59,8 @@ class LieselOptim:
         Integer seed for batch shuffling or random batch sampling, and for custom
         losses or optimizers that use ``carry.key``. Starting parameter values
         come from ``model``. Set the seed for a random training/validation/test
-        split separately when creating that split. ``None`` uses the current Unix
-        time in seconds.
+        split separately when creating that split. Defaults to ``0``. Explicit
+        ``None`` uses the current Unix time in whole seconds.
     split
         Optional split. If neither ``split`` nor ``loss`` is supplied, all observed
         data is used for training. Multi-size observed data automatically uses
@@ -124,7 +124,7 @@ class LieselOptim:
         loss_monitor: LossMonitor,
         optimizers: Sequence[OptimizerLike] | Literal["adam", "lbfgs"] = "adam",
         stopper: Stopper | None = None,
-        seed: int | None = None,
+        seed: int | None = 0,
         split: SplitConfig | None = None,
         batch_size: int | None = None,
         batches: BatchConfig | None = None,

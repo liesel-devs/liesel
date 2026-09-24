@@ -10,6 +10,7 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.model as lsl
 import liesel.optim as opt
+import liesel.optim.liesel_optim as quick_module
 import liesel.optim.split as split_module
 from liesel.optim import (
     Batches,
@@ -64,8 +65,9 @@ def test_lieseloptim_imports():
 
 
 @pytest.mark.parametrize("make_model", [_normal_model, _two_branch_model])
+@pytest.mark.parametrize("seed_kwargs", [{}, {"seed": 42}])
 def test_seeded_automatic_full_data_setup_preserves_rows_and_repeats_fit(
-    make_model, monkeypatch
+    make_model, seed_kwargs, monkeypatch
 ):
     def unexpected_clock_read():
         raise AssertionError("Automatic full-data setup must not generate a split seed")
@@ -73,12 +75,15 @@ def test_seeded_automatic_full_data_setup_preserves_rows_and_repeats_fit(
     monkeypatch.setattr(
         split_module, "time", SimpleNamespace(time=unexpected_clock_read)
     )
+    monkeypatch.setattr(
+        quick_module, "time", SimpleNamespace(time=unexpected_clock_read)
+    )
 
     def run():
         model = make_model()
         quick = LieselOptim(
             model,
-            seed=42,
+            **seed_kwargs,
             batches=Batches.from_model(model, batch_size=2, multi_size="manager"),
             loss_monitor=EmaTrainLossMonitor(1),
             stopper=Stopper(epochs=3, patience=3),
@@ -92,6 +97,12 @@ def test_seeded_automatic_full_data_setup_preserves_rows_and_repeats_fit(
     first, second = run(), run()
     assert jnp.array_equal(first.history.loss_train, second.history.loss_train)
     assert jnp.array_equal(first.position_final["loc"], second.position_final["loc"])
+
+
+def test_explicit_none_seed_uses_clock(monkeypatch):
+    monkeypatch.setattr(quick_module, "time", SimpleNamespace(time=lambda: 1234.5))
+    optim = LieselOptim(_normal_model(), loss_monitor="train_full_data", seed=None)
+    assert optim.seed == 1234
 
 
 def test_lieseloptim_requires_explicit_loss_monitor():

@@ -68,6 +68,8 @@ What changes
 * Wrap ``params`` and the Optax optimizer in :class:`liesel.optim.Optimizer`.
   Without this, the builder fits all parameters with Adam at learning rate
   ``0.02``. The old default rate was ``0.01``.
+* Splits and ``LieselOptim`` now default to ``seed=0``. Explicit ``seed=None``
+  retains time-based seeding. A separately constructed split has its own seed.
 * Replace ``gs.Stopper(max_iter=...)`` with ``opt.Stopper(epochs=...)``. An epoch
   runs all configured batches. The new history starts after the first epoch;
   the old history started before any updates. Runs need not stop at the same time.

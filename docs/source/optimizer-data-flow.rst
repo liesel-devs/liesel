@@ -33,8 +33,11 @@ split.
 The split's ``seed`` chooses which rows go into each part. The seed passed to
 ``LieselOptim`` controls batch shuffling or random batch sampling during fitting.
 Custom losses and optimizers can also use its random key through ``carry.key``.
-Starting parameter values come from the model. Set both seeds to repeat the
-split and fitting randomness; seed any random data or starting values separately.
+Both seeds default to ``0``, making split and fitting randomness reproducible in
+the same environment. Choose other integer seeds for different runs. Explicit
+``seed=None`` opts into Unix time in whole seconds, so calls in the same second
+can share a seed. Starting parameter values come from the model; seed any random
+data or starting values separately.
 
 For separate groups, make the grouping explicit:
 
