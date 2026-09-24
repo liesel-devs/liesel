@@ -13,7 +13,7 @@ import liesel.optim as opt
 from liesel.distributions import GaussianCopula
 
 
-def copula_model(extra=False):
+def copula_model(extra=False, observed=True):
     loc = lsl.Var.new_param(0.0, name="loc")
     rho = lsl.Var.new_param(0.2, bijector=tfb.Tanh(), name="rho")
     x1 = lsl.Var.new_obs(
@@ -33,7 +33,7 @@ def copula_model(extra=False):
         dist=lsl.Dist(GaussianCopula, dependence=rho),
         name="copula",
     )
-    copula.observed = True
+    copula.observed = observed
     roots = [copula]
     if extra:
         roots.append(
@@ -77,8 +77,22 @@ def test_factories_select_strong_inputs_and_reject_explicit_weak_keys(factory):
         factory.from_model(model, position_keys=[["x1"], ["x2"]], **kwargs)
 
 
-def test_full_data_copula_fit_and_parameter_gradients_match_joint_normal():
-    model = copula_model()
+@pytest.mark.parametrize("repair_existing_model", [False, True])
+def test_full_data_copula_fit_and_parameter_gradients_match_joint_normal(
+    repair_existing_model,
+):
+    model = copula_model(observed=not repair_existing_model)
+    if repair_existing_model:
+        split = opt.PositionSplit.from_model(model)
+        with pytest.raises(ValueError) as direct:
+            opt.NegLogProbLoss(model, split)
+        with pytest.raises(ValueError) as wrapper:
+            opt.LieselOptim(model, optimizers="lbfgs", loss_monitor="train_full_data")
+        for error in (direct, wrapper):
+            assert "model.vars['copula'].observed = True" in str(error.value)
+        model.vars["copula"].observed = True
+        assert model.vars["copula"].dist_node in model.nodes["_model_log_lik"].inputs
+        np.testing.assert_allclose(model.log_lik, model.log_prob)
     engine = opt.LieselOptim(
         model,
         optimizers="lbfgs",

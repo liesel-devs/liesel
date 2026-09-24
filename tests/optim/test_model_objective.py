@@ -13,7 +13,8 @@ import liesel.optim as opt
 
 
 @pytest.mark.parametrize(
-    "kind", ["likelihood", "probability", "prior", "latent", "standalone"]
+    "kind",
+    ["likelihood", "probability", "prior", "latent", "weak_latent", "standalone"],
 )
 def test_default_loss_rejects_unsupported_model_factors(kind):
     loc = lsl.Var.new_param(0.0, name="loc")
@@ -37,14 +38,24 @@ def test_default_loss_rejects_unsupported_model_factors(kind):
         builder.add(
             lsl.Var(3.0, lsl.Dist(tfd.Normal, loc=loc, scale=0.1), name="latent")
         )
+    elif kind == "weak_latent":
+        builder.add(
+            lsl.Var.new_calc(
+                lambda x: x + 3.0,
+                loc,
+                dist=lsl.Dist(tfd.Normal, 0.0, 0.1),
+                name="weak_latent",
+            )
+        )
     else:
         extra = lsl.Dist(tfd.Normal, loc=loc, scale=0.1, _name="extra")
         extra.at = lsl.Value(3.0)
         builder.add(extra)
     model = builder.build_model()
     split = opt.PositionSplit.from_model(model, infer_sample_sizes=False)
-    with pytest.raises(ValueError, match="cannot decompose.*custom Loss"):
+    with pytest.raises(ValueError, match="cannot decompose.*custom Loss") as error:
         opt.NegLogProbLoss(model, split)
+    assert ".observed = True" not in str(error.value)
     with pytest.raises(ValueError, match="cannot decompose.*custom Loss"):
         opt.LieselOptim(
             model, split=split, optimizers="lbfgs", loss_monitor="train_full_data"

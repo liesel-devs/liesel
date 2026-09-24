@@ -9,6 +9,7 @@ from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Literal, Protocol
 
 import jax
+import networkx as nx
 
 from ..model import Calc, Model
 from ..model.model import _reduced_sum
@@ -51,20 +52,41 @@ def _validate_model_decomposition(model: Model) -> None:
     ):
         node = model.nodes[name]
         actual = Counter(parent.name for parent in node.inputs)
-        if (
-            not isinstance(node, Calc)
-            or node.function is not _reduced_sum
-            or node.kwinputs
-            or actual != expected
-        ):
+        standard_sum = (
+            isinstance(node, Calc)
+            and node.function is _reduced_sum
+            and not node.kwinputs
+        )
+        if not standard_sum or actual != expected:
+            hint = ""
+            if name == "_model_log_prob" and standard_sum:
+                unexpected = actual - expected
+                observed_values = {var.value_node for var in model.observed.values()}
+                for var in model.vars.values():
+                    if (
+                        var.weak
+                        and not var.observed
+                        and not var.parameter
+                        and var.dist_node is not None
+                        and var.dist_node.name in unexpected
+                        and observed_values
+                        & nx.ancestors(model.node_graph, var.value_node)
+                    ):
+                        hint += (
+                            f" {var.name!r} is a weak variable with a distribution "
+                            "that is neither observed nor a parameter and depends "
+                            "on observed data. If it represents part of the "
+                            f"likelihood, set model.vars[{var.name!r}].observed = True."
+                        )
             raise ValueError(
                 f"NegLogProbLoss cannot decompose {name!r}: expected the standard "
                 "sum of observed likelihoods and parameter priors. "
                 f"Unexpected inputs: {list((actual - expected).elements())}; "
                 f"missing inputs: {list((expected - actual).elements())}. "
-                "Custom aggregate nodes or distribution factors that are neither "
-                "observed nor parameter priors require a custom Loss. "
-                "A manual split does not change the objective decomposition."
+                "Custom aggregate objectives require a custom Loss. Unclassified "
+                "factors must be assigned their intended role or handled by a "
+                "custom Loss. A manual split does not change the objective "
+                f"decomposition.{hint}"
             )
 
 
