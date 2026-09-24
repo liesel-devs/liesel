@@ -1,0 +1,475 @@
+"""Dense Laplace integration of continuous model coordinates."""
+
+import math
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from functools import partial
+from numbers import Real
+from typing import Any
+
+import jax
+import jax.numpy as jnp
+import jax.scipy as jsp
+from jax.flatten_util import ravel_pytree
+from tensorflow_probability.substrates.jax.distributions.distribution import (
+    DiscreteDistributionMixin,
+)
+
+from ..goose.pytree import register_dataclass_as_pytree
+from ..model import Model, Value
+from ._engine_utils import _validate_positive_int
+from .loss import LossMixin, SplitConfig, _validate_bool
+from .split import PositionSplit
+from .state import OptimCarry
+from .types import Position
+
+
+@register_dataclass_as_pytree
+@dataclass
+class LaplaceState:
+    """Conditional mode and its unmodified dense precision factor.
+
+    ``status`` is numeric for JAX: 0 uninitialized, 1 success, 2 iteration limit,
+    3 failed backtracking, 4 non-finite evaluation, 5 invalid curvature.
+    ``newton_decrement_squared`` is g.T @ solve(H, g); half of it is the
+    convergence measure. Names and shapes describe the flattened latent order,
+    sorted by coordinate name. ``latent_precision_cholesky`` is lower triangular,
+    with ``L @ L.T`` equal to the conditional negative-log-density Hessian.
+    ``gradient_norm`` is the Euclidean norm of its latent gradient. ``n_iter``
+    counts attempted Newton steps; ``n_resolution_steps`` counts accepted steps
+    using the resolution safeguard. Only status 1 denotes a valid approximation.
+    """
+
+    outer_position: Position
+    latent_position: Position
+    latent_precision_cholesky: jax.Array
+    n_iter: jax.Array
+    gradient_norm: jax.Array
+    newton_decrement_squared: jax.Array
+    status: jax.Array
+    n_resolution_steps: jax.Array
+    latent_names: tuple[str, ...] = field(metadata={"static": True})
+    latent_shapes: tuple[tuple[int, ...], ...] = field(metadata={"static": True})
+
+
+def _evaluate(joint, theta, z):
+    """Compute and retain one point's derivatives and true Cholesky factor."""
+
+    def grad_with_value(x):
+        value, gradient = jax.value_and_grad(joint, argnums=1)(theta, x)
+        return gradient, (value, gradient)
+
+    hessian, (value, gradient) = jax.jacfwd(grad_with_value, has_aux=True)(z)
+    factor = jnp.linalg.cholesky(hessian)
+    decrement = 0.5 * gradient @ jsp.linalg.cho_solve((factor, True), gradient)
+    return {
+        "z": z,
+        "value": value,
+        "gradient": gradient,
+        "hessian": hessian,
+        "factor": factor,
+        "decrement": decrement,
+    }
+
+
+def _converged(point, tol):
+    return (
+        jnp.isfinite(point["value"])
+        & jnp.isfinite(point["gradient"]).all()
+        & jnp.isfinite(point["factor"]).all()
+        & (point["decrement"] <= tol)
+    )
+
+
+def _finite(point):
+    return (
+        jnp.isfinite(point["value"])
+        & jnp.isfinite(point["gradient"]).all()
+        & jnp.isfinite(point["hessian"]).all()
+    )
+
+
+def _solve(joint, theta, seed, tol, max_iter):
+    point = _evaluate(joint, theta, seed)
+    state: dict[str, Any] = {
+        "point": point,
+        "n_iter": jnp.array(0),
+        "status": jnp.where(_finite(point), 0, 4),
+        "resolution_floor": jnp.array(0.0, seed.dtype),
+        "min_value": point["value"],
+        "n_resolution_steps": jnp.array(0),
+    }
+
+    def continuing(state):
+        return (
+            (state["n_iter"] < max_iter)
+            & (state["status"] == 0)
+            & ~_converged(state["point"], tol)
+        )
+
+    def step(state):
+        point = state["point"]
+        spd = jnp.isfinite(point["factor"]).all()
+        direction = jax.lax.cond(
+            spd,
+            lambda: -jsp.linalg.cho_solve((point["factor"], True), point["gradient"]),
+            lambda: (
+                -point["gradient"]
+                / jnp.maximum(1.0, jnp.linalg.norm(point["hessian"], ord=jnp.inf))
+            ),
+        )
+        slope = point["gradient"] @ direction
+        nominal_resolution = (
+            8 * jnp.finfo(seed.dtype).eps * jnp.maximum(1.0, jnp.abs(point["value"]))
+        )
+        line = (
+            jnp.array(0),
+            jnp.array(1.0, seed.dtype),
+            jnp.array(False),
+            point,
+            jnp.array(False),
+            state["resolution_floor"],
+        )
+
+        def try_step(line):
+            count, alpha, _, last, _, floor = line
+            z = point["z"] + alpha * direction
+            value = joint(theta, z)
+            predicted = -alpha * slope - 0.5 * alpha**2 * (
+                direction @ point["hessian"] @ direction
+            )
+            tiny_step = jnp.all(
+                jnp.abs(z - point["z"])
+                <= 32
+                * jnp.finfo(seed.dtype).eps
+                * jnp.maximum(1.0, jnp.abs(point["z"]))
+            )
+            observed_jump = jnp.abs(value - point["value"])
+            # Cancellation can quantize a small returned objective. Learn its
+            # first observed jump only over a few representable coordinates,
+            # where the predicted change is below nominal scalar resolution.
+            # A genuine equal-energy proposal cannot inflate this floor.
+            learn_resolution = (
+                spd
+                & tiny_step
+                & jnp.any(z != point["z"])
+                & (predicted <= nominal_resolution)
+                & (observed_jump > nominal_resolution)
+                & jnp.isfinite(value)
+                & (floor == 0)
+            )
+            floor = jnp.where(learn_resolution, 2 * observed_jump, floor)
+            resolution = jnp.maximum(nominal_resolution, floor)
+            plateau = (
+                (value == point["value"]) & jnp.any(z != point["z"]) & (predicted > 0)
+            )
+            resolution_mode = spd & ((predicted <= resolution) | plateau)
+            armijo = (
+                jnp.isfinite(value)
+                & (slope < 0)
+                & (value <= point["value"] + 1e-4 * alpha * slope)
+            )
+            candidate = jax.lax.cond(
+                armijo | resolution_mode,
+                lambda: _evaluate(joint, theta, z),
+                lambda: last,
+            )
+            decreased = jnp.isfinite(candidate["factor"]).all() & (
+                (candidate["decrement"] < point["decrement"])
+                | (candidate["decrement"] <= tol)
+            )
+            accepted = (
+                _finite(candidate)
+                & (candidate["value"] <= state["min_value"] + resolution)
+                & jnp.where(resolution_mode, decreased, armijo)
+            )
+            # Keep the learned floor fixed, and bound total uphill drift by the
+            # running minimum rather than allowing another increase each step.
+            return count + 1, alpha / 2, accepted, candidate, resolution_mode, floor
+
+        _, _, accepted, candidate, resolution_mode, floor = jax.lax.while_loop(
+            lambda line: (line[0] < 24) & ~line[2], try_step, line
+        )
+        status = jnp.where(accepted, 0, jnp.where(~spd & (slope == 0), 5, 3))
+        return state | {
+            "point": candidate,
+            "n_iter": state["n_iter"] + 1,
+            "status": status,
+            "resolution_floor": floor,
+            "min_value": jnp.minimum(state["min_value"], candidate["value"]),
+            "n_resolution_steps": state["n_resolution_steps"]
+            + (accepted & resolution_mode).astype(jnp.int32),
+        }
+
+    state = jax.lax.while_loop(continuing, step, state)
+    point = state["point"]
+    status = jnp.where(
+        state["status"] != 0,
+        state["status"],
+        jnp.where(
+            _converged(point, tol),
+            1,
+            jnp.where(jnp.isfinite(point["factor"]).all(), 2, 5),
+        ),
+    )
+    return point | {
+        "n_iter": state["n_iter"],
+        "n_resolution_steps": state["n_resolution_steps"],
+        "status": status,
+    }
+
+
+def _laplace_value(point):
+    value = (
+        point["value"]
+        + jnp.log(jnp.diag(point["factor"])).sum()
+        - 0.5 * point["z"].size * jnp.log(2 * jnp.pi)
+    )
+    return jnp.where(point["status"] == 1, value, jnp.inf)
+
+
+@partial(jax.custom_vjp, nondiff_argnums=(0, 3, 4))
+def _fit_value(joint, theta, seed, tol, max_iter):
+    point = _solve(joint, theta, seed, tol, max_iter)
+    return _laplace_value(point), point
+
+
+@jax.custom_jvp
+def _first_order_only(theta):
+    return theta
+
+
+@_first_order_only.defjvp
+def _reject_higher_derivatives(primals, tangents):
+    raise TypeError(
+        "Laplace fitting supports first derivatives only; "
+        "use approximate_joint_posterior for posterior curvature."
+    )
+
+
+def _fit_forward(joint, theta, seed, tol, max_iter):
+    theta = _first_order_only(theta)
+    point = _solve(joint, theta, seed, tol, max_iter)
+    return (_laplace_value(point), point), (theta, point)
+
+
+def _fit_backward(joint, tol, max_iter, residual, cotangent):
+    theta, point = residual
+    z, factor = point["z"], point["factor"]
+    hessian_cotangent = 0.5 * jsp.linalg.cho_solve(
+        (factor, True), jnp.eye(z.size, dtype=z.dtype)
+    )
+
+    def value_and_hessian(t, x):
+        return joint(t, x), jax.hessian(joint, argnums=1)(t, x)
+
+    # Unused primal outputs are removed by JAX. Only third-derivative
+    # contractions survive; the already computed dense factor is reused.
+    _, pullback = jax.vjp(value_and_hessian, theta, z)
+    partial_theta, partial_z = pullback(
+        (jnp.ones_like(point["value"]), hessian_cotangent)
+    )
+    mode_cotangent = jsp.linalg.cho_solve((factor, True), partial_z)
+    _, cross_pullback = jax.vjp(lambda t: jax.grad(joint, argnums=1)(t, z), theta)
+    gradient = partial_theta - cross_pullback(mode_cotangent)[0]
+    return cotangent[0] * gradient, None
+
+
+_fit_value.defvjp(_fit_forward, _fit_backward)
+
+
+class LaplaceLoss(LossMixin):
+    """Integrate selected latent coordinates out of the model's joint density.
+
+    Use full-data batches and ``loss_monitor="train_full_data"``. The returned
+    value is the unscaled negative log Laplace approximation, including priors,
+    transformation Jacobians, and normalization constants.
+
+    Parameters
+    ----------
+    model
+        Model supplying the actual joint log density. Its parameter flags and
+        current state are left unchanged.
+    split
+        Training observations to substitute into that density. If omitted, use
+        the usual model-derived full-training split. Custom aggregate densities
+        may need an explicit :class:`PositionSplit`.
+    latent
+        Nonempty sequence of writable continuous coordinate names to integrate.
+        Scalars, vectors, and matrices can be combined. Aliases, weak variables,
+        discrete coordinates, and overlap with outer coordinates are rejected.
+    warm_start
+        Start each inner solve from the committed latent mode. Defaults to True.
+        False always uses the model's original latent values. This is an inner
+        warm start, distinct from resuming an optimizer checkpoint.
+    inner_max_iter
+        Maximum attempted Newton steps per evaluation. Defaults to 100.
+    inner_tol
+        Positive bound on half the squared Newton decrement. None selects 1e-6
+        for float32 or 1e-10 for float64; global JAX precision is never changed.
+
+    Notes
+    -----
+    The dense solver finds a local conditional mode. Non-concave densities may
+    have several modes; warm and cold starts need not choose the same one.
+    True positive-definite curvature and convergence are required for success.
+    A failed solve returns an infinite value and an inspectable failed proposal.
+    Every evaluation is pure: the engine commits state only at its full-training
+    monitor point. No curvature history is retained for every epoch.
+
+    Reverse-mode fitting gradients reuse the final latent factor and include the
+    latent dependence of its log determinant. Higher fitting derivatives raise;
+    use ``approximate_joint_posterior`` after fitting for joint uncertainty.
+    """
+
+    default_position_keys: Sequence[str]
+
+    def __init__(
+        self,
+        model: Model,
+        split: SplitConfig | None = None,
+        *,
+        latent: Sequence[str],
+        warm_start: bool = True,
+        inner_max_iter: int = 100,
+        inner_tol: float | None = None,
+    ):
+        _validate_bool(warm_start, "warm_start")
+        _validate_positive_int(inner_max_iter, "inner_max_iter")
+        if inner_tol is not None and (
+            isinstance(inner_tol, bool)
+            or not isinstance(inner_tol, Real)
+            or not math.isfinite(inner_tol)
+            or inner_tol <= 0
+        ):
+            raise ValueError("inner_tol must be a positive finite real number.")
+        self.model = model
+        self.split = (
+            PositionSplit.from_model(model, multi_size="manager", shuffle=False)
+            if split is None
+            else split
+        )
+        self._data_nodes = {model._node_for_position_key(k) for k in self.split.train}
+        if not latent:
+            raise ValueError("latent must contain at least one continuous coordinate.")
+        self._latent_nodes = self._coordinate_nodes(latent)
+        self.latent_names = tuple(sorted(latent))
+        self._initial_latent = model.extract_position(self.latent_names)
+        self._seed, self._unravel_latent = ravel_pytree(self._initial_latent)
+        self.latent_shapes = tuple(
+            jnp.shape(self._initial_latent[k]) for k in self.latent_names
+        )
+        self.default_position_keys = tuple(
+            k
+            for k, var in model.parameters.items()
+            if var.value_node not in self._latent_nodes
+        )
+        self.warm_start = warm_start
+        self.inner_max_iter = inner_max_iter
+        self.inner_tol = (
+            (1e-10 if self._seed.dtype == jnp.float64 else 1e-6)
+            if inner_tol is None
+            else inner_tol
+        )
+
+    def position(self, position_keys: Sequence[str]) -> Position:
+        """Validate and extract outer coordinates, excluding latents and data."""
+        nodes = self._coordinate_nodes(position_keys)
+        if self._latent_nodes.intersection(nodes):
+            raise ValueError("Outer and latent coordinates must not overlap.")
+        return self.model.extract_position(position_keys)
+
+    def _coordinate_nodes(self, keys: Sequence[str]) -> set:
+        if isinstance(keys, str):
+            raise ValueError("Pass coordinate names as a sequence, not a string.")  # noqa: TRY004
+        nodes = set()
+        for key in keys:
+            if key in self.model.nodes:
+                node = self.model.nodes[key]
+            elif key in self.model.vars:
+                node = self.model.vars[key].value_node
+            else:
+                raise ValueError(f"Unknown coordinate {key!r}.")
+            if node in nodes:
+                raise ValueError(f"Duplicate coordinate or alias {key!r}.")
+            if not isinstance(node, Value) or not jnp.issubdtype(
+                jnp.asarray(node.value).dtype, jnp.floating
+            ):
+                raise ValueError(f"{key!r} must be a writable continuous coordinate.")
+            if node in self._data_nodes or (node.var is not None and node.var.observed):
+                raise ValueError(f"{key!r} is a training input or observation.")
+            dist = (
+                node.var.dist_node.init_dist()
+                if node.var is not None and node.var.dist_node is not None
+                else None
+            )
+            while dist is not None:
+                if isinstance(dist, DiscreteDistributionMixin):
+                    raise ValueError(f"{key!r} has a discrete distribution.")  # noqa: TRY004
+                dist = getattr(
+                    dist, "distribution", getattr(dist, "components_distribution", None)
+                )
+            nodes.add(node)
+        return nodes
+
+    def init_state(self, params: Position, carry: OptimCarry) -> LaplaceState:
+        """Create an uninitialized latent guess with a stable state structure."""
+        self.position(tuple(params))
+        return LaplaceState(
+            outer_position=params,
+            latent_position=self._initial_latent,
+            latent_precision_cholesky=jnp.zeros(
+                (self._seed.size, self._seed.size), dtype=self._seed.dtype
+            ),
+            n_iter=jnp.array(0),
+            gradient_norm=jnp.array(jnp.inf, dtype=self._seed.dtype),
+            newton_decrement_squared=jnp.array(jnp.inf, dtype=self._seed.dtype),
+            status=jnp.array(0),
+            n_resolution_steps=jnp.array(0),
+            latent_names=self.latent_names,
+            latent_shapes=self.latent_shapes,
+        )
+
+    def loss_train_batched(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, LaplaceState]:
+        """Return the full-training Laplace loss and an uncommitted state."""
+        theta, unravel_outer = ravel_pytree(params)
+        seed = (
+            ravel_pytree(carry.loss_state.latent_position)[0]
+            if self.warm_start
+            else self._seed
+        )
+
+        def joint(t, z):
+            position = Position(
+                unravel_outer(t)
+                | self._unravel_latent(z)
+                | self.split.train
+                | carry.fixed_position
+            )
+            return -self.model.update_state(position, carry.model_state)[
+                "_model_log_prob"
+            ].value
+
+        value, point = _fit_value(
+            joint, theta, seed, self.inner_tol, self.inner_max_iter
+        )
+        state = LaplaceState(
+            outer_position=params,
+            latent_position=Position(self._unravel_latent(point["z"])),
+            latent_precision_cholesky=point["factor"],
+            n_iter=point["n_iter"],
+            gradient_norm=jnp.linalg.norm(point["gradient"]),
+            newton_decrement_squared=2 * point["decrement"],
+            status=point["status"],
+            n_resolution_steps=point["n_resolution_steps"],
+            latent_names=self.latent_names,
+            latent_shapes=self.latent_shapes,
+        )
+        return value, state
+
+    loss_train = loss_train_batched
+
+    def loss_monitor(self, params: Position, carry: OptimCarry):
+        raise ValueError("LaplaceLoss requires loss_monitor='train_full_data'.")
