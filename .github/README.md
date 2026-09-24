@@ -98,7 +98,7 @@ import liesel.goose as gs
 
 builder = gs.LieselMCMC(model).get_engine_builder(seed=42, num_chains=4)
 
- # we disable the progress bar for a nicer display here in the readme
+# we disable the progress bar for a nicer display here in the readme
 builder.show_progress = False
 
 builder.add_adaptation(1000)

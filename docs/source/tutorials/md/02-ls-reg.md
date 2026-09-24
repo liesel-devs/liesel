@@ -52,14 +52,18 @@ key, key_X, key_Z, key_y = jax.random.split(key, 4)
 true_beta = jnp.array([1.0, 3.0])
 true_gamma = jnp.array([0.0, 0.5])
 
-X_mat = jnp.column_stack([
-    jnp.ones(n),
-    tfd.Uniform(low=0.0, high=5.0).sample(n, seed=key_X),
-])
-Z_mat = jnp.column_stack([
-    jnp.ones(n),
-    tfd.Normal(loc=2.0, scale=1.0).sample(n, seed=key_Z),
-])
+X_mat = jnp.column_stack(
+    [
+        jnp.ones(n),
+        tfd.Uniform(low=0.0, high=5.0).sample(n, seed=key_X),
+    ]
+)
+Z_mat = jnp.column_stack(
+    [
+        jnp.ones(n),
+        tfd.Normal(loc=2.0, scale=1.0).sample(n, seed=key_Z),
+    ]
+)
 
 true_mean = X_mat @ true_beta
 true_scale = jnp.exp(Z_mat @ true_gamma)
