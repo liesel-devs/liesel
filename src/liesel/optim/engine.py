@@ -972,14 +972,19 @@ class OptimEngine:
 
         return carry, loss
 
-    def _debug_obs_batch_template(self, batches: BatchConfig) -> Position:
-        if not batches.is_full_data or self.split.has_validation or self.split.has_test:
-            return batches.get_batched_position(self.split.train, batch_index=0)
+    def _observed_batch(
+        self, batches: BatchConfig, batch_index: int | jax.Array = 0
+    ) -> Position:
+        """Overlay a batch on training data so omitted keys cannot leak holdouts."""
+        has_holdout = self.split.has_validation or self.split.has_test
+        if not batches.is_full_data or has_holdout:
+            batch = batches.get_batched_position(self.split.train, batch_index)
+            return Position(self.split.train | batch) if has_holdout else batch
 
         return Position({})
 
     def _init_nan_debug_state(self, carry: OptimCarry) -> OptimNaNDebugState:
-        obs_batch = self._debug_obs_batch_template(carry.batches)
+        obs_batch = self._observed_batch(carry.batches)
         loss_dtype = jnp.asarray(carry.loss_train).dtype
         return OptimNaNDebugState.new(
             key=carry.key,
@@ -1103,12 +1108,7 @@ class OptimEngine:
         OptimCarry
             Updated carry with accumulated epoch training loss.
         """
-        Bi = carry.batches
-
-        if not Bi.is_full_data or self.split.has_validation or self.split.has_test:
-            obs_batch = Bi.get_batched_position(self.split.train, batch_index=j)
-        else:
-            obs_batch = Position({})
+        obs_batch = self._observed_batch(carry.batches, j)
         carry.batch = obs_batch
         carry.i_batch = j
 
@@ -1249,12 +1249,7 @@ class OptimEngine:
     def _run_batch_debug_body(
         self, j: int | jax.Array, carry: OptimCarry
     ) -> OptimCarry:
-        Bi = carry.batches
-
-        if not Bi.is_full_data or self.split.has_validation or self.split.has_test:
-            obs_batch = Bi.get_batched_position(self.split.train, batch_index=j)
-        else:
-            obs_batch = Position({})
+        obs_batch = self._observed_batch(carry.batches, j)
         carry.batch = obs_batch
         carry.i_batch = j
 
@@ -1577,7 +1572,7 @@ class OptimEngine:
             save_position_history=self.save_position_history,
         )
         if self.debug_nans:
-            carry.batch = self._debug_obs_batch_template(carry.batches)
+            carry.batch = self._observed_batch(carry.batches)
             carry.nan_debug_state = self._init_nan_debug_state(carry)
 
         return carry

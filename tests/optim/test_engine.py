@@ -12,7 +12,9 @@ import jax
 import jax.numpy as jnp
 import optax
 import pytest
+import tensorflow_probability.substrates.jax.distributions as tfd
 
+import liesel.model as lsl
 import liesel.optim as opt
 import liesel.optim.engine as engine_module
 from liesel.optim import (
@@ -32,6 +34,63 @@ from liesel.optim.liesel_optim import LieselOptim as LieselOptimFromQuick
 from liesel.optim.loss import Loss, LossMixin
 from liesel.optim.state import OptimCarry
 from liesel.optim.types import Position
+
+
+@pytest.mark.parametrize("debug", [False, True])
+@pytest.mark.parametrize("holdout", ["validate", "test"])
+@pytest.mark.parametrize("mode", ["no_keys", "group_full", "group_mini"])
+def test_unbatched_split_entries_use_training_rows(debug, holdout, mode):
+    loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
+    y1 = lsl.Var.new_obs(
+        jnp.array([2.0] * 5 + [100.0] * 5),
+        lsl.Dist(tfd.Normal, loc=loc, scale=1.0),
+        name="y1",
+    )
+    y2 = lsl.Var.new_obs(
+        jnp.array([1.0] * 3 + [200.0] * 3),
+        lsl.Dist(tfd.Normal, loc=loc, scale=1.0),
+        name="y2",
+    )
+    model = lsl.Model([y1] if mode == "no_keys" else [y1, y2])
+    split = PositionSplit.from_model(
+        model,
+        multi_size="manager",
+        shuffle=False,
+        validate_axis_share=0.5 if holdout == "validate" else 0.0,
+        test_axis_share=0.5 if holdout == "test" else 0.0,
+    )
+    batches = (
+        Batches([], axis_size=5, batch_size=None)
+        if mode == "no_keys"
+        else Batches.from_split(
+            split, position_keys=["y1"], batch_size=1 if mode == "group_mini" else None
+        )
+    )
+    engine = LieselOptim(
+        model,
+        split=split,
+        batches=batches,
+        optimizers=[Optimizer(["loc"], optax.sgd(0.1))],
+        loss_monitor="train_full_data",
+        stopper=Stopper(epochs=150, patience=150),
+        seed=1,
+        show_progress=False,
+    ).build_engine()
+    engine.debug_nans = debug
+    expected_mean = 2.0 if mode == "no_keys" else 1.625
+    carry = engine._run_batch(0, engine._init_carry(150))
+    # The first SGD update checks the training-only gradient directly.
+    assert float(carry.position["loc"]) == pytest.approx(0.1 * expected_mean)
+    result = engine.fit()
+    assert float(result.position_final["loc"]) == pytest.approx(expected_mean, abs=1e-5)
+    if debug:
+        engine.optimizers = [NanOptimizer(["loc"])]
+        info = engine.fit().nan_debug
+        assert info is not None
+        assert info.obs_batch.keys() == split.train.keys()
+        for name, values in info.obs_batch.items():
+            assert jnp.all(values == split.train[name][0])
+        assert jnp.isnan(info.reproduce_step(engine).position["loc"])
 
 
 def test_ema_train_loss_monitor_required_and_explicit_windows():
