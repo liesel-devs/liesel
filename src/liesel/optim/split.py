@@ -2384,7 +2384,7 @@ class Split:
         shuffle: bool = True,
         seed: jax.Array | int | None = None,
         sample_sizes: SampleSizes | None = None,
-        multi_size: Literal["manager"] = "manager",
+        multi_size: Literal["error", "manager"] = "error",
     ) -> Split | SplitManager: ...
 
     @classmethod

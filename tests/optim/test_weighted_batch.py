@@ -401,6 +401,59 @@ class LeadingReducedNormal(tfd.Normal):
         return super()._log_prob(x).sum(axis=0)
 
 
+@pytest.mark.parametrize("factory", [Batches.from_model, BatchManager.from_model])
+@pytest.mark.parametrize("grouped", [False, True])
+@pytest.mark.parametrize("value_nodes", [False, True])
+def test_model_factories_route_custom_likelihood_axes(factory, grouped, value_nodes):
+    variables = [
+        lsl.Var.new_obs(
+            jnp.arange(3.0 * size).reshape(3, size),
+            lsl.Dist(LeadingReducedNormal, 0.0, 1.0),
+            name=name,
+        )
+        for name, size in ([("y", 4), ("z", 6)] if grouped else [("y", 4)])
+    ]
+    model = lsl.Model(variables)
+    kwargs = {"multi_size": "manager"} if factory == Batches.from_model else {}
+    axes = {var.name: 0 for var in variables}
+    keys = [var.value_node.name if value_nodes else var.name for var in variables]
+
+    def build(likelihood_axes):
+        return factory(
+            model,
+            batch_size=2,
+            position_keys=keys,
+            default_batch_axis=1,
+            sample_with_replacement=True,
+            sampling_weights={
+                key: jnp.arange(1, var.value.shape[1] + 1)
+                for key, var in zip(keys, variables, strict=True)
+            },
+            likelihood_axes=likelihood_axes,
+            **kwargs,
+        )
+
+    batches = build(axes)
+    children = batches.batches if isinstance(batches, BatchManager) else (batches,)
+    assert [child.likelihood_axes for child in children] == [
+        {var.name: 0} for var in variables
+    ]
+    state = model.update_state(
+        batches.get_batched_position(model.extract_position(keys), 0), model.state
+    )
+    expected = sum(
+        child.batch_sample_scale
+        * jnp.sum(state[f"{var.name}_log_prob"].value * child.correction_factors(0))
+        for child, var in zip(children, variables, strict=True)
+    )
+    assert float(batches.scaled_log_lik(model, state, batch_index=0)) == pytest.approx(
+        float(expected)
+    )
+    with pytest.raises(ValueError, match="likelihood_axes.*typo"):
+        invalid = build({**axes, "typo": 0})
+        invalid.scaled_log_lik(model, state, batch_index=0)
+
+
 def test_custom_leading_reduction_requires_explicit_likelihood_axis():
     y = lsl.Var.new_obs(
         jnp.arange(12.0).reshape(3, 4),
@@ -902,5 +955,9 @@ def test_manager_weight_overrides_preserve_originals_and_unspecified_children():
     np.testing.assert_allclose(
         manager.batches[0].sampling_probabilities, [0.1, 0.2, 0.3, 0.4]
     )
-    assert manager.batches[1] is b
-    assert manager.batches[2] is c
+    assert manager.batches[1] is not b
+    assert manager.batches[2] is not c
+    np.testing.assert_array_equal(
+        manager.batches[1].sampling_probabilities, b.sampling_probabilities
+    )
+    np.testing.assert_array_equal(manager.batches[2].indices, c.indices)

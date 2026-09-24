@@ -1,6 +1,7 @@
 """Explicit observation groups through public split and batch factories."""
 
 from types import SimpleNamespace
+from typing import assert_type
 
 import jax
 import jax.numpy as jnp
@@ -100,6 +101,28 @@ def test_single_split_factory_accepts_one_explicit_group_by_default():
     recipe = Split.from_model(_model(), position_keys=[["y_a"]])
     assert isinstance(recipe, Split)
     assert recipe.position_keys == ["y_a"]
+
+
+def test_factory_overloads_preserve_scalar_defaults_and_positional_calls():
+    model = lsl.Model([lsl.Var.new_obs(jnp.arange(4.0), name="y")])
+    assert_type(Split.from_model(model), Split)
+    assert_type(Batches.from_model(model, 2), Batches)
+    assert_type(Split.from_model(model, multi_size="manager"), Split | SplitManager)
+    assert_type(
+        Batches.from_model(model, 2, multi_size="manager"), Batches | BatchManager
+    )
+    recipe = assert_type(
+        Split.from_model(
+            model, None, None, 0.0, 0.0, None, 0, True, 0, None, "manager"
+        ),
+        Split | SplitManager,
+    )
+    batches = assert_type(
+        Batches.from_model(model, 2, None, None, True, None, 0, "manager"),
+        Batches | BatchManager,
+    )
+    assert isinstance(recipe, Split)
+    assert isinstance(batches, Batches)
 
 
 @pytest.mark.parametrize("factory", [PositionSplit, PositionSplitManager, Split])

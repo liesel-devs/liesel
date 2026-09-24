@@ -813,6 +813,7 @@ class Batches:
         sample_with_replacement: bool = False,
         *,
         sampling_weights: Array | Mapping[str, Array] | None = None,
+        likelihood_axes: dict[str, int] | None = None,
     ) -> Batches: ...
 
     @classmethod
@@ -826,7 +827,7 @@ class Batches:
         shuffle: bool = True,
         batch_axes: dict[str, int] | None = None,
         default_batch_axis: int = 0,
-        multi_size: Literal["manager"] = "manager",
+        multi_size: Literal["error", "manager"] = "error",
         epoch_size: Literal["strict", "min", "max"] | int = "max",
         sample_size: float | None = None,
         batch_sample_size: float | None = None,
@@ -834,6 +835,7 @@ class Batches:
         sample_with_replacement: bool = False,
         *,
         sampling_weights: Array | Mapping[str, Array] | None = None,
+        likelihood_axes: dict[str, int] | None = None,
     ) -> Batches | BatchManager: ...
 
     @classmethod
@@ -854,6 +856,7 @@ class Batches:
         sample_with_replacement: bool = False,
         *,
         sampling_weights: Array | Mapping[str, Array] | None = None,
+        likelihood_axes: dict[str, int] | None = None,
     ) -> Batches | BatchManager:
         """
         Builds a :class:`Batches` object from a Liesel model.
@@ -918,6 +921,11 @@ class Batches:
             Unknown keys and multiple entries for one group are rejected; omitted
             groups use uniform sampling. Weighted groups require replacement
             sampling. See :class:`Batches` for validation and likelihood correction.
+
+        likelihood_axes
+            Map observed variable names to axes of their pointwise log probabilities
+            for weighted correction. Each child receives entries for its own group.
+            See :class:`Batches` for axis semantics.
 
         Returns
         -------
@@ -1003,6 +1011,7 @@ class Batches:
                     infer_sample_size=infer_sample_size,
                     sample_with_replacement=sample_with_replacement,
                     sampling_weights=sampling_weights,
+                    likelihood_axes=likelihood_axes,
                 )
 
             raise ValueError(
@@ -1036,6 +1045,7 @@ class Batches:
             batch_sample_size=batch_sample_size,
             sample_with_replacement=sample_with_replacement,
             sampling_weights=weights,
+            likelihood_axes=likelihood_axes,
         )
 
         if infer_sample_size and sample_size is None:
@@ -1837,6 +1847,7 @@ class BatchManager:
         sample_with_replacement: bool = False,
         *,
         sampling_weights: Array | Mapping[str, Array] | None = None,
+        likelihood_axes: dict[str, int] | None = None,
     ) -> BatchManager:
         """
         Builds a :class:`BatchManager` from inferred or explicit groups.
@@ -1890,6 +1901,11 @@ class BatchManager:
             ``sample_with_replacement=True``. See :class:`Batches` for validation
             and likelihood correction.
 
+        likelihood_axes
+            Map observed variable names to axes of their pointwise log probabilities
+            for weighted correction. Each child receives entries for its own group.
+            See :class:`Batches` for axis semantics.
+
         Returns
         -------
         BatchManager
@@ -1933,6 +1949,18 @@ class BatchManager:
             model, pos_keys, batch_axes, default_batch_axis
         )
         shuffle = False if batch_size is None else shuffle
+        likelihood_axes = likelihood_axes or {}
+        observed_names = {
+            var.name
+            for var in model.observed.values()
+            if var.name in pos_keys or var.value_node.name in pos_keys
+        }
+        unknown = likelihood_axes.keys() - observed_names
+        if unknown:
+            raise ValueError(
+                "likelihood_axes names are not in these batch groups: "
+                f"{sorted(unknown)}."
+            )
 
         batches = []
         for axis_size, keys in groups:
@@ -1945,6 +1973,12 @@ class BatchManager:
                 batch_axes=batch_axes,
                 default_batch_axis=default_batch_axis,
                 infer_sample_size=infer_sample_size,
+                likelihood_axes={
+                    var.name: likelihood_axes[var.name]
+                    for var in model.observed.values()
+                    if var.name in likelihood_axes
+                    and (var.name in keys or var.value_node.name in keys)
+                },
                 sample_with_replacement=(
                     sample_with_replacement
                     or (batch_size is not None and batch_size > axis_size)
