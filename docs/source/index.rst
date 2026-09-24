@@ -9,6 +9,7 @@ Liesel: A Probabilistic Programming Framework
    :hidden:
    :maxdepth: 1
 
+   model-building
    tutorials_overview
    optimization
 
@@ -18,11 +19,13 @@ API Reference
 
 This is an overview of the central classes in Liesel.
 
+.. _model-api:
+
 Model Basics
 ************
 
-The fundamental building blocks of your model graph are given by just three classes.
-Both are documented with examples, so make sure to check them out.
+Start with the :doc:`model-building` guide. These three classes describe the
+model graph; their reference pages document arguments and defaults.
 
 The model building workflow in Liesel consists of the following steps:
 

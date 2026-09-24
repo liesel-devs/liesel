@@ -1,5 +1,10 @@
 # Location-scale regression
 
+For a compact example including predictions and response simulations, see
+{doc}`../notebooks/12-model-predictions`. This application develops the
+location-scale model and its sampling workflow in more detail.
+
+
 
 This tutorial implements a Bayesian location-scale regression model
 within the Liesel framework. In contrast to the standard linear model

@@ -1,5 +1,10 @@
 # Parameter transformations
 
+For transformation semantics and short recipes, see
+{doc}`../../model-transformations`. This tutorial follows a transformed
+parameter through a complete MCMC fit.
+
+
 
 This tutorial builds on the [linear regression
 tutorial](01a-lin-reg.md#linear-regression). Here, we demonstrate how to

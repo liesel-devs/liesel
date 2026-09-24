@@ -1,5 +1,10 @@
 # Linear Regression
 
+For a step-by-step introduction to constructing and inspecting the model,
+start with {doc}`../notebooks/11-model-building`. This example continues to
+MCMC inference with Goose.
+
+
 
 In this tutorial, we build a linear regression model with Liesel and
 estimate it with Goose. Our goal is to illustrate the most fundamental
@@ -63,29 +68,14 @@ id="generate-data" />
 
 ## Building the Model
 
-As the most basic building blocks of a model, Liesel provides the
-{class}`.Var` class for instantiating variables and the {class}`.Dist`
-class for wrapping probability distributions. The {class}`.Var` class
-comes with four constructors, namely {meth}`.Var.new_param` for
-parameters, {meth}`.Var.new_obs` for observed data,
-{meth}`.Var.new_calc` for variables that are deterministic functions of
-other variables in the model, and {meth}`.Var.new_value` for fixed
-values.
+The construction steps are explained in {doc}`../notebooks/11-model-building`.
+Here we prepare the same building blocks for MCMC inference.
 
 ### The regression coefficients
 
-Let’s assume the weakly informative prior
-$\beta_0, \beta_1 \sim \mathcal{N}(0, 100^2)$ for the regression
-coefficients. To define this in Liesel, we will be using the
-{class}`.Dist` class. This class wraps distribution classes with the
-TensorFlow Probability (TFP) API. Here, we use the TFP distribution
-object
-[(`tfd.Normal`)](https://www.tensorflow.org/probability/api_docs/python/tfp/distributions/Normal),
-and the two hyperparameters representing the parameters of the
-distribution. TFP uses the names `loc` for the mean and `scale` for the
-standard deviation, so we have to use the same names here. This is a
-general feature of {class}`.Dist`, you should always use the parameter
-names from TFP to refer to the parameters of your distribution.
+Give the coefficients independent normal priors with standard deviation 100.
+`Dist` uses the distribution's argument names: `loc` for the mean and `scale`
+for the standard deviation.
 
 ``` python
 beta_prior = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
@@ -158,9 +148,8 @@ response.
 model = lsl.Model(y)
 ```
 
-The {meth}`.Model.plot()` method visualizes the model. If the layout of
-the graph looks messy for you, please make sure you have the
-`pygraphviz` package installed.
+Plot the dependencies with {meth}`~liesel.model.Model.plot`. Graph layout
+requires Graphviz.
 
 ``` python
 model.plot()
