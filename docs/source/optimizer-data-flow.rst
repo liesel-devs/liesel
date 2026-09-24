@@ -204,8 +204,8 @@ earlier split or restore the context lost at batch boundaries.
 To evaluate such a model on its original ordered data, use no holdouts and
 ``batch_size=None``. When a conditional model can instead use fixed response/lag
 pairs, prepare those pairs from the original series and keep them in one group.
-The following example verifies that a batch has the same conditional likelihood
-contributions as the corresponding full-data rows:
+The following example compares a batch's conditional likelihood contributions
+with those of the corresponding full-data rows:
 
 .. code-block:: python
 
@@ -236,7 +236,10 @@ contributions as the corresponding full-data rows:
        full_terms[ar_batches.batch_indices[0]]
    )
    actual = -ar_batches.scaled_log_lik(ar_model, state, batch_index=0)
-   assert jnp.allclose(actual, expected)
+   print(bool(jnp.allclose(actual, expected)))
+
+The output is ``True``: the selected pairs retain their full-data likelihood
+contributions.
 
 These are conditional likelihood terms with fixed observed lags. Choose temporal
 holdouts according to the intended prediction task; this example does not define
