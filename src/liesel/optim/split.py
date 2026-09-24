@@ -1010,7 +1010,7 @@ class PositionSplit:
         >>> model = lsl.Model([y])
         >>> split = PositionSplit.from_model(
         ...     model,
-        ...     position_keys=["y"],
+        ...     position_keys=[["y"]],
         ...     validate_axis_share=0.2,
         ...     test_axis_share=0.1,
         ...     shuffle=False,
@@ -1027,7 +1027,7 @@ class PositionSplit:
         >>> model = lsl.Model([y1_multi, y2_multi])
         >>> managed = PositionSplit.from_model(
         ...     model,
-        ...     position_keys=["y1_multi", "y2_multi"],
+        ...     position_keys=[["y1_multi"], ["y2_multi"]],
         ...     validate_axis_share=0.2,
         ...     multi_size="manager",
         ...     shuffle=True,
@@ -1223,7 +1223,7 @@ class PositionSplitManager:
     >>> model = lsl.Model([y1, y2])
     >>> managed = PositionSplitManager.from_model(
     ...     model,
-    ...     position_keys=["y1", "y2"],
+    ...     position_keys=[["y1"], ["y2"]],
     ...     validate_axis_share=0.2,
     ...     shuffle=True,
     ...     seed=42,
@@ -1322,7 +1322,7 @@ class PositionSplitManager:
         >>> model = lsl.Model([x, y])
         >>> split = PositionSplitManager.from_model(
         ...     model,
-        ...     position_keys=["x", "y"],
+        ...     position_keys=[["x"], ["y"]],
         ...     validate_axis_share=0.2,
         ...     shuffle=True,
         ...     seed=42,
@@ -1811,7 +1811,7 @@ class SplitManager:
     >>> model = lsl.Model([x, y])
     >>> manager = SplitManager.from_model(
     ...     model,
-    ...     position_keys=["x", "y"],
+    ...     position_keys=[["x"], ["y"]],
     ...     validate_axis_share=0.2,
     ...     shuffle=True,
     ...     seed=42,
@@ -1919,7 +1919,7 @@ class SplitManager:
         >>> model = lsl.Model([x, y])
         >>> manager = SplitManager.from_model(
         ...     model,
-        ...     position_keys=["x", "y"],
+        ...     position_keys=[["x"], ["y"]],
         ...     validate_axis_share=0.2,
         ...     shuffle=True,
         ...     seed=42,
@@ -2466,7 +2466,7 @@ class Split:
         >>> from liesel.optim import Split
         >>> y = lsl.Var.new_obs(jnp.arange(10.0), name="y")
         >>> splitter = Split.from_model(
-        ...     lsl.Model([y]), validate_axis_share=0.2, shuffle=True, seed=42
+        ...     lsl.Model([y]), position_keys=[["y"]], validate_axis_share=0.2, seed=42
         ... )
         >>> splitter.axis_size, splitter.train_axis_size, splitter.validate_axis_size
         (10, 8, 2)
@@ -2475,6 +2475,7 @@ class Split:
         >>> managed = Split.from_model(
         ...     lsl.Model([y, z]),
         ...     multi_size="manager",
+        ...     position_keys=[["y"], ["z"]],
         ...     validate_axis_share=0.2,
         ...     shuffle=True,
         ...     seed=42,

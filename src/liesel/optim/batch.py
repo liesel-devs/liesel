@@ -943,20 +943,20 @@ class Batches:
 
         >>> y = lsl.Var.new_obs(jnp.arange(6.0), name="y")
         >>> model = lsl.Model([y])
-        >>> batches = Batches.from_model(model, batch_size=2, position_keys=["y"])
+        >>> batches = Batches.from_model(model, batch_size=2, position_keys=[["y"]])
         >>> batches.axis_size, batches.batch_size, batches.position_keys
         (6, 2, ['y'])
 
         Passing ``batch_size=None`` disables shuffling and creates one
         full-data batch:
 
-        >>> full_data = Batches.from_model(model, batch_size=None, position_keys=["y"])
+        >>> full_data = Batches.from_model(model, None, position_keys=[["y"]])
         >>> full_data.shuffle, full_data.batch_indices.tolist()
         (False, [[0, 1, 2, 3, 4, 5]])
 
         An empty ``position_keys`` sequence creates a no-key full-data adapter:
 
-        >>> no_key = Batches.from_model(model, batch_size=None, position_keys=[])
+        >>> no_key = Batches.from_model(model, None, position_keys=[], axis_size=6)
         >>> no_key.position_keys, no_key.is_full_data
         ([], True)
 
@@ -968,7 +968,7 @@ class Batches:
         >>> manager = Batches.from_model(
         ...     model,
         ...     batch_size=2,
-        ...     position_keys=["x", "z"],
+        ...     position_keys=[["x"], ["z"]],
         ...     multi_size="manager",
         ... )
         >>> type(manager).__name__, manager.axis_size, manager.n_full_batches
@@ -1917,7 +1917,7 @@ class BatchManager:
         >>> manager = BatchManager.from_model(
         ...     model,
         ...     batch_size=2,
-        ...     position_keys=["x", "y"],
+        ...     position_keys=[["x"], ["y"]],
         ... )
         >>> manager.axis_size, manager.batch_size, manager.n_full_batches
         ((8, 5), (2, 2), 4)
@@ -1930,7 +1930,7 @@ class BatchManager:
         >>> full_data = BatchManager.from_model(
         ...     model,
         ...     batch_size=None,
-        ...     position_keys=["x", "y"],
+        ...     position_keys=[["x"], ["y"]],
         ... )
         >>> full_data.is_full_data, full_data.n_full_batches
         (True, 1)
@@ -1960,7 +1960,7 @@ class BatchManager:
             batch = Batches.from_model(
                 model,
                 batch_size=batch_size,
-                position_keys=keys,
+                position_keys=[keys],
                 axis_size=axis_size,
                 shuffle=shuffle,
                 batch_axes=batch_axes,

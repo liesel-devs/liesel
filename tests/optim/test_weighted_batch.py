@@ -922,7 +922,15 @@ def test_factory_weights_require_replacement(constructor):
         if constructor == "init":
             BatchManager([Batches(["y"], 4, 2)], sampling_weights=[1, 2, 3, 4])
         else:
-            model = lsl.Model([lsl.Var.new_obs(jnp.arange(4.0), name="y")])
+            model = lsl.Model(
+                [
+                    lsl.Var.new_obs(
+                        jnp.arange(4.0),
+                        lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+                        name="y",
+                    )
+                ]
+            )
             cls = Batches if constructor == "batches" else BatchManager
             cls.from_model(model, 2, sampling_weights=[1, 2, 3, 4])
 

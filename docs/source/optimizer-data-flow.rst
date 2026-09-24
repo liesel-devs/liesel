@@ -55,11 +55,22 @@ even if their lengths happen to match. Flat or omitted ``position_keys`` group
 observed arrays by length; use nested groups when equal length does not mean
 matching rows. Every group must have validation data if any group does.
 
+Automatic grouping requires an observed likelihood in each group. If a group
+has none, specify its row keys as an explicit nested group, or mark shared data
+as passthrough. Matching lengths alone do not establish row alignment: lookup
+tables must be passthrough even when their length matches a response.
+
 Set ``split_axes`` when creating a split for observations on an axis other than
 zero. A value of ``None`` keeps a shared table unchanged in every split and out
 of automatic batches. Keep per-observation covariates, weights, and offsets with
 the response.
 Set the corresponding ``batch_axes`` when creating batches too.
+
+For a model with a lookup table ``z`` indexed by row-level group IDs, construct
+``PositionSplit.from_model(model, split_axes={"z": None})`` and pass the result
+as ``LieselOptim(..., split=split)``. This also works for scalar constants.
+Automatic setup raises an informative error for scalars or inferred groups
+without a likelihood instead of guessing how to split them.
 
 ``PositionSplit`` holds the split data. ``Split`` holds reusable row indices;
 call ``split_position()`` to apply them. Manager classes handle several groups.
