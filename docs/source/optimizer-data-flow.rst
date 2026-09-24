@@ -183,125 +183,6 @@ each child with ``Batches.from_split`` and combine them with ``BatchManager``.
 `Open the BatchManager overview in a separate page
 <_static/visualizations/batch-manager-overview.html>`__.
 
-.. _optimizer-row-wise:
-
-When row batching is valid
---------------------------
-
-Selecting data rows must preserve each selected row's likelihood contribution.
-This requirement applies to weak observations and to strong observations whose
-distribution inputs are computed from the data. Graph dependencies identify
-which group supplies a factor; matching array shapes, explicit groups and
-``likelihood_axes`` do not establish that the factor can be evaluated row by row.
-The optimizer does not verify this requirement.
-
-For example, recomputing ``y[1:] - phi * y[:-1]`` or
-``y - phi * jnp.roll(y, 1)`` after selecting arbitrary rows changes which values
-are neighbors. Shuffled holdouts break these lag relationships even if fitting
-then uses full-data batches. Turning off batch shuffling does not repair an
-earlier split or restore the context lost at batch boundaries.
-
-To evaluate such a model on its original ordered data, use no holdouts and
-``batch_size=None``. When a conditional model can instead use fixed response/lag
-pairs, prepare those pairs from the original series and keep them in one group.
-The following example compares a batch's conditional likelihood contributions
-with those of the corresponding full-data rows:
-
-.. code-block:: python
-
-   import jax
-   import jax.numpy as jnp
-   import tensorflow_probability.substrates.jax.distributions as tfd
-   import liesel.model as lsl
-   import liesel.optim as opt
-
-   series = jnp.array([0.0, 0.7, 0.4, -0.1, 0.3, 0.9, 0.5])
-   lag = lsl.Var.new_obs(series[:-1], name="lag")
-   phi = lsl.Var.new_param(0.5, name="phi")
-   mean = lsl.Var.new_calc(lambda lag, phi: phi * lag, lag, phi)
-   response = lsl.Var.new_obs(
-       series[1:], lsl.Dist(tfd.Normal, mean, 1.0), name="y"
-   )
-   ar_model = lsl.Model([response])
-   ar_split = opt.PositionSplit.from_model(
-       ar_model, position_keys=[["y", "lag"]]
-   )
-   ar_batches = opt.Batches.from_split(ar_split, batch_size=2).start_epoch(
-       jax.random.key(1)
-   )
-   batch = ar_batches.get_batched_position(ar_split.train, 0)
-   state = ar_model.update_state(batch, ar_model.state)
-   full_terms = ar_model.state["y_log_prob"].value
-   expected = -ar_batches.batch_sample_scale * jnp.sum(
-       full_terms[ar_batches.batch_indices[0]]
-   )
-   actual = -ar_batches.scaled_log_lik(ar_model, state, batch_index=0)
-   print(bool(jnp.allclose(actual, expected)))
-
-The output is ``True``: the selected pairs retain their full-data likelihood
-contributions.
-
-These are conditional likelihood terms with fixed observed lags. Choose temporal
-holdouts according to the intended prediction task; this example does not define
-a forecasting-validation procedure. Dependencies that require other batching or
-held-out semantics need a custom :class:`~liesel.optim.Loss` and suitable data
-configuration. Substituting a custom loss while retaining incorrect row slicing
-does not repair the objective.
-
-Weak observed variables
------------------------
-
-Weak observed variables, such as copula observations computed from marginal PITs,
-are supported. The model factories select strong observed inputs as writable data;
-weak values and their likelihoods are recomputed as parameters or data change.
-Automatic grouping also supports inputs whose only likelihood comes from a weak
-observed variable; the strong inputs need not have their own distributions.
-Explicitly selecting a weak variable or its value node for splitting or batching
-raises an error: select its strong source data instead.
-
-Keep aligned inputs of a weak observation in one group, for example
-``position_keys=[["x1", "x2"]]`` for two copula margins. The weak likelihood then
-shares that group's split, scaling, and weighted sampling corrections. It also
-contributes to validation and test scores when its source group is held out.
-A factor spanning independently split or batched groups is rejected.
-
-Graph dependencies identify which group supplies a weak observation, but do not
-establish arbitrary transformation or row semantics. Supply explicit grouping
-and axes when needed. In weighted batches, a multidimensional weak likelihood
-requires ``likelihood_axes={"copula": 0}`` (with the appropriate factor name and
-likelihood axis); the strong input's axis is not assumed to be its likelihood axis.
-The :ref:`row-wise requirement <optimizer-row-wise>` also applies here. Use a
-custom loss and suitable data configuration when the transformation does not
-preserve the group's likelihood contributions.
-
-Copula likelihoods are sensitive to starting values: PITs can round to 0 or 1,
-producing infinite inverse-CDF values and non-finite likelihoods. Initialize
-marginal parameters near the data, for example with a margins-only fit. Higher
-precision can help but cannot guarantee finite tails. For a configured
-``LieselOptim`` builder, enable first-NaN reproduction capture on its engine:
-
-.. code-block:: python
-
-   engine = builder.build_engine()
-   engine.debug_nans = True
-   result = engine.fit()
-   debug_info = result.nan_debug
-
-``debug_nans`` is an engine setting, not a ``LieselOptim`` constructor argument.
-The captured information helps reproduce the first detected NaN; it does not
-correct poor starting values.
-
-Weak parameters and priors
---------------------------
-
-A prior may be attached to a weak parameter computed from a strong source variable.
-That prior remains in the default loss, including its derivatives through the weak
-parameter. Automatic optimizer selection cannot decide which source to estimate
-and raises an informative error. Supply the strong names explicitly, for example
-``optimizers=[opt.Optimizer(["source"], optax.adam(0.01))]`` or
-``optimizers=[opt.LBFGS(["source"])]``. The source does not need to be marked as a
-parameter. The weak parameter itself is recomputed during fitting.
-
 .. _optimizer-likelihood-scaling:
 
 What the loss means
@@ -335,6 +216,123 @@ to include them. See :class:`~liesel.optim.NegLogProbLoss` for details.
 
 `Open the likelihood-scaling overview in a separate page
 <_static/visualizations/likelihood-scaling.html>`__.
+
+.. _optimizer-row-wise:
+
+When row batching is valid
+--------------------------
+
+Selecting data rows must preserve each selected row's likelihood contribution.
+This requirement applies to weak observations and to strong observations whose
+distribution inputs are computed from the data. Graph dependencies identify
+which group supplies a factor; matching array shapes, explicit groups and
+``likelihood_axes`` do not establish that the factor can be evaluated row by row.
+The optimizer does not verify this requirement.
+
+For example, recomputing ``y[1:] - phi * y[:-1]`` or
+``y - phi * jnp.roll(y, 1)`` after selecting arbitrary rows changes which values
+are neighbors. Shuffled holdouts break these lag relationships even if fitting
+then uses full-data batches. Turning off batch shuffling does not repair an
+earlier split or restore the context lost at batch boundaries.
+
+To evaluate such a model on its original ordered data, use no holdouts and
+``batch_size=None``. Dependencies that require other batching or held-out
+semantics need a custom :class:`~liesel.optim.Loss` and suitable data
+configuration. Substituting a custom loss while retaining incorrect row slicing
+does not repair the objective.
+
+Prepare aligned response and lag pairs
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For a conditional model with fixed observed lags, prepare response/lag pairs
+from the original series. Keep both arrays in one group so selecting a response
+also selects its original lag:
+
+.. code-block:: python
+
+   import jax.numpy as jnp
+   import tensorflow_probability.substrates.jax.distributions as tfd
+   import liesel.model as lsl
+   import liesel.optim as opt
+
+   series = jnp.array([0.0, 0.7, 0.4, -0.1, 0.3, 0.9, 0.5])
+   lag = lsl.Var.new_obs(series[:-1], name="lag")
+   phi = lsl.Var.new_param(0.5, name="phi")
+   mean = lsl.Var.new_calc(lambda lag, phi: phi * lag, lag, phi)
+   response = lsl.Var.new_obs(
+       series[1:], lsl.Dist(tfd.Normal, mean, 1.0), name="y"
+   )
+   ar_model = lsl.Model([response])
+   ar_split = opt.PositionSplit.from_model(
+       ar_model, position_keys=[["y", "lag"]]
+   )
+   ar_batches = opt.Batches.from_split(ar_split, batch_size=2)
+
+Pass ``ar_split`` and ``ar_batches`` to ``LieselOptim`` to fit this conditional
+model. Choose temporal holdouts according to the intended prediction task;
+this example does not define a forecasting-validation procedure.
+
+Compare a batch with the full-data contributions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Using the model and batches above, select a batch and compare its scaled
+likelihood with the corresponding terms evaluated on the original data:
+
+.. code-block:: python
+
+   import jax
+
+   ar_batches = ar_batches.start_epoch(jax.random.key(1))
+   batch = ar_batches.get_batched_position(ar_split.train, 0)
+   state = ar_model.update_state(batch, ar_model.state)
+   full_terms = ar_model.state["y_log_prob"].value
+   expected = -ar_batches.batch_sample_scale * jnp.sum(
+       full_terms[ar_batches.batch_indices[0]]
+   )
+   actual = -ar_batches.scaled_log_lik(ar_model, state, batch_index=0)
+   print(bool(jnp.allclose(actual, expected)))
+
+The output is ``True``: the selected pairs retain their full-data likelihood
+contributions.
+
+Batch weak observed variables
+------------------------------
+
+Weak observed variables, such as copula observations computed from marginal PITs,
+are supported. The model factories select strong observed inputs as writable data;
+weak values and their likelihoods are recomputed as parameters or data change.
+
+Mark the weak variable carrying the copula likelihood as observed, for example
+``copula.observed = True``. On an existing model, use
+``model.vars["copula"].observed = True``. An intermediate PIT without its own
+likelihood does not need this flag. See the
+:class:`~liesel.distributions.GaussianCopula` example for a complete model.
+
+Automatic grouping also supports inputs whose only likelihood comes from a weak
+observed variable; the strong inputs need not have their own distributions.
+Explicitly selecting a weak variable or its value node for splitting or batching
+raises an error: select its strong source data instead.
+
+Keep aligned inputs of a weak observation in one group, for example
+``position_keys=[["x1", "x2"]]`` for two copula margins. The weak likelihood then
+shares that group's split, scaling, and weighted sampling corrections. It also
+contributes to validation and test scores when its source group is held out.
+A factor spanning independently split or batched groups is rejected.
+
+Graph dependencies identify which group supplies a weak observation, but do not
+establish arbitrary transformation or row semantics. Supply explicit grouping
+and axes when needed. In weighted batches, a multidimensional weak likelihood
+requires ``likelihood_axes={"copula": 0}`` (with the appropriate factor name and
+likelihood axis); the strong input's axis is not assumed to be its likelihood axis.
+The :ref:`row-wise requirement <optimizer-row-wise>` also applies here. Use a
+custom loss and suitable data configuration when the transformation does not
+preserve the group's likelihood contributions.
+
+Copula likelihoods are sensitive to starting values: PITs can round to 0 or 1,
+producing infinite inverse-CDF values and non-finite likelihoods. Initialize
+marginal parameters near the data, for example with a margins-only fit. Higher
+precision can help but cannot guarantee finite tails. To investigate a failed
+fit, see :ref:`optimizer-debug-nans`.
 
 .. raw:: html
 

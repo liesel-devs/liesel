@@ -54,6 +54,7 @@ Read the result
 
 Both position properties raise ``RuntimeError`` if their parameters contain NaN
 or infinity. History, status, and diagnostics remain available for inspection.
+See :ref:`optimizer-debug-nans` to capture information about a NaN failure.
 
 The training curve averages the losses seen before each update. Parameters
 change during an epoch, so this curve is not the full training loss at its end.
@@ -88,3 +89,24 @@ An EMA combines losses from several parameter positions. Its best saved position
 is the snapshot at the end of that epoch, not a position whose exact loss equals
 the plotted average. See :class:`~liesel.optim.EmaTrainLossMonitor` for the formula
 and the alternative :meth:`~liesel.optim.EmaTrainLossMonitor.from_half_life` setting.
+
+.. _optimizer-debug-nans:
+
+Investigate a NaN failure
+-------------------------
+
+For a configured ``LieselOptim`` builder, enable first-NaN reproduction capture
+on its engine before fitting:
+
+.. code-block:: python
+
+   engine = builder.build_engine()
+   engine.debug_nans = True
+   result = engine.fit()
+   debug_info = result.nan_debug
+
+If a NaN is detected, ``debug_info`` contains information for reproducing it;
+otherwise it is ``None``. See :class:`~liesel.optim.OptimNaNDebugInfo` for its
+contents. Enable ``debug_nans`` on the engine returned by ``build_engine()``.
+The captured information helps investigate the failure; it does not correct
+poor starting values.

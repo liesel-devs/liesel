@@ -60,6 +60,17 @@ parameters, or ``optimizers=[opt.LBFGS(["beta", "log_sigma"])]`` for a selected
 subset. The remaining parameters stay fixed. Use ordinary Optax optimizers for
 separate blocks, as above.
 
+Select source parameters for a weak prior
+-----------------------------------------
+
+A prior may be attached to a weak parameter computed from a strong source variable.
+That prior remains in the default loss, including its derivatives through the weak
+parameter. Automatic parameter selection cannot decide which source to estimate
+and raises an informative error. Supply the strong names explicitly, for example
+``optimizers=[opt.Optimizer(["source"], optax.adam(0.01))]`` or
+``optimizers=[opt.LBFGS(["source"])]``. The source does not need to be marked as a
+parameter. The weak parameter itself is recomputed during fitting.
+
 Run Adam followed by L-BFGS
 ---------------------------
 
