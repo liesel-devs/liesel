@@ -65,15 +65,14 @@ Optimization does not assign the fitted state to the original model.
 What changes
 ------------
 
-* ``scale_loss`` accepts booleans and defaults to ``True``. Replace the earlier
-  optimizer wrapper's ``scale_loss="auto"`` with ``True`` or omit it.
 * To optimize only selected parameters (the old ``params=``), wrap the
   transformation in ``opt.Optimizer(params, transformation)`` as above. A bare
   Optax transformation optimizes all model parameters.
 * ``LieselOptim`` requires ``optimizers``. Pass a configured Optax transformation
   for all parameters, ``"lbfgs"``, or explicit per-parameter optimizers.
-* Splits and ``LieselOptim`` now default to ``seed=0``. Explicit ``seed=None``
-  retains time-based seeding. A separately constructed split has its own seed.
+* Replace ``batch_seed`` with ``seed``. The new default, ``seed=0``, is
+  deterministic; ``seed=None`` uses the current time. A separately constructed
+  split has its own seed.
 * Replace ``gs.Stopper(max_iter=...)`` with ``opt.Stopper(epochs=...)``. An epoch
   runs all configured batches. The new history starts after the first epoch;
   the old history started before any updates. Runs need not stop at the same time.
@@ -98,6 +97,6 @@ Build the split from your existing holdout to keep the same evaluation data.
 Validation now uses likelihood only; set ``validation_strategy="log_prob"`` to
 include priors as before.
 
-``batch_size`` remains available; ``batch_seed`` becomes ``seed``. See the
+``batch_size`` remains available. See the
 :doc:`basic tutorial <tutorials/notebooks/09-liesel-optim-basic>` for a complete
 validation and minibatch example.
