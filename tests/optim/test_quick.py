@@ -511,6 +511,7 @@ def test_fit_returns_optim_result():
     ).fit()
 
     assert isinstance(result, OptimResult)
+    assert type(result.history) is opt.OptimHistory
     assert result.monitor_source == "train_ema"
     assert result.n_epochs == 1
     assert result.position_final.keys() == model.parameters.keys()

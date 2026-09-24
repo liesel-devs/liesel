@@ -143,6 +143,7 @@ and defaults.
     ~liesel.optim.LieselOptim
     ~liesel.optim.OptimEngine
     ~liesel.optim.OptimCheckpoint
+    ~liesel.optim.OptimHistory
     ~liesel.optim.OptimResult
     ~liesel.optim.OptimNaNDebugInfo
     ~liesel.optim.Loss

@@ -202,7 +202,7 @@ class OptimHistory:
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from liesel.optim.state import OptimHistory
+    >>> from liesel.optim import OptimHistory
     >>> from liesel.optim.types import Position
     >>> position = Position({"theta": jnp.array([1.0, 2.0])})
     >>> history = OptimHistory.from_epochs(epochs=3, position=position)
@@ -247,7 +247,7 @@ class OptimHistory:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.optim.state import OptimHistory
+        >>> from liesel.optim import OptimHistory
         >>> from liesel.optim.types import Position
         >>> history = OptimHistory.from_epochs(2, Position({"theta": jnp.array(1.0)}))
         >>> history.loss_monitor.tolist()
@@ -284,7 +284,7 @@ class OptimHistory:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.optim.state import OptimHistory
+        >>> from liesel.optim import OptimHistory
         >>> history = OptimHistory.from_epochs(epochs=2, position=None)
         >>> history.loss_train = history.loss_train.at[0].set(1.5)
         >>> history.loss_monitor = history.loss_monitor.at[0].set(2.5)
@@ -317,7 +317,7 @@ class OptimHistory:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.optim.state import OptimHistory
+        >>> from liesel.optim import OptimHistory
         >>> from liesel.optim.types import Position
         >>> history = OptimHistory.from_epochs(
         ...     2, Position({"theta": jnp.array([1.0, 2.0])})
@@ -347,7 +347,7 @@ class OptimHistory:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.optim.state import OptimHistory
+        >>> from liesel.optim import OptimHistory
         >>> from liesel.optim.types import Position
         >>> position = Position({"theta": jnp.ones((2,))})
         >>> history = OptimHistory.init_position_history(position, epochs=3)
@@ -389,7 +389,7 @@ class OptimHistory:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.optim.state import OptimHistory
+        >>> from liesel.optim import OptimHistory
         >>> from liesel.optim.types import Position
         >>> position = Position({"theta": jnp.array([1.0, 2.0])})
         >>> history = OptimHistory.init_position_history(position, epochs=2)
@@ -895,7 +895,7 @@ class OptimResult:
     --------
     >>> import jax.numpy as jnp
     >>> from liesel.optim import OptimResult
-    >>> from liesel.optim.state import OptimHistory
+    >>> from liesel.optim import OptimHistory
     >>> from liesel.optim.types import Position
     >>> history = OptimHistory.from_epochs(epochs=2, position=None)
     >>> position_final = Position({"theta": jnp.array(2.0)})

@@ -15,6 +15,7 @@ from .split import PositionSplitManager as PositionSplitManager
 from .split import Split as Split
 from .split import SplitManager as SplitManager
 from .state import OptimCheckpoint as OptimCheckpoint
+from .state import OptimHistory as OptimHistory
 from .state import OptimNaNDebugInfo as OptimNaNDebugInfo
 from .state import OptimResult as OptimResult
 from .stop import Stopper as Stopper
@@ -31,6 +32,7 @@ __all__ = [
     "NegLogProbLoss",
     "OptimCheckpoint",
     "OptimEngine",
+    "OptimHistory",
     "OptimNaNDebugInfo",
     "OptimResult",
     "Optimizer",

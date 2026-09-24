@@ -5,8 +5,8 @@ import jax.numpy as jnp
 import optax
 import pytest
 
-from liesel.optim import Batches, Optimizer
-from liesel.optim.state import OptimCarry, OptimHistory, OptimResult
+from liesel.optim import Batches, OptimHistory, Optimizer
+from liesel.optim.state import OptimCarry, OptimResult
 from liesel.optim.types import Position
 
 
