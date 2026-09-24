@@ -389,7 +389,7 @@ def _infer_sample_size_for_part(
                 "Cannot infer sample sizes because "
                 f"{var_name!r} has Var.dist_node.per_obs=False. Set "
                 "infer_sample_sizes=False or provide sample_sizes manually in "
-                "PositionSplit.from_model(...), then pass the resulting split to "
+                "PositionSplit.from_model(...). If using LieselOptim, pass it as "
                 "LieselOptim(..., split=split)."
             )
 
@@ -404,8 +404,8 @@ def _infer_sample_size_for_part(
             "Cannot infer a scalar sample size because observed variables in one "
             f"PositionSplit imply incompatible pointwise sample sizes: {sizes}. "
             "Use PositionSplitManager, provide sample_sizes manually, or set "
-            "infer_sample_sizes=False in PositionSplit.from_model(...), then pass "
-            "the resulting split to LieselOptim(..., split=split)."
+            "infer_sample_sizes=False in PositionSplit.from_model(...). If using "
+            "LieselOptim, pass it as LieselOptim(..., split=split)."
         )
 
     return unique_sizes.pop()
@@ -661,7 +661,7 @@ class PositionSplit:
             raise ValueError(
                 "Cannot infer sample sizes for a model with a custom log_lik_node. "
                 "Set infer_sample_sizes=False or provide sample_sizes manually in "
-                "PositionSplit.from_model(...), then pass the resulting split to "
+                "PositionSplit.from_model(...). If using LieselOptim, pass it as "
                 "LieselOptim(..., split=split)."
             )
 
