@@ -32,7 +32,7 @@ from ._engine_utils import (
     _validate_positive_int,
 )
 from .batch import Batches, BatchManager
-from .loss import Loss, NegLogProbLoss
+from .loss import Loss, LossMixin, NegLogProbLoss
 from .optimizer import LBFGS, Optimizer, OptimizerLike
 from .split import PositionSplitManager
 from .state import (
@@ -470,7 +470,8 @@ class OptimEngine:
         Raises
         ------
         ValueError
-            If ``loss_monitor`` is not one of the supported sources.
+            If ``loss_monitor`` is unsupported, validation data is missing, or
+            full-data monitoring uses the unimplemented :class:`.LossMixin` stub.
         """
         if not isinstance(self.loss_monitor, EmaTrainLossMonitor) and (
             self.loss_monitor not in ("validation", "train_full_data")
@@ -484,6 +485,15 @@ class OptimEngine:
         if self.loss_monitor == "validation" and not self.split.has_validation:
             raise ValueError(
                 "loss_monitor='validation' requires a split with validation data."
+            )
+
+        if self.loss_monitor == "train_full_data" and (
+            getattr(self.loss.loss_train, "__func__", None) is LossMixin.loss_train
+        ):
+            raise ValueError(
+                "loss_monitor='train_full_data' requires the custom loss to "
+                "implement loss_train(). Implement it or use "
+                "EmaTrainLossMonitor(effective_window=...)."
             )
 
     def _validate_debug_nans(self) -> None:

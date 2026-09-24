@@ -1378,6 +1378,52 @@ def test_ema_monitor_adds_no_full_data_evaluation():
     assert result.history.loss_monitor.tolist() == pytest.approx([2.5])
 
 
+@pytest.mark.parametrize(
+    "implementation", ["missing", "inherited", "instance", "protocol"]
+)
+def test_full_data_monitor_validates_custom_loss(implementation, monkeypatch):
+    class BatchedLoss(LossMixin, SequenceLoss):
+        pass
+
+    class InheritedLoss(UnitGradientLoss):
+        pass
+
+    loss = {
+        "missing": BatchedLoss,
+        "inherited": InheritedLoss,
+        "instance": BatchedLoss,
+        "protocol": SequenceLoss,
+    }[implementation](_split())
+    if implementation == "instance":
+        monkeypatch.setattr(loss, "loss_train", lambda params, carry: params["theta"])
+
+    def build_engine(monitor):
+        return OptimEngine(
+            loss=loss,
+            batches=Batches(["y"], axis_size=1, batch_size=None),
+            optimizers=[_optimizer()],
+            stopper=Stopper(epochs=1, patience=1),
+            seed=1,
+            initial_state={},
+            show_progress=False,
+            loss_monitor=monitor,
+        )
+
+    if implementation == "missing":
+        with pytest.raises(
+            ValueError, match="implement loss_train.*EmaTrainLossMonitor"
+        ):
+            build_engine("train_full_data")
+        engine = build_engine(EmaTrainLossMonitor(1.0))
+        assert engine.fit().n_epochs == 1
+        engine.loss_monitor = "train_full_data"
+        with pytest.raises(ValueError, match="implement loss_train"):
+            engine.fit()
+    else:
+        engine = build_engine("train_full_data")
+        assert engine.fit().history.loss_monitor.tolist() == pytest.approx([0.0])
+
+
 def test_validation_monitor_is_unsmoothed():
     split = _monitor_split_with_validation()
     engine = OptimEngine(
