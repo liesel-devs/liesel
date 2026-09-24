@@ -45,19 +45,22 @@ Pass this list as ``optimizers=optimizers`` to ``LieselOptim``. Each optimizer
 updates its own parameters in list order on every batch. Their parameter names
 must not overlap. Parameters left out of the list stay fixed.
 
-Change engine settings
+Control history memory
 ----------------------
 
-Use ``build_engine()`` when you need settings beyond the builder's arguments:
+Disable parameter history when you only need the final and best positions:
 
 .. code-block:: python
 
-   engine = opt.LieselOptim(
-       model, loss_monitor="train_full_data"
-   ).build_engine()
-   engine.save_position_history = False
-   result = engine.fit()
+   result = opt.LieselOptim(
+       model, loss_monitor="train_full_data", save_position_history=False
+   ).fit()
 
-This saves memory by skipping parameter paths; the final and best positions are
-still available. See :class:`~liesel.optim.OptimEngine` for all settings, or
+History reserves memory for the maximum epoch budget before fitting, even when
+early stopping ends the run sooner. Its parameter storage costs approximately
+``epochs * total_parameter_bytes``: one million float32 parameters across 1,000
+epochs take about 4 GB. Disabling it retains scalar losses and final/best positions.
+
+Use ``build_engine()`` for settings beyond the wrapper's arguments.
+See :class:`~liesel.optim.OptimEngine` for all settings, or
 :doc:`optimizer-checkpointing` to pause and resume a fit.

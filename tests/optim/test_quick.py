@@ -595,3 +595,26 @@ def test_fit_handles_float64_model_with_x64_enabled():
 
     assert isinstance(result, OptimResult)
     assert result.history.loss_train.dtype == jnp.float64
+
+
+@pytest.mark.parametrize("save_history", [False, True])
+def test_wrapper_history_setting_preserves_positions_and_resume(save_history):
+    quick = LieselOptim(
+        _normal_model(),
+        loss_monitor="train_full_data",
+        save_position_history=save_history,
+        stopper=Stopper(epochs=4, patience=4),
+        show_progress=False,
+    )
+    engine = quick.build_engine()
+    whole = engine.fit()
+    paused = engine.fit(pause_after=2)
+    resumed = quick.build_engine().fit(checkpoint=paused.checkpoint)
+    assert (whole.history.position is not None) == save_history
+    assert (resumed.history.position is not None) == save_history
+    assert resumed.position_min_monitor is not None
+    assert jnp.array_equal(resumed.position_final["loc"], whole.position_final["loc"])
+    assert jnp.array_equal(resumed.history.loss_monitor, whole.history.loss_monitor)
+    assert jnp.array_equal(
+        resumed.position_min_monitor["loc"], whole.position_min_monitor["loc"]
+    )

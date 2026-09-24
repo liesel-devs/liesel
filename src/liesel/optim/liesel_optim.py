@@ -86,6 +86,12 @@ class LieselOptim:
         Whether the default :class:`.NegLogProbLoss` should divide losses by the
         training sample size. ``"auto"`` scales the internally constructed loss.
         This setting has no effect when ``loss`` is supplied.
+    save_position_history
+        Whether to save parameter values at every epoch. Defaults to ``True``.
+        History is allocated for the maximum epoch budget before fitting: its
+        size is approximately epochs times the total parameter bytes (4 GB for
+        1,000 epochs and one million float32 parameters). Set ``False`` to skip
+        this allocation; losses and final/best positions remain available.
     show_progress
         Whether the built engine should show ``tqdm`` progress bars.
     show_step_progress
@@ -131,6 +137,7 @@ class LieselOptim:
         loss: Loss | None = None,
         validation_strategy: Literal["log_lik", "log_prob"] = "log_lik",
         scale_loss: bool | Literal["auto"] = "auto",
+        save_position_history: bool = True,
         show_progress: bool = True,
         show_step_progress: bool = False,
         progress_update_every: int = 10,
@@ -167,6 +174,7 @@ class LieselOptim:
             else batches
         )
         self.optimizers = self._resolve_optimizers(optimizers)
+        self.save_position_history = save_position_history
         _validate_optimizer_batches(self.optimizers, self.batches)
         self.show_progress = show_progress
         self.progress_update_every = progress_update_every
@@ -262,6 +270,7 @@ class LieselOptim:
             initial_state=self.model.state,
             seed=self.seed,
             loss_monitor=self.loss_monitor,
+            save_position_history=self.save_position_history,
             show_progress=self.show_progress,
             progress_update_every=self.progress_update_every,
             show_step_progress=self.show_step_progress,
