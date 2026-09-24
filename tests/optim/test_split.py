@@ -981,7 +981,6 @@ class TestSplitManager:
             key=jax.random.key(0),
             epochs=1,
             position=Position({}),
-            tracked=None,
             batches=Batches([], axis_size=1, batch_size=None),
             optimizers=[],
             model_state=model.state,

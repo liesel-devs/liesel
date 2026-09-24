@@ -47,14 +47,16 @@ After:
 
    import liesel.optim as opt
 
-   result = opt.LieselOptim(
+   engine = opt.LieselOptim(
        model,
        optimizers=[opt.Optimizer(["loc"], optax.adam(0.01))],
        stopper=opt.Stopper(epochs=1000, patience=20, atol=0.001),
        loss_monitor="train_full_data",
        scale_loss=False,
        show_progress=False,
-   ).fit()
+       save_position_history=True,
+   ).build_engine()
+   result = engine.fit()
    position = result.position_min_monitor
    fitted_state = model.update_state(position, model.state)
 
@@ -106,3 +108,35 @@ include priors as before.
 ``batch_size`` remains available. See the
 :doc:`basic tutorial <tutorials/notebooks/09-liesel-optim-basic>` for a complete
 validation and minibatch example.
+
+Reconstructing tracked quantities
+---------------------------------
+
+``optim_flat(track_keys=...)`` has no direct argument replacement. Set
+``save_position_history=True`` and evaluate deterministic model quantities from
+the saved parameter history after fitting. For the example above, this records
+the scalar total log likelihood and the array of individual log likelihoods:
+
+.. code-block:: python
+
+   import jax
+
+   track_keys = ["_model_log_lik", "y_log_prob"]
+   history = {
+       key: values[:result.n_epochs]
+       for key, values in result.history.position.items()
+   }
+
+   def extract_quantities(position):
+       state = model.update_state(position | engine.split.train, model.state)
+       return model.extract_position(track_keys, state)
+
+   derived_history = jax.vmap(extract_quantities)(history)
+   derived_plot = result.plot_params(position=derived_history)
+
+Explicitly supplying ``engine.split.train`` makes data-dependent quantities refer
+to complete training data, even after a minibatch fit. Slicing to
+``result.n_epochs`` excludes unused history entries when history pruning is
+disabled. This reconstructs deterministic model quantities at each saved epoch
+position; it cannot reconstruct transient optimizer internals or past stochastic
+draws.

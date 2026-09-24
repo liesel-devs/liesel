@@ -13,7 +13,7 @@ from liesel.optim.types import Position
 class TestOptimHistory:
     def test_position_df(self):
         pos = Position({"a": jnp.full((3, 2), fill_value=1.0)})
-        hist = OptimHistory.from_epochs(epochs=20, position=pos, tracked=None)
+        hist = OptimHistory.from_epochs(epochs=20, position=pos)
         df = hist.position_df()
         assert df.shape == (20, 7)
         assert hist.position_df(subset=[]).to_dict("list") == {
@@ -30,7 +30,6 @@ class TestOptimHistory:
                     "sigma": jnp.array([3.0]),
                 }
             ),
-            tracked=None,
         )
 
         df = hist.position_df()
@@ -43,29 +42,6 @@ class TestOptimHistory:
             "sigma": [3.0],
         }
 
-    def test_tracked_df_flattens_multidimensional_histories(self):
-        tracked = Position({"matrix": jnp.arange(4.0).reshape(2, 2)})
-        hist = OptimHistory.from_epochs(epochs=1, position=None, tracked=tracked)
-        assert hist.tracked is not None
-        hist.tracked = OptimHistory.update_position_history(0, hist.tracked, tracked)
-
-        df = hist.tracked_df()
-
-        assert df.columns.tolist() == [
-            "epoch",
-            "matrix0",
-            "matrix1",
-            "matrix2",
-            "matrix3",
-        ]
-        assert df.iloc[0].to_dict() == {
-            "epoch": 0.0,
-            "matrix0": 0.0,
-            "matrix1": 1.0,
-            "matrix2": 2.0,
-            "matrix3": 3.0,
-        }
-
 
 class TestOptimCarry:
     def test_new_uses_position_dtype_for_losses_and_history(self):
@@ -76,7 +52,6 @@ class TestOptimCarry:
                 key=jax.random.key(0),
                 epochs=2,
                 position=position,
-                tracked=None,
                 batches=Batches(["y"], axis_size=4, batch_size=2),
                 optimizers=[Optimizer(["theta"], optax.sgd(0.1))],
                 model_state={},
@@ -103,7 +78,6 @@ class TestOptimCarry:
                 key=jax.random.key(0),
                 epochs=2,
                 position=position,
-                tracked=None,
                 batches=Batches(["y"], axis_size=4, batch_size=2),
                 optimizers=optimizers,
                 model_state={},
@@ -115,7 +89,7 @@ class TestOptimResult:
     @pytest.mark.parametrize("value", [float("nan"), float("inf"), -float("inf")])
     @pytest.mark.parametrize("name", ["position_final", "position_min_monitor"])
     def test_position_access_rejects_nonfinite_parameters(self, value, name):
-        history = OptimHistory.from_epochs(epochs=1, position=None, tracked=None)
+        history = OptimHistory.from_epochs(epochs=1, position=None)
         result = OptimResult(
             history=history,
             position_final=Position({"theta": jnp.array([1.0, value])}),
@@ -132,7 +106,7 @@ class TestOptimResult:
         assert result.history is history
 
     def test_n_epochs_is_completed_epoch_count(self):
-        history = OptimHistory.from_epochs(epochs=2, position=None, tracked=None)
+        history = OptimHistory.from_epochs(epochs=2, position=None)
         position = Position({})
         result = OptimResult(
             history=history,
@@ -161,7 +135,7 @@ class TestOptimResult:
         monitor_source: Literal["train_ema", "validation", "train_full_data"],
         monitor_label: str,
     ):
-        history = OptimHistory.from_epochs(epochs=2, position=None, tracked=None)
+        history = OptimHistory.from_epochs(epochs=2, position=None)
         history.loss_train = jnp.array([1.0, 0.5])
         history.loss_monitor = jnp.array([1.2, 0.7])
         position = Position({})
@@ -198,7 +172,7 @@ class TestOptimResult:
         ],
     )
     def test_plot_loss_overview_window(self, window, expected_epochs):
-        history = OptimHistory.from_epochs(epochs=10, position=None, tracked=None)
+        history = OptimHistory.from_epochs(epochs=10, position=None)
         position = Position({})
         result = OptimResult(
             history=history,
@@ -227,7 +201,7 @@ class TestOptimResult:
             assert figure.get_size_inches() == pytest.approx((8, 7))
 
     def test_plot_loss_overview_handles_no_completed_epochs(self):
-        history = OptimHistory.from_epochs(epochs=0, position=None, tracked=None)
+        history = OptimHistory.from_epochs(epochs=0, position=None)
         position = Position({})
         result = OptimResult(
             history=history,
@@ -247,7 +221,7 @@ class TestOptimResult:
 
     def test_plot_methods_reject_invalid_window(self):
         position = Position({"theta": jnp.array(0.0)})
-        history = OptimHistory.from_epochs(epochs=2, position=position, tracked=None)
+        history = OptimHistory.from_epochs(epochs=2, position=position)
         result = OptimResult(
             history=history,
             position_final=position,

@@ -198,8 +198,6 @@ class OptimHistory:
     position
         Optional parameter position history. Each array has a leading epoch
         dimension.
-    tracked
-        Optional history for additional tracked quantities.
 
     Examples
     --------
@@ -207,7 +205,7 @@ class OptimHistory:
     >>> from liesel.optim.state import OptimHistory
     >>> from liesel.optim.types import Position
     >>> position = Position({"theta": jnp.array([1.0, 2.0])})
-    >>> history = OptimHistory.from_epochs(epochs=3, position=position, tracked=None)
+    >>> history = OptimHistory.from_epochs(epochs=3, position=position)
     >>> history.loss_train.shape
     (3,)
     >>> history.position["theta"].shape
@@ -219,14 +217,12 @@ class OptimHistory:
     loss_train: jax.Array
     loss_monitor: jax.Array
     position: Position | None
-    tracked: Position | None
 
     @classmethod
     def from_epochs(
         cls,
         epochs: int,
         position: Position | None,
-        tracked: Position | None,
         loss_dtype: jnp.dtype | None = None,
     ) -> OptimHistory:
         """
@@ -239,12 +235,9 @@ class OptimHistory:
         position
             Initial position used to infer the shape of the stored parameter history.
             If ``None``, no parameter history is allocated.
-        tracked
-            Initial tracked position used to infer the shape of tracked history. If
-            ``None``, no tracked history is allocated.
         loss_dtype
             Optional dtype for the loss history. If omitted, the first floating dtype
-            in ``position`` or ``tracked`` is used, falling back to JAX's default.
+            in ``position`` is used, falling back to JAX's default.
 
         Returns
         -------
@@ -256,18 +249,12 @@ class OptimHistory:
         >>> import jax.numpy as jnp
         >>> from liesel.optim.state import OptimHistory
         >>> from liesel.optim.types import Position
-        >>> history = OptimHistory.from_epochs(
-        ...     2, Position({"theta": jnp.array(1.0)}), tracked=None
-        ... )
+        >>> history = OptimHistory.from_epochs(2, Position({"theta": jnp.array(1.0)}))
         >>> history.loss_monitor.tolist()
         [inf, inf]
         >>> history.position["theta"].tolist()
         [0.0, 0.0]
         """
-        tracked_init = (
-            cls.init_position_history(tracked, epochs) if tracked is not None else None
-        )
-
         position_init = (
             cls.init_position_history(position, epochs)
             if position is not None
@@ -275,13 +262,12 @@ class OptimHistory:
         )
 
         if loss_dtype is None:
-            loss_dtype = _first_floating_dtype(position, tracked)
+            loss_dtype = _first_floating_dtype(position)
 
         inst = cls(
             loss_train=jnp.full((epochs,), fill_value=jnp.inf, dtype=loss_dtype),
             loss_monitor=jnp.full((epochs,), fill_value=jnp.inf, dtype=loss_dtype),
             position=position_init,
-            tracked=tracked_init,
         )
         return inst
 
@@ -299,7 +285,7 @@ class OptimHistory:
         --------
         >>> import jax.numpy as jnp
         >>> from liesel.optim.state import OptimHistory
-        >>> history = OptimHistory.from_epochs(epochs=2, position=None, tracked=None)
+        >>> history = OptimHistory.from_epochs(epochs=2, position=None)
         >>> history.loss_train = history.loss_train.at[0].set(1.5)
         >>> history.loss_monitor = history.loss_monitor.at[0].set(2.5)
         >>> history.loss_df().iloc[0].to_dict()
@@ -334,11 +320,11 @@ class OptimHistory:
         >>> from liesel.optim.state import OptimHistory
         >>> from liesel.optim.types import Position
         >>> history = OptimHistory.from_epochs(
-        ...     2, Position({"theta": jnp.array([1.0, 2.0])}), tracked=None
+        ...     2, Position({"theta": jnp.array([1.0, 2.0])})
         ... )
         >>> history.position_df().columns.tolist()
         ['epoch', 'theta0', 'theta1']
-        >>> no_position = OptimHistory.from_epochs(2, position=None, tracked=None)
+        >>> no_position = OptimHistory.from_epochs(2, position=None)
         >>> try:
         ...     no_position.position_df()
         ... except TypeError as error:
@@ -350,38 +336,6 @@ class OptimHistory:
                 "'position' is None. Probably the position history was not saved."
             )
         return position_df(self.position, subset)
-
-    def tracked_df(self, subset: Sequence[str] | None = None) -> pd.DataFrame:
-        """
-        Converts tracked quantities into a data frame.
-
-        Parameters
-        ----------
-        subset
-            Optional sequence of tracked quantity names to keep.
-
-        Raises
-        ------
-        ValueError
-            If no tracked history is available.
-
-        Examples
-        --------
-        >>> import jax.numpy as jnp
-        >>> from liesel.optim.state import OptimHistory
-        >>> from liesel.optim.types import Position
-        >>> tracked = Position({"mean": jnp.array(0.0)})
-        >>> history = OptimHistory.from_epochs(epochs=2, position=None, tracked=tracked)
-        >>> history.tracked = OptimHistory.update_position_history(
-        ...     0, history.tracked, Position({"mean": jnp.array(1.5)})
-        ... )
-        >>> history.tracked_df().iloc[0].to_dict()
-        {'epoch': 0.0, 'mean': 1.5}
-        """
-        if self.tracked is None:
-            raise ValueError(f"{self.tracked=}")
-
-        return position_df(self.tracked, subset)
 
     @staticmethod
     def init_position_history(position: Position, epochs: int) -> Position:
@@ -581,8 +535,6 @@ class OptimCarry:
         Current JAX pseudo-random key.
     position
         Current parameter position.
-    tracked
-        Optional tracked quantities for diagnostics.
     history
         Preallocated optimizer history.
     batches
@@ -618,7 +570,6 @@ class OptimCarry:
     key: jax.Array  # random number key
 
     position: Position  # parameter position (estimation targets)
-    tracked: Position | None  # recorded position (for diagnosis)
 
     history: OptimHistory
     batches: BatchConfig
@@ -647,7 +598,6 @@ class OptimCarry:
         key: jax.Array,
         epochs: int,
         position: Position,
-        tracked: Position | None,
         batches: BatchConfig,
         optimizers: Sequence[OptimizerLike],
         model_state: ModelState,
@@ -672,7 +622,6 @@ class OptimCarry:
         ...     key=jax.random.key(0),
         ...     epochs=2,
         ...     position=position,
-        ...     tracked=None,
         ...     batches=Batches(["y"], axis_size=4, batch_size=2),
         ...     optimizers=[Optimizer(["theta"], optax.sgd(0.1))],
         ...     model_state={},
@@ -702,9 +651,9 @@ class OptimCarry:
         opt_states = {opt.identifier: opt.init(position) for opt in optimizers}
         loss_dtype = _first_floating_dtype(position)
         if save_position_history:
-            history = OptimHistory.from_epochs(epochs, position, tracked, loss_dtype)
+            history = OptimHistory.from_epochs(epochs, position, loss_dtype)
         else:
-            history = OptimHistory.from_epochs(epochs, None, tracked, loss_dtype)
+            history = OptimHistory.from_epochs(epochs, None, loss_dtype)
 
         inf = _inf_with_dtype(loss_dtype)
         zero = jnp.zeros_like(inf)
@@ -712,7 +661,6 @@ class OptimCarry:
         inst = cls(
             key=key,
             position=position,
-            tracked=tracked,
             history=history,
             batches=batches,
             optimizer_states=opt_states,
@@ -818,7 +766,7 @@ def _checkpoint_versions() -> dict[str, str]:
     }
 
 
-_CHECKPOINT_HEADER = b"liesel.optim.checkpoint\x00\x01\n"
+_CHECKPOINT_HEADER = b"liesel.optim.checkpoint\x00\x02\n"
 
 
 @dataclass(frozen=True)
@@ -949,7 +897,7 @@ class OptimResult:
     >>> from liesel.optim import OptimResult
     >>> from liesel.optim.state import OptimHistory
     >>> from liesel.optim.types import Position
-    >>> history = OptimHistory.from_epochs(epochs=2, position=None, tracked=None)
+    >>> history = OptimHistory.from_epochs(epochs=2, position=None)
     >>> position_final = Position({"theta": jnp.array(2.0)})
     >>> position_min_monitor = Position({"theta": jnp.array(1.0)})
     >>> result = OptimResult(

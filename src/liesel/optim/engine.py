@@ -825,7 +825,6 @@ class OptimEngine:
         history = OptimHistory.from_epochs(
             capacity,
             carry.position if carry.history.position is not None else None,
-            carry.tracked if carry.history.tracked is not None else None,
             carry.history.loss_train.dtype,
         )
         carry.history = jax.tree.map(
@@ -891,7 +890,6 @@ class OptimEngine:
         reproduction_carry = OptimCarry(
             key=debug_state.reproduction_key,
             position=debug_state.reproduction_position,
-            tracked=carry.tracked,
             history=carry.history,
             batches=debug_state.reproduction_batches,
             optimizer_states=debug_state.reproduction_optimizer_states,
@@ -948,10 +946,6 @@ class OptimEngine:
             for name, value in history.position.items():
                 history.position[name] = value.at[i:, ...].set(jnp.nan)
 
-            if history.tracked is not None:
-                for name, value in history.tracked.items():
-                    history.tracked[name] = value.at[i:, ...].set(jnp.nan)
-
         if not self.prune_history:
             return history
 
@@ -962,10 +956,6 @@ class OptimEngine:
             assert history.position is not None
             for name, value in history.position.items():
                 history.position[name] = value[:i, ...]
-
-            if history.tracked is not None:
-                for name, value in history.tracked.items():
-                    history.tracked[name] = value[:i, ...]
 
         return history
 
@@ -1450,7 +1440,7 @@ class OptimEngine:
         Runs one full epoch over the configured batches.
 
         The method starts a new batch epoch, runs the batch loop, records train and
-        monitoring losses, updates position/tracked histories, updates the global best
+        monitoring losses, updates position history, updates the global best
         position, and increments ``carry.epoch``.
 
         Parameters
@@ -1517,10 +1507,6 @@ class OptimEngine:
             carry.history.position = carry.history.update_position_history(
                 carry.epoch, carry.history.position, carry.position
             )
-            if carry.history.tracked is not None and carry.tracked is not None:
-                carry.history.tracked = carry.history.update_position_history(
-                    carry.epoch, carry.history.tracked, carry.tracked
-                )
 
         def update_carry(carry: OptimCarry):
             carry.min_monitor_loss = carry.loss_monitor
@@ -1595,7 +1581,6 @@ class OptimEngine:
             key=key,
             epochs=epochs,
             position=initial_position,
-            tracked=None,
             optimizers=self.optimizers,
             model_state=self.initial_state,
             save_position_history=self.save_position_history,

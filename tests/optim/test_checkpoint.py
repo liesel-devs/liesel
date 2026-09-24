@@ -242,7 +242,7 @@ def test_failed_write_preserves_previous_checkpoint(tmp_path, monkeypatch, opera
     assert_same_run(make_engine().fit(checkpoint=path), make_engine().fit())
 
 
-@pytest.mark.parametrize("contents", [b"garbage", b"liesel.optim.checkpoint\x00\x02\n"])
+@pytest.mark.parametrize("contents", [b"garbage", b"liesel.optim.checkpoint\x00\x01\n"])
 def test_invalid_file_is_not_overwritten(tmp_path, contents):
     path = tmp_path / "optim.pkl"
     path.write_bytes(contents)
