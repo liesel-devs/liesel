@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
@@ -96,6 +97,44 @@ def test_seeded_automatic_full_data_setup_preserves_rows_and_repeats_fit(
 def test_lieseloptim_requires_explicit_loss_monitor():
     with pytest.raises(TypeError, match="loss_monitor"):
         LieselOptim(_normal_model())  # ty: ignore[missing-argument]
+
+
+@pytest.mark.parametrize("optimizers", ["lbfgs", [opt.LBFGS(["loc"])]])
+def test_lbfgs_rejects_minibatches_during_wrapper_construction(optimizers):
+    with pytest.raises(ValueError, match="LBFGS.*full-data.*deterministic"):
+        LieselOptim(
+            _normal_model(),
+            optimizers=optimizers,
+            batch_size=2,
+            loss_monitor="train_full_data",
+        )
+
+
+@pytest.mark.parametrize(
+    "seed", [1, np.int64(1), jax.random.key(1), jax.random.PRNGKey(1)]
+)
+def test_engine_accepts_integer_and_jax_seeds(seed):
+    engine = LieselOptim(
+        _normal_model(),
+        loss_monitor="train_full_data",
+        stopper=Stopper(epochs=2, patience=2),
+        show_progress=False,
+    ).build_engine()
+    # Exercise the low-level constructor as well as a real JAX execution.
+    engine = OptimEngine(
+        loss=engine.loss,
+        batches=engine.batches,
+        optimizers=engine.optimizers,
+        stopper=engine.stopper,
+        seed=seed,
+        initial_state=engine.initial_state,
+        loss_monitor="train_full_data",
+        show_progress=False,
+    )
+    assert jnp.array_equal(
+        jax.random.key_data(engine.seed), jax.random.key_data(jax.random.key(1))
+    )
+    assert engine.fit().status == "max_epochs"
 
 
 @pytest.mark.parametrize("kind", ["per_obs", "custom_log_lik"])

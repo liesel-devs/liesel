@@ -16,6 +16,7 @@ import time
 import warnings
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
+from numbers import Integral
 from pathlib import Path
 from typing import Literal, cast
 
@@ -27,6 +28,7 @@ from tqdm import tqdm
 from ._engine_utils import (
     BatchConfig,
     SplitConfig,
+    _validate_optimizer_batches,
     _validate_positive_int,
 )
 from .batch import Batches, BatchManager
@@ -330,7 +332,9 @@ class OptimEngine:
         self.batches = batches
         self.optimizers = optimizers
         self.stopper = stopper
-        self.seed = jax.random.key(seed) if isinstance(seed, int) else seed
+        self.seed = (
+            jax.random.key(int(seed)) if isinstance(seed, (int, Integral)) else seed
+        )
         self.initial_state = initial_state
         self.prune_history = prune_history
         self.show_progress = show_progress
@@ -521,13 +525,7 @@ class OptimEngine:
                 "PositionSplitManager."
             )
 
-        if not self.batches.is_full_data and any(
-            isinstance(opt, LBFGS) for opt in self.optimizers
-        ):
-            raise ValueError(
-                "LBFGS requires full-data batches and a deterministic objective; "
-                "configure full-data batches or use another optimizer."
-            )
+        _validate_optimizer_batches(self.optimizers, self.batches)
 
         missing = sorted(
             key for key in self.batches.position_keys if key not in self.split.train

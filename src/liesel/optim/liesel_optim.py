@@ -12,6 +12,7 @@ from ..model import Model
 from ._engine_utils import (
     BatchConfig,
     SplitConfig,
+    _validate_optimizer_batches,
     _validate_positive_int,
 )
 from .batch import Batches
@@ -165,6 +166,7 @@ class LieselOptim:
             else batches
         )
         self.optimizers = self._resolve_optimizers(optimizers)
+        _validate_optimizer_batches(self.optimizers, self.batches)
         self.show_progress = show_progress
         self.progress_update_every = progress_update_every
         self.show_step_progress = show_step_progress
