@@ -588,6 +588,9 @@ class OptimCarry:
     loss_state: Any = None
     loss_state_min_monitor: Any = None
     _loss_state_valid: jax.Array = field(default_factory=lambda: jnp.asarray(False))
+    _numerical_failure: jax.Array = field(default_factory=lambda: jnp.asarray(0))
+    failed_loss_state: Any = None
+    _epoch_start: Any = None
 
     batch: Position = field(default_factory=lambda: Position({}))
     fixed_position: Position = field(default_factory=lambda: Position({}))
@@ -797,6 +800,7 @@ class OptimCheckpoint:
     versions: dict[str, str] = field(default_factory=_checkpoint_versions)
     _rebuild_model_state: bool = False
     _data_structure: tuple = ()
+    _loss_configuration: tuple | None = None
 
     @property
     def history(self) -> OptimHistory:
@@ -897,17 +901,25 @@ class OptimResult:
         Reproduction data for the first captured NaN when engine NaN debugging was
         enabled, otherwise ``None``.
     checkpoint
-        Explicit resumable state. ``None`` on NaN failure. History arrays are shared
-        with this result; continuation leaves earlier results unchanged.
+        Explicit resumable state. ``None`` on numerical or NaN failure. History
+        arrays are shared with this result; continuation leaves earlier results
+        unchanged.
     loss_state_final
         Loss state matched to ``position_final``, or ``None`` if no completed
         full-training evaluation exists for that position. Stateless losses
         always return ``None``.
     loss_state_min_monitor
         Loss state matched to ``position_min_monitor``, or ``None`` if unavailable.
+    failed_loss_state
+        Available proposal from a handled numerical failure, for inspection only.
+        It never replaces a valid final or best loss state.
+    failure_reason
+        Explanation of a handled numerical failure, otherwise ``None``.
     status
         Why fitting returned: ``"paused"``, ``"max_epochs"``, ``"early_stopping"``,
-        or ``"nan"``. Stopping conditions take precedence over a pause boundary.
+        ``"numerical_failure"``, or ``"nan"``. A handled Laplace failure rolls back
+        to the last completed epoch and takes precedence over captured NaNs.
+        Stopping conditions take precedence over a pause boundary.
 
     Examples
     --------
@@ -943,9 +955,13 @@ class OptimResult:
     duration: float
     nan_debug: OptimNaNDebugInfo | None = None
     checkpoint: OptimCheckpoint | None = None
-    status: Literal["paused", "max_epochs", "early_stopping", "nan"] = "max_epochs"
+    status: Literal[
+        "paused", "max_epochs", "early_stopping", "nan", "numerical_failure"
+    ] = "max_epochs"
     loss_state_final: Any = None
     loss_state_min_monitor: Any = None
+    failed_loss_state: Any = None
+    failure_reason: str | None = None
 
     def __init__(
         self,
@@ -959,9 +975,13 @@ class OptimResult:
         duration: float,
         nan_debug: OptimNaNDebugInfo | None = None,
         checkpoint: OptimCheckpoint | None = None,
-        status: Literal["paused", "max_epochs", "early_stopping", "nan"] = "max_epochs",
+        status: Literal[
+            "paused", "max_epochs", "early_stopping", "nan", "numerical_failure"
+        ] = "max_epochs",
         loss_state_final: Any = None,
         loss_state_min_monitor: Any = None,
+        failed_loss_state: Any = None,
+        failure_reason: str | None = None,
     ):
         self.history = history
         self._position_final = position_final
@@ -976,6 +996,8 @@ class OptimResult:
         self.status = status
         self.loss_state_final = loss_state_final
         self.loss_state_min_monitor = loss_state_min_monitor
+        self.failed_loss_state = failed_loss_state
+        self.failure_reason = failure_reason
 
     @staticmethod
     def _checked_position(position: Position, name: str) -> Position:

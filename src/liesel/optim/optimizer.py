@@ -244,7 +244,11 @@ class Optimizer:
         pos = position
 
         opt_state = carry.optimizer_states[self.identifier]
-        (value, _), grad = loss.value_and_grad(pos, carry)
+        (value, proposal), grad = loss.value_and_grad(pos, carry)
+        from .laplace import LaplaceLoss, _all_finite, _record_failure
+
+        if isinstance(loss, LaplaceLoss):
+            carry = loss._check_evaluation(carry, value, proposal, grad)
         try:
             updates, opt_state = self.optimizer.update(grad, opt_state, params=pos)
         except TypeError as error:
@@ -255,6 +259,11 @@ class Optimizer:
                 f"Original error: {error}"
             ) from error
         updated_position = cast(Position, optax.apply_updates(pos, updates))
+
+        if isinstance(loss, LaplaceLoss):
+            carry = _record_failure(
+                carry, jnp.where(_all_finite(updated_position), 0, 4), proposal
+            )
 
         carry.position = Position(carry.position | updated_position)
         carry.optimizer_states[self.identifier] = opt_state
@@ -301,6 +310,9 @@ class LBFGS(Optimizer):
     ``LBFGS`` behaves like :class:`Optimizer` but uses
     :func:`optax.value_and_grad_from_state` inside :meth:`step`, which lets Optax
     reuse value/gradient information stored by the L-BFGS transformation.
+    Stateful losses recompute value and gradient with the current committed seed.
+    For :class:`.LaplaceLoss`, non-finite evaluations and unsuccessful public
+    line-search diagnostics stop fitting with ``status="numerical_failure"``.
 
     L-BFGS requires full-data batches, a deterministic objective, and must be the
     sole optimizer. Other parameter updates would invalidate its cached objective
@@ -373,7 +385,12 @@ class LBFGS(Optimizer):
             )
             return loss.loss_train_batched(candidate, carry)[0]
 
-        if carry.loss_state is None:
+        from .laplace import LaplaceLoss, _all_finite, _record_failure
+
+        if isinstance(loss, LaplaceLoss):
+            (value, proposal), grad = loss.value_and_grad(pos, carry)
+            carry = loss._check_evaluation(carry, value, proposal, grad)
+        elif carry.loss_state is None:
             value_and_grad = optax.value_and_grad_from_state(loss_fn)
             value, grad = value_and_grad(pos, state=opt_state)
         else:
@@ -385,6 +402,38 @@ class LBFGS(Optimizer):
         )
 
         updated_position = cast(Position, optax.apply_updates(pos, updates))
+
+        if isinstance(loss, LaplaceLoss):
+            # Public diagnostics distinguish an exhausted search from a valid
+            # finite candidate. Fallback values alone do not establish success.
+            decrease_error = optax.tree.get(opt_state, "decrease_error", default=0.0)
+            curvature_error = optax.tree.get(opt_state, "curvature_error", default=0.0)
+            candidate_value = optax.tree.get(opt_state, "value", default=value)
+            candidate_grad = optax.tree.get(opt_state, "grad", default=grad)
+            moved = jnp.any(
+                jnp.array([jnp.any(updated_position[k] != pos[k]) for k in pos])
+            )
+            stationary = jnp.all(
+                jnp.array([jnp.all(g == 0) for g in jax.tree.leaves(grad)])
+            )
+            valid_step = (
+                _all_finite((updated_position, candidate_value, candidate_grad))
+                & (decrease_error == 0)
+                & (curvature_error == 0)
+                & (moved | stationary)
+            )
+            reason = jnp.where(valid_step, 0, 3)
+
+            def failed_candidate(carry):
+                _, failed_state = loss.loss_train_batched(updated_position, carry)
+                return _record_failure(carry, reason, failed_state)
+
+            carry = jax.lax.cond(
+                (reason != 0) & (carry._numerical_failure == 0),
+                failed_candidate,
+                lambda c: c,
+                carry,
+            )
 
         carry.position = Position(carry.position | updated_position)
         carry.optimizer_states[self.identifier] = opt_state

@@ -33,6 +33,7 @@ from ._engine_utils import (
 )
 from ._log_lik import validate_likelihood_groups
 from .batch import Batches, BatchManager
+from .laplace import LaplaceLoss
 from .loss import Loss, LossMixin, NegLogProbLoss
 from .optimizer import LBFGS, Optimizer, OptimizerLike
 from .split import PositionSplitManager
@@ -713,6 +714,8 @@ class OptimEngine:
             checkpoint_every,
             save_checkpoint if checkpoint_path is not None else None,
         )
+        if bool(carry._numerical_failure):
+            carry = self._rollback_epoch(carry)
         jax.block_until_ready(carry)
         duration = previous_duration + time.monotonic() - start
         status = self._fit_status(carry)
@@ -751,8 +754,14 @@ class OptimEngine:
             loss_state_min_monitor=(
                 carry.loss_state_min_monitor if min_monitor_epoch is not None else None
             ),
+            failed_loss_state=(
+                carry.failed_loss_state if status == "numerical_failure" else None
+            ),
+            failure_reason=self._failure_reason(carry),
             checkpoint=(
-                None if status == "nan" else self._make_checkpoint(carry, duration)
+                None
+                if status in ("nan", "numerical_failure")
+                else self._make_checkpoint(carry, duration)
             ),
         )
         result.duration = previous_duration + time.monotonic() - start
@@ -766,7 +775,7 @@ class OptimEngine:
 
     def _can_rebuild_model_state(self) -> bool:
         # Only these concrete implementations leave the evaluation template unchanged.
-        return type(self.loss) is NegLogProbLoss and all(
+        return type(self.loss) in (NegLogProbLoss, LaplaceLoss) and all(
             type(opt) in (Optimizer, LBFGS) for opt in self.optimizers
         )
 
@@ -778,6 +787,16 @@ class OptimEngine:
             }
             for part in (self.split.train, self.split.validate, self.split.test)
         )
+
+    def _loss_configuration(self) -> tuple | None:
+        if isinstance(self.loss, LaplaceLoss):
+            return (
+                self.loss.latent_names,
+                self.loss.warm_start,
+                self.loss.inner_max_iter,
+                self.loss.inner_tol,
+            )
+        return None
 
     def _make_checkpoint(self, carry: OptimCarry, duration: float) -> OptimCheckpoint:
         snapshot = jax.tree.map(lambda x: x, carry)
@@ -793,10 +812,13 @@ class OptimEngine:
             duration,
             _rebuild_model_state=rebuild_model_state,
             _data_structure=self._data_structure(),
+            _loss_configuration=self._loss_configuration(),
         )
 
     def _restore_carry(self, checkpoint: OptimCheckpoint) -> OptimCarry:
         """Copies snapshot containers and restores the working history capacity."""
+        if checkpoint._loss_configuration != self._loss_configuration():
+            raise ValueError("Checkpoint loss configuration is incompatible.")
         position = self.loss.position(self.position_keys)
         self._validate_checkpoint_tree(checkpoint._carry.position, position, "position")
         if checkpoint._data_structure != self._data_structure():
@@ -862,6 +884,8 @@ class OptimEngine:
                 )
 
     def _fit_status(self, carry: OptimCarry):
+        if int(carry._numerical_failure):
+            return "numerical_failure"
         if bool(jnp.isnan(carry.loss_train) | jnp.isnan(carry.loss_monitor)) or (
             carry.nan_debug_state is not None and bool(carry.nan_debug_state.has_nan)
         ):
@@ -871,6 +895,24 @@ class OptimEngine:
         if not bool(self._continue_fit(carry)):
             return "early_stopping"
         return "paused"
+
+    @staticmethod
+    def _failure_reason(carry: OptimCarry) -> str | None:
+        reason = int(carry._numerical_failure)
+        if reason == 1:
+            status = int(carry.failed_loss_state.status)
+            inner = {
+                2: "iteration limit",
+                3: "backtracking failed",
+                4: "non-finite evaluation",
+                5: "invalid curvature",
+            }.get(status, "non-finite loss")
+            return f"Inner Laplace optimization failed: {inner}."
+        return {
+            2: "Non-finite outer gradient.",
+            3: "Outer line search failed to find a valid step.",
+            4: "Non-finite outer parameter update.",
+        }.get(reason)
 
     def _nan_debug_info(self, carry: OptimCarry) -> OptimNaNDebugInfo | None:
         if not self.debug_nans:
@@ -912,6 +954,11 @@ class OptimEngine:
             model_state=debug_state.reproduction_model_state,
             loss_state=debug_state.reproduction_loss_state,
             loss_state_min_monitor=carry.loss_state_min_monitor,
+            failed_loss_state=(
+                debug_state.reproduction_loss_state
+                if isinstance(self.loss, LaplaceLoss)
+                else None
+            ),
             batch=debug_state.obs_batch,
             fixed_position=fixed_position,
             position_min_monitor=carry.position_min_monitor,
@@ -1395,6 +1442,14 @@ class OptimEngine:
         )
 
     def _run_batch(self, j: int | jax.Array, carry: OptimCarry) -> OptimCarry:
+        return jax.lax.cond(
+            carry._numerical_failure != 0,
+            lambda c: c,
+            lambda c: self._run_batch_body(j, c),
+            carry,
+        )
+
+    def _run_batch_body(self, j: int | jax.Array, carry: OptimCarry) -> OptimCarry:
         if self.debug_nans:
             return self._run_batch_debug(j, carry)
 
@@ -1437,6 +1492,17 @@ class OptimEngine:
 
     def _start_epoch(self, carry: OptimCarry) -> OptimCarry:
         """Starts a batch epoch and resets its accumulated losses."""
+        if isinstance(self.loss, LaplaceLoss):
+            carry._epoch_start = jax.tree.map(
+                lambda x: x,
+                (
+                    carry.position,
+                    carry.optimizer_states,
+                    carry.loss_train,
+                    carry.loss_monitor,
+                    carry._loss_state_valid,
+                ),
+            )
         key, subkey = jax.random.split(carry.key)
         carry.key = key
         carry.batches = carry.batches.start_epoch(subkey)
@@ -1485,7 +1551,7 @@ class OptimEngine:
 
         if self.debug_nans:
             return jax.lax.cond(
-                self._debug_state(carry).has_nan,
+                self._debug_state(carry).has_nan & (carry._numerical_failure == 0),
                 lambda carry: carry,
                 self._finish_epoch,
                 carry,
@@ -1494,6 +1560,27 @@ class OptimEngine:
         return self._finish_epoch(carry)
 
     def _finish_epoch(self, carry: OptimCarry) -> OptimCarry:
+        if isinstance(self.loss, LaplaceLoss):
+            return jax.lax.cond(
+                carry._numerical_failure != 0,
+                self._rollback_epoch,
+                self._finish_epoch_body,
+                carry,
+            )
+        return self._finish_epoch_body(carry)
+
+    @staticmethod
+    def _rollback_epoch(carry: OptimCarry) -> OptimCarry:
+        (
+            carry.position,
+            carry.optimizer_states,
+            carry.loss_train,
+            carry.loss_monitor,
+            carry._loss_state_valid,
+        ) = carry._epoch_start
+        return carry
+
+    def _finish_epoch_body(self, carry: OptimCarry) -> OptimCarry:
         """
         Records losses and histories after a full epoch completed without debug stop.
         """
@@ -1519,8 +1606,19 @@ class OptimEngine:
                 loss_monitor_i
             )
         else:
-            loss_monitor_i, proposed_state = self.loss.loss_train(carry.position, carry)
+            if isinstance(self.loss, LaplaceLoss):
+                (loss_monitor_i, proposed_state), gradient = self.loss.value_and_grad(
+                    carry.position, carry
+                )
+                carry = self.loss._check_evaluation(
+                    carry, loss_monitor_i, proposed_state, gradient
+                )
+            else:
+                loss_monitor_i, proposed_state = self.loss.loss_train(
+                    carry.position, carry
+                )
             carry._loss_state_valid = jnp.isfinite(loss_monitor_i)
+            carry._loss_state_valid &= carry._numerical_failure == 0
             carry.loss_state = jax.lax.cond(
                 carry._loss_state_valid,
                 lambda: proposed_state,
@@ -1546,6 +1644,7 @@ class OptimEngine:
 
         carry = jax.lax.cond(
             jnp.isfinite(carry.loss_monitor)
+            & (carry._numerical_failure == 0)
             & (carry.loss_monitor < carry.min_monitor_loss),
             update_carry,
             lambda carry: carry,
@@ -1553,6 +1652,16 @@ class OptimEngine:
         )
 
         carry.epoch += 1
+
+        if isinstance(self.loss, LaplaceLoss):
+
+            def rollback(carry):
+                carry.epoch -= 1
+                return self._rollback_epoch(carry)
+
+            carry = jax.lax.cond(
+                carry._numerical_failure != 0, rollback, lambda c: c, carry
+            )
 
         return carry
 
@@ -1563,6 +1672,7 @@ class OptimEngine:
         no_nan_loss = ~jnp.logical_or(loss_train_is_nan, loss_monitor_is_nan)
         continue_ = self.stopper.continue_(carry.epoch, carry.history.loss_monitor)
         should_continue = jnp.logical_and(no_nan_loss, continue_)
+        should_continue &= carry._numerical_failure == 0
 
         if self.debug_nans:
             should_continue = jnp.logical_and(
@@ -1619,6 +1729,18 @@ class OptimEngine:
         carry.loss_state_min_monitor = jax.tree.map(
             lambda value: value, carry.loss_state
         )
+        if isinstance(self.loss, LaplaceLoss):
+            carry.failed_loss_state = jax.tree.map(lambda x: x, carry.loss_state)
+            carry._epoch_start = jax.tree.map(
+                lambda x: x,
+                (
+                    carry.position,
+                    carry.optimizer_states,
+                    carry.loss_train,
+                    carry.loss_monitor,
+                    carry._loss_state_valid,
+                ),
+            )
         if self.debug_nans:
             carry.batch = self._observed_batch(carry.batches)
             carry.nan_debug_state = self._init_nan_debug_state(carry)
@@ -1780,14 +1902,15 @@ class OptimEngine:
             else:
                 debug_has_nan = jnp.asarray(False)
 
-            completed_batches = jnp.where(debug_has_nan, carry.i_batch + 1, upper)
+            batch_failed = debug_has_nan | (carry._numerical_failure != 0)
+            completed_batches = jnp.where(batch_failed, carry.i_batch + 1, upper)
             loss_train, loss_monitor = self._completed_epoch_losses(carry)
             status = (
                 carry.epoch,
                 completed_batches,
                 loss_train,
                 loss_monitor,
-                debug_has_nan,
+                batch_failed,
             )
             return carry, status
 
@@ -1846,13 +1969,13 @@ class OptimEngine:
                         completed_batches_value,
                         loss_train,
                         loss_monitor,
-                        debug_has_nan_value,
+                        batch_failed_value,
                     ) = jax.device_get(status)
 
-                    debug_has_nan = bool(debug_has_nan_value)
+                    batch_failed = bool(batch_failed_value)
                     completed_batches = int(completed_batches_value)
                     completed_epochs = int(completed)
-                    finished_epoch = upper == n_batches and not debug_has_nan
+                    finished_epoch = upper == n_batches and not batch_failed
                     if batch_progress_bar is not None:
                         if not use_nested_bars:
                             batch_progress_bar.set_description_str(
@@ -1873,7 +1996,7 @@ class OptimEngine:
                             batch_progress_bar.refresh()
                     rendered_batches = max(rendered_batches, completed_batches)
 
-                    if debug_has_nan:
+                    if batch_failed:
                         should_continue = False
                         break
 

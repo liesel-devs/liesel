@@ -19,7 +19,8 @@ applies. To extend the total budget, change ``engine.stopper.epochs`` before
 resuming. Calling ``fit()`` without a checkpoint starts a new run.
 
 The result's ``status`` tells you why fitting stopped: ``"paused"``,
-``"max_epochs"``, ``"early_stopping"``, or ``"nan"``. A NaN result has no
+``"max_epochs"``, ``"early_stopping"``, ``"numerical_failure"``, or ``"nan"``.
+A numerical-failure or NaN result has no
 checkpoint; recover from an earlier saved checkpoint instead.
 
 Save progress to disk
@@ -33,7 +34,7 @@ Run the same call on the first job and after an interruption:
 
 A missing file starts a new run. An existing file resumes it. The engine saves
 every ten epochs here, plus at deliberate pauses and normal completion. A crash
-or timeout loses work since the last successful save. Failed writes and NaN
+or timeout loses work since the last successful save. Failed writes and numerical
 failures leave the previous file intact.
 
 Use a different path for a new experiment and only one writer per path. The
@@ -63,6 +64,8 @@ History and monitoring continue across pauses. Earlier results stay unchanged;
 keeping many snapshots uses extra memory. Treat checkpoint contents as read-only.
 Custom losses must keep their model state and loss-state PyTrees compatible
 and serializable with pickle. Committed and best loss states survive recovery.
+For ``LaplaceLoss``, keep the latent coordinates and inner-solver controls unchanged;
+checkpoint recovery checks these settings as well as state structure and dtype.
 
 For manual snapshots, use :meth:`liesel.optim.OptimCheckpoint.save` and
 :meth:`liesel.optim.OptimCheckpoint.load`. Passing a checkpoint object resumes

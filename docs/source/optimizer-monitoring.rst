@@ -113,3 +113,16 @@ otherwise it is ``None``. See :class:`~liesel.optim.OptimNaNDebugInfo` for its
 contents. Enable ``debug_nans`` on the engine returned by ``build_engine()``.
 The captured information helps investigate the failure; it does not correct
 poor starting values.
+
+Inspect a Laplace failure
+-------------------------
+
+``LaplaceLoss`` detects failed inner solves, non-finite outer gradients, and failed
+outer steps. These return ``status="numerical_failure"`` with ``failure_reason``
+and an available ``failed_loss_state`` for inspection. The final position and loss
+state come from the last completed valid epoch; if none exists,
+``loss_state_final`` is ``None``. Best snapshots remain available.
+
+This status takes precedence over captured NaNs, whether ``debug_nans`` is enabled
+or not. A failed result has no resumable checkpoint. An earlier checkpoint on disk
+is preserved. Generic NaN failures retain their existing terminal-position behavior.
