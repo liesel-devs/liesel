@@ -86,7 +86,6 @@ class GaussianCopula(tfd.TransformedDistribution):
         parameters = dict(locals())
 
         batch_shape = () if dependence is None else np.shape(dependence)
-        loc = np.zeros(batch_shape + (2,))
 
         if dependence is None:
             scale_tril = None
@@ -103,6 +102,9 @@ class GaussianCopula(tfd.TransformedDistribution):
             tril2 = np.stack([dependence, tril22], axis=-1)
             scale_tril = np.stack([tril1, tril2], axis=-2)
 
+        loc = np.zeros(
+            batch_shape + (2,), dtype=None if scale_tril is None else scale_tril.dtype
+        )
         distribution = tfd.MultivariateNormalTriL(
             loc=loc,
             scale_tril=scale_tril,
