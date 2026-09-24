@@ -404,23 +404,39 @@ def test_multi_size_default_split_builds_batch_manager():
     assert engine.loss.scalar == sum(engine.split.train_axis_sizes)
 
 
-def test_scale_loss_false_builds_unscaled_default_loss():
+@pytest.mark.parametrize(
+    "kwargs, scaled",
+    [({}, True), ({"scale_loss": True}, True), ({"scale_loss": False}, False)],
+)
+def test_scale_loss_configures_default_loss(kwargs, scaled):
     model = _normal_model()
 
     engine = LieselOptim(
         model,
         optimizers=optax.adam(0.02),
         loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
-        scale_loss=False,
         seed=1,
+        **kwargs,
     ).build_engine()
 
     assert isinstance(engine.loss, NegLogProbLoss)
-    assert engine.loss.scale is False
-    assert engine.loss.scalar == 1.0
+    assert engine.loss.scale is scaled
+    assert engine.loss.scalar == (6.0 if scaled else 1.0)
 
 
-def test_scale_loss_is_ignored_for_custom_loss():
+@pytest.mark.parametrize("scale_loss", ["auto", "invalid", None, 0, 1])
+def test_scale_loss_rejects_non_booleans(scale_loss):
+    with pytest.raises(ValueError, match="scale_loss must be True or False"):
+        LieselOptim(
+            _normal_model(),
+            optimizers=optax.adam(0.02),
+            loss_monitor="train_full_data",
+            scale_loss=scale_loss,
+        )
+
+
+@pytest.mark.parametrize("scale_loss", [True, False])
+def test_scale_loss_is_ignored_for_custom_loss(scale_loss):
     model = _normal_model()
     split = PositionSplit.from_model(model)
     loss = NegLogProbLoss(model, split, scale=False)
@@ -430,7 +446,7 @@ def test_scale_loss_is_ignored_for_custom_loss():
         optimizers=optax.adam(0.02),
         loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         loss=loss,
-        scale_loss=True,
+        scale_loss=scale_loss,
         seed=1,
     ).build_engine()
 

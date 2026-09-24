@@ -65,6 +65,8 @@ Optimization does not assign the fitted state to the original model.
 What changes
 ------------
 
+* ``scale_loss`` accepts booleans and defaults to ``True``. Replace the earlier
+  optimizer wrapper's ``scale_loss="auto"`` with ``True`` or omit it.
 * To optimize only selected parameters (the old ``params=``), wrap the
   transformation in ``opt.Optimizer(params, transformation)`` as above. A bare
   Optax transformation optimizes all model parameters.

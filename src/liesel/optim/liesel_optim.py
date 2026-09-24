@@ -17,7 +17,7 @@ from ._engine_utils import (
 )
 from .batch import Batches
 from .engine import EmaTrainLossMonitor, LossMonitor
-from .loss import Loss, NegLogProbLoss
+from .loss import Loss, NegLogProbLoss, _validate_bool
 from .optimizer import LBFGS, Optimizer, OptimizerLike
 from .split import PositionSplit
 from .stop import Stopper
@@ -88,7 +88,7 @@ class LieselOptim:
         supplied.
     scale_loss
         Whether the default :class:`.NegLogProbLoss` should divide losses by the
-        training sample size. ``"auto"`` scales the internally constructed loss.
+        training sample size. Defaults to ``True``.
         This setting has no effect when ``loss`` is supplied.
     save_position_history
         Whether to save parameter values at every epoch. Defaults to ``True``.
@@ -146,7 +146,7 @@ class LieselOptim:
         batches: BatchConfig | None = None,
         loss: Loss | None = None,
         validation_strategy: Literal["log_lik", "log_prob"] = "log_lik",
-        scale_loss: bool | Literal["auto"] = "auto",
+        scale_loss: bool = True,
         save_position_history: bool = True,
         show_progress: bool = True,
         show_step_progress: bool = False,
@@ -221,23 +221,17 @@ class LieselOptim:
         self,
         loss: Loss | None,
         validation_strategy: Literal["log_lik", "log_prob"],
-        scale_loss: bool | Literal["auto"],
+        scale_loss: bool,
     ) -> Loss:
         if loss is not None:
             return loss
 
-        if scale_loss == "auto":
-            scale = True
-        elif isinstance(scale_loss, bool):
-            scale = scale_loss
-        else:
-            raise ValueError("scale_loss must be True, False, or 'auto'.")
-
+        _validate_bool(scale_loss, "scale_loss")
         return NegLogProbLoss(
             self.model,
             self.split,
             validation_strategy=validation_strategy,
-            scale=scale,
+            scale=scale_loss,
         )
 
     def _resolve_optimizers(
