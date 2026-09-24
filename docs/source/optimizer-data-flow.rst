@@ -62,6 +62,21 @@ Set the corresponding ``batch_axes`` when creating batches too.
 call ``split_position()`` to apply them. Manager classes handle several groups.
 See :meth:`~liesel.optim.PositionSplit.from_model` for the factory options.
 
+For observed distributions with ``per_obs=False`` or a custom ``log_lik_node``,
+automatic sample-size inference is unavailable. Construct the split explicitly:
+
+.. code-block:: python
+
+   split = opt.PositionSplit.from_model(
+       model, infer_sample_sizes=False, multi_size="manager", shuffle=False
+   )
+   optim = opt.LieselOptim(model, split=split, loss_monitor="train_full_data")
+
+This chooses split-axis counts for scaling. Alternatively, supply effective
+``sample_sizes`` to the split factory. Setting ``scale_loss=False`` on
+``LieselOptim`` only disables final loss normalization; it does not disable
+split inference or specify batch scaling.
+
 .. raw:: html
 
    <iframe

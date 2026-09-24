@@ -63,7 +63,10 @@ class LieselOptim:
         Optional split. If neither ``split`` nor ``loss`` is supplied, all observed
         data is used for training. Multi-size observed data automatically uses
         :class:`.PositionSplitManager`. With a custom loss, an explicit split must
-        be the same object as ``loss.split``.
+        be the same object as ``loss.split``. Models with ``per_obs=False`` or a
+        custom ``log_lik_node`` require an explicitly constructed split: use
+        :meth:`.PositionSplit.from_model` with ``infer_sample_sizes=False`` for
+        axis counts, or supply effective ``sample_sizes`` there.
     batch_size
         Rows per batch in each training group. Uses :meth:`.Batches.from_split`
         with otherwise default settings. ``None`` uses all training data.

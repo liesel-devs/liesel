@@ -98,6 +98,35 @@ def test_lieseloptim_requires_explicit_loss_monitor():
         LieselOptim(_normal_model())  # ty: ignore[missing-argument]
 
 
+@pytest.mark.parametrize("kind", ["per_obs", "custom_log_lik"])
+def test_automatic_inference_error_explains_manual_split(kind):
+    loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
+    dist = lsl.Dist(tfd.Normal, loc=loc, scale=1.0)
+    dist.per_obs = kind != "per_obs"
+    y = lsl.Var.new_obs(jnp.arange(4.0), dist, name="y")
+    builder = lsl.GraphBuilder().add(y)
+    if kind == "custom_log_lik":
+        builder.log_lik_node = lsl.Calc(
+            lambda value: value.sum(), dist, _name="custom_log_lik"
+        )
+    model = builder.build_model()
+    with pytest.raises(ValueError, match=r"PositionSplit.from_model.*split=split"):
+        LieselOptim(model, loss_monitor="train_full_data", scale_loss=False)
+    for split in (
+        PositionSplit.from_model(model, infer_sample_sizes=False),
+        PositionSplit.from_model(model, sample_sizes={"train": 4}),
+    ):
+        result = LieselOptim(
+            model,
+            split=split,
+            optimizers="lbfgs",
+            loss_monitor="train_full_data",
+            seed=1,
+            show_progress=False,
+        ).fit()
+        assert float(result.position_final["loc"]) == pytest.approx(1.5, abs=1e-5)
+
+
 @pytest.mark.parametrize(
     "keyword",
     [
