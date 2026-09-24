@@ -63,8 +63,6 @@ History and monitoring continue across pauses. Earlier results stay unchanged;
 keeping many snapshots uses extra memory. Treat checkpoint contents as read-only.
 Custom losses must keep their model state and loss-state PyTrees compatible
 and serializable with pickle. Committed and best loss states survive recovery.
-The loss-state addition uses checkpoint schema 3; files from unreleased schema 2
-are rejected. ``allow_version_mismatch`` does not bypass schema checks.
 
 For manual snapshots, use :meth:`liesel.optim.OptimCheckpoint.save` and
 :meth:`liesel.optim.OptimCheckpoint.load`. Passing a checkpoint object resumes

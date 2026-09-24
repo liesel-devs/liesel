@@ -140,15 +140,3 @@ to complete training data, even after a minibatch fit. Slicing to
 disabled. This reconstructs deterministic model quantities at each saved epoch
 position; it cannot reconstruct transient optimizer internals or past stochastic
 draws.
-
-Update custom losses
---------------------
-
-The unreleased ``optim`` loss interface now returns auxiliary state. Change
-``loss_train_batched``, ``loss_train``, and ``loss_monitor`` from ``return value``
-to ``return value, None`` for a stateless loss. Direct callers unpack the pair.
-Custom ``value_and_grad`` methods return ``((value, state), gradient)``;
-``LossMixin`` provides that method automatically. Direct protocol implementations
-also supply ``init_state(params, carry)`` and ``default_position_keys``; inheriting
-from ``LossMixin`` provides stateless defaults for both. See
-:doc:`optimizer-customization` for stateful evaluation rules.
