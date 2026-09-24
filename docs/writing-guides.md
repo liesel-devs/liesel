@@ -63,10 +63,13 @@ for the reader.
 Embed interactive explanations beside the relevant text. A separate-page link
 can supplement the embed, but should not be the only way readers discover it.
 
-Use static images for diagrams whose generation would make documentation
-builds fragile. Generate them from the real example, add descriptive alt text,
-and name the command that produced them. Refresh images when the example
-changes. Keep essential explanations readable without interacting with a visual.
+Generate model graphs with `model.plot()` in executed tutorial cells. The
+Read the Docs build installs Graphviz for their layout. Give generated figures
+descriptive alt text in the cell metadata at `mystnb.image.alt`, and check that
+it appears on the rendered image. Use static images when a figure cannot be
+generated reliably during the build; record its source command and refresh it
+when the example changes. Keep essential explanations readable without
+interacting with a visual.
 
 ## Check the finished result
 
