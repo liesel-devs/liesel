@@ -75,9 +75,9 @@ def test_default_loss_rejects_unsupported_model_factors(kind):
             return model.extract_position(position_keys)
 
         def loss_train_batched(self, params, carry):
-            return -model.update_state(params, carry.model_state)[
-                "_model_log_prob"
-            ].value
+            return (
+                -model.update_state(params, carry.model_state)["_model_log_prob"].value
+            ), None
 
         loss_train = loss_train_batched
         loss_monitor = loss_train_batched
@@ -91,7 +91,7 @@ def test_default_loss_rejects_unsupported_model_factors(kind):
         stopper=opt.Stopper(epochs=1, patience=1),
     ).build_engine()
     carry = engine._init_carry(1)
-    value = engine.loss.loss_train({"loc": jnp.array(1.0)}, carry)
+    value = engine.loss.loss_train({"loc": jnp.array(1.0)}, carry)[0]
     assert (
         value
         == -model.update_state({"loc": jnp.array(1.0)}, model.state)[
@@ -133,7 +133,9 @@ def test_supported_objective_and_gradient_match_model(per_obs):
     for value in (0.0, 0.7):
         key = next(iter(model.parameters))
         position = {key: jnp.asarray(value, dtype=model.vars[key].value.dtype)}
-        actual, grad = jax.value_and_grad(engine.loss.loss_train)(position, carry)
+        (actual, _), grad = jax.value_and_grad(engine.loss.loss_train, has_aux=True)(
+            position, carry
+        )
         expected, expected_grad = jax.value_and_grad(
             lambda p: -model.update_state(p, model.state)["_model_log_prob"].value
         )(position)
@@ -185,7 +187,9 @@ def test_weak_parameter_prior_requires_explicit_strong_optimization_keys(optimiz
                 value, dtype=jnp.asarray(model.vars["source"].value).dtype
             )
         }
-        actual, grad = jax.value_and_grad(engine.loss.loss_train)(position, carry)
+        (actual, _), grad = jax.value_and_grad(engine.loss.loss_train, has_aux=True)(
+            position, carry
+        )
         expected, ref_grad = jax.value_and_grad(
             lambda p: -model.update_state(p, model.state)["_model_log_prob"].value
         )(position)

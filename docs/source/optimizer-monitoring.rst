@@ -48,6 +48,9 @@ Read the result
   the lowest finite monitoring loss. It raises ``RuntimeError`` if no such loss
   was recorded. An earlier best position remains available after a later failure.
 * ``result.position_final`` holds the parameters at the end of the run.
+* Stateful losses expose matching ``result.loss_state_min_monitor`` and
+  ``result.loss_state_final`` snapshots. These are ``None`` for stateless losses
+  or when no matching full-training evaluation exists.
 * ``result.plot_loss_overview()`` shows the full loss history and a closer
   view of recent epochs.
 * ``result.plot_params()`` shows saved parameter paths.

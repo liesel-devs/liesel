@@ -6,7 +6,7 @@ the default negative log-probability loss for Liesel models.
 
 from collections import Counter
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 import jax
 import networkx as nx
@@ -123,31 +123,48 @@ class Loss(Protocol):
         """
         ...
 
-    def loss_train_batched(self, params: Position, carry: "OptimCarry") -> jax.Array:
+    @property
+    def default_position_keys(self) -> Sequence[str] | None:
+        """Optional default optimizer keys; None uses the model's parameters."""
+        ...
+
+    def init_state(self, params: Position, carry: "OptimCarry") -> Any:
+        """Initial loss-state PyTree, or None for a stateless loss."""
+        ...
+
+    def loss_train_batched(
+        self, params: Position, carry: "OptimCarry"
+    ) -> tuple[jax.Array, Any]:
         """
         Computes the training loss for the current mini-batch.
 
         ``carry.batch`` contains the observed mini-batch and ``carry.fixed_position``
-        contains parameters currently owned by other optimizers.
+        contains parameters currently owned by other optimizers. Returns
+        ``(value, proposed_state)``; stateless losses return ``(value, None)``.
         """
         ...
 
-    def loss_train(self, params: Position, carry: "OptimCarry") -> jax.Array:
+    def loss_train(
+        self, params: Position, carry: "OptimCarry"
+    ) -> tuple[jax.Array, Any]:
         """
         Computes the full-data training loss at ``params``.
 
         The engine calls this method for ``loss_monitor="train_full_data"`` after
-        every epoch, at the final post-update position.
+        every epoch, at the final post-update position. It commits the proposed
+        state only when this value is finite. All other proposals are discarded.
         """
         ...
 
-    def loss_monitor(self, params: Position, carry: "OptimCarry") -> jax.Array:
+    def loss_monitor(
+        self, params: Position, carry: "OptimCarry"
+    ) -> tuple[jax.Array, Any]:
         """Computes the complete validation monitoring loss at ``params``."""
         ...
 
     def value_and_grad(
         self, params: Position, carry: "OptimCarry"
-    ) -> tuple[jax.Array, Position]:
+    ) -> tuple[tuple[jax.Array, Any], Position]:
         """Returns ``(loss_train_batched(params, carry), grad)``."""
         ...
 
@@ -186,7 +203,7 @@ class LossMixin:
     ...
     ...     def loss_train_batched(self, params, carry):
     ...         del carry
-    ...         return params["x"] ** 2
+    ...         return params["x"] ** 2, None
     >>> loss = Quadratic()
     >>> loss.grad(Position({"x": jnp.array(3.0)}), carry=None)["x"]
     Array(6., dtype=float32, weak_type=True)
@@ -197,10 +214,24 @@ class LossMixin:
     split: SplitConfig
     """Train/validation/test split used by the loss."""
 
-    loss_train_batched: Callable[[Position, "OptimCarry"], jax.Array]
+    default_position_keys: Sequence[str] | None = None
+    """Optional default optimizer keys; None preserves the model-based default."""
+
+    loss_train_batched: Callable[[Position, "OptimCarry"], tuple[jax.Array, Any]]
     """Training objective differentiated by :meth:`grad` and :meth:`value_and_grad`."""
 
-    def loss_train(self, params: Position, carry: "OptimCarry") -> jax.Array:
+    def init_state(self, params: Position, carry: "OptimCarry") -> Any:
+        """Returns None for a stateless loss; override to initialize loss state.
+
+        Evaluations return a proposed state without mutating ``carry.loss_state``.
+        Its PyTree structure, shapes, and dtypes must match this initial state.
+        Stateful losses require full-data batches and full-training monitoring.
+        """
+        return None
+
+    def loss_train(
+        self, params: Position, carry: "OptimCarry"
+    ) -> tuple[jax.Array, Any]:
         """
         Computes the full-data training loss.
 
@@ -254,7 +285,7 @@ class LossMixin:
 
     def value_and_grad(
         self, params: Position, carry: "OptimCarry"
-    ) -> tuple[jax.Array, Position]:
+    ) -> tuple[tuple[jax.Array, Any], Position]:
         """
         Evaluates :meth:`loss_train_batched` and its gradient.
 
@@ -268,9 +299,10 @@ class LossMixin:
         Returns
         -------
         tuple
-            Pair ``(value, grad_tree)`` as returned by :func:`jax.value_and_grad`.
+            ``((value, proposed_state), grad_tree)``. Auxiliary state is not
+            differentiated or committed by this method.
         """
-        grad_ = jax.value_and_grad(self.loss_train_batched, argnums=0)
+        grad_ = jax.value_and_grad(self.loss_train_batched, argnums=0, has_aux=True)
         value, grad_tree = grad_(params, carry)
         return value, Position(grad_tree)
 
@@ -290,8 +322,8 @@ class LossMixin:
         Position
             Gradient tree with the same keys as ``params``.
         """
-        grad_ = jax.grad(self.loss_train_batched, argnums=0)
-        grad_tree = grad_(params, carry)
+        grad_ = jax.grad(self.loss_train_batched, argnums=0, has_aux=True)
+        grad_tree, _ = grad_(params, carry)
         return Position(grad_tree)
 
 
@@ -398,7 +430,9 @@ class NegLogProbLoss(LossMixin):
         """
         return self.model.extract_position(position_keys)
 
-    def loss_train_batched(self, params: Position, carry: "OptimCarry") -> jax.Array:
+    def loss_train_batched(
+        self, params: Position, carry: "OptimCarry"
+    ) -> tuple[jax.Array, None]:
         """
         Computes mini-batch negative log posterior.
 
@@ -413,9 +447,9 @@ class NegLogProbLoss(LossMixin):
 
         Returns
         -------
-        jax.Array
-            Negative scaled log-likelihood plus log-prior, optionally normalized by
-            ``self.scalar``.
+        tuple
+            ``(value, None)``: negative scaled log-likelihood plus log-prior,
+            optionally normalized by ``self.scalar``.
         """
         position = Position(params | carry.batch | carry.fixed_position)
         new_state = self.model.update_state(position, carry.model_state)
@@ -424,9 +458,11 @@ class NegLogProbLoss(LossMixin):
             self.model, new_state, batch_index=carry.i_batch
         )
         log_prior = new_state["_model_log_prior"].value
-        return -(log_lik + log_prior) / self.scalar
+        return (-(log_lik + log_prior) / self.scalar), None
 
-    def loss_train(self, params: Position, carry: "OptimCarry") -> jax.Array:
+    def loss_train(
+        self, params: Position, carry: "OptimCarry"
+    ) -> tuple[jax.Array, None]:
         """
         Computes full-data negative log posterior.
 
@@ -439,18 +475,20 @@ class NegLogProbLoss(LossMixin):
 
         Returns
         -------
-        jax.Array
-            Negative full-data log-likelihood plus log-prior, optionally normalized
-            by ``self.scalar``.
+        tuple
+            ``(value, None)``: negative full-data log-likelihood plus log-prior,
+            optionally normalized by ``self.scalar``.
         """
         position = Position(params | self.split.train | carry.fixed_position)
         new_state = self.model.update_state(position, carry.model_state)
 
         log_lik = self.split.scaled_log_lik(self.model, new_state, part="train")
         log_prior = new_state["_model_log_prior"].value
-        return -(log_lik + log_prior) / self.scalar
+        return (-(log_lik + log_prior) / self.scalar), None
 
-    def loss_monitor(self, params: Position, carry: "OptimCarry") -> jax.Array:
+    def loss_monitor(
+        self, params: Position, carry: "OptimCarry"
+    ) -> tuple[jax.Array, None]:
         """
         Computes validation loss.
 
@@ -463,8 +501,8 @@ class NegLogProbLoss(LossMixin):
 
         Returns
         -------
-        jax.Array
-            Negative scaled validation log-likelihood. If
+        tuple
+            ``(value, None)``: negative scaled validation log-likelihood. If
             ``validation_strategy="log_prob"``, the log-prior is included as well.
         """
         position = Position(params | self.obs_validate | carry.fixed_position)
@@ -474,7 +512,7 @@ class NegLogProbLoss(LossMixin):
         if self.validation_strategy == "log_prob":
             loss -= new_state["_model_log_prior"].value
 
-        return loss / self.scalar
+        return (loss / self.scalar), None
 
     def __repr__(self) -> str:
         """Returns a compact representation showing the validation strategy."""

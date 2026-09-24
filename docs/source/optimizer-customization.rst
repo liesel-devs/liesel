@@ -113,3 +113,23 @@ epochs take about 4 GB. Disabling it retains scalar losses and final/best positi
 Use ``build_engine()`` for settings beyond the wrapper's arguments.
 See :class:`~liesel.optim.OptimEngine` for all settings, or
 :doc:`optimizer-checkpointing` to pause and resume a fit.
+
+Write a custom loss
+-------------------
+
+Inherit from :class:`liesel.optim.LossMixin` to obtain gradient helpers. Define
+``split``, ``position(keys)``, and ``loss_train_batched(params, carry)``; also define
+``loss_train`` for full-training monitoring or ``loss_monitor`` for validation.
+All three evaluation methods return ``(value, proposed_state)``. For a stateless
+loss, return ``(value, None)``. The mixin differentiates only ``value``.
+
+For stateful losses, implement ``init_state(params, carry)`` and read the committed
+state from ``carry.loss_state``. Return proposals without changing that input.
+Their PyTree structure, array shapes, and dtypes must remain fixed. The engine
+commits a proposal only at a finite full-training monitor evaluation after an
+epoch; proposals during optimizer updates and line searches are discarded.
+Stateful losses require full-data batches and ``loss_monitor="train_full_data"``.
+
+Set ``default_position_keys`` to select the parameters used by ``LieselOptim``
+with a bare Optax transformation or ``"lbfgs"``. The default ``None`` selects all
+model parameters. Explicit optimizer blocks always retain their own keys.

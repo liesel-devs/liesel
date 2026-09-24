@@ -244,7 +244,7 @@ class Optimizer:
         pos = position
 
         opt_state = carry.optimizer_states[self.identifier]
-        value, grad = loss.value_and_grad(pos, carry)
+        (value, _), grad = loss.value_and_grad(pos, carry)
         try:
             updates, opt_state = self.optimizer.update(grad, opt_state, params=pos)
         except TypeError as error:
@@ -371,10 +371,15 @@ class LBFGS(Optimizer):
                 candidate,
                 pos,
             )
-            return loss.loss_train_batched(candidate, carry)
+            return loss.loss_train_batched(candidate, carry)[0]
 
-        value_and_grad = optax.value_and_grad_from_state(loss_fn)
-        value, grad = value_and_grad(pos, state=opt_state)
+        if carry.loss_state is None:
+            value_and_grad = optax.value_and_grad_from_state(loss_fn)
+            value, grad = value_and_grad(pos, state=opt_state)
+        else:
+            # A newly committed seed can change an approximate objective. Reuse
+            # L-BFGS memory, but evaluate value/gradient with the current seed.
+            value, grad = jax.value_and_grad(loss_fn)(pos)
         updates, opt_state = self.optimizer.update(
             grad, opt_state, params=pos, value=value, grad=grad, value_fn=loss_fn
         )

@@ -480,6 +480,7 @@ class OptimNaNDebugState:
     reproduction_optimizer_states: dict[str, optax.OptState]
     reproduction_batches: BatchConfig
     reproduction_model_state: ModelState
+    reproduction_loss_state: Any = None
 
     @classmethod
     def new(
@@ -492,6 +493,7 @@ class OptimNaNDebugState:
         batches: BatchConfig,
         model_state: ModelState,
         loss_dtype: jnp.dtype | None = None,
+        loss_state: Any = None,
     ) -> OptimNaNDebugState:
         if loss_dtype is None:
             loss_dtype = _first_floating_dtype(position)
@@ -513,6 +515,7 @@ class OptimNaNDebugState:
             reproduction_optimizer_states=optimizer_states,
             reproduction_batches=batches,
             reproduction_model_state=model_state,
+            reproduction_loss_state=loss_state,
         )
 
 
@@ -543,6 +546,11 @@ class OptimCarry:
         Optax states keyed by optimizer identifier.
     model_state
         Current model state.
+    loss_state
+        Opaque committed loss-state PyTree. Evaluations propose replacements;
+        only a finite full-training monitor evaluation commits one.
+    loss_state_min_monitor
+        Loss state matched to ``position_min_monitor``.
     batch
         Current mini-batch position.
     fixed_position
@@ -576,6 +584,10 @@ class OptimCarry:
 
     optimizer_states: dict[str, optax.OptState]
     model_state: ModelState
+
+    loss_state: Any = None
+    loss_state_min_monitor: Any = None
+    _loss_state_valid: jax.Array = field(default_factory=lambda: jnp.asarray(False))
 
     batch: Position = field(default_factory=lambda: Position({}))
     fixed_position: Position = field(default_factory=lambda: Position({}))
@@ -752,7 +764,7 @@ class OptimNaNDebugInfo:
         carry = deepcopy(self.reproduction_carry)
         opt = self.optimizer(engine)
         if opt is None:
-            return engine.loss.loss_train_batched(self.reproduction_position, carry)
+            return engine.loss.loss_train_batched(self.reproduction_position, carry)[0]
 
         position = opt.position(self.reproduction_position)
         _, loss = opt.step(position, engine.loss, carry)
@@ -766,7 +778,7 @@ def _checkpoint_versions() -> dict[str, str]:
     }
 
 
-_CHECKPOINT_HEADER = b"liesel.optim.checkpoint\x00\x02\n"
+_CHECKPOINT_HEADER = b"liesel.optim.checkpoint\x00\x03\n"
 
 
 @dataclass(frozen=True)
@@ -887,6 +899,12 @@ class OptimResult:
     checkpoint
         Explicit resumable state. ``None`` on NaN failure. History arrays are shared
         with this result; continuation leaves earlier results unchanged.
+    loss_state_final
+        Loss state matched to ``position_final``, or ``None`` if no completed
+        full-training evaluation exists for that position. Stateless losses
+        always return ``None``.
+    loss_state_min_monitor
+        Loss state matched to ``position_min_monitor``, or ``None`` if unavailable.
     status
         Why fitting returned: ``"paused"``, ``"max_epochs"``, ``"early_stopping"``,
         or ``"nan"``. Stopping conditions take precedence over a pause boundary.
@@ -926,6 +944,8 @@ class OptimResult:
     nan_debug: OptimNaNDebugInfo | None = None
     checkpoint: OptimCheckpoint | None = None
     status: Literal["paused", "max_epochs", "early_stopping", "nan"] = "max_epochs"
+    loss_state_final: Any = None
+    loss_state_min_monitor: Any = None
 
     def __init__(
         self,
@@ -940,6 +960,8 @@ class OptimResult:
         nan_debug: OptimNaNDebugInfo | None = None,
         checkpoint: OptimCheckpoint | None = None,
         status: Literal["paused", "max_epochs", "early_stopping", "nan"] = "max_epochs",
+        loss_state_final: Any = None,
+        loss_state_min_monitor: Any = None,
     ):
         self.history = history
         self._position_final = position_final
@@ -952,6 +974,8 @@ class OptimResult:
         self.nan_debug = nan_debug
         self.checkpoint = checkpoint
         self.status = status
+        self.loss_state_final = loss_state_final
+        self.loss_state_min_monitor = loss_state_min_monitor
 
     @staticmethod
     def _checked_position(position: Position, name: str) -> Position:
