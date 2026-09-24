@@ -47,6 +47,39 @@ def _matrix_obs_model(shape=(4, 8)):
 
 
 class TestSplit:
+    def test_inferred_key_recipe_is_reusable_with_passthrough(self):
+        recipe = Split(axis_size=4, validate_axis_size=1, split_axes={"tab": None})
+        tab = jnp.arange(2)
+        for name in ("x", "y"):
+            split = recipe.split_position(Position({name: jnp.arange(4), "tab": tab}))
+            assert split.split_position_keys == [name]
+            assert split.train[name].size == 3
+            assert jnp.array_equal(split.validate["tab"], tab)
+        assert recipe.position_keys is None
+
+    @pytest.mark.parametrize("share, expected", [(0.29, 29), (0.289, 28), (0.0, 0)])
+    def test_share_counts_tolerate_roundoff(self, share, expected):
+        for part in ("validate", "test"):
+            recipe = Split.from_axis_shares(
+                ["x"], axis_size=100, **{f"{part}_axis_share": share}
+            )
+            assert getattr(recipe, f"{part}_axis_size") == expected
+            assert recipe.train_axis_size == 100 - expected
+
+    def test_share_counts_and_grouped_holdout_detection_agree(self):
+        model = lsl.Model(
+            [
+                lsl.Var.new_obs(jnp.arange(49), name="x"),
+                lsl.Var.new_obs(jnp.arange(49), name="y"),
+            ]
+        )
+        # This product is one ULP below 1.0, but both groups need a holdout.
+        manager = SplitManager.from_model(
+            model, position_keys=[["x"], ["y"]], validate_axis_share=1 / 49, seed=7
+        )
+        assert manager.validate_axis_sizes == (1, 1)
+        assert not jnp.array_equal(manager.splits[0].indices, manager.splits[1].indices)
+
     def test_split_position_keeps_none_axis_keys_unchanged(self):
         response = jnp.arange(24.0).reshape(4, 6)
         land = jnp.arange(6.0).reshape(6, 1)
@@ -346,6 +379,35 @@ class TestSplit:
 
 
 class TestPositionSplit:
+    @pytest.mark.parametrize("part", ["train", "validate", "test"])
+    def test_empty_parts_can_contain_only_passthrough(self, part):
+        positions = {name: Position({}) for name in ("train", "validate", "test")}
+        positions[part] = Position({"x": jnp.arange(3)})
+        sizes = {f"{name}_axis_size": 3 if name == part else 0 for name in positions}
+        split = PositionSplit(
+            positions["train"],
+            positions["validate"],
+            positions["test"],
+            sizes["train_axis_size"],
+            sizes["validate_axis_size"],
+            sizes["test_axis_size"],
+            passthrough=Position({"tab": jnp.arange(2)}),
+        )
+        assert split.split_position_keys == ["x"]
+        for position in (split.train, split.validate, split.test):
+            assert position["tab"].tolist() == [0, 1]
+        sizes[f"{next(name for name in positions if name != part)}_axis_size"] = 1
+        with pytest.raises(ValueError, match="must contain position entries"):
+            PositionSplit(
+                positions["train"],
+                positions["validate"],
+                positions["test"],
+                sizes["train_axis_size"],
+                sizes["validate_axis_size"],
+                sizes["test_axis_size"],
+                passthrough=Position({"tab": jnp.arange(2)}),
+            )
+
     def test_from_model_keeps_position_keys_authoritative(self):
         model, _, _ = _two_branch_model()
 

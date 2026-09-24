@@ -9,6 +9,21 @@ from liesel.optim import Batches, BatchManager, PositionSplit, PositionSplitMana
 from liesel.optim.types import Position
 
 
+def test_managers_own_their_child_batch_indices():
+    child = Batches(["x"], axis_size=6, batch_size=2)
+    original = child.indices.copy()
+    first = BatchManager(
+        [child, Batches(["y"], axis_size=8, batch_size=2)], epoch_size="max"
+    )
+    second = BatchManager([child], epoch_size="min")
+    second_indices = second.batches[0].indices.copy()
+    first.start_epoch(jax.random.key(42))
+    assert first.batches[0].indices.size == 8
+    assert second.batches[0].indices.size == 6
+    assert jnp.array_equal(child.indices, original)
+    assert jnp.array_equal(second.batches[0].indices, second_indices)
+
+
 class TestBatches:
     def test_removed_construction_mode_is_rejected(self):
         split = PositionSplit(

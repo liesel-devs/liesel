@@ -1743,7 +1743,7 @@ class BatchManager:
     )
 
     def __post_init__(self, sampling_weights):
-        self.batches = tuple(self.batches)
+        self.batches = tuple(copy(batch) for batch in self.batches)
 
         if len(self.batches) == 0:
             raise ValueError("BatchManager requires at least one Batches object.")
@@ -1767,7 +1767,6 @@ class BatchManager:
         batches = []
         for batch, weight in zip(self.batches, weights, strict=True):
             if weight is not None:
-                batch = copy(batch)
                 batch._set_sampling_weights(weight)
             batches.append(batch)
         self.batches = tuple(batches)

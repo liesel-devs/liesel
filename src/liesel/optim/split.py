@@ -21,6 +21,15 @@ SampleSizes = Mapping[SplitPart, int | float]
 _SPLIT_PARTS: tuple[SplitPart, ...] = ("train", "validate", "test")
 
 
+def _share_to_size(axis_size: int, share: float) -> int:
+    """Floor a share count, correcting roundoff next to an integer."""
+    count = axis_size * share
+    nearest = round(count)
+    if abs(count - nearest) <= 2 * math.ulp(count):
+        return nearest
+    return math.floor(count)
+
+
 def _merge_positions(positions: Sequence[Position]) -> Position:
     """
     Merge split position dictionaries and reject duplicate keys.
@@ -513,14 +522,14 @@ class PositionSplit:
             ("validate", self.validate, self.validate_axis_size),
             ("test", self.test, self.test_axis_size),
         ):
-            keys = set(position)
+            keys = set(position) - self.passthrough.keys()
             if n_part > 0 and not keys:
                 raise ValueError(
                     f"PositionSplit.{part} must contain position entries when "
                     f"{part}_axis_size > 0."
                 )
 
-            if keys and keys != expected_keys:
+            if keys and keys != expected_keys - self.passthrough.keys():
                 raise ValueError(
                     f"PositionSplit.{part} must contain the same position keys as "
                     "the other non-empty split parts."
@@ -558,10 +567,10 @@ class PositionSplit:
         ['x']
         """
         for position in (self.train, self.validate, self.test):
-            if position:
+            if position.keys() - self.passthrough.keys():
                 return list(position)
 
-        return []
+        return list(self.passthrough)
 
     @property
     def split_position_keys(self) -> list[str]:
@@ -1931,7 +1940,8 @@ class SplitManager:
         ]
         # Positive shares can still round down to zero observations.
         has_holdout = any(
-            axis_size * validate_axis_share >= 1 or axis_size * test_axis_share >= 1
+            _share_to_size(axis_size, validate_axis_share) >= 1
+            or _share_to_size(axis_size, test_axis_share) >= 1
             for axis_size, _ in groups
         )
         seeds = (
@@ -2534,8 +2544,9 @@ class Split:
         Builds a :class:`Split` from validation and test proportions.
 
         The number of validation and test observations is computed with
-        ``int(axis_size * share)``. Any fractional remainder is assigned to the training
-        split, so the resulting split sizes always sum to ``axis_size``.
+        flooring ``axis_size * share``, snapping products within two floating-point
+        ULPs of an integer to that integer first. Any fractional remainder goes to
+        training, so the resulting split sizes always sum to ``axis_size``.
 
         Parameters
         ----------
@@ -2603,8 +2614,8 @@ class Split:
                 f"Validation and test shares sum to {share_observed}, which is > 1.0."
             )
 
-        validate_axis_size = int(axis_size * validate_axis_share)
-        test_axis_size = int(axis_size * test_axis_share)
+        validate_axis_size = _share_to_size(axis_size, validate_axis_share)
+        test_axis_size = _share_to_size(axis_size, test_axis_share)
         train_axis_size = axis_size - validate_axis_size - test_axis_size
 
         return cls(
@@ -2763,20 +2774,20 @@ class Split:
         >>> split.validate["x"].tolist()
         [[3], [7]]
         """
-        if self.position_keys is None:
-            self.position_keys = list(position)
-
-        if not self.split_position_keys:
-            raise ValueError("Split requires at least one position key to be split.")
-
+        position_keys = (
+            list(position) if self.position_keys is None else self.position_keys
+        )
         train_position = {}
         validation_position = {}
         test_position = {}
+        passthrough = Position({})
 
         assert self.split_axes is not None
-        for key in self.split_position_keys:
+        for key in position_keys:
             axis = self.split_axes.get(key, self.default_split_axis)
-            assert axis is not None
+            if axis is None:
+                passthrough[key] = position[key]
+                continue
 
             n_this_key = jnp.shape(position[key])[axis]
             if not jnp.shape(position[key])[axis] == self.axis_size:
@@ -2795,9 +2806,8 @@ class Split:
             validation_position[key] = validation_values
             test_position[key] = test_values
 
-        passthrough = Position(
-            {key: position[key] for key in self.passthrough_position_keys}
-        )
+        if not train_position:
+            raise ValueError("Split requires at least one position key to be split.")
 
         split = PositionSplit(
             train=Position(train_position),
