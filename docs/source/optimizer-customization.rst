@@ -57,6 +57,28 @@ parameters, or ``optimizers=[opt.LBFGS(["beta", "log_sigma"])]`` for a selected
 subset. The remaining parameters stay fixed. Use ordinary Optax optimizers for
 separate blocks, as above.
 
+Run Adam followed by L-BFGS
+---------------------------
+
+Use two separate fits to switch from Adam to L-BFGS. The optimizer option
+``activate_after_epochs`` delays activation; it does not deactivate Adam.
+For an existing ``model`` with the same parameter names in both fits:
+
+.. code-block:: python
+
+   first = opt.LieselOptim(
+       model, optimizers=optax.adam(0.01), loss_monitor="train_full_data"
+   ).fit()
+   model.state = model.update_state(first.position_final, model.state)
+   result = opt.LieselOptim(
+       model, optimizers="lbfgs", loss_monitor="train_full_data"
+   ).fit()
+
+Assign the returned model state before constructing the second fit:
+``update_state`` leaves the model unchanged by default. L-BFGS starts with fresh
+optimizer state at Adam's final parameter values and uses full-data batches here.
+Do not pass Adam's checkpoint to the L-BFGS fit.
+
 Control history memory
 ----------------------
 
