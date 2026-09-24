@@ -815,7 +815,7 @@ posterior
 
 </table>
 
-Here, we end this first tutorial. We have learned how to build a linear
-regression model, attach a NUTS kernel through an inference
-specification, and draw MCMC samples - that is quite a bit for the
-start. Now, have fun modelling with Liesel!
+This fit conditions on the fixed variance. To estimate both coefficients
+and variance, continue with {doc}`01c-transform`. The
+{doc}`MCMC sampling guide <../../sampling>` links to configuration and
+diagnostics.

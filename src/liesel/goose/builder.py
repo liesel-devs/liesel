@@ -232,7 +232,7 @@ class EngineBuilder:
         the actual scale:
 
         >>> log_scale = lsl.Var.new_param(0.0, name="log_scale")
-        >>> scale = lsl.Calc(jnp.exp, variance, _name="scale")
+        >>> scale = lsl.Var.new_calc(jnp.exp, log_scale, name="scale")
         >>> dist = lsl.Dist(tfd.Normal, loc=0.0, scale=scale)
         >>> y = lsl.Var.new_obs(jnp.array([1.0, 2.0, 3.0]), dist, name="y")
         >>> model = lsl.Model([y])
@@ -248,8 +248,8 @@ class EngineBuilder:
         included in the results. Now, if you also want the value of ``"scale"`` to be
         included, you can add it to the list of included position keys:
 
-        >>> builder.position_keys.append("scale")
-        >>> builder.position_keys
+        >>> builder.positions_included.append("scale")
+        >>> builder.positions_included
         ['scale']
 
         Beware however that including many intermediate position keys can lead to large

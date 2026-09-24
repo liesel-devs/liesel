@@ -1,129 +1,210 @@
 ---
 engine: jupyter
+execute:
+  daemon: false
 ---
 
-```{python}
-# | label: setup
-# | include: false
+<a id="parameter-transformations"></a>
 
-import liesel.goose as gs
-import pandas as pd
+# Sample your first posterior
 
-gs.Summary.__repr__ = gs.Summary._repr_html_
-gs.Summary._repr_markdown_ = gs.Summary._repr_html_
-pd.options.display.float_format = "{:.3f}".format
-pd.options.display.html.border = 0
-```
+Fit a Gaussian regression with NUTS, inspect the chains, and use the draws to
+estimate the regression mean. You should already know how to
+{doc}`build a Liesel model <01a-lin-reg>`. This page includes the complete setup
+and samples both the coefficients and the noise variance.
 
-# Parameter transformations
+## Build a small regression model
 
-This tutorial builds on the [linear regression tutorial](01a-lin-reg.md#linear-regression).
-Here, we demonstrate how to transform a positive-valued parameter so that it can be sampled with a NUTS kernel on an unconstrained scale.
-
-First, let's set up the linear regression model again.
-The data-generating process and the model structure are the same as in the [linear regression tutorial](01a-lin-reg.md#linear-regression), but this time we prepare the model for joint NUTS sampling of the regression coefficients and the error variance.
+We simulate 500 observations with intercept 1, slope 2, and noise standard
+deviation 1. Independent normal priors describe the two coefficients, and an
+inverse-gamma prior keeps the variance positive.
 
 ```{python}
-# | label: model-setup
+#| label: model-setup
 import jax
 import jax.numpy as jnp
-import numpy as np
 import matplotlib.pyplot as plt
-
-# We use distributions and bijectors from tensorflow probability
-import tensorflow_probability.substrates.jax.distributions as tfd
+import numpy as np
+import pandas as pd
 import tensorflow_probability.substrates.jax.bijectors as tfb
+import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.goose as gs
 import liesel.model as lsl
 
 rng = np.random.default_rng(42)
-
-# data-generating process
 n = 500
 true_beta = np.array([1.0, 2.0])
 true_sigma = 1.0
-x0 = rng.uniform(size=n)
-X_mat = np.c_[np.ones(n), x0]
+x = rng.uniform(size=n)
+X_mat = np.column_stack([np.ones(n), x])
 y_vec = X_mat @ true_beta + rng.normal(scale=true_sigma, size=n)
 
-# Model
-# Part 1: Model for the mean
-beta_prior = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
 beta = lsl.Var.new_param(
-    value=np.array([0.0, 0.0]),
-    dist=beta_prior,
-    name="beta",
-    inference=gs.MCMCSpec(gs.NUTSKernel, kernel_group="1"),
+    jnp.zeros(2), lsl.Dist(tfd.Normal, 0.0, 5.0), name="beta"
 )
-
+sigma_sq = lsl.Var.new_param(
+    1.0, lsl.Dist(tfd.InverseGamma, concentration=3.0, scale=2.0), name="sigma_sq"
+)
+sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma")
 X = lsl.Var.new_obs(X_mat, name="X")
-mu = lsl.Var(lsl.Calc(jnp.dot, X, beta), name="mu")
-
-# Part 2: Model for the standard deviation
-a = lsl.Var(0.01, name="a")
-b = lsl.Var(0.01, name="b")
-sigma_sq_prior = lsl.Dist(tfd.InverseGamma, concentration=a, scale=b)
-sigma_sq = lsl.Var.new_param(value=10.0, dist=sigma_sq_prior, name="sigma_sq")
-
-sigma = lsl.Var(lsl.Calc(jnp.sqrt, sigma_sq), name="sigma")
-
-# Observation model
-y_dist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
-y = lsl.Var(y_vec, dist=y_dist, name="y")
+mu = lsl.Var.new_calc(jnp.dot, X, beta, name="mu")
+y = lsl.Var.new_obs(y_vec, lsl.Dist(tfd.Normal, mu, sigma), name="y")
 ```
 
-Now let's try to sample the regression coefficients $\boldsymbol{\beta}$ and the variance $\sigma^2$ with a single NUTS kernel.
-NUTS operates on unconstrained real-valued parameters, whereas $\sigma^2$ must remain positive.
-We therefore biject `sigma_sq` with an exponential bijector.
-This creates an unconstrained latent variable representing $\log(\sigma^2)$ and keeps `sigma_sq` as the positive back-transformed value.
-Both `beta` and the transformed variance receive NUTS inference specifications with the same `kernel_group`, so Goose samples them jointly in one NUTS block.
+## Prepare the variance for NUTS
+
+NUTS uses gradients in unconstrained coordinates. Transform the positive
+variance with an exponential bijector and name its unconstrained counterpart
+`log_sigma_sq`:
 
 ```{python}
-# | label: graph-and-transformation
-sigma_sq.biject(tfb.Exp(), inference=gs.MCMCSpec(gs.NUTSKernel, kernel_group="1"))
+#| label: transform-variance
+sigma_sq.biject(tfb.Exp(), name="log_sigma_sq")
+log_sigma_sq = sigma_sq.bijected_var
+```
 
-model = lsl.Model(y)
+The model still describes the same prior on the variance. If
+$\eta=\log(\sigma^2)$, the transformed density is
+$p_\eta(\eta)=p_{\sigma^2}(e^\eta)e^\eta$.
+{meth}`~liesel.model.Var.biject` includes this change-of-variables factor.
+Choosing a new normal prior on $\eta$ and exponentiating it would instead
+define a different prior on $\sigma^2$.
+
+## Choose a joint update
+
+Give the coefficients and log variance the same explicit `kernel_group`:
+
+```{python}
+#| label: inference-specs
+joint = gs.MCMCSpec(
+    gs.NUTSKernel,
+    kernel_group="regression",
+    jitter_dist=tfd.Normal(0.0, 0.2),
+)
+beta.inference = joint
+log_sigma_sq.inference = joint
+model = lsl.Model([y])
+```
+
+One NUTS kernel now updates both coefficients and the log variance together.
+The jitter distribution perturbs each chain's initial values on these
+unconstrained scales. Without a configured jitter distribution, Goose uses the
+model's starting values for every chain.
+
+```{python}
+#| label: graph-and-transformation
+#| fig-cap: "Regression graph: beta and X determine mu; log_sigma_sq determines sigma_sq and sigma; mu and sigma determine the distribution of y."
 model.plot()
 ```
 
+The graph separates the sampled `log_sigma_sq` from its deterministic
+transformation `sigma_sq`. The likelihood receives the standard deviation
+`sigma`, computed as the square root of the variance.
 
-The response distribution still requires the standard deviation on the original scale.
-The model graph shows that `sigma_sq` is now a deterministic, positive-valued transformation of its unconstrained latent variable.
-The standard deviation `sigma` is then computed as `sqrt(sigma_sq)`, so the likelihood continues to receive a valid scale parameter.
-
-Now we can set up and run the MCMC algorithm directly from the `MCMCSpec` objects stored in the model.
-We also include `sigma_sq` in the stored positions, because the NUTS kernel itself samples the transformed variable, while `sigma_sq` is the easier quantity to interpret.
+## Run several chains
 
 ```{python}
-# | label: sample
-
+#| label: sample
 results = gs.LieselMCMC(model).run_for_epochs(
     seed=1,
     num_chains=4,
     adaptation=1000,
     posterior=1000,
     positions_included=["sigma_sq"],
+    show_progress=False,
 )
 ```
 
-Judging from the trace plots, it seems that all chains have converged.
+Each chain runs 1,000 adaptation iterations followed by 1,000 posterior
+iterations. Adaptation tunes the kernel; only the posterior phase supplies
+draws for inference. These are example settings, not a guarantee of adequate
+sampling. `positions_included` records the variance on its original scale
+as well as the parameters updated by NUTS.
+
+## Inspect the chains
 
 ```{python}
-# | label: traceplots
-gs.plot_trace(results)
+#| label: summary
+summary = gs.Summary(results, selected=["beta", "sigma_sq"])
+summary.to_dataframe().set_index("var_fqn")[
+    ["mean", "sd", "q_0.05", "q_0.95", "mcse_mean"]
+].round(3)
 ```
 
-We can also take a look at the summary table, which includes both the original $\sigma^2$ and the transformed $\log(\sigma^2)$.
-
-```{python results="asis"}
-# | label: summary
-gs.Summary(results)
-```
-
-Finally, let's check the autocorrelation of the samples.
+The posterior means are about 0.99 for the intercept, 1.90 for the slope,
+and 1.04 for the variance, compared with generating values of 1, 2, and 1.
+Finite data and
+the priors mean the estimates need not equal the generating values.
+Posterior standard deviations describe uncertainty in the parameters;
+Monte Carlo standard errors describe the numerical precision of the estimates.
 
 ```{python}
-# | label: correlation-plots
-gs.plot_cor(results)
+#| label: diagnostics
+summary.aggregate_diagnostics().round(3)
 ```
+
+In this run, the largest R-hat is about 1.004 and the smallest bulk ESS is
+about 1,680 across the displayed parameters. For a vector such as `beta`, this table reports its lowest bulk/tail ESS and
+largest R-hat. Check all the parameters, not only one well-behaved coefficient.
+
+```{python}
+#| label: errors
+summary.error_df().reset_index()[["error_msg", "phase", "count"]]
+```
+
+This run records divergences during warmup and none in the posterior phase.
+The error table separates warmup from posterior sampling. An error while the
+sampler is adapting has a different context from one persisting in the
+posterior phase; inspect the message and phase before deciding what to change.
+
+```{python}
+#| label: traceplots
+#| fig-cap: "Four posterior chains for the intercept, slope, and variance, showing their movement and overlap over 1000 draws."
+gs.plot_trace(results, params=["beta", "sigma_sq"])
+```
+
+Look for overlap, drift, and long periods without movement. The traces must
+be read alongside the numerical diagnostics; appearance alone cannot establish
+convergence. See {doc}`../../goose-diagnostics` for interpreting sampler errors,
+ESS, R-hat, and MCSE.
+
+## Use the draws
+
+```{python}
+#| label: sample-shapes
+samples = results.get_posterior_samples()
+print(samples["beta"].shape)
+print(samples["sigma_sq"].shape)
+```
+
+The first two axes are chains and posterior draws. The coefficient array's
+last axis contains the intercept and slope. Warmup is excluded.
+
+Predict the mean at new covariate values, retaining the design matrix's
+intercept column:
+
+```{python}
+#| label: prediction
+#| fig-cap: "Simulated regression observations, the true regression line, and a posterior median line with a pointwise 90 percent credible band."
+x_grid = jnp.linspace(0.0, 1.0, 100)
+X_grid = jnp.column_stack([jnp.ones_like(x_grid), x_grid])
+pred = model.predict(samples, predict=["mu"], newdata={"X": X_grid})
+lower, median, upper = jnp.quantile(pred["mu"], jnp.array([0.05, 0.5, 0.95]), axis=(0, 1))
+
+fig, ax = plt.subplots(figsize=(7, 4))
+ax.scatter(x, y_vec, s=10, alpha=0.2, label="Observations")
+ax.fill_between(x_grid, lower, upper, alpha=0.3, label="90% credible band")
+ax.plot(x_grid, median, label="Posterior median")
+ax.plot(x_grid, 1.0 + 2.0 * x_grid, "--", label="True mean")
+ax.set(xlabel="x", ylabel="Response")
+ax.legend()
+plt.show()
+```
+
+The band describes pointwise uncertainty in the **mean**. It does not describe
+the spread of individual observations. See {doc}`../../goose-results` to
+simulate responses and obtain predictive intervals.
+
+Next, {doc}`combine NUTS and Gibbs updates <01d-gibbs-sampling>` for the same
+statistical model, or {doc}`choose different parameter blocks <../../goose-kernels>`.

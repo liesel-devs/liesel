@@ -1,61 +1,139 @@
 # Defining a custom MCMC kernel
 
-## Custom Metropolis-Hastings kernel
+<a id="custom-metropolis-hastings-kernel"></a>
 
-The easiest way to use a custom MCMC kernel in `liesel.goose` is to
-provide a proposal function for a {class}`.MHKernel`. The function must
-accept a pseudo-random number key, a model state and a step size as
-arguments, and be compatible with just-in-time compilation via `jax`
-(i.e., pure, without side-effects). It returns a {class}`.MHProposal`,
-which simply wraps the proposed value and the Metropolis-Hastings
-log-correction factor. The {class}`.MHKernel` handles the
-acceptance/rejection logic and is fully equipped with dual averaging
-functionality for step size tuning, which can be switched on by passing
-`da_tune_step_size` as a keyword argument to the kernel. In this case,
-users should ensure that their settings for the initial step size
-(default: $1$) and the target acceptance probability (default: $.234$)
-are suitable.
+## Supply a Metropolis-Hastings proposal
 
-As an example, a random walk kernel (like {class}`.RWKernel`) can be
-implemented with
+Start with {class}`~liesel.goose.MHKernel` when only your proposal is
+custom. It handles acceptance/rejection and optional step size
+adaptation. A complete kernel class is useful when you also need
+specialized state or tuning.
+
+This runnable example estimates a normal mean. A symmetric random-walk
+proposal is deliberately simple; for ordinary use,
+{class}`~liesel.goose.RWKernel` already provides this update.
 
 ``` python
->>> param_name = ... # name of the parameter variable to be sampled
->>> def rw_proposal(prng_key, model_state, step_size):
-...     pos = model.extract_position([param_name], model_state)
-...     current = pos[param_name]
-...
-...     proposal_dist = tfd.Normal(loc=current, scale=step_size)
-...     proposed = proposal_dist.sample(seed=prng_key)
-...
-...     backward_dist = tfd.Normal(loc=proposed, scale=step_size)
-...     backward_log_prob = backward_dist.log_prob(current)
-...     forward_log_prob = proposal_dist.log_prob(proposed)
-...     log_correction = (backward_log_prob - forward_log_prob).sum()
-...     return gs.MHProposal({param_name: proposed}, log_correction)
+import jax
+import jax.numpy as jnp
+import tensorflow_probability.substrates.jax.distributions as tfd
+
+import liesel.model as lsl
+
+mu = lsl.Var.new_param(
+    0.0, lsl.Dist(tfd.Normal, 0.0, 2.0), name="mu"
+)
+y = lsl.Var.new_obs(
+    jnp.array([0.8, 1.3, 0.9, 1.6, 1.1]),
+    lsl.Dist(tfd.Normal, mu, 1.0),
+    name="y",
+)
+model = lsl.Model([y])
+
+def rw_proposal(prng_key, model_state, step_size):
+    current = model.extract_position(["mu"], model_state)["mu"]
+    proposed = current + step_size * jax.random.normal(prng_key, current.shape)
+    return gs.MHProposal({"mu": proposed}, log_correction=0.0)
+
+model.vars["mu"].inference = gs.MCMCSpec(
+    gs.MHKernel,
+    kernel_kwargs={"proposal_fn": rw_proposal, "da_tune_step_size": True},
+    jitter_dist=tfd.Normal(0.0, 0.2),
+)
+results = gs.LieselMCMC(model).run_for_epochs(
+    seed=7, num_chains=4, adaptation=1000, posterior=1000, show_progress=False,
+)
+gs.Summary(results).to_dataframe()[["mean", "sd", "mcse_mean"]].round(3)
 ```
 
-It can then be attached to the coefficient variable with
+    liesel.goose.engine - INFO - Initializing kernels...
+    liesel.goose.engine - INFO - Done
+    liesel.goose.engine - INFO - Finished warmup
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+&#10;    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+&#10;    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+
+|          | mean  | sd    | mcse_mean |
+|----------|-------|-------|-----------|
+| variable |       |       |           |
+| mu       | 1.076 | 0.410 | 0.018     |
+
+</div>
+
+The proposal function receives the random key, current model state, and
+step size. It returns a {class}`~liesel.goose.MHProposal` containing a
+position and the log proposal correction
+
+$$
+\log q(\text{current}\mid\text{proposed})
+-\log q(\text{proposed}\mid\text{current}).
+$$
+
+For this symmetric normal proposal the correction is zero. For an
+asymmetric proposal, compute it explicitly and sum over the proposed
+block’s dimensions. Use JAX-compatible calculations and the supplied
+key; do not change captured model values or reuse a random key for
+independent draws.
 
 ``` python
->>> model.vars[param_name].inference = gs.MCMCSpec(
-...     gs.MHKernel,
-...     kernel_kwargs={"proposal_fn": rw_proposal, "da_tune_step_size": True},
-... )
+gs.Summary(results).aggregate_diagnostics().round(3)
 ```
 
-In this case, the proposal distribution is symmetric, so the log
-correction factor is zero by definition. We still compute it here
-explicitly for the purpose of demonstration.
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+&#10;    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+&#10;    .dataframe thead th {
+        text-align: right;
+    }
+</style>
 
-While a custom proposal function for a {class}`.MHKernel` can be written
-conveniently, it may not cover cases in which a custom MCMC kernel
-requires additional hyperparameters or specialized tuning. For such
-cases, `liesel.goose` provides tools for users to write their own
-classes, implementing the {class}`.Kernel` protocol.
+|           | ess_bulk | ess_tail | rhat  | aggregated_by         |
+|-----------|----------|----------|-------|-----------------------|
+| parameter |          |          |       |                       |
+| mu        | 494.920  | 528.267  | 1.002 | min (ess); max (rhat) |
 
-The next section shows you how to write such a fully custom kernel
-class.
+</div>
+
+``` python
+gs.Summary(results).error_df()
+```
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+&#10;    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+&#10;    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+
+|     |
+|-----|
+
+</div>
+
+Read these with the {doc}`diagnostics guide <../../goose-diagnostics>`.
+For an exact full-conditional draw, use the
+{doc}`Gibbs tutorial <01d-gibbs-sampling>` instead.
 
 ## Fully customized MCMC kernel
 
@@ -631,23 +709,23 @@ gs.Summary(results)
     liesel.goose.engine - INFO - Initializing kernels...
     liesel.goose.engine - INFO - Done
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s] 50%|█████████████████████                     | 1/2 [00:00<00:00,  2.34chunk/s]100%|██████████████████████████████████████████| 2/2 [00:00<00:00,  4.66chunk/s]
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s] 50%|█████████████████████                     | 1/2 [00:00<00:00,  3.51chunk/s]100%|██████████████████████████████████████████| 2/2 [00:00<00:00,  6.99chunk/s]
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
-      0%|                                                  | 0/1 [00:00<?, ?chunk/s]100%|█████████████████████████████████████████| 1/1 [00:00<00:00, 820.96chunk/s]
+      0%|                                                  | 0/1 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 1/1 [00:00<00:00, 1234.34chunk/s]
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 2/2 [00:00<00:00, 3200.54chunk/s]
+      0%|                                                  | 0/2 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1466.03chunk/s]
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 275 transitions, 25 jitted together
-      0%|                                                 | 0/11 [00:00<?, ?chunk/s]100%|██████████████████████████████████████| 11/11 [00:00<00:00, 3650.97chunk/s]
+      0%|                                                 | 0/11 [00:00<?, ?chunk/s]100%|██████████████████████████████████████| 11/11 [00:00<00:00, 4747.62chunk/s]
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 100 transitions, 25 jitted together
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 4/4 [00:00<00:00, 1868.49chunk/s]
+      0%|                                                  | 0/4 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 4/4 [00:00<00:00, 3025.65chunk/s]
     liesel.goose.engine - INFO - Finished epoch
     liesel.goose.engine - INFO - Finished warmup
     liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 500 transitions, 25 jitted together
-      0%|                                                 | 0/20 [00:00<?, ?chunk/s]100%|██████████████████████████████████████| 20/20 [00:00<00:00, 4763.01chunk/s]
+      0%|                                                 | 0/20 [00:00<?, ?chunk/s]100%|██████████████████████████████████████| 20/20 [00:00<00:00, 3961.00chunk/s]
     liesel.goose.engine - INFO - Finished epoch
 
 <p>
