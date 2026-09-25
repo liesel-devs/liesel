@@ -75,6 +75,61 @@ def test_scalar_gaussian_has_normalized_value_gradient_and_conditional_state():
     assert float(carry.loss_state.latent_position["z"]) == -2.0
 
 
+def test_precomputed_data_supports_direct_loss_evaluation():
+    x = lsl.Var.new_value(jnp.array([0.0, 1.0]), name="x")
+    basis = lsl.Var.new_calc(jnp.square, x, name="basis")
+    theta = lsl.Var.new_param(0.6, lsl.Dist(tfd.Normal, 0.0, 1.0), name="theta")
+    z = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, theta, 1.0), name="z")
+    loc = lsl.Var.new_calc(lambda b, latent: b + latent, basis, z)
+    y = lsl.Var.new_obs(jnp.array([1.0, 2.0]), lsl.Dist(tfd.Normal, loc, 1.0), name="y")
+    model = lsl.Model(y)
+    split = opt.PositionSplit.from_model(model, position_keys=["basis", "y"])
+    loss = opt.LaplaceLoss(model, split, latent=["z"])
+    position, carry = loss_carry(loss, ["theta"])
+    (value, state), gradient = jax.jit(loss.value_and_grad)(position, carry)
+
+    # After integrating z, y - basis is N(theta, [[2, 1], [1, 2]]).
+    expected = 1.5 * math.log(2 * math.pi) + 0.5 * math.log(3) + 0.6**2 / 2 + 0.4**2 / 3
+    np.testing.assert_allclose(value, expected, atol=2e-6)
+    np.testing.assert_allclose(gradient["theta"], 1 / 3, atol=2e-6)
+    np.testing.assert_allclose(state.latent_position["z"], 2.6 / 3, atol=2e-6)
+
+
+@pytest.mark.parametrize("dependency", ["outer", "latent", "fixed"])
+def test_precomputed_data_must_be_fixed_during_inner_and_outer_fitting(dependency):
+    x = lsl.Var.new_value(jnp.arange(1.0, 5.0), name="x")
+    alpha = lsl.Var.new_param(0.0, name="alpha")
+    z = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, 0.0, 1.0), name="z")
+    beta = lsl.Var.new_param(1.0, name="beta")
+    source = {"outer": alpha, "latent": z, "fixed": beta}[dependency]
+    basis = lsl.Var.new_calc(lambda b, v: b * v, source, x, name="basis")
+    loc = lsl.Var.new_calc(lambda a, latent, b: a + latent + b, alpha, z, basis)
+    y = lsl.Var.new_obs(2 + x.value, lsl.Dist(tfd.Normal, loc, 1.0), name="y")
+    model = lsl.Model(y)
+    split = opt.PositionSplit.from_model(model, position_keys=["basis", "y"])
+
+    def build_engine():
+        return opt.LieselOptim(
+            model,
+            loss=opt.LaplaceLoss(model, split, latent=["z"]),
+            optimizers=[opt.LBFGS(["alpha"])],
+            loss_monitor="train_full_data",
+            stopper=opt.Stopper(epochs=10, patience=3),
+            show_progress=False,
+        ).build_engine()
+
+    if dependency != "fixed":
+        with pytest.raises(
+            ValueError,
+            match="Computed data key 'basis' depends on optimized parameter "
+            f"'{source.name}'",
+        ):
+            build_engine()
+    else:
+        result = build_engine().fit()
+        np.testing.assert_allclose(result.position_final["alpha"], 2.0, atol=1e-5)
+
+
 @pytest.mark.parametrize("x64", [False, True])
 def test_nonlinear_mode_and_gradient_include_log_determinant_dependence(x64):
     with jax.enable_x64(x64):

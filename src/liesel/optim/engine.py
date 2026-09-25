@@ -551,10 +551,11 @@ class OptimEngine:
             if isinstance(self.batches, BatchManager)
             else (self.batches,)
         )
-        if isinstance(self.loss, NegLogProbLoss):
+        if isinstance(self.loss, (NegLogProbLoss, LaplaceLoss)):
             validate_model_data_keys(
                 self.loss.model, self.split.position_keys, self.position_keys
             )
+        if isinstance(self.loss, NegLogProbLoss):
             validate_likelihood_groups(
                 self.loss.model, [batch.position_keys for batch in batches]
             )

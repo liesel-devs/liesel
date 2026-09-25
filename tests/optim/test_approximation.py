@@ -188,8 +188,9 @@ def test_normal_regression_posterior_is_exact_independent_of_loss_scaling(scale_
 @pytest.mark.parametrize("loss_kind", ["laplace", "joint"])
 @pytest.mark.parametrize("holdout", [False, True])
 @pytest.mark.parametrize("x64", [False, True])
+@pytest.mark.parametrize("precomputed", [False, True])
 def test_callback_basis_is_prepared_for_fitting_and_joint_uncertainty(
-    loss_kind, holdout, x64
+    loss_kind, holdout, x64, precomputed
 ):
     with jax.enable_x64(x64):
         calls = []
@@ -217,7 +218,7 @@ def test_callback_basis_is_prepared_for_fitting_and_joint_uncertainty(
         model = lsl.Model(y, to_float32=False)
         split = opt.PositionSplit.from_model(
             model,
-            position_keys=["x", "y"],
+            position_keys=["basis" if precomputed else "x", "y"],
             validate_axis_share=0.5 if holdout else 0.0,
             shuffle=False,
         )
@@ -243,9 +244,10 @@ def test_callback_basis_is_prepared_for_fitting_and_joint_uncertainty(
         posterior = loss.approximate_joint_posterior(result)
         jax.effects_barrier()
         assert posterior.valid
-        assert fitting_calls == 1
-        assert len(calls) == 1
-        np.testing.assert_array_equal(calls[0], [1, 2] if holdout else [1, 2, 3, 4])
+        assert fitting_calls == (0 if precomputed else 1)
+        assert len(calls) == (0 if precomputed else 1)
+        if not precomputed:
+            np.testing.assert_array_equal(calls[0], [1, 2] if holdout else [1, 2, 3, 4])
 
         # Completing the square gives the exact joint posterior. Integrating beta
         # is also exact here, so the Laplace and joint-MAP results must coincide.

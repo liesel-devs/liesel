@@ -648,7 +648,9 @@ class NegLogProbLoss(LossMixin):
                 "No optimized coordinates are available.", raise_on_failure
             )
 
-        training_state = self.model.update_state(self.split.train, self.model.state)
+        training_state = self.model.update_state(
+            self.split.train, self.model.state, allow_weak_vars=True
+        )
 
         def joint(flat):
             state = self.model.update_state(unravel(flat), training_state)

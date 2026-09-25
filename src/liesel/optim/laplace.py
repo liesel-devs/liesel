@@ -15,7 +15,7 @@ from jax.flatten_util import ravel_pytree
 from ..goose.pytree import register_dataclass_as_pytree
 from ..model import Model
 from ._engine_utils import _validate_positive_int
-from ._model_utils import continuous_coordinate_nodes
+from ._model_utils import continuous_coordinate_nodes, validate_model_data_keys
 from .approximation import (
     LaplaceApproximation,
     _positive_definite,
@@ -418,7 +418,9 @@ class LaplaceLoss(LossMixin):
         return self.model.extract_position(position_keys)
 
     def _coordinate_nodes(self, keys: Sequence[str]) -> set:
-        return continuous_coordinate_nodes(self.model, keys, self._data_nodes)
+        nodes = continuous_coordinate_nodes(self.model, keys, self._data_nodes)
+        validate_model_data_keys(self.model, self.split.position_keys, keys)
+        return nodes
 
     def init_state(self, params: Position, carry: OptimCarry) -> LaplaceState:
         """Create an uninitialized latent guess with a stable state structure."""
@@ -563,7 +565,9 @@ class LaplaceLoss(LossMixin):
         )
         theta, unravel_outer = ravel_pytree(position)
         seed, unravel_latent = ravel_pytree(state.latent_position)
-        training_state = self.model.update_state(self.split.train, self.model.state)
+        training_state = self.model.update_state(
+            self.split.train, self.model.state, allow_weak_vars=True
+        )
 
         def joint(t, z):
             return self._joint(unravel_outer(t), unravel_latent(z), training_state)
@@ -637,7 +641,7 @@ class LaplaceLoss(LossMixin):
         training_state = getattr(carry, "_data_states", {}).get("train")
         if training_state is None:
             training_state = self.model.update_state(
-                self.split.train, carry.model_state
+                self.split.train, carry.model_state, allow_weak_vars=True
             )
 
         def joint(t, z):
