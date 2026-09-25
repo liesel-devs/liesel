@@ -84,7 +84,7 @@ def test_full_block_reproduces_joint_covariance_and_sample_layout():
         [[2, -1, -2, 2], [-1, 1, 1, -1], [-2, 1, 3, -3], [2, -1, -3, 4]],
         atol=3e-6,
     )
-    samples = vdist.sample(jax.random.key(42), (2, 3))
+    samples = vdist.sample((2, 3), seed=jax.random.key(42))
     assert {name: value.shape for name, value in samples.items()} == {
         "a": (2, 3, 2),
         "matrix": (2, 3, 1, 1),

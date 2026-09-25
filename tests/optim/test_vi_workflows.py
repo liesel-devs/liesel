@@ -39,7 +39,7 @@ def test_normal_fit_and_posterior_workflow(case):
     loss = opt.NegElboLoss.from_vdist(
         vdist, data, nsamples=1 if case == "high_n" else 10, scale=case == "high_n"
     )
-    initial_samples = vdist.sample(jax.random.key(42), (1, 1000))
+    initial_samples = vdist.sample((1, 1000), seed=jax.random.key(42))
     result = opt.OptimEngine(
         loss=loss,
         loss_monitor=opt.EmaTrainLossMonitor(20 if case == "high_n" else 1),
@@ -55,7 +55,7 @@ def test_normal_fit_and_posterior_workflow(case):
     for position in (result.position_final, result.position_min_monitor):
         assert all(jnp.isfinite(value).all() for value in position.values())
     samples = vdist.sample(
-        jax.random.key(42), (1, 1000), at_position=result.position_final
+        (1, 1000), seed=jax.random.key(42), at_position=result.position_final
     )
     predicted = model.predict(samples, predict=["s"])
     assert samples["m"].shape == predicted["s"].shape == (1, 1000)
@@ -89,10 +89,10 @@ def test_quick_fullrank_fit_with_ten_thousand_rows():
     )
     vdist = builder.loss.vdist
     assert isinstance(vdist, opt.VDist)
-    initial = vdist.sample(jax.random.key(42), (1000,))
+    initial = vdist.sample((1000,), seed=jax.random.key(42))
     result = builder.fit()
     samples = vdist.sample(
-        jax.random.key(42), (1000,), at_position=result.position_final
+        (1000,), seed=jax.random.key(42), at_position=result.position_final
     )
     assert all(jnp.isfinite(value).all() for value in samples.values())
     assert abs(samples["m"].mean() - values.mean()) < abs(
@@ -111,7 +111,7 @@ def test_untransformed_dense_scale_samples_match_covariance():
         .mvn_tril(scale_tril=0.1, scale_tril_bijector=None)
         .build()
     )
-    samples = vdist.sample(jax.random.key(99), (10_000,))
+    samples = vdist.sample((10000,), seed=jax.random.key(99))
     matrix = np.column_stack((samples["m"], samples[scale_key]))
     # Six Monte Carlo standard errors for Normal(0, 0.1**2) moments.
     np.testing.assert_allclose(matrix.mean(axis=0), 0.0, atol=6 * 0.1 / 100)
@@ -134,7 +134,7 @@ def test_custom_lognormal_block_and_separate_optimizers():
     q_scale.transform(tfb.Softplus())
     q_log_scale = opt.VDist([scale_key], model).init(distribution)
     vdist = opt.CompositeVDist(q_mean, q_log_scale).build()
-    samples = vdist.sample(jax.random.key(42), (10_000,))
+    samples = vdist.sample((10000,), seed=jax.random.key(42))
     assert jnp.all(samples[scale_key] > 0)
     # LogNormal(0, 1) has mean exp(1/2) and variance (e - 1) * e.
     np.testing.assert_allclose(
@@ -192,10 +192,10 @@ def test_prefitted_regression_initializes_composite_vi():
     np.testing.assert_allclose(actual, expected, rtol=1e-4, atol=1e-4)
     model.state = model.update_state(mode, model.state)
     vdist = opt.CompositeVDist(
-        opt.VDist(["beta_loc_0", "beta_loc"], model).mvn_diag(),
-        opt.VDist(["beta_scale_0"], model).mvn_diag(),
+        opt.VDist(["beta_loc_0", "beta_loc"], model).mvn_diag(scale_diag=0.01),
+        opt.VDist(["beta_scale_0"], model).mvn_diag(scale_diag=0.01),
     ).build()
-    initial = vdist.sample(jax.random.key(42), (1000,))
+    initial = vdist.sample((1000,), seed=jax.random.key(42))
     for key in mode:
         np.testing.assert_allclose(
             initial[key].mean(axis=0), mode[key], atol=6 * 0.01 / np.sqrt(1000)
@@ -214,7 +214,7 @@ def test_prefitted_regression_initializes_composite_vi():
         show_progress=False,
     ).fit()
     samples = vdist.sample(
-        jax.random.key(42), (1, 1000), at_position=result.position_final
+        (1, 1000), seed=jax.random.key(42), at_position=result.position_final
     )
     prediction = model.predict(samples, predict=["scale"])
     np.testing.assert_allclose(

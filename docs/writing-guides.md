@@ -61,9 +61,20 @@ Python in `{code-cell}` blocks without interactive prompts (`>>>` or `...`).
   already handle. Include a lower-level recipe or alternative only when it serves
   a distinct task or helps the reader make a meaningful choice.
 - Keep code consistent with the repository formatter. Group imports, leave blank
-  lines between steps, and lay out data and long calls so they are easy to scan.
+  lines between meaningful stages and substantial independent definitions, and
+  keep short, closely related statements together. Format for visual readability,
+  not just line length. Apply this judgment to all functions and constructors.
+  Wrap dense calls so functions or lambdas, inputs, nested expressions, and named
+  options are easy to distinguish. Use trailing commas to preserve the layout
+  under Ruff; keep simple calls compact. Brief comments can label conceptual
+  groups when the surrounding prose does not make them clear.
   Keep related setup and modifications together in one cell. Give each inspection
   expression its own `{code-cell}`, with its native output immediately below.
+- Tag build-only setup cells with `:tags: [remove-cell]`. They still execute, but
+  show no code, output, or expandable box. Keep prerequisites and links to relevant
+  tutorials visible in the prose; keep setup that teaches the workflow visible.
+- Pass distributions to `lsl.Var` and its factory methods using `dist=`, not
+  positional arguments.
 - Pass a single model root directly, as in `lsl.Model(y)`. Choose `to_float32`
   for the needs of the example, independently of this calling style.
 - Use realistic data, fixed seeds, and only the settings needed for the task.
@@ -74,12 +85,17 @@ Python in `{code-cell}` blocks without interactive prompts (`>>>` or `...`).
   adding repeated defensive checks to examples.
 
 Migration guides should show the old and new code and explain meaningful
-behavior changes.
+behavior changes. Write them only for changes to released APIs. Don't document
+the history of unreleased APIs, such as earlier defaults, renamed arguments, or
+before-and-after tables; describe the current behavior instead.
 
 ## Show useful visuals
 
 Use built-in Liesel/Goose plotting helpers where available, and plotnine for
-custom statistical plots. Show the rendered plot with its code. Explain what
+custom statistical plots. Prefer helpers such as `model.plot()` and
+`gs.plot_trace()` over hand-built equivalents. Put each plotting call in its own
+code cell, directly above its rendered figure. Keep construction and fitting
+separate from plotting. Explain what
 readers should look for and what the plot cannot establish. Use enough contrast,
 distinct shapes, or small positional offsets to keep overlapping marks visible.
 

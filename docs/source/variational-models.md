@@ -32,13 +32,21 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 import liesel.model as lsl
 import liesel.optim as opt
 
-alpha = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, 0.0, 2.0), name="alpha")
-beta = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, 0.0, 2.0), name="beta")
+alpha = lsl.Var.new_param(0.0, dist=lsl.Dist(tfd.Normal, 0.0, 2.0), name="alpha")
+beta = lsl.Var.new_param(0.0, dist=lsl.Dist(tfd.Normal, 0.0, 2.0), name="beta")
+
 x = lsl.Var.new_value(jnp.arange(5.0), name="x")
-mean = lsl.Var.new_calc(lambda a, b, x: a + b * x, alpha, beta, x, name="mean")
+mean = lsl.Var.new_calc(
+    lambda a, b, x: a + b * x,
+    alpha,
+    beta,
+    x,
+    name="mean",
+)
+
 y = lsl.Var.new_obs(
     jnp.array([1.1, 1.7, 3.0, 3.8, 5.2]),
-    lsl.Dist(tfd.Normal, mean, 0.5),
+    dist=lsl.Dist(tfd.Normal, mean, 0.5),
     name="y",
 )
 model = lsl.Model(y)
@@ -60,15 +68,21 @@ A learned coefficient controls their dependence. Observed variables in `q` are
 placeholders for variational draws, not training observations from the target.
 
 ```{code-cell} python
-alpha_loc = lsl.Var.new_param(0.0, name="alpha_loc")
+alpha_loc = lsl.Var.new_param(
+    0.0,
+    dist=lsl.Dist(tfd.Normal, 0.0, 1.0),
+    name="alpha_loc",
+)
 beta_loc = lsl.Var.new_param(0.0, name="beta_loc")
-log_scale = lsl.Var.new_param(-0.7, name="log_scale")
-scale = lsl.Var.new_calc(jnp.exp, log_scale, name="scale")
 dependence = lsl.Var.new_param(0.0, name="dependence")
 
+log_scale = lsl.Var.new_param(-0.7, name="log_scale")
+scale = lsl.Var.new_calc(jnp.exp, log_scale, name="scale")
+
 q_alpha = lsl.Var.new_obs(
-    0.0, lsl.Dist(tfd.Normal, alpha_loc, scale), name="alpha"
+    0.0, dist=lsl.Dist(tfd.Normal, alpha_loc, scale), name="alpha"
 )
+
 beta_mean = lsl.Var.new_calc(
     lambda loc, coefficient, parent: loc + coefficient * parent,
     beta_loc,
@@ -77,7 +91,7 @@ beta_mean = lsl.Var.new_calc(
     name="beta_mean",
 )
 q_beta = lsl.Var.new_obs(
-    0.0, lsl.Dist(tfd.Normal, beta_mean, scale), name="beta"
+    0.0, dist=lsl.Dist(tfd.Normal, beta_mean, scale), name="beta"
 )
 q = lsl.Model(q_beta)
 ```
@@ -100,8 +114,11 @@ After fixing variational parameters, every distribution actually sampled must
 belong to an observed `q` variable and support fully reparameterized draws.
 Construction rejects unsupported distributions and unclassified sampled variables.
 Discrete distributions need a different gradient estimator. Priors on variational
-parameters, if present, are optional regularization terms; they do not cause those
-parameters to be sampled.
+parameters, if present, do not cause those parameters to be sampled. They are
+ignored by the default `regularize_q_prior=False`, so the Normal prior attached to
+`alpha_loc` above does not change this fit. Opting into their penalties changes
+the objective; see {ref}`vi-q-prior-penalties`. Target priors on `alpha` and `beta`
+remain included.
 
 ## Fit and sample
 
@@ -111,6 +128,7 @@ model object passed to {class}`~liesel.optim.LieselVI`.
 
 ```{code-cell} python
 loss = opt.NegElboLoss(model, q, nsamples=16, scale=True)
+
 result = opt.LieselVI(
     model,
     loss=loss,
@@ -120,6 +138,7 @@ result = opt.LieselVI(
     seed=42,
     show_progress=False,
 ).fit()
+
 posterior = loss.approximate_joint_posterior(result)
 draws = posterior.sample(1_000, seed=jax.random.key(43))
 ```
@@ -147,6 +166,43 @@ modeling choice; use separate scale parameters when that restriction is unsuitab
 `entropy="mc"` uses sampled negative log densities. An explicit loss keeps its own
 settings when passed to `LieselVI`. See {doc}`variational-inference` for monitoring
 and {doc}`optimizer-customization` for separate optimizer blocks.
+
+(vi-q-prior-penalties)=
+
+## Choose q-parameter penalties
+
+By default, {class}`~liesel.optim.NegElboLoss` optimizes the ordinary ELBO:
+the expected target log likelihood **and target log prior**, plus the entropy of
+variational draws. `regularize_q_prior=False` does not remove target priors.
+
+A prior attached to a fixed optimization parameter in `q`, such as `alpha_loc`,
+is different: it is not part of the density of the draws `alpha` and `beta`.
+Set `regularize_q_prior=True` explicitly to add its log density as a penalty.
+This can shift the fitted distribution and need not optimize the ordinary ELBO.
+Built-in Gaussian families have no such priors, so this flag has no effect on them.
+
+Compare both objectives at the same fitted parameters and with the same draws:
+
+```{code-cell} python
+regularized_loss = opt.NegElboLoss(model, q, nsamples=16, regularize_q_prior=True)
+
+params = result.position_final
+key = jax.random.key(45)
+elbo = loss.estimate_elbo(params, key)
+regularized = regularized_loss.estimate_elbo(params, key)
+```
+
+```{code-cell} python
+pd.DataFrame(
+    {"Value": [elbo, regularized, regularized - elbo]},
+    index=["Ordinary ELBO", "Regularized objective", "Added q-prior term"],
+).astype(float).round(3)
+```
+
+The difference is the Normal log prior evaluated at the fitted `alpha_loc`.
+To optimize this penalized objective, pass `regularized_loss` as `loss` to
+`LieselVI`. An explicit loss keeps its own setting; a wrapper flag does not
+modify it. Target-model priors are included in both rows.
 
 ## Map names and shapes
 

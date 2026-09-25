@@ -84,7 +84,7 @@ def test_default_build_engine_uses_opinionated_defaults():
     assert engine.batches.is_full_data
     assert engine.batches.axis_size == engine.split.train_axis_size
     assert engine.optimizers[0].position_keys == tuple(engine.loss.q.parameters)
-    assert engine.stopper == Stopper(epochs=1000, patience=10, rtol=1e-6)
+    assert engine.stopper == Stopper(epochs=1000, patience=1000, rtol=1e-6)
     assert engine.loss_monitor is LOSS_MONITOR
     assert engine.progress_update_every == 10
     assert engine.show_step_progress is False
@@ -216,13 +216,18 @@ def test_user_provided_batches_are_not_mutated():
     assert batches.axis_size == 2
 
 
-def test_multi_size_default_split_builds_batch_manager():
+def test_multi_size_split_requires_opt_in_and_builds_batch_manager():
     model = _two_branch_model()
 
+    with pytest.raises(ValueError, match="multiple observation groups"):
+        LieselVI(model, optimizers=optax.adam(1e-3), loss_monitor=LOSS_MONITOR)
+
+    split = PositionSplit.from_model(model, multi_size="manager", shuffle=False)
     engine = LieselVI(
         model,
         optimizers=optax.adam(learning_rate=1e-3),
         loss_monitor=LOSS_MONITOR,
+        split=split,
         batch_size=None,
         seed=1,
     ).build_engine()
@@ -270,6 +275,7 @@ def test_weighted_vi_checkpoint_continues_same_run(tmp_path, managed):
             model,
             optimizers=optax.adam(learning_rate=1e-3),
             batches=batches,
+            split=PositionSplit.from_model(model, multi_size="manager", shuffle=False),
             loss_monitor=LOSS_MONITOR,
             stopper=Stopper(epochs=3, patience=3),
             nsamples=1,
@@ -593,7 +599,7 @@ def test_default_stoppers_are_independent():
         _normal_model(), optimizers=optax.adam(1e-3), loss_monitor=LOSS_MONITOR
     )
     first.stopper.epochs = 2
-    assert second.stopper == Stopper(epochs=1000, patience=10, rtol=1e-6)
+    assert second.stopper == Stopper(epochs=1000, patience=1000, rtol=1e-6)
 
 
 @pytest.mark.parametrize("scale_loss", ["auto", 1, None])
@@ -728,3 +734,21 @@ def test_computed_basis_fit_matches_raw_training_only_fit(batch_size):
         strict=True,
     ):
         np.testing.assert_allclose(a, b, rtol=1e-6, atol=1e-6)
+
+
+def test_default_budget_does_not_stop_on_a_flat_monitor():
+    vi = LieselVI(
+        _normal_model(), optimizers=optax.adam(0.01), loss_monitor=LOSS_MONITOR
+    )
+    history = jnp.ones(1000)
+    assert not bool(vi.stopper.stop_now(999, history))
+    assert bool(vi.stopper.stop_now(1000, history))
+    explicit = Stopper(epochs=1000, patience=10)
+    vi = LieselVI(
+        _normal_model(),
+        optimizers=optax.adam(0.01),
+        loss_monitor=LOSS_MONITOR,
+        stopper=explicit,
+    )
+    assert vi.stopper is explicit
+    assert bool(vi.stopper.stop_now(11, history))

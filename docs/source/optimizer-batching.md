@@ -91,8 +91,11 @@ fitting. Splitting and batching may use different axes. When holding out rows
 on the same axis, build batches from the split so they use the training size.
 
 Only complete batches are used. With shuffling, the leftover rows can change
-between epochs. For multiple groups, a {py:class}`~liesel.optim.BatchManager`
-supplies one batch from each group at every update.
+between epochs. For multiple groups, first {ref}`opt in and inspect the split
+groups <optimizer-split-groups>`, then pass that split to `Batches.from_split`.
+It returns a {py:class}`~liesel.optim.BatchManager` that supplies one batch from
+each group at every update. The groups come from your split; `LieselOptim` raises
+if different observed lengths require a grouping choice you have not supplied.
 
 With several groups, the default `epoch_size="max"` follows the group with
 the most batches. Smaller groups start another shuffled pass as needed. See
