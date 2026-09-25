@@ -33,9 +33,10 @@ original row order and ignore the seed, even with ``shuffle=True``. This is also
 the behavior of ``LieselOptim``'s automatic full-training split.
 
 Fits using the built-in model losses and optimizers retain one prepared set of
-data-derived node values per used partition (training, plus validation when
-monitored), using extra memory to avoid recomputing those values at every full-data
-evaluation.
+data-derived node values per partition evaluated in full. Training values are
+prepared only for full-data batches or ``loss_monitor="train_full_data"``;
+validation values are prepared only for validation monitoring. This uses extra
+memory to avoid recomputing those values at every full-data evaluation.
 
 The split's ``seed`` chooses which rows go into each part. The seed passed to
 ``LieselOptim`` controls batch shuffling or random batch sampling during fitting.
