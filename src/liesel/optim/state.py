@@ -607,6 +607,14 @@ class OptimCarry:
     i_batch: int | jax.Array = 0  # inner for-loop index over batches
     nan_debug_state: OptimNaNDebugState | None = None
 
+    def _record_failure(self, reason, state):
+        first = (self._numerical_failure == 0) & (reason != 0)
+        self.failed_loss_state = jax.lax.cond(
+            first, lambda: state, lambda: self.failed_loss_state
+        )
+        self._numerical_failure = jnp.where(first, reason, self._numerical_failure)
+        return self
+
     @classmethod
     def new(
         cls,

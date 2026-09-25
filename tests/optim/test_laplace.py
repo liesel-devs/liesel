@@ -586,7 +586,7 @@ def test_nonfinite_outer_gradient_is_handled_even_with_finite_inner_solution(
     np.testing.assert_array_equal(result.position_final["theta"], 0.0)
 
 
-def test_exhausted_lbfgs_search_is_not_a_successful_finite_fallback():
+def test_lbfgs_accepts_a_safe_finite_fallback_after_search_budget():
     model, split = density_model(
         lambda theta, z: (theta - 100) ** 2 / 2 + (z - theta) ** 2 / 2,
         theta=jnp.array(0.0),
@@ -597,11 +597,27 @@ def test_exhausted_lbfgs_search_is_not_a_successful_finite_fallback():
         optax.lbfgs(linesearch=optax.scale_by_zoom_linesearch(max_linesearch_steps=1)),
     )
     result = fit_engine(opt.LaplaceLoss(model, split, latent=["z"]), [optimizer]).fit()
+    assert result.status == "max_epochs"
+    np.testing.assert_allclose(result.position_final["theta"], 100.0, atol=1e-5)
+    assert result.failed_loss_state is None
+
+
+@pytest.mark.parametrize("debug", [False, True])
+def test_lbfgs_reports_failure_when_every_trial_is_invalid(debug):
+    model, split = density_model(
+        lambda theta, z: jnp.where(theta == 0, theta + z**2 / 2, jnp.inf),
+        theta=jnp.array(0.0),
+        z=jnp.array(0.0),
+    )
+    engine = fit_engine(opt.LaplaceLoss(model, split, latent=["z"]))
+    engine.debug_nans = debug
+    result = engine.fit()
     assert result.status == "numerical_failure"
     assert "line search" in result.failure_reason.lower()
     assert result.n_epochs == 0
     np.testing.assert_array_equal(result.position_final["theta"], 0.0)
-    assert result.failed_loss_state is not None
+    assert result.loss_state_final is None
+    assert result.checkpoint is None
 
 
 def test_lbfgs_accepts_zero_step_at_valid_stationary_point():
@@ -749,7 +765,7 @@ def test_full_data_repeated_updates_and_multiple_blocks_keep_epoch_commit_timing
     np.testing.assert_allclose(result.position_final["b"], 0.25)
 
 
-def test_monitor_cannot_commit_a_finite_value_with_nonfinite_outer_gradient():
+def test_nonfinite_outer_gradient_stops_before_the_next_update():
     model, split = density_model(
         lambda theta, z: (
             -theta
@@ -764,9 +780,11 @@ def test_monitor_cannot_commit_a_finite_value_with_nonfinite_outer_gradient():
     ).fit()
     assert result.status == "numerical_failure"
     assert "gradient" in result.failure_reason.lower()
-    assert result.n_epochs == 1
-    np.testing.assert_allclose(result.position_final["theta"], 1.0)
-    np.testing.assert_allclose(result.loss_state_final.latent_position["z"], 1.0)
+    # Monitoring commits the valid conditional mode; the next update checks the
+    # outer gradient. No extra backward pass is required solely for monitoring.
+    assert result.n_epochs == 2
+    np.testing.assert_allclose(result.position_final["theta"], 2.0)
+    np.testing.assert_allclose(result.loss_state_final.latent_position["z"], 2.0)
     np.testing.assert_allclose(result.failed_loss_state.outer_position["theta"], 2.0)
 
 
@@ -832,3 +850,22 @@ def test_float64_fit_and_checkpoint_keep_loss_state_dtype():
         assert result.status == "max_epochs"
         assert result.loss_state_final.latent_precision_cholesky.dtype == jnp.float64
         np.testing.assert_allclose(result.position_final["theta"], 2.0, atol=1e-10)
+
+
+def test_float32_coordinates_allow_float64_density_accumulation():
+    with jax.enable_x64():
+        coefficient = jnp.array(1.0, dtype=jnp.float64)
+        model, split = density_model(
+            lambda theta, z: coefficient * (theta**2 / 2 + (z - theta) ** 2 / 2),
+            theta=jnp.array(0.7, dtype=jnp.float32),
+            z=jnp.array(-2.0, dtype=jnp.float32),
+        )
+        loss = opt.LaplaceLoss(model, split, latent=["z"])
+        position, carry = loss_carry(loss, ["theta"])
+        (value, state), gradient = jax.jit(loss.value_and_grad)(position, carry)
+        assert value.dtype == jnp.float64
+        assert state.latent_position["z"].dtype == jnp.float32
+        np.testing.assert_allclose(
+            value, 0.7**2 / 2 - math.log(2 * math.pi) / 2, atol=1e-6
+        )
+        np.testing.assert_allclose(gradient["theta"], 0.7, atol=1e-6)

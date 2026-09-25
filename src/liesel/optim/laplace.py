@@ -52,19 +52,6 @@ class LaplaceState:
     latent_shapes: tuple[tuple[int, ...], ...] = field(metadata={"static": True})
 
 
-def _all_finite(tree):
-    return jnp.all(jnp.array([jnp.all(jnp.isfinite(x)) for x in jax.tree.leaves(tree)]))
-
-
-def _record_failure(carry, reason, state):
-    first = (carry._numerical_failure == 0) & (reason != 0)
-    carry.failed_loss_state = jax.lax.cond(
-        first, lambda: state, lambda: carry.failed_loss_state
-    )
-    carry._numerical_failure = jnp.where(first, reason, carry._numerical_failure)
-    return carry
-
-
 def _evaluate(joint, theta, z):
     """Compute and retain one point's derivatives and true Cholesky factor."""
 
@@ -108,7 +95,7 @@ def _solve(joint, theta, seed, tol, max_iter):
         "point": point,
         "n_iter": jnp.array(0),
         "status": jnp.where(_finite(point), 0, 4),
-        "resolution_floor": jnp.array(0.0, seed.dtype),
+        "resolution_floor": jnp.zeros_like(point["value"]),
         "min_value": point["value"],
         "n_resolution_steps": jnp.array(0, dtype=jnp.int32),
     }
@@ -443,13 +430,20 @@ class LaplaceLoss(LossMixin):
             latent_shapes=self.latent_shapes,
         )
 
-    def _check_evaluation(self, carry, value, state, gradient):
-        reason = jnp.where(
-            (state.status != 1) | ~jnp.isfinite(value),
-            1,
-            jnp.where(_all_finite(gradient), 0, 2),
-        )
-        return _record_failure(carry, reason, state)
+    def _evaluation_failure(self, value, proposed_state, gradient):
+        return jnp.where(proposed_state.status == 1, 0, proposed_state.status)
+
+    def _failure_message(self, reason, failed_state) -> str | None:
+        inner = {
+            2: "iteration limit",
+            3: "backtracking failed",
+            4: "non-finite evaluation",
+            5: "invalid curvature",
+        }.get(reason)
+        return None if inner is None else f"Inner Laplace optimization failed: {inner}."
+
+    def _checkpoint_configuration(self) -> tuple:
+        return self.latent_names, self.warm_start, self.inner_max_iter, self.inner_tol
 
     def loss_train_batched(
         self, params: Position, carry: OptimCarry

@@ -17,10 +17,10 @@ import jax
 import jax.numpy as jnp
 import optax
 
+from .loss import Loss, _all_finite, _check_evaluation
 from .types import Position
 
 if TYPE_CHECKING:
-    from .loss import Loss
     from .state import OptimCarry
 
 
@@ -245,10 +245,7 @@ class Optimizer:
 
         opt_state = carry.optimizer_states[self.identifier]
         (value, proposal), grad = loss.value_and_grad(pos, carry)
-        from .laplace import LaplaceLoss, _all_finite, _record_failure
-
-        if isinstance(loss, LaplaceLoss):
-            carry = loss._check_evaluation(carry, value, proposal, grad)
+        carry = _check_evaluation(loss, carry, value, proposal, grad)
         try:
             updates, opt_state = self.optimizer.update(grad, opt_state, params=pos)
         except TypeError as error:
@@ -260,9 +257,9 @@ class Optimizer:
             ) from error
         updated_position = cast(Position, optax.apply_updates(pos, updates))
 
-        if isinstance(loss, LaplaceLoss):
-            carry = _record_failure(
-                carry, jnp.where(_all_finite(updated_position), 0, 4), proposal
+        if carry.loss_state is not None:
+            carry = carry._record_failure(
+                jnp.where(_all_finite(updated_position), 0, -4), proposal
             )
 
         carry.position = Position(carry.position | updated_position)
@@ -311,8 +308,9 @@ class LBFGS(Optimizer):
     :func:`optax.value_and_grad_from_state` inside :meth:`step`, which lets Optax
     reuse value/gradient information stored by the L-BFGS transformation.
     Stateful losses recompute value and gradient with the current committed seed.
-    For :class:`.LaplaceLoss`, non-finite evaluations and unsuccessful public
-    line-search diagnostics stop fitting with ``status="numerical_failure"``.
+    Stateful losses stop with ``status="numerical_failure"`` on non-finite
+    evaluations or a line search that finds no finite trial. Safe finite fallback
+    steps remain valid when the search budget is exhausted.
 
     L-BFGS requires full-data batches, a deterministic objective, and must be the
     sole optimizer. Other parameter updates would invalidate its cached objective
@@ -385,29 +383,23 @@ class LBFGS(Optimizer):
             )
             return loss.loss_train_batched(candidate, carry)[0]
 
-        from .laplace import LaplaceLoss, _all_finite, _record_failure
-
-        if isinstance(loss, LaplaceLoss):
+        if carry.loss_state is not None:
             (value, proposal), grad = loss.value_and_grad(pos, carry)
-            carry = loss._check_evaluation(carry, value, proposal, grad)
-        elif carry.loss_state is None:
+            carry = _check_evaluation(loss, carry, value, proposal, grad)
+        else:
             value_and_grad = optax.value_and_grad_from_state(loss_fn)
             value, grad = value_and_grad(pos, state=opt_state)
-        else:
-            # A newly committed seed can change an approximate objective. Reuse
-            # L-BFGS memory, but evaluate value/gradient with the current seed.
-            value, grad = jax.value_and_grad(loss_fn)(pos)
         updates, opt_state = self.optimizer.update(
             grad, opt_state, params=pos, value=value, grad=grad, value_fn=loss_fn
         )
 
         updated_position = cast(Position, optax.apply_updates(pos, updates))
 
-        if isinstance(loss, LaplaceLoss):
-            # Public diagnostics distinguish an exhausted search from a valid
-            # finite candidate. Fallback values alone do not establish success.
+        if carry.loss_state is not None:
+            # Optax may retain a safe sufficient-decrease step when its search
+            # budget is exhausted. Positive diagnostic errors alone are not a
+            # numerical failure, and a stationary zero step is valid too.
             decrease_error = optax.tree.get(opt_state, "decrease_error", default=0.0)
-            curvature_error = optax.tree.get(opt_state, "curvature_error", default=0.0)
             candidate_value = optax.tree.get(opt_state, "value", default=value)
             candidate_grad = optax.tree.get(opt_state, "grad", default=grad)
             moved = jnp.any(
@@ -416,17 +408,14 @@ class LBFGS(Optimizer):
             stationary = jnp.all(
                 jnp.array([jnp.all(g == 0) for g in jax.tree.leaves(grad)])
             )
-            valid_step = (
-                _all_finite((updated_position, candidate_value, candidate_grad))
-                & (decrease_error == 0)
-                & (curvature_error == 0)
-                & (moved | stationary)
-            )
-            reason = jnp.where(valid_step, 0, 3)
+            valid_step = _all_finite(
+                (updated_position, candidate_value, candidate_grad)
+            ) & ~(jnp.isinf(decrease_error) & ~moved & ~stationary)
+            reason = jnp.where(valid_step, 0, -3)
 
             def failed_candidate(carry):
                 _, failed_state = loss.loss_train_batched(updated_position, carry)
-                return _record_failure(carry, reason, failed_state)
+                return carry._record_failure(reason, failed_state)
 
             carry = jax.lax.cond(
                 (reason != 0) & (carry._numerical_failure == 0),

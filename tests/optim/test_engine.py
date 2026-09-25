@@ -82,6 +82,52 @@ def test_stateful_loss_commits_once_per_epoch_and_retains_matched_snapshots(debu
     assert result.loss_state_min_monitor == {"count": 1, "position": -6.0}
 
 
+def test_plain_stateful_loss_can_classify_failure_without_engine_type_knowledge():
+    class PlainLoss:
+        default_position_keys = None
+        split = PositionSplit(
+            Position({"y": jnp.array([0.0])}), Position({}), Position({}), 1, 0, 0
+        )
+
+        def position(self, position_keys):
+            return Position({name: jnp.array(2.0) for name in position_keys})
+
+        def init_state(self, params, carry):
+            return {"count": jnp.array(0)}
+
+        def loss_train_batched(self, params, carry):
+            return params["theta"] ** 2 / 2, {"count": carry.loss_state["count"] + 1}
+
+        loss_train = loss_train_batched
+        loss_monitor = loss_train_batched
+        value_and_grad = LossMixin.value_and_grad
+        grad = LossMixin.grad
+
+        def _evaluation_failure(self, value, state, gradient):
+            return jnp.where(state["count"] > 1, 7, 0)
+
+        def _failure_message(self, reason, state):
+            return "The custom state reached its limit." if reason == 7 else None
+
+    loss = PlainLoss()
+    result = OptimEngine(
+        loss=loss,
+        batches=Batches.from_split(loss.split, batch_size=None),
+        optimizers=[Optimizer(["theta"], optax.sgd(0.5))],
+        stopper=Stopper(epochs=3, patience=3),
+        seed=1,
+        initial_state={},
+        loss_monitor="train_full_data",
+        show_progress=False,
+    ).fit()
+    assert result.status == "numerical_failure"
+    assert result.failure_reason == "The custom state reached its limit."
+    assert result.n_epochs == 1
+    assert result.loss_state_final == {"count": 1}
+    assert result.failed_loss_state == {"count": 2}
+    assert float(result.position_final["theta"]) == 1.0
+
+
 @pytest.mark.parametrize("debug", [False, True])
 @pytest.mark.parametrize("holdout", ["validate", "test"])
 @pytest.mark.parametrize("mode", ["no_keys", "group_full", "group_mini"])

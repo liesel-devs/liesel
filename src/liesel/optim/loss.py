@@ -9,6 +9,7 @@ from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 import jax
+import jax.numpy as jnp
 import networkx as nx
 
 from ..model import Calc, Model
@@ -21,6 +22,25 @@ if TYPE_CHECKING:
     from .state import OptimCarry
 
 SplitConfig = PositionSplit | PositionSplitManager
+
+
+def _all_finite(tree):
+    return jnp.all(jnp.array([jnp.all(jnp.isfinite(x)) for x in jax.tree.leaves(tree)]))
+
+
+def _check_evaluation(loss, carry, value, proposal, gradient=None):
+    """Classify stateful evaluations without interpreting their opaque state."""
+    if carry.loss_state is None:
+        return carry
+    reason = getattr(loss, "_evaluation_failure", lambda *_: 0)(
+        value, proposal, gradient
+    )
+    reason = jnp.where(
+        reason != 0,
+        reason,
+        jnp.where(~jnp.isfinite(value), -1, jnp.where(_all_finite(gradient), 0, -2)),
+    )
+    return carry._record_failure(reason, proposal)
 
 
 def _training_loss_scalar(split: SplitConfig) -> float:
@@ -227,6 +247,18 @@ class LossMixin:
         Its PyTree structure, shapes, and dtypes must match this initial state.
         Stateful losses require full-data batches and full-training monitoring.
         """
+        return None
+
+    def _evaluation_failure(self, value, proposed_state, gradient):
+        """Optional state-specific failure code; gradient is None at monitoring."""
+        return 0
+
+    def _failure_message(self, reason, failed_state) -> str | None:
+        """Optional explanation for a positive state-specific failure code."""
+        return None
+
+    def _checkpoint_configuration(self) -> tuple | None:
+        """Optional configuration metadata checked before checkpoint recovery."""
         return None
 
     def loss_train(

@@ -34,7 +34,7 @@ from ._engine_utils import (
 from ._log_lik import validate_likelihood_groups
 from .batch import Batches, BatchManager
 from .laplace import LaplaceLoss
-from .loss import Loss, LossMixin, NegLogProbLoss
+from .loss import Loss, LossMixin, NegLogProbLoss, _check_evaluation
 from .optimizer import LBFGS, Optimizer, OptimizerLike
 from .split import PositionSplitManager
 from .state import (
@@ -789,14 +789,7 @@ class OptimEngine:
         )
 
     def _loss_configuration(self) -> tuple | None:
-        if isinstance(self.loss, LaplaceLoss):
-            return (
-                self.loss.latent_names,
-                self.loss.warm_start,
-                self.loss.inner_max_iter,
-                self.loss.inner_tol,
-            )
-        return None
+        return getattr(self.loss, "_checkpoint_configuration", lambda: None)()
 
     def _make_checkpoint(self, carry: OptimCarry, duration: float) -> OptimCheckpoint:
         snapshot = jax.tree.map(lambda x: x, carry)
@@ -896,23 +889,21 @@ class OptimEngine:
             return "early_stopping"
         return "paused"
 
-    @staticmethod
-    def _failure_reason(carry: OptimCarry) -> str | None:
+    def _failure_reason(self, carry: OptimCarry) -> str | None:
         reason = int(carry._numerical_failure)
-        if reason == 1:
-            status = int(carry.failed_loss_state.status)
-            inner = {
-                2: "iteration limit",
-                3: "backtracking failed",
-                4: "non-finite evaluation",
-                5: "invalid curvature",
-            }.get(status, "non-finite loss")
-            return f"Inner Laplace optimization failed: {inner}."
+        if reason == 0:
+            return None
+        message = getattr(self.loss, "_failure_message", lambda *_: None)(
+            reason, carry.failed_loss_state
+        )
+        if message is not None:
+            return message
         return {
-            2: "Non-finite outer gradient.",
-            3: "Outer line search failed to find a valid step.",
-            4: "Non-finite outer parameter update.",
-        }.get(reason)
+            -1: "Non-finite loss evaluation.",
+            -2: "Non-finite outer gradient.",
+            -3: "Outer line search failed to find a valid step.",
+            -4: "Non-finite outer parameter update.",
+        }.get(reason, f"Loss evaluation failed (code {reason}).")
 
     def _nan_debug_info(self, carry: OptimCarry) -> OptimNaNDebugInfo | None:
         if not self.debug_nans:
@@ -956,7 +947,7 @@ class OptimEngine:
             loss_state_min_monitor=carry.loss_state_min_monitor,
             failed_loss_state=(
                 debug_state.reproduction_loss_state
-                if isinstance(self.loss, LaplaceLoss)
+                if carry.loss_state is not None
                 else None
             ),
             batch=debug_state.obs_batch,
@@ -1204,7 +1195,9 @@ class OptimEngine:
         has_active_optimizer = jnp.asarray(False)
         optimizer_loss_has_nan = jnp.asarray(False)
         for opt in self.optimizers:
-            is_active = carry.epoch >= opt.activate_after_epochs
+            is_active = (carry.epoch >= opt.activate_after_epochs) & (
+                carry._numerical_failure == 0
+            )
             carry, optimizer_loss = jax.lax.cond(
                 is_active,
                 lambda carry, opt=opt: self._run_optimizer_step(opt, carry),
@@ -1376,7 +1369,9 @@ class OptimEngine:
             ) -> tuple[OptimCarry, jax.Array]:
                 return self._run_optimizer_step_debug(opt, opt_index, obs_batch, carry)
 
-            is_active = carry.epoch >= opt.activate_after_epochs
+            is_active = (carry.epoch >= opt.activate_after_epochs) & (
+                carry._numerical_failure == 0
+            )
             carry, optimizer_loss = jax.lax.cond(
                 jnp.logical_or(
                     self._debug_state(carry).has_nan,
@@ -1492,7 +1487,7 @@ class OptimEngine:
 
     def _start_epoch(self, carry: OptimCarry) -> OptimCarry:
         """Starts a batch epoch and resets its accumulated losses."""
-        if isinstance(self.loss, LaplaceLoss):
+        if carry.loss_state is not None:
             carry._epoch_start = jax.tree.map(
                 lambda x: x,
                 (
@@ -1560,7 +1555,7 @@ class OptimEngine:
         return self._finish_epoch(carry)
 
     def _finish_epoch(self, carry: OptimCarry) -> OptimCarry:
-        if isinstance(self.loss, LaplaceLoss):
+        if carry.loss_state is not None:
             return jax.lax.cond(
                 carry._numerical_failure != 0,
                 self._rollback_epoch,
@@ -1606,17 +1601,8 @@ class OptimEngine:
                 loss_monitor_i
             )
         else:
-            if isinstance(self.loss, LaplaceLoss):
-                (loss_monitor_i, proposed_state), gradient = self.loss.value_and_grad(
-                    carry.position, carry
-                )
-                carry = self.loss._check_evaluation(
-                    carry, loss_monitor_i, proposed_state, gradient
-                )
-            else:
-                loss_monitor_i, proposed_state = self.loss.loss_train(
-                    carry.position, carry
-                )
+            loss_monitor_i, proposed_state = self.loss.loss_train(carry.position, carry)
+            carry = _check_evaluation(self.loss, carry, loss_monitor_i, proposed_state)
             carry._loss_state_valid = jnp.isfinite(loss_monitor_i)
             carry._loss_state_valid &= carry._numerical_failure == 0
             carry.loss_state = jax.lax.cond(
@@ -1653,7 +1639,7 @@ class OptimEngine:
 
         carry.epoch += 1
 
-        if isinstance(self.loss, LaplaceLoss):
+        if carry.loss_state is not None:
 
             def rollback(carry):
                 carry.epoch -= 1
@@ -1729,7 +1715,7 @@ class OptimEngine:
         carry.loss_state_min_monitor = jax.tree.map(
             lambda value: value, carry.loss_state
         )
-        if isinstance(self.loss, LaplaceLoss):
+        if carry.loss_state is not None:
             carry.failed_loss_state = jax.tree.map(lambda x: x, carry.loss_state)
             carry._epoch_start = jax.tree.map(
                 lambda x: x,
