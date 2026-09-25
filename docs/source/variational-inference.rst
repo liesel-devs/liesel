@@ -88,6 +88,7 @@ Work through the examples
    :maxdepth: 1
 
    variational-models
+   Laplace initialization <variational-laplace>
    tutorials/notebooks/11-liesel-vi-basic
    tutorials/notebooks/12-liesel-vi-advanced
 
