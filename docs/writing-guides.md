@@ -54,11 +54,15 @@ summaries that restate the section.
 
 - Prefer executable MyST Markdown for task guides with code and results. Use
   native notebook cells and outputs instead of generated RST output blocks.
+  Add `file_format: mystnb` and a Python `kernelspec` in YAML front matter,
+  then use `{code-cell} ipython3` cells. Keep one source per page; remove the
+  corresponding Quarto source when converting generated Markdown to MyST.
 - State prerequisites, such as an existing `model`, before a snippet. Make
   complete guides and tutorials runnable from top to bottom. Build-only setup
   cells may run a linked prerequisite tutorial; use `remove-cell` to omit their
   source and outputs from the rendered page while still executing them. Keep
-  reader prerequisites visible in the prose.
+  reader prerequisites visible in the prose and instructional setup visible in
+  the code. Shared setup can also use MyST-NB's native `:load:` option.
 - Use existing public helpers instead of manual setup or calculations that they
   already handle. Include a lower-level recipe or alternative only when it serves
   a distinct task or helps the reader make a meaningful choice.
@@ -104,7 +108,7 @@ what the plot cannot establish. Use enough contrast, distinct shapes, or small
 positional offsets to keep overlapping marks visible.
 
 Put each plotting call in its own code cell, with the rendered figure directly
-below it. Keep construction and fitting code in separate cells.
+below it. Keep plot preparation, construction, and fitting code in separate cells.
 
 In model walkthroughs, include `model.plot()` after constructing the model and
 show the graph beside its code. Generate it in an executed tutorial cell where
@@ -126,7 +130,13 @@ Read the guide from top to bottom for flow, missing prerequisites, repetition,
 and unnecessary detours. Match verification to the change: execute changed
 examples, refresh affected saved outputs, and inspect plots. Build the docs when
 changing rendering or navigation; check both sidebars and that links resolve.
-Run the relevant hooks on edited files.
+Execute notebook examples as part of the Sphinx build. Keep
+`nb_execution_mode = "force"`, `nb_execution_allow_errors = False`, and
+`nb_execution_raise_on_error = True` so execution errors fail the build.
+Sphinx's incremental build only executes pages it reads; use `-E` for a fresh
+execution of all notebook sources. Also use `-E` after changing a shared
+`:load:` file, since MyST-NB does not track that file as an incremental-build
+dependency. Run the relevant hooks on edited files.
 
 Use Sphinx cross-references for internal pages and API objects. Links intended
 for use outside the docs must work from that context. Report validation accurately,

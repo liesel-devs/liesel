@@ -1,861 +1,271 @@
-# Gibbs Sampling
+---
+file_format: mystnb
+kernelspec:
+  name: python3
+  display_name: Python 3
+---
 
+<a id="gibbs-sampling"></a>
 
-This tutorial extends the [linear regression
-tutorial](01a-lin-reg.md#linear-regression). Here, we show how to sample
-model parameters using a Gibbs kernel.
+# Combine NUTS and Gibbs
 
-As this tutorial is a continuation of the previous tutorials, we will
-use the same model and data assumed there.
+Sample the same regression posterior as in
+{doc}`01c-transform`, now updating the coefficients with NUTS and the variance
+with an exact Gibbs step. The prior and likelihood stay the same; only the
+sampling strategy changes.
 
-## Data and imports
+## Build the model
 
-``` python
-import jax
+This repeats the setup so the tutorial runs on its own.
+
+```{code-cell} ipython3
 import jax.numpy as jnp
 import numpy as np
-
-# We use distributions and bijectors from tensorflow probability
-import tensorflow_probability.substrates.jax.distributions as tfd
+import pandas as pd
 import tensorflow_probability.substrates.jax.bijectors as tfb
+import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.goose as gs
 import liesel.model as lsl
 
-import matplotlib.pyplot as plt
-```
-
-``` python
-# Generate data
+# Simulate regression observations.
 rng = np.random.default_rng(42)
-
-# sample size and true parameters
 n = 500
 true_beta = np.array([1.0, 2.0])
 true_sigma = 1.0
+x = rng.uniform(size=n)
+X_mat = np.column_stack([np.ones(n), x])
+y_vec = X_mat @ true_beta + rng.normal(scale=true_sigma, size=n)
 
-# data-generating process
-x0 = rng.uniform(size=n)
-X_mat = np.column_stack([np.ones(n), x0])
-eps = rng.normal(scale=true_sigma, size=n)
-y_vec = X_mat @ true_beta + eps
+# Define the priors.
+beta = lsl.Var.new_param(
+    jnp.zeros(2),
+    dist=lsl.Dist(tfd.Normal, 0.0, 5.0),
+    name="beta",
+)
+sigma_sq = lsl.Var.new_param(
+    1.0,
+    dist=lsl.Dist(tfd.InverseGamma, concentration=3.0, scale=2.0),
+    name="sigma_sq",
+)
 
-# define beta
-beta_prior = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
-
-beta = lsl.Var.new_param(value=jnp.array([0.0, 0.0]), dist=beta_prior, name="beta")
-
-# define the variance and the scale
-a = lsl.Var.new_param(0.01, name="a")
-b = lsl.Var.new_param(0.01, name="b")
-sigma_sq_prior = lsl.Dist(tfd.InverseGamma, concentration=a, scale=b)
-sigma_sq = lsl.Var.new_param(value=1.0, dist=sigma_sq_prior, name="sigma_sq")
-
-# Define sigma as a transformation of sigma_sq for the likelihood
+# Connect the parameters to the observations.
 sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma")
-
-# calculator-setup
 X = lsl.Var.new_obs(X_mat, name="X")
 mu = lsl.Var.new_calc(jnp.dot, X, beta, name="mu")
-
-# Build response
-y_dist = lsl.Dist(tfd.Normal, loc=mu, scale=sigma)
-y = lsl.Var.new_obs(y_vec, dist=y_dist, name="y")
-
-# Plot model
-model = lsl.Model([y])
-model.plot()
+y = lsl.Var.new_obs(
+    y_vec,
+    dist=lsl.Dist(tfd.Normal, mu, sigma),
+    name="y",
+)
+model = lsl.Model(y)
 ```
 
-<img
-src="01d-gibbs-sampling_files/figure-commonmark/build-model-output-1.png"
-id="build-model" />
+The inverse-gamma prior has concentration $a=3$ and scale $b=2$.
+These are fixed hyperparameters, not parameters to be sampled.
 
-## MCMC inference
+<a id="using-a-gibbs-kernel"></a>
 
-### Using a Gibbs kernel
+## Define the Gibbs update
 
-This time we want to sample the previously fixed `sigma_sq` with a Gibbs
-sampler. Using a Gibbs kernel is a bit more complicated, because Goose
-doesn’t automatically derive the full conditional from the model graph.
-Hence, the user needs to provide a function to sample from the full
-conditional. The function needs to accept a PRNG key and a model state
-as arguments, and it needs to return a dictionary with the variable name
-as the key and the new variable value as the value. We could also update
-multiple parameters with one Gibbs kernel by returning a dictionary with
-several entries.
+For coefficients $\boldsymbol\beta$, the residual sum of squares is
+$S=\sum_i(y_i-\mathbf{x}_i^\top\boldsymbol\beta)^2$.
+Because the coefficient prior is independent of the variance, its full
+conditional is
 
-For this normal-inverse-gamma model, the full conditional of $\sigma^2$
-is again an inverse-gamma distribution. To retrieve the relevant values
-from the `model_state`, we use {meth}`.Model.extract_position`.
+$$
+\sigma^2 \mid \boldsymbol\beta,\mathbf y
+\sim \operatorname{InverseGamma}\left(a+\frac{n}{2},\ b+\frac{S}{2}\right).
+$$
 
-``` python
+Goose does not derive this distribution. Supply a transition function that
+uses the **current** state and draws from it:
+
+```{code-cell} ipython3
 def draw_sigma_sq(prng_key, model_state):
-    # extract relevant values from model state
-    pos = model.extract_position(
-        position_keys=["y", "mu", "sigma_sq", "a", "b"], model_state=model_state
-    )
-    # calculate relevant intermediate quantities
-    n = len(pos["y"])
+    pos = model.extract_position(["y", "mu"], model_state)
     resid = pos["y"] - pos["mu"]
-    a_gibbs = pos["a"] + n / 2
-    b_gibbs = pos["b"] + jnp.sum(resid**2) / 2
-    # draw new value from full conditional
-    draw = b_gibbs / jax.random.gamma(prng_key, a_gibbs)
-    # return key-value pair of variable name and new value
-    return {"sigma_sq": draw}
+
+    conditional = tfd.InverseGamma(
+        concentration=3.0 + resid.size / 2,
+        scale=2.0 + jnp.sum(resid**2) / 2,
+    )
+    return {"sigma_sq": conditional.sample(seed=prng_key)}
 ```
 
-The regression coefficients `beta` are still sampled with NUTS. For
-`sigma_sq`, we attach an {class}`~.goose.MCMCSpec` with
-{meth}`~.goose.GibbsKernel.with_transition_fn`, which turns our custom
-transition function into a kernel factory that {class}`.LieselMCMC` can
-use. The Gibbs kernel itself does not need adaptation, but the NUTS
-kernel for `beta` does, so we still run an adaptation phase before
-drawing posterior samples.
+The prior's fixed hyperparameters may be constants here. The mean must be
+read from `model_state` so the update uses the current coefficients, rather
+than their initial values. Use the supplied random key, JAX-compatible
+calculations, and a position dictionary with the sampled variable's name.
 
-``` python
-beta.inference = gs.MCMCSpec(gs.NUTSKernel)
-sigma_sq.inference = gs.MCMCSpec(gs.GibbsKernel.with_transition_fn(draw_sigma_sq))
+## Choose the update order
 
-results = gs.LieselMCMC(model).run_for_epochs(
-    seed=1, num_chains=4, adaptation=1000, posterior=1000
+```{code-cell} ipython3
+model.vars["beta"].inference = gs.MCMCSpec(
+    gs.NUTSKernel,
+    order=1,
+    jitter_dist=tfd.Normal(0.0, 0.2),
+)
+model.vars["sigma_sq"].inference = gs.MCMCSpec(
+    gs.GibbsKernel.with_transition_fn(draw_sigma_sq),
+    order=2,
+    jitter_dist=tfd.LogNormal(0.0, 0.1),
+    jitter_method="multiplicative",
 )
 ```
 
-    liesel.goose.mcmc_spec - WARNING - No inference specification defined for Var(name="b"). If you do not add a kernel for this parameter manually to an EngineBuilder, it will not be sampled.
-    liesel.goose.mcmc_spec - WARNING - No inference specification defined for Var(name="a"). If you do not add a kernel for this parameter manually to an EngineBuilder, it will not be sampled.
-    liesel.goose.builder - WARNING - No jitter functions provided for position keys 'sigma_sq', 'beta'. The initial values for these keys won't be jittered
-    liesel.goose.engine - INFO - Initializing kernels...
-    liesel.goose.engine - INFO - Done
-    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 100 transitions, 25 jitted together
+Within each iteration:
 
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-     25%|██████████▌                               | 1/4 [00:03<00:10,  3.49s/chunk]
-    100%|██████████████████████████████████████████| 4/4 [00:03<00:00,  1.14chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 2, 4, 4, 2 / 100 transitions
-    liesel.goose.engine - INFO - Finished epoch
-    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
+| Step | Update | Values used |
+| --- | --- | --- |
+| 1 | NUTS proposes both coefficients together. | The current variance. |
+| 2 | Gibbs draws a new variance. | The newly updated coefficients. |
+| 3 | Goose stores the iteration. | Both updated blocks. |
 
-      0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|████████████████████████████████████████| 1/1 [00:00<00:00, 1007.76chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 1, 2, 1, 1 / 25 transitions
-    liesel.goose.engine - INFO - Finished epoch
-    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
+The positive multiplicative jitter keeps the initial variance on its support.
+The Gibbs kernel has no tuning, but the NUTS kernel still needs adaptation.
 
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1002.34chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 1, 3, 1, 1 / 50 transitions
-    liesel.goose.engine - INFO - Finished epoch
-    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
+```{code-cell} ipython3
+---
+mystnb:
+  image:
+    alt: "Regression graph with beta and sigma_sq as sampled parameters; sigma is the square root of sigma_sq and mu is X times beta."
+---
+model.plot()
+```
 
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|████████████████████████████████████████| 4/4 [00:00<00:00, 1659.96chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 1, 2, 1, 1 / 100 transitions
-    liesel.goose.engine - INFO - Finished epoch
-    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 525 transitions, 25 jitted together
+## Run the chains
 
-      0%|                                                 | 0/21 [00:00<?, ?chunk/s]
-    100%|███████████████████████████████████████| 21/21 [00:00<00:00, 298.33chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 4, 3, 2, 3 / 525 transitions
-    liesel.goose.engine - INFO - Finished epoch
-    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 200 transitions, 25 jitted together
+```{code-cell} ipython3
+results = gs.LieselMCMC(model).run_for_epochs(
+    seed=1,
+    num_chains=4,
+    adaptation=1000,
+    posterior=1000,
+    show_progress=False,
+)
 
-      0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|████████████████████████████████████████| 8/8 [00:00<00:00, 1142.08chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_01: 3, 1, 2, 4 / 200 transitions
-    liesel.goose.engine - INFO - Finished epoch
-    liesel.goose.engine - INFO - Finished warmup
-    liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 1000 transitions, 25 jitted together
-
-      0%|                                                 | 0/40 [00:00<?, ?chunk/s]
-     75%|█████████████████████████████▎         | 30/40 [00:00<00:00, 293.62chunk/s]
-    100%|███████████████████████████████████████| 40/40 [00:00<00:00, 274.01chunk/s]
-    liesel.goose.engine - INFO - Finished epoch
-
-Finally, we can take a look at our results.
-
-``` python
 summary = gs.Summary(results)
-summary
 ```
 
-<p>
-
-<strong>Parameter summary:</strong>
-</p>
-
-<table border="0" class="dataframe">
-
-<thead>
-
-<tr style="text-align: right;">
-
-<th>
-
-</th>
-
-<th>
-
-</th>
-
-<th>
-
-kernel
-</th>
-
-<th>
-
-mean
-</th>
-
-<th>
-
-sd
-</th>
-
-<th>
-
-q_0.05
-</th>
-
-<th>
-
-q_0.5
-</th>
-
-<th>
-
-q_0.95
-</th>
-
-<th>
-
-sample_size
-</th>
-
-<th>
-
-ess_bulk
-</th>
-
-<th>
-
-ess_tail
-</th>
-
-<th>
-
-rhat
-</th>
-
-</tr>
-
-<tr>
-
-<th>
-
-parameter
-</th>
-
-<th>
-
-index
-</th>
-
-<th>
-
-</th>
-
-<th>
-
-</th>
-
-<th>
-
-</th>
-
-<th>
-
-</th>
-
-<th>
-
-</th>
-
-<th>
-
-</th>
-
-<th>
-
-</th>
-
-<th>
-
-</th>
-
-<th>
-
-</th>
-
-<th>
-
-</th>
-
-</tr>
-
-</thead>
-
-<tbody>
-
-<tr>
-
-<th rowspan="2" valign="top">
-
-beta
-</th>
-
-<th>
-
-(0,)
-</th>
-
-<td>
-
-kernel_01
-</td>
-
-<td>
-
-0.983
-</td>
-
-<td>
-
-0.090
-</td>
-
-<td>
-
-0.837
-</td>
-
-<td>
-
-0.984
-</td>
-
-<td>
-
-1.128
-</td>
-
-<td>
-
-4000
-</td>
-
-<td>
-
-946.958
-</td>
-
-<td>
-
-1138.096
-</td>
-
-<td>
-
-1.007
-</td>
-
-</tr>
-
-<tr>
-
-<th>
-
-(1,)
-</th>
-
-<td>
-
-kernel_01
-</td>
-
-<td>
-
-1.912
-</td>
-
-<td>
-
-0.154
-</td>
-
-<td>
-
-1.661
-</td>
-
-<td>
-
-1.913
-</td>
-
-<td>
-
-2.158
-</td>
-
-<td>
-
-4000
-</td>
-
-<td>
-
-933.683
-</td>
-
-<td>
-
-1052.928
-</td>
-
-<td>
-
-1.007
-</td>
-
-</tr>
-
-<tr>
-
-<th>
-
-sigma_sq
-</th>
-
-<th>
-
-()
-</th>
-
-<td>
-
-kernel_00
-</td>
-
-<td>
-
-1.043
-</td>
-
-<td>
-
-0.066
-</td>
-
-<td>
-
-0.939
-</td>
-
-<td>
-
-1.040
-</td>
-
-<td>
-
-1.154
-</td>
-
-<td>
-
-4000
-</td>
-
-<td>
-
-4091.178
-</td>
-
-<td>
-
-3815.673
-</td>
-
-<td>
-
-1.000
-</td>
-
-</tr>
-
-</tbody>
-
-</table>
-
-<p>
-
-<strong>Acceptance probabilities:</strong>
-</p>
-
-<table border="0" class="dataframe">
-
-<thead>
-
-<tr style="text-align: right;">
-
-<th>
-
-</th>
-
-<th>
-
-</th>
-
-<th>
-
-</th>
-
-<th>
-
-acceptance_probability
-</th>
-
-<th>
-
-position_moved
-</th>
-
-</tr>
-
-<tr>
-
-<th>
-
-kernel
-</th>
-
-<th>
-
-positions
-</th>
-
-<th>
-
-phase
-</th>
-
-<th>
-
-</th>
-
-<th>
-
-</th>
-
-</tr>
-
-</thead>
-
-<tbody>
-
-<tr>
-
-<th rowspan="2" valign="top">
-
-kernel_00
-</th>
-
-<th rowspan="2" valign="top">
-
-sigma_sq
-</th>
-
-<th>
-
-posterior
-</th>
-
-<td>
-
-1.000
-</td>
-
-<td>
-
-1.000
-</td>
-
-</tr>
-
-<tr>
-
-<th>
-
-warmup
-</th>
-
-<td>
-
-1.000
-</td>
-
-<td>
-
-1.000
-</td>
-
-</tr>
-
-<tr>
-
-<th rowspan="2" valign="top">
-
-kernel_01
-</th>
-
-<th rowspan="2" valign="top">
-
-beta
-</th>
-
-<th>
-
-posterior
-</th>
-
-<td>
-
-0.885
-</td>
-
-<td>
-
-NaN
-</td>
-
-</tr>
-
-<tr>
-
-<th>
-
-warmup
-</th>
-
-<td>
-
-0.791
-</td>
-
-<td>
-
-NaN
-</td>
-
-</tr>
-
-</tbody>
-
-</table>
-
-<p>
-
-<strong>Error summary:</strong>
-</p>
-
-<table border="0" class="dataframe">
-
-<thead>
-
-<tr style="text-align: right;">
-
-<th>
-
-</th>
-
-<th>
-
-</th>
-
-<th>
-
-</th>
-
-<th>
-
-</th>
-
-<th>
-
-</th>
-
-<th>
-
-count
-</th>
-
-<th>
-
-sample_size
-</th>
-
-<th>
-
-sample_size_total
-</th>
-
-<th>
-
-relative
-</th>
-
-</tr>
-
-<tr>
-
-<th>
-
-kernel
-</th>
-
-<th>
-
-positions
-</th>
-
-<th>
-
-error_code
-</th>
-
-<th>
-
-error_msg
-</th>
-
-<th>
-
-phase
-</th>
-
-<th>
-
-</th>
-
-<th>
-
-</th>
-
-<th>
-
-</th>
-
-<th>
-
-</th>
-
-</tr>
-
-</thead>
-
-<tbody>
-
-<tr>
-
-<th rowspan="2" valign="top">
-
-kernel_01
-</th>
-
-<th rowspan="2" valign="top">
-
-beta
-</th>
-
-<th rowspan="2" valign="top">
-
-1
-</th>
-
-<th rowspan="2" valign="top">
-
-divergent transition
-</th>
-
-<th>
-
-warmup
-</th>
-
-<td>
-
-50
-</td>
-
-<td>
-
-4000
-</td>
-
-<td>
-
-4000
-</td>
-
-<td>
-
-0.012
-</td>
-
-</tr>
-
-<tr>
-
-<th>
-
-posterior
-</th>
-
-<td>
-
-0
-</td>
-
-<td>
-
-4000
-</td>
-
-<td>
-
-4000
-</td>
-
-<td>
-
-0.000
-</td>
-
-</tr>
-
-</tbody>
-
-</table>
-
-And plot them.
-
-``` python
-gs.plot_trace(results)
+```{code-cell} ipython3
+summary.to_dataframe().set_index("var_fqn")[
+    ["mean", "sd", "q_0.05", "q_0.95", "mcse_mean"]
+].round(3)
 ```
 
-<img
-src="01d-gibbs-sampling_files/figure-commonmark/trace-plot-output-1.png"
-id="trace-plot" />
+```{code-cell} ipython3
+summary.aggregate_diagnostics().round(3)
+```
+
+```{code-cell} ipython3
+summary.error_df().reset_index().filter(["error_msg", "phase", "count"])
+```
+
+The posterior means are about 0.99 for the intercept, 1.91 for the slope,
+and 1.04 for the variance, close to the generating values 1, 2, and 1.
+The largest R-hat is about 1.005 and the smallest bulk ESS is about 1,100.
+The NUTS update records 45 warmup divergences and none during posterior
+sampling. These diagnostics support using the draws for this example;
+check the chain paths as well.
+
+```{code-cell} ipython3
+---
+mystnb:
+  image:
+    alt: "Four chains from the mixed NUTS and Gibbs sampler for the intercept, slope, and variance."
+---
+gs.plot_trace(results, params=["beta", "sigma_sq"])
+```
+
+Inspect the overlap of the chains together with ESS, R-hat, and reported errors.
+An exact Gibbs draw is always accepted, but the sequence of alternating block
+updates can still mix slowly. See {doc}`../../goose-diagnostics`.
+
+## Compare with joint NUTS
+
+Build a fresh model with the same data and priors, then transform its variance.
+The repeated setup keeps both sampling strategies independent.
+
+```{code-cell} ipython3
+beta_joint = lsl.Var.new_param(
+    jnp.zeros(2),
+    dist=lsl.Dist(tfd.Normal, 0.0, 5.0),
+    name="beta",
+)
+variance_joint = lsl.Var.new_param(
+    1.0,
+    dist=lsl.Dist(tfd.InverseGamma, concentration=3.0, scale=2.0),
+    name="sigma_sq",
+)
+
+# Connect the parameters to the observations.
+sigma_joint = lsl.Var.new_calc(jnp.sqrt, variance_joint, name="sigma")
+X_joint = lsl.Var.new_obs(X_mat, name="X")
+mu_joint = lsl.Var.new_calc(jnp.dot, X_joint, beta_joint, name="mu")
+y_joint = lsl.Var.new_obs(
+    y_vec,
+    dist=lsl.Dist(tfd.Normal, mu_joint, sigma_joint),
+    name="y",
+)
+
+# Configure a joint update on the unconstrained scale.
+joint = gs.MCMCSpec(
+    gs.NUTSKernel,
+    kernel_group="regression",
+    jitter_dist=tfd.Normal(0.0, 0.2),
+)
+beta_joint.inference = joint
+variance_joint.biject(tfb.Exp(), name="log_sigma_sq", inference=joint)
+joint_model = lsl.Model(y_joint)
+```
+
+```{code-cell} ipython3
+joint_results = gs.LieselMCMC(joint_model).run_for_epochs(
+    seed=1,
+    num_chains=4,
+    adaptation=1000,
+    posterior=1000,
+    positions_included=["sigma_sq"],
+    show_progress=False,
+)
+```
+
+Compare both methods on the original variance scale, including Monte Carlo
+precision and diagnostics:
+
+```{code-cell} ipython3
+comparison = pd.concat(
+    {
+        "NUTS + Gibbs": gs.Summary(
+            results, selected=["beta", "sigma_sq"]
+        ).to_dataframe(),
+        "Joint NUTS": gs.Summary(
+            joint_results, selected=["beta", "sigma_sq"]
+        ).to_dataframe(),
+    },
+    names=["Sampler"],
+)
+```
+
+```{code-cell} ipython3
+comparison.set_index("var_fqn", append=True)[
+    ["mean", "sd", "mcse_mean", "ess_bulk", "rhat"]
+].round(3)
+```
+
+The posterior means agree within a few thousandths in this run. Gibbs gives
+more effective draws for the variance here, while joint NUTS gives more for
+the coefficients. Both runs have R-hat below 1.01 for these quantities. This comparison uses two actual runs,
+not stored reference values. It does not establish a universally faster
+strategy: the value of blocking depends on the posterior and the cost of each
+update. Inspect errors for the comparison run too:
+
+```{code-cell} ipython3
+gs.Summary(joint_results).error_df().reset_index().filter(
+    ["error_msg", "phase", "count"]
+)
+```
+
+Next, {doc}`choose other kernels and blocks <../../goose-kernels>` or
+{doc}`supply a custom Metropolis-Hastings proposal <08-custom-kernel>`.

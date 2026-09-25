@@ -12,6 +12,7 @@ Liesel: A Probabilistic Programming Framework
    model-building
    tutorials_overview
    optimization
+   sampling
 
 
 API Reference
@@ -42,17 +43,13 @@ The model building workflow in Liesel consists of the following steps:
     ~liesel.model.Var
     ~liesel.model.Dist
 
+.. _mcmc-api:
+
 MCMC Setup
 ************
 
-To set up an MCMC engine, goose provides the :class:`~.goose.EngineBuilder`. Please refer to
-the linked EngineBuilder documentation to learn how to use it.
-
-A recent addition is the :class:`~.goose.MCMCSpec`, which can be passed to the
-``inference`` argument of a :class:`.model.Var` upon initialization to tell the variable
-directly how it should be sampled. You can then use the method
-:meth:`~.goose.LieselMCMC.get_engine_builder` of :class:`~.goose.LieselMCMC` to
-conveniently initialize your :class:`~.goose.EngineBuilder`.
+Start with :doc:`sampling` for worked examples and task guides. The pages
+below describe arguments, defaults, and exact behavior.
 
 .. autosummary::
     :toctree: generated
