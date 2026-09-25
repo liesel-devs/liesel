@@ -112,7 +112,7 @@ def position_key_groups_from_model(
 def continuous_coordinate_nodes(
     model: Model, keys: Sequence[str], data_nodes: set
 ) -> set:
-    """Resolve distinct writable continuous coordinates, excluding data."""
+    """Resolve distinct writable continuous parameters, excluding data."""
     if isinstance(keys, str):
         raise ValueError("Pass coordinate names as a sequence, not a string.")  # noqa: TRY004
     nodes = set()

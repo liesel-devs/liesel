@@ -567,8 +567,8 @@ class NegLogProbLoss(LossMixin):
         Curvature comes from the full training log-likelihood plus log-prior,
         including transformation Jacobians. Validation and test data are excluded,
         and loss normalization (``scale`` or ``LieselOptim.scale_loss``) does not
-        affect the approximation. Only optimized coordinates are included;
-        omitted coordinates retain their model values.
+        affect the approximation. Only optimized parameters are included;
+        omitted parameters retain their model values.
 
         Parameters
         ----------

@@ -36,6 +36,9 @@ Use short sentences, familiar verbs, and concrete names. Address the reader
 directly. Explain a technical term where it first becomes necessary. Keep exact
 API names and distinctions that affect the result.
 
+Call model parameters “parameters,” not “coordinates.” Where transformations
+matter, use “transformed parameters” or specify the parameter scale.
+
 Prefer “This saves memory” to “This configuration facilitates reduced memory
 consumption.” Remove repeated introductions, promotional claims, and closing
 summaries that restate the section.

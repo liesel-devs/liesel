@@ -64,7 +64,7 @@ History and monitoring continue across pauses. Earlier results stay unchanged;
 keeping many snapshots uses extra memory. Treat checkpoint contents as read-only.
 Custom losses must keep their model state and loss-state PyTrees compatible
 and serializable with pickle. Committed and best loss states survive recovery.
-For ``LaplaceLoss``, keep the latent coordinates and inner-solver controls unchanged;
+For ``LaplaceLoss``, keep the latent parameters and inner-solver controls unchanged;
 checkpoint recovery checks these settings as well as state structure and dtype.
 
 For manual snapshots, use :meth:`liesel.optim.OptimCheckpoint.save` and

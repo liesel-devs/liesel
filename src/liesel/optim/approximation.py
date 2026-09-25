@@ -15,11 +15,11 @@ from .types import Position
 
 @dataclass
 class LaplaceApproximation:
-    """Joint Gaussian approximation in fitted coordinate order.
+    """Joint Gaussian approximation of the fitted parameters.
 
     The lower triangular ``precision_cholesky`` factors the joint precision.
-    ``mean`` contains the fitted coordinates. Their flattened order is given by
-    ``names`` and ``shapes``: sorted optimized names, followed by sorted latent
+    ``mean`` contains the fitted parameter values. Their flattened order is given
+    by ``names`` and ``shapes``: sorted optimized names, followed by sorted latent
     names when present. Construct instances through
     :meth:`~liesel.optim.NegLogProbLoss.approximate_joint_posterior` or
     :meth:`~liesel.optim.LaplaceLoss.approximate_joint_posterior`.
@@ -119,7 +119,7 @@ class LaplaceApproximation:
         """Return named diagonal blocks of the joint precision.
 
         Each block is the precision of that parameter conditional on all other
-        coordinates. Its inverse is a conditional covariance, generally different
+        parameters. Its inverse is a conditional covariance, generally different
         from the marginal covariance. Selection and flattened shapes follow
         :meth:`marginal_covariance_blocks`. The full precision is not constructed.
         """
@@ -132,9 +132,9 @@ class LaplaceApproximation:
         return blocks
 
     def sample(self, key: jax.Array, sample_shape: tuple[int, ...] = ()) -> Position:
-        """Draw coordinate dictionaries with common leading sample axes.
+        """Draw parameter dictionaries with common leading sample axes.
 
-        The default returns one draw in the original coordinate shapes. Pass
+        The default returns one draw in the original parameter shapes. Pass
         ``(draws,)`` or ``(chains, draws)`` for leading axes accepted by
         :meth:`liesel.model.Model.predict`.
         """

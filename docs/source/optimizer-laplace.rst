@@ -9,7 +9,7 @@ Poisson model's mean and random-effect scale while integrating eight group effec
 
    **Relation to REML.** ``LaplaceLoss`` approximates integration over selected
    parameters in smooth models, including non-Gaussian and nonlinear models.
-   The integrated coordinates, priors, and Jacobians determine the target. Here
+   The integrated parameters, priors, and Jacobians determine the target. Here
    we integrate the group effects and retain parameter priors, yielding a
    marginal posterior.
 
@@ -92,7 +92,7 @@ Fit the marginal posterior
 
    early_stopping
 
-Use full-data batches and ``"train_full_data"`` monitoring. The outer coordinates
+Use full-data batches and ``"train_full_data"`` monitoring. The outer parameters
 are ``mu`` and ``h(tau)``; ``b`` keeps its prior. The unscaled loss includes priors,
 Jacobians, and normalization constants; see :doc:`optimizer-loss-scaling`.
 
@@ -121,7 +121,7 @@ For the first group, the multiplier is about ``exp(-1.272) = 0.28``;
 for the last group, it is about ``exp(1.328) = 3.77``.
 
 For the final snapshot, pair ``position_final`` with ``loss_state_final``.
-See :class:`~liesel.optim.LaplaceState` for convergence diagnostics, coordinate
+See :class:`~liesel.optim.LaplaceState` for convergence diagnostics, parameter
 ordering, and the saved curvature in ``latent_precision_cholesky``.
 
 Construct joint uncertainty on request
@@ -284,5 +284,6 @@ Choose numerical controls
 Newton decrement: ``None`` chooses ``1e-6`` for float32 or ``1e-10`` for float64.
 
 The solver finds a local mode; warm and cold starts can find different modes.
-Dense curvature uses O(d²) storage and O(d³) linear algebra for d latent coordinates.
+For d scalar latent parameters, dense curvature uses O(d²) storage and O(d³)
+linear algebra.
 This version targets a few hundred latents with a modest outer dimension.

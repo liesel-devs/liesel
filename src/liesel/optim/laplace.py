@@ -1,4 +1,4 @@
-"""Dense Laplace integration of continuous model coordinates."""
+"""Dense Laplace integration of continuous model parameters."""
 
 import math
 from collections.abc import Sequence
@@ -36,7 +36,7 @@ class LaplaceState:
     3 failed backtracking, 4 non-finite evaluation, 5 invalid curvature.
     ``newton_decrement_squared`` is g.T @ solve(H, g); half of it is the
     convergence measure. Names and shapes describe the flattened latent order,
-    sorted by coordinate name. ``latent_precision_cholesky`` is lower triangular,
+    sorted by parameter name. ``latent_precision_cholesky`` is lower triangular,
     with ``L @ L.T`` equal to the conditional negative-log-density Hessian.
     ``gradient_norm`` is the Euclidean norm of its latent gradient. ``n_iter``
     counts attempted Newton steps; ``n_resolution_steps`` counts accepted steps
@@ -298,7 +298,7 @@ _fit_value.defvjp(_fit_forward, _fit_backward)
 
 
 class LaplaceLoss(LossMixin):
-    """Integrate selected latent coordinates out of the model's joint density.
+    """Integrate selected latent parameters out of the model's joint density.
 
     Use full-data batches and ``loss_monitor="train_full_data"``. The returned
     value is the unscaled negative log Laplace approximation, including priors,
@@ -314,9 +314,9 @@ class LaplaceLoss(LossMixin):
         the usual model-derived full-training split. Custom aggregate densities
         may need an explicit :class:`PositionSplit`.
     latent
-        Nonempty sequence of writable continuous coordinate names to integrate.
+        Nonempty sequence of writable continuous parameter names to integrate.
         Scalars, vectors, and matrices can be combined. Duplicate aliases, weak
-        variables, discrete coordinates, and overlap with outer coordinates are
+        variables, discrete parameters, and overlap with outer parameters are
         rejected.
     warm_start
         Start each inner solve from the committed latent mode. Defaults to True.
@@ -398,7 +398,7 @@ class LaplaceLoss(LossMixin):
         )
 
     def position(self, position_keys: Sequence[str]) -> Position:
-        """Validate and extract outer coordinates, excluding latents and data."""
+        """Validate and extract outer parameters, excluding latents and data."""
         nodes = self._coordinate_nodes(position_keys)
         if self._latent_nodes.intersection(nodes):
             raise ValueError("Outer and latent coordinates must not overlap.")
@@ -455,7 +455,7 @@ class LaplaceLoss(LossMixin):
         """Construct joint uncertainty from marginal and conditional curvature.
 
         The selected minimum-monitor or final state must belong to this model, loss, and
-        training data. Omitted outer coordinates retain their model values.
+        training data. Omitted outer parameters retain their model values.
         This optional calculation uses higher implicit derivatives and does no
         work during ordinary fitting.
 
@@ -488,7 +488,7 @@ class LaplaceLoss(LossMixin):
         ``outer_newton_decrement_squared`` when evaluation reaches those values.
         Successful evaluation also retains ``mode_jacobian`` (J) and
         ``joint_precision``. Model graph and data equality are the caller's
-        responsibility; coordinate metadata and saved configuration are checked.
+        responsibility; parameter metadata and saved configuration are checked.
         """
         approximation = _prepare_approximation(
             result, at, raise_on_failure, stationarity_tol
