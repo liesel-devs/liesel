@@ -16,6 +16,24 @@ def strong_observed_keys(model: Model) -> list[str]:
     return [name for name, var in model.observed.items() if not var.weak]
 
 
+def multi_size_error_message(
+    factory: str, groups: Sequence[tuple[int, list[str]]]
+) -> str:
+    """Explain inferred groups and the explicit grouping and shared-data routes."""
+    description = "; ".join(f"{keys} (axis length {size})" for size, keys in groups)
+    manager = "BatchManager" if factory == "Batches" else f"{factory}Manager"
+    return (
+        f"{factory}.from_model() found multiple observation groups: {description}. "
+        "Matching lengths do not establish row alignment. Check the groups before "
+        "setting multi_size='manager'. For LieselOptim, pass "
+        "split=opt.PositionSplit.from_model(model, multi_size='manager'). "
+        f"Use nested position_keys with {manager}.from_model(...) to choose groups "
+        "explicitly. For shared values, "
+        "construct a split with split_axes={key: None}, then pass it as split=split "
+        "or use Batches.from_split(split, ...)."
+    )
+
+
 def validate_model_data_keys(
     model: Model,
     position_keys: Sequence[str],
