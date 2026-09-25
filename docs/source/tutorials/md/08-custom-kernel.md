@@ -1,223 +1,127 @@
-# Defining a custom MCMC kernel
+---
+file_format: mystnb
+kernelspec:
+  name: python3
+  display_name: Python 3
+---
+
+# Define a custom kernel
 
 <a id="custom-metropolis-hastings-kernel"></a>
 
-## Supply a Metropolis-Hastings proposal
+## Supply an MH proposal
 
-Start with {class}`~liesel.goose.MHKernel` when only your proposal is
-custom. It handles acceptance/rejection and optional step size
-adaptation. A complete kernel class is useful when you also need
-specialized state or tuning.
+Start with {class}`~liesel.goose.MHKernel` when only your proposal is custom.
+It handles acceptance/rejection and optional step size adaptation. A complete
+kernel class is useful when you also need specialized state or tuning.
 
-This runnable example estimates a normal mean. A symmetric random-walk
-proposal is deliberately simple; for ordinary use,
-{class}`~liesel.goose.RWKernel` already provides this update.
+This runnable example estimates a normal mean. A symmetric random-walk proposal
+is deliberately simple; for ordinary use, {class}`~liesel.goose.RWKernel` already
+provides this update.
 
-``` python
+```{code-cell} ipython3
 import jax
 import jax.numpy as jnp
 import tensorflow_probability.substrates.jax.distributions as tfd
 
+import liesel.goose as gs
 import liesel.model as lsl
 
 mu = lsl.Var.new_param(
-    0.0, lsl.Dist(tfd.Normal, 0.0, 2.0), name="mu"
+    0.0,
+    dist=lsl.Dist(tfd.Normal, 0.0, 2.0),
+    name="mu",
 )
 y = lsl.Var.new_obs(
     jnp.array([0.8, 1.3, 0.9, 1.6, 1.1]),
-    lsl.Dist(tfd.Normal, mu, 1.0),
+    dist=lsl.Dist(tfd.Normal, mu, 1.0),
     name="y",
 )
-model = lsl.Model([y])
+model = lsl.Model(y)
+```
 
+```{code-cell} ipython3
+---
+mystnb:
+  image:
+    alt: "Normal-mean model: the parameter mu determines the mean of the observed response y."
+---
+model.plot()
+```
+
+Define the proposal and attach it to the mean parameter:
+
+```{code-cell} ipython3
 def rw_proposal(prng_key, model_state, step_size):
     current = model.extract_position(["mu"], model_state)["mu"]
     proposed = current + step_size * jax.random.normal(prng_key, current.shape)
     return gs.MHProposal({"mu": proposed}, log_correction=0.0)
+
 
 model.vars["mu"].inference = gs.MCMCSpec(
     gs.MHKernel,
     kernel_kwargs={"proposal_fn": rw_proposal, "da_tune_step_size": True},
     jitter_dist=tfd.Normal(0.0, 0.2),
 )
+```
+
+```{code-cell} ipython3
 results = gs.LieselMCMC(model).run_for_epochs(
-    seed=7, num_chains=4, adaptation=1000, posterior=1000, show_progress=False,
+    seed=7,
+    num_chains=4,
+    adaptation=1000,
+    posterior=1000,
+    show_progress=False,
 )
+```
+
+```{code-cell} ipython3
 gs.Summary(results).to_dataframe()[["mean", "sd", "mcse_mean"]].round(3)
 ```
 
-    liesel.goose.engine - INFO - Initializing kernels...
-    liesel.goose.engine - INFO - Done
-    liesel.goose.engine - INFO - Finished warmup
-
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-&#10;    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-&#10;    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-
-|          | mean  | sd    | mcse_mean |
-|----------|-------|-------|-----------|
-| variable |       |       |           |
-| mu       | 1.076 | 0.410 | 0.018     |
-
-</div>
-
-The proposal function receives the random key, current model state, and
-step size. It returns a {class}`~liesel.goose.MHProposal` containing a
-position and the log proposal correction
+The proposal function receives the random key, current model state, and step
+size. It returns a {class}`~liesel.goose.MHProposal` containing a position and
+the log proposal correction
 
 $$
 \log q(\text{current}\mid\text{proposed})
 -\log q(\text{proposed}\mid\text{current}).
 $$
 
-For this symmetric normal proposal the correction is zero. For an
-asymmetric proposal, compute it explicitly and sum over the proposed
-block’s dimensions. Use JAX-compatible calculations and the supplied
-key; do not change captured model values or reuse a random key for
-independent draws.
+For this symmetric normal proposal the correction is zero. For an asymmetric
+proposal, compute it explicitly and sum over the proposed block's dimensions.
+Use JAX-compatible calculations and the supplied key; do not change captured
+model values or reuse a random key for independent draws.
 
-``` python
+```{code-cell} ipython3
 gs.Summary(results).aggregate_diagnostics().round(3)
 ```
 
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-&#10;    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-&#10;    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-
-|           | ess_bulk | ess_tail | rhat  | aggregated_by         |
-|-----------|----------|----------|-------|-----------------------|
-| parameter |          |          |       |                       |
-| mu        | 494.920  | 528.267  | 1.002 | min (ess); max (rhat) |
-
-</div>
-
-``` python
+```{code-cell} ipython3
 gs.Summary(results).error_df()
 ```
 
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-&#10;    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-&#10;    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-
-|     |
-|-----|
-
-</div>
-
-Read these with the {doc}`diagnostics guide <../../goose-diagnostics>`.
+The estimated mean is about 1.08, with R-hat about 1.002 and bulk ESS about
+495. The empty error table means no errors were recorded. Read these results
+with the {doc}`diagnostics guide <../../goose-diagnostics>`.
 For an exact full-conditional draw, use the
 {doc}`Gibbs tutorial <01d-gibbs-sampling>` instead.
 
-## Fully customized MCMC kernel
+## Define a kernel state
 
-Any Python class that implements the {class}`.Kernel` protocol can be
-used as an MCMC kernel class in `liesel.goose`. The protocol requires
-the implementation of several attributes and methods, the most important
-of which are {meth}`.Kernel.transition` and {meth}`.Kernel.tune`. These
-methods are called by the engine and need to be pure and jittable.
+Implement the {class}`~liesel.goose.Kernel` protocol when a proposal function
+is not enough, for example when your algorithm needs its own tuning state.
+Below we reconstruct the built-in random-walk kernel to show the required
+hooks. Use {class}`~liesel.goose.RWKernel` for routine sampling.
 
-### Overview
+The chain-specific state holds the step size and dual averaging state.
+Register the dataclass as a JAX pytree so the engine can compile and batch it.
+State and transition outputs must keep the same structure and array shapes
+throughout sampling.
 
-**The transition method.** The purpose of the transition method is to
-move the subset of the model state handled by the kernel using a valid
-MCMC step, e.g.~a Metropolis-Hastings algorithm. Its signature is:
-
-``` python
->>> class Kernel:
-...
-...     def transition(
-...         self,
-...         prng_key: KeyArray,
-...         kernel_state: KernelState,
-...         model_state: ModelState,
-...         epoch: EpochState,
-...     ) -> TransitionOutcome[KernelState, TransitionInfo]:
-...         ...
-```
-
-Since the {meth}`.Kernel.transition` method must be pure, and MCMC
-transitions generally involve the generation of random numbers, a key
-for pseudo-random number generation (PRNG) needs to be provided as an
-argument. In addition, the {meth}`.Kernel.transition` method receives
-the kernel state, the model state and the epoch state as arguments, and
-returns a {class}`.TransitionOutcome` object, which wraps the new kernel
-state, the new model state and some meta-information about the
-transition, e.g.~an error code or the acceptance probability (in a
-{class}`.TransitionInfo` object). An error code of zero indicates that
-the transition did not produce an error.
-
-All inputs and outputs must be valid *pytrees* (i.e.~arrays or nested
-lists, tuples or dicts of arrays). The structure of these objects,
-e.g.~the shape of the arrays in the kernel state, must not change
-between transitions. This allows the kernels to have specialized
-{class}`.KernelState` and {class}`.TransitionInfo` classes. A kernel
-state can be any pytree.
-
-**The tune method.** The {meth}`.Kernel.tune` method updates the kernel
-hyperparameters at the end of an adaptation epoch. The method receives
-the PRNG key, the model state, the kernel state, the epoch state, and
-(optionally) the *history*, i.e.~the samples from the previous epoch, as
-arguments. It returns a {class}`.TuningOutcome` object that wraps the
-new kernel state and some meta-information about the tuning process,
-e.g.~an error code. As for the transition, the {class}`.TuningInfo`
-class can be kernel-specific but must be a valid pytree.
-
-The signature of the {meth}`.Kernel.tune` method is as follows:
-
-``` python
->>> class Kernel:
-...
-...     def tune(
-...         self,
-...         prng_key: KeyArray,
-...         kernel_state: KernelState,
-...         model_state: ModelState,
-...         epoch: EpochState,
-...         history: Position | None,
-...     ) -> TuningOutcome[KernelState, TuningInfo]:
-...         ...
-```
-
-### Step-by-step tutorial
-
-We will now go through the definition of the {class}`.RWKernel`
-step-by-step.
-
-#### The kernel state
-
-First, we define the {class}`.KernelState`. Since we plan to use dual
-averaging for step size tuning in this kernel class, we define a kernel
-state that follows the {class}`.DAKernelState` protocol.
-
-``` python
+```{code-cell} ipython3
 from dataclasses import dataclass
+
 from liesel.goose import da  # dual averaging functionality
 from liesel.goose.da import DualAvgState
 from liesel.goose.pytree import (
@@ -241,302 +145,31 @@ class RWKernelState:
             self.da_state = DualAvgState.from_step_size(self.step_size)
 ```
 
-#### The kernel class
+## Implement the hooks
 
-We now define the actual kernel class. The class inherits from two
-mixins provided by `liesel.goose`.
+{class}`~liesel.goose.ModelMixin` supplies model access and position extraction.
+{class}`~liesel.goose.TransitionMixin` chooses the standard or adaptive
+transition based on the epoch type. Both transitions must be pure and
+JAX-compatible: use the supplied state and random key rather than changing
+the captured model.
 
-The {class}`.ModelMixin` gives the kernel access to the model and
-provides convenience methods such as {meth}`.ModelMixin.position`, which
-extracts the part of the model state handled by this kernel.
+The standard transition proposes a Gaussian random walk and delegates
+acceptance to {func}`~liesel.goose.mh_step`. The adaptive transition also updates
+the step size. Split the random key so proposal and acceptance use independent
+randomness.
 
-The {class}`.TransitionMixin` provides the public
-{meth}`.TransitionMixin.transition` method. Internally, it dispatches to
-`_standard_transition` or `_adaptive_transition`, depending on the
-current epoch. This means that we only have to implement these two
-methods.
-
-``` python
+```{code-cell} ipython3
 from collections.abc import Sequence
 
 import jax
 import jax.flatten_util
+
 import liesel.goose as gs
 
 
 class RWKernel(
-    gs.ModelMixin, gs.TransitionMixin[RWKernelState, gs.DefaultTransitionInfo]
-):
-    error_book = {0: "no errors", 90: "nan acceptance prob"}
-    """Dict of error codes and their meaning."""
-
-    needs_history = False
-    """Whether this kernel needs its history for tuning."""
-
-    identifier: str = ""
-    """Kernel identifier, set by :class:`~.goose.EngineBuilder`"""
-
-    position_keys: tuple[str, ...]
-    """Tuple of position keys handled by this kernel."""
-```
-
-At the beginning of the class, we define a few class attributes required
-by the kernel protocol.
-
-The `error_book` maps error codes to human-readable messages. By
-convention, an error code of zero means that no error occurred.
-
-The `needs_history` attribute tells the engine whether the kernel
-requires the samples from the previous epoch for tuning. This random
-walk kernel does not use the history, so we set it to `False`.
-
-The `identifier` is set by the {class}`~.goose.EngineBuilder` and can be
-used to distinguish between kernels. Finally, `position_keys` stores the
-names of the model variables handled by this kernel.
-
-The constructor stores the user-supplied settings. The most important
-argument is `position_keys`, which determines which model variables are
-updated by this kernel.
-
-The remaining arguments configure the initial step size and the dual
-averaging algorithm. These values are stored on the kernel object, but
-they are not part of the kernel state. The mutable, chain-specific part
-of the kernel is stored separately in the {class}`.RWKernelState`.
-
-``` python
-    def __init__(
-        self,
-        position_keys: Sequence[str],
-        initial_step_size: float = 1.0,
-        da_target_accept: float = 0.234,
-        da_gamma: float = 0.05,
-        da_kappa: float = 0.75,
-        da_t0: int = 10,
-        identifier: str = "",
-    ):
-        self._model = None
-        self.position_keys = tuple(position_keys)
-        self.initial_step_size = initial_step_size
-        self.da_target_accept = da_target_accept
-        self.da_gamma = da_gamma
-        self.da_kappa = da_kappa
-        self.da_t0 = da_t0
-        self.identifier = identifier
-```
-
-Before sampling starts, the engine calls `init_state`. This method
-creates the initial kernel state for one chain. In our case, the only
-user-facing state variable is the current step size.
-
-``` python
-    def init_state(self, prng_key, model_state: gs.ModelState) -> RWKernelState:
-        """
-        Initializes the kernel state.
-        """
-        return RWKernelState(step_size=self.initial_step_size)
-```
-
-Next, we implement the non-adaptive transition. This method performs one
-ordinary Metropolis-Hastings random walk step.
-
-First, we split the pseudo-random number key. One key is used to
-generate the proposal, and the other key is used inside the
-Metropolis-Hastings accept/reject step.
-
-``` python
-    def _standard_transition(
-        self,
-        prng_key,
-        kernel_state: RWKernelState,
-        model_state: gs.ModelState,
-        epoch: gs.EpochState,
-    ) -> gs.TransitionOutcome[RWKernelState, gs.DefaultTransitionInfo]:
-        """
-        Performs an MCMC transition *without* dual averaging.
-        """
-
-        key, subkey = jax.random.split(prng_key)
-        step_size = kernel_state.step_size
-        ...
-```
-
-The current position is extracted from the model state. Since the
-position can be a pytree, we flatten it into a single vector before
-adding Gaussian noise. After the proposal has been generated, we
-transform it back into the original pytree structure.
-
-This lets the same implementation work for scalar, vector-valued, or
-structured model positions.
-
-``` python
-def _standard_transition(...):
-        # ... (continued)
-        # random walk proposal
-        position = self.position(model_state)
-        flat_position, unravel_fn = jax.flatten_util.ravel_pytree(position)
-        step = step_size * jax.random.normal(key, flat_position.shape)
-        flat_proposal = flat_position + step
-        proposal = unravel_fn(flat_proposal)
-```
-
-Finally, we pass the proposal to {func}`.mh_step`. This function
-evaluates the proposed model state and performs the Metropolis-Hastings
-accept/reject step.
-
-The result is returned as a {class}`.TransitionOutcome`, which contains
-the transition information, the kernel state, and the updated model
-state.
-
-``` python
-def _standard_transition(...):
-        # ... (continued)
-        # metropolis-hastings calibration
-        info, model_state = gs.mh_step(subkey, self.model, proposal, model_state)
-        return gs.TransitionOutcome(info, kernel_state, model_state)
-```
-
-The adaptive transition starts by performing the same
-Metropolis-Hastings step as above. It then updates the dual averaging
-state using the observed acceptance probability from the transition.
-
-The dual averaging update modifies the kernel state in place. It uses
-the current acceptance probability, the time within the current epoch,
-and the dual averaging hyperparameters stored on the kernel object.
-
-``` python
-    def _adaptive_transition(
-        self,
-        prng_key,
-        kernel_state: RWKernelState,
-        model_state: gs.ModelState,
-        epoch: gs.EpochState,
-    ) -> gs.TransitionOutcome[RWKernelState, gs.DefaultTransitionInfo]:
-        """
-        Performs an MCMC transition *with* dual averaging.
-        """
-
-        outcome = self._standard_transition(prng_key, kernel_state, model_state, epoch)
-
-        da.da_step(
-            outcome.kernel_state,
-            outcome.info.acceptance_prob,
-            epoch.time_in_epoch,
-            self.da_target_accept,
-            self.da_gamma,
-            self.da_kappa,
-            self.da_t0,
-        )
-
-        return outcome
-```
-
-The `tune` method is called by the engine at the end of a tuning epoch.
-This particular kernel does not perform any additional tuning at the end
-of an epoch, because the step size adaptation already happens during the
-adaptive transitions.
-
-Still, the method must be implemented to satisfy the kernel protocol. We
-therefore return a successful {class}`.TuningOutcome` with the unchanged
-kernel state.
-
-``` python
-    def tune(
-        self,
-        prng_key,
-        kernel_state: RWKernelState,
-        model_state: gs.ModelState,
-        epoch: gs.EpochState,
-        history: gs.Position | None = None,
-    ) -> gs.TuningOutcome[RWKernelState, gs.DefaultTuningInfo]:
-        """
-        Currently does nothing.
-        """
-
-        info = gs.DefaultTuningInfo(error_code=0, time=epoch.time)
-        return gs.TuningOutcome(info, kernel_state)
-```
-
-At the beginning of each adaptation epoch, we reset the dual averaging
-state. This is done in `start_epoch`.
-
-This reset does not discard the current step size itself. Instead, it
-reinitializes the auxiliary quantities used internally by the dual
-averaging algorithm.
-
-``` python
-    def start_epoch(
-        self,
-        prng_key,
-        kernel_state: RWKernelState,
-        model_state: gs.ModelState,
-        epoch: gs.EpochState,
-    ) -> RWKernelState:
-        """
-        Resets the state of the dual averaging algorithm.
-        """
-
-        da.da_init(kernel_state)
-        return kernel_state
-```
-
-At the end of an adaptation epoch, we finalize the dual averaging
-update. This replaces the current step size by the averaged step size
-found during the epoch.
-
-``` python
-    def end_epoch(
-        self,
-        prng_key,
-        kernel_state: RWKernelState,
-        model_state: gs.ModelState,
-        epoch: gs.EpochState,
-    ) -> RWKernelState:
-        """
-        Sets the step size as found by the dual averaging algorithm.
-        """
-
-        da.da_finalize(kernel_state)
-        return kernel_state
-```
-
-Finally, the engine calls `end_warmup` after all warmup epochs have
-finished. This hook can be used for final warmup-specific adjustments.
-Our random walk kernel does not need any such adjustment, so we simply
-return the unchanged kernel state.
-
-``` python
-    def end_warmup(
-        self,
-        prng_key,
-        kernel_state: RWKernelState,
-        model_state: gs.ModelState,
-        tuning_history: gs.TuningInfo | None,
-    ) -> gs.WarmupOutcome[RWKernelState]:
-        """
-        Currently does nothing.
-        """
-
-        return gs.WarmupOutcome(error_code=0, kernel_state=kernel_state)
-```
-
-This completes the kernel class. The main logic is contained in
-`_standard_transition`, which constructs a random walk proposal and
-delegates the Metropolis-Hastings correction to {func}`.mh_step`. The
-adaptive version adds one more step: it updates the step size using dual
-averaging based on the observed acceptance probability.
-
-We now simply restate the full code-block here:
-
-``` python
-from collections.abc import Sequence
-
-import jax
-import jax.flatten_util
-import liesel.goose as gs
-
-
-class RWKernel(
-    gs.ModelMixin, gs.TransitionMixin[RWKernelState, gs.DefaultTransitionInfo]
+    gs.ModelMixin,
+    gs.TransitionMixin[RWKernelState, gs.DefaultTransitionInfo],
 ):
     error_book = {0: "no errors", 90: "nan acceptance prob"}
     """Dict of error codes and their meaning."""
@@ -611,7 +244,12 @@ class RWKernel(
         Performs an MCMC transition *with* dual averaging.
         """
 
-        outcome = self._standard_transition(prng_key, kernel_state, model_state, epoch)
+        outcome = self._standard_transition(
+            prng_key,
+            kernel_state,
+            model_state,
+            epoch,
+        )
 
         da.da_step(
             outcome.kernel_state,
@@ -682,226 +320,47 @@ class RWKernel(
         return gs.WarmupOutcome(error_code=0, kernel_state=kernel_state)
 ```
 
-#### Trying out our new kernel
+`init_state` creates each chain's state. `start_epoch` resets dual averaging,
+and `end_epoch` installs its averaged step size. Here `tune` and `end_warmup`
+only return successful outcomes; other kernels can use them for updates at
+epoch boundaries and after warmup. See the {class}`~liesel.goose.Kernel`
+protocol for all method contracts.
 
-Here, we just take a very simple model to confirm that our kernel runs.
+## Run the custom kernel
 
-``` python
-import liesel.model as lsl
-import tensorflow_probability.substrates.jax.distributions as tfd
+Reuse the normal-mean model above and replace its inference specification.
+The prior, data, and initial value are unchanged:
 
-mu = lsl.Var.new_param(0.0, name="mu", inference=gs.MCMCSpec(RWKernel))
-y = lsl.Var.new_obs(
-    value=jax.random.normal(jax.random.key(13), (100,)) + 0.5,
-    dist=lsl.Dist(tfd.Normal, loc=mu, scale=1.0),
-    name="y",
-)
-model = lsl.Model(y)
-
-results = gs.LieselMCMC(model).run_for_epochs(
-    seed=7, num_chains=4, adaptation=500, posterior=500
-)
-
-gs.Summary(results)
+```{code-cell} ipython3
+model.vars["mu"].inference = gs.MCMCSpec(RWKernel, jitter_dist=tfd.Normal(0.0, 0.2))
 ```
 
-    liesel.goose.builder - WARNING - No jitter functions provided for position keys 'mu'. The initial values for these keys won't be jittered
-    liesel.goose.engine - INFO - Initializing kernels...
-    liesel.goose.engine - INFO - Done
-    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s] 50%|█████████████████████                     | 1/2 [00:00<00:00,  3.51chunk/s]100%|██████████████████████████████████████████| 2/2 [00:00<00:00,  6.99chunk/s]
-    liesel.goose.engine - INFO - Finished epoch
-    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
-      0%|                                                  | 0/1 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 1/1 [00:00<00:00, 1234.34chunk/s]
-    liesel.goose.engine - INFO - Finished epoch
-    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1466.03chunk/s]
-    liesel.goose.engine - INFO - Finished epoch
-    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 275 transitions, 25 jitted together
-      0%|                                                 | 0/11 [00:00<?, ?chunk/s]100%|██████████████████████████████████████| 11/11 [00:00<00:00, 4747.62chunk/s]
-    liesel.goose.engine - INFO - Finished epoch
-    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 100 transitions, 25 jitted together
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s]100%|████████████████████████████████████████| 4/4 [00:00<00:00, 3025.65chunk/s]
-    liesel.goose.engine - INFO - Finished epoch
-    liesel.goose.engine - INFO - Finished warmup
-    liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 500 transitions, 25 jitted together
-      0%|                                                 | 0/20 [00:00<?, ?chunk/s]100%|██████████████████████████████████████| 20/20 [00:00<00:00, 3961.00chunk/s]
-    liesel.goose.engine - INFO - Finished epoch
+```{code-cell} ipython3
+custom_results = gs.LieselMCMC(model).run_for_epochs(
+    seed=7,
+    num_chains=4,
+    adaptation=1000,
+    posterior=1000,
+    show_progress=False,
+)
 
-<p>
-<strong>Parameter summary:</strong>
-</p>
-<table border="0" class="dataframe">
-<thead>
-<tr style="text-align: right;">
-<th>
-</th>
-<th>
-</th>
-<th>
-kernel
-</th>
-<th>
-mean
-</th>
-<th>
-sd
-</th>
-<th>
-q_0.05
-</th>
-<th>
-q_0.5
-</th>
-<th>
-q_0.95
-</th>
-<th>
-sample_size
-</th>
-<th>
-ess_bulk
-</th>
-<th>
-ess_tail
-</th>
-<th>
-rhat
-</th>
-</tr>
-<tr>
-<th>
-parameter
-</th>
-<th>
-index
-</th>
-<th>
-</th>
-<th>
-</th>
-<th>
-</th>
-<th>
-</th>
-<th>
-</th>
-<th>
-</th>
-<th>
-</th>
-<th>
-</th>
-<th>
-</th>
-<th>
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<th>
-mu
-</th>
-<th>
-()
-</th>
-<td>
-kernel_00
-</td>
-<td>
-0.457
-</td>
-<td>
-0.098
-</td>
-<td>
-0.278
-</td>
-<td>
-0.464
-</td>
-<td>
-0.609
-</td>
-<td>
-2000
-</td>
-<td>
-313.054
-</td>
-<td>
-271.839
-</td>
-<td>
-1.013
-</td>
-</tr>
-</tbody>
-</table>
-<p>
-<strong>Acceptance probabilities:</strong>
-</p>
-<table border="0" class="dataframe">
-<thead>
-<tr style="text-align: right;">
-<th>
-</th>
-<th>
-</th>
-<th>
-</th>
-<th>
-acceptance_probability
-</th>
-<th>
-position_moved
-</th>
-</tr>
-<tr>
-<th>
-kernel
-</th>
-<th>
-positions
-</th>
-<th>
-phase
-</th>
-<th>
-</th>
-<th>
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<th rowspan="2" valign="top">
-kernel_00
-</th>
-<th rowspan="2" valign="top">
-mu
-</th>
-<th>
-posterior
-</th>
-<td>
-0.206
-</td>
-<td>
-0.205
-</td>
-</tr>
-<tr>
-<th>
-warmup
-</th>
-<td>
-0.221
-</td>
-<td>
-0.220
-</td>
-</tr>
-</tbody>
-</table>
+custom_summary = gs.Summary(custom_results)
+```
+
+```{code-cell} ipython3
+custom_summary.to_dataframe()[["mean", "sd", "mcse_mean", "ess_bulk", "rhat"]].round(3)
+```
+
+```{code-cell} ipython3
+custom_summary.error_df()
+```
+
+The custom class reproduces the MH-proposal results for this seed. The
+normal-normal model also has an exact posterior: its mean is
+$\sum_i y_i/(n+1/4) \approx 1.086$ and its standard deviation is
+$1/\sqrt{n+1/4} \approx 0.436$, where $n=5$. The estimates are close to
+these values; the sampled mean has MCSE about 0.018.
+
+This checks that the class runs in the sampling engine. Before using a new
+algorithm in an analysis, also test it against a known target distribution
+and check its behavior for vector parameters and invalid proposals.

@@ -159,6 +159,12 @@ remove_from_toctrees = ["generated/liesel.*.*.*.*.rst"]
 # --------------------------------------------------------------------------------------
 
 # myst configuration
+# Execute notebook sources when Sphinx reads them and stop on execution errors.
+nb_execution_mode = "force"
+nb_execution_allow_errors = False
+nb_execution_raise_on_error = True
+nb_execution_timeout = 180
+
 myst_heading_anchors = 3  # auto-generate 3 levels of heading anchors
 myst_enable_extensions = ["amsmath", "dollarmath", "html_image"]
 myst_dmath_double_inline = True
