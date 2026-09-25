@@ -1833,7 +1833,7 @@ def _sample_variational_model(
 
     fixed = tuple(name for name in q.parameters if name not in (at_position or {}))
     q_samples = q.sample(
-        shape=sample_shape, seed=seed, posterior_samples=at_position, fixed=fixed
+        sample_shape=sample_shape, seed=seed, posterior_samples=at_position, fixed=fixed
     )
     if at_position is not None:
         q_samples = jax.tree.map(
