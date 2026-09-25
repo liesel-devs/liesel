@@ -214,19 +214,6 @@ definiteness. It selects ``at="best"`` by default; use ``at="final"`` for the fi
 snapshot. Keep the model, data, and fixed parameters unchanged between fitting and
 this call. See :meth:`~liesel.optim.LaplaceLoss.approximate_joint_posterior` for controls.
 
-Control inner warm starts
--------------------------
-
-By default, each inner solve starts from the latent mode committed at the end of
-the previous epoch. Set ``warm_start=False`` to start from the model's latent values:
-
-.. code-block:: python
-
-   cold_loss = opt.LaplaceLoss(model, latent=["b"], warm_start=False)
-
-Pass ``cold_loss`` to a new fit to compare. Resuming an interrupted fit is a separate
-operation: :doc:`optimizer-checkpointing` explains how to resume with saved states.
-
 Inspect a failure deliberately
 ------------------------------
 
@@ -269,6 +256,19 @@ reason:
    False
 
 Its ``sample`` and ``covariance`` methods raise.
+
+Control inner warm starts
+-------------------------
+
+By default, each inner solve starts from the latent mode committed at the end of
+the previous epoch. Set ``warm_start=False`` to start from the model's latent values:
+
+.. code-block:: python
+
+   cold_loss = opt.LaplaceLoss(model, latent=["b"], warm_start=False)
+
+Pass ``cold_loss`` to a new fit to compare. Resuming an interrupted fit is a separate
+operation: :doc:`optimizer-checkpointing` explains how to resume with saved states.
 
 Choose numerical controls
 -------------------------
