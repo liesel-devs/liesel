@@ -1,11 +1,11 @@
-Migrating from optim_flat
-=========================
+Migrate optim_flat
+==================
 
 :func:`liesel.goose.optim_flat` is deprecated since version 0.8.0 and emits a
 ``FutureWarning`` when called. Use :class:`liesel.optim.LieselOptim` instead.
 
-Full-data optimization
-----------------------
+Fit the full data
+-----------------
 
 Both examples use the same model and optimize only ``loc``:
 
@@ -14,6 +14,7 @@ Both examples use the same model and optimize only ``loc``:
    import jax.numpy as jnp
    import optax
    import tensorflow_probability.substrates.jax.distributions as tfd
+
    import liesel.model as lsl
 
    loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
@@ -22,7 +23,7 @@ Both examples use the same model and optimize only ``loc``:
        lsl.Dist(tfd.Normal, loc=loc, scale=1.0),
        name="y",
    )
-   model = lsl.Model([y])
+   model = lsl.Model(y)
 
 Before (deprecated):
 
@@ -90,8 +91,8 @@ What changes
 * Use ``result.plot_loss_overview()`` or ``result.history.loss_df()`` instead of
   ``gs.history_to_df(result.history)``.
 
-Validation and minibatches
---------------------------
+Split and batch data
+--------------------
 
 Models with custom aggregate likelihood, prior, or probability nodes require a
 custom :class:`~liesel.optim.Loss`. The built-in loss supports only the standard
@@ -109,8 +110,8 @@ include priors as before.
 :doc:`basic tutorial <tutorials/notebooks/09-liesel-optim-basic>` for a complete
 validation and minibatch example.
 
-Reconstructing tracked quantities
----------------------------------
+Track model outputs
+-------------------
 
 ``optim_flat(track_keys=...)`` has no direct argument replacement. Set
 ``save_position_history=True`` and evaluate deterministic model quantities from
@@ -127,12 +128,13 @@ the scalar total log likelihood and the array of individual log likelihoods:
        for key, values in result.history.position.items()
    }
 
+
    def extract_quantities(position):
        state = model.update_state(position | engine.split.train, model.state)
        return model.extract_position(track_keys, state)
 
+
    derived_history = jax.vmap(extract_quantities)(history)
-   derived_plot = result.plot_params(position=derived_history)
 
 Explicitly supplying ``engine.split.train`` makes data-dependent quantities refer
 to complete training data, even after a minibatch fit. Slicing to

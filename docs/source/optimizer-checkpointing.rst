@@ -1,5 +1,5 @@
-Pause and resume a fit
-======================
+Pause and resume
+================
 
 Build an engine to pause a run or save progress. Here, ``optim`` is a configured
 :class:`liesel.optim.LieselOptim`.
@@ -11,7 +11,6 @@ Pause in memory
 
    engine = optim.build_engine()
    first = engine.fit(pause_after=100)
-   first.plot_loss_overview()
    result = engine.fit(checkpoint=first.checkpoint)
 
 ``pause_after`` limits additional epochs in that call. Early stopping still
@@ -22,8 +21,8 @@ The result's ``status`` tells you why fitting stopped: ``"paused"``,
 ``"max_epochs"``, ``"early_stopping"``, or ``"nan"``. A NaN result has no
 checkpoint; recover from an earlier saved checkpoint instead.
 
-Save progress to disk
----------------------
+Save to disk
+------------
 
 Run the same call on the first job and after an interruption:
 
@@ -39,12 +38,9 @@ failures leave the previous file intact.
 Use a different path for a new experiment and only one writer per path. The
 parent directory must exist.
 
-If the checkpoint permits no additional epochs under the current stopper
-settings, ``fit`` warns and returns its result without further optimization.
-This applies to both paths and in-memory checkpoints. Increasing
-``engine.stopper.epochs`` allows continuation only if early stopping does not
-apply. Use a new path or call ``fit()`` without a checkpoint for a fresh run,
-including when changing data or optimizer settings for a new experiment.
+If the epoch budget is exhausted or early stopping applies, resuming warns
+and returns without further updates. Increasing ``engine.stopper.epochs``
+extends the budget but does not override early stopping.
 
 Resume safely
 -------------

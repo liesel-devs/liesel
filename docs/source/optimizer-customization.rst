@@ -6,14 +6,15 @@ configured Optax transformation, such as ``optimizers=optax.adam(0.01)``, to use
 it for all parameters, or ``optimizers="lbfgs"`` for a full-data, deterministic
 fit. L-BFGS cannot use minibatches.
 
-Set a learning rate or schedule
--------------------------------
+Set the learning rate
+---------------------
 
 For an existing ``model``, pass a configured Optax optimizer directly:
 
 .. code-block:: python
 
    import optax
+
    import liesel.optim as opt
 
    schedule = optax.exponential_decay(
@@ -27,16 +28,11 @@ For an existing ``model``, pass a configured Optax optimizer directly:
 
 The schedule advances on optimizer updates, not epochs. With minibatches, it can
 advance several times per epoch. For a constant rate, use ``optax.adam(0.01)``.
-Constant-rate minibatch fits can retain optimization noise. For precise point
-estimates, check convergence and consider a smaller or decaying rate, or an
-explicit full-data optimizer. A schedule alone does not guarantee convergence.
+Minibatch fits can retain optimization noise. For precise point estimates,
+check convergence and consider a smaller rate or a final full-data fit.
 
-Pass the result of ``optax.adam(...)``, not the ``optax.adam`` factory function.
-Transformations must support updates using gradients, state and parameters;
-use ``"lbfgs"`` for L-BFGS, which also requires objective evaluations.
-
-Use different optimizers for different parameters
--------------------------------------------------
+Choose parameters
+-----------------
 
 For the ``beta`` and ``log_sigma`` parameters in the basic tutorial:
 
@@ -50,18 +46,15 @@ For the ``beta`` and ``log_sigma`` parameters in the basic tutorial:
 Pass this list as ``optimizers=optimizers`` to ``LieselOptim``. Each optimizer
 updates its own parameters in list order on every batch. Their parameter names
 must not overlap. Parameters left out of the list stay fixed.
-Each active standard optimizer evaluates its own objective and gradient per batch,
-so separate blocks add work compared with one joint optimizer; custom optimizers
-and line searches can have different costs.
+Separate blocks each evaluate the loss and gradient, adding work.
 
 L-BFGS must be the only optimizer because other parameter updates invalidate its
 cached objective and curvature history. Use ``optimizers="lbfgs"`` for all model
 parameters, or ``optimizers=[opt.LBFGS(["beta", "log_sigma"])]`` for a selected
-subset. The remaining parameters stay fixed. Use ordinary Optax optimizers for
-separate blocks, as above.
+subset.
 
-Select source parameters for a weak prior
------------------------------------------
+Fit a weak parameter
+--------------------
 
 A prior may be attached to a weak parameter computed from a strong source variable.
 That prior remains in the default loss, including its derivatives through the weak
@@ -71,8 +64,8 @@ and raises an informative error. Supply the strong names explicitly, for example
 ``optimizers=[opt.LBFGS(["source"])]``. The source does not need to be marked as a
 parameter. The weak parameter itself is recomputed during fitting.
 
-Run Adam followed by L-BFGS
----------------------------
+Switch to L-BFGS
+----------------
 
 Use two separate fits to switch from Adam to L-BFGS. The optimizer option
 ``activate_after_epochs`` delays activation; it does not deactivate Adam.
@@ -93,16 +86,18 @@ Assign the returned model state before constructing the second fit:
 optimizer state at Adam's final parameter values and uses full-data batches here.
 Do not pass Adam's checkpoint to the L-BFGS fit.
 
-Control history memory
-----------------------
+Save less history
+-----------------
 
 Disable parameter history when you only need the final and best positions:
 
 .. code-block:: python
 
    result = opt.LieselOptim(
-       model, optimizers=optax.adam(0.01),
-       loss_monitor="train_full_data", save_position_history=False
+       model,
+       optimizers=optax.adam(0.01),
+       loss_monitor="train_full_data",
+       save_position_history=False,
    ).fit()
 
 History reserves memory for the maximum epoch budget before fitting, even when
