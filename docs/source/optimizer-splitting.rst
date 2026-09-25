@@ -32,6 +32,11 @@ to rounding. Splits with validation or test data shuffle by default; set
 original row order and ignore the seed, even with ``shuffle=True``. This is also
 the behavior of ``LieselOptim``'s automatic full-training split.
 
+Fits using the built-in model losses and optimizers retain one prepared set of
+data-derived node values per used partition (training, plus validation when
+monitored), using extra memory to avoid recomputing those values at every full-data
+evaluation.
+
 The split's ``seed`` chooses which rows go into each part. The seed passed to
 ``LieselOptim`` controls batch shuffling or random batch sampling during fitting.
 Custom losses and optimizers can also use its random key through ``carry.key``.

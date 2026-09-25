@@ -641,9 +641,10 @@ class NegLogProbLoss(LossMixin):
                 "No optimized coordinates are available.", raise_on_failure
             )
 
+        training_state = self.model.update_state(self.split.train, self.model.state)
+
         def joint(flat):
-            position = Position(unravel(flat) | self.split.train)
-            state = self.model.update_state(position, self.model.state)
+            state = self.model.update_state(unravel(flat), training_state)
             log_lik = self.split.scaled_log_lik(self.model, state, part="train")
             return -(log_lik + state["_model_log_prior"].value)
 

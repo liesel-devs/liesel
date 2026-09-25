@@ -454,7 +454,7 @@ class LaplaceLoss(LossMixin):
         return self.latent_names, self.warm_start, self.inner_max_iter, self.inner_tol
 
     def _joint(self, outer, latent, model_state, fixed_position=None):
-        position = Position(outer | latent | self.split.train | (fixed_position or {}))
+        position = Position(outer | latent | (fixed_position or {}))
         return -self.model.update_state(position, model_state)["_model_log_prob"].value
 
     def approximate_joint_posterior(
@@ -563,9 +563,10 @@ class LaplaceLoss(LossMixin):
         )
         theta, unravel_outer = ravel_pytree(position)
         seed, unravel_latent = ravel_pytree(state.latent_position)
+        training_state = self.model.update_state(self.split.train, self.model.state)
 
         def joint(t, z):
-            return self._joint(unravel_outer(t), unravel_latent(z), self.model.state)
+            return self._joint(unravel_outer(t), unravel_latent(z), training_state)
 
         @jax.jit
         def derivatives(theta, seed):
@@ -633,12 +634,17 @@ class LaplaceLoss(LossMixin):
             if self.warm_start
             else self._seed
         )
+        training_state = getattr(carry, "_data_states", {}).get("train")
+        if training_state is None:
+            training_state = self.model.update_state(
+                self.split.train, carry.model_state
+            )
 
         def joint(t, z):
             return self._joint(
                 unravel_outer(t),
                 self._unravel_latent(z),
-                carry.model_state,
+                training_state,
                 carry.fixed_position,
             )
 

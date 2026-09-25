@@ -10,6 +10,7 @@ import optax
 import pytest
 import tensorflow_probability.substrates.jax.bijectors as tfb
 import tensorflow_probability.substrates.jax.distributions as tfd
+from jax.experimental import io_callback
 
 import liesel.model as lsl
 import liesel.optim as opt
@@ -182,6 +183,82 @@ def test_normal_regression_posterior_is_exact_independent_of_loss_scaling(scale_
             options: dict[str, Any] = {"raise_on_failure": False, field: value}
             with pytest.raises(ValueError, match=field):
                 optim.loss.approximate_joint_posterior(result, **options)
+
+
+@pytest.mark.parametrize("loss_kind", ["laplace", "joint"])
+@pytest.mark.parametrize("holdout", [False, True])
+@pytest.mark.parametrize("x64", [False, True])
+def test_callback_basis_is_prepared_for_fitting_and_joint_uncertainty(
+    loss_kind, holdout, x64
+):
+    with jax.enable_x64(x64):
+        calls = []
+
+        def square(values):
+            calls.append(np.asarray(values).copy())
+            return np.square(values)
+
+        def basis_fn(values):
+            return io_callback(
+                square,
+                jax.ShapeDtypeStruct(values.shape, values.dtype),
+                values,
+                ordered=True,
+            )
+
+        x = lsl.Var.new_value(jnp.arange(1.0, 5.0), name="x")
+        basis = lsl.Var.new_calc(basis_fn, x, name="basis")
+        alpha = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, 0.0, 1.0), name="alpha")
+        beta = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, 0.0, 1.0), name="beta")
+        loc = lsl.Var.new_calc(lambda a, b, v: a + b * v, alpha, beta, basis)
+        y = lsl.Var.new_obs(
+            1 + 2 * x.value**2, lsl.Dist(tfd.Normal, loc, 1.0), name="y"
+        )
+        model = lsl.Model(y, to_float32=False)
+        split = opt.PositionSplit.from_model(
+            model,
+            position_keys=["x", "y"],
+            validate_axis_share=0.5 if holdout else 0.0,
+            shuffle=False,
+        )
+        loss = (
+            opt.LaplaceLoss(model, split, latent=["beta"])
+            if loss_kind == "laplace"
+            else opt.NegLogProbLoss(model, split)
+        )
+        optim = opt.LieselOptim(
+            model,
+            loss=loss,
+            optimizers="lbfgs",
+            loss_monitor="train_full_data",
+            stopper=opt.Stopper(epochs=20, patience=3, rtol=1e-9),
+            show_progress=False,
+        )
+        jax.effects_barrier()
+        calls.clear()
+        result = optim.fit()
+        jax.effects_barrier()
+        fitting_calls = len(calls)
+        calls.clear()
+        posterior = loss.approximate_joint_posterior(result)
+        jax.effects_barrier()
+        assert posterior.valid
+        assert fitting_calls == 1
+        assert len(calls) == 1
+        np.testing.assert_array_equal(calls[0], [1, 2] if holdout else [1, 2, 3, 4])
+
+        # Completing the square gives the exact joint posterior. Integrating beta
+        # is also exact here, so the Laplace and joint-MAP results must coincide.
+        if holdout:
+            mean = np.array([21, 57]) / 29
+            covariance = np.array([[18, -5], [-5, 3]]) / 29
+        else:
+            mean = np.array([580, 1770]) / 875
+            covariance = np.array([[355, -30], [-30, 5]]) / 875
+        np.testing.assert_allclose(
+            [posterior.mean["alpha"], posterior.mean["beta"]], mean, atol=1e-5
+        )
+        np.testing.assert_allclose(posterior.covariance(), covariance, atol=1e-6)
 
 
 def test_validation_best_must_be_stationary_for_training_posterior():
