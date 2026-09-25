@@ -68,6 +68,8 @@ for the reader.
 
 ## Put visuals where they help
 
+Use plotnine for statistical plots, and show the rendered plot with its code.
+
 Embed interactive explanations beside the relevant text. A separate-page link
 can supplement the embed, but should not be the only way readers discover it.
 

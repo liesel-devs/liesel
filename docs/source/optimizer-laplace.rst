@@ -84,28 +84,116 @@ Jacobians, and normalization constants; see :doc:`optimizer-loss-scaling`.
 Inspect the conditional mode and curvature
 ------------------------------------------
 
+The fit retains the group effects at their conditional mode, together with the
+outer parameters that produced them. Recover both from the best recorded fit:
+
 .. code-block:: pycon
 
    >>> outer = result.position_min_monitor
    >>> state = result.loss_state_min_monitor
+   >>> b_mode = state.latent_position["b"]
    >>> print(f"mu = {outer['mu']:.3f}, log(tau) = {outer['h(tau)']:.3f}")
    mu = 1.679, log(tau) = -0.229
-   >>> print(state.latent_position["b"].round(3))
+   >>> print(b_mode.round(3))
    [-1.272 -0.514 -0.064  0.441  0.934 -0.586  0.182  1.328]
-   >>> int(state.status), int(state.n_iter)
-   (1, 1)
-   >>> float(state.newton_decrement_squared / 2) < loss.inner_tol
-   True
+
+Each effect multiplies the baseline rate ``exp(mu)`` by ``exp(b)``.
+For the first group, the multiplier is about ``exp(-1.272) = 0.28``;
+for the last group, it is about ``exp(1.328) = 3.77``.
+
+The saved curvature also tells you how tightly these effects are determined.
+``latent_factor @ latent_factor.T`` is their conditional precision. Solve against
+it to obtain a local Gaussian covariance and read off standard deviations:
+
+.. code-block:: pycon
+
+   >>> from jax.scipy.linalg import cho_solve
    >>> latent_factor = state.latent_precision_cholesky
-   >>> state.latent_names, state.latent_shapes, latent_factor.shape
-   (('b',), ((8,),), (8, 8))
+   >>> conditional_covariance = cho_solve(
+   ...     (latent_factor, True), jnp.eye(latent_factor.shape[0])
+   ... )
+   >>> conditional_sd = jnp.sqrt(jnp.diag(conditional_covariance))
+   >>> print(conditional_sd.round(3))
+   [0.363 0.264 0.215 0.169 0.134 0.272 0.191 0.11 ]
 
-``latent_factor @ latent_factor.T`` is the conditional precision, ordered by
-``latent_names`` and ``latent_shapes``. ``status == 1`` means the inner solve
-succeeded. See :class:`~liesel.optim.LaplaceState` for the other diagnostics.
+These standard deviations are on the log-rate scale and hold ``mu`` and ``tau``
+fixed at their fitted values. The joint approximation below also accounts for
+uncertainty in those outer parameters.
 
-The best snapshot minimizes monitoring loss. For the last completed epoch, use
-``position_final`` with its matching ``loss_state_final``.
+For the final snapshot, pair ``position_final`` with ``loss_state_final``.
+See :class:`~liesel.optim.LaplaceState` for convergence diagnostics and coordinate
+ordering; ``status == 1`` means the conditional solve succeeded.
+
+Construct joint uncertainty on request
+--------------------------------------
+
+Turn the completed fit into a joint Gaussian approximation for ``mu``, ``h(tau)``,
+and all eight group effects. It includes their correlations, so each draw is a
+complete parameter set that can be passed directly to ``Model.predict``:
+
+.. code-block:: pycon
+
+   >>> posterior = loss.approximate_joint_posterior(result)
+   >>> draws = posterior.sample(jax.random.key(42), sample_shape=(1000,))
+   >>> predicted = model.predict(draws, predict=["tau", "log_rate"])
+   >>> tau_draws = predicted["tau"]
+   >>> rate_draws = jnp.exp(predicted["log_rate"])
+
+``Model.predict`` transforms draws back to the positive ``tau`` scale and evaluates
+the log rates. For example, summarize the between-group scale with its 5th, 50th,
+and 95th percentiles:
+
+.. code-block:: pycon
+
+   >>> quantiles = jnp.array([0.05, 0.5, 0.95])
+   >>> print(jnp.quantile(tau_draws, quantiles).round(3))
+   [0.516 0.787 1.194]
+
+The approximate posterior median is 0.79, with a 90% credible interval of
+0.52 to 1.19. The same draws give intervals for each group's expected count:
+
+.. code-block:: python
+
+   import pandas as pd
+   import plotnine as p9
+
+   group_rates = rate_draws[:, ::4]  # Four observations share each group's rate.
+   lower, median, upper = jnp.quantile(group_rates, quantiles, axis=0)
+   rate_summary = pd.DataFrame(
+       {
+           "group": range(1, 9),
+           "median": median,
+           "lower": lower,
+           "upper": upper,
+           "observed": counts.mean(axis=1),
+       }
+   )
+   rate_plot = (
+       p9.ggplot(rate_summary, p9.aes(x="group", y="median"))
+       + p9.geom_pointrange(p9.aes(ymin="lower", ymax="upper"), color="#1f77b4")
+       + p9.geom_point(p9.aes(y="observed"), shape="x", color="gray")
+       + p9.scale_x_continuous(breaks=range(1, 9))
+       + p9.labs(x="Group", y="Expected count")
+       + p9.theme_minimal()
+       + p9.theme(figure_size=(7, 3.5))
+   )
+   rate_plot.show()
+
+.. figure:: _static/optimizer-laplace-rates.png
+   :alt: Approximate posterior medians and 90 percent credible intervals for eight group rates, with observed group means marked by crosses.
+
+   Blue points and bars show posterior medians and 90% credible intervals;
+   gray crosses mark observed means. The intervals carry uncertainty in the mean,
+   scale, and group effects through to expected counts. New observations also
+   vary according to the Poisson distribution.
+
+For matrix calculations, ``posterior.covariance()`` constructs the full covariance
+on request. ``posterior.names`` and ``posterior.shapes`` describe its ordering.
+
+The helper adds curvature work once per call and checks stationarity and positive
+definiteness. It selects ``at="best"`` by default; use ``at="final"`` for the final
+snapshot. Keep the model, data, and fixed parameters unchanged between fitting and
+this call. See :meth:`~liesel.optim.LaplaceLoss.approximate_joint_posterior` for controls.
 
 Control inner warm starts
 -------------------------
@@ -119,37 +207,6 @@ the previous epoch. Set ``warm_start=False`` to start from the model's latent va
 
 Pass ``cold_loss`` to a new fit to compare. Resuming an interrupted fit is a separate
 operation: :doc:`optimizer-checkpointing` explains how to resume with saved states.
-
-Construct joint uncertainty on request
---------------------------------------
-
-.. code-block:: pycon
-
-   >>> posterior = loss.approximate_joint_posterior(result)
-   >>> posterior.names, posterior.shapes
-   (('h(tau)', 'mu', 'b'), ((), (), (8,)))
-   >>> covariance = posterior.covariance()
-   >>> covariance.shape
-   (10, 10)
-   >>> draws = posterior.sample(jax.random.key(42), sample_shape=(1000,))
-   >>> predicted = model.predict(draws, predict=["tau", "log_rate"])
-   >>> tau_draws = predicted["tau"]
-   >>> rate_draws = jnp.exp(predicted["log_rate"])
-   >>> tau_draws.shape, rate_draws.shape
-   ((1000,), (1000, 32))
-
-The joint Gaussian includes outer and latent uncertainty and their correlations.
-A dense covariance is only constructed when requested.
-
-The default is ``at="best"``; use ``at="final"`` for the final snapshot.
-Keep the same model, data, and loss configuration; do not change fixed parameters
-between fitting and this call.
-``Model.predict`` transforms optimizer-coordinate draws to the positive ``tau`` scale.
-
-The helper costs extra curvature work once per call and none during fitting. It
-requires positive-definite curvature and an approximately stationary fit
-(``stationarity_tol``, default ``1e-4``). Use this helper rather than differentiating
-the loss twice.
 
 Inspect a failure deliberately
 ------------------------------
