@@ -21,6 +21,9 @@ measurement of their sum. All parameters are on the real line. This Gaussian
 model has an exact Gaussian posterior, so it also makes the difference between
 a dense family and independent blocks visible.
 
+For the basic fitting workflow, see {doc}`optimizer-laplace` and
+{doc}`variational-inference`. This example includes its model setup.
+
 ## Fit the Laplace model
 
 ```{code-cell} python
@@ -33,16 +36,24 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 import liesel.model as lsl
 import liesel.optim as opt
 
-z = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, 0.0, 1.0), name="z")
-a_loc = lsl.Var.new_calc(lambda value: jnp.repeat(value, 2), z, name="a_loc")
+z = lsl.Var.new_param(0.0, dist=lsl.Dist(tfd.Normal, 0.0, 1.0), name="z")
+
+a_loc = lsl.Var.new_calc(
+    lambda value: jnp.repeat(value, 2),
+    z,
+    name="a_loc",
+)
 a = lsl.Var.new_param(
     jnp.zeros(2),
-    lsl.Dist(tfd.MultivariateNormalDiag, a_loc, jnp.ones(2)),
+    dist=lsl.Dist(tfd.MultivariateNormalDiag, a_loc, jnp.ones(2)),
     name="a",
 )
+
 total = lsl.Var.new_calc(jnp.sum, a, name="total")
 y = lsl.Var.new_obs(
-    jnp.array([2.0]), lsl.Dist(tfd.Normal, total, 1.0), name="y"
+    jnp.array([2.0]),
+    dist=lsl.Dist(tfd.Normal, total, 1.0),
+    name="y",
 )
 model = lsl.Model(y)
 ```
@@ -64,6 +75,7 @@ The same initialization API also accepts an approximation from
 ```{code-cell} python
 split = opt.PositionSplit.from_model(model)
 laplace_loss = opt.LaplaceLoss(model, split, latent=["a"])
+
 laplace_result = opt.LieselOptim(
     model,
     loss=laplace_loss,
@@ -72,6 +84,7 @@ laplace_result = opt.LieselOptim(
     stopper=opt.Stopper(epochs=20, patience=3),
     show_progress=False,
 ).fit()
+
 approximation = laplace_loss.approximate_joint_posterior(laplace_result)
 ```
 
@@ -164,6 +177,7 @@ predictions before treating a fit as converged.
 
 ```{code-cell} python
 vi_loss = opt.NegElboLoss.from_vdist(blocked, nsamples=32)
+
 vi_result = opt.LieselVI(
     model,
     loss=vi_loss,
@@ -173,6 +187,7 @@ vi_result = opt.LieselVI(
     seed=42,
     show_progress=False,
 ).fit()
+
 posterior = vi_loss.approximate_joint_posterior(vi_result)
 draws = posterior.sample(2_000, seed=jax.random.key(43))
 ```
