@@ -81,8 +81,8 @@ Use full-data batches and ``"train_full_data"`` monitoring. The outer coordinate
 are ``mu`` and ``h(tau)``; ``b`` keeps its prior. The unscaled loss includes priors,
 Jacobians, and normalization constants; see :doc:`optimizer-loss-scaling`.
 
-Inspect the conditional mode and curvature
-------------------------------------------
+Inspect the conditional mode
+----------------------------
 
 The fit retains the group effects at their conditional mode, together with the
 outer parameters that produced them. Recover both from the best recorded fit:
@@ -105,32 +105,9 @@ Each effect multiplies the baseline rate ``exp(mu)`` by ``exp(b)``.
 For the first group, the multiplier is about ``exp(-1.272) = 0.28``;
 for the last group, it is about ``exp(1.328) = 3.77``.
 
-The saved curvature also tells you how tightly these effects are determined.
-``latent_factor @ latent_factor.T`` is their conditional precision. Solve against
-it to obtain a local Gaussian covariance and read off standard deviations:
-
-.. code-block:: python
-
-   from jax.scipy.linalg import cho_solve
-
-   latent_factor = state.latent_precision_cholesky
-   conditional_covariance = cho_solve(
-       (latent_factor, True), jnp.eye(latent_factor.shape[0])
-   )
-   conditional_sd = jnp.sqrt(jnp.diag(conditional_covariance))
-   print(conditional_sd.round(3))
-
-.. code-block:: text
-
-   [0.363 0.264 0.215 0.169 0.134 0.272 0.191 0.11 ]
-
-These standard deviations are on the log-rate scale and hold ``mu`` and ``tau``
-fixed at their fitted values. The joint approximation below also accounts for
-uncertainty in those outer parameters.
-
 For the final snapshot, pair ``position_final`` with ``loss_state_final``.
-See :class:`~liesel.optim.LaplaceState` for convergence diagnostics and coordinate
-ordering; ``status == 1`` means the conditional solve succeeded.
+See :class:`~liesel.optim.LaplaceState` for convergence diagnostics, coordinate
+ordering, and the saved curvature in ``latent_precision_cholesky``.
 
 Construct joint uncertainty on request
 --------------------------------------
