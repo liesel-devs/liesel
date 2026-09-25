@@ -151,13 +151,38 @@ likelihood with the corresponding terms evaluated on the original data:
 The output is ``True``: the selected pairs retain their full-data likelihood
 contributions.
 
+.. _optimizer-computed-data:
+
+Batch precomputed values
+-----------------------
+
+An expensive computed variable, such as a callback-based design matrix, can be
+batched by selecting its cached values. For a model with a computed ``basis``,
+batch its rows alongside a raw covariate ``x2`` and the response ``y``:
+
+.. code-block:: python
+
+   split = opt.PositionSplit.from_model(
+       model, position_keys=["basis", "x2", "y"], validate_axis_share=0.2
+   )
+   batches = opt.Batches.from_split(split, batch_size=32)
+
+This trades memory for less computation: the full basis matrix must fit in memory.
+Its values must remain valid as parameters change, and selecting rows must preserve
+their :ref:`likelihood contributions <optimizer-row-wise>`. Raw covariates can still
+be used for inexpensive JAX calculations in the same fit.
+
+Use the computed variable's name. Transient variables and calculation-node keys
+are rejected. A computed value cannot be selected together with an ancestor or
+descendant data key; for example, choose either ``basis`` or the covariate it uses.
+
 .. _optimizer-weak-observations:
 
 Batch weak observed variables
 ------------------------------
 
 Weak observed variables, such as copula observations computed from marginal PITs,
-are supported. The model factories select strong observed inputs as writable data;
+are supported. By default, model factories select strong observed inputs as data;
 weak values and their likelihoods are recomputed as parameters or data change.
 
 Mark the weak variable carrying the copula likelihood as observed, for example
@@ -168,8 +193,9 @@ likelihood does not need this flag. See the
 
 Automatic grouping also supports inputs whose only likelihood comes from a weak
 observed variable; the strong inputs need not have their own distributions.
-Explicitly selecting a weak variable or its value node for splitting or batching
-raises an error: select its strong source data instead.
+Values such as PITs that depend on fitted parameters must remain computed from
+their strong source data. Fixed computed values can be selected explicitly as
+:ref:`precomputed data <optimizer-computed-data>`.
 
 Keep aligned inputs of a weak observation in one group, for example
 ``position_keys=[["x1", "x2"]]`` for two copula margins. The weak likelihood then
