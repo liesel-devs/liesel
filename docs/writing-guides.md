@@ -52,22 +52,24 @@ summaries that restate the section.
 
 ## Make examples easy to use
 
+Use executable MyST Markdown for guides with code and results. Put runnable
+Python in `{code-cell}` blocks without interactive prompts (`>>>` or `...`).
+
 - State prerequisites, such as an existing `model`, before a snippet. Make
   complete tutorials runnable from top to bottom.
 - Use existing public helpers instead of manual setup or calculations that they
   already handle. Include a lower-level recipe or alternative only when it serves
   a distinct task or helps the reader make a meaningful choice.
 - Keep code consistent with the repository formatter. Group imports, leave blank
-  lines between steps, and separate model construction, fitting, and inspection.
-  Lay out data and long calls so they are easy to scan.
-- Use plain Python blocks without interactive prompts (`>>>` or `...`).
+  lines between steps, and lay out data and long calls so they are easy to scan.
+  Keep related setup and modifications together in one cell. Give each inspection
+  expression its own `{code-cell}`, with its native output immediately below.
 - Pass a single model root directly, as in `lsl.Model(y)`. Choose `to_float32`
   for the needs of the example, independently of this calling style.
 - Use realistic data, fixed seeds, and only the settings needed for the task.
-- Pair print statements and inspection expressions with actual executed output.
-  Use notebook outputs or separate text blocks in text guides. Round numbers and
-  select useful fields; remove unnecessary inspection calls instead of leaving
-  them without output.
+- Prefer expressions over `print()` and native tables for related results.
+  Select useful fields and round numbers for readability. Remove unnecessary
+  inspection calls instead of leaving them without output.
 - Keep verification assertions in tests. Investigate awkward API behavior before
   adding repeated defensive checks to examples.
 
@@ -76,26 +78,29 @@ behavior changes.
 
 ## Show useful visuals
 
-Use plotnine for statistical plots and show the rendered plot with its code.
-Explain what readers should look for and what the plot cannot establish. Use
-enough contrast, distinct shapes, or small positional offsets to keep overlapping
-marks visible.
+Use built-in Liesel/Goose plotting helpers where available, and plotnine for
+custom statistical plots. Show the rendered plot with its code. Explain what
+readers should look for and what the plot cannot establish. Use enough contrast,
+distinct shapes, or small positional offsets to keep overlapping marks visible.
 
-In model walkthroughs, include `model.plot()` after constructing the model and
-show the graph beside its code. Generate it in an executed tutorial cell where
-possible; the Read the Docs build installs Graphviz for layout. Give figures
-descriptive alt text. For notebooks, use `mystnb.image.alt` cell metadata and
-check that it appears on the rendered image.
+In model walkthroughs, include `model.plot()` in its own cell after constructing
+the model and show the graph immediately below. The Read the Docs build installs
+Graphviz for layout. Give every figure descriptive alt text. For cell outputs,
+use `mystnb.image.alt` cell metadata and check that it appears on the rendered
+image.
 
 Embed interactive explanations beside the relevant text. A separate-page link
 can supplement the embed. Keep essential explanations readable without
 interacting with the visual.
 
-Use static images for guides that do not execute code during the build or when
-generation is unreliable. Record the source command and refresh the image when
-the example changes.
+Static assets can illustrate concepts outside the executable example. Record
+their source and refresh them when the explanation changes.
 
 ## Check the finished result
+
+Execute guide examples during the docs build and fail the build on execution
+errors. Let execution produce the displayed results; do not maintain copied
+output blocks by hand.
 
 Read the guide from top to bottom for flow, missing prerequisites, repetition,
 and unnecessary detours. Match verification to the change: execute changed
