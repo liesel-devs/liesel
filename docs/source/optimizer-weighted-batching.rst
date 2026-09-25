@@ -1,5 +1,5 @@
-Weighted minibatch sampling
-===========================
+Sample with weights
+===================
 
 Sampling weights make some training rows appear more often. The built-in loss
 corrects for this, so the fit still targets the original likelihood on average.
@@ -19,10 +19,8 @@ Starting with a ``model`` and its ``split``, build batches and pass them to
    import liesel.optim as opt
 
    weights = opt.Batches.weights_binned(split.train["y"], bins=10)
-   batches = opt.Batches(
-       split.split_position_keys,
-       axis_size=split.train_axis_size,
-       sample_size=split.train_sample_size,
+   batches = opt.Batches.from_split(
+       split,
        batch_size=32,
        sample_with_replacement=True,
        sampling_weights=weights,
@@ -60,39 +58,28 @@ Choose weights
        needed, ``strength`` between zero and one.
 
 Pass labels or values from the training split. Stronger balancing can emphasize
-outliers. These helpers preserve row order and return weights; they do not
-change a batch object themselves. Their API pages describe accepted inputs.
+outliers. Their API pages describe accepted inputs.
 
 Several groups
 --------------
 
-Give one weight vector per group, keyed by one selected variable in that group:
+For a split with several groups, give one weight vector per group. Here,
+``weights_a`` and ``weights_b`` follow the training rows of ``y_a`` and ``y_b``:
 
 .. code-block:: python
 
-   children = [
-       opt.Batches(
-           child.split_position_keys,
-           axis_size=child.train_axis_size,
-           sample_size=child.train_sample_size,
-           batch_size=32,
-           sample_with_replacement=True,
-       )
-       for child in split.splits
-   ]
-   batches = opt.BatchManager(
-       children,
-       epoch_size="max",
+   batches = opt.Batches.from_split(
+       split,
+       batch_size=32,
+       sample_with_replacement=True,
        sampling_weights={"y_a": weights_a, "y_b": weights_b},
    )
 
-The split must already contain those groups. Omitted groups use uniform sampling.
-If your model already holds the training rows, :meth:`~liesel.optim.Batches.from_model`
-and :meth:`~liesel.optim.BatchManager.from_model` can infer sizes for you.
-See :class:`~liesel.optim.BatchManager` for direct construction and overrides.
+Use one selected variable name as the key for each group. Omitted groups use
+uniform sampling. See :meth:`~liesel.optim.Batches.from_split` for other settings.
 
-Custom likelihoods and losses
------------------------------
+Use a custom loss
+-----------------
 
 The built-in correction gives a sampled row with probability ``p`` an extra
 factor ``1 / (N * p)``, where ``N`` is the group's row count. This acts before

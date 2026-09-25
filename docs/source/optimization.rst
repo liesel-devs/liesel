@@ -32,7 +32,7 @@ Start here
    :maxdepth: 1
 
    tutorials/notebooks/09-liesel-optim-basic
-   tutorials/notebooks/10-liesel-optim-advanced
+   Fit two data groups <tutorials/notebooks/10-liesel-optim-advanced>
 
 Common tasks
 ------------

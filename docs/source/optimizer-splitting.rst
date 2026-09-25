@@ -1,5 +1,5 @@
-Split training, validation, and test data
-=========================================
+Split data
+==========
 
 A split decides which rows belong to training, validation, and testing.
 Create it before :doc:`configuring minibatches <optimizer-batching>`;
@@ -9,8 +9,8 @@ The optimizer does not check this property.
 
 .. _optimizer-split-overview:
 
-Keep matching rows together
----------------------------
+Keep rows together
+------------------
 
 Split responses and their covariates together. For an existing ``model``:
 
@@ -33,13 +33,12 @@ original row order and ignore the seed, even with ``shuffle=True``. This is also
 the behavior of ``LieselOptim``'s automatic full-training split.
 
 The split's ``seed`` chooses which rows go into each part. The seed passed to
-``LieselOptim`` controls batch shuffling or random batch sampling during fitting.
-Custom losses and optimizers can also use its random key through ``carry.key``.
-Both seeds default to ``0``, making split and fitting randomness reproducible in
-the same environment. Choose other integer seeds for different runs. Explicit
-``seed=None`` opts into Unix time in whole seconds, so calls in the same second
-can share a seed. Starting parameter values come from the model; seed any random
-data or starting values separately.
+``LieselOptim`` controls batch sampling during fitting. Both default to ``0``.
+Starting parameter values come from the model; seed any random data or starting
+values separately.
+
+Split several groups
+--------------------
 
 For separate groups, make the grouping explicit:
 
@@ -57,22 +56,21 @@ even if their lengths happen to match. Flat or omitted ``position_keys`` group
 observed arrays by length; use nested groups when equal length does not mean
 matching rows. Every group must have validation data if any group does.
 
-Automatic grouping requires an observed likelihood in each group. If a group
-has none, specify its row keys as an explicit nested group, or mark shared data
-as passthrough. Matching lengths alone do not establish row alignment: lookup
-tables must be passthrough even when their length matches a response.
+Automatic grouping requires an observed likelihood in each group. For row data
+without a likelihood, supply an explicit nested group.
 
-Set ``split_axes`` when creating a split for observations on an axis other than
-zero. A value of ``None`` keeps a shared table unchanged in every split and out
-of automatic batches. Keep per-observation covariates, weights, and offsets with
-the response.
-Set the corresponding ``batch_axes`` when :doc:`creating batches <optimizer-batching>` too.
+Keep shared data
+----------------
 
-For a model with a lookup table ``z`` indexed by row-level group IDs, construct
+Shared tables and scalar constants must stay unchanged in every split. For a
+lookup table ``z`` indexed by row-level group IDs, use
 ``PositionSplit.from_model(model, split_axes={"z": None})`` and pass the result
-as ``LieselOptim(..., split=split)``. This also works for scalar constants.
-Automatic setup raises an informative error for scalars or inferred groups
-without a likelihood instead of guessing how to split them.
+as ``LieselOptim(..., split=split)``. This also keeps ``z`` out of automatic batches,
+even if its length matches a response. Keep per-row covariates, weights, and
+offsets with their response.
+
+For observations on an axis other than zero, set ``split_axes`` and the
+corresponding ``batch_axes`` when :doc:`creating batches <optimizer-batching>`.
 
 ``PositionSplit`` holds the split data. ``Split`` holds reusable row indices;
 call ``split_position()`` to apply them. Manager classes handle several groups.
