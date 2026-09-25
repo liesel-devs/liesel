@@ -53,8 +53,8 @@ cached objective and curvature history. Use ``optimizers="lbfgs"`` for all model
 parameters, or ``optimizers=[opt.LBFGS(["beta", "log_sigma"])]`` for a selected
 subset.
 
-Fit a weak parameter
---------------------
+Choose the source
+-----------------
 
 A prior may be attached to a weak parameter computed from a strong source variable.
 That prior remains in the default loss, including its derivatives through the weak
