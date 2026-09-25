@@ -146,9 +146,9 @@ be used for inexpensive JAX calculations in the same fit.
 Built-in fits also prepare data-derived values once for inputs that batches
 leave unchanged, including unbatched groups and shared data. They retain full
 training values only for full-data batches or full-training monitoring, and
-prepare validation values only for validation monitoring. With EMA or
-validation monitoring, batches that supply every training key need no extra
-training template. These prepared values save computation at a memory cost.
+prepare validation values only for validation monitoring. When batches supply
+every training key, EMA or validation monitoring avoids retaining extra
+full-training values. These prepared values save computation at a memory cost.
 
 Use the computed variable's name. Transient variables and calculation-node keys
 are rejected. A computed value cannot be selected together with an ancestor or

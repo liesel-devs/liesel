@@ -85,8 +85,8 @@ at a fixed age. The average continues across epochs and reuses losses already
 computed for optimizer updates.
 
 An EMA combines losses from several parameter positions. Its best saved position
-is the snapshot at the end of that epoch, not a position whose exact loss equals
-the plotted average. See :class:`~liesel.optim.EmaTrainLossMonitor` for the formula
+is the snapshot at the end of that epoch; its exact loss need not equal the
+EMA monitor value. See :class:`~liesel.optim.EmaTrainLossMonitor` for the formula
 and the alternative :meth:`~liesel.optim.EmaTrainLossMonitor.from_half_life` setting.
 
 .. _optimizer-debug-nans:
