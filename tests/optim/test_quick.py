@@ -73,7 +73,7 @@ def test_lieseloptim_imports():
 
 @pytest.mark.parametrize("make_model", [_normal_model, _two_branch_model])
 @pytest.mark.parametrize("seed_kwargs", [{}, {"seed": 42}])
-def test_seeded_automatic_full_data_setup_preserves_rows_and_repeats_fit(
+def test_seeded_full_data_setup_preserves_rows_and_repeats_fit(
     make_model, seed_kwargs, monkeypatch
 ):
     def unexpected_clock_read():
@@ -88,8 +88,14 @@ def test_seeded_automatic_full_data_setup_preserves_rows_and_repeats_fit(
 
     def run():
         model = make_model()
+        split = (
+            PositionSplit.from_model(model, multi_size="manager")
+            if make_model is _two_branch_model
+            else None
+        )
         quick = LieselOptim(
             model,
+            split=split,
             optimizers=optax.adam(0.02),
             **seed_kwargs,
             batches=Batches.from_model(model, batch_size=2, multi_size="manager"),
@@ -381,11 +387,12 @@ def test_user_provided_batches_are_not_mutated():
     assert batches.axis_size == 6
 
 
-def test_multi_size_default_split_builds_batch_manager():
+def test_multi_size_opt_in_split_builds_batch_manager():
     model = _two_branch_model()
 
     engine = LieselOptim(
         model,
+        split=PositionSplit.from_model(model, multi_size="manager"),
         optimizers=optax.adam(0.02),
         loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
         seed=1,

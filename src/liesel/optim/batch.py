@@ -15,7 +15,11 @@ from . import _alias
 from ._log_lik import observed_log_lik_sources
 from ._log_lik import scaled_common_log_lik as _scaled_common_log_lik
 from ._log_lik import scaled_liesel_log_lik as _scaled_liesel_log_lik
-from ._model_utils import position_key_groups_from_model, strong_observed_keys
+from ._model_utils import (
+    multi_size_error_message,
+    position_key_groups_from_model,
+    strong_observed_keys,
+)
 from .split import (
     PositionSplit,
     PositionSplitManager,
@@ -1019,12 +1023,7 @@ class Batches:
                     likelihood_axes=likelihood_axes,
                 )
 
-            raise ValueError(
-                "Batches.from_model() found multiple observation groups "
-                f"with axis sizes {[size for size, _ in groups]}. Use "
-                "Batches.from_model(..., multi_size='manager') or "
-                "BatchManager.from_model(...)."
-            )
+            raise ValueError(multi_size_error_message("Batches", groups))
 
         if axis_size is None:
             axis_size = (
