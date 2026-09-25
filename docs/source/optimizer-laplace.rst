@@ -201,6 +201,20 @@ The approximate posterior median is 0.79, with a 90% credible interval of
 For matrix calculations, ``posterior.covariance()`` constructs the full covariance
 on request. ``posterior.names`` and ``posterior.shapes`` describe its ordering.
 
+To work with one parameter, request its block by name:
+
+.. code-block:: python
+
+   b_covariance = posterior.marginal_covariance_blocks(["b"])["b"]
+
+This 8 × 8 matrix retains the uncertainty associated with ``mu`` and ``h(tau)``.
+Omit the name selection to get a dictionary of blocks for every parameter.
+For a factor of each block's inverse, use
+``posterior.marginal_precision_cholesky_blocks()``.
+For precision conditional on all the other parameters, use
+``posterior.conditional_precision_blocks()``; these are diagonal blocks of the
+joint precision and generally differ from the marginal precisions.
+
 The helper adds curvature work once per call and checks stationarity and positive
 definiteness. It selects ``at="best"`` by default; use ``at="final"`` for the final
 snapshot. Keep the model, data, and fixed parameters unchanged between fitting and

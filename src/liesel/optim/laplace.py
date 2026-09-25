@@ -84,6 +84,85 @@ class LaplaceApproximation:
             (factor, True), jnp.eye(factor.shape[0], dtype=factor.dtype)
         )
 
+    def _block_slices(self, position_keys):
+        if isinstance(position_keys, str):
+            raise ValueError("Pass coordinate names as a sequence, not a string.")  # noqa: TRY004
+        slices = {}
+        offset = 0
+        for name, shape in zip(self.names, self.shapes, strict=True):
+            width = math.prod(shape)
+            slices[name] = slice(offset, offset + width)
+            offset += width
+        keys = self.names if position_keys is None else position_keys
+        if len(set(keys)) != len(keys):
+            raise ValueError("Duplicate coordinate names.")
+        for name in keys:
+            if name not in slices:
+                raise ValueError(f"Unknown coordinate {name!r}.")
+        return {name: slices[name] for name in keys}
+
+    def marginal_covariance_blocks(
+        self, position_keys: Sequence[str] | None = None
+    ) -> Position:
+        """Return named diagonal blocks of the joint covariance.
+
+        Each block describes a parameter's marginal uncertainty, retaining the
+        effect of correlations with all other parameters. Blocks are flattened
+        two-dimensional matrices, including (1, 1) for scalars. None selects all
+        names; an explicit selection preserves its order. Only selected blocks
+        are constructed, without allocating the full covariance. Unknown or
+        duplicate names, and a string instead of a sequence, raise ValueError.
+        """
+        if not self.valid or self.precision_cholesky is None:
+            raise RuntimeError("Cannot use an invalid Laplace approximation.")
+        factor = self.precision_cholesky
+        blocks = Position({})
+        for name, section in self._block_slices(position_keys).items():
+            selected = jax.nn.one_hot(
+                jnp.arange(section.start, section.stop),
+                factor.shape[0],
+                dtype=factor.dtype,
+            ).T
+            solved = jsp.linalg.solve_triangular(factor, selected, lower=True)
+            blocks[name] = solved.T @ solved
+        return blocks
+
+    def marginal_precision_cholesky_blocks(
+        self, position_keys: Sequence[str] | None = None
+    ) -> Position:
+        """Factor the inverse of each selected marginal covariance block.
+
+        Each lower triangular factor L satisfies L @ L.T = inverse(Sigma_ii).
+        These are not diagonal blocks of the joint precision Cholesky factor.
+        Selection and flattened shapes follow :meth:`marginal_covariance_blocks`.
+        """
+        blocks = Position({})
+        for name, covariance in self.marginal_covariance_blocks(position_keys).items():
+            precision = jsp.linalg.cho_solve(
+                (jnp.linalg.cholesky(covariance), True),
+                jnp.eye(covariance.shape[0], dtype=covariance.dtype),
+            )
+            blocks[name] = jnp.linalg.cholesky(precision)
+        return blocks
+
+    def conditional_precision_blocks(
+        self, position_keys: Sequence[str] | None = None
+    ) -> Position:
+        """Return named diagonal blocks of the joint precision.
+
+        Each block is the precision of that parameter conditional on all other
+        coordinates. Its inverse is a conditional covariance, generally different
+        from the marginal covariance. Selection and flattened shapes follow
+        :meth:`marginal_covariance_blocks`. The full precision is not constructed.
+        """
+        if not self.valid or self.precision_cholesky is None:
+            raise RuntimeError("Cannot use an invalid Laplace approximation.")
+        blocks = Position({})
+        for name, section in self._block_slices(position_keys).items():
+            rows = self.precision_cholesky[section, :]
+            blocks[name] = rows @ rows.T
+        return blocks
+
     def sample(self, key: jax.Array, sample_shape: tuple[int, ...] = ()) -> Position:
         """Draw coordinate dictionaries with common leading sample axes.
 
