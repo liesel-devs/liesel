@@ -4,6 +4,7 @@ Nodes and variables.
 
 from __future__ import annotations
 
+import copyreg
 import inspect
 import logging
 import warnings
@@ -66,6 +67,21 @@ type Distribution = jd.Distribution | nd.Distribution
 type Bijector = jb.Bijector | nb.Bijector
 
 logger = logging.getLogger(__name__)
+
+
+def _rebuild_invert(cls: type[Bijector], parameters: dict[str, Any]) -> Bijector:
+    return cls(**parameters)
+
+
+def _reduce_invert(bijector: jb.Invert | nb.Invert) -> tuple:
+    return _rebuild_invert, (type(bijector), dict(bijector.parameters))
+
+
+# TFP's Invert requires its bijector in __new__, which copy, pickle, and dill do
+# not pass when they rebuild an object. Model.update_state deep-copies the model,
+# and save_model uses dill, so models containing Invert need this reduction.
+for _invert in (jb.Invert, nb.Invert):
+    copyreg.pickle(_invert, _reduce_invert)
 
 
 def _unique_tuple[T: Hashable](*args: Iterable[T]) -> tuple[T, ...]:
@@ -3426,7 +3442,6 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
     kwinputs: dict[str, Any] = dict(dist_node.kwinputs)
 
     def transform_dist(*args, **kwargs):
-        # Construct Invert here: capturing it prevents saved models from reloading.
         return jd.TransformedDistribution(
             InputDist(*args, **kwargs), jb.Invert(bijector_inst)
         )
