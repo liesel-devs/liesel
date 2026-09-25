@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Sequence
-from math import ceil
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Literal
 
 import optax
 
@@ -13,10 +12,12 @@ from ..model import Model
 from ._engine_utils import (
     BatchConfig,
     SplitConfig,
+    _validate_optimizer_batches,
     _validate_positive_int,
 )
 from .batch import Batches
 from .engine import EmaTrainLossMonitor, LossMonitor
+from .loss import _validate_bool
 from .optimizer import Optimizer, OptimizerLike
 from .split import PositionSplit
 from .stop import Stopper
@@ -26,17 +27,15 @@ if TYPE_CHECKING:
     from .engine import OptimEngine
     from .state import OptimResult
 
-_MISSING = object()
-
 
 class LieselVI:
     """
     Builds an :class:`.OptimEngine` for variational inference.
 
     ``LieselVI`` is the quick-start wrapper for ELBO optimization. It constructs one
-    of the standard :class:`.NegElboLoss` variational families, default training
-    batches, and an Adam optimizer over the variational parameters unless these
-    pieces are supplied explicitly. Variational-family initialization belongs to
+    of the standard :class:`.NegElboLoss` variational families and default training
+    batches, and wraps a supplied Optax transformation over all variational
+    parameters. Variational-family initialization belongs to
     :class:`.NegElboLoss` and :class:`.VDist`; pass a custom ``NegElboLoss`` when you
     need Laplace or custom initialization.
 
@@ -47,16 +46,12 @@ class LieselVI:
     loss
         Either one of ``"mvn_diag"``, ``"mvn_tril"``, and ``"mvn_blocked"``, or an
         explicit :class:`.NegElboLoss` instance.
-    elbo
-        Deprecated alias for ``loss``.
     batches
         Optional explicit batch configuration. Cannot be combined with
         ``batch_size``.
     batch_size
         Mini-batch size used to construct default batches. ``None`` means full-data
         batches.
-    batch_axis_size
-        Deprecated alias for ``batch_size``.
     split
         Optional split. If omitted and ``loss`` is not an explicit
         :class:`.NegElboLoss`,
@@ -64,30 +59,23 @@ class LieselVI:
         automatically uses :class:`.PositionSplitManager`. Validation data is not
         supported for ELBO losses.
     optimizers
-        Either explicit optimizers or the string shortcut ``"adam"``. L-BFGS is not
-        provided as a string shortcut because ELBO estimates are usually stochastic.
+        A configured Optax transformation, such as ``optax.adam(learning_rate=0.01)``,
+        applied to all variational q parameters, or a sequence of explicit
+        :class:`.Optimizer` objects selecting q parameter blocks. Pass a
+        transformation, not an optimizer factory. L-BFGS has no string shortcut
+        because ELBO estimates are usually stochastic; an explicit :class:`.LBFGS`
+        must be the sole optimizer and requires full-data batches and a
+        deterministic objective.
     stopper
-        Maximum-epoch and early-stopping configuration.
+        Maximum-epoch and early-stopping configuration. ``None`` creates a fresh
+        :class:`.Stopper` with ``epochs=1000``, ``patience=10``, and ``rtol=1e-6``.
     seed
-        Integer seed. If ``None``, the current Unix time is used.
-    axis_size
-        Optional scalar observation count for scalar default splitting.
-    split_axes
-        Optional mapping from observed position key to split/batch axis. ``None``
-        includes a selected key unchanged in every split part; such keys are not
-        included in automatically derived batches.
-    default_split_axis
-        Split/batch axis for observed keys missing from ``split_axes``.
-    shuffle_batches
-        Whether default mini-batches should shuffle observations.
-    epoch_size
-        Joint epoch length used by default :class:`.BatchManager` objects:
-        ``"strict"``, ``"min"``, ``"max"``, or a positive integer.
+        Integer seed, defaulting to zero. If ``None``, the current Unix time is used.
     nsamples
         Monte Carlo sample count for internally constructed training ELBOs.
     scale_loss
         Whether internally constructed ELBO losses should be divided by the training
-        sample size. ``"auto"`` scales the loss. This setting has no effect when
+        sample size. Must be a boolean. This setting has no effect when
         ``loss`` is an explicit :class:`.NegElboLoss`.
     regularize_q_prior
         Whether internally constructed ELBOs should include priors in the
@@ -101,13 +89,13 @@ class LieselVI:
     entropy
         Entropy estimator for internally constructed losses: ``"auto"`` uses
         analytic entropy where supported with per-term Monte Carlo fallback;
-        ``"mc"`` keeps the original sampled estimator. An explicit loss retains
+        ``"mc"`` estimates all entropy terms by sampling. An explicit loss retains
         its own entropy setting.
+    save_position_history
+        Whether to save parameter positions after each epoch. Disabling this saves
+        memory; final and best-monitor positions and loss histories remain available.
     show_progress
         Whether the built engine should show ``tqdm`` progress bars.
-    progress_n_updates
-        Compatibility alias for an approximate maximum number of epoch updates.
-        Reading it returns the effective update count after interval conversion.
     progress_update_every
         Update the epoch progress bar after this many completed epochs. When batch
         progress is active, the epoch bar advances after every epoch.
@@ -116,13 +104,11 @@ class LieselVI:
         when ``show_progress`` is enabled.
     step_progress_update_every
         Update the batch progress bar after this many completed batches.
-    step_progress_n_updates
-        Compatibility alias for an approximate maximum number of batch updates.
-        Reading it returns the effective update count after interval conversion.
 
     Examples
     --------
     >>> import jax.numpy as jnp
+    >>> import optax
     >>> import liesel.model as lsl
     >>> import tensorflow_probability.substrates.jax.distributions as tfd
     >>> from liesel.optim import EmaTrainLossMonitor, LieselVI
@@ -134,7 +120,10 @@ class LieselVI:
     ... )
     >>> model = lsl.Model([y])
     >>> engine = LieselVI(
-    ...     model, loss_monitor=EmaTrainLossMonitor(effective_window=1.0), seed=1
+    ...     model,
+    ...     optimizers=optax.adam(learning_rate=1e-3),
+    ...     loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
+    ...     seed=1,
     ... ).build_engine()
     >>> type(engine).__name__
     'OptimEngine'
@@ -147,54 +136,32 @@ class LieselVI:
         model: Model,
         *,
         loss_monitor: LossMonitor,
-        loss: Literal["mvn_diag", "mvn_tril", "mvn_blocked"] | NegElboLoss = "mvn_diag",
-        elbo: Literal["mvn_diag", "mvn_tril", "mvn_blocked"]
-        | NegElboLoss
-        | None = None,
-        batches: BatchConfig | None = None,
-        batch_size: int | None = None,
-        batch_axis_size: int | None | object = _MISSING,
+        optimizers: optax.GradientTransformation | Sequence[OptimizerLike],
+        stopper: Stopper | None = None,
+        seed: int | None = 0,
         split: SplitConfig | None = None,
-        optimizers: Sequence[OptimizerLike] | Literal["adam"] = "adam",
-        stopper: Stopper = Stopper(  # noqa: B008
-            epochs=1000, patience=10, rtol=1e-6
-        ),
-        seed: int | None = None,
-        axis_size: int | None = None,
-        split_axes: dict[str, int | None] | None = None,
-        default_split_axis: int = 0,
-        shuffle_batches: bool = True,
-        epoch_size: Literal["strict", "min", "max"] | int = "max",
+        batch_size: int | None = None,
+        batches: BatchConfig | None = None,
+        loss: Literal["mvn_diag", "mvn_tril", "mvn_blocked"] | NegElboLoss = "mvn_diag",
         nsamples: int = 10,
-        scale_loss: bool | Literal["auto"] = "auto",
+        scale_loss: bool = True,
         regularize_q_prior: bool = True,
-        show_progress: bool = True,
-        progress_n_updates: int | None = None,
-        progress_update_every: int = 10,
-        show_step_progress: bool = False,
-        step_progress_update_every: int = 10,
-        step_progress_n_updates: int | None = None,
         entropy: Literal["auto", "mc"] = "auto",
+        save_position_history: bool = True,
+        show_progress: bool = True,
+        show_step_progress: bool = False,
+        progress_update_every: int = 10,
+        step_progress_update_every: int = 10,
     ) -> None:
-        if batch_axis_size is not _MISSING:
-            if batch_size is not None:
-                raise ValueError("Pass either batch_size or batch_axis_size, not both.")
-            batch_size = cast(int | None, batch_axis_size)
-
         if batches is not None and batch_size is not None:
-            raise ValueError("Pass either batches or batch_size, not both.")
-
-        if elbo is not None:
-            if loss != "mvn_diag":
-                raise ValueError("Pass either loss or elbo, not both.")
-            loss = elbo
+            raise ValueError("Pass either batch_size or batches, not both.")
 
         self.model = model
         self.seed = int(time.time()) if seed is None else seed
-        self.stopper = stopper
-        self.split = self._resolve_split(
-            loss, split, axis_size, split_axes, default_split_axis
+        self.stopper = (
+            Stopper(epochs=1000, patience=10, rtol=1e-6) if stopper is None else stopper
         )
+        self.split = self._resolve_split(loss, split)
         self.loss_monitor = loss_monitor
         if loss_monitor == "validation":
             raise ValueError(
@@ -216,61 +183,27 @@ class LieselVI:
             regularize_q_prior=regularize_q_prior,
             entropy=entropy,
         )
-        self.batches = self._resolve_batches(
-            batches=batches,
-            batch_size=batch_size,
-            split_axes=split_axes,
-            default_split_axis=default_split_axis,
-            shuffle=shuffle_batches,
-            epoch_size=epoch_size,
+        self.batches = (
+            Batches.from_split(self.split, batch_size=batch_size)
+            if batches is None
+            else batches
         )
         self.optimizers = self._resolve_optimizers(optimizers)
+        self.save_position_history = save_position_history
+        _validate_optimizer_batches(self.optimizers, self.batches)
         self.show_progress = show_progress
         self.progress_update_every = progress_update_every
         self.show_step_progress = show_step_progress
         self.step_progress_update_every = step_progress_update_every
-        if progress_n_updates is not None:
-            self.progress_n_updates = progress_n_updates
-        if step_progress_n_updates is not None:
-            self.step_progress_n_updates = step_progress_n_updates
         _validate_positive_int(self.progress_update_every, "progress_update_every")
         _validate_positive_int(
             self.step_progress_update_every, "step_progress_update_every"
-        )
-
-    @property
-    def progress_n_updates(self) -> int:
-        """Effective number of epoch updates implied by the update interval."""
-        _validate_positive_int(self.progress_update_every, "progress_update_every")
-        return ceil(self.stopper.epochs / self.progress_update_every)
-
-    @progress_n_updates.setter
-    def progress_n_updates(self, value: int) -> None:
-        _validate_positive_int(value, "progress_n_updates")
-        self.progress_update_every = max(ceil(self.stopper.epochs / value), 1)
-
-    @property
-    def step_progress_n_updates(self) -> int:
-        """Effective number of batch updates implied by the update interval."""
-        _validate_positive_int(
-            self.step_progress_update_every, "step_progress_update_every"
-        )
-        return ceil(self.batches.n_full_batches / self.step_progress_update_every)
-
-    @step_progress_n_updates.setter
-    def step_progress_n_updates(self, value: int) -> None:
-        _validate_positive_int(value, "step_progress_n_updates")
-        self.step_progress_update_every = max(
-            ceil(self.batches.n_full_batches / value), 1
         )
 
     def _resolve_split(
         self,
         loss: Literal["mvn_diag", "mvn_tril", "mvn_blocked"] | NegElboLoss,
         split: SplitConfig | None,
-        axis_size: int | None,
-        split_axes: dict[str, int | None] | None,
-        default_split_axis: int,
     ) -> SplitConfig:
         if isinstance(loss, NegElboLoss):
             if split is not None and split is not loss.split:
@@ -286,9 +219,6 @@ class LieselVI:
         return PositionSplit.from_model(
             self.model,
             shuffle=False,
-            axis_size=axis_size,
-            split_axes=split_axes,
-            default_split_axis=default_split_axis,
             multi_size="manager",
         )
 
@@ -296,19 +226,14 @@ class LieselVI:
         self,
         loss: Literal["mvn_diag", "mvn_tril", "mvn_blocked"] | NegElboLoss,
         nsamples: int,
-        scale_loss: bool | Literal["auto"],
+        scale_loss: bool,
         regularize_q_prior: bool,
         entropy: Literal["auto", "mc"],
     ) -> NegElboLoss:
         if isinstance(loss, NegElboLoss):
             return loss
 
-        if scale_loss == "auto":
-            scale = True
-        elif isinstance(scale_loss, bool):
-            scale = scale_loss
-        else:
-            raise ValueError("scale_loss must be True, False, or 'auto'.")
+        _validate_bool(scale_loss, "scale_loss")
 
         match loss:
             case "mvn_diag":
@@ -316,7 +241,7 @@ class LieselVI:
                     self.model,
                     split=self.split,
                     nsamples=nsamples,
-                    scale=scale,
+                    scale=scale_loss,
                     regularize_q_prior=regularize_q_prior,
                     entropy=entropy,
                 )
@@ -325,7 +250,7 @@ class LieselVI:
                     self.model,
                     split=self.split,
                     nsamples=nsamples,
-                    scale=scale,
+                    scale=scale_loss,
                     regularize_q_prior=regularize_q_prior,
                     entropy=entropy,
                 )
@@ -334,7 +259,7 @@ class LieselVI:
                     self.model,
                     split=self.split,
                     nsamples=nsamples,
-                    scale=scale,
+                    scale=scale_loss,
                     regularize_q_prior=regularize_q_prior,
                     entropy=entropy,
                 )
@@ -344,57 +269,38 @@ class LieselVI:
                     "NegElboLoss instance."
                 )
 
-    def _resolve_batches(
-        self,
-        batches: BatchConfig | None,
-        batch_size: int | None,
-        split_axes: dict[str, int | None] | None,
-        default_split_axis: int,
-        shuffle: bool,
-        epoch_size: Literal["strict", "min", "max"] | int,
-    ) -> BatchConfig:
-        if batches is not None:
-            return batches
-
-        batch_axes = {
-            key: axis for key, axis in (split_axes or {}).items() if axis is not None
-        }
-        return Batches.from_split(
-            self.split,
-            batch_size=batch_size,
-            shuffle=shuffle,
-            batch_axes=batch_axes,
-            default_batch_axis=default_split_axis,
-            epoch_size=epoch_size,
-        )
-
     def _resolve_optimizers(
-        self, optimizers: Sequence[OptimizerLike] | str
+        self, optimizers: optax.GradientTransformation | Sequence[OptimizerLike]
     ) -> Sequence[OptimizerLike]:
-        if not isinstance(optimizers, str):
-            return optimizers
-
-        if optimizers == "adam":
-            return [
-                Optimizer(
-                    list(self.loss.q.parameters),
-                    optimizer=optax.adam(learning_rate=1e-3),
+        if isinstance(optimizers, optax.GradientTransformation):
+            return [Optimizer(list(self.loss.q.parameters), optimizers)]
+        if isinstance(optimizers, str):
+            if optimizers == "lbfgs":
+                raise ValueError(
+                    "LieselVI does not provide optimizers='lbfgs' because ELBO "
+                    "estimates are usually stochastic. Pass an explicit LBFGS "
+                    "optimizer sequence if you want to run a deterministic "
+                    "L-BFGS experiment."
                 )
-            ]
-
-        if optimizers == "lbfgs":
-            raise ValueError(
-                "LieselVI does not provide optimizers='lbfgs' because ELBO "
-                "estimates are usually stochastic. Pass an explicit LBFGS optimizer "
-                "sequence if you want to run a deterministic L-BFGS experiment."
+            raise ValueError(  # noqa: TRY004
+                "Pass a configured Optax transformation as "
+                "optimizers=optax.adam(learning_rate=...) or a sequence of optimizers."
             )
-
-        raise ValueError("optimizers must be 'adam' or a sequence.")
-
-    @property
-    def elbo(self) -> NegElboLoss:
-        """Alias for :attr:`loss`."""
-        return self.loss
+        if isinstance(optimizers, Sequence):
+            for index, optimizer in enumerate(optimizers):
+                if isinstance(optimizer, optax.GradientTransformation):
+                    raise TypeError(
+                        f"optimizers[{index}] is a bare Optax transformation. Pass "
+                        "a single transformation directly for all parameters, or "
+                        "wrap each one in Optimizer(keys, transformation) for "
+                        "separate parameter blocks."
+                    )
+            return optimizers
+        raise TypeError(
+            "optimizers must be a configured Optax transformation such as "
+            "optax.adam(learning_rate=...) or a sequence of optimizers. "
+            "Pass the transformation, not the optimizer factory."
+        )
 
     def build_engine(self) -> OptimEngine:
         """
@@ -416,6 +322,7 @@ class LieselVI:
             initial_state=self.model.state,
             seed=self.seed,
             loss_monitor=self.loss_monitor,
+            save_position_history=self.save_position_history,
             show_progress=self.show_progress,
             progress_update_every=self.progress_update_every,
             show_step_progress=self.show_step_progress,
