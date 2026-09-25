@@ -182,7 +182,14 @@ The approximate posterior median is 0.79, with a 90% credible interval of
    rate_plot = (
        p9.ggplot(rate_summary, p9.aes(x="group", y="median"))
        + p9.geom_pointrange(p9.aes(ymin="lower", ymax="upper"), color="#1f77b4")
-       + p9.geom_point(p9.aes(y="observed"), shape="x", color="gray")
+       + p9.geom_point(
+           p9.aes(y="observed"),
+           shape="x",
+           color="black",
+           size=2.5,
+           stroke=0.8,
+           position=p9.position_nudge(x=0.15),
+       )
        + p9.scale_x_continuous(breaks=range(1, 9))
        + p9.labs(x="Group", y="Expected count")
        + p9.theme_minimal()
@@ -191,12 +198,13 @@ The approximate posterior median is 0.79, with a 90% credible interval of
    rate_plot.show()
 
 .. figure:: _static/optimizer-laplace-rates.png
-   :alt: Approximate posterior medians and 90 percent credible intervals for eight group rates, with observed group means marked by crosses.
+   :alt: Approximate posterior medians and 90 percent credible intervals for eight group rates, with observed group means marked by black crosses slightly to the right.
 
    Blue points and bars show posterior medians and 90% credible intervals;
-   gray crosses mark observed means. The intervals carry uncertainty in the mean,
-   scale, and group effects through to expected counts. New observations also
-   vary according to the Poisson distribution.
+   black crosses mark observed means, shifted slightly to the right for clarity.
+   The intervals carry uncertainty in the mean, scale, and group effects through
+   to expected counts. New observations also vary according to the Poisson
+   distribution.
 
 For matrix calculations, ``posterior.covariance()`` constructs the full covariance
 on request. ``posterior.names`` and ``posterior.shapes`` describe its ordering.
