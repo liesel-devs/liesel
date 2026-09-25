@@ -2,7 +2,6 @@
 
 import re
 from pathlib import Path
-from textwrap import dedent
 
 import jax
 import jax.numpy as jnp
@@ -11,13 +10,15 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 
 
 def test_custom_distribution_guide():
-    guide = Path(__file__).resolve().parents[2] / "docs/source/model-distributions.rst"
+    guide = Path(__file__).resolve().parents[2] / "docs/source/model-distributions.md"
     blocks = re.findall(
-        r"\.\. code-block:: python\n\n((?:(?:   [^\n]*)?\n)+)", guide.read_text()
+        r"```\{code-cell\} ipython3\n(?:---\n.*?\n---\n)?(.*?)\n```",
+        guide.read_text(),
+        re.DOTALL,
     )
     namespace = {}
     for block in blocks:
-        exec(dedent(block), namespace)  # noqa: S102 - Execute trusted, checked-in docs.
+        exec(block, namespace)  # noqa: S102 - Execute trusted, checked-in docs.
         if "custom_model" in namespace:
             break
 

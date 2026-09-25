@@ -1,84 +1,134 @@
 # Writing short, useful guides
 
-Use these notes when writing or reorganizing Liesel guides and tutorial
-notebooks, including model building, optimization, and MCMC sampling.
+Use these notes for Liesel guides and tutorial notebooks, including model
+building, optimization, and MCMC sampling.
 
-## Give readers a clear route
+## Give each topic a home
 
-Start by reading the current docs and implementation. Identify the tasks readers
-need to complete, then give each piece of information one main home:
+Read the current docs and implementation, identify the reader's task, and choose
+where the explanation belongs:
 
 - **Landing page:** explain the purpose, show a small working example, and link
   to the next steps.
-- **Tutorial:** walk through a complete, realistic task. Introduce one idea at a
-  time and show the results.
+- **Tutorial:** walk through a complete, realistic task, introducing one idea at
+  a time and showing the results.
 - **Task guide:** answer a specific question, such as choosing priors,
   configuring a sampler, or inspecting results.
 - **API reference:** document arguments, defaults, exact rules, and edge cases.
 
-Keep essential constraints beside the example they affect. Link to deeper
-details instead of repeating them. When retiring duplicate notebooks, preserve
-useful examples in the tutorials and genuine checks in the test suite.
+Give each explanation one main home and link to it elsewhere. Keep prerequisites
+and essential constraints beside the example they affect. Explain choices that
+change the model, algorithm, or reported results; brevity must not hide them.
+When retiring duplicate notebooks, preserve useful examples in tutorials and
+genuine checks in the test suite.
 
-## Write each section around an action
+## Lead with the main workflow
 
-Use a practical heading, a short introduction, the code, and an explanation of
-what the code changes. Include a link when there is a useful next step.
+Introduce a feature's general purpose before relating it to special cases. Show
+the main workflow and a useful result first. Put tuning, performance details,
+and extended diagnostics later, or link to a separate task guide or reference.
 
-Prefer headings such as “Define the model” or “Inspect the chains” to vague
-headings such as “Advanced usage.” After the example, explain how to interpret
-the output or how the choice affects the next step. Avoid explaining every
+Give each section a practical heading, a short introduction, the relevant code,
+and an interpretation of the result. Name the actual operation, such as “Define
+the model” or “Choose the source.” Avoid vague headings and explanations of every
 visible line of code.
+
+Keep page and section headings on one line in both rendered sidebars at desktop
+widths. Use a short toctree label when a longer tutorial title is useful. Shorten
+the wording without losing its meaning; do not hide or clip wrapping text.
 
 ## Keep the language human
 
 Use short sentences, familiar verbs, and concrete names. Address the reader
-directly. Explain a technical term where it first becomes necessary. Keep exact
+directly and explain technical terms when they become necessary. Preserve exact
 API names and distinctions that affect the result.
+
+Call model parameters “parameters,” not “coordinates.” Where transformations
+matter, use “transformed parameters” or specify the parameter scale.
 
 Prefer “This saves memory” to “This configuration facilitates reduced memory
 consumption.” Remove repeated introductions, promotional claims, and closing
 summaries that restate the section.
 
-Brevity means removing repetition, not hiding prerequisites or meaningful
-choices. Explain when a setting changes the model, the algorithm, or the
-reported results. Preserve deliberate API choices instead of silently choosing
-for the reader.
-
 ## Make examples easy to use
 
+- Prefer executable MyST Markdown for task guides with code and results. Use
+  native notebook cells and outputs instead of generated RST output blocks.
 - State prerequisites, such as an existing `model`, before a snippet. Make
-  complete tutorials runnable from top to bottom.
-- Use realistic data, fixed seeds, and only the settings needed to teach the
-  task. Show a useful result, rather than a wall of diagnostic output.
-- Do not use `assert` statements in documentation. Keep verification in tests.
-  When a type diagnostic exposes awkward or unsafe API behavior, investigate
-  the cause before adding checks to every example.
-- Choose outputs that help readers judge the result: a model graph, a summary,
-  or a diagnostic plot. Explain what to look for and what the output cannot
-  establish on its own.
+  complete guides and tutorials runnable from top to bottom. Build-only setup
+  cells may run a linked prerequisite tutorial; use `remove-cell` to omit their
+  source and outputs from the rendered page while still executing them. Keep
+  reader prerequisites visible in the prose.
+- Use existing public helpers instead of manual setup or calculations that they
+  already handle. Include a lower-level recipe or alternative only when it serves
+  a distinct task or helps the reader make a meaningful choice.
+- Make the structure of the example visible through its layout. Group imports
+  and organize code into meaningful stages, such as parameters, inputs, mean,
+  scale, response, fitting, and inspection. Use blank lines between stages and
+  substantial independent definitions, including consecutive multiline calls.
+  Keep short, closely related statements together; do not separate every line.
+- Wrap visually dense calls, not only calls that exceed the line-length limit.
+  Put arguments on separate lines when that helps distinguish a function or
+  lambda, its inputs, nested expressions, and named options. Use trailing commas
+  so Ruff preserves the chosen layout. Keep short, easily scanned calls on one
+  line. Apply this judgment to all functions and constructors.
+- Use short comments to label conceptual groups when the surrounding prose does
+  not already make them clear. Explain the role of a group, such as “Scale
+  predictor,” rather than narrating individual assignments.
+- Pass distributions to `lsl.Var` and its factory methods with the explicit
+  `dist=` keyword, rather than as a positional argument.
+- Use code cells without interactive prompts (`>>>` or `...`).
+- Pass a single model root directly, as in `lsl.Model(y)`. Use a sequence for
+  multiple roots.
+- Use realistic data, fixed seeds, and only the settings needed for the task.
+- Keep setup and modifications together, then put each inspection expression
+  in its own cell so its native output appears immediately below it. Prefer
+  expressions to `print()` for inspecting values, and native tables for related
+  results. Reserve `print()` for messages. Round numbers and select useful fields;
+  remove unnecessary inspection calls instead of leaving them without output.
+- Execute examples when building the docs and fail the build on execution errors.
+  Keep image alt text in cell metadata and inspect the rendered outputs.
+- Keep verification assertions in tests. Investigate awkward API behavior before
+  adding repeated defensive checks to examples.
 
-## Put visuals where they help
+Migration guides should show the old and new code and explain meaningful
+behavior changes.
+
+## Show useful visuals
+
+Prefer built-in Liesel and Goose plotting helpers when they cover the task,
+for example `model.plot()`, `gs.plot_trace()`, and `result.plot_loss_overview()`.
+Use plotnine for custom statistical plots without a suitable built-in helper.
+Show the rendered plot with its code. Explain what readers should look for and
+what the plot cannot establish. Use enough contrast, distinct shapes, or small
+positional offsets to keep overlapping marks visible.
+
+Put each plotting call in its own code cell, with the rendered figure directly
+below it. Keep construction and fitting code in separate cells.
+
+In model walkthroughs, include `model.plot()` after constructing the model and
+show the graph beside its code. Generate it in an executed tutorial cell where
+possible; the Read the Docs build installs Graphviz for layout. Give figures
+descriptive alt text. For notebooks, use `mystnb.image.alt` cell metadata and
+check that it appears on the rendered image.
 
 Embed interactive explanations beside the relevant text. A separate-page link
-can supplement the embed, but should not be the only way readers discover it.
+can supplement the embed. Keep essential explanations readable without
+interacting with the visual.
 
-Generate model graphs with `model.plot()` in executed tutorial cells. The
-Read the Docs build installs Graphviz for their layout. Give generated figures
-descriptive alt text in the cell metadata at `mystnb.image.alt`, and check that
-it appears on the rendered image. Use static images when a figure cannot be
-generated reliably during the build; record its source command and refresh it
-when the example changes. Keep essential explanations readable without
-interacting with a visual.
+Use static images for guides that do not execute code during the build or when
+generation is unreliable. Record the source command and refresh the image when
+the example changes.
 
 ## Check the finished result
 
-Execute changed examples and notebooks, refresh affected saved outputs, and
-inspect the plots. Build the docs when changing rendering or navigation, and
-check that links resolve. Use Sphinx cross-references for internal pages and API
-objects. Links intended for use outside the docs must work from that context.
-Run the relevant hooks on the edited files.
+Read the guide from top to bottom for flow, missing prerequisites, repetition,
+and unnecessary detours. Match verification to the change: execute changed
+examples, refresh affected saved outputs, and inspect plots. Build the docs when
+changing rendering or navigation; check both sidebars and that links resolve.
+Run the relevant hooks on edited files.
 
-Match descriptions to actual behavior. A migration guide should show the old
-and new code and identify meaningful behavior changes. Verify notebook build
-settings before claiming that execution is skipped or cached.
+Use Sphinx cross-references for internal pages and API objects. Links intended
+for use outside the docs must work from that context. Report validation accurately,
+including whether builds were fresh or incremental and notebooks were executed,
+cached, or skipped.
