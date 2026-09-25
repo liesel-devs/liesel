@@ -64,6 +64,7 @@ from typing import Literal, Self, cast
 import jax
 import jax.flatten_util
 import jax.numpy as jnp
+import jax.scipy as jsp
 import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as tfd
 
@@ -72,7 +73,7 @@ from ..model import Dist, Model, Var
 from ..model.logprob import FlatLogProb
 from ..model.model import TemporaryModel
 from ._model_utils import validate_model_data_keys
-from .approximation import LaplaceApproximation
+from .approximation import LaplaceApproximation, _positive_definite
 from .loss import LossMixin, _training_loss_scalar, _validate_bool
 from .split import PositionSplit, PositionSplitManager, _has_custom_model_log_lik
 from .state import OptimCarry, OptimResult
@@ -124,6 +125,74 @@ def _laplace_covariance(model: Model, position_keys: Sequence[str], loc: jax.Arr
     if not bool(jnp.isfinite(cov_matrix).all()):
         raise ValueError("Laplace covariance must be finite.")
     return cov_matrix
+
+
+def _laplace_conditional_parameters(
+    approximation: LaplaceApproximation, position: Position
+):
+    """Select a joint block in the target's flattened parameter order."""
+    if not approximation.valid or approximation.precision_cholesky is None:
+        raise RuntimeError("Cannot use an invalid Laplace approximation.")
+    if (
+        len(set(approximation.names)) != len(approximation.names)
+        or len(approximation.names) != len(approximation.shapes)
+        or set(approximation.names) != set(approximation.mean)
+    ):
+        raise ValueError("Inconsistent approximation names, shapes, or mean.")
+    for name, shape in zip(approximation.names, approximation.shapes, strict=True):
+        if jnp.shape(approximation.mean[name]) != shape:
+            raise ValueError(f"Approximation shape mismatch for {name!r}.")
+        if not bool(jnp.isfinite(approximation.mean[name]).all()):
+            raise RuntimeError("Approximation means must be finite.")
+    sections = approximation._block_slices(sorted(position))
+    for name in sections:
+        if jnp.shape(position[name]) != jnp.shape(approximation.mean[name]):
+            raise ValueError(f"Target shape mismatch for {name!r}.")
+    factor = approximation.precision_cholesky
+    size = sum(prod(shape) for shape in approximation.shapes)
+    if factor.shape != (size, size):
+        raise ValueError("Approximation precision factor has the wrong shape.")
+    if not bool(_valid_precision_cholesky(factor)):
+        raise RuntimeError("Approximation precision factor is unusable.")
+    indices = jnp.array(
+        [
+            index
+            for section in sections.values()
+            for index in range(section.start, section.stop)
+        ],
+        dtype=jnp.int32,
+    )
+    rows = factor[indices, :]
+    precision = rows @ rows.T
+    precision_factor = jnp.linalg.cholesky(precision)
+    if not bool(_positive_definite(precision, precision_factor)):
+        raise RuntimeError("Selected conditional precision is unusable.")
+    covariance = jsp.linalg.cho_solve(
+        (precision_factor, True), jnp.eye(len(indices), dtype=factor.dtype)
+    )
+    scale_tril = jnp.linalg.cholesky(covariance)
+    if not bool(jnp.isfinite(scale_tril).all()):
+        raise RuntimeError("Selected conditional covariance is unusable.")
+    loc = jnp.concatenate([jnp.ravel(approximation.mean[name]) for name in sections])
+    return loc, scale_tril
+
+
+@jax.jit
+def _valid_precision_cholesky(factor):
+    # A whole-matrix reduction can allocate quadratic compiler temporaries.
+    # Scan rows to keep validation workspace linear in the total dimension.
+    columns = jnp.arange(factor.shape[0])
+
+    def check_row(index, valid):
+        row = factor[index]
+        return (
+            valid
+            & jnp.isfinite(row).all()
+            & (row[index] > 0)
+            & jnp.where(columns > index, row == 0, True).all()
+        )
+
+    return jax.lax.fori_loop(0, factor.shape[0], check_row, jnp.array(True))
 
 
 def _validate_gaussian_scale(value, *, triangular=False):
@@ -1667,19 +1736,13 @@ class VDist:
         if not isinstance(approximation, LaplaceApproximation):
             raise TypeError("approximation must be a LaplaceApproximation.")
         position = self.p.extract_position(self.position_keys)
-        loc, scale_tril = approximation._conditional_parameters(position)
-        loc = self._prepare_loc(loc)
-        scale_tril = _asarray_with_float_dtype(scale_tril, loc.dtype)
-        dist = Dist(tfd.MultivariateNormalTriL, loc=loc, scale_tril=scale_tril)
-        bijector = dist.find_default_parameter_bijectors()["scale_tril"]
-        assert bijector is not None
-        if not bool(jnp.isfinite(loc).all()) or not bool(
-            jnp.isfinite(bijector.inverse(scale_tril)).all()
-        ):
+        loc, scale_tril = _laplace_conditional_parameters(approximation, position)
+        try:
+            return self.mvn_tril(loc=loc, scale_tril=scale_tril)
+        except ValueError as error:
             raise RuntimeError(
                 "Cannot represent initialization with the default bijector."
-            )
-        return self.mvn_tril(loc=loc, scale_tril=scale_tril)
+            ) from error
 
     def build(self) -> Self:
         """

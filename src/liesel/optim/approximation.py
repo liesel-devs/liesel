@@ -69,53 +69,6 @@ class LaplaceApproximation:
                 raise ValueError(f"Unknown coordinate {name!r}.")
         return {name: slices[name] for name in keys}
 
-    def _conditional_parameters(self, position: Position):
-        """Select a joint block in the target's flattened parameter order."""
-        if not self.valid or self.precision_cholesky is None:
-            raise RuntimeError("Cannot use an invalid Laplace approximation.")
-        if (
-            len(set(self.names)) != len(self.names)
-            or len(self.names) != len(self.shapes)
-            or set(self.names) != set(self.mean)
-        ):
-            raise ValueError("Inconsistent approximation names, shapes, or mean.")
-        for name, shape in zip(self.names, self.shapes, strict=True):
-            if jnp.shape(self.mean[name]) != shape:
-                raise ValueError(f"Approximation shape mismatch for {name!r}.")
-            if not bool(jnp.isfinite(self.mean[name]).all()):
-                raise RuntimeError("Approximation means must be finite.")
-        sections = self._block_slices(sorted(position))
-        for name in sections:
-            if jnp.shape(position[name]) != jnp.shape(self.mean[name]):
-                raise ValueError(f"Target shape mismatch for {name!r}.")
-        factor = self.precision_cholesky
-        size = sum(math.prod(shape) for shape in self.shapes)
-        if factor.shape != (size, size):
-            raise ValueError("Approximation precision factor has the wrong shape.")
-        if not bool(_valid_precision_cholesky(factor)):
-            raise RuntimeError("Approximation precision factor is unusable.")
-        indices = jnp.array(
-            [
-                index
-                for section in sections.values()
-                for index in range(section.start, section.stop)
-            ],
-            dtype=jnp.int32,
-        )
-        rows = factor[indices, :]
-        precision = rows @ rows.T
-        precision_factor = jnp.linalg.cholesky(precision)
-        if not bool(_positive_definite(precision, precision_factor)):
-            raise RuntimeError("Selected conditional precision is unusable.")
-        covariance = jsp.linalg.cho_solve(
-            (precision_factor, True), jnp.eye(len(indices), dtype=factor.dtype)
-        )
-        scale_tril = jnp.linalg.cholesky(covariance)
-        if not bool(jnp.isfinite(scale_tril).all()):
-            raise RuntimeError("Selected conditional covariance is unusable.")
-        loc = jnp.concatenate([jnp.ravel(self.mean[name]) for name in sections])
-        return loc, scale_tril
-
     def marginal_covariance_blocks(
         self, position_keys: Sequence[str] | None = None
     ) -> Position:
@@ -208,24 +161,6 @@ class LaplaceApproximation:
             ].reshape(sample_shape + shape)
             offset += width
         return samples
-
-
-@jax.jit
-def _valid_precision_cholesky(factor):
-    # A whole-matrix reduction can allocate quadratic compiler temporaries.
-    # Scan rows to keep validation workspace linear in the total dimension.
-    columns = jnp.arange(factor.shape[0])
-
-    def check_row(index, valid):
-        row = factor[index]
-        return (
-            valid
-            & jnp.isfinite(row).all()
-            & (row[index] > 0)
-            & jnp.where(columns > index, row == 0, True).all()
-        )
-
-    return jax.lax.fori_loop(0, factor.shape[0], check_row, jnp.array(True))
 
 
 def _positive_definite(precision, factor):
