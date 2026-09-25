@@ -113,13 +113,23 @@ def _solve(joint, theta, seed, tol, max_iter):
     def step(state):
         point = state["point"]
         spd = jnp.isfinite(point["factor"]).all()
+
+        def fallback_direction():
+            # Scale each eigendirection by its curvature magnitude. This changes
+            # only the search direction; the stored Hessian and factor stay exact.
+            eigenvalues, eigenvectors = jnp.linalg.eigh(point["hessian"])
+            curvature = jnp.abs(eigenvalues)
+            floor = jnp.sqrt(jnp.finfo(seed.dtype).eps) * jnp.maximum(
+                1.0, jnp.max(curvature)
+            )
+            return -eigenvectors @ (
+                (eigenvectors.T @ point["gradient"]) / jnp.maximum(curvature, floor)
+            )
+
         direction = jax.lax.cond(
             spd,
             lambda: -jsp.linalg.cho_solve((point["factor"], True), point["gradient"]),
-            lambda: (
-                -point["gradient"]
-                / jnp.maximum(1.0, jnp.linalg.norm(point["hessian"], ord=jnp.inf))
-            ),
+            fallback_direction,
         )
         slope = point["gradient"] @ direction
         nominal_resolution = (
@@ -332,6 +342,9 @@ class LaplaceLoss(LossMixin):
     -----
     The dense solver finds a local conditional mode. Non-concave densities may
     have several modes; warm and cold starts need not choose the same one.
+    When curvature is indefinite, a descent direction uses the magnitudes of
+    the Hessian eigenvalues with a numerical floor. This modifies only the search
+    direction, never the Hessian used for convergence or the approximation.
     True positive-definite curvature and convergence are required for success.
     A failed solve returns an infinite value and an inspectable failed proposal.
     Every evaluation is pure: the engine commits state only at its full-training

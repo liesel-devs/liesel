@@ -214,6 +214,37 @@ def test_safeguarded_solve_recovers_from_bad_curvature_and_nonfinite_trials(case
         assert float(state.newton_decrement_squared) / 2 <= loss.inner_tol
 
 
+@pytest.mark.parametrize("x64", [False, True])
+def test_inner_solver_fits_normal_location_and_scale_from_zero(x64):
+    with jax.enable_x64(x64):
+        mu = lsl.Var.new_param(0.0, name="mu")
+        log_sd = lsl.Var.new_param(0.0, name="log_sd")
+        sd = lsl.Var.new_calc(jnp.exp, log_sd)
+        theta = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, 0.0, 1.0), name="theta")
+        y = lsl.Var.new_obs(
+            jnp.array([9.0, 11.0]), lsl.Dist(tfd.Normal, mu, sd), name="y"
+        )
+        model = lsl.Model([y, theta], to_float32=not x64)
+        loss = opt.LaplaceLoss(model, latent=["mu", "log_sd"])
+        position, carry = loss_carry(loss, ["theta"])
+        (value, state), gradient = jax.jit(loss.value_and_grad)(position, carry)
+
+        # The zero start has indefinite curvature. The Normal MLE is (10, 1),
+        # with Hessian diag(4, 2) in (log_sd, mu) order.
+        assert int(state.status) == 1
+        accuracy = 2e-5 if x64 else 5e-3
+        np.testing.assert_allclose(state.latent_position["mu"], 10.0, atol=accuracy)
+        np.testing.assert_allclose(state.latent_position["log_sd"], 0.0, atol=accuracy)
+        factor = state.latent_precision_cholesky
+        np.testing.assert_allclose(
+            factor @ factor.T, [[4.0, 0.0], [0.0, 2.0]], atol=accuracy
+        )
+        np.testing.assert_allclose(
+            value, 1 + math.log(2 * math.pi) / 2 + math.log(8) / 2, atol=accuracy
+        )
+        np.testing.assert_allclose(gradient["theta"], 0.0, atol=accuracy)
+
+
 @pytest.mark.parametrize(
     "case,status", [("saddle", 5), ("nonfinite", 4), ("budget", 2), ("backtracking", 3)]
 )
