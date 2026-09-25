@@ -32,13 +32,21 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 import liesel.model as lsl
 import liesel.optim as opt
 
-alpha = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, 0.0, 2.0), name="alpha")
-beta = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, 0.0, 2.0), name="beta")
+alpha = lsl.Var.new_param(0.0, dist=lsl.Dist(tfd.Normal, 0.0, 2.0), name="alpha")
+beta = lsl.Var.new_param(0.0, dist=lsl.Dist(tfd.Normal, 0.0, 2.0), name="beta")
+
 x = lsl.Var.new_value(jnp.arange(5.0), name="x")
-mean = lsl.Var.new_calc(lambda a, b, x: a + b * x, alpha, beta, x, name="mean")
+mean = lsl.Var.new_calc(
+    lambda a, b, x: a + b * x,
+    alpha,
+    beta,
+    x,
+    name="mean",
+)
+
 y = lsl.Var.new_obs(
     jnp.array([1.1, 1.7, 3.0, 3.8, 5.2]),
-    lsl.Dist(tfd.Normal, mean, 0.5),
+    dist=lsl.Dist(tfd.Normal, mean, 0.5),
     name="y",
 )
 model = lsl.Model(y)
@@ -60,15 +68,21 @@ A learned coefficient controls their dependence. Observed variables in `q` are
 placeholders for variational draws, not training observations from the target.
 
 ```{code-cell} python
-alpha_loc = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, 0.0, 1.0), name="alpha_loc")
+alpha_loc = lsl.Var.new_param(
+    0.0,
+    dist=lsl.Dist(tfd.Normal, 0.0, 1.0),
+    name="alpha_loc",
+)
 beta_loc = lsl.Var.new_param(0.0, name="beta_loc")
-log_scale = lsl.Var.new_param(-0.7, name="log_scale")
-scale = lsl.Var.new_calc(jnp.exp, log_scale, name="scale")
 dependence = lsl.Var.new_param(0.0, name="dependence")
 
+log_scale = lsl.Var.new_param(-0.7, name="log_scale")
+scale = lsl.Var.new_calc(jnp.exp, log_scale, name="scale")
+
 q_alpha = lsl.Var.new_obs(
-    0.0, lsl.Dist(tfd.Normal, alpha_loc, scale), name="alpha"
+    0.0, dist=lsl.Dist(tfd.Normal, alpha_loc, scale), name="alpha"
 )
+
 beta_mean = lsl.Var.new_calc(
     lambda loc, coefficient, parent: loc + coefficient * parent,
     beta_loc,
@@ -77,7 +91,7 @@ beta_mean = lsl.Var.new_calc(
     name="beta_mean",
 )
 q_beta = lsl.Var.new_obs(
-    0.0, lsl.Dist(tfd.Normal, beta_mean, scale), name="beta"
+    0.0, dist=lsl.Dist(tfd.Normal, beta_mean, scale), name="beta"
 )
 q = lsl.Model(q_beta)
 ```
@@ -114,6 +128,7 @@ model object passed to {class}`~liesel.optim.LieselVI`.
 
 ```{code-cell} python
 loss = opt.NegElboLoss(model, q, nsamples=16, scale=True)
+
 result = opt.LieselVI(
     model,
     loss=loss,
@@ -123,6 +138,7 @@ result = opt.LieselVI(
     seed=42,
     show_progress=False,
 ).fit()
+
 posterior = loss.approximate_joint_posterior(result)
 draws = posterior.sample(1_000, seed=jax.random.key(43))
 ```
@@ -169,6 +185,7 @@ Compare both objectives at the same fitted parameters and with the same draws:
 
 ```{code-cell} python
 regularized_loss = opt.NegElboLoss(model, q, nsamples=16, regularize_q_prior=True)
+
 params = result.position_final
 key = jax.random.key(45)
 elbo = loss.estimate_elbo(params, key)

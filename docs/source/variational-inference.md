@@ -32,10 +32,11 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 import liesel.model as lsl
 import liesel.optim as opt
 
-loc = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, 0.0, 1.0), name="loc")
+loc = lsl.Var.new_param(0.0, dist=lsl.Dist(tfd.Normal, 0.0, 1.0), name="loc")
+
 y = lsl.Var.new_obs(
     jnp.array([0.9, 1.4, 0.8, 1.2, 0.7, 1.0]),
-    lsl.Dist(tfd.Normal, loc, 1.0),
+    dist=lsl.Dist(tfd.Normal, loc, 1.0),
     name="y",
 )
 model = lsl.Model(y)
@@ -62,6 +63,7 @@ Sixteen draws per step estimate the ELBO; more draws cost more computation.
 
 ```{code-cell} python
 loss = opt.NegElboLoss.mvn_diag(model, nsamples=16, scale_diag=0.5, scale=True)
+
 result = opt.LieselVI(
     model,
     loss=loss,
@@ -181,7 +183,6 @@ value. With an EMA, that value combines losses from several positions.
 :maxdepth: 1
 
 variational-models
-variational-migration
 tutorials/notebooks/11-liesel-vi-basic
 tutorials/notebooks/12-liesel-vi-advanced
 ```
