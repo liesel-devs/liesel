@@ -30,6 +30,10 @@ headings such as “Advanced usage.” After the example, explain how to interpr
 the output or how the choice affects the next step. Avoid explaining every
 visible line of code.
 
+Keep page and section headings short enough to fit on one line in the rendered
+sidebars. If a longer tutorial title is useful, give it a short toctree label.
+Check both sidebars at desktop widths; do not hide or clip wrapping text.
+
 ## Keep the language human
 
 Use short sentences, familiar verbs, and concrete names. Address the reader

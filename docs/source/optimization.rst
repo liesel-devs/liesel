@@ -24,32 +24,13 @@ The ``optimizers`` argument is required. Pass a configured Optax transformation,
 such as ``optimizers=optax.adam(0.01)``, to optimize all parameters with it.
 The fitted values are returned separately; fitting does not change your model.
 
-Approximate posterior uncertainty
----------------------------------
-
-After a joint MAP fit, the default :class:`~liesel.optim.NegLogProbLoss` can
-construct a Gaussian posterior approximation and draw parameter dictionaries:
-
-.. code-block:: python
-
-   import jax
-
-   posterior = optim.loss.approximate_joint_posterior(result)
-   draws = posterior.sample(1000, seed=jax.random.key(42))
-
-The default ``at="min_monitor"`` selects ``position_min_monitor``;
-``at="final"`` selects ``position_final``. Both use full-training curvature,
-regardless of loss scaling or monitoring strategy. A validation or EMA minimum
-may not be a posterior mode; the helper checks stationarity and raises if the
-selected position is unsuitable. Only optimized parameters enter the
-approximation, with omitted parameters held fixed at their model values.
-
-Use ``model.predict`` to transform draws and evaluate derived quantities.
-:class:`~liesel.optim.LaplaceApproximation` also provides the full covariance and
-named marginal covariance, marginal precision factor, and conditional precision
-blocks. See :doc:`optimizer-laplace` for examples of drawing and using joint
-uncertainty. In hierarchical models, joint MAP can favor vanishing scale
-parameters; that guide shows how to integrate selected effects before fitting.
+After a joint MAP fit, ``optim.loss.approximate_joint_posterior(result)``
+can construct a Gaussian approximation for the optimized parameters. It uses
+full-training curvature and checks that the selected position is a stationary
+point with positive curvature; a validation or EMA minimum may not qualify.
+See :meth:`~liesel.optim.NegLogProbLoss.approximate_joint_posterior` for controls
+and :doc:`optimizer-laplace` for a walkthrough of draws and uncertainty in a
+hierarchical model.
 
 Start here
 ----------
@@ -58,7 +39,7 @@ Start here
    :maxdepth: 1
 
    tutorials/notebooks/09-liesel-optim-basic
-   tutorials/notebooks/10-liesel-optim-advanced
+   Fit two data groups <tutorials/notebooks/10-liesel-optim-advanced>
 
 Common tasks
 ------------

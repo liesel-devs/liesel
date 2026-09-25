@@ -20,8 +20,8 @@ Poisson model's mean and random-effect scale while integrating eight group effec
    `Bates et al., Section 3.4
    <https://lme4.github.io/lme4/articles/lmer.pdf#page=16>`__.
 
-Build and inspect the model
----------------------------
+Build the model
+---------------
 
 Use float64 for this example: enable it before creating arrays and pass
 ``to_float32=False`` to the model.
@@ -71,8 +71,8 @@ Use float64 for this example: enable it before creating arrays and pass
 
    The group effects ``b`` enter the log rate; ``tau`` controls their prior scale.
 
-Fit the marginal posterior
---------------------------
+Fit the model
+-------------
 
 .. code-block:: python
 
@@ -96,8 +96,8 @@ Use full-data batches and ``"train_full_data"`` monitoring. The outer parameters
 are ``mu`` and ``h(tau)``; ``b`` keeps its prior. The unscaled loss includes priors,
 Jacobians, and normalization constants; see :doc:`optimizer-loss-scaling`.
 
-Inspect the conditional mode
-----------------------------
+Inspect group effects
+---------------------
 
 The fit retains the group effects at their conditional mode, together with the
 outer parameters that produced them. Recover both from the best recorded fit:
@@ -124,8 +124,8 @@ For the final snapshot, pair ``position_final`` with ``loss_state_final``.
 See :class:`~liesel.optim.LaplaceState` for convergence diagnostics, parameter
 ordering, and the saved curvature in ``latent_precision_cholesky``.
 
-Construct joint uncertainty on request
---------------------------------------
+Estimate uncertainty
+--------------------
 
 Turn the completed fit into a joint Gaussian approximation for ``mu``, ``h(tau)``,
 and all eight group effects. It includes their correlations, so each draw is a
@@ -221,8 +221,10 @@ definiteness. It selects ``at="min_monitor"`` by default; use ``at="final"`` for
 final snapshot. Keep the model, data, and fixed parameters unchanged between fitting
 and this call. See :meth:`~liesel.optim.LaplaceLoss.approximate_joint_posterior` for controls.
 
-Inspect a failure deliberately
-------------------------------
+.. _optimizer-laplace-failure:
+
+Inspect a failure
+-----------------
 
 An insufficient inner budget makes a useful diagnostic example:
 
@@ -238,15 +240,14 @@ An insufficient inner budget makes a useful diagnostic example:
    ).fit()
    print(failed.status)
    print(failed.failure_reason)
-   print((int(failed.failed_loss_state.status), int(failed.failed_loss_state.n_iter)))
 
 .. code-block:: text
 
    numerical_failure
    Inner Laplace optimization failed: iteration limit.
-   (2, 1)
 
-Failures preserve the last valid snapshot; without one, the loss state is ``None``.
+``failed.failed_loss_state`` holds the inner solver diagnostics. Failures
+preserve the last valid snapshot; without one, the loss state is ``None``.
 Failed fits cannot resume; earlier saved checkpoints remain available.
 
 The posterior helper raises on failure by default. ``raise_on_failure=False`` returns
@@ -264,8 +265,8 @@ reason:
 
 Its ``sample`` and ``covariance`` methods raise.
 
-Control inner warm starts
--------------------------
+Control warm starts
+-------------------
 
 By default, each inner solve starts from the latent mode committed at the end of
 the previous epoch. Set ``warm_start=False`` to start from the model's latent values:
@@ -277,11 +278,12 @@ the previous epoch. Set ``warm_start=False`` to start from the model's latent va
 Pass ``cold_loss`` to a new fit to compare. Resuming an interrupted fit is a separate
 operation: :doc:`optimizer-checkpointing` explains how to resume with saved states.
 
-Choose numerical controls
--------------------------
+Tune the inner solve
+--------------------
 
-``inner_max_iter`` defaults to 100. ``inner_tol`` bounds half the inner squared
-Newton decrement: ``None`` chooses ``1e-6`` for float32 or ``1e-10`` for float64.
+Use ``inner_max_iter`` to change the iteration budget and ``inner_tol`` to
+control convergence. See :class:`~liesel.optim.LaplaceLoss` for their definitions
+and defaults.
 
 The solver finds a local mode; warm and cold starts can find different modes.
 For d scalar latent parameters, dense curvature uses O(d²) storage and O(d³)

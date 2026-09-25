@@ -1,5 +1,5 @@
-Monitoring and early stopping
-=============================
+Monitor a fit
+=============
 
 ``loss_monitor`` chooses the loss used for early stopping and for saving the
 best fit. Choose it when creating :class:`liesel.optim.LieselOptim`.
@@ -63,25 +63,21 @@ The training curve averages the losses seen before each update. Parameters
 change during an epoch, so this curve is not the full training loss at its end.
 Use ``result.history.loss_df()`` to inspect the recorded values.
 
-Smooth minibatch losses
------------------------
+Smooth noisy losses
+-------------------
 
 For an existing ``model``:
 
 .. code-block:: python
 
-   split = opt.PositionSplit.from_model(model)
-   batches = opt.Batches.from_split(split, batch_size=32)
    result = opt.LieselOptim(
        model,
        optimizers=optax.adam(0.01),
-       split=split,
-       batches=batches,
+       batch_size=32,
        loss_monitor=opt.EmaTrainLossMonitor(effective_window=2.0),
        stopper=stopper,
        seed=42,
    ).fit()
-   result.plot_loss_overview()
 
 A larger ``effective_window`` smooths more and reacts more slowly. Its unit is
 an epoch's worth of batches. Older losses fade gradually; they are not dropped
@@ -95,8 +91,8 @@ and the alternative :meth:`~liesel.optim.EmaTrainLossMonitor.from_half_life` set
 
 .. _optimizer-debug-nans:
 
-Investigate a NaN failure
--------------------------
+Investigate NaNs
+----------------
 
 For a configured ``LieselOptim`` builder, enable first-NaN reproduction capture
 on its engine before fitting:
@@ -110,21 +106,9 @@ on its engine before fitting:
 
 If a NaN is detected, ``debug_info`` contains information for reproducing it;
 otherwise it is ``None``. See :class:`~liesel.optim.OptimNaNDebugInfo` for its
-contents. Enable ``debug_nans`` on the engine returned by ``build_engine()``.
-The captured information helps investigate the failure; it does not correct
-poor starting values.
+contents. The captured information helps investigate the failure; it does
+not correct poor starting values.
 
-Inspect a Laplace failure
--------------------------
-
-For a runnable example, see :doc:`optimizer-laplace`.
-
-``LaplaceLoss`` detects failed inner solves, non-finite outer gradients, and failed
-outer steps. These return ``status="numerical_failure"`` with ``failure_reason``
-and an available ``failed_loss_state`` for inspection. The final position and loss
-state come from the last completed valid epoch; if none exists,
-``loss_state_final`` is ``None``. Best snapshots remain available.
-
-This status takes precedence over captured NaNs, whether ``debug_nans`` is enabled
-or not. A failed result has no resumable checkpoint. An earlier checkpoint on disk
-is preserved. Generic NaN failures retain their existing terminal-position behavior.
+``LaplaceLoss`` reports inner or outer numerical failures through
+``status="numerical_failure"``, ``failure_reason``, and ``failed_loss_state``.
+See :ref:`optimizer-laplace-failure` for an example and recovery behavior.
