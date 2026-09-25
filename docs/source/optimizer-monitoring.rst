@@ -1,5 +1,5 @@
-Monitoring and early stopping
-=============================
+Monitor a fit
+=============
 
 ``loss_monitor`` chooses the loss used for early stopping and for saving the
 best fit. Choose it when creating :class:`liesel.optim.LieselOptim`.
@@ -60,25 +60,21 @@ The training curve averages the losses seen before each update. Parameters
 change during an epoch, so this curve is not the full training loss at its end.
 Use ``result.history.loss_df()`` to inspect the recorded values.
 
-Smooth minibatch losses
------------------------
+Smooth noisy losses
+-------------------
 
 For an existing ``model``:
 
 .. code-block:: python
 
-   split = opt.PositionSplit.from_model(model)
-   batches = opt.Batches.from_split(split, batch_size=32)
    result = opt.LieselOptim(
        model,
        optimizers=optax.adam(0.01),
-       split=split,
-       batches=batches,
+       batch_size=32,
        loss_monitor=opt.EmaTrainLossMonitor(effective_window=2.0),
        stopper=stopper,
        seed=42,
    ).fit()
-   result.plot_loss_overview()
 
 A larger ``effective_window`` smooths more and reacts more slowly. Its unit is
 an epoch's worth of batches. Older losses fade gradually; they are not dropped
@@ -86,14 +82,14 @@ at a fixed age. The average continues across epochs and reuses losses already
 computed for optimizer updates.
 
 An EMA combines losses from several parameter positions. Its best saved position
-is the snapshot at the end of that epoch, not a position whose exact loss equals
-the plotted average. See :class:`~liesel.optim.EmaTrainLossMonitor` for the formula
+is the snapshot at the end of that epoch; its exact loss need not equal the
+EMA monitor value. See :class:`~liesel.optim.EmaTrainLossMonitor` for the formula
 and the alternative :meth:`~liesel.optim.EmaTrainLossMonitor.from_half_life` setting.
 
 .. _optimizer-debug-nans:
 
-Investigate a NaN failure
--------------------------
+Investigate NaNs
+----------------
 
 For a configured ``LieselOptim`` builder, enable first-NaN reproduction capture
 on its engine before fitting:
@@ -107,6 +103,5 @@ on its engine before fitting:
 
 If a NaN is detected, ``debug_info`` contains information for reproducing it;
 otherwise it is ``None``. See :class:`~liesel.optim.OptimNaNDebugInfo` for its
-contents. Enable ``debug_nans`` on the engine returned by ``build_engine()``.
-The captured information helps investigate the failure; it does not correct
-poor starting values.
+contents. The captured information helps investigate the failure; it does
+not correct poor starting values.

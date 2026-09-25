@@ -1,7 +1,7 @@
 .. _optimizer-likelihood-scaling:
 
-Understand loss scaling
-=======================
+Scale the loss
+==============
 
 The default training loss combines likelihood and priors. A minibatch likelihood
 is scaled up to represent its full training group; priors are not scaled up.
@@ -32,8 +32,8 @@ to include them. See :class:`~liesel.optim.NegLogProbLoss` for details.
 `Open the likelihood-scaling overview in a separate page
 <_static/visualizations/likelihood-scaling.html>`__.
 
-Choose sample sizes for reduced likelihoods
--------------------------------------------
+Set sample sizes
+----------------
 
 For an existing ``model``, observed distributions with ``per_obs=False`` prevent
 automatic sample-size inference. Construct the split explicitly:
@@ -41,13 +41,16 @@ automatic sample-size inference. Construct the split explicitly:
 .. code-block:: python
 
    import optax
+
    import liesel.optim as opt
 
    split = opt.PositionSplit.from_model(
        model, infer_sample_sizes=False, multi_size="manager", shuffle=False
    )
    optim = opt.LieselOptim(
-       model, split=split, optimizers=optax.adam(0.01),
+       model,
+       split=split,
+       optimizers=optax.adam(0.01),
        loss_monitor="train_full_data",
    )
 
@@ -56,8 +59,8 @@ This chooses split-axis counts for scaling. Alternatively, supply effective
 ``LieselOptim`` only disables final loss normalization; it does not disable
 split inference or specify batch scaling.
 
-Handle custom objectives
--------------------------
+Use a custom loss
+-----------------
 
 Custom aggregate likelihood, prior, or probability nodes require a custom
 :class:`~liesel.optim.Loss` and an explicit split. A manual split specifies data
