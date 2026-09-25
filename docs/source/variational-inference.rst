@@ -37,8 +37,9 @@ the supplied model unchanged.
 ``approximate_joint_posterior`` selects the saved position with the smallest
 monitoring loss by default. Pass ``at="final"`` to select the last iterate instead.
 The returned :class:`.VariationalApproximation` keeps those fitted values without
-retaining the fit history. Keep the variational model, its fixed values, and its
-position mapping unchanged while using it, and use a result from the same loss.
+retaining the fit history. Variational parameters omitted from the fit are bound
+to their current model values. Keep the variational graph, nonparameter values,
+and position mapping unchanged while using it, and use a result from the same loss.
 
 Sampling uses the learned variational distribution, including custom families
 and mappings. It does not refit the model or compute a Hessian. Summarize draws

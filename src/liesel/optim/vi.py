@@ -670,9 +670,9 @@ class NegElboLoss(LossMixin):
         result
             Fit result belonging to this loss and variational model. The selected
             parameter values are copied; the result and its history are not retained.
-            Keep the variational model, fixed parameters and ``q_to_p`` mapping
-            unchanged while using the returned object. Omitted variational parameters
-            retain their current model values.
+            Omitted variational parameters are copied from their current model
+            values. Keep the variational graph, nonparameter values and ``q_to_p``
+            mapping unchanged while using the returned object.
         at
             ``"min_monitor"`` (default) selects ``result.position_min_monitor``;
             ``"final"`` selects ``result.position_final``. An unavailable minimum
@@ -688,8 +688,8 @@ class NegElboLoss(LossMixin):
         Raises
         ------
         ValueError
-            If ``at`` is invalid or the selected position has unknown keys or
-            incompatible shapes or dtypes.
+            If ``at`` is invalid or the selected position has nonparameter keys,
+            duplicate parameter targets, or incompatible shapes or dtypes.
         RuntimeError
             If the selected position is unavailable or contains NaN or infinity.
 
@@ -707,22 +707,34 @@ class NegElboLoss(LossMixin):
             if at == "min_monitor"
             else result.position_final
         )
-        try:
-            expected = self.position(list(position))
-        except KeyError as error:
-            raise ValueError(
-                f"Unknown variational position key: {error.args[0]!r}."
-            ) from error
+        parameter_names = {
+            var.value_node: name for name, var in self.q.parameters.items()
+        }
+        selected = Position({})
+        for key, value in position.items():
+            try:
+                name = parameter_names[self.q._node_for_position_key(key)]
+            except KeyError as error:
+                raise ValueError(
+                    f"Unknown variational parameter key: {key!r}."
+                ) from error
+            if name in selected:
+                raise ValueError(
+                    f"Multiple keys select variational parameter {name!r}."
+                )
+            selected[name] = value
+        expected = self.position(list(self.q.parameters))
         if any(
             jnp.shape(value) != jnp.shape(expected[name])
             or getattr(value, "dtype", jnp.asarray(value).dtype)
             != jnp.asarray(expected[name]).dtype
-            for name, value in position.items()
+            for name, value in selected.items()
         ):
             raise ValueError(
                 "Selected variational parameters have incompatible shapes or dtypes."
             )
-        snapshot = Position(jax.tree.map(lambda x: jnp.array(x, copy=True), position))
+        expected.update(selected)
+        snapshot = Position(jax.tree.map(lambda x: jnp.array(x, copy=True), expected))
         return VariationalApproximation(self.q, self._q_to_p, snapshot)
 
     def estimate_elbo(
@@ -1668,8 +1680,8 @@ class VariationalApproximation:
     """Fitted variational posterior in the target model's parameter representation.
 
     Construct through :meth:`NegElboLoss.approximate_joint_posterior`.
-    The selected variational parameter values are held independently of the fit
-    result. Keep the variational model, its fixed values, and the position mapping
+    Variational parameter values are held independently of the fit result.
+    Keep the variational graph, nonparameter values, and the position mapping
     unchanged while using this object.
     """
 

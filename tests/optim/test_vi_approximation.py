@@ -136,6 +136,51 @@ def test_direct_custom_loss_sampling_and_prediction():
     )
 
 
+def test_omitted_parameters_with_priors_are_bound_at_construction():
+    loc = lsl.Var.new_param(3.0, lsl.Dist(tfd.Normal, 10.0, 1.0), name="loc")
+    scale = lsl.Var.new_param(0.1, name="scale")
+    z = lsl.Var.new_obs(0.0, lsl.Dist(tfd.Normal, loc, scale), name="z")
+    q = lsl.Model([z])
+    loss = opt.NegElboLoss(
+        _model(), q, q_to_p=lambda pos: Position({"alpha": pos["z"]})
+    )
+    position = Position({"scale": jnp.array(0.2)})
+    posterior = loss.approximate_joint_posterior(_result(position, position))
+    draws = posterior.sample(2000, seed=jax.random.key(82))["alpha"]
+    np.testing.assert_allclose(draws.mean(), 3.0, atol=0.02)
+    np.testing.assert_allclose(draws.std(), 0.2, atol=0.02)
+    q.vars["loc"].value = -20.0
+    np.testing.assert_array_equal(
+        posterior.sample(2000, seed=jax.random.key(82))["alpha"], draws
+    )
+
+
+def test_nonparameter_position_is_rejected():
+    loss = opt.NegElboLoss.mvn_diag(_model())
+    position = loss.position(list(loss.q.observed))
+    with pytest.raises(ValueError, match="variational parameter"):
+        loss.approximate_joint_posterior(_result(position, position))
+
+
+def test_parameter_node_aliases_and_duplicate_targets():
+    loss = opt.NegElboLoss.mvn_diag(_model())
+    position = loss.position(list(loss.q.parameters))
+    aliases = Position(
+        {
+            loss.q.parameters[name].value_node.name: value
+            for name, value in position.items()
+        }
+    )
+    expected = loss.approximate_joint_posterior(_result(position, position))
+    actual = loss.approximate_joint_posterior(_result(aliases, aliases))
+    key = jax.random.key(8)
+    for name, draws in expected.sample(5, seed=key).items():
+        np.testing.assert_array_equal(actual.sample(5, seed=key)[name], draws)
+    aliases.update(position)
+    with pytest.raises(ValueError, match="Multiple keys"):
+        loss.approximate_joint_posterior(_result(aliases, aliases))
+
+
 def test_posterior_from_actual_fit():
     model = _model()
     loss = opt.NegElboLoss.mvn_diag(model, nsamples=2)
