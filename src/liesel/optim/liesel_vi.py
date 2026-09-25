@@ -124,7 +124,7 @@ class LieselVI:
     ...     lsl.Dist(tfd.Normal, loc=loc, scale=1.0),
     ...     name="y",
     ... )
-    >>> model = lsl.Model([y])
+    >>> model = lsl.Model(y)
     >>> engine = LieselVI(
     ...     model,
     ...     optimizers=optax.adam(learning_rate=1e-3),

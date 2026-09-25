@@ -29,7 +29,7 @@ ELBO loss:
 ...     lsl.Dist(tfp.distributions.Normal, loc=loc, scale=1.0),
 ...     name="y",
 ... )
->>> p = lsl.Model([y])
+>>> p = lsl.Model(y)
 >>> vdist = opt.VDist(["mu"], p).mvn_diag().build()
 >>> elbo = opt.NegElboLoss.from_vdist(vdist, nsamples=2)
 >>> repr(elbo)
@@ -226,7 +226,7 @@ class NegElboLoss(LossMixin):
     ...     lsl.Dist(tfp.distributions.Normal, loc=loc, scale=1.0),
     ...     name="y",
     ... )
-    >>> p = lsl.Model([y])
+    >>> p = lsl.Model(y)
     >>> elbo = opt.NegElboLoss.mvn_diag(p, nsamples=2)
     >>> repr(elbo)
     'NegElboLoss(nsamples=2)'
@@ -239,6 +239,24 @@ class NegElboLoss(LossMixin):
     ...     nsamples=2,
     ... )
     >>> value.shape
+    ()
+
+    Supply a variational model directly when its graph is easier to express without
+    a builder. Observed variables are draws; strong parameters are optimized inputs:
+
+    >>> q_loc = lsl.Var.new_param(0.0, name="q_loc")
+    >>> q_log_scale = lsl.Var.new_param(-1.0, name="q_log_scale")
+    >>> q_scale = lsl.Var.new_calc(jnp.exp, q_log_scale, name="q_scale")
+    >>> q_mu = lsl.Var.new_obs(
+    ...     0.0, lsl.Dist(tfp.distributions.Normal, q_loc, q_scale), name="mu"
+    ... )
+    >>> q = lsl.Model(q_mu)
+    >>> custom_loss = opt.NegElboLoss(p, q, nsamples=2)
+    >>> sorted(custom_loss.position(list(q.parameters)))
+    ['q_loc', 'q_log_scale']
+    >>> custom_loss.estimate_elbo(
+    ...     custom_loss.position(list(q.parameters)), jax.random.key(2), p.state
+    ... ).shape
     ()
     """
 
@@ -347,7 +365,7 @@ class NegElboLoss(LossMixin):
         ...     lsl.Dist(tfp.distributions.Normal, loc=loc, scale=1.0),
         ...     name="y",
         ... )
-        >>> p = lsl.Model([y])
+        >>> p = lsl.Model(y)
         >>> vdist = opt.VDist(["mu"], p).mvn_diag().build()
         >>> opt.NegElboLoss.from_vdist(vdist).vdist is vdist
         True
@@ -975,7 +993,7 @@ class VDist:
     ...     lsl.Dist(tfp.distributions.Normal, loc=loc, scale=scale),
     ...     name="y",
     ... )
-    >>> p = lsl.Model([y])
+    >>> p = lsl.Model(y)
 
     >>> vdist = opt.VDist(["mu", "h(sigma)"], p).mvn_diag().build()
 
@@ -998,15 +1016,18 @@ class VDist:
 
     where :math:`\boldsymbol{\Lambda}` is a :math:`2 \times 2` covariance matrix.
 
-    ..rubric:: Custom variational distributions
+    .. rubric:: Custom variational distributions
 
     You can use any fully reparameterized tensorflow distribution of fitting
     event shape, wrapped in a :class:`.Dist`. For example, you can define the
     model with diagonal covariance matrix from above like this:
 
     >>> q_loc = lsl.Var.new_param(jnp.zeros(2), name="q_loc")
-    >>> q_scale = lsl.Var.new_param(jnp.ones(2), name="q_scale")
-    >>> dist = lsl.Dist(tfd.MultivariateNormalDiag, loc=q_loc, scale_diag=q_scale)
+    >>> q_log_scale = lsl.Var.new_param(jnp.zeros(2), name="q_log_scale")
+    >>> q_scale = lsl.Var.new_calc(jnp.exp, q_log_scale, name="q_scale")
+    >>> dist = lsl.Dist(
+    ...     tfp.distributions.MultivariateNormalDiag, loc=q_loc, scale_diag=q_scale
+    ... )
     >>> vdist = opt.VDist(["mu", "h(sigma)"], p).init(dist).build()
 
     .. note::
@@ -1081,7 +1102,7 @@ class VDist:
         >>> import liesel.model as lsl
         >>> import liesel.optim as opt
         >>> theta = lsl.Var.new_param(jnp.array([1.0, 2.0]), name="theta")
-        >>> p = lsl.Model([theta])
+        >>> p = lsl.Model(theta)
         >>> vdist = opt.VDist(["theta"], p)
         >>> vdist.q_to_p({"(theta)": jnp.array([3.0, 4.0])})["theta"].tolist()
         [3.0, 4.0]
@@ -1128,7 +1149,7 @@ class VDist:
         >>> import liesel.model as lsl
         >>> import liesel.optim as opt
         >>> theta = lsl.Var.new_param(jnp.array(0.0), name="theta")
-        >>> p = lsl.Model([theta])
+        >>> p = lsl.Model(theta)
         >>> vdist = opt.VDist(["theta"], p)
         >>> vdist.parameters
         []
@@ -1269,7 +1290,7 @@ class VDist:
         >>> import liesel.model as lsl
         >>> import liesel.optim as opt
         >>> theta = lsl.Var.new_param(jnp.array(0.0), name="theta")
-        >>> p = lsl.Model([theta])
+        >>> p = lsl.Model(theta)
         >>> opt.VDist(["theta"], p).normal(scale=0.5)
         VDist(['theta'], dist=Normal)
         """
@@ -1527,7 +1548,7 @@ class VDist:
         >>> import liesel.model as lsl
         >>> import liesel.optim as opt
         >>> theta = lsl.Var.new_param(jnp.array([0.0]), name="theta")
-        >>> p = lsl.Model([theta])
+        >>> p = lsl.Model(theta)
         >>> vdist = opt.VDist(["theta"], p).mvn_diag().build()
         >>> samples = vdist.sample(jax.random.key(1), sample_shape=(3,))
         >>> samples["theta"].shape
@@ -1775,7 +1796,7 @@ class CompositeVDist:
     ...     lsl.Dist(tfp.distributions.Normal, loc=loc, scale=scale),
     ...     name="y",
     ... )
-    >>> p = lsl.Model([y])
+    >>> p = lsl.Model(y)
 
     >>> q1 = opt.VDist(["mu"], p).mvn_diag()
     >>> q2 = opt.VDist(["h(sigma)"], p).mvn_diag()

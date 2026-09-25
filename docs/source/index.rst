@@ -169,6 +169,19 @@ the arguments and defaults.
     ~liesel.optim.PositionSplit
     ~liesel.optim.PositionSplitManager
 
+Variational array helpers
+*************************
+
+These helpers apply position mappings across leading sample axes.
+
+.. autosummary::
+    :toctree: generated
+    :nosignatures:
+
+    ~liesel.optim.vi.flatten_leading_batch
+    ~liesel.optim.vi.unflatten_leading_batch
+    ~liesel.optim.vi.vmap_batched
+
 Legacy optimization (deprecated)
 ********************************
 

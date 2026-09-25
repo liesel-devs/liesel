@@ -78,12 +78,16 @@ iterate; ``position_min_monitor`` is the saved epoch-end position with the
 smallest monitoring value. With an EMA, that value combines losses from several
 positions. Inspect convergence and posterior predictions before choosing a fit.
 
+For conditional variational graphs and directly constructed ``q`` models, see
+:doc:`variational-models`.
+
 Work through the examples
 -------------------------
 
 .. toctree::
    :maxdepth: 1
 
+   variational-models
    tutorials/notebooks/11-liesel-vi-basic
    tutorials/notebooks/12-liesel-vi-advanced
 
