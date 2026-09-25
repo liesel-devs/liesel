@@ -61,8 +61,8 @@ summaries that restate the section.
   lines between steps, and separate model construction, fitting, and inspection.
   Lay out data and long calls so they are easy to scan.
 - Use plain Python blocks without interactive prompts (`>>>` or `...`).
-- Pass a single model root directly, as in `lsl.Model(y)`. Use a sequence for
-  multiple roots.
+- Pass a single model root directly, as in `lsl.Model(y)`. Choose `to_float32`
+  for the needs of the example, independently of this calling style.
 - Use realistic data, fixed seeds, and only the settings needed for the task.
 - Pair print statements and inspection expressions with actual executed output.
   Use notebook outputs or separate text blocks in text guides. Round numbers and
