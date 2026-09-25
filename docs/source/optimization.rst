@@ -35,7 +35,7 @@ construct a Gaussian posterior approximation and draw parameter dictionaries:
    import jax
 
    posterior = optim.loss.approximate_joint_posterior(result)
-   draws = posterior.sample(jax.random.key(42), sample_shape=(1000,))
+   draws = posterior.sample(1000, seed=jax.random.key(42))
 
 The default ``at="min_monitor"`` selects ``position_min_monitor``;
 ``at="final"`` selects ``position_final``. Both use full-training curvature,

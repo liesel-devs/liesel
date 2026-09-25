@@ -131,19 +131,24 @@ class LaplaceApproximation:
             blocks[name] = rows @ rows.T
         return blocks
 
-    def sample(self, key: jax.Array, sample_shape: tuple[int, ...] = ()) -> Position:
+    def sample(
+        self, sample_shape: int | Sequence[int] = (), *, seed: jax.Array
+    ) -> Position:
         """Draw parameter dictionaries with common leading sample axes.
 
         The default returns one draw in the original parameter shapes. Pass
-        ``(draws,)`` or ``(chains, draws)`` for leading axes accepted by
-        :meth:`liesel.model.Model.predict`.
+        ``draws``, ``(draws,)``, or ``(chains, draws)`` for leading axes accepted
+        by :meth:`liesel.model.Model.predict`. The JAX random key ``seed`` is
+        required and keyword-only, for example ``sample(1000, seed=key)``.
         """
         if not self.valid or self.precision_cholesky is None:
             raise RuntimeError("Cannot sample an invalid Laplace approximation.")
         factor = self.precision_cholesky
-        sample_shape = tuple(sample_shape)
+        sample_shape = (
+            (sample_shape,) if isinstance(sample_shape, int) else tuple(sample_shape)
+        )
         size = factor.shape[0]
-        noise = jax.random.normal(key, sample_shape + (size,), dtype=factor.dtype)
+        noise = jax.random.normal(seed, sample_shape + (size,), dtype=factor.dtype)
         centered = jsp.linalg.solve_triangular(
             factor, noise.reshape((-1, size)).T, lower=True, trans="T"
         ).T.reshape(sample_shape + (size,))

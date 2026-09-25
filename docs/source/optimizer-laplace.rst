@@ -134,7 +134,7 @@ complete parameter set that can be passed directly to ``Model.predict``:
 .. code-block:: python
 
    posterior = loss.approximate_joint_posterior(result)
-   draws = posterior.sample(jax.random.key(42), sample_shape=(1000,))
+   draws = posterior.sample(1000, seed=jax.random.key(42))
    predicted = model.predict(draws, predict=["tau", "log_rate"])
    tau_draws = predicted["tau"]
    rate_draws = jnp.exp(predicted["log_rate"])

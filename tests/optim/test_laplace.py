@@ -961,7 +961,7 @@ def test_posterior_requires_stationarity_and_allows_explicit_failure_inspection(
     with pytest.raises(RuntimeError, match="invalid"):
         failed.covariance()
     with pytest.raises(RuntimeError, match="invalid"):
-        failed.sample(jax.random.key(0))
+        failed.sample(seed=jax.random.key(0))
     assert loss.approximate_joint_posterior(result, stationarity_tol=1.0).valid
 
 
@@ -1096,15 +1096,15 @@ def test_posterior_samples_restore_matrix_shapes_and_gaussian_moments():
         fit_engine(loss, optax.sgd(0.0), epochs=1).fit()
     )
     key = jax.random.key(42)
-    single = approximation.sample(key)
+    single = approximation.sample(seed=key)
     assert single["theta"].shape == ()
     assert single["z"].shape == (1, 2)
     for name, value in single.items():
-        np.testing.assert_array_equal(value, approximation.sample(key)[name])
-    draws = approximation.sample(key, sample_shape=(2, 3))
+        np.testing.assert_array_equal(value, approximation.sample(seed=key)[name])
+    draws = approximation.sample((2, 3), seed=key)
     assert draws["theta"].shape == (2, 3)
     assert draws["z"].shape == (2, 3, 1, 2)
-    draws = approximation.sample(key, sample_shape=(60_000,))
+    draws = approximation.sample((60_000,), seed=key)
     flat = np.column_stack([draws["theta"], np.asarray(draws["z"]).reshape(60_000, 2)])
     # With 60k draws, these bounds exceed five Monte Carlo standard errors.
     np.testing.assert_allclose(flat.mean(axis=0), [0.0, 0.0, 0.0], atol=0.03, rtol=0)
@@ -1133,7 +1133,7 @@ def test_posterior_draws_predict_transforms_and_keep_omitted_coordinates_fixed(s
     result = fit_engine(loss, [opt.Optimizer(keys, optax.sgd(0.0))], epochs=1).fit()
     approximation = loss.approximate_joint_posterior(result)
     assert "fixed" not in approximation.mean
-    draws = approximation.sample(jax.random.key(2), sample_shape=shape)
+    draws = approximation.sample(shape, seed=jax.random.key(2))
     predicted = model.predict(draws, predict=["scale", "fixed"])
     assert predicted["scale"].shape == shape
     np.testing.assert_allclose(predicted["scale"], jnp.exp(draws[keys[0]]), rtol=1e-6)

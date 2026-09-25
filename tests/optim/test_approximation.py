@@ -38,6 +38,35 @@ def gaussian_approximation():
     )
 
 
+def test_sample_requires_keyword_seed_and_defaults_to_one_draw():
+    posterior = gaussian_approximation()
+    key = jax.random.key(42)
+    single = posterior.sample(seed=key)
+    assert {name: value.shape for name, value in single.items()} == {
+        "z": (),
+        "matrix": (1, 1),
+        "a": (2,),
+    }
+    legacy_sample: Any = posterior.sample
+    with pytest.raises(TypeError, match="seed"):
+        legacy_sample(key)
+
+
+@pytest.mark.parametrize("shape", [1000, [1000]])
+def test_sample_accepts_integer_and_sequence_shapes_with_identical_draws(shape):
+    posterior = gaussian_approximation()
+    key = jax.random.key(42)
+    draws = posterior.sample(shape, seed=key)
+    tuple_draws = posterior.sample((1000,), seed=key)
+    assert {name: value.shape for name, value in draws.items()} == {
+        "z": (1000,),
+        "matrix": (1000, 1, 1),
+        "a": (1000, 2),
+    }
+    for name, value in draws.items():
+        np.testing.assert_array_equal(value, tuple_draws[name])
+
+
 def test_marginal_covariance_blocks_include_dependence_on_other_parameters():
     posterior = gaussian_approximation()
     blocks = posterior.marginal_covariance_blocks()
@@ -219,7 +248,7 @@ def test_posterior_rejects_nonpositive_curvature(curvature):
     assert failed.precision_cholesky is None
     np.testing.assert_allclose(failed.diagnostics["joint_precision"], precision)
     with pytest.raises(RuntimeError, match="invalid"):
-        failed.sample(jax.random.key(0))
+        failed.sample(seed=jax.random.key(0))
     with pytest.raises(RuntimeError, match="invalid"):
         failed.covariance()
 
@@ -342,7 +371,7 @@ def test_posterior_handles_managed_splits_transforms_and_fixed_parameters():
         assert posterior.names == ("h(scale)",)
         np.testing.assert_allclose(posterior.mean["h(scale)"], 13 / 15, atol=1e-10)
         np.testing.assert_allclose(posterior.covariance(), [[4 / 15]], atol=1e-10)
-        draws = posterior.sample(jax.random.key(4), (2, 3))
+        draws = posterior.sample((2, 3), seed=jax.random.key(4))
         predicted = model.predict(draws, predict=["scale", "fixed"])
         np.testing.assert_allclose(predicted["scale"], jnp.exp(draws["h(scale)"]))
         np.testing.assert_allclose(predicted["fixed"], 3.0)
