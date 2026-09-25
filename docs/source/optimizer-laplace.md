@@ -112,6 +112,9 @@ Use full-data batches and `"train_full_data"` monitoring. The outer parameters
 are `mu` and `h(tau)`; `b` keeps its prior. The unscaled loss includes priors,
 Jacobians, and normalization constants; see {doc}`optimizer-loss-scaling`.
 
+For observed arrays with different lengths, pass an explicit `split` to
+`LaplaceLoss`; {ref}`check the groups and opt in <optimizer-split-groups>` first.
+
 ## Inspect group effects
 
 The fit retains the group effects at their conditional mode, together with the

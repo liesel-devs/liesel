@@ -321,8 +321,11 @@ class LaplaceLoss(LossMixin):
         current state are left unchanged.
     split
         Training observations to substitute into that density. If omitted, use
-        the usual model-derived full-training split. Custom aggregate densities
-        may need an explicit :class:`PositionSplit`.
+        all observations for training and raise for different observed axis lengths.
+        For independent groups, pass a checked split from
+        :meth:`~liesel.optim.PositionSplit.from_model` with ``multi_size="manager"``.
+        Use ``split_axes={key: None}`` there for shared values. Custom aggregate
+        densities may need an explicit :class:`PositionSplit`.
     latent
         Nonempty sequence of writable continuous parameter names to integrate.
         Scalars, vectors, and matrices can be combined. Duplicate aliases, weak
@@ -383,7 +386,7 @@ class LaplaceLoss(LossMixin):
             raise ValueError("inner_tol must be a positive finite real number.")
         self.model = model
         self.split = (
-            PositionSplit.from_model(model, multi_size="manager", shuffle=False)
+            PositionSplit.from_model(model, multi_size="error", shuffle=False)
             if split is None
             else split
         )

@@ -544,6 +544,32 @@ def fit_engine(loss, optimizers="lbfgs", epochs=6, **kwargs):
     ).build_engine()
 
 
+def test_multi_size_laplace_requires_explicit_split_opt_in():
+    theta = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, 0.0, 1.0), name="theta")
+    z = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, theta, 1.0), name="z")
+    y_a = lsl.Var.new_obs(
+        jnp.array([1.0, 2.0]), lsl.Dist(tfd.Normal, z, 1.0), name="y_a"
+    )
+    y_b = lsl.Var.new_obs(
+        jnp.array([2.0, 3.0, 4.0]), lsl.Dist(tfd.Normal, z, 1.0), name="y_b"
+    )
+    model = lsl.Model([y_a, y_b])
+    with pytest.raises(ValueError, match="multiple observation groups"):
+        opt.LaplaceLoss(model, latent=["z"])
+
+    split = opt.PositionSplit.from_model(model, multi_size="manager")
+    loss = opt.LaplaceLoss(model, split, latent=["z"])
+    result = fit_engine(loss).fit()
+
+    # With five unit-variance observations summing to 12, the marginal mode
+    # is theta=12/11, the conditional mode is z=24/11, and latent precision is 6.
+    assert result.status in ("max_epochs", "early_stopping")
+    np.testing.assert_allclose(result.position_final["theta"], 12 / 11, atol=2e-5)
+    state = result.loss_state_final
+    np.testing.assert_allclose(state.latent_position["z"], 24 / 11, atol=2e-5)
+    np.testing.assert_allclose(state.latent_precision_cholesky**2, [[6.0]], atol=2e-5)
+
+
 @pytest.mark.parametrize("optimizer", ["lbfgs", optax.sgd(0.5)])
 @pytest.mark.parametrize("warm_start", [False, True])
 def test_gaussian_marginal_fit_excludes_latents_and_matches_saved_states(
