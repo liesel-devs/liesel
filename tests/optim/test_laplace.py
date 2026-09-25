@@ -869,3 +869,298 @@ def test_float32_coordinates_allow_float64_density_accumulation():
             value, 0.7**2 / 2 - math.log(2 * math.pi) / 2, atol=1e-6
         )
         np.testing.assert_allclose(gradient["theta"], 0.7, atol=1e-6)
+
+
+def test_joint_gaussian_posterior_has_correct_cross_covariances():
+    # theta ~ N(0,1), z|theta ~ N([theta,-theta/2], inverse([[2,1],[1,2]])).
+    model, split = density_model(
+        lambda theta, z: (
+            theta**2 / 2
+            + (z[0] - theta) ** 2
+            + (z[1] + theta / 2) ** 2
+            + (z[0] - theta) * (z[1] + theta / 2)
+        ),
+        theta=jnp.array(0.0),
+        z=jnp.zeros(2),
+    )
+    loss = opt.LaplaceLoss(model, split, latent=["z"])
+    result = fit_engine(loss, optax.sgd(0.0), epochs=1).fit()
+    approximation = loss.approximate_joint_posterior(result)
+    assert isinstance(approximation, opt.LaplaceApproximation)
+    assert approximation.valid
+    assert approximation.names == ("theta", "z")
+    assert approximation.shapes == ((), (2,))
+    np.testing.assert_allclose(approximation.mean["theta"], 0.0)
+    np.testing.assert_allclose(approximation.mean["z"], [0.0, 0.0])
+    np.testing.assert_allclose(
+        approximation.covariance(),
+        [[1.0, 1.0, -0.5], [1.0, 5 / 3, -5 / 6], [-0.5, -5 / 6, 11 / 12]],
+        atol=2e-6,
+    )
+
+
+@pytest.mark.parametrize("x64", [False, True])
+def test_nonlinear_joint_posterior_uses_true_implicit_second_derivative(x64):
+    with jax.enable_x64(x64):
+        dtype = jnp.float64 if x64 else jnp.float32
+        model, split = density_model(
+            lambda theta, z: theta**2 / 2 - theta / 3 + z**4 / 4 - theta * z,
+            theta=jnp.array(1.0, dtype),
+            z=jnp.array(1.0, dtype),
+        )
+        loss = opt.LaplaceLoss(model, split, latent=["z"])
+        result = fit_engine(loss, optax.sgd(0.0), epochs=1).fit()
+        approximation = loss.approximate_joint_posterior(result)
+        accuracy = 1e-10 if x64 else 2e-5
+        assert approximation.valid
+        # At theta=z=1, the exact marginal Laplace curvature is 1/3.
+        # Differentiating one Newton correction instead gives the wrong 5/9.
+        np.testing.assert_allclose(
+            approximation.diagnostics["outer_precision"],
+            [[1 / 3]],
+            atol=accuracy,
+            rtol=0,
+        )
+        np.testing.assert_allclose(
+            approximation.covariance(),
+            [[3.0, 1.0], [1.0, 2 / 3]],
+            atol=accuracy,
+            rtol=0,
+        )
+
+
+def test_posterior_requires_stationarity_and_allows_explicit_failure_inspection():
+    model, split = density_model(
+        lambda theta, z: theta**2 / 2 + (z - theta) ** 2 / 2,
+        theta=jnp.array(1.0),
+        z=jnp.array(1.0),
+    )
+    loss = opt.LaplaceLoss(model, split, latent=["z"])
+    result = fit_engine(loss, optax.sgd(0.0), epochs=1).fit()
+    with pytest.raises(RuntimeError, match="stationarity"):
+        loss.approximate_joint_posterior(result)
+    failed = loss.approximate_joint_posterior(result, raise_on_failure=False)
+    assert not failed.valid
+    assert failed.precision_cholesky is None
+    assert "stationarity" in failed.diagnostics["reason"]
+    np.testing.assert_allclose(failed.diagnostics["outer_gradient"], [1.0])
+    np.testing.assert_allclose(failed.diagnostics["outer_precision"], [[1.0]])
+    np.testing.assert_allclose(
+        failed.diagnostics["outer_newton_decrement_squared"], 1.0
+    )
+    with pytest.raises(RuntimeError, match="invalid"):
+        failed.covariance()
+    with pytest.raises(RuntimeError, match="invalid"):
+        failed.sample(jax.random.key(0))
+    assert loss.approximate_joint_posterior(result, stationarity_tol=1.0).valid
+
+
+@pytest.mark.parametrize("curvature", ["outer", "latent"])
+def test_posterior_rejects_two_negative_curvature_directions(curvature):
+    # Positive determinant alone cannot establish positive definiteness.
+    model, split = density_model(
+        lambda theta, z: -jnp.sum(theta**2) / 2 + jnp.sum(z**2) / 2,
+        theta=jnp.zeros(2),
+        z=jnp.zeros(2),
+    )
+    loss = opt.LaplaceLoss(model, split, latent=["z"])
+    result = fit_engine(loss, optax.sgd(0.0), epochs=1).fit()
+    if curvature == "latent":
+        changed, changed_split = density_model(
+            lambda theta, z: jnp.sum(theta**2) / 2 - jnp.sum(z**2) / 2,
+            theta=jnp.zeros(2),
+            z=jnp.zeros(2),
+        )
+        loss = opt.LaplaceLoss(changed, changed_split, latent=["z"])
+    failed = loss.approximate_joint_posterior(result, raise_on_failure=False)
+    assert not failed.valid
+    assert "curvature" in failed.diagnostics["reason"]
+    np.testing.assert_allclose(failed.diagnostics[curvature + "_precision"], -np.eye(2))
+    assert failed.precision_cholesky is None
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("at", "missing"),
+        ("raise_on_failure", 1),
+        ("stationarity_tol", 0),
+        ("stationarity_tol", math.inf),
+    ],
+)
+def test_posterior_configuration_errors_are_not_suppressed(field, value):
+    engine = checkpoint_engine()
+    result = engine.fit()
+    with pytest.raises(ValueError, match=field):
+        engine.loss.approximate_joint_posterior(result, **{field: value})
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        "names",
+        "shapes",
+        "values",
+        "dtype",
+        "outer",
+        "missing",
+        "failed",
+        "configuration",
+    ],
+)
+def test_posterior_rejects_visibly_incompatible_snapshots(invalid):
+    model, split = density_model(
+        lambda theta, z: theta**2 / 2 + (z - theta) ** 2 / 2,
+        theta=jnp.array(0.0),
+        z=jnp.array(0.0),
+    )
+    loss = opt.LaplaceLoss(model, split, latent=["z"])
+    result = fit_engine(loss, optax.sgd(0.0), epochs=1).fit()
+    state = result.loss_state_min_monitor
+    changes = {
+        "names": {"latent_names": ("other",)},
+        "shapes": {"latent_shapes": ((1,),)},
+        "values": {"latent_position": {"z": jnp.ones(2)}},
+        "dtype": {"latent_position": {"z": jnp.array(0, dtype=jnp.int32)}},
+        "outer": {"outer_position": {"theta": jnp.array(2.0)}},
+        "failed": {"status": jnp.array(2)},
+    }
+    if invalid == "missing":
+        result.loss_state_min_monitor = None
+    elif invalid == "configuration":
+        loss.warm_start = False
+    else:
+        result.loss_state_min_monitor = replace(state, **changes[invalid])
+    with pytest.raises(RuntimeError, match="state|coordinate|configuration"):
+        loss.approximate_joint_posterior(result)
+    failed = loss.approximate_joint_posterior(result, raise_on_failure=False)
+    assert not failed.valid
+    assert failed.diagnostics["reason"]
+
+
+def test_posterior_can_inspect_a_fit_with_no_valid_snapshot():
+    model, split = density_model(
+        lambda theta, z: theta**2 + jnp.log(z),
+        theta=jnp.array(0.0),
+        z=jnp.array(-1.0),
+    )
+    loss = opt.LaplaceLoss(model, split, latent=["z"])
+    result = fit_engine(loss, optax.sgd(0.1)).fit()
+    assert result.status == "numerical_failure"
+    for at in ("best", "final"):
+        failed = loss.approximate_joint_posterior(result, at=at, raise_on_failure=False)
+        assert not failed.valid
+        assert failed.diagnostics["reason"]
+
+
+def test_posterior_samples_restore_matrix_shapes_and_gaussian_moments():
+    model, split = density_model(
+        lambda theta, z: (
+            theta**2 / 2
+            + (z[0, 0] - theta) ** 2
+            + (z[0, 1] + theta / 2) ** 2
+            + (z[0, 0] - theta) * (z[0, 1] + theta / 2)
+        ),
+        theta=jnp.array(0.0),
+        z=jnp.zeros((1, 2)),
+    )
+    loss = opt.LaplaceLoss(model, split, latent=["z"])
+    approximation = loss.approximate_joint_posterior(
+        fit_engine(loss, optax.sgd(0.0), epochs=1).fit()
+    )
+    key = jax.random.key(42)
+    single = approximation.sample(key)
+    assert single["theta"].shape == ()
+    assert single["z"].shape == (1, 2)
+    for name, value in single.items():
+        np.testing.assert_array_equal(value, approximation.sample(key)[name])
+    draws = approximation.sample(key, sample_shape=(2, 3))
+    assert draws["theta"].shape == (2, 3)
+    assert draws["z"].shape == (2, 3, 1, 2)
+    draws = approximation.sample(key, sample_shape=(60_000,))
+    flat = np.column_stack([draws["theta"], np.asarray(draws["z"]).reshape(60_000, 2)])
+    # With 60k draws, these bounds exceed five Monte Carlo standard errors.
+    np.testing.assert_allclose(flat.mean(axis=0), [0.0, 0.0, 0.0], atol=0.03, rtol=0)
+    np.testing.assert_allclose(
+        np.cov(flat, rowvar=False),
+        [[1.0, 1.0, -0.5], [1.0, 5 / 3, -5 / 6], [-0.5, -5 / 6, 11 / 12]],
+        atol=0.05,
+        rtol=0,
+    )
+
+
+@pytest.mark.parametrize("shape", [(), (4,), (2, 3)])
+def test_posterior_draws_predict_transforms_and_keep_omitted_coordinates_fixed(shape):
+    scale = lsl.Var.new_param(
+        1.0, lsl.Dist(tfd.LogNormal, 0.0, 1.0), bijector=tfb.Exp(), name="scale"
+    )
+    fixed = lsl.Var.new_param(3.0, name="fixed")
+    location = lsl.Var.new_calc(
+        lambda scale, fixed: jnp.log(scale) + fixed - 3, scale, fixed, name="location"
+    )
+    z = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, location, 1.0), name="z")
+    y = lsl.Var.new_obs(jnp.array([0.0]), lsl.Dist(tfd.Normal, z, 1.0), name="y")
+    model = lsl.Model([y])
+    loss = opt.LaplaceLoss(model, latent=["z"])
+    keys = [k for k in loss.default_position_keys if k != "fixed"]
+    result = fit_engine(loss, [opt.Optimizer(keys, optax.sgd(0.0))], epochs=1).fit()
+    approximation = loss.approximate_joint_posterior(result)
+    assert "fixed" not in approximation.mean
+    draws = approximation.sample(jax.random.key(2), sample_shape=shape)
+    predicted = model.predict(draws, predict=["scale", "fixed"])
+    assert predicted["scale"].shape == shape
+    np.testing.assert_allclose(predicted["scale"], jnp.exp(draws[keys[0]]), rtol=1e-6)
+    np.testing.assert_allclose(predicted["fixed"], 3.0)
+
+
+def test_posterior_selects_matched_best_and_final_snapshots():
+    with jax.enable_x64():
+        model, split = density_model(
+            lambda theta, z: (
+                theta**2 / 2
+                + (1 + theta**2) * (z - theta) ** 2 / 2
+                - jnp.log1p(theta**2) / 2
+            ),
+            theta=jnp.array(4.0),
+            z=jnp.array(4.0),
+        )
+        loss = opt.LaplaceLoss(model, split, latent=["z"])
+        result = fit_engine(loss, optax.sgd(2.5), epochs=2).fit()
+        for at, theta in (("best", -6.0), ("final", 9.0)):
+            # An explicit loose stationarity threshold isolates selection here.
+            approximation = loss.approximate_joint_posterior(
+                result, at=at, stationarity_tol=100.0
+            )
+            np.testing.assert_allclose(approximation.mean["theta"], theta, atol=1e-10)
+            np.testing.assert_allclose(approximation.mean["z"], theta, atol=1e-10)
+            np.testing.assert_allclose(
+                approximation.diagnostics["latent_precision"],
+                [[1 + theta**2]],
+                atol=1e-10,
+            )
+            np.testing.assert_allclose(
+                approximation.covariance(),
+                [[1, 1], [1, 1 + 1 / (1 + theta**2)]],
+                atol=1e-10,
+            )
+
+
+def test_posterior_detects_nonfinite_derivatives_at_a_terminal_monitored_point():
+    model, split = density_model(
+        lambda theta, z: (
+            -theta
+            + jnp.where(theta == 2, (theta - 2) * jnp.sqrt(jnp.abs(theta - 2)), 0.0)
+            + (z - theta) ** 2 / 2
+        ),
+        theta=jnp.array(0.0),
+        z=jnp.array(0.0),
+    )
+    loss = opt.LaplaceLoss(model, split, latent=["z"])
+    result = fit_engine(loss, optax.sgd(1.0), epochs=2).fit()
+    assert result.status == "max_epochs"
+    assert int(result.loss_state_final.status) == 1
+    failed = loss.approximate_joint_posterior(
+        result, at="final", raise_on_failure=False
+    )
+    assert not failed.valid
+    assert "Non-finite" in failed.diagnostics["reason"]

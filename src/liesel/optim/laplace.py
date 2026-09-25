@@ -20,7 +20,7 @@ from ..model import Model, Value
 from ._engine_utils import _validate_positive_int
 from .loss import LossMixin, SplitConfig, _validate_bool
 from .split import PositionSplit
-from .state import OptimCarry
+from .state import OptimCarry, OptimResult
 from .types import Position
 
 
@@ -50,6 +50,65 @@ class LaplaceState:
     n_resolution_steps: jax.Array
     latent_names: tuple[str, ...] = field(metadata={"static": True})
     latent_shapes: tuple[tuple[int, ...], ...] = field(metadata={"static": True})
+
+
+@dataclass
+class LaplaceApproximation:
+    """Joint Gaussian approximation in optimized and latent coordinate order.
+
+    The lower triangular ``precision_cholesky`` factors the joint precision.
+    ``mean`` contains optimized outer and integrated latent coordinates. Their
+    flattened order is given by ``names`` and ``shapes``: sorted outer names first,
+    then sorted latent names. Construct instances through
+    :meth:`LaplaceLoss.approximate_joint_posterior`.
+
+    ``valid=False`` denotes a diagnostic object with no precision factor.
+    ``diagnostics['reason']`` explains failure; any evaluated raw curvature and
+    gradients remain available there. Invalid objects reject sampling and
+    covariance construction. A dense covariance is only allocated on request.
+    """
+
+    mean: Position
+    precision_cholesky: jax.Array | None
+    names: tuple[str, ...]
+    shapes: tuple[tuple[int, ...], ...]
+    valid: bool
+    diagnostics: dict[str, Any]
+
+    def covariance(self) -> jax.Array:
+        """Construct the dense joint covariance on request."""
+        if not self.valid or self.precision_cholesky is None:
+            raise RuntimeError("Cannot use an invalid Laplace approximation.")
+        factor = self.precision_cholesky
+        return jsp.linalg.cho_solve(
+            (factor, True), jnp.eye(factor.shape[0], dtype=factor.dtype)
+        )
+
+    def sample(self, key: jax.Array, sample_shape: tuple[int, ...] = ()) -> Position:
+        """Draw coordinate dictionaries with common leading sample axes.
+
+        The default returns one draw in the original coordinate shapes. Pass
+        ``(draws,)`` or ``(chains, draws)`` for leading axes accepted by
+        :meth:`liesel.model.Model.predict`.
+        """
+        if not self.valid or self.precision_cholesky is None:
+            raise RuntimeError("Cannot sample an invalid Laplace approximation.")
+        factor = self.precision_cholesky
+        sample_shape = tuple(sample_shape)
+        size = factor.shape[0]
+        noise = jax.random.normal(key, sample_shape + (size,), dtype=factor.dtype)
+        centered = jsp.linalg.solve_triangular(
+            factor, noise.reshape((-1, size)).T, lower=True, trans="T"
+        ).T.reshape(sample_shape + (size,))
+        samples = Position({})
+        offset = 0
+        for name, shape in zip(self.names, self.shapes, strict=True):
+            width = math.prod(shape)
+            samples[name] = self.mean[name] + centered[
+                ..., offset : offset + width
+            ].reshape(sample_shape + shape)
+            offset += width
+        return samples
 
 
 def _evaluate(joint, theta, z):
@@ -226,6 +285,22 @@ def _laplace_value(point):
         - 0.5 * point["z"].size * jnp.log(2 * jnp.pi)
     )
     return jnp.where(point["status"] == 1, value, jnp.inf)
+
+
+def _postfit_value(joint, theta, seed, tol, max_iter):
+    """Differentiate the implicit mode to higher order only after fitting."""
+    root = jax.lax.custom_root(
+        lambda z: jax.grad(joint, argnums=1)(theta, z),
+        seed,
+        lambda equation, z0: _solve(joint, theta, z0, tol, max_iter)["z"],
+        lambda linear, b: jnp.linalg.solve(jax.jacfwd(linear)(jnp.zeros_like(b)), b),
+    )
+    factor = jnp.linalg.cholesky(jax.hessian(joint, argnums=1)(theta, root))
+    return (
+        joint(theta, root)
+        + jnp.log(jnp.diag(factor)).sum()
+        - root.size * math.log(2 * math.pi) / 2
+    )
 
 
 @partial(jax.custom_vjp, nondiff_argnums=(0, 3, 4))
@@ -445,6 +520,195 @@ class LaplaceLoss(LossMixin):
     def _checkpoint_configuration(self) -> tuple:
         return self.latent_names, self.warm_start, self.inner_max_iter, self.inner_tol
 
+    def _joint(self, outer, latent, model_state, fixed_position=None):
+        position = Position(outer | latent | self.split.train | (fixed_position or {}))
+        return -self.model.update_state(position, model_state)["_model_log_prob"].value
+
+    def approximate_joint_posterior(
+        self,
+        result: OptimResult,
+        *,
+        at: str = "best",
+        raise_on_failure: bool = True,
+        stationarity_tol: float = 1e-4,
+    ) -> LaplaceApproximation:
+        """Construct joint uncertainty from marginal and conditional curvature.
+
+        The selected best or final state must belong to this model, loss, and
+        training data. Omitted outer coordinates retain their model values.
+        This optional calculation uses higher implicit derivatives and does no
+        work during ordinary fitting.
+
+        Parameters
+        ----------
+        result
+            Fit result with a matching successful conditional state.
+        at
+            ``"best"`` (default) selects the smallest monitoring loss;
+            ``"final"`` selects the final committed position.
+        raise_on_failure
+            Raise RuntimeError on an invalid approximation (default True).
+            False returns an inspectable object with ``valid=False``. Invalid
+            argument values always raise ValueError.
+        stationarity_tol
+            Positive finite bound on half the outer squared Newton decrement.
+            Defaults to 1e-4, on the unscaled marginal objective.
+
+        Notes
+        -----
+        The approximation combines marginal outer curvature K with conditional
+        latent curvature H and the mode sensitivity J. Its latent covariance is
+        H^-1 + J K^-1 J.T, and its outer/latent cross covariance is K^-1 J.T.
+        Factor solves construct the joint precision without allocating a dense
+        covariance. True positive-definite curvature, inner convergence, and
+        outer stationarity are required; no jitter or eigenvalue clipping is used.
+
+        Diagnostics include ``reason``, ``inner_state``, ``outer_gradient``,
+        ``outer_precision`` (K), ``latent_precision`` (H), and
+        ``outer_newton_decrement_squared`` when evaluation reaches those values.
+        Successful evaluation also retains ``mode_jacobian`` (J) and
+        ``joint_precision``. Model graph and data equality are the caller's
+        responsibility; coordinate metadata and saved configuration are checked.
+        """
+        if at not in ("best", "final"):
+            raise ValueError("at must be 'best' or 'final'.")
+        _validate_bool(raise_on_failure, "raise_on_failure")
+        if (
+            isinstance(stationarity_tol, bool)
+            or not isinstance(stationarity_tol, Real)
+            or not math.isfinite(stationarity_tol)
+            or stationarity_tol <= 0
+        ):
+            raise ValueError("stationarity_tol must be a positive finite real number.")
+        approximation = LaplaceApproximation(
+            mean=Position({}),
+            precision_cholesky=None,
+            names=(),
+            shapes=(),
+            valid=False,
+            diagnostics={"reason": None},
+        )
+
+        def failed(reason):
+            approximation.diagnostics["reason"] = reason
+            if raise_on_failure:
+                raise RuntimeError(reason)
+            return approximation
+
+        try:
+            position = (
+                result.position_min_monitor if at == "best" else result.position_final
+            )
+        except RuntimeError as error:
+            return failed(f"The selected position is unavailable: {error}")
+        state = (
+            result.loss_state_min_monitor if at == "best" else result.loss_state_final
+        )
+        if not isinstance(state, LaplaceState) or int(state.status) != 1:
+            return failed(
+                "The selected result has no successful matched Laplace state."
+            )
+        if (
+            result.checkpoint is not None
+            and result.checkpoint._loss_configuration
+            != self._checkpoint_configuration()
+        ):
+            return failed("The result's loss configuration is incompatible.")
+
+        def same_layout(values, reference):
+            return set(values) == set(reference) and all(
+                jnp.shape(values[name]) == jnp.shape(reference[name])
+                and jnp.asarray(values[name]).dtype
+                == jnp.asarray(reference[name]).dtype
+                for name in reference
+            )
+
+        try:
+            expected_outer = self.position(tuple(position))
+        except ValueError as error:
+            return failed(f"Incompatible outer coordinates: {error}")
+        if (
+            state.latent_names != self.latent_names
+            or state.latent_shapes != self.latent_shapes
+            or not same_layout(state.latent_position, self._initial_latent)
+            or not same_layout(position, expected_outer)
+            or not same_layout(state.outer_position, position)
+            or not all(
+                bool(jnp.array_equal(state.outer_position[k], position[k]))
+                for k in position
+            )
+        ):
+            return failed(
+                "The selected Laplace state has incompatible coordinates or metadata."
+            )
+        names = tuple(sorted(position)) + state.latent_names
+        approximation.mean = Position(position | state.latent_position)
+        approximation.names = names
+        approximation.shapes = tuple(
+            jnp.shape(approximation.mean[name]) for name in names
+        )
+        theta, unravel_outer = ravel_pytree(position)
+        seed, unravel_latent = ravel_pytree(state.latent_position)
+
+        def joint(t, z):
+            return self._joint(unravel_outer(t), unravel_latent(z), self.model.state)
+
+        @jax.jit
+        def derivatives(theta, seed):
+            inner = _evaluate(joint, theta, seed)
+            outer = _evaluate(
+                lambda _, t: _postfit_value(
+                    joint, t, seed, self.inner_tol, self.inner_max_iter
+                ),
+                None,
+                theta,
+            )
+            cross = jax.jacfwd(jax.grad(joint, argnums=1), argnums=0)(theta, seed)
+            return inner, outer, cross
+
+        inner, outer, cross = derivatives(theta, seed)
+        approximation.diagnostics.update(
+            {
+                "inner_state": state,
+                "outer_gradient": outer["gradient"],
+                "outer_precision": outer["hessian"],
+                "latent_precision": inner["hessian"],
+                "outer_newton_decrement_squared": 2 * outer["decrement"],
+            }
+        )
+        if not bool(jnp.all(jnp.isfinite(inner["factor"]))):
+            return failed(
+                "Invalid latent curvature: positive definiteness is required."
+            )
+        if not bool(_converged(inner, self.inner_tol)):
+            return failed(
+                "The selected conditional mode fails the inner convergence check."
+            )
+        if not bool(_finite(outer)):
+            return failed("Non-finite marginal value or derivatives.")
+        if not bool(jnp.all(jnp.isfinite(outer["factor"]))):
+            return failed("Invalid outer curvature: positive definiteness is required.")
+        if not bool(outer["decrement"] <= stationarity_tol):
+            return failed(
+                "Outer stationarity check failed: half the squared Newton decrement "
+                "exceeds stationarity_tol."
+            )
+        solved_cross = jsp.linalg.cho_solve((inner["factor"], True), cross)
+        precision = jnp.block(
+            [
+                [outer["hessian"] + cross.T @ solved_cross, cross.T],
+                [cross, inner["hessian"]],
+            ]
+        )
+        factor = jnp.linalg.cholesky(precision)
+        approximation.diagnostics["mode_jacobian"] = -solved_cross
+        approximation.diagnostics["joint_precision"] = precision
+        if not bool(jnp.all(jnp.isfinite(factor))):
+            return failed("Invalid joint curvature: positive definiteness is required.")
+        approximation.precision_cholesky = factor
+        approximation.valid = True
+        return approximation
+
     def loss_train_batched(
         self, params: Position, carry: OptimCarry
     ) -> tuple[jax.Array, LaplaceState]:
@@ -457,15 +721,12 @@ class LaplaceLoss(LossMixin):
         )
 
         def joint(t, z):
-            position = Position(
-                unravel_outer(t)
-                | self._unravel_latent(z)
-                | self.split.train
-                | carry.fixed_position
+            return self._joint(
+                unravel_outer(t),
+                self._unravel_latent(z),
+                carry.model_state,
+                carry.fixed_position,
             )
-            return -self.model.update_state(position, carry.model_state)[
-                "_model_log_prob"
-            ].value
 
         value, point = _fit_value(
             joint, theta, seed, self.inner_tol, self.inner_max_iter
