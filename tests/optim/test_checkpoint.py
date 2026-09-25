@@ -351,6 +351,7 @@ def make_model_engine(optimizer):
     )
     return LieselOptim(
         model,
+        split=PositionSplit.from_model(model, multi_size="manager"),
         loss_monitor="train_full_data",
         batches=batches,
         optimizers=optax.adam(0.02) if optimizer == "adam" else optimizer,

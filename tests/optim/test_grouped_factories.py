@@ -36,6 +36,57 @@ def _model(*, shared=False):
     return lsl.Model(variables)
 
 
+def _shared_knots_model():
+    x = lsl.Var.new_obs(jnp.linspace(0, 1, 6), name="x")
+    knots = lsl.Var.new_obs(jnp.linspace(0.2, 0.8, 3), name="knots")
+    beta = lsl.Var.new_param(jnp.array(0.0), name="beta")
+    mu = lsl.Var.new_calc(
+        lambda x, k, b: b * jnp.maximum(x[:, None] - k[None, :], 0).sum(-1),
+        x,
+        knots,
+        beta,
+        name="mu",
+    )
+    y = lsl.Var.new_obs(jnp.linspace(0, 1, 6), lsl.Dist(tfd.Normal, mu, 1.0), name="y")
+    c = lsl.Var.new_param(jnp.array(0.0), name="c")
+    y2 = lsl.Var.new_obs(jnp.zeros(3), lsl.Dist(tfd.Normal, c, 1.0), name="y2")
+    return lsl.Model([y, y2])
+
+
+def test_multi_size_model_requires_explicit_split_opt_in():
+    model = _shared_knots_model()
+    with pytest.raises(ValueError, match="multiple observation groups"):
+        LieselOptim(model, optimizers="lbfgs", loss_monitor="train_full_data")
+
+    split = PositionSplit.from_model(model, multi_size="manager", shuffle=False)
+    engine = LieselOptim(
+        model, split=split, optimizers="lbfgs", loss_monitor="train_full_data"
+    ).build_engine()
+
+    assert engine.split is split
+    assert isinstance(split, PositionSplitManager)
+    assert {tuple(sorted(child.position_keys)) for child in split.splits} == {
+        ("knots", "y2"),
+        ("x", "y"),
+    }
+    assert isinstance(engine.batches, BatchManager)
+    assert set(engine.batches.axis_size) == {3, 6}
+
+
+@pytest.mark.parametrize("factory", [PositionSplit, Split, Batches])
+def test_multi_size_error_identifies_groups_and_remedies(factory):
+    kwargs = {"batch_size": 2} if factory is Batches else {}
+    with pytest.raises(ValueError) as error:
+        factory.from_model(_shared_knots_model(), **kwargs)
+
+    message = str(error.value)
+    assert "['knots', 'y2'] (axis length 3)" in message
+    assert "['x', 'y'] (axis length 6)" in message
+    assert "split=opt.PositionSplit.from_model(model, multi_size='manager')" in message
+    assert "split_axes={key: None}" in message
+    assert "nested position_keys" in message
+
+
 def test_split_recipe_infers_multiple_groups_and_materializes_them():
     model = lsl.Model(
         [
