@@ -211,11 +211,7 @@ def test_prepared_partitions_keep_omitted_batch_keys_on_training_rows(
     jax.effects_barrier()
     expected_calls = [[1.0, 2.0, 3.0]]
     if holdout == "validate":
-        if batch_size == 1:
-            # Without a training template, the omitted group is evaluated per batch.
-            expected_calls = [[4.0, 5.0, 6.0]] + expected_calls * 10
-        else:
-            expected_calls += [[4.0, 5.0, 6.0]]
+        expected_calls += [[4.0, 5.0, 6.0]]
     np.testing.assert_array_equal(calls, expected_calls)
 
     # The same gradient applies at each step: the two training z values coincide.
@@ -231,6 +227,82 @@ def test_prepared_partitions_keep_omitted_batch_keys_on_training_rows(
     if holdout == "test":
         expected += np.log(2 * np.pi) / 2 + beta**2 / 2
     np.testing.assert_allclose(result.history.loss_monitor, expected / 5, rtol=1e-5)
+
+
+@pytest.mark.parametrize("debug", [False, True])
+def test_partial_batches_prepare_unbatched_and_passthrough_values_once(tmp_path, debug):
+    calls = {"x": [], "s": []}
+
+    def counted_square(values, name):
+        def square(values):
+            calls[name].append(np.asarray(values).copy())
+            return np.square(values)
+
+        return io_callback(
+            square,
+            jax.ShapeDtypeStruct(values.shape, values.dtype),
+            values,
+            ordered=True,
+        )
+
+    x = lsl.Var.new_value(jnp.arange(1.0, 7.0), name="x")
+    s = lsl.Var.new_value(jnp.array(1.0), name="s")
+    basis = lsl.Var.new_calc(lambda x: counted_square(x, "x"), x, name="basis")
+    scale = lsl.Var.new_calc(lambda s: counted_square(s, "s"), s, name="scale")
+    beta = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, 0.0, 1.0), name="beta")
+    loc = lsl.Var.new_calc(jnp.multiply, basis, beta)
+    y = lsl.Var.new_obs(2 * x.value**2, lsl.Dist(tfd.Normal, loc, scale), name="y")
+    z = lsl.Var.new_obs(
+        jnp.array([1.0, 1.0, 100.0, 100.0]),
+        lsl.Dist(tfd.Normal, beta, 1.0),
+        name="z",
+    )
+    model = lsl.Model([y, z])
+    splitter = Split.from_model(
+        model,
+        position_keys=["x", "y", "z", "s"],
+        split_axes={"s": None},
+        multi_size="manager",
+        test_axis_share=0.5,
+        shuffle=False,
+    )
+    # The passthrough training value also differs from the model's setup value.
+    data = Position(model.extract_position(["x", "y", "z"]) | {"s": jnp.array(2.0)})
+    split = splitter.split_position(data)
+    engine = LieselOptim(
+        model,
+        split=split,
+        batches=Batches.from_split(
+            split, position_keys=["z"], batch_size=1, shuffle=False
+        ),
+        optimizers=optax.sgd(0.1),
+        loss_monitor=EmaTrainLossMonitor(effective_window=2),
+        stopper=Stopper(epochs=5, patience=5, min_epochs=5),
+        show_progress=False,
+    ).build_engine()
+    engine.debug_nans = debug
+    jax.effects_barrier()
+    for values in calls.values():
+        values.clear()
+
+    checkpoint = tmp_path / "partial-fit.pkl"
+    paused = engine.fit(checkpoint=checkpoint, pause_after=2)
+    jax.effects_barrier()
+    assert paused.status == "paused"
+    np.testing.assert_array_equal(calls["x"], [[1.0, 2.0, 3.0]])
+    np.testing.assert_array_equal(calls["s"], [2.0])
+
+    result = engine.fit(checkpoint=checkpoint)
+    jax.effects_barrier()
+    # A resume rebuilds the same training values once, regardless of epoch count.
+    np.testing.assert_array_equal(calls["x"], [[1.0, 2.0, 3.0]] * 2)
+    np.testing.assert_array_equal(calls["s"], [2.0, 2.0])
+    # Normal y has variance 16, z variance 1, and beta a unit Normal prior.
+    # The normalized gradient is ((73/8)*beta - 57/4) / 5, twice per epoch.
+    steps = 2 * np.arange(1, 6)
+    expected = (114 / 73) * (1 - (1 - 0.1 * 73 / 40) ** steps)
+    assert result.history.position is not None
+    np.testing.assert_allclose(result.history.position["beta"], expected, rtol=1e-5)
 
 
 @pytest.mark.parametrize(
