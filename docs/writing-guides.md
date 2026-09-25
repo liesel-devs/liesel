@@ -53,10 +53,12 @@ for the reader.
   imports, use blank lines between logical steps, and separate model construction,
   fitting, and inspection into focused blocks. Lay out data and long calls so they
   are easy to scan.
+- Use plain Python code blocks without interactive prompts (`>>>` or `...`).
+  Keep code easy to copy and run.
 - Use realistic data, fixed seeds, and only the settings needed to teach the
   task. Show a useful result, rather than a wall of diagnostic output.
 - Pair print statements and inspection expressions with their actual output.
-  Use executed notebook outputs or checked Python console blocks in text guides.
+  Use executed notebook outputs or separate text output blocks in text guides.
   Capture results by running the examples; round displayed numbers and select
   useful diagnostic fields to keep the output readable.
 - Do not use `assert` statements in documentation. Keep verification in tests.

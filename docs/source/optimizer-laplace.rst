@@ -71,11 +71,11 @@ Fit the marginal posterior
        stopper=stopper,
        show_progress=False,
    ).fit()
+   print(result.status)
 
-.. code-block:: pycon
+.. code-block:: text
 
-   >>> result.status
-   'early_stopping'
+   early_stopping
 
 Use full-data batches and ``"train_full_data"`` monitoring. The outer coordinates
 are ``mu`` and ``h(tau)``; ``b`` keeps its prior. The unscaled loss includes priors,
@@ -87,14 +87,18 @@ Inspect the conditional mode and curvature
 The fit retains the group effects at their conditional mode, together with the
 outer parameters that produced them. Recover both from the best recorded fit:
 
-.. code-block:: pycon
+.. code-block:: python
 
-   >>> outer = result.position_min_monitor
-   >>> state = result.loss_state_min_monitor
-   >>> b_mode = state.latent_position["b"]
-   >>> print(f"mu = {outer['mu']:.3f}, log(tau) = {outer['h(tau)']:.3f}")
+   outer = result.position_min_monitor
+   state = result.loss_state_min_monitor
+   b_mode = state.latent_position["b"]
+
+   print(f"mu = {outer['mu']:.3f}, log(tau) = {outer['h(tau)']:.3f}")
+   print(b_mode.round(3))
+
+.. code-block:: text
+
    mu = 1.679, log(tau) = -0.229
-   >>> print(b_mode.round(3))
    [-1.272 -0.514 -0.064  0.441  0.934 -0.586  0.182  1.328]
 
 Each effect multiplies the baseline rate ``exp(mu)`` by ``exp(b)``.
@@ -105,15 +109,19 @@ The saved curvature also tells you how tightly these effects are determined.
 ``latent_factor @ latent_factor.T`` is their conditional precision. Solve against
 it to obtain a local Gaussian covariance and read off standard deviations:
 
-.. code-block:: pycon
+.. code-block:: python
 
-   >>> from jax.scipy.linalg import cho_solve
-   >>> latent_factor = state.latent_precision_cholesky
-   >>> conditional_covariance = cho_solve(
-   ...     (latent_factor, True), jnp.eye(latent_factor.shape[0])
-   ... )
-   >>> conditional_sd = jnp.sqrt(jnp.diag(conditional_covariance))
-   >>> print(conditional_sd.round(3))
+   from jax.scipy.linalg import cho_solve
+
+   latent_factor = state.latent_precision_cholesky
+   conditional_covariance = cho_solve(
+       (latent_factor, True), jnp.eye(latent_factor.shape[0])
+   )
+   conditional_sd = jnp.sqrt(jnp.diag(conditional_covariance))
+   print(conditional_sd.round(3))
+
+.. code-block:: text
+
    [0.363 0.264 0.215 0.169 0.134 0.272 0.191 0.11 ]
 
 These standard deviations are on the log-rate scale and hold ``mu`` and ``tau``
@@ -131,22 +139,25 @@ Turn the completed fit into a joint Gaussian approximation for ``mu``, ``h(tau)`
 and all eight group effects. It includes their correlations, so each draw is a
 complete parameter set that can be passed directly to ``Model.predict``:
 
-.. code-block:: pycon
+.. code-block:: python
 
-   >>> posterior = loss.approximate_joint_posterior(result)
-   >>> draws = posterior.sample(jax.random.key(42), sample_shape=(1000,))
-   >>> predicted = model.predict(draws, predict=["tau", "log_rate"])
-   >>> tau_draws = predicted["tau"]
-   >>> rate_draws = jnp.exp(predicted["log_rate"])
+   posterior = loss.approximate_joint_posterior(result)
+   draws = posterior.sample(jax.random.key(42), sample_shape=(1000,))
+   predicted = model.predict(draws, predict=["tau", "log_rate"])
+   tau_draws = predicted["tau"]
+   rate_draws = jnp.exp(predicted["log_rate"])
 
 ``Model.predict`` transforms draws back to the positive ``tau`` scale and evaluates
 the log rates. For example, summarize the between-group scale with its 5th, 50th,
 and 95th percentiles:
 
-.. code-block:: pycon
+.. code-block:: python
 
-   >>> quantiles = jnp.array([0.05, 0.5, 0.95])
-   >>> print(jnp.quantile(tau_draws, quantiles).round(3))
+   quantiles = jnp.array([0.05, 0.5, 0.95])
+   print(jnp.quantile(tau_draws, quantiles).round(3))
+
+.. code-block:: text
+
    [0.516 0.787 1.194]
 
 The approximate posterior median is 0.79, with a 90% credible interval of
@@ -223,27 +234,33 @@ An insufficient inner budget makes a useful diagnostic example:
        loss_monitor="train_full_data",
        show_progress=False,
    ).fit()
+   print(failed.status)
+   print(failed.failure_reason)
+   print((int(failed.failed_loss_state.status), int(failed.failed_loss_state.n_iter)))
 
-.. code-block:: pycon
+.. code-block:: text
 
-   >>> failed.status
-   'numerical_failure'
-   >>> failed.failure_reason
-   'Inner Laplace optimization failed: iteration limit.'
-   >>> int(failed.failed_loss_state.status), int(failed.failed_loss_state.n_iter)
+   numerical_failure
+   Inner Laplace optimization failed: iteration limit.
    (2, 1)
-   >>> diagnostic = short_loss.approximate_joint_posterior(
-   ...     failed, raise_on_failure=False
-   ... )
-   >>> diagnostic.valid
-   False
 
 Failures preserve the last valid snapshot; without one, the loss state is ``None``.
 Failed fits cannot resume; earlier saved checkpoints remain available.
 
 The posterior helper raises on failure by default. ``raise_on_failure=False`` returns
 an invalid diagnostic object with available gradients, curvature, and the failure
-reason. Its ``sample`` and ``covariance`` methods raise.
+reason:
+
+.. code-block:: python
+
+   diagnostic = short_loss.approximate_joint_posterior(failed, raise_on_failure=False)
+   print(diagnostic.valid)
+
+.. code-block:: text
+
+   False
+
+Its ``sample`` and ``covariance`` methods raise.
 
 Choose numerical controls
 -------------------------
