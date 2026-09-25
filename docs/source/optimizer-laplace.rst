@@ -48,7 +48,7 @@ Use float64 for this example: enable it before creating arrays and pass
    log_rate = lsl.Var.new_calc(lambda mu, b: mu + b[group], mu, b, name="log_rate")
    y = lsl.Var.new_obs(counts.ravel(), lsl.Dist(tfd.Poisson, log_rate=log_rate), name="y")
 
-   model = lsl.Model([y], to_float32=False)
+   model = lsl.Model(y, to_float32=False)
    model.plot(width=8, height=6)
 
 .. figure:: _static/optimizer-laplace-model.png
