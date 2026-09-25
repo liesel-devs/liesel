@@ -67,7 +67,7 @@ Python in `{code-cell}` blocks without interactive prompts (`>>>` or `...`).
 - Pass a single model root directly, as in `lsl.Model(y)`. Choose `to_float32`
   for the needs of the example, independently of this calling style.
 - Use realistic data, fixed seeds, and only the settings needed for the task.
-- Prefer expressions over `print()` and native tables for related results.
+- Prefer expressions over `print()`. Use native tables for related results.
   Select useful fields and round numbers for readability. Remove unnecessary
   inspection calls instead of leaving them without output.
 - Keep verification assertions in tests. Investigate awkward API behavior before
