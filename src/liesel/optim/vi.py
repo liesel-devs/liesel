@@ -743,10 +743,6 @@ class NegElboLoss(LossMixin):
 
         return jnp.mean(elbo_samples)
 
-    def evaluate(self, *args, **kwargs) -> jax.Array:
-        """Alias for :meth:`estimate_elbo`."""
-        return self.estimate_elbo(*args, **kwargs)
-
     def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
         """
         Computes the negative mini-batch ELBO used by optimizer updates.
@@ -796,9 +792,6 @@ class NegElboLoss(LossMixin):
         """Returns a compact representation showing the training Monte Carlo count."""
         name = type(self).__name__
         return f"{name}(nsamples={self.nsamples})"
-
-
-Elbo = NegElboLoss
 
 
 class VDist:

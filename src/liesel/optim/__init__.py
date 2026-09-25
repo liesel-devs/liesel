@@ -21,7 +21,6 @@ from .state import OptimNaNDebugInfo as OptimNaNDebugInfo
 from .state import OptimResult as OptimResult
 from .stop import Stopper as Stopper
 from .vi import CompositeVDist as CompositeVDist
-from .vi import Elbo as Elbo
 from .vi import NegElboLoss as NegElboLoss
 from .vi import VDist as VDist
 
@@ -30,7 +29,6 @@ __all__ = [
     "BatchManager",
     "Batches",
     "CompositeVDist",
-    "Elbo",
     "EmaTrainLossMonitor",
     "LieselOptim",
     "LieselVI",

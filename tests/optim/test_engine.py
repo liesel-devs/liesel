@@ -22,7 +22,6 @@ from liesel.optim import (
     Batches,
     BatchManager,
     CompositeVDist,
-    Elbo,
     EmaTrainLossMonitor,
     LieselOptim,
     LieselVI,
@@ -1617,7 +1616,7 @@ def test_api_imports_after_engine_refactor():
     assert LieselOptimFromQuick is LieselOptim
     assert opt.LieselVI is LieselVI
     assert opt.NegElboLoss is NegElboLoss
-    assert opt.Elbo is Elbo
+    assert not hasattr(opt, "Elbo")
     assert opt.VDist is VDist
     assert opt.CompositeVDist is CompositeVDist
     assert not hasattr(opt, "QuickOptim")
