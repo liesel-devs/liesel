@@ -60,10 +60,11 @@ Bind the fitted variational distribution and draw target-model positions:
 
 from __future__ import annotations
 
+import operator
 from collections.abc import Callable, Sequence
 from functools import partial
 from math import prod
-from typing import Literal, Self, cast
+from typing import Any, Literal, Self, cast
 
 import jax
 import jax.flatten_util
@@ -1975,9 +1976,11 @@ def _sample_variational_model(
     if q is None:
         raise ValueError("The object has no model.")
 
-    sample_shape = (
-        (sample_shape,) if isinstance(sample_shape, int) else tuple(sample_shape)
-    )
+    shape_arg: Any = sample_shape
+    try:
+        sample_shape = (operator.index(shape_arg),)
+    except TypeError:
+        sample_shape = tuple(operator.index(size) for size in shape_arg)
 
     if at_position is not None:
         at_position = jax.tree.map(lambda x: jnp.expand_dims(x, (0, 1)), at_position)
