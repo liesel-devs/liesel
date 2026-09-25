@@ -179,6 +179,8 @@ def _sample_compat(fn):
         if old_shape:
             if args or "sample_shape" in kwargs:
                 raise TypeError("Pass only one of 'shape' and 'sample_shape'.")
+            if kwargs["shape"] is None:
+                raise TypeError("shape=None is not supported; use sample_shape=().")
             kwargs["sample_shape"] = kwargs.pop("shape")
         if old_positional:
             if len(args) > len(positional_names) + 1:

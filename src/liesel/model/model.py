@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import math
+import operator
 import re
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -2434,9 +2435,11 @@ class Model:
         """
 
         chunk_size = _validate_chunk_size(chunk_size)
-        shape = (
-            (sample_shape,) if isinstance(sample_shape, int) else tuple(sample_shape)
-        )
+        shape_arg: Any = sample_shape
+        try:
+            shape = (operator.index(shape_arg),)
+        except TypeError:
+            shape = tuple(shape_arg)
         posterior_samples = (
             posterior_samples if posterior_samples is not None else Position({})
         )

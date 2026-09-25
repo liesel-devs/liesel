@@ -9,6 +9,7 @@ from itertools import combinations
 import jax
 import jax.numpy as jnp
 import jax.random as rnd
+import numpy as np
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 from IPython.core.guarded_eval import EvaluationContext, guarded_eval
@@ -1325,6 +1326,15 @@ class TestSampleSignature:
         assert actual["y"].shape == shape + (2,)
         assert jnp.array_equal(actual["y"], expected["y"])
 
+    @pytest.mark.parametrize(
+        "sample_shape", [np.int64(3), jnp.array(3), np.array([3]), jnp.array([3])]
+    )
+    def test_array_sample_shape(self, normal_sample, sample_shape):
+        expected = normal_sample((3,), seed=rnd.key(42))
+        actual = normal_sample(sample_shape, seed=rnd.key(42))
+        assert actual["y"].shape == (3, 2)
+        assert jnp.array_equal(actual["y"], expected["y"])
+
     @pytest.mark.parametrize("argument", ["key", "legacy_key", "shape", "omitted"])
     def test_missing_seed(self, normal_sample, argument):
         args = {
@@ -1346,6 +1356,7 @@ class TestSampleSignature:
             (((), None, None), {"posterior_samples": None}),
             (((), None, None, (), None, None, 64, 8), {}),
             ((), {"unexpected": 3}),
+            ((), {"shape": None}),
         ],
     )
     def test_invalid_binding(self, normal_sample, args, kwargs):
