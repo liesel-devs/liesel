@@ -6,6 +6,9 @@ from collections.abc import Mapping, Sequence
 
 import jax.numpy as jnp
 import networkx as nx
+from tensorflow_probability.substrates.jax.distributions.distribution import (
+    DiscreteDistributionMixin,
+)
 
 from ..model import Model, TransientNode, Value
 from ._log_lik import observed_log_lik_node_names, validate_likelihood_groups
@@ -129,3 +132,40 @@ def position_key_groups_from_model(
 
     validate_likelihood_groups(model, [keys for _, keys in groups])
     return flat_keys, groups
+
+
+def continuous_coordinate_nodes(
+    model: Model, keys: Sequence[str], data_nodes: set
+) -> set:
+    """Resolve distinct writable continuous parameters, excluding data."""
+    if isinstance(keys, str):
+        raise ValueError("Pass coordinate names as a sequence, not a string.")  # noqa: TRY004
+    nodes = set()
+    for key in keys:
+        if key in model.nodes:
+            node = model.nodes[key]
+        elif key in model.vars:
+            node = model.vars[key].value_node
+        else:
+            raise ValueError(f"Unknown coordinate {key!r}.")
+        if node in nodes:
+            raise ValueError(f"Duplicate coordinate or alias {key!r}.")
+        if not isinstance(node, Value) or not jnp.issubdtype(
+            jnp.asarray(node.value).dtype, jnp.floating
+        ):
+            raise ValueError(f"{key!r} must be a writable continuous coordinate.")
+        if node in data_nodes or (node.var is not None and node.var.observed):
+            raise ValueError(f"{key!r} is a training input or observation.")
+        dist = (
+            node.var.dist_node.init_dist()
+            if node.var is not None and node.var.dist_node is not None
+            else None
+        )
+        while dist is not None:
+            if isinstance(dist, DiscreteDistributionMixin):
+                raise ValueError(f"{key!r} has a discrete distribution.")  # noqa: TRY004
+            dist = getattr(
+                dist, "distribution", getattr(dist, "components_distribution", None)
+            )
+        nodes.add(node)
+    return nodes

@@ -1,5 +1,4 @@
 Liesel: A Probabilistic Programming Framework
-=============================================
 
 .. include:: welcome.md
    :parser: myst_parser.sphinx_
@@ -156,6 +155,9 @@ the arguments and defaults.
     ~liesel.optim.VariationalApproximation
     ~liesel.optim.VDist
     ~liesel.optim.CompositeVDist
+    ~liesel.optim.LaplaceLoss
+    ~liesel.optim.LaplaceState
+    ~liesel.optim.LaplaceApproximation
     ~liesel.optim.Optimizer
     ~liesel.optim.OptimizerLike
     ~liesel.optim.LBFGS

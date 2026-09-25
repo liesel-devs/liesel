@@ -894,9 +894,11 @@ class NegElboLoss(LossMixin):
 
         return jnp.mean(elbo_samples)
 
-    def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train_batched(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, None]:
         """
-        Computes the negative mini-batch ELBO used by optimizer updates.
+        Returns the negative mini-batch ELBO and stateless proposal ``None``.
 
         ``carry.batch`` supplies observed mini-batch values, and ``carry.batches``
         supplies the corresponding likelihood scaling, including per-branch scaling
@@ -912,11 +914,11 @@ class NegElboLoss(LossMixin):
             nsamples=self.nsamples,
             batch_index=carry.i_batch,
         )
-        return -elbo / self.scalar
+        return -elbo / self.scalar, None
 
-    def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train(self, params: Position, carry: OptimCarry) -> tuple[jax.Array, None]:
         """
-        Computes the negative full-training-data ELBO.
+        Returns the negative full-training-data ELBO and stateless proposal ``None``.
 
         This method uses :attr:`split.train` as observed data and ignores the
         current mini-batch in ``carry.batch``. It is useful for diagnostics or
@@ -932,9 +934,11 @@ class NegElboLoss(LossMixin):
             split_part="train",
             nsamples=self.nsamples,
         )
-        return -elbo / self.scalar
+        return -elbo / self.scalar, None
 
-    def loss_monitor(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_monitor(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, None]:
         """Rejects validation monitoring, which ELBO losses do not support."""
         del params, carry
         raise ValueError("NegElboLoss does not support validation monitoring.")

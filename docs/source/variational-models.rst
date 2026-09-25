@@ -113,7 +113,8 @@ Use another objective
 use :class:`.OptimEngine` with an implementation of the public :class:`.Loss`
 interface. :class:`.LossMixin` supplies the gradient helpers. The custom loss owns
 its variational model, maps optimizer keys to initial values through ``position``,
-and evaluates its objective in ``loss_train_batched``. It must also implement
+and returns ``(value, proposed_state)`` from ``loss_train_batched``. A stateless
+loss uses ``None`` as the proposed state. It must also implement
 ``loss_train`` to use full-data monitoring.
 
 Choose explicit :class:`.Optimizer` blocks over the custom loss's parameter keys

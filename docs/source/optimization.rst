@@ -13,17 +13,26 @@ For an existing Liesel ``model``, a full-data fit takes:
 
    import liesel.optim as opt
 
-   result = opt.LieselOptim(
+   optim = opt.LieselOptim(
        model,
        optimizers="lbfgs",
        loss_monitor="train_full_data",
-   ).fit()
+   )
+   result = optim.fit()
    position = result.position_min_monitor
 
 L-BFGS needs the full data and a deterministic loss. For minibatches, use Adam.
 The ``optimizers`` argument is required. Pass a configured Optax transformation,
 such as ``optimizers=optax.adam(0.01)``, to optimize all parameters with it.
 The fitted values are returned separately; fitting does not change your model.
+
+After a joint MAP fit, ``optim.loss.approximate_joint_posterior(result)``
+can construct a Gaussian approximation for the optimized parameters. It uses
+full-training curvature and checks that the selected position is a stationary
+point with positive curvature; a validation or EMA minimum may not qualify.
+See :meth:`~liesel.optim.NegLogProbLoss.approximate_joint_posterior` for controls
+and :doc:`optimizer-laplace` for a walkthrough of draws and uncertainty in a
+hierarchical model.
 
 Start here
 ----------
@@ -42,6 +51,7 @@ Common tasks
 
    optimizer-monitoring
    optimizer-customization
+   optimizer-laplace
    optimizer-splitting
    optimizer-batching
    optimizer-loss-scaling

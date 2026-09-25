@@ -40,7 +40,7 @@ class StochasticLoss(LossMixin):
 
     def loss_train_batched(self, params, carry):
         target = jnp.mean(carry.batch["y"]) + jax.random.normal(carry.key)
-        return (params["theta"] - target) ** 2
+        return ((params["theta"] - target) ** 2), None
 
     def loss_monitor(self, params, carry):
         raise NotImplementedError("This test loss uses EMA monitoring.")
@@ -100,6 +100,60 @@ def test_stopper_changes_are_validated_before_resuming():
 
     with pytest.raises(ValueError, match="epochs"):
         engine.fit(checkpoint=result.checkpoint)
+
+
+def test_checkpoint_load_rejects_previous_carry_schema(tmp_path):
+    path = tmp_path / "old.pkl"
+    make_engine().fit(pause_after=1).checkpoint.save(path)
+    data = path.read_bytes()
+    _, payload = data.split(b"\n", 1)
+    path.write_bytes(b"liesel.optim.checkpoint\x00\x02\n" + payload)
+    with pytest.raises(ValueError, match="format"):
+        OptimCheckpoint.load(path)
+
+
+def test_committed_loss_state_survives_resume_and_requires_compatible_structure(
+    tmp_path,
+):
+    class CountingLoss(StochasticLoss):
+        def __init__(self, shape=()):
+            super().__init__()
+            self.shape = shape
+
+        def init_state(self, params, carry):
+            return {"count": jnp.zeros(self.shape, dtype=jnp.int32)}
+
+        def loss_train_batched(self, params, carry):
+            count = carry.loss_state["count"]
+            return (params["theta"] - count) ** 2, {"count": count + 1}
+
+        loss_train = loss_train_batched
+
+    def engine(shape=()):
+        loss = CountingLoss(shape)
+        return OptimEngine(
+            loss=loss,
+            batches=Batches.from_split(loss.split, batch_size=None),
+            optimizers=[Optimizer(["theta"], optax.sgd(0.1))],
+            stopper=Stopper(epochs=4, patience=4),
+            seed=42,
+            initial_state={},
+            loss_monitor="train_full_data",
+            show_progress=False,
+        )
+
+    path = tmp_path / "stateful.pkl"
+    first = engine().fit(checkpoint=path, pause_after=2)
+    actual = engine().fit(checkpoint=path)
+    expected = engine().fit()
+    assert_same_run(actual, expected)
+    assert int(first.loss_state_final["count"]) == 2
+    assert int(actual.loss_state_final["count"]) == 4
+    assert int(actual.loss_state_min_monitor["count"]) == 1
+
+    incompatible = engine(shape=(2,))
+    with pytest.raises(ValueError, match="loss state"):
+        incompatible.fit(checkpoint=first.checkpoint)
 
 
 @pytest.mark.parametrize("progress", ["off", "epochs", "batches"])
@@ -260,9 +314,11 @@ def test_invalid_execution_limits_are_rejected(argument, value):
 
 class NaNLoss(StochasticLoss):
     def loss_train_batched(self, params, carry):
-        return jnp.where(
-            carry.epoch >= 3, jnp.nan, super().loss_train_batched(params, carry)
-        )
+        return (
+            jnp.where(
+                carry.epoch >= 3, jnp.nan, super().loss_train_batched(params, carry)[0]
+            )
+        ), None
 
 
 @pytest.mark.parametrize("progress", ["off", "epochs", "batches"])
@@ -410,8 +466,11 @@ def test_reconstructed_model_recovery_with_nan_debugging(tmp_path):
 class StatefulLoss(StochasticLoss):
     def loss_train_batched(self, params, carry):
         return (
-            super().loss_train_batched(params, carry)
-            + carry.model_state["offset"] * params["theta"]
+            (
+                super().loss_train_batched(params, carry)[0]
+                + carry.model_state["offset"] * params["theta"]
+            ),
+            None,
         )
 
 

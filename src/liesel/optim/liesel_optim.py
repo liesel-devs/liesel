@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from .state import OptimResult
 
 
-class LieselOptim:
+class LieselOptim[LossType: Loss = NegLogProbLoss]:
     """
     Builds an :class:`.OptimEngine` for a Liesel model using sensible defaults.
 
@@ -52,8 +52,9 @@ class LieselOptim:
     optimizers
         Required optimizer choice. An Optax transformation such as
         ``optax.adam(0.01)`` applies to all model parameters. Pass ``"lbfgs"``
-        for the built-in full-data L-BFGS optimizer, or a sequence of explicit
-        optimizers for selected parameters. If a parameter is weak (computed),
+        for the built-in full-data L-BFGS optimizer. A custom loss can override
+        the automatic keys through ``default_position_keys``. Pass a sequence of
+        explicit optimizers for selected parameters. If a parameter is weak (computed),
         automatic selection raises an error. Explicitly name its strong source
         variables with :class:`.Optimizer` or :class:`.LBFGS`; those sources need
         not be marked as parameters. Priors on weak parameters remain in the loss.
@@ -151,7 +152,7 @@ class LieselOptim:
         split: SplitConfig | None = None,
         batch_size: int | None = None,
         batches: BatchConfig | None = None,
-        loss: Loss | None = None,
+        loss: LossType | None = None,
         validation_strategy: Literal["log_lik", "log_prob"] = "log_lik",
         scale_loss: bool = True,
         save_position_history: bool = True,
@@ -226,10 +227,10 @@ class LieselOptim:
 
     def _resolve_loss(
         self,
-        loss: Loss | None,
+        loss: LossType | None,
         validation_strategy: Literal["log_lik", "log_prob"],
         scale_loss: bool,
-    ) -> Loss:
+    ) -> LossType | NegLogProbLoss:
         if loss is not None:
             return loss
 
@@ -247,11 +248,18 @@ class LieselOptim:
         | Sequence[OptimizerLike]
         | Literal["lbfgs"],
     ) -> Sequence[OptimizerLike]:
-        position_keys = list(self.model.parameters)
+        default_keys = self.loss.default_position_keys
+        position_keys = list(
+            self.model.parameters if default_keys is None else default_keys
+        )
         if isinstance(optimizers, optax.GradientTransformation) or (
             isinstance(optimizers, str) and optimizers == "lbfgs"
         ):
-            weak = [name for name, var in self.model.parameters.items() if var.weak]
+            weak = [
+                name
+                for name in position_keys
+                if name in self.model.vars and self.model.vars[name].weak
+            ]
             if weak:
                 raise ValueError(
                     f"Cannot automatically select weak parameters {weak}: their "

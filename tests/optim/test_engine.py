@@ -40,6 +40,98 @@ from liesel.optim.state import OptimCarry
 from liesel.optim.types import Position
 
 
+@pytest.mark.parametrize("debug_nans", [False, True])
+def test_stateful_loss_commits_once_per_epoch_and_retains_matched_snapshots(debug_nans):
+    class StatefulQuadratic(LossMixin):
+        split = PositionSplit(
+            Position({"y": jnp.array([0.0])}), Position({}), Position({}), 1, 0, 0
+        )
+
+        def position(self, position_keys):
+            return Position({name: jnp.array(4.0) for name in position_keys})
+
+        def init_state(self, params, carry):
+            return {"count": jnp.array(0), "position": params["theta"]}
+
+        def loss_train_batched(self, params, carry):
+            return 0.5 * params["theta"] ** 2, {
+                "count": carry.loss_state["count"] + 1,
+                "position": params["theta"],
+            }
+
+        loss_train = loss_train_batched
+        loss_monitor = loss_train_batched
+
+    loss = StatefulQuadratic()
+    result = OptimEngine(
+        loss=loss,
+        batches=Batches.from_split(loss.split, batch_size=None),
+        optimizers=[Optimizer(["theta"], optax.sgd(2.5))],
+        stopper=Stopper(epochs=2, patience=2),
+        seed=1,
+        initial_state={},
+        loss_monitor="train_full_data",
+        save_position_history=True,
+        show_progress=False,
+        debug_nans=debug_nans,
+    ).fit()
+
+    # Large SGD steps deliberately separate the best and final snapshots:
+    # 4 - 2.5*4 = -6; -6 - 2.5*(-6) = 9.
+    assert result.history.loss_train.tolist() == [8.0, 18.0]
+    assert result.history.loss_monitor.tolist() == [18.0, 40.5]
+    assert float(result.position_final["theta"]) == 9.0
+    assert result.loss_state_final == {"count": 2, "position": 9.0}
+    assert float(result.position_min_monitor["theta"]) == -6.0
+    assert result.loss_state_min_monitor == {"count": 1, "position": -6.0}
+
+
+def test_plain_stateful_loss_can_classify_failure_without_engine_type_knowledge():
+    class PlainLoss:
+        default_position_keys = None
+        split = PositionSplit(
+            Position({"y": jnp.array([0.0])}), Position({}), Position({}), 1, 0, 0
+        )
+
+        def position(self, position_keys):
+            return Position({name: jnp.array(2.0) for name in position_keys})
+
+        def init_state(self, params, carry):
+            return {"count": jnp.array(0)}
+
+        def loss_train_batched(self, params, carry):
+            return params["theta"] ** 2 / 2, {"count": carry.loss_state["count"] + 1}
+
+        loss_train = loss_train_batched
+        loss_monitor = loss_train_batched
+        value_and_grad = LossMixin.value_and_grad
+        grad = LossMixin.grad
+
+        def _evaluation_failure(self, value, state, gradient):
+            return jnp.where(state["count"] > 1, 7, 0)
+
+        def _failure_message(self, reason, state):
+            return "The custom state reached its limit." if reason == 7 else None
+
+    loss = PlainLoss()
+    result = OptimEngine(
+        loss=loss,
+        batches=Batches.from_split(loss.split, batch_size=None),
+        optimizers=[Optimizer(["theta"], optax.sgd(0.5))],
+        stopper=Stopper(epochs=3, patience=3),
+        seed=1,
+        initial_state={},
+        loss_monitor="train_full_data",
+        show_progress=False,
+    ).fit()
+    assert result.status == "numerical_failure"
+    assert result.failure_reason == "The custom state reached its limit."
+    assert result.n_epochs == 1
+    assert result.loss_state_final == {"count": 1}
+    assert result.failed_loss_state == {"count": 2}
+    assert float(result.position_final["theta"]) == 1.0
+
+
 @pytest.mark.parametrize("debug", [False, True])
 @pytest.mark.parametrize("holdout", ["validate", "test"])
 @pytest.mark.parametrize("mode", ["no_keys", "group_full", "group_mini"])
@@ -224,13 +316,13 @@ class SequenceOptimizer:
     def step(
         self, position: Position, loss, carry: OptimCarry
     ) -> tuple[OptimCarry, jax.Array]:
-        value = loss.loss_train_batched(position, carry)
+        value = loss.loss_train_batched(position, carry)[0]
         carry.position = Position(carry.position | {"theta": self.values[carry.epoch]})
         return carry, value
 
 
 @dataclass
-class SequenceLoss:
+class SequenceLoss(LossMixin):
     split: PositionSplit | PositionSplitManager
 
     @property
@@ -240,17 +332,23 @@ class SequenceLoss:
     def position(self, position_keys) -> Position:
         return Position({key: jnp.array(-1.0) for key in position_keys})
 
-    def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train_batched(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, object]:
         del carry
-        return params["theta"]
+        return (params["theta"]), None
 
-    def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, object]:
         del carry
-        return params["theta"]
+        return (params["theta"]), None
 
-    def loss_monitor(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_monitor(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, object]:
         del carry
-        return params["theta"]
+        return (params["theta"]), None
 
     def grad(self, params: Position, carry: OptimCarry):
         return {key: jnp.zeros_like(value) for key, value in params.items()}
@@ -261,32 +359,80 @@ class SequenceLoss:
 
 @dataclass
 class QuadraticEngineLoss(SequenceLoss):
-    def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train_batched(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, object]:
         del carry
-        return params["theta"] ** 2
+        return (params["theta"] ** 2), None
 
-    def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, object]:
         return self.loss_train_batched(params, carry)
 
 
+@pytest.mark.parametrize("configuration", ["minibatch", "ema", "validation"])
+def test_stateful_loss_requires_full_training_batches_and_monitor(configuration):
+    class StatefulLoss(SequenceLoss):
+        def init_state(self, params, carry):
+            return jnp.array(0)
+
+    split = PositionSplit(
+        Position({"y": jnp.array([0.0, 1.0])}),
+        Position({"y": jnp.array([2.0])}),
+        Position({}),
+        2,
+        1,
+        0,
+    )
+    monitors: dict[str, LossMonitor] = {
+        "minibatch": "train_full_data",
+        "ema": EmaTrainLossMonitor(1.0),
+        "validation": "validation",
+    }
+    monitor = monitors[configuration]
+    engine = OptimEngine(
+        loss=StatefulLoss(split),
+        batches=Batches.from_split(
+            split, batch_size=1 if configuration == "minibatch" else None
+        ),
+        optimizers=[Optimizer(["theta"], optax.sgd(0.1))],
+        stopper=Stopper(epochs=1, patience=1),
+        seed=1,
+        initial_state={},
+        loss_monitor=monitor,
+        show_progress=False,
+    )
+    with pytest.raises(
+        ValueError, match="Stateful losses require full-data.*train_full_data"
+    ):
+        engine.fit()
+
+
 @dataclass
-class BatchSensitiveLoss:
+class BatchSensitiveLoss(LossMixin):
     split: PositionSplit
 
     def position(self, position_keys) -> Position:
         return Position({key: jnp.array(0.0) for key in position_keys})
 
-    def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train_batched(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, object]:
         obs = carry.batch if carry.batch else self.split.train
-        return params["theta"] + jnp.sum(obs["y"])
+        return (params["theta"] + jnp.sum(obs["y"])), None
 
-    def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, object]:
         del carry
-        return params["theta"] + jnp.sum(self.split.train["y"])
+        return (params["theta"] + jnp.sum(self.split.train["y"])), None
 
-    def loss_monitor(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_monitor(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, object]:
         del params, carry
-        return jnp.array(-999.0)
+        return (jnp.array(-999.0)), None
 
     def grad(self, params: Position, carry: OptimCarry):
         del carry
@@ -298,32 +444,40 @@ class BatchSensitiveLoss:
 
 @dataclass
 class BatchedOnlyLoss(BatchSensitiveLoss):
-    def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, object]:
         del params, carry
         raise AssertionError("full training loss should not be evaluated")
 
 
 @dataclass
 class DistinctFullDataLoss(BatchSensitiveLoss):
-    def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, object]:
         del carry
-        return params["theta"] + 10.0
+        return (params["theta"] + 10.0), None
 
 
 @dataclass
 class DivergentExactLoss(SequenceLoss):
-    def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train_batched(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, object]:
         del params
-        return -jnp.asarray(carry.epoch, dtype=float)
+        return (-jnp.asarray(carry.epoch, dtype=float)), None
 
 
 @dataclass
 class EpochSequenceLoss(SequenceLoss):
     epoch_losses: jax.Array
 
-    def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train_batched(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, object]:
         del params
-        return self.epoch_losses[carry.epoch]
+        return (self.epoch_losses[carry.epoch]), None
 
 
 @dataclass
@@ -333,14 +487,22 @@ class UnitGradientLoss(LossMixin):
     def position(self, position_keys) -> Position:
         return Position({key: jnp.array(0.0) for key in position_keys})
 
-    def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train_batched(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, object]:
         del carry
-        return sum((jnp.sum(value) for value in params.values()), start=jnp.array(0.0))
+        return (
+            sum((jnp.sum(value) for value in params.values()), start=jnp.array(0.0))
+        ), None
 
-    def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, object]:
         return self.loss_train_batched(params, carry)
 
-    def loss_monitor(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_monitor(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, object]:
         return self.loss_train_batched(params, carry)
 
     def grad(self, params: Position, carry: OptimCarry):
@@ -382,7 +544,7 @@ class DebugNoOpOptimizer:
     def step(
         self, position: Position, loss, carry: OptimCarry
     ) -> tuple[OptimCarry, jax.Array]:
-        return carry, loss.loss_train_batched(position, carry)
+        return carry, loss.loss_train_batched(position, carry)[0]
 
 
 @dataclass
@@ -390,7 +552,7 @@ class AddOneOptimizer(DebugNoOpOptimizer):
     def step(
         self, position: Position, loss, carry: OptimCarry
     ) -> tuple[OptimCarry, jax.Array]:
-        value = loss.loss_train_batched(position, carry)
+        value = loss.loss_train_batched(position, carry)[0]
         key = self.position_keys[0]
         carry.position = Position(carry.position | {key: position[key] + 1.0})
         return carry, value
@@ -414,7 +576,7 @@ class NanOptimizer(DebugNoOpOptimizer):
     def step(
         self, position: Position, loss, carry: OptimCarry
     ) -> tuple[OptimCarry, jax.Array]:
-        value = loss.loss_train_batched(position, carry)
+        value = loss.loss_train_batched(position, carry)[0]
         key = self.position_keys[0]
         carry.position = Position(carry.position | {key: position[key] * jnp.nan})
         return carry, value
@@ -430,7 +592,7 @@ class NanLossAndPositionOptimizer(NanOptimizer):
 
 
 @dataclass
-class DebugNaNLoss:
+class DebugNaNLoss(LossMixin):
     split: PositionSplit
     trigger_batch_value: float | None = None
     trigger_epoch: int | None = None
@@ -444,7 +606,9 @@ class DebugNaNLoss:
             }
         )
 
-    def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train_batched(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, object]:
         param_sum = sum(
             (jnp.sum(value) for value in params.values()), start=jnp.array(0.0)
         )
@@ -453,20 +617,26 @@ class DebugNaNLoss:
         )
         loss = param_sum + batch_sum
         if self.trigger_batch_value is None:
-            return loss
+            return (loss), None
 
         trigger = jnp.asarray(False)
         for value in carry.batch.values():
             trigger = trigger | jnp.any(value == self.trigger_batch_value)
         if self.trigger_epoch is not None:
             trigger = trigger & (carry.epoch == self.trigger_epoch)
-        return jnp.where(trigger, jnp.nan, loss)
+        return (jnp.where(trigger, jnp.nan, loss)), None
 
-    def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, object]:
         del carry
-        return sum((jnp.sum(value) for value in params.values()), start=jnp.array(0.0))
+        return (
+            sum((jnp.sum(value) for value in params.values()), start=jnp.array(0.0))
+        ), None
 
-    def loss_monitor(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_monitor(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, object]:
         return self.loss_train(params, carry)
 
     def grad(self, params: Position, carry: OptimCarry):
@@ -1195,11 +1365,13 @@ def test_long_window_ema_tracks_float32_plateau(initial_loss, tmp_path):
             return Position({key: jnp.float32(0) for key in position_keys})
 
         def loss_train_batched(self, params, carry):
-            return jnp.where(
-                carry.epoch == 0,
-                jnp.float32(initial_loss),
-                super().loss_train_batched(params, carry),
-            )
+            return (
+                jnp.where(
+                    carry.epoch == 0,
+                    jnp.float32(initial_loss),
+                    super().loss_train_batched(params, carry)[0],
+                )
+            ), None
 
     engine = OptimEngine(
         loss=PlateauLoss(split),
@@ -1405,8 +1577,8 @@ def test_ema_monitor_adds_no_full_data_evaluation():
     "implementation", ["missing", "inherited", "instance", "protocol"]
 )
 def test_full_data_monitor_validates_custom_loss(implementation, monkeypatch):
-    class BatchedLoss(LossMixin, SequenceLoss):
-        pass
+    class BatchedLoss(SequenceLoss):
+        loss_train = LossMixin.loss_train
 
     class InheritedLoss(UnitGradientLoss):
         pass
@@ -1418,7 +1590,9 @@ def test_full_data_monitor_validates_custom_loss(implementation, monkeypatch):
         "protocol": SequenceLoss,
     }[implementation](_split())
     if implementation == "instance":
-        monkeypatch.setattr(loss, "loss_train", lambda params, carry: params["theta"])
+        monkeypatch.setattr(
+            loss, "loss_train", lambda params, carry: (params["theta"], None)
+        )
 
     def build_engine(monitor):
         return OptimEngine(

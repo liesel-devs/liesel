@@ -143,7 +143,7 @@ Its values must remain valid as parameters change, and selecting rows must prese
 their :ref:`likelihood contributions <optimizer-row-wise>`. Raw covariates can still
 be used for inexpensive JAX calculations in the same fit.
 
-Fits using :class:`.NegLogProbLoss` also prepare data-derived values once for
+Fits using :class:`.NegLogProbLoss` or :class:`.LaplaceLoss` also prepare data-derived values once for
 inputs that batches leave unchanged, including unbatched groups and shared data. They retain full
 training values only for full-data batches or full-training monitoring, and
 prepare validation values only for validation monitoring. When batches supply

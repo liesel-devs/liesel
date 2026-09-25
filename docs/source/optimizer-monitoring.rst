@@ -1,5 +1,4 @@
 Monitor a fit
-=============
 
 ``loss_monitor`` chooses the loss used for early stopping and for saving the
 best fit. Choose it when creating :class:`liesel.optim.LieselOptim`.
@@ -52,6 +51,9 @@ Read the result
   the lowest finite monitoring loss. It raises ``RuntimeError`` if no such loss
   was recorded. An earlier best position remains available after a later failure.
 * ``result.position_final`` holds the parameters at the end of the run.
+* Stateful losses expose matching ``result.loss_state_min_monitor`` and
+  ``result.loss_state_final`` snapshots. These are ``None`` for stateless losses
+  or when no matching full-training evaluation exists.
 * ``result.plot_loss_overview()`` shows the full loss history and a closer
   view of recent epochs.
 * ``result.plot_params()`` shows saved parameter paths.
@@ -109,3 +111,7 @@ If a NaN is detected, ``debug_info`` contains information for reproducing it;
 otherwise it is ``None``. See :class:`~liesel.optim.OptimNaNDebugInfo` for its
 contents. The captured information helps investigate the failure; it does
 not correct poor starting values.
+
+``LaplaceLoss`` reports inner or outer numerical failures through
+``status="numerical_failure"``, ``failure_reason``, and ``failed_loss_state``.
+See :ref:`optimizer-laplace-failure` for an example and recovery behavior.
