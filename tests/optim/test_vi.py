@@ -271,6 +271,33 @@ def test_compositevdist_rejects_inconsistent_dtype_policy():
 
 
 class TestVDist:
+    @pytest.mark.parametrize("family", ["normal", "mvn_diag", "mvn_tril"])
+    def test_laplace_initialization_preserves_correlated_curvature(self, family):
+        theta = lsl.Var.new_param(
+            jnp.zeros(2),
+            lsl.Dist(
+                tfp.distributions.MultivariateNormalTriL,
+                jnp.zeros(2),
+                jnp.array([[2.0, 0.0], [1.0, 1.0]]),
+            ),
+            name="theta",
+        )
+        vdist = opt.VDist(["theta"], lsl.Model(theta))
+        scale_arg = {
+            "normal": "scale",
+            "mvn_diag": "scale_diag",
+            "mvn_tril": "scale_tril",
+        }
+        getattr(vdist, family)(**{scale_arg[family]: "laplace"}).build()
+        distribution = _dist_node(vdist).init_dist()
+        if family == "mvn_tril":
+            actual = distribution.covariance()
+            expected = np.array([[4.0, 2.0], [2.0, 2.0]])
+        else:
+            actual = distribution.variance()
+            expected = np.array([4.0, 2.0])
+        np.testing.assert_allclose(actual, expected, rtol=1e-4, atol=1e-4)
+
     def test_normalizes_tuple_position_keys(self):
         p = _laplace_model()
 

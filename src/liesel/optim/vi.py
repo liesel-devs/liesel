@@ -113,7 +113,7 @@ def _laplace_covariance(model: Model, position_keys: Sequence[str], loc: jax.Arr
 
     eigvals, eigvecs = jnp.linalg.eigh(info_matrix)
     inv_eigvals_clipped = 1 / jnp.clip(eigvals, min=1e-5)
-    cov_matrix = eigvecs @ (inv_eigvals_clipped[..., None, :] * eigvecs.T)
+    cov_matrix = (eigvecs * inv_eigvals_clipped) @ eigvecs.T
     return cov_matrix
 
 
