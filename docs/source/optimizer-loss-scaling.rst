@@ -18,6 +18,10 @@ which need not equal the number of array elements.
 Validation leaves out priors by default. Use ``validation_strategy="log_prob"``
 to include them. See :class:`~liesel.optim.NegLogProbLoss` for details.
 
+With :class:`~liesel.optim.LaplaceLoss`, the objective is always the unscaled
+full-training marginal posterior approximation. It includes priors and Jacobians;
+the wrapper's ``scale_loss`` setting does not change it. See :doc:`optimizer-laplace`.
+
 .. raw:: html
 
    <iframe
@@ -59,13 +63,15 @@ split inference or specify batch scaling.
 Handle custom objectives
 -------------------------
 
-Custom aggregate likelihood, prior, or probability nodes require a custom
-:class:`~liesel.optim.Loss` and an explicit split. A manual split specifies data
-grouping and scaling; it does not change the objective used by
-:class:`~liesel.optim.NegLogProbLoss`. The built-in loss accepts the standard sums
+Custom aggregate likelihood, prior, or probability nodes need a loss that evaluates
+those aggregates. A manual split specifies data grouping and scaling; it does not
+change the objective used by
+:class:`~liesel.optim.NegLogProbLoss`. That loss accepts the standard sums
 of observed distribution factors and parameter priors, including weak observed
 variables. Other distribution factors must be classified appropriately or handled
-by a custom loss.
+by an appropriate loss. ``LaplaceLoss`` uses the model's actual joint density,
+including custom aggregates, with full training observations substituted. If
+automatic split inference fails, supply an explicit full-training split.
 
 For the data setup, see :doc:`optimizer-splitting` and
 :doc:`optimizer-batching`. :doc:`optimizer-weighted-batching` explains the

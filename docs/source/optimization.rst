@@ -40,6 +40,7 @@ Common tasks
 
    optimizer-monitoring
    optimizer-customization
+   optimizer-laplace
    optimizer-splitting
    optimizer-batching
    optimizer-loss-scaling

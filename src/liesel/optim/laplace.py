@@ -371,8 +371,9 @@ class LaplaceLoss(LossMixin):
         may need an explicit :class:`PositionSplit`.
     latent
         Nonempty sequence of writable continuous coordinate names to integrate.
-        Scalars, vectors, and matrices can be combined. Aliases, weak variables,
-        discrete coordinates, and overlap with outer coordinates are rejected.
+        Scalars, vectors, and matrices can be combined. Duplicate aliases, weak
+        variables, discrete coordinates, and overlap with outer coordinates are
+        rejected.
     warm_start
         Start each inner solve from the committed latent mode. Defaults to True.
         False always uses the model's original latent values. This is an inner

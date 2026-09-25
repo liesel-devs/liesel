@@ -12,7 +12,7 @@ import tensorflow_probability.substrates.jax.bijectors as tfb
 import tensorflow_probability.substrates.jax.distributions as tfd
 from scipy.integrate import quad
 from scipy.interpolate import BSpline
-from scipy.optimize import brentq
+from scipy.optimize import brentq, minimize
 from scipy.special import gammaln
 
 import liesel.model as lsl
@@ -1352,3 +1352,89 @@ def test_large_poisson_count_converges_from_a_remote_start(x64):
             atol=1e-5 if x64 else 0.002,
             rtol=0,
         )
+
+
+def test_multigroup_poisson_fit_estimates_scale_near_exact_integrated_posterior():
+    counts = np.array(
+        [
+            [1, 2, 1, 0],
+            [3, 2, 4, 3],
+            [6, 5, 4, 5],
+            [9, 7, 10, 8],
+            [13, 16, 12, 15],
+            [2, 4, 3, 2],
+            [5, 8, 6, 7],
+            [20, 23, 19, 21],
+        ],
+        dtype=float,
+    )
+    sums = counts.sum(axis=1)
+
+    def exact_marginal(outer):
+        mu, log_tau = outer
+        tau = math.exp(log_tau)
+        value = mu**2 / 8 + (log_tau - math.log(0.5)) ** 2 / (2 * 0.7**2)
+        for total in sums:
+
+            def joint(b, total=total):
+                return b * b / (2 * tau * tau) + 4 * math.exp(mu + b) - total * (mu + b)
+
+            mode = brentq(
+                lambda b, total=total: b / (tau * tau) + 4 * math.exp(mu + b) - total,
+                -40,
+                40,
+            )
+            at_mode = joint(mode)
+            # Conditional curvature >= 1/tau**2 bounds these omitted tails.
+            integral, error = quad(
+                lambda b, at_mode=at_mode, joint=joint: math.exp(at_mode - joint(b)),
+                mode - 12 * tau,
+                mode + 12 * tau,
+                epsabs=1e-11,
+                epsrel=1e-11,
+            )
+            assert error < 1e-8
+            value += at_mode + log_tau - math.log(integral)
+        return value
+
+    reference = minimize(
+        exact_marginal,
+        [1.0, math.log(0.5)],
+        method="Powell",
+        bounds=[(-3, 5), (-3, 2)],
+        options={"xtol": 1e-8, "ftol": 1e-10},
+    )
+    assert reference.success
+    with jax.enable_x64():
+        mu = lsl.Var.new_param(1.0, lsl.Dist(tfd.Normal, 0.0, 2.0), name="mu")
+        tau = lsl.Var.new_param(
+            0.5,
+            lsl.Dist(tfd.LogNormal, math.log(0.5), 0.7),
+            bijector=tfb.Exp(),
+            name="tau",
+        )
+        b = lsl.Var.new_param(jnp.zeros(8), lsl.Dist(tfd.Normal, 0.0, tau), name="b")
+        groups = jnp.repeat(jnp.arange(8), 4)
+        eta = lsl.Var.new_calc(lambda mu, b: mu + b[groups], mu, b, name="eta")
+        y = lsl.Var.new_obs(
+            jnp.asarray(counts.ravel()), lsl.Dist(tfd.Poisson, log_rate=eta), name="y"
+        )
+        model = lsl.Model([y], to_float32=False)
+        loss = opt.LaplaceLoss(model, latent=["b"])
+        result = opt.LieselOptim(
+            model,
+            loss=loss,
+            optimizers="lbfgs",
+            loss_monitor="train_full_data",
+            stopper=opt.Stopper(epochs=60, patience=10, rtol=1e-10),
+            show_progress=False,
+        ).fit()
+        assert result.status in ("early_stopping", "max_epochs")
+        fitted = model.predict(result.position_min_monitor, predict=["mu", "tau"])
+        # Fixed before running: permit Laplace approximation error, not merely
+        # numerical optimizer error, relative to exactly integrated posterior.
+        np.testing.assert_allclose(
+            fitted["tau"], math.exp(reference.x[1]), atol=0.02, rtol=0
+        )
+        np.testing.assert_allclose(fitted["mu"], reference.x[0], atol=0.02, rtol=0)
+        assert loss.approximate_joint_posterior(result).valid

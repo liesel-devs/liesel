@@ -117,6 +117,8 @@ poor starting values.
 Inspect a Laplace failure
 -------------------------
 
+For a runnable example, see :doc:`optimizer-laplace`.
+
 ``LaplaceLoss`` detects failed inner solves, non-finite outer gradients, and failed
 outer steps. These return ``status="numerical_failure"`` with ``failure_reason``
 and an available ``failed_loss_state`` for inspection. The final position and loss
