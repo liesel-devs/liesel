@@ -107,7 +107,13 @@ def _is_laplace_init(value, name: str) -> bool:
 
 
 def _laplace_covariance(model: Model, position_keys: Sequence[str], loc: jax.Array):
+    flat_position, _ = jax.flatten_util.ravel_pytree(
+        model.extract_position(position_keys)
+    )
+    loc = jnp.broadcast_to(loc, flat_position.shape)
     info_matrix = -FlatLogProb(model, position_keys).hessian(loc)
+    if not bool(jnp.isfinite(info_matrix).all()):
+        raise ValueError("Laplace curvature must be finite.")
     diag = jnp.diag(info_matrix)
     ridge = 1e-6 * jnp.maximum(jnp.mean(jnp.abs(diag)), 1.0)
     info_matrix += ridge * jnp.eye(jnp.shape(info_matrix)[-1])
@@ -115,7 +121,30 @@ def _laplace_covariance(model: Model, position_keys: Sequence[str], loc: jax.Arr
     eigvals, eigvecs = jnp.linalg.eigh(info_matrix)
     inv_eigvals_clipped = 1 / jnp.clip(eigvals, min=1e-5)
     cov_matrix = (eigvecs * inv_eigvals_clipped) @ eigvecs.T
+    if not bool(jnp.isfinite(cov_matrix).all()):
+        raise ValueError("Laplace covariance must be finite.")
     return cov_matrix
+
+
+def _validate_gaussian_scale(value, *, triangular=False):
+    if not bool(jnp.isfinite(value).all()):
+        raise ValueError("Initial scale must be finite.")
+    if triangular:
+        if value.ndim != 2 or value.shape[0] != value.shape[1]:
+            raise ValueError("Initial scale factor must be a square matrix.")
+        if not bool((value == jnp.tril(value)).all()):
+            raise ValueError("Initial scale factor must be lower triangular.")
+        if not bool((jnp.diag(value) != 0).all()):
+            raise ValueError("Initial scale factor must have nonzero diagonal entries.")
+    elif not bool((value > 0).all()):
+        raise ValueError("Initial scale must be strictly positive.")
+
+
+def _validate_bijected_scale(var: Var):
+    if var.has_bijected_var and not bool(jnp.isfinite(var.bijected_var.value).all()):
+        raise ValueError(
+            "Initial scale cannot be represented finitely by the chosen bijector."
+        )
 
 
 def _distribution_sample_shape(distribution, value_shape: tuple[int, ...]):
@@ -164,8 +193,11 @@ class NegElboLoss(LossMixin):
     p
         Target Liesel model whose posterior is approximated.
     q
-        Variational Liesel model. Its observed variables are sampled as
-        reparameterized variational draws.
+        Variational Liesel model. Every distribution sampled after fixing its
+        parameters must belong to an observed variable and support fully
+        reparameterized draws. Mark strong free inputs as parameters; computed
+        means and scales remain ordinary derived variables. Unsupported sampled
+        distributions and weak marked parameters raise ValueError.
     split
         Train/test split for observed data in ``p``. Validation data is not
         supported for ELBO losses. If omitted, :meth:`.PositionSplit.from_model` is
@@ -179,7 +211,9 @@ class NegElboLoss(LossMixin):
         ``p``. Builders such as :class:`VDist` provide this mapping automatically.
         With computed data keys, this mapping is also evaluated on the current
         observed position of ``q`` at construction to identify inferred target keys.
-        Use a pure mapping whose output keys do not depend on sampled values.
+        Use a pure, one-to-one structural name/shape mapping whose output keys do
+        not depend on sampled values. It must preserve the draws' density; no
+        change-of-variables Jacobian is added for this mapping.
     scale
         If ``True``, divide losses by the training sample size. For
         :class:`.PositionSplitManager`, the scalar is the sum of all branch-specific
@@ -199,6 +233,15 @@ class NegElboLoss(LossMixin):
         ``"mc"`` estimates entropy from sampled negative log densities. Analytic
         entropy avoids sampled log-density evaluation where supported; target-model
         likelihoods and priors are still evaluated with Monte Carlo draws.
+
+    Notes
+    -----
+    A custom aggregate likelihood in ``q`` must be the normalized joint log density
+    of the draws. Normalization and arbitrary mapping correctness are the caller's
+    responsibility and cannot be checked mechanically. Put nonlinear distribution
+    transformations inside ``q``, with their Jacobians in its density. Do not drop
+    auxiliary random variables without an appropriate target density. See
+    :doc:`/variational-models` for a complete conditional-model example.
 
     Attributes
     ----------
@@ -277,6 +320,33 @@ class NegElboLoss(LossMixin):
         _validate_bool(scale, "scale")
         if entropy not in ("auto", "mc"):
             raise ValueError("entropy must be 'auto' or 'mc'.")
+        q_parameters = q.parameters
+        weak_parameters = [name for name, var in q_parameters.items() if var.weak]
+        if weak_parameters:
+            raise ValueError(
+                f"Variational parameters {weak_parameters} must be strong; "
+                "mark their strong free inputs as parameters instead."
+            )
+        # Match Model.sample's distribution selection after fixing q parameters.
+        for node in q._simulation_nodes:
+            if (
+                not isinstance(node, Dist)
+                or node.at is None
+                or node.var is None
+                or node.name in q_parameters
+                or node.at.name in q_parameters
+                or node.var.name in q_parameters
+            ):
+                continue
+            if not node.var.observed:
+                raise ValueError(
+                    f"Sampled variational variable {node.var.name!r} must be observed."
+                )
+            if node.init_dist().reparameterization_type != tfd.FULLY_REPARAMETERIZED:
+                raise ValueError(
+                    f"Variational distribution for {node.var.name!r} must be "
+                    "fully reparameterized."
+                )
         self.entropy = entropy
         self.p = p
         self.q = q
@@ -966,6 +1036,22 @@ class VDist:
         Whether to convert values in the variational model to ``float32``. If
         ``None``, inherits the ``to_float32`` policy set when constructing ``p``.
 
+    Notes
+    -----
+    Gaussian initializers require finite locations and scales. Normal and diagonal
+    multivariate scales must be strictly positive. Dense scale factors must be
+    square, lower triangular, and have nonzero diagonals. The chosen bijector must
+    represent the initial value finitely; otherwise construction raises ValueError.
+    Negative dense diagonals are allowed with no bijector or a compatible custom
+    bijector, but not with the automatic positive-diagonal transform.
+
+    A scalar ``loc`` remains one learned shared location, broadcast to the governed
+    parameters. Use a vector to learn their means separately. Scalar scales expand
+    to one scale per governed parameter. The ``"laplace"`` scale initializer adds
+    its existing ridge and eigenvalue floor; it is an initialization heuristic,
+    not evidence of a valid posterior mode. Nonfinite curvature or results raise
+    ValueError instead of being repaired.
+
     See Also
     --------
 
@@ -1206,6 +1292,8 @@ class VDist:
         loc_value = jnp.asarray(self._flat_pos if loc is None else loc)
         if self._to_float32 and jnp.issubdtype(loc_value.dtype, jnp.floating):
             loc_value = loc_value.astype(jnp.float32)
+        if not bool(jnp.isfinite(loc_value).all()):
+            raise ValueError("Initial location must be finite.")
         return loc_value
 
     def init(self, dist: Dist) -> Self:
@@ -1264,7 +1352,7 @@ class VDist:
         ----------
         loc
             Initial location. If ``None``, the current flattened target position is
-            used.
+            used. A scalar is one learned location shared by all governed parameters.
         scale
             Initial scale. A scalar is broadcast to all flat components. The special
             value ``"laplace"`` initializes the scale from the diagonal of a
@@ -1312,6 +1400,7 @@ class VDist:
             else:
                 scale_value = scale_arr
         scale_value = _asarray_with_float_dtype(scale_value, loc_dtype)
+        _validate_gaussian_scale(scale_value)
 
         loc_var = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
         scale_var = Var.new_param(scale_value, name=self._flat_pos_name + "_scale")
@@ -1325,6 +1414,7 @@ class VDist:
         else:
             scale_var.transform(scale_bijector, *bijector_args, **bijector_kwargs)
 
+        _validate_bijected_scale(scale_var)
         return self.init(dist)
 
     def mvn_diag(
@@ -1348,7 +1438,8 @@ class VDist:
         ----------
         loc
             Initial value for the location of the variational distribution. If
-            ``None``, the current flattened target position is used.
+            ``None``, the current flattened target position is used. A scalar is
+            one learned location shared by all governed parameters.
         scale_diag
             Initial value for the square roots of the diagonal elements of the
             variational distribution's covariance matrix. In other words: The marginal
@@ -1392,6 +1483,7 @@ class VDist:
             else:
                 scale_diag_value = scale_diag_arr
         scale_diag_value = _asarray_with_float_dtype(scale_diag_value, loc_dtype)
+        _validate_gaussian_scale(scale_diag_value)
 
         loc_var = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
         scale_diag_var = Var.new_param(
@@ -1409,6 +1501,7 @@ class VDist:
                 scale_diag_bijector, *bijector_args, **bijector_kwargs
             )
 
+        _validate_bijected_scale(scale_diag_var)
         return self.init(dist)
 
     def mvn_tril(
@@ -1433,7 +1526,8 @@ class VDist:
         ----------
         loc
             Initial value for the location of the variational distribution. If
-            ``None``, the current flattened target position is used.
+            ``None``, the current flattened target position is used. A scalar is
+            one learned location shared by all governed parameters.
         scale_tril
             Initial value for the lower Cholesky factor, must have non-zero diagonal
             elements. A scalar is interpreted as a multiple of the identity matrix.
@@ -1480,6 +1574,7 @@ class VDist:
             else:
                 scale_tril_value = scale_tril_value_arr
         scale_tril_value = _asarray_with_float_dtype(scale_tril_value, loc_dtype)
+        _validate_gaussian_scale(scale_tril_value, triangular=True)
 
         loc_var = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
         scale_tril_var = Var.new_param(
@@ -1497,6 +1592,7 @@ class VDist:
                 scale_tril_bijector, *bijector_args, **bijector_kwargs
             )
 
+        _validate_bijected_scale(scale_tril_var)
         return self.init(dist)
 
     def mvn_tril_from_laplace(self, approximation: LaplaceApproximation) -> Self:

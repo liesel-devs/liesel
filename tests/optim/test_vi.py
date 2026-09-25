@@ -360,7 +360,7 @@ class TestVDist:
 
     def test_sample_shapes(self):
         loc = lsl.Var.new_param(jnp.array([0.0]), name="loc")
-        scale = lsl.Var.new_param(0.0, name="scale", bijector=tfp.bijectors.Exp())
+        scale = lsl.Var.new_param(1.0, name="scale", bijector=tfp.bijectors.Exp())
         y = lsl.Var.new_obs(
             jnp.linspace(-2, 2, 50),
             lsl.Dist(tfp.distributions.Normal, loc=loc, scale=scale),
@@ -388,7 +388,7 @@ class TestVDist:
 
     def test_sample_at_position_shapes(self):
         loc = lsl.Var.new_param(jnp.array([0.0]), name="loc")
-        scale = lsl.Var.new_param(0.0, name="scale", bijector=tfp.bijectors.Exp())
+        scale = lsl.Var.new_param(1.0, name="scale", bijector=tfp.bijectors.Exp())
         y = lsl.Var.new_obs(
             jnp.linspace(-2, 2, 50),
             lsl.Dist(tfp.distributions.Normal, loc=loc, scale=scale),
@@ -826,17 +826,36 @@ def test_conditional_entropy_averages_over_sampled_parents():
     np.testing.assert_allclose(grad["mean"], 1.0, atol=1e-5)
 
 
-def test_custom_variational_likelihood_uses_mc():
-    z = lsl.Var.new_obs(0.0, lsl.Dist(tfp.distributions.Normal, 0.0, 1.0), name="z")
+@pytest.mark.parametrize("entropy", ["auto", "mc"])
+def test_custom_variational_likelihood_uses_mc(entropy):
+    loc = lsl.Var.new_param(0.3, name="q_loc")
+    scale = lsl.Var.new_param(1.2, name="q_scale")
+    z = lsl.Var.new_obs(0.0, lsl.Dist(tfp.distributions.Normal, loc, scale), name="z")
     gb = lsl.GraphBuilder().add(z)
-    gb.log_lik_node = lsl.Calc(lambda lp: 2 * lp, z.dist_node)
+    # A custom aggregate that is still the normalized density of the draws.
+    gb.log_lik_node = lsl.Calc(jnp.sum, z.dist_node)
     q = gb.build_model()
-    automatic = _entropy_test_loss(q)
-    sampled = _entropy_test_loss(q, entropy="mc")
-    samples = q.sample((10,), seed=jax.random.key(84))
-    expected = -2 * tfp.distributions.Normal(0.0, 1.0).log_prob(samples["z"]).mean()
-    np.testing.assert_allclose(_estimated_entropy(automatic, {}), expected, atol=1e-5)
-    np.testing.assert_allclose(_estimated_entropy(sampled, {}), expected, atol=1e-5)
+    p = _laplace_model()
+    loss = opt.NegElboLoss(
+        p, q, q_to_p=lambda sample: {"loc": sample["z"]}, entropy=entropy
+    )
+    key = jax.random.key(84)
+    draws = q.sample((10,), seed=key)["z"]
+    epsilon = (draws - 0.3) / 1.2
+    # log q(z) = -log(scale)-log(2*pi)/2-epsilon**2/2;
+    # p has a standard Normal prior and two zero Normal observations:
+    # log p(z) = -3*log(2*pi)/2-3*z**2/2. Differentiate z=loc+scale*epsilon.
+    expected = jnp.mean(
+        jnp.log(1.2) + 0.5 * epsilon**2 - 1.5 * draws**2 - jnp.log(2 * jnp.pi)
+    )
+    value, gradients = jax.value_and_grad(
+        lambda params: loss.estimate_elbo(params, key, p.state)
+    )(loss.position(["q_loc", "q_scale"]))
+    np.testing.assert_allclose(value, expected, atol=1e-5)
+    np.testing.assert_allclose(gradients["q_loc"], -3 * draws.mean(), atol=1e-5)
+    np.testing.assert_allclose(
+        gradients["q_scale"], 1 / 1.2 - 3 * jnp.mean(draws * epsilon), atol=1e-5
+    )
 
 
 def test_mc_mode_matches_original_elbo_and_gradients():
