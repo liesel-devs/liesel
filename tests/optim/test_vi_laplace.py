@@ -216,3 +216,17 @@ def test_laplace_fit_initializes_dense_and_blocked_vi():
         assert all(np.isfinite(value).all() for value in draws.values())
         assert draws["a"].shape == (10, 2)
         assert draws["z"].shape == (10,)
+
+
+def test_rejects_initialization_outside_default_bijector_domain():
+    model = lsl.Model(lsl.Var.new_param(0.0, name="z"))
+    approximation = opt.LaplaceApproximation(
+        mean={"z": jnp.array(0.0)},
+        precision_cholesky=jnp.array([[1e9]]),
+        names=("z",),
+        shapes=((),),
+        valid=True,
+        diagnostics={},
+    )
+    with pytest.raises(RuntimeError, match="represent"):
+        opt.VDist(["z"], model).mvn_tril_from_laplace(approximation)

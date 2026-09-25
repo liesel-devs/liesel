@@ -1572,6 +1572,17 @@ class VDist:
             raise TypeError("approximation must be a LaplaceApproximation.")
         position = self.p.extract_position(self.position_keys)
         loc, scale_tril = approximation._conditional_parameters(position)
+        loc = self._prepare_loc(loc)
+        scale_tril = _asarray_with_float_dtype(scale_tril, loc.dtype)
+        dist = Dist(tfd.MultivariateNormalTriL, loc=loc, scale_tril=scale_tril)
+        bijector = dist.find_default_parameter_bijectors()["scale_tril"]
+        assert bijector is not None
+        if not bool(jnp.isfinite(loc).all()) or not bool(
+            jnp.isfinite(bijector.inverse(scale_tril)).all()
+        ):
+            raise RuntimeError(
+                "Cannot represent initialization with the default bijector."
+            )
         return self.mvn_tril(loc=loc, scale_tril=scale_tril)
 
     def build(self) -> Self:
