@@ -55,6 +55,7 @@ from ..docs import usedocs
 from ..model import Dist, Model, Var
 from ..model.logprob import FlatLogProb
 from ..model.model import TemporaryModel
+from ._model_utils import validate_model_data_keys
 from .loss import LossMixin, _training_loss_scalar, _validate_bool
 from .split import PositionSplit, PositionSplitManager, _has_custom_model_log_lik
 from .state import OptimCarry
@@ -151,12 +152,16 @@ class NegElboLoss(LossMixin):
     split
         Train/test split for observed data in ``p``. Validation data is not
         supported for ELBO losses. If omitted, :meth:`.PositionSplit.from_model` is
-        used.
+        used. Computed data keys must be fixed with respect to inferred target
+        positions. Dependencies or overlap with inferred targets raise
+        :class:`ValueError` when constructing the loss; batch fixed inputs instead.
     nsamples
         Number of Monte Carlo samples used for training losses.
     q_to_p
         Function mapping a sampled position from ``q`` to a position accepted by
         ``p``. Builders such as :class:`VDist` provide this mapping automatically.
+        With computed data keys, this mapping is also evaluated on the current
+        observed position of ``q`` at construction to identify inferred target keys.
     scale
         If ``True``, divide losses by the training sample size. For
         :class:`.PositionSplitManager`, the scalar is the sum of all branch-specific
@@ -247,6 +252,31 @@ class NegElboLoss(LossMixin):
         self.scalar = _training_loss_scalar(self.split) if self.scale else 1.0
         self.vdist = vdist
         self.regularize_q_prior = regularize_q_prior
+        self._validate_data_keys(self.split, ())
+
+    def _validate_data_keys(
+        self, split: SplitConfig, optimizer_keys: Sequence[str]
+    ) -> None:
+        """Validate data against inferred target positions."""
+        del optimizer_keys
+        computed_keys = [
+            key
+            for key in split.position_keys
+            if key in self.p.vars and self.p.vars[key].weak
+        ]
+        target_keys = (
+            list(self.q_to_p(self.q.extract_position(list(self.q.observed))))
+            if computed_keys
+            else []
+        )
+        validate_model_data_keys(self.p, split.position_keys, target_keys)
+        target_nodes = {self.p._node_for_position_key(key) for key in target_keys}
+        for key in computed_keys:
+            if self.p.vars[key].value_node in target_nodes:
+                raise ValueError(
+                    f"Computed data key {key!r} overlaps an inferred target; "
+                    "batch its fixed inputs instead."
+                )
 
     @classmethod
     def from_vdist(
@@ -685,7 +715,9 @@ class NegElboLoss(LossMixin):
 
         @partial(jax.vmap)
         def log_prob_of_p(sample):
-            p_state_new = self.p.update_state(self.q_to_p(sample) | obs, p_state)
+            p_state_new = self.p.update_state(
+                self.q_to_p(sample) | obs, p_state, allow_weak_vars=True
+            )
             if batches is None:
                 if split is None:
                     log_lik_p = scale_log_lik_p_by * p_state_new["_model_log_lik"].value

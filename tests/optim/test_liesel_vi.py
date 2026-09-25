@@ -683,3 +683,48 @@ def test_test_holdout_with_omitted_batch_key_matches_training_only_fit(batch_siz
         strict=True,
     ):
         np.testing.assert_allclose(a, b, rtol=1e-6, atol=1e-6)
+
+
+@pytest.mark.parametrize("batch_size", [None, 1])
+def test_computed_basis_fit_matches_raw_training_only_fit(batch_size):
+    def fit(computed, heldout):
+        x_values = jnp.array([0.0, 1.0, 2.0] + ([30.0, 40.0, 50.0] if heldout else []))
+        y_values = jnp.array(
+            [1.0, 2.0, 3.0] + ([100.0, 200.0, 300.0] if heldout else [])
+        )
+        x = lsl.Var.new_obs(x_values, name="x")
+        basis = lsl.Var.new_calc(
+            lambda x: jnp.stack((jnp.ones_like(x), x), axis=-1), x, name="basis"
+        )
+        beta = lsl.Var.new_param(jnp.zeros(2), name="beta")
+        mu = lsl.Var.new_calc(lambda matrix, coef: matrix @ coef, basis, beta)
+        y = lsl.Var.new_obs(y_values, lsl.Dist(tfd.Normal, loc=mu, scale=1.0), name="y")
+        model = lsl.Model([y])
+        split = PositionSplit.from_model(
+            model,
+            position_keys=["basis" if computed else "x", "y"],
+            test_axis_share=0.5 if heldout else 0.0,
+            shuffle=False,
+        )
+        return LieselVI(
+            model,
+            split=split,
+            batch_size=batch_size,
+            optimizers=optax.adam(1e-3),
+            loss_monitor="train_full_data",
+            nsamples=2,
+            seed=7,
+            stopper=Stopper(epochs=3, patience=3),
+            show_progress=False,
+        ).fit()
+
+    actual, expected = (
+        fit(computed=True, heldout=True),
+        fit(computed=False, heldout=False),
+    )
+    for a, b in zip(
+        jax.tree.leaves((actual.position_final, actual.history)),
+        jax.tree.leaves((expected.position_final, expected.history)),
+        strict=True,
+    ):
+        np.testing.assert_allclose(a, b, rtol=1e-6, atol=1e-6)

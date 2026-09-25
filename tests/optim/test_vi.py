@@ -746,3 +746,101 @@ def test_mc_mode_matches_original_elbo_and_gradients():
 def test_rejects_invalid_entropy_mode(entropy):
     with pytest.raises(ValueError, match="entropy"):
         opt.NegElboLoss.mvn_diag(_laplace_model(), entropy=entropy)
+
+
+def _computed_mean_model(beta_is_parameter=True, transient=False):
+    x = lsl.Var.new_value(jnp.arange(1.0, 5.0), name="x")
+    beta = lsl.Var.new_value(1.0, name="beta")
+    beta.parameter = beta_is_parameter
+    mean = lsl.Var.new_calc(
+        lambda b, v: b * v, beta, x, name="mean", cache=not transient
+    )
+    alpha = lsl.Var.new_param(0.0, name="alpha")
+    loc = lsl.Var.new_calc(lambda a, m: a + m, alpha, mean)
+    y = lsl.Var.new_obs(
+        2.0 + x.value, lsl.Dist(tfp.distributions.Normal, loc, 1.0), name="y"
+    )
+    return lsl.Model([y])
+
+
+@pytest.mark.parametrize("factory", ["vdist", "composite", "direct"])
+@pytest.mark.parametrize("beta_is_parameter", [False, True])
+@pytest.mark.parametrize("infer_beta", [False, True])
+def test_computed_data_dependency_uses_inferred_target_keys(
+    factory, beta_is_parameter, infer_beta
+):
+    model = _computed_mean_model(beta_is_parameter)
+    split = opt.PositionSplit.from_model(model, position_keys=["mean", "y"])
+    keys = ["alpha", "beta"] if infer_beta else ["alpha"]
+
+    def make_loss():
+        if factory == "direct":
+            loc = lsl.Var.new_param(jnp.zeros(len(keys)), name="q_loc")
+            draw = lsl.Var.new_obs(
+                jnp.zeros(len(keys)),
+                lsl.Dist(
+                    tfp.distributions.MultivariateNormalDiag, loc, jnp.ones(len(keys))
+                ),
+                name="draw",
+            )
+            q = lsl.Model([draw])
+            return opt.NegElboLoss(
+                model,
+                q,
+                split=split,
+                q_to_p=lambda sample: Position(
+                    {key: sample["draw"][i] for i, key in enumerate(keys)}
+                ),
+            )
+        vdist = (
+            opt.CompositeVDist(*(opt.VDist([key], model).normal() for key in keys))
+            if factory == "composite"
+            else opt.VDist(keys, model).mvn_diag()
+        ).build()
+        return opt.NegElboLoss.from_vdist(vdist, split)
+
+    if infer_beta:
+        with pytest.raises(
+            ValueError, match="Computed data key 'mean'.*parameter 'beta'"
+        ):
+            make_loss()
+    else:
+        loss = make_loss()
+        value = loss.estimate_elbo(
+            loss.position(list(loss.q.parameters)),
+            jax.random.key(1),
+            model.state,
+            obs=split.train,
+        )
+        assert jnp.isfinite(value)
+
+
+@pytest.mark.parametrize("target_kind", ["variable", "node"])
+def test_computed_data_cannot_overlap_inferred_target(target_kind):
+    model = _computed_mean_model()
+    split = opt.PositionSplit.from_model(model, position_keys=["mean", "y"])
+    key = "mean" if target_kind == "variable" else model.vars["mean"].value_node.name
+    vdist = opt.VDist([key], model).mvn_diag().build()
+    with pytest.raises(ValueError, match="Computed data key 'mean'.*inferred target"):
+        opt.NegElboLoss.from_vdist(vdist, split)
+
+
+@pytest.mark.parametrize("invalid", ["ancestor", "transient", "node_alias"])
+def test_neg_elbo_validates_manual_computed_data_splits(invalid):
+    model = _computed_mean_model(transient=invalid == "transient")
+    keys = ["mean", "y"]
+    if invalid == "ancestor":
+        keys.append("x")
+    elif invalid == "node_alias":
+        keys[0] = model.vars["mean"].value_node.name
+    split = opt.Split(keys, axis_size=4).split_position(
+        Position({key: jnp.zeros(4) for key in keys})
+    )
+    vdist = opt.VDist(["alpha"], model).normal().build()
+    message = {
+        "ancestor": "Ambiguous",
+        "transient": "transient",
+        "node_alias": "variable name",
+    }[invalid]
+    with pytest.raises(ValueError, match=message):
+        opt.NegElboLoss.from_vdist(vdist, split)
