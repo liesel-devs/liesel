@@ -1,9 +1,22 @@
-Integrate latent parameters with Laplace
-========================================
+Laplace approximation and REML
+==============================
 
 :class:`liesel.optim.LaplaceLoss` integrates selected continuous parameters out
 of the model's joint density, then fits the remaining parameters. Here we fit a
 Poisson model's mean and random-effect scale while integrating eight group effects.
+
+.. note::
+
+   **Relation to REML.** In Gaussian linear mixed models, restricted maximum
+   likelihood (REML) can be obtained by integrating out both random effects and
+   fixed-effect coefficients, with a flat prior on the latter. Laplace integration
+   is exact in this setting; see `Bates et al., Section 3.4
+   <https://lme4.github.io/lme4/articles/lmer.pdf#page=16>`__.
+
+   ``LaplaceLoss`` provides this integration machinery. Recovering classical REML
+   also requires that priors on the remaining parameters and transformation
+   Jacobians do not alter the likelihood objective. Here we integrate only the
+   group effects and retain parameter priors, so we fit a marginal posterior.
 
 Build and inspect the model
 ---------------------------
