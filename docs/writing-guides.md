@@ -49,8 +49,16 @@ for the reader.
 
 - State prerequisites, such as an existing `model`, before a snippet. Make
   complete tutorials runnable from top to bottom.
+- Keep code blocks orderly and consistent with the repository formatter. Group
+  imports, use blank lines between logical steps, and separate model construction,
+  fitting, and inspection into focused blocks. Lay out data and long calls so they
+  are easy to scan.
 - Use realistic data, fixed seeds, and only the settings needed to teach the
   task. Show a useful result, rather than a wall of diagnostic output.
+- Pair print statements and inspection expressions with their actual output.
+  Use executed notebook outputs or checked Python console blocks in text guides.
+  Capture results by running the examples; round displayed numbers and select
+  useful diagnostic fields to keep the output readable.
 - Do not use `assert` statements in documentation. Keep verification in tests.
   When a type diagnostic exposes awkward or unsafe API behavior, investigate
   the cause before adding checks to every example.
@@ -63,12 +71,15 @@ for the reader.
 Embed interactive explanations beside the relevant text. A separate-page link
 can supplement the embed, but should not be the only way readers discover it.
 
-Generate model graphs with `model.plot()` in executed tutorial cells. The
-Read the Docs build installs Graphviz for their layout. Give generated figures
-descriptive alt text in the cell metadata at `mystnb.image.alt`, and check that
-it appears on the rendered image. Use static images when a figure cannot be
-generated reliably during the build; record its source command and refresh it
-when the example changes. Keep essential explanations readable without
+In model walkthroughs, include `model.plot()` after constructing the model and
+show its rendered graph beside the code. Generate graphs in executed tutorial
+cells where possible. The Read the Docs build installs Graphviz for their layout.
+Give figures descriptive alt text; for notebooks, use the cell metadata at
+`mystnb.image.alt` and check that it appears on the rendered image.
+
+Use static images in guides that do not execute code during the build, or when a
+figure cannot be generated reliably there. Record the source command and refresh
+the image when the example changes. Keep essential explanations readable without
 interacting with a visual.
 
 ## Check the finished result
