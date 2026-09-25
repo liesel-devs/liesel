@@ -802,7 +802,14 @@ class NegElboLoss(LossMixin):
 
         nsamples = nsamples if nsamples is not None else self.nsamples
         _validate_positive_int(nsamples, "nsamples")
-        samples = self.q.sample((nsamples,), seed=key, newdata=params)
+        q_for_sampling = self.q._copy_computational_model()
+        q_for_sampling.state = q_state
+        samples = q_for_sampling.sample(
+            (nsamples,),
+            seed=key,
+            newdata=params,
+            fixed=tuple(self.q.parameters) + tuple(params),
+        )
         use_analytic_entropy = self.entropy == "auto" and not _has_custom_model_log_lik(
             self.q
         )
@@ -1666,7 +1673,10 @@ def _sample_variational_model(
     if at_position is not None:
         at_position = jax.tree.map(lambda x: jnp.expand_dims(x, (0, 1)), at_position)
 
-    q_samples = q.sample(shape=sample_shape, seed=seed, posterior_samples=at_position)
+    fixed = tuple(name for name in q.parameters if name not in (at_position or {}))
+    q_samples = q.sample(
+        shape=sample_shape, seed=seed, posterior_samples=at_position, fixed=fixed
+    )
     if at_position is not None:
         q_samples = jax.tree.map(
             lambda x: jnp.squeeze(x, (len(sample_shape), len(sample_shape) + 1)),

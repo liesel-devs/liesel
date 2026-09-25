@@ -605,6 +605,106 @@ def _entropy_test_loss(q, **kwargs):
     return opt.NegElboLoss(_laplace_model(), q, q_to_p=lambda sample: {}, **kwargs)
 
 
+@pytest.mark.parametrize("composite", [False, True])
+@pytest.mark.parametrize("position_kind", ["current", "partial", "full", "alias"])
+def test_sampling_keeps_variational_parameters_fixed(composite, position_kind):
+    mean = lsl.Var.new_param(
+        jnp.array([3.0]),
+        lsl.Dist(tfp.distributions.Normal, 10.0, 1.0),
+        name="mean",
+    )
+    scale = lsl.Var.new_param(jnp.array([0.2]), name="scale")
+    block = opt.VDist(["loc"], _laplace_model()).init(
+        lsl.Dist(tfp.distributions.Normal, mean, scale)
+    )
+    vdist = opt.CompositeVDist(block).build() if composite else block.build()
+    position = None
+    expected_mean, expected_scale = 3.0, 0.2
+    if position_kind != "current":
+        position = Position({"scale": jnp.array([0.5])})
+        expected_scale = 0.5
+    if position_kind in ("full", "alias"):
+        assert position is not None
+        mean_key = "mean" if position_kind == "full" else mean.value_node.name
+        position[mean_key] = jnp.array([-2.0])
+        expected_mean = -2.0
+    draws = vdist.sample(jax.random.key(82), (2000,), at_position=position)["loc"]
+    np.testing.assert_allclose(draws.mean(), expected_mean, atol=0.04)
+    np.testing.assert_allclose(draws.std(), expected_scale, atol=0.04)
+
+
+@pytest.mark.parametrize("entropy", ["auto", "mc"])
+@pytest.mark.parametrize("optimize_mean", [True, False])
+def test_variational_parameter_priors_do_not_resample_parameters(
+    entropy, optimize_mean
+):
+    p = _laplace_model()
+
+    def evaluate(with_prior):
+        prior = lsl.Dist(tfp.distributions.Normal, 10.0, 1.0) if with_prior else None
+        mean = lsl.Var.new_param(3.0, prior, name="mean")
+        scale = lsl.Var.new_param(0.2, name="scale")
+        z = lsl.Var.new_obs(
+            0.0, lsl.Dist(tfp.distributions.Normal, mean, scale), name="z"
+        )
+        loss = opt.NegElboLoss(
+            p,
+            lsl.Model(z),
+            q_to_p=lambda pos: Position({"loc": pos["z"]}),
+            regularize_q_prior=False,
+            entropy=entropy,
+            nsamples=2048,
+        )
+        params = Position(
+            {"mean": jnp.array(3.0)} if optimize_mean else {"scale": jnp.array(0.2)}
+        )
+        return jax.jit(
+            jax.value_and_grad(
+                lambda params: loss.estimate_elbo(params, jax.random.key(82), p.state)
+            )
+        )(params)
+
+    expected = evaluate(False)
+    actual = evaluate(True)
+    for a, b in zip(jax.tree.leaves(actual), jax.tree.leaves(expected), strict=True):
+        np.testing.assert_allclose(a, b, rtol=1e-5, atol=1e-5)
+
+
+@pytest.mark.parametrize("entropy", ["auto", "mc"])
+def test_supplied_variational_state_controls_draws_without_mutating_model(entropy):
+    p = _laplace_model()
+
+    def variational_model(mean_value):
+        mean = lsl.Var.new_value(mean_value, name="mean")
+        scale = lsl.Var.new_param(0.2, name="scale")
+        z = lsl.Var.new_obs(
+            0.0, lsl.Dist(tfp.distributions.Normal, mean, scale), name="z"
+        )
+        return lsl.Model(z)
+
+    q = variational_model(0.0)
+    loss = opt.NegElboLoss(
+        p, q, q_to_p=lambda pos: Position({"loc": pos["z"]}), entropy=entropy
+    )
+    reference = opt.NegElboLoss(
+        p, variational_model(3.0), q_to_p=loss.q_to_p, entropy=entropy
+    )
+    state = q.update_state({"mean": jnp.array(3.0)})
+    params = Position({"scale": jnp.array(0.2)})
+    key = jax.random.key(82)
+    actual = jax.jit(
+        jax.value_and_grad(
+            lambda params: loss.estimate_elbo(params, key, p.state, q_state=state)
+        )
+    )(params)
+    expected = jax.jit(
+        jax.value_and_grad(lambda params: reference.estimate_elbo(params, key, p.state))
+    )(params)
+    for a, b in zip(jax.tree.leaves(actual), jax.tree.leaves(expected), strict=True):
+        np.testing.assert_allclose(a, b, rtol=1e-5, atol=1e-5)
+    assert q.vars["mean"].value == 0.0
+
+
 def _estimated_entropy(loss, params):
     return (
         loss.estimate_elbo(params, jax.random.key(84), loss.p.state) - loss.p.log_prob
