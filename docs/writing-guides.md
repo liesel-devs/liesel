@@ -85,7 +85,9 @@ Python in `{code-cell}` blocks without interactive prompts (`>>>` or `...`).
   adding repeated defensive checks to examples.
 
 Migration guides should show the old and new code and explain meaningful
-behavior changes.
+behavior changes. Write them only for changes to released APIs. Don't document
+the history of unreleased APIs, such as earlier defaults, renamed arguments, or
+before-and-after tables; describe the current behavior instead.
 
 ## Show useful visuals
 
