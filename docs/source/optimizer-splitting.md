@@ -83,18 +83,55 @@ The split's `seed` chooses which rows go into each part. The seed passed to
 Starting parameter values come from the model; seed any random data or starting
 values separately.
 
+(optimizer-split-groups)=
+
 ## Split several groups
 
-For separate groups, use `PositionSplitManager.from_model` with explicit
-groups, such as `position_keys=[["X_a", "y_a"], ["X_b", "y_b"]]`.
-Set `validate_axis_share=0.2` and `seed=42` as above. The
-{doc}`two-group tutorial <tutorials/notebooks/10-liesel-optim-advanced>`
-shows a complete example.
+By default, `LieselOptim` raises when observed arrays have different lengths.
+This gives you a chance to check which arrays share rows and which are shared
+data. For independent groups, opt in to grouping by length and inspect the result:
+
+```{code-cell} ipython3
+y_a = lsl.Var.new_obs(
+    rng.normal(size=80),
+    lsl.Dist(tfd.Normal, 0.0, 1.0),
+    name="y_a",
+)
+y_b = lsl.Var.new_obs(
+    rng.normal(size=40),
+    lsl.Dist(tfd.Normal, 0.0, 1.0),
+    name="y_b",
+)
+grouped_model = lsl.Model([y_a, y_b])
+grouped_split = opt.PositionSplit.from_model(
+    grouped_model, multi_size="manager", validate_axis_share=0.2, seed=42
+)
+```
+
+```{code-cell} ipython3
+pd.DataFrame(
+    [
+        {
+            "keys": group.position_keys,
+            "training": group.train_axis_size,
+            "validation": group.validate_axis_size,
+        }
+        for group in grouped_split.splits
+    ]
+)
+```
+
+Pass the checked split to `LieselOptim` as `split=grouped_split`. Matching lengths
+do not establish row alignment: flat or omitted `position_keys` group arrays by
+length only. To choose groups explicitly, use `PositionSplitManager.from_model`
+with nested keys, such as `position_keys=[["X_a", "y_a"], ["X_b", "y_b"]]`.
+The {doc}`two-group tutorial <tutorials/notebooks/10-liesel-optim-advanced>` shows
+a complete fit.
 
 Arrays within a group share row indices. Different groups split independently,
-even if their lengths happen to match. Flat or omitted `position_keys` group
-observed arrays by length; use nested groups when equal length does not mean
-matching rows. Every group must have validation data if any group does.
+even if their lengths happen to match. Every group must have validation data if
+any group does. Keep shared arrays out of row groups with `split_axes={key: None}`,
+as described below.
 
 Automatic grouping requires an observed likelihood in each group. For row data
 without a likelihood, supply an explicit nested group.

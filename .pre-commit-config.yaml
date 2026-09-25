@@ -11,7 +11,7 @@ repos:
       - id: end-of-file-fixer
       - id: trailing-whitespace
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.4
+    rev: v0.16.9
     hooks:
       # Run the linter.
       - id: ruff-check
@@ -19,6 +19,6 @@ repos:
       # Run the formatter.
       - id: ruff-format
   - repo: https://github.com/astral-sh/ty-pre-commit
-    rev: v0.0.74
+    rev: v0.0.84
     hooks:
       - id: ty

@@ -92,7 +92,12 @@ scheme with IWLS kernels for the regression coefficients
 
 ``` python
 iwls_results = gs.LieselMCMC(model).run_for_epochs(
-    seed=1, num_chains=4, adaptation=1000, posterior=10000, posterior_thinning=10, show_progress=False
+    seed=1,
+    num_chains=4,
+    adaptation=1000,
+    posterior=10000,
+    posterior_thinning=10,
+    show_progress=False,
 )
 ```
 
