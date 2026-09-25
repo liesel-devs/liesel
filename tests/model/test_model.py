@@ -1356,7 +1356,12 @@ class TestSampleSignature:
         assert not caught
 
     def test_inspected_signature(self, normal_sample):
-        for sample in (normal_sample, type(normal_sample.__self__).sample):
+        # Sphinx also inspects the unwrapped function when rendering its signature.
+        for sample in (
+            normal_sample,
+            type(normal_sample.__self__).sample,
+            inspect.unwrap(normal_sample),
+        ):
             parameters = dict(inspect.signature(sample).parameters)
             parameters.pop("self", None)
             assert list(parameters) == [

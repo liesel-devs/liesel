@@ -218,6 +218,8 @@ def _sample_compat(fn):
             inspect.Parameter("shape", inspect.Parameter.KEYWORD_ONLY, default=None),
         ]
     )
+    # Sphinx's type-hint extension unwraps the function before inspecting it.
+    fn.__dict__["__signature__"] = wrapped.__dict__["__signature__"]
     return wrapped
 
 
