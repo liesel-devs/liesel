@@ -6,13 +6,31 @@ from collections.abc import Mapping, Sequence
 
 import jax.numpy as jnp
 
-from ..model import Model
+from ..model import Model, TransientNode, Value
 from ._log_lik import observed_log_lik_node_names, validate_likelihood_groups
 
 
 def strong_observed_keys(model: Model) -> list[str]:
-    """Observed inputs whose values can be replaced by split or batch data."""
+    """Default observed inputs; computed variables must be selected explicitly."""
     return [name for name, var in model.observed.items() if not var.weak]
+
+
+def validate_model_data_keys(model: Model, position_keys: Sequence[str]) -> None:
+    """Require writable, non-transient data keys with unambiguous computed values."""
+    for key in position_keys:
+        node = model._node_for_position_key(key)
+        if isinstance(node, TransientNode):
+            raise ValueError(  # noqa: TRY004
+                f"Cannot split or batch transient data key {key!r}."
+            )
+        if key not in model.vars and not isinstance(node, Value):
+            raise ValueError(
+                f"Use a variable name for computed data, not node key {key!r}."
+            )
+    try:
+        model._validate_weak_var_position(model.extract_position(position_keys))
+    except RuntimeError as error:
+        raise ValueError(str(error)) from error
 
 
 def position_key_groups_from_model(
@@ -48,13 +66,7 @@ def position_key_groups_from_model(
     flat_keys = [key for group in selections for key in group]
     if len(set(flat_keys)) != len(flat_keys):
         raise ValueError(f"Duplicate position_keys are not allowed: {flat_keys}")
-    for var in model.vars.values():
-        if var.weak and (var.name in flat_keys or var.value_node.name in flat_keys):
-            raise ValueError(
-                f"Cannot split or batch weak variable {var.name!r} directly. "
-                "Select its strong source data instead; weak observed values "
-                "and their likelihoods are recomputed from those inputs."
-            )
+    validate_model_data_keys(model, flat_keys)
     position = model.extract_position(flat_keys)
     groups = []
 

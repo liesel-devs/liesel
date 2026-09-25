@@ -766,11 +766,11 @@ class OptimEngine:
         carry._data_states = {}
         if self.batches.is_full_data or self.loss_monitor == "train_full_data":
             carry._data_states["train"] = self.loss.model.update_state(
-                self.split.train, carry.model_state
+                self.split.train, carry.model_state, allow_weak_vars=True
             )
         if self.loss_monitor == "validation":
             carry._data_states["validate"] = self.loss.model.update_state(
-                self.split.validate, carry.model_state
+                self.split.validate, carry.model_state, allow_weak_vars=True
             )
 
     def _data_structure(self) -> tuple:

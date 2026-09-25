@@ -14,6 +14,7 @@ import networkx as nx
 from ..model import Calc, Model
 from ..model.model import _reduced_sum
 from ._log_lik import validate_likelihood_groups
+from ._model_utils import validate_model_data_keys
 from .split import PositionSplit, PositionSplitManager
 from .types import Position
 
@@ -356,6 +357,7 @@ class NegLogProbLoss(LossMixin):
         scale: bool = False,
     ):
         _validate_model_decomposition(model)
+        validate_model_data_keys(model, split.position_keys)
         splits = split.splits if isinstance(split, PositionSplitManager) else (split,)
         validate_likelihood_groups(model, [part.split_position_keys for part in splits])
         self._model = model
@@ -396,6 +398,12 @@ class NegLogProbLoss(LossMixin):
         Position
             Model position restricted to ``position_keys``.
         """
+        for key in position_keys:
+            if key in self.model.vars and self.model.vars[key].weak:
+                raise RuntimeError(
+                    f"Cannot optimize weak variable {key!r}; name its strong source "
+                    "instead."
+                )
         return self.model.extract_position(position_keys)
 
     def loss_train_batched(self, params: Position, carry: "OptimCarry") -> jax.Array:
@@ -420,7 +428,7 @@ class NegLogProbLoss(LossMixin):
         position = Position(params | carry.batch | carry.fixed_position)
         states = getattr(carry, "_data_states", {})
         state = states.get("train", carry.model_state)
-        new_state = self.model.update_state(position, state)
+        new_state = self.model.update_state(position, state, allow_weak_vars=True)
 
         log_lik = carry.batches.scaled_log_lik(
             self.model, new_state, batch_index=carry.i_batch
@@ -449,7 +457,7 @@ class NegLogProbLoss(LossMixin):
         data = {} if "train" in states else self.split.train
         position = Position(params | data | carry.fixed_position)
         state = states.get("train", carry.model_state)
-        new_state = self.model.update_state(position, state)
+        new_state = self.model.update_state(position, state, allow_weak_vars=True)
 
         log_lik = self.split.scaled_log_lik(self.model, new_state, part="train")
         log_prior = new_state["_model_log_prior"].value
@@ -477,7 +485,7 @@ class NegLogProbLoss(LossMixin):
         data = {} if part in states else self.obs_validate
         position = Position(params | data | carry.fixed_position)
         state = states.get(part, carry.model_state)
-        new_state = self.model.update_state(position, state)
+        new_state = self.model.update_state(position, state, allow_weak_vars=True)
         loss = -self.split.scaled_log_lik(self.model, new_state, part=part)
         if self.validation_strategy == "log_prob":
             loss -= new_state["_model_log_prior"].value
