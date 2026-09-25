@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 
 import jax.numpy as jnp
+import networkx as nx
 
 from ..model import Model, TransientNode, Value
 from ._log_lik import observed_log_lik_node_names, validate_likelihood_groups
@@ -15,7 +16,11 @@ def strong_observed_keys(model: Model) -> list[str]:
     return [name for name, var in model.observed.items() if not var.weak]
 
 
-def validate_model_data_keys(model: Model, position_keys: Sequence[str]) -> None:
+def validate_model_data_keys(
+    model: Model,
+    position_keys: Sequence[str],
+    parameter_keys: Sequence[str] = (),
+) -> None:
     """Require writable, non-transient data keys with unambiguous computed values."""
     for key in position_keys:
         node = model._node_for_position_key(key)
@@ -27,6 +32,14 @@ def validate_model_data_keys(model: Model, position_keys: Sequence[str]) -> None
             raise ValueError(
                 f"Use a variable name for computed data, not node key {key!r}."
             )
+        if parameter_keys and key in model.vars and model.vars[key].weak:
+            ancestors = nx.ancestors(model.node_graph, node)
+            for parameter in parameter_keys:
+                if model._node_for_position_key(parameter) in ancestors:
+                    raise ValueError(
+                        f"Computed data key {key!r} depends on optimized parameter "
+                        f"{parameter!r}; batch its fixed inputs instead."
+                    )
     try:
         model._validate_weak_var_position(model.extract_position(position_keys))
     except RuntimeError as error:

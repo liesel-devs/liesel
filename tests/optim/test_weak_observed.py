@@ -1,5 +1,7 @@
 """Copula factors follow their strong data inputs through splits and batches."""
 
+from typing import Any
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -124,6 +126,52 @@ def test_factories_reject_ambiguous_or_transient_computed_data(factory, invalid)
             factory(model, split)
         else:
             factory.from_model(model, position_keys=keys, **kwargs)
+
+
+@pytest.mark.parametrize("direct_engine", [False, True])
+@pytest.mark.parametrize("optimize_beta", [False, True])
+def test_computed_data_requires_fixed_parameter_dependencies(
+    direct_engine, optimize_beta
+):
+    x = lsl.Var.new_value(jnp.arange(1.0, 5.0), name="x")
+    beta = lsl.Var.new_param(1.0, name="beta")
+    mean = lsl.Var.new_calc(lambda b, v: b * v, beta, x, name="mean")
+    alpha = lsl.Var.new_param(0.0, name="alpha")
+    loc = lsl.Var.new_calc(lambda a, m: a + m, alpha, mean)
+    y = lsl.Var.new_obs(2 + x.value, lsl.Dist(tfd.Normal, loc, 1.0), name="y")
+    model = lsl.Model(y)
+    split = opt.PositionSplit.from_model(model, position_keys=["mean", "y"])
+
+    def build_engine():
+        options: dict[str, Any] = {
+            "optimizers": [
+                opt.LBFGS(["alpha", "beta"] if optimize_beta else ["alpha"])
+            ],
+            "loss_monitor": "train_full_data",
+            "stopper": opt.Stopper(epochs=10, patience=3),
+            "show_progress": False,
+        }
+        if direct_engine:
+            return opt.OptimEngine(
+                loss=opt.NegLogProbLoss(model, split),
+                batches=opt.Batches.from_split(split, batch_size=None),
+                initial_state=model.state,
+                seed=0,
+                **options,
+            )
+        return opt.LieselOptim(model, split=split, **options).build_engine()
+
+    if optimize_beta:
+        with pytest.raises(
+            ValueError,
+            match="Computed data key 'mean' depends on optimized parameter 'beta'",
+        ):
+            build_engine()
+    else:
+        result = build_engine().fit()
+        np.testing.assert_allclose(result.position_final["alpha"], 2.0, atol=1e-5)
+        assert set(result.position_final) == {"alpha"}
+        assert model.vars["beta"].value == 1.0
 
 
 @pytest.mark.parametrize("repair_existing_model", [False, True])
