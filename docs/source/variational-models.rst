@@ -1,5 +1,5 @@
 Build a variational model
-========================
+=========================
 
 Use a Liesel :class:`.Model` as the variational distribution when its parameters
 or conditional dependencies are easier to express as a graph. The Gaussian
@@ -51,8 +51,8 @@ not training observations from the target model. Mark the strong inputs to
 optimize as parameters. Derived scales and conditional means stay computed
 variables. Optimizing ``log_scale`` keeps ``scale`` positive.
 
-Every sampled distribution must support reparameterized draws with differentiable
-paths from the variational parameters. Discrete distributions need a different
+Every distribution sampled after fixing the variational parameters must support
+reparameterized draws with differentiable paths from those parameters. Discrete distributions need a different
 gradient estimator. Priors on variational parameters, if present, are optional
 regularization terms; they do not cause those parameters to be sampled.
 
