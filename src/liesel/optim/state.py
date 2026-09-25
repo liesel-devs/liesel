@@ -592,6 +592,9 @@ class OptimCarry:
     i_batch: int | jax.Array = 0  # inner for-loop index over batches
     nan_debug_state: OptimNaNDebugState | None = None
 
+    # Read-only partition templates, prepared outside the compiled fit loop.
+    _data_states: dict[str, ModelState] = field(default_factory=dict, repr=False)
+
     @classmethod
     def new(
         cls,

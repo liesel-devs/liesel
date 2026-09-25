@@ -418,7 +418,9 @@ class NegLogProbLoss(LossMixin):
             ``self.scalar``.
         """
         position = Position(params | carry.batch | carry.fixed_position)
-        new_state = self.model.update_state(position, carry.model_state)
+        states = getattr(carry, "_data_states", {})
+        state = states.get("train", carry.model_state)
+        new_state = self.model.update_state(position, state)
 
         log_lik = carry.batches.scaled_log_lik(
             self.model, new_state, batch_index=carry.i_batch
@@ -443,8 +445,11 @@ class NegLogProbLoss(LossMixin):
             Negative full-data log-likelihood plus log-prior, optionally normalized
             by ``self.scalar``.
         """
-        position = Position(params | self.split.train | carry.fixed_position)
-        new_state = self.model.update_state(position, carry.model_state)
+        states = getattr(carry, "_data_states", {})
+        data = {} if "train" in states else self.split.train
+        position = Position(params | data | carry.fixed_position)
+        state = states.get("train", carry.model_state)
+        new_state = self.model.update_state(position, state)
 
         log_lik = self.split.scaled_log_lik(self.model, new_state, part="train")
         log_prior = new_state["_model_log_prior"].value
@@ -467,9 +472,12 @@ class NegLogProbLoss(LossMixin):
             Negative scaled validation log-likelihood. If
             ``validation_strategy="log_prob"``, the log-prior is included as well.
         """
-        position = Position(params | self.obs_validate | carry.fixed_position)
-        new_state = self.model.update_state(position, carry.model_state)
         part = "validate" if self.split.has_validation else "train"
+        states = getattr(carry, "_data_states", {})
+        data = {} if part in states else self.obs_validate
+        position = Position(params | data | carry.fixed_position)
+        state = states.get(part, carry.model_state)
+        new_state = self.model.update_state(position, state)
         loss = -self.split.scaled_log_lik(self.model, new_state, part=part)
         if self.validation_strategy == "log_prob":
             loss -= new_state["_model_log_prior"].value

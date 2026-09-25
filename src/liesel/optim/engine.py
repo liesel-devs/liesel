@@ -757,6 +757,20 @@ class OptimEngine:
             type(opt) in (Optimizer, LBFGS) for opt in self.optimizers
         )
 
+    def _prepare_data_states(self, carry: OptimCarry) -> None:
+        # Custom losses/optimizers may evolve model_state. Only reuse templates
+        # for the same concrete implementations that permit checkpoint rebuilding.
+        if not self._can_rebuild_model_state():
+            return
+        assert isinstance(self.loss, NegLogProbLoss)
+        carry._data_states = {
+            "train": self.loss.model.update_state(self.split.train, carry.model_state)
+        }
+        if self.loss_monitor == "validation":
+            carry._data_states["validate"] = self.loss.model.update_state(
+                self.split.validate, carry.model_state
+            )
+
     def _data_structure(self) -> tuple:
         return tuple(
             {
@@ -773,6 +787,7 @@ class OptimEngine:
             # Reconstruct this static template from the caller's model. Internal
             # anonymous node names may differ between otherwise identical models.
             snapshot.model_state = {}
+            snapshot._data_states = {}
             if snapshot.nan_debug_state is not None:
                 snapshot.nan_debug_state.reproduction_model_state = {}
         return OptimCheckpoint(
@@ -816,6 +831,7 @@ class OptimEngine:
         carry = jax.tree.map(lambda x: x, checkpoint._carry)
         if checkpoint._rebuild_model_state:
             carry.model_state = jax.tree.map(lambda x: x, self.initial_state)
+            self._prepare_data_states(carry)
             if carry.nan_debug_state is not None:
                 carry.nan_debug_state.reproduction_model_state = jax.tree.map(
                     lambda x: x, self.initial_state
@@ -894,6 +910,7 @@ class OptimEngine:
             batches=debug_state.reproduction_batches,
             optimizer_states=debug_state.reproduction_optimizer_states,
             model_state=debug_state.reproduction_model_state,
+            _data_states=carry._data_states,
             batch=debug_state.obs_batch,
             fixed_position=fixed_position,
             position_min_monitor=carry.position_min_monitor,
@@ -992,18 +1009,29 @@ class OptimEngine:
         return carry, loss
 
     def _observed_batch(
-        self, batches: BatchConfig, batch_index: int | jax.Array = 0
+        self,
+        batches: BatchConfig,
+        batch_index: int | jax.Array = 0,
+        *,
+        prepared: bool = False,
     ) -> Position:
-        """Overlay a batch on training data so omitted keys cannot leak holdouts."""
+        """Keep omitted keys on training rows, either via a template or an overlay."""
         has_holdout = self.split.has_validation or self.split.has_test
+        children = batches.batches if isinstance(batches, BatchManager) else [batches]
+        if prepared and batches.is_full_data and not any(b.shuffle for b in children):
+            return Position({})
         if not batches.is_full_data or has_holdout:
             batch = batches.get_batched_position(self.split.train, batch_index)
-            return Position(self.split.train | batch) if has_holdout else batch
+            if has_holdout and not prepared:
+                return Position(self.split.train | batch)
+            return batch
 
         return Position({})
 
     def _init_nan_debug_state(self, carry: OptimCarry) -> OptimNaNDebugState:
-        obs_batch = self._observed_batch(carry.batches)
+        obs_batch = self._observed_batch(
+            carry.batches, prepared=bool(carry._data_states)
+        )
         loss_dtype = jnp.asarray(carry.loss_train).dtype
         return OptimNaNDebugState.new(
             key=carry.key,
@@ -1127,7 +1155,9 @@ class OptimEngine:
         OptimCarry
             Updated carry with accumulated epoch training loss.
         """
-        obs_batch = self._observed_batch(carry.batches, j)
+        obs_batch = self._observed_batch(
+            carry.batches, j, prepared=bool(carry._data_states)
+        )
         carry.batch = obs_batch
         carry.i_batch = j
 
@@ -1268,7 +1298,9 @@ class OptimEngine:
     def _run_batch_debug_body(
         self, j: int | jax.Array, carry: OptimCarry
     ) -> OptimCarry:
-        obs_batch = self._observed_batch(carry.batches, j)
+        obs_batch = self._observed_batch(
+            carry.batches, j, prepared=bool(carry._data_states)
+        )
         carry.batch = obs_batch
         carry.i_batch = j
 
@@ -1585,8 +1617,11 @@ class OptimEngine:
             model_state=self.initial_state,
             save_position_history=self.save_position_history,
         )
+        self._prepare_data_states(carry)
         if self.debug_nans:
-            carry.batch = self._observed_batch(carry.batches)
+            carry.batch = self._observed_batch(
+                carry.batches, prepared=bool(carry._data_states)
+            )
             carry.nan_debug_state = self._init_nan_debug_state(carry)
 
         return carry
