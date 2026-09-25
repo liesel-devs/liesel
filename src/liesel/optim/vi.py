@@ -36,6 +36,22 @@ ELBO loss:
 'NegElboLoss(nsamples=2)'
 >>> elbo.position(vdist.parameters).keys()
 dict_keys(['(mu)_loc', 'h((mu)_scale)'])
+
+Bind the fitted variational distribution and draw target-model positions:
+
+>>> import jax
+>>> import optax
+>>> result = opt.LieselVI(
+...     p,
+...     loss=elbo,
+...     optimizers=optax.adam(0.01),
+...     loss_monitor=opt.EmaTrainLossMonitor(1),
+...     stopper=opt.Stopper(epochs=3, patience=3),
+...     show_progress=False,
+... ).fit()
+>>> posterior = elbo.approximate_joint_posterior(result)
+>>> posterior.sample(5, seed=jax.random.key(42))["mu"].shape
+(5,)
 """
 
 from __future__ import annotations
@@ -58,7 +74,7 @@ from ..model.model import TemporaryModel
 from ._model_utils import validate_model_data_keys
 from .loss import LossMixin, _training_loss_scalar, _validate_bool
 from .split import PositionSplit, PositionSplitManager, _has_custom_model_log_lik
-from .state import OptimCarry
+from .state import OptimCarry, OptimResult
 from .types import ModelState, Position
 
 SplitConfig = PositionSplit | PositionSplitManager
@@ -643,6 +659,71 @@ class NegElboLoss(LossMixin):
             Position accepted by ``p``.
         """
         return self._q_to_p(q_position)
+
+    def approximate_joint_posterior(
+        self, result: OptimResult, *, at: str = "min_monitor"
+    ) -> VariationalApproximation:
+        """Bind the fitted variational distribution for posterior sampling.
+
+        Parameters
+        ----------
+        result
+            Fit result belonging to this loss and variational model. The selected
+            parameter values are copied; the result and its history are not retained.
+            Keep the variational model, fixed parameters and ``q_to_p`` mapping
+            unchanged while using the returned object. Omitted variational parameters
+            retain their current model values.
+        at
+            ``"min_monitor"`` (default) selects ``result.position_min_monitor``;
+            ``"final"`` selects ``result.position_final``. An unavailable minimum
+            does not fall back to the final position.
+
+        Returns
+        -------
+        VariationalApproximation
+            The learned variational distribution, with draws mapped to target-model
+            parameter names and shapes. Works with both variational builders and
+            directly supplied ``q`` models and mappings.
+
+        Raises
+        ------
+        ValueError
+            If ``at`` is invalid or the selected position has unknown keys or
+            incompatible shapes or dtypes.
+        RuntimeError
+            If the selected position is unavailable or contains NaN or infinity.
+
+        Notes
+        -----
+        This binds the learned distribution without refitting or evaluating
+        curvature. Finite fitted parameters do not certify convergence or posterior
+        accuracy. The result must belong to this loss; compatible parameter metadata
+        alone cannot establish that provenance. See the module example for usage.
+        """
+        if at not in ("min_monitor", "final"):
+            raise ValueError("at must be 'min_monitor' or 'final'.")
+        position = (
+            result.position_min_monitor
+            if at == "min_monitor"
+            else result.position_final
+        )
+        try:
+            expected = self.position(list(position))
+        except KeyError as error:
+            raise ValueError(
+                f"Unknown variational position key: {error.args[0]!r}."
+            ) from error
+        if any(
+            jnp.shape(value) != jnp.shape(expected[name])
+            or getattr(value, "dtype", jnp.asarray(value).dtype)
+            != jnp.asarray(expected[name]).dtype
+            for name, value in position.items()
+        ):
+            raise ValueError(
+                "Selected variational parameters have incompatible shapes or dtypes."
+            )
+        snapshot = Position(jax.tree.map(lambda x: jnp.array(x, copy=True), position))
+        return VariationalApproximation(self.q, self._q_to_p, snapshot)
 
     def estimate_elbo(
         self,
@@ -1581,6 +1662,44 @@ def _sample_variational_model(
         )
 
     return vmap_batched(Position(q_samples), q_to_p, batch_shape=sample_shape)
+
+
+class VariationalApproximation:
+    """Fitted variational posterior in the target model's parameter representation.
+
+    Construct through :meth:`NegElboLoss.approximate_joint_posterior`.
+    The selected variational parameter values are held independently of the fit
+    result. Keep the variational model, its fixed values, and the position mapping
+    unchanged while using this object.
+    """
+
+    def __init__(
+        self,
+        q: Model,
+        q_to_p: Callable[[Position], Position],
+        position: Position,
+    ):
+        self._q = q
+        self._q_to_p = q_to_p
+        self._position = position
+
+    def sample(
+        self, sample_shape: int | Sequence[int] = (), *, seed: jax.Array
+    ) -> Position:
+        """Draw target parameter dictionaries with common leading sample axes.
+
+        The default returns one draw in the original parameter shapes. Pass an
+        integer, a tuple such as ``(1000,)``, or ``(chains, draws)`` for leading
+        sample axes. The JAX random key ``seed`` is required and keyword-only.
+        Use :meth:`liesel.model.Model.predict` to evaluate derived quantities or
+        transform draws back to constrained parameter scales.
+        """
+        shape = (
+            (sample_shape,) if isinstance(sample_shape, int) else tuple(sample_shape)
+        )
+        return _sample_variational_model(
+            self._q, self._q_to_p, seed, shape, self._position
+        )
 
 
 class CompositeVDist:

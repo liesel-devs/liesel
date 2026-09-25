@@ -153,6 +153,7 @@ the arguments and defaults.
     ~liesel.optim.LossMixin
     ~liesel.optim.NegLogProbLoss
     ~liesel.optim.NegElboLoss
+    ~liesel.optim.VariationalApproximation
     ~liesel.optim.VDist
     ~liesel.optim.CompositeVDist
     ~liesel.optim.Optimizer

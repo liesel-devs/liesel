@@ -25,17 +25,36 @@ For an existing Liesel ``model`` with parameters on the real line:
        loss_monitor=opt.EmaTrainLossMonitor(effective_window=2.0),
        seed=42,
    ).fit()
-   samples = loss.vdist.sample(
-       jax.random.key(43),
-       sample_shape=(1_000,),
-       at_position=result.position_final,
-   )
+   posterior = loss.approximate_joint_posterior(result)
+   samples = posterior.sample(1_000, seed=jax.random.key(43))
 
 ``mvn_diag`` creates a diagonal Gaussian over the model parameters and stores
 its :class:`.VDist` in ``loss.vdist``. Samples use the target parameter names.
 Transform constrained parameters to the real line before constructing this
 approximation, and transform draws back when summarizing them. Fitting leaves
 the supplied model unchanged.
+
+``approximate_joint_posterior`` selects the saved position with the smallest
+monitoring loss by default. Pass ``at="final"`` to select the last iterate instead.
+The returned :class:`.VariationalApproximation` keeps those fitted values without
+retaining the fit history. Keep the variational model, its fixed values, and its
+position mapping unchanged while using it, and use a result from the same loss.
+
+Sampling uses the learned variational distribution, including custom families
+and mappings. It does not refit the model or compute a Hessian. Summarize draws
+to estimate posterior moments and intervals; finite fitted values do not certify
+convergence. The default ``sample(seed=key)`` returns one draw in the original
+parameter shapes. An integer or tuple adds leading sample axes. For example:
+
+.. code-block:: python
+
+   samples = posterior.sample((1, 1_000), seed=jax.random.key(44))
+   # Evaluate derived model quantities or transform constrained parameters:
+   predicted = model.predict(samples)
+
+This also works for a directly constructed :class:`.NegElboLoss` without a
+``VDist``. Existing custom transformed-family limitations still apply; see
+`issue #418 <https://github.com/liesel-devs/liesel/issues/418>`_.
 
 Use ``mvn_tril`` for a dense covariance or :class:`.CompositeVDist` to combine
 families for different parameter blocks. An explicit loss keeps its own sample
