@@ -786,9 +786,11 @@ class OptimEngine:
             return
         model = getattr(self.loss, "model", None)
         assert model is not None
-        carry._data_states = {
-            "train": model.update_state(self.split.train, carry.model_state)
-        }
+        carry._data_states = {}
+        if self.batches.is_full_data or self.loss_monitor == "train_full_data":
+            carry._data_states["train"] = model.update_state(
+                self.split.train, carry.model_state
+            )
         if self.loss_monitor == "validation":
             carry._data_states["validate"] = model.update_state(
                 self.split.validate, carry.model_state
@@ -1087,7 +1089,7 @@ class OptimEngine:
 
     def _init_nan_debug_state(self, carry: OptimCarry) -> OptimNaNDebugState:
         obs_batch = self._observed_batch(
-            carry.batches, prepared=bool(carry._data_states)
+            carry.batches, prepared="train" in carry._data_states
         )
         loss_dtype = jnp.asarray(carry.loss_train).dtype
         return OptimNaNDebugState.new(
@@ -1217,7 +1219,7 @@ class OptimEngine:
             Updated carry with accumulated epoch training loss.
         """
         obs_batch = self._observed_batch(
-            carry.batches, j, prepared=bool(carry._data_states)
+            carry.batches, j, prepared="train" in carry._data_states
         )
         carry.batch = obs_batch
         carry.i_batch = j
@@ -1362,7 +1364,7 @@ class OptimEngine:
         self, j: int | jax.Array, carry: OptimCarry
     ) -> OptimCarry:
         obs_batch = self._observed_batch(
-            carry.batches, j, prepared=bool(carry._data_states)
+            carry.batches, j, prepared="train" in carry._data_states
         )
         carry.batch = obs_batch
         carry.i_batch = j
@@ -1763,7 +1765,7 @@ class OptimEngine:
             )
         if self.debug_nans:
             carry.batch = self._observed_batch(
-                carry.batches, prepared=bool(carry._data_states)
+                carry.batches, prepared="train" in carry._data_states
             )
             carry.nan_debug_state = self._init_nan_debug_state(carry)
 

@@ -9,6 +9,7 @@ from jax.experimental import io_callback
 import liesel.model as lsl
 from liesel.optim import (
     Batches,
+    EmaTrainLossMonitor,
     LieselOptim,
     LossMixin,
     NegLogProbLoss,
@@ -208,10 +209,14 @@ def test_prepared_partitions_keep_omitted_batch_keys_on_training_rows(
     calls.clear()
     result = optim.fit()
     jax.effects_barrier()
-    assert len(calls) == (2 if holdout == "validate" else 1)
-    np.testing.assert_array_equal(calls[0], [1.0, 2.0, 3.0])
+    expected_calls = [[1.0, 2.0, 3.0]]
     if holdout == "validate":
-        np.testing.assert_array_equal(calls[1], [4.0, 5.0, 6.0])
+        if batch_size == 1:
+            # Without a training template, the omitted group is evaluated per batch.
+            expected_calls = [[4.0, 5.0, 6.0]] + expected_calls * 10
+        else:
+            expected_calls += [[4.0, 5.0, 6.0]]
+    np.testing.assert_array_equal(calls, expected_calls)
 
     # The same gradient applies at each step: the two training z values coincide.
     steps = np.arange(1, 6) * (1 if batch_size is None else 2)
@@ -226,6 +231,53 @@ def test_prepared_partitions_keep_omitted_batch_keys_on_training_rows(
     if holdout == "test":
         expected += np.log(2 * np.pi) / 2 + beta**2 / 2
     np.testing.assert_allclose(result.history.loss_monitor, expected / 5, rtol=1e-5)
+
+
+@pytest.mark.parametrize("debug", [False, True])
+@pytest.mark.parametrize("monitor", ["ema", "validation"])
+def test_minibatches_skip_full_training_basis_and_keep_omitted_training_rows(
+    tmp_path, debug, monitor
+):
+    model, calls = _counted_basis_model(extra_branch=True)
+    split = PositionSplit.from_model(
+        model,
+        position_keys=[["x", "y"], ["z"]],
+        multi_size="manager",
+        shuffle=False,
+        validate_axis_share=0.5,
+    )
+    engine = LieselOptim(
+        model,
+        split=split,
+        batches=Batches.from_split(
+            split, position_keys=["x", "y"], batch_size=1, shuffle=False
+        ),
+        optimizers=optax.sgd(0.01),
+        loss_monitor=(
+            EmaTrainLossMonitor(effective_window=2)
+            if monitor == "ema"
+            else "validation"
+        ),
+        stopper=Stopper(epochs=3, patience=3, min_epochs=3),
+        show_progress=False,
+    ).build_engine()
+    engine.debug_nans = debug
+    calls.clear()
+    checkpoint = tmp_path / "fit.pkl"
+    paused = engine.fit(checkpoint=checkpoint, pause_after=1)
+    assert paused.status == "paused"
+    result = engine.fit(checkpoint=checkpoint)
+    jax.effects_barrier()
+    assert not any(np.array_equal(call, [1.0, 2.0, 3.0]) for call in calls)
+    assert result.n_epochs == 3
+    assert result.history.position is not None
+    # The three scalar Gaussian SGD steps compose to
+    # beta_next = 0.450709792 * beta + 1.082866944, using only training z = [1, 1].
+    np.testing.assert_allclose(
+        result.history.position["beta"],
+        [1.082866944, 1.5709256790939157, 1.7908985300718774],
+        rtol=1e-5,
+    )
 
 
 @pytest.mark.parametrize("debug", [False, True])
