@@ -1,15 +1,15 @@
 Integrate latent parameters with Laplace
-============================================
+========================================
 
 :class:`liesel.optim.LaplaceLoss` integrates selected continuous parameters out
 of the model's joint density, then fits the remaining parameters. Here we fit a
 Poisson model's mean and random-effect scale while integrating eight group effects.
 
 Build a model and fit the marginal posterior
-------------------------------------------------
+--------------------------------------------
 
-Use float64 for this example. Enable it before constructing arrays and preserve
-it when building the model; the loss itself never changes JAX's precision.
+Use float64 for this example: enable it before creating arrays and pass
+``to_float32=False`` to the model.
 
 .. code-block:: python
 
@@ -48,17 +48,14 @@ it when building the model; the loss itself never changes JAX's precision.
    print(result.status)
 
 The outer optimizer selects ``mu`` and the unconstrained ``tau_transformed``
-coordinate automatically. ``b`` keeps its prior and parameter status in the model.
-Fitting leaves the model unchanged. Explicit optimizer lists can select a smaller
-outer subset; omitted parameters stay fixed at their model values.
+coordinate. ``b`` keeps its prior. Fitting leaves the model unchanged.
 
-The loss uses the full, unscaled joint density, including priors, transformation
-Jacobians, and normalization constants. ``LieselOptim(scale_loss=...)`` does not
-rescale a supplied loss. Use full-data batches and ``"train_full_data"`` monitoring;
-minibatches, validation monitoring, and EMA monitoring are unsupported here.
+Use full-data batches and ``"train_full_data"`` monitoring. The loss includes
+priors, Jacobians, and normalization constants without rescaling;
+see :doc:`optimizer-loss-scaling`.
 
 Inspect the conditional mode and curvature
-----------------------------------------------
+------------------------------------------
 
 .. code-block:: python
 
@@ -70,37 +67,28 @@ Inspect the conditional mode and curvature
    latent_factor = state.latent_precision_cholesky
    print(state.latent_names, state.latent_shapes)
 
-``latent_factor @ latent_factor.T`` is the dense conditional precision at this
-outer position. Its flattened order follows ``latent_names`` and ``latent_shapes``.
-Only ``status == 1`` denotes a successful inner solve. The state's gradient norm
-and ``n_resolution_steps`` help inspect convergence and floating-point safeguards.
+``latent_factor @ latent_factor.T`` is the conditional precision, ordered by
+``latent_names`` and ``latent_shapes``. ``status == 1`` means the inner solve
+succeeded. See :class:`~liesel.optim.LaplaceState` for the other diagnostics.
 
-The best snapshot minimizes recorded monitoring loss. Use ``position_final`` with
-``loss_state_final`` for the last completed epoch; keep each position with its own
-state. Factors are retained for these snapshots, rather than for every history row.
+The best snapshot minimizes monitoring loss. For the last completed epoch, use
+``position_final`` with its matching ``loss_state_final``.
 
 Control inner warm starts
------------------------------
+-------------------------
 
-The default ``warm_start=True`` starts each inner solve from the last committed
-latent mode. The seed stays fixed throughout an outer line search. One successful
-full-training evaluation commits state after each epoch, even with several outer
-updates. That monitor repeats the selected-point solve; it does not recompute the
-outer gradient. Stateful L-BFGS refreshes its gradient when starting a new step.
-
-To compare with starts from the original latent values, supply a new loss to a new fit:
+By default, each inner solve starts from the latent mode committed at the end of
+the previous epoch. Set ``warm_start=False`` to start from the model's latent values:
 
 .. code-block:: python
 
    cold_loss = opt.LaplaceLoss(model, latent=["b"], warm_start=False)
 
-This controls inner initialization. To resume an interrupted fit, use an optimizer
-checkpoint instead; see :doc:`optimizer-checkpointing`. Checkpoints preserve the
-committed and best latent states and require the same latent coordinates and
-inner-solver settings.
+Pass ``cold_loss`` to a new fit to compare. Resuming an interrupted fit is a separate
+operation: :doc:`optimizer-checkpointing` explains how to resume with saved states.
 
 Construct joint uncertainty on request
-------------------------------------------
+--------------------------------------
 
 .. code-block:: python
 
@@ -112,26 +100,22 @@ Construct joint uncertainty on request
    tau_draws = predicted["tau"]
    rate_draws = jnp.exp(predicted["log_rate"])
 
-The mean combines the selected outer fit with its conditional latent mode. The
-Gaussian combines marginal outer curvature with the local conditional Gaussian,
-including cross-correlations and the outer parameters' contribution to latent
-uncertainty. Its precision factor orders sorted outer names before sorted latent
-names. A dense covariance is only constructed when requested.
+The joint Gaussian includes outer uncertainty, conditional latent uncertainty, and
+their cross-correlations. Its precision factor orders sorted outer names before
+sorted latent names. A dense covariance is only constructed when requested.
 
-Use ``at="final"`` to select the matched final snapshot. Keep the same model,
-training data, and loss configuration; do not change fixed parameters between
-fitting and this call. Samples use optimizer coordinates. ``Model.predict`` applies
-the model's transformations, including the positive ``tau`` scale here. Empty
-``sample_shape=()`` returns one draw; ``(chains, draws)`` adds two leading axes.
+Use ``at="final"`` for the final snapshot. Keep the same model, data, and loss
+configuration; do not change fixed parameters between fitting and this call.
+``Model.predict`` transforms draws from optimizer coordinates to the positive
+``tau`` scale here. ``sample_shape=()`` gives one draw; ``(chains, draws)`` adds two axes.
 
-This optional calculation adds higher implicit derivatives and curvature work
-once per call. Ordinary fitting uses first derivatives and reuses the final latent
-factor; differentiating the fitting loss twice raises an error. The helper requires
-true positive-definite conditional and marginal curvature and checks outer
-stationarity using half the squared Newton decrement (default bound ``1e-4``).
+The helper costs extra curvature work once per call and none during fitting. It
+requires positive-definite curvature and an approximately stationary fit
+(``stationarity_tol``, default ``1e-4``). Use this helper rather than differentiating
+the loss twice.
 
 Inspect a failure deliberately
-----------------------------------
+------------------------------
 
 An insufficient inner budget makes a useful diagnostic example:
 
@@ -149,26 +133,22 @@ An insufficient inner budget makes a useful diagnostic example:
    )
    print(diagnostic.valid, diagnostic.diagnostics["reason"])
 
-A handled numerical failure preserves the last completed valid position and state.
-If no valid evaluation exists, the matching state is ``None``. The failed proposal
-is separate and cannot become a warm-start seed. Failed fits have no resumable
-checkpoint; an earlier saved checkpoint remains available.
+A numerical failure preserves the last completed valid position and state; if none
+exists, the matching state is ``None``. Failed fits have no resumable checkpoint;
+an earlier saved checkpoint remains available.
 
-The posterior helper raises on failure by default. ``raise_on_failure=False``
-consciously requests an invalid diagnostic object with whatever gradients and raw
-curvature could be evaluated. Its ``sample`` and ``covariance`` methods raise.
-No jitter or eigenvalue clipping silently converts invalid curvature into success.
+The posterior helper raises on failure by default. ``raise_on_failure=False`` returns
+an invalid diagnostic object with available gradients, curvature, and the failure
+reason. Its ``sample`` and ``covariance`` methods raise.
 
 Choose numerical controls
------------------------------
+-------------------------
 
 ``inner_max_iter`` defaults to 100. ``inner_tol`` bounds half the inner squared
-Newton decrement on the unscaled objective: ``None`` chooses ``1e-6`` for float32
-or ``1e-10`` for float64. For difficult curvature, consider better initial values,
-float64, or an explicit tolerance and budget; inspect the diagnostics when doing so.
-An early-stopping result alone does not certify posterior stationarity.
+Newton decrement: ``None`` chooses ``1e-6`` for float32 or ``1e-10`` for float64.
+For difficult curvature, consider better initial values, float64, or an explicit
+tolerance and budget; inspect the diagnostics when doing so.
 
-The solver finds a local conditional mode. Non-concave problems may select different
-modes from warm and cold starts. Dense curvature uses O(d²) storage and O(d³) linear
-algebra for d latent coordinates; this version targets a few hundred latents with
-a modest outer dimension. It has no sparse or block approximation.
+The solver finds a local mode; warm and cold starts can find different modes.
+Dense curvature uses O(d²) storage and O(d³) linear algebra for d latent coordinates.
+This version targets a few hundred latents with a modest outer dimension.

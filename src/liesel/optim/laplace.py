@@ -393,6 +393,11 @@ class LaplaceLoss(LossMixin):
     Every evaluation is pure: the engine commits state only at its full-training
     monitor point. No curvature history is retained for every epoch.
 
+    The committed inner seed stays fixed throughout each outer line search. The
+    full-training monitor repeats the selected-point solve without calculating
+    another outer gradient. Stateful L-BFGS refreshes its gradient at each step
+    because a new committed seed may change the loss evaluation.
+
     Reverse-mode fitting gradients reuse the final latent factor and include the
     latent dependence of its log determinant. Higher fitting derivatives raise;
     use ``approximate_joint_posterior`` after fitting for joint uncertainty.

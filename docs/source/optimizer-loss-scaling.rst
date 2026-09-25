@@ -69,7 +69,7 @@ change the objective used by
 :class:`~liesel.optim.NegLogProbLoss`. That loss accepts the standard sums
 of observed distribution factors and parameter priors, including weak observed
 variables. Other distribution factors must be classified appropriately or handled
-by an appropriate loss. ``LaplaceLoss`` uses the model's actual joint density,
+by a custom loss. ``LaplaceLoss`` uses the model's actual joint density,
 including custom aggregates, with full training observations substituted. If
 automatic split inference fails, supply an explicit full-training split.
 
