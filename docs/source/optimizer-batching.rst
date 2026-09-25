@@ -154,7 +154,7 @@ contributions.
 .. _optimizer-computed-data:
 
 Batch precomputed values
------------------------
+------------------------
 
 An expensive computed variable, such as a callback-based design matrix, can be
 batched by selecting its cached values. For a model with a computed ``basis``,
@@ -175,6 +175,13 @@ be used for inexpensive JAX calculations in the same fit.
 Use the computed variable's name. Transient variables and calculation-node keys
 are rejected. A computed value cannot be selected together with an ancestor or
 descendant data key; for example, choose either ``basis`` or the covariate it uses.
+
+For :class:`.LieselVI`, fixed JAX-computed data can also be selected explicitly.
+Omit validation data from its split. :class:`.NegElboLoss` rejects computed data
+that depend on or overlap an inferred target position; batch the fixed inputs
+instead. A dependency may remain fixed outside the variational distribution.
+This support does not extend to ordered callback-based computations, which may
+fail inside VI's vectorized, differentiated ELBO evaluation.
 
 .. _optimizer-weak-observations:
 

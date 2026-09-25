@@ -34,11 +34,6 @@ a comparison of different samplers, and more:
 For parameter fitting, start with the :doc:`optimization` guide. It links to
 two worked examples and short guides for common tasks.
 
-The variational inference tutorials introduce :class:`liesel.optim.LieselVI`:
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Variational inference
-
-   tutorials/notebooks/11-liesel-vi-basic
-   tutorials/notebooks/12-liesel-vi-advanced
+For approximate posteriors, start with :doc:`variational-inference`. Its two
+tutorials introduce Gaussian approximations, posterior sampling and models with
+multiple observation groups using :class:`liesel.optim.LieselVI`.

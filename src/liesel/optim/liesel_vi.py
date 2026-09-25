@@ -43,21 +43,12 @@ class LieselVI:
     ----------
     model
         Target Liesel model.
-    loss
-        Either one of ``"mvn_diag"``, ``"mvn_tril"``, and ``"mvn_blocked"``, or an
-        explicit :class:`.NegElboLoss` instance.
-    batches
-        Optional explicit batch configuration. Cannot be combined with
-        ``batch_size``.
-    batch_size
-        Mini-batch size used to construct default batches. ``None`` means full-data
-        batches.
-    split
-        Optional split. If omitted and ``loss`` is not an explicit
-        :class:`.NegElboLoss`,
-        all observed data is used for training. Multi-size observed data
-        automatically uses :class:`.PositionSplitManager`. Validation data is not
-        supported for ELBO losses.
+    loss_monitor
+        Source for the epoch-level stopping and progress loss. Pass
+        :class:`.EmaTrainLossMonitor` for a continuous EMA of pre-update losses or
+        ``"train_full_data"`` for one complete training-loss evaluation after each
+        epoch. Validation monitoring is unavailable because ELBO losses do not
+        support validation splits.
     optimizers
         A configured Optax transformation, such as ``optax.adam(learning_rate=0.01)``,
         applied to all variational q parameters, or a sequence of explicit
@@ -70,7 +61,28 @@ class LieselVI:
         Maximum-epoch and early-stopping configuration. ``None`` creates a fresh
         :class:`.Stopper` with ``epochs=1000``, ``patience=10``, and ``rtol=1e-6``.
     seed
-        Integer seed, defaulting to zero. If ``None``, the current Unix time is used.
+        Seed for variational draws and batch shuffling, defaulting to zero.
+        ``None`` uses the current Unix time in whole seconds. An explicitly
+        constructed split has its own seed for selecting train/test rows.
+    split
+        Optional split. If omitted and ``loss`` is not an explicit
+        :class:`.NegElboLoss`, all strong observed inputs are used for training.
+        Multi-size observed data automatically uses :class:`.PositionSplitManager`.
+        An explicit loss supplies its own split; if both are passed, they must be
+        the same object. Validation data is not supported for ELBO losses.
+        Use :meth:`.PositionSplit.from_model` for data keys, split axes and
+        train/test fractions. For distributions with ``per_obs=False``, supply
+        ``sample_sizes`` or choose axis counts with ``infer_sample_sizes=False``.
+    batch_size
+        Mini-batch size used to construct default batches. ``None`` means full-data
+        batches.
+    batches
+        Optional explicit batch configuration. Cannot be combined with
+        ``batch_size``. Use :meth:`.Batches.from_split` for custom batch axes,
+        shuffling or epoch size, and :class:`.BatchManager` for multiple groups.
+    loss
+        Either one of ``"mvn_diag"``, ``"mvn_tril"``, and ``"mvn_blocked"``, or an
+        explicit :class:`.NegElboLoss` instance.
     nsamples
         Monte Carlo sample count for internally constructed training ELBOs.
     scale_loss
@@ -80,12 +92,6 @@ class LieselVI:
     regularize_q_prior
         Whether internally constructed ELBOs should include priors in the
         variational model as regularization terms.
-    loss_monitor
-        Source for the epoch-level stopping and progress loss. Pass
-        :class:`.EmaTrainLossMonitor` for a continuous EMA of pre-update losses or
-        ``"train_full_data"`` for one complete training-loss evaluation after each
-        epoch. Validation monitoring is unavailable because ELBO losses do not
-        support validation splits.
     entropy
         Entropy estimator for internally constructed losses: ``"auto"`` uses
         analytic entropy where supported with per-term Monte Carlo fallback;
@@ -96,12 +102,12 @@ class LieselVI:
         memory; final and best-monitor positions and loss histories remain available.
     show_progress
         Whether the built engine should show ``tqdm`` progress bars.
-    progress_update_every
-        Update the epoch progress bar after this many completed epochs. When batch
-        progress is active, the epoch bar advances after every epoch.
     show_step_progress
         Whether to show an additional progress bar for batches within each epoch
         when ``show_progress`` is enabled.
+    progress_update_every
+        Update the epoch progress bar after this many completed epochs. When batch
+        progress is active, the epoch bar advances after every epoch.
     step_progress_update_every
         Update the batch progress bar after this many completed batches.
 

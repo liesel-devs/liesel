@@ -139,8 +139,8 @@ class NegElboLoss(LossMixin):
     ``NegElboLoss`` connects a target model ``p`` and a variational model ``q``. The
     variational model must be able to sample parameter positions, and ``q_to_p`` must
     map those sampled positions into the parameter names expected by ``p``. The loss
-    is minimized by the experimental optimization engine, so the public loss methods
-    return the negative ELBO.
+    is minimized by :class:`.OptimEngine`, so the training loss methods return the
+    negative ELBO. :meth:`estimate_elbo` returns the ELBO itself.
 
     Parameters
     ----------
@@ -162,6 +162,7 @@ class NegElboLoss(LossMixin):
         ``p``. Builders such as :class:`VDist` provide this mapping automatically.
         With computed data keys, this mapping is also evaluated on the current
         observed position of ``q`` at construction to identify inferred target keys.
+        Use a pure mapping whose output keys do not depend on sampled values.
     scale
         If ``True``, divide losses by the training sample size. For
         :class:`.PositionSplitManager`, the scalar is the sum of all branch-specific
@@ -171,16 +172,16 @@ class NegElboLoss(LossMixin):
         introspection and convenience; it is not required for evaluating the loss.
     regularize_q_prior
         Whether priors in ``q`` should be added to the ELBO as regularization terms.
-        The default preserves the historical behavior of this class. Set to
-        ``False`` to subtract only the variational likelihood term.
+        Defaults to ``True``. Set to ``False`` to omit these additional priors;
+        target-model priors remain part of the ELBO.
     entropy
         ``"auto"`` (default) uses differentiable distribution entropies where
         implemented, falling back to Monte Carlo per term on ``NotImplementedError``.
         Independent block entropies add exactly; conditional entropies are averaged
         over sampled parents. Custom aggregate likelihoods in ``q`` use Monte Carlo.
-        ``"mc"`` retains the original sampled log-density estimator. The default
-        changes seeded optimization trajectories and can improve numerical stability;
-        it does not guarantee faster convergence.
+        ``"mc"`` estimates entropy from sampled negative log densities. Analytic
+        entropy avoids sampled log-density evaluation where supported; target-model
+        likelihoods and priors are still evaluated with Monte Carlo draws.
 
     Attributes
     ----------

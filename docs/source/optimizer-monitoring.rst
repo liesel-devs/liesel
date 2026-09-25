@@ -25,6 +25,10 @@ An epoch runs all configured batches. The two full-data monitors each add one
 loss evaluation at the end of every epoch. Validation uses likelihood only by
 default; set ``validation_strategy="log_prob"`` to include priors.
 
+:class:`.LieselVI` accepts the EMA and full-training monitors, but no validation
+monitor. Its full-training ELBO still uses variational draws and can fluctuate;
+see :doc:`variational-inference`.
+
 Choose when to stop
 -------------------
 

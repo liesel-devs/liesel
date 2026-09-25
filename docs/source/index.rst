@@ -11,6 +11,7 @@ Liesel: A Probabilistic Programming Framework
 
    tutorials_overview
    optimization
+   variational-inference
 
 
 API Reference
@@ -131,8 +132,9 @@ acccess to important diagnostics.
 Optimizer API
 *************
 
-Start with the :doc:`optimization` guide. These pages describe the arguments
-and defaults.
+Start with :doc:`optimization` for parameter fitting or
+:doc:`variational-inference` for approximate posteriors. These pages describe
+the arguments and defaults.
 
 .. autosummary::
     :toctree: generated
