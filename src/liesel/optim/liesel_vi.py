@@ -42,7 +42,8 @@ class LieselVI:
     Parameters
     ----------
     model
-        Target Liesel model.
+        Target Liesel model. An explicit loss must satisfy ``loss.p is model``;
+        otherwise construction raises ValueError.
     loss_monitor
         Source for the epoch-level stopping and progress loss. Pass
         :class:`.EmaTrainLossMonitor` for a continuous EMA of pre-update losses or
@@ -237,6 +238,8 @@ class LieselVI:
         entropy: Literal["auto", "mc"],
     ) -> NegElboLoss:
         if isinstance(loss, NegElboLoss):
+            if loss.p is not self.model:
+                raise ValueError("For an explicit loss, loss.p must be model.")
             return loss
 
         _validate_bool(scale_loss, "scale_loss")
