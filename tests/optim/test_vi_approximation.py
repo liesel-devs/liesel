@@ -1,6 +1,7 @@
 import gc
 import inspect
 import weakref
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -35,6 +36,29 @@ def _result(final, minimum):
         patience=1,
         duration=0.0,
     )
+
+
+@pytest.mark.parametrize("sampler", ["builder", "composite", "posterior"])
+def test_integer_like_sample_counts_match_python_counts(sampler):
+    block = opt.VDist(["alpha", "beta"], _model()).mvn_diag()
+    vdist = (
+        opt.CompositeVDist(block).build() if sampler == "composite" else block.build()
+    )
+    loss = opt.NegElboLoss.from_vdist(vdist)
+    position = loss.position(vdist.parameters)
+    posterior = loss.approximate_joint_posterior(_result(position, position))
+    sample: Any = posterior.sample if sampler == "posterior" else vdist.sample
+    key = jax.random.key(39)
+
+    for shape, expected_shape in [
+        (np.int64(4), 4),
+        (jnp.array(4), 4),
+        ((np.int64(2), jnp.array(3)), (2, 3)),
+    ]:
+        actual = sample(shape, seed=key)
+        expected = sample(expected_shape, seed=key)
+        for name in expected:
+            np.testing.assert_array_equal(actual[name], expected[name])
 
 
 @pytest.mark.parametrize("family", ["diagonal", "dense", "composite"])
