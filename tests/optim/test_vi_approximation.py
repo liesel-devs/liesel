@@ -62,7 +62,7 @@ def test_posterior_samples_match_existing_sampler(family):
         compiled = jax.jit(lambda key, shape=shape: posterior.sample(shape, seed=key))(
             key
         )
-        expected = vdist.sample(key, axes, at_position=position)
+        expected = vdist.sample(axes, seed=key, at_position=position)
         assert actual["alpha"].shape == axes
         assert actual["beta"].shape == axes + (2,)
         for name in expected:
@@ -96,11 +96,11 @@ def test_selected_position_is_a_snapshot_without_retaining_result():
     final = Position({loc_key: jnp.full(3, 5.0)})
     result = _result(final, minimum)
     result_ref, history_ref = weakref.ref(result), weakref.ref(result.history)
-    posterior = loss.approximate_joint_posterior(result)
-    terminal = loss.approximate_joint_posterior(result, at="final")
+    posterior = loss.approximate_joint_posterior(result, at="min_monitor")
+    terminal = loss.approximate_joint_posterior(result)
     key = jax.random.key(7)
     expected = vdist.sample(
-        key, (8,), at_position=Position({loc_key: jnp.full(3, 2.0)})
+        (8,), seed=key, at_position=Position({loc_key: jnp.full(3, 2.0)})
     )
     minimum[loc_key][...] = -100.0
     minimum.clear()
@@ -213,8 +213,8 @@ def test_unavailable_nonfinite_and_invalid_selection():
     position = loss.position(list(loss.q.parameters))
     result = _result(position, None)
     with pytest.raises(RuntimeError, match="No finite monitoring loss"):
-        loss.approximate_joint_posterior(result)
-    loss.approximate_joint_posterior(result, at="final")
+        loss.approximate_joint_posterior(result, at="min_monitor")
+    loss.approximate_joint_posterior(result)
     with pytest.raises(ValueError, match="at must be"):
         loss.approximate_joint_posterior(result, at="best")
     name = next(iter(position))

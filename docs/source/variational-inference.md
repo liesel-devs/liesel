@@ -50,9 +50,14 @@ mystnb:
 model.plot()
 ```
 
-Choose an initial scale appropriate for the parameter's units. Here 0.5 is close
-to the posterior scale. We use an explicit iteration budget because stochastic
-loss fluctuations can trigger early stopping before the distribution stabilizes.
+Choose an initial scale appropriate for the parameter's units. The Gaussian
+builders default to SD `0.1`, an overridable heuristic; here we choose `0.5`.
+See {ref}`vi-initial-scale` for the tradeoff. The default objective includes target
+priors and excludes extra penalties on variational parameters; see
+{ref}`vi-q-prior-penalties`.
+
+We use a 300-epoch budget here. Without an explicit stopper, `LieselVI` uses
+1,000 epochs without early stopping. A budget is not a convergence check.
 Sixteen draws per step estimate the ELBO; more draws cost more computation.
 
 ```{code-cell} python
@@ -99,8 +104,10 @@ pd.DataFrame(
 The exact posterior mean in this example is 6/7 and its standard deviation is
 1/sqrt(7). Monte Carlo summaries fluctuate around the fitted family's values.
 
-`approximate_joint_posterior` selects the saved position with the smallest
-monitoring loss by default. Pass `at="final"` to select the last iterate instead.
+`approximate_joint_posterior` selects the final iterate by default. Unlike a
+deterministic MAP/Laplace objective, VI's monitoring loss is noisy; selecting its
+minimum can favor a lucky estimate. Pass `at="min_monitor"` to select that saved
+position explicitly. Neither selection guarantees posterior accuracy.
 The returned {class}`~liesel.optim.VariationalApproximation` keeps those values
 without retaining fit history. Variational parameters omitted from the fit are
 bound to their current model values. Keep its variational graph, nonparameter
@@ -129,6 +136,27 @@ Use `mvn_tril` for a dense covariance or {class}`~liesel.optim.CompositeVDist` f
 independent blocks. An explicit loss keeps its own sample count, scaling, entropy,
 and prior settings; configure them on that loss.
 
+(vi-initial-scale)=
+
+## Choose an initial scale
+
+Gaussian builders and loss factories default to SD `0.1` for each governed
+parameter. For dense blocks, this means a Cholesky factor `0.1 * I`, hence
+covariance `0.01 * I`. Locations start at the current target-model values.
+
+`0.1` is a convenience heuristic in each parameter's units, including transformed
+units for parameters such as log standard deviations. It is not scale-invariant,
+a posterior uncertainty estimate, or a generally superior choice to `0.01` or `1`.
+Narrow initialization keeps initial draws local but can take many updates to expand;
+wider initialization can produce more variable gradients or reach unstable regions.
+The learning rate, parameterization, and iteration budget also matter.
+
+Override `scale_diag` as in the fit above, use `scale_tril` for dense blocks, or
+`scale` with {meth}`~liesel.optim.VDist.normal`. Arrays allow different scales for
+different parameters. Pass an explicitly constructed loss to `LieselVI` to preserve
+those settings. Check loss paths and fitted uncertainty; increasing the budget or
+changing the learning rate may be necessary even in simple Gaussian models.
+
 ## Choose a monitor
 
 Both `optimizers` and `loss_monitor` are required. An
@@ -137,6 +165,9 @@ updates and carries the average across epochs. `"train_full_data"` adds an
 evaluation on all training rows after each epoch. It still draws variational
 samples and can fluctuate without minibatches. Analytic entropy reduces one
 source of Monte Carlo noise; it does not make the whole ELBO deterministic.
+The default stopper spends a fixed 1,000-epoch budget. To opt into early stopping,
+pass a {class}`~liesel.optim.Stopper` with patience smaller than its epoch budget;
+Monte Carlo fluctuations can trigger that rule before the distribution stabilizes.
 See {doc}`optimizer-monitoring` for stopping and histories.
 
 ELBO losses do not support validation splits. Use a train/test split for a final
@@ -150,11 +181,17 @@ value. With an EMA, that value combines losses from several positions.
 :maxdepth: 1
 
 variational-models
+variational-migration
 tutorials/notebooks/11-liesel-vi-basic
 tutorials/notebooks/12-liesel-vi-advanced
 ```
 
 ## Configure the fit
+
+Multiple observation sizes require an explicit split. Use
+`PositionSplit.from_model(model, multi_size="manager")` after checking the groups,
+or specify nested `position_keys` for explicit row groups. Mark shared arrays with
+`split_axes={key: None}`. Equal array lengths do not establish row alignment.
 
 * {doc}`optimizer-splitting` explains explicit splits, axes, and seeds.
 * {doc}`optimizer-batching` covers aligned row groups and fixed computed data.

@@ -151,7 +151,7 @@ def test_scalar_location_remains_one_shared_parameter(family, argument, laplace)
     np.testing.assert_allclose(
         distribution.stddev(), jnp.sqrt(0.5) if laplace else 0.5, atol=2e-6
     )
-    assert q.sample(jax.random.key(42), (5,))["z"].shape == (5, 2)
+    assert q.sample((5,), seed=jax.random.key(42))["z"].shape == (5, 2)
 
 
 def test_custom_scale_bijector_must_have_finite_inverse():

@@ -164,7 +164,7 @@ def test_neg_elbo_family_inherits_target_model_to_float32(family, to_float32):
             for value in loss.q.extract_position(list(loss.q.parameters)).values()
         )
         assert loss.vdist is not None
-        assert loss.vdist.sample(jax.random.key(1), (3,))["loc"].dtype == expected
+        assert loss.vdist.sample((3,), seed=jax.random.key(1))["loc"].dtype == expected
 
 
 def test_vdist_float64():
@@ -174,7 +174,7 @@ def test_vdist_float64():
         q = opt.VDist(["x"], model).normal(0.0, 1.0).build()
         assert q.q is not None
         assert q.q.extract_position(q.parameters)["(x)_loc"].dtype == jnp.float64
-        assert q.sample(jax.random.key(1), (3,))["x"].dtype == jnp.float64
+        assert q.sample((3,), seed=jax.random.key(1))["x"].dtype == jnp.float64
 
 
 def test_vdist_default_inherits_target_model_to_float32():
@@ -185,7 +185,7 @@ def test_vdist_default_inherits_target_model_to_float32():
         assert model.vars["x"].value.dtype == jnp.float32
         assert q.q is not None
         assert q.q.extract_position(q.parameters)["(x)_loc"].dtype == jnp.float32
-        assert q.sample(jax.random.key(1), (3,))["x"].dtype == jnp.float32
+        assert q.sample((3,), seed=jax.random.key(1))["x"].dtype == jnp.float32
 
 
 def test_vdist_can_override_target_model_to_float32():
@@ -196,7 +196,7 @@ def test_vdist_can_override_target_model_to_float32():
         assert model.vars["x"].value.dtype == jnp.float32
         assert q.q is not None
         assert q.q.extract_position(q.parameters)["(x)_loc"].dtype == jnp.float64
-        assert q.sample(jax.random.key(1), (3,))["x"].dtype == jnp.float64
+        assert q.sample((3,), seed=jax.random.key(1))["x"].dtype == jnp.float64
 
 
 @pytest.mark.parametrize("initializer", ["normal", "mvn_diag", "mvn_tril"])
@@ -209,7 +209,7 @@ def test_vdist_can_still_force_variational_model_to_float32(initializer):
         q = getattr(vdist, initializer)(loc=loc).build()
         assert q.q is not None
         assert q.q.extract_position(q.parameters)["(x)_loc"].dtype == jnp.float32
-        assert q.sample(jax.random.key(1), (3,))["x"].dtype == jnp.float32
+        assert q.sample((3,), seed=jax.random.key(1))["x"].dtype == jnp.float32
 
 
 @pytest.mark.parametrize("initializer", ["normal", "mvn_diag", "mvn_tril"])
@@ -221,7 +221,7 @@ def test_vdist_uses_float64_under_x64_when_not_converting(initializer):
         q = getattr(vdist, initializer)().build()
         assert q.q is not None
         assert q.q.extract_position(q.parameters)["(x)_loc"].dtype == jnp.float64
-        assert q.sample(jax.random.key(1), (3,))["x"].dtype == jnp.float64
+        assert q.sample((3,), seed=jax.random.key(1))["x"].dtype == jnp.float64
 
 
 def test_compositevdist_float64():
@@ -235,7 +235,7 @@ def test_compositevdist_float64():
             vi_dist.q.extract_position(vi_dist.parameters)["(x)_loc"].dtype
             == jnp.float64
         )
-        assert vi_dist.sample(jax.random.key(1), (3,))["x"].dtype == jnp.float64
+        assert vi_dist.sample((3,), seed=jax.random.key(1))["x"].dtype == jnp.float64
 
 
 def test_vdist_exp_bijector_float64():
@@ -245,7 +245,7 @@ def test_vdist_exp_bijector_float64():
         q = opt.VDist(["x"], model).normal(0.0, 1.0, scale_bijector=tfb.Exp()).build()
         assert q.q is not None
         assert q.q.extract_position(q.parameters)["(x)_loc"].dtype == jnp.float64
-        assert q.sample(jax.random.key(1), (3,))["x"].dtype == jnp.float64
+        assert q.sample((3,), seed=jax.random.key(1))["x"].dtype == jnp.float64
 
 
 def test_compositevdist_exp_bijector_float64():
@@ -259,7 +259,7 @@ def test_compositevdist_exp_bijector_float64():
             vi_dist.q.extract_position(vi_dist.parameters)["(x)_loc"].dtype
             == jnp.float64
         )
-        assert vi_dist.sample(jax.random.key(1), (3,))["x"].dtype == jnp.float64
+        assert vi_dist.sample((3,), seed=jax.random.key(1))["x"].dtype == jnp.float64
 
 
 def test_compositevdist_rejects_inconsistent_dtype_policy():
@@ -370,19 +370,19 @@ class TestVDist:
         q = opt.VDist(list(p.parameters), p).mvn_tril().build()
 
         key = jax.random.key(0)
-        samples = q.sample(key)
+        samples = q.sample(seed=key)
         assert samples["loc"].shape == (1,)
         assert samples["h(scale)"].shape == ()
 
-        samples = q.sample(key, (2,))
+        samples = q.sample((2,), seed=key)
         assert samples["loc"].shape == (2, 1)
         assert samples["h(scale)"].shape == (2,)
 
-        samples = q.sample(key, (1, 2))
+        samples = q.sample((1, 2), seed=key)
         assert samples["loc"].shape == (1, 2, 1)
         assert samples["h(scale)"].shape == (1, 2)
 
-        samples = q.sample(key, (1, 2, 3))
+        samples = q.sample((1, 2, 3), seed=key)
         assert samples["loc"].shape == (1, 2, 3, 1)
         assert samples["h(scale)"].shape == (1, 2, 3)
 
@@ -401,19 +401,19 @@ class TestVDist:
         at_position = q.q.extract_position(q.parameters)
 
         key = jax.random.key(0)
-        samples = q.sample(key, at_position=at_position)
+        samples = q.sample(seed=key, at_position=at_position)
         assert samples["loc"].shape == (1,)
         assert samples["h(scale)"].shape == ()
 
-        samples = q.sample(key, (2,), at_position=at_position)
+        samples = q.sample((2,), seed=key, at_position=at_position)
         assert samples["loc"].shape == (2, 1)
         assert samples["h(scale)"].shape == (2,)
 
-        samples = q.sample(key, (1, 2), at_position=at_position)
+        samples = q.sample((1, 2), seed=key, at_position=at_position)
         assert samples["loc"].shape == (1, 2, 1)
         assert samples["h(scale)"].shape == (1, 2)
 
-        samples = q.sample(key, (1, 2, 3), at_position=at_position)
+        samples = q.sample((1, 2, 3), seed=key, at_position=at_position)
         assert samples["loc"].shape == (1, 2, 3, 1)
         assert samples["h(scale)"].shape == (1, 2, 3)
 
@@ -454,25 +454,25 @@ class TestCompositeVDist:
         q = opt.CompositeVDist(q1, q2).build()
 
         key = jax.random.key(0)
-        samples = q.sample(key)
+        samples = q.sample(seed=key)
         assert samples["loc"].shape == (1,)
         assert samples["h(scale)"].shape == ()
 
-        samples = q.sample(key, (2,))
+        samples = q.sample((2,), seed=key)
         assert samples["loc"].shape == (2, 1)
         assert samples["h(scale)"].shape == (2,)
 
-        samples = q.sample(key, (1, 2))
+        samples = q.sample((1, 2), seed=key)
         assert samples["loc"].shape == (1, 2, 1)
         assert samples["h(scale)"].shape == (1, 2)
 
-        samples = q.sample(key, (1, 2, 3))
+        samples = q.sample((1, 2, 3), seed=key)
         assert samples["loc"].shape == (1, 2, 3, 1)
         assert samples["h(scale)"].shape == (1, 2, 3)
 
         assert q.q is not None
         at_position = q.q.extract_position(q.parameters)
-        samples = q.sample(key, (2,), at_position=at_position)
+        samples = q.sample((2,), seed=key, at_position=at_position)
         assert samples["loc"].shape == (2, 1)
         assert samples["h(scale)"].shape == (2,)
 
@@ -628,7 +628,7 @@ def test_sampling_keeps_variational_parameters_fixed(composite, position_kind):
         mean_key = "mean" if position_kind == "full" else mean.value_node.name
         position[mean_key] = jnp.array([-2.0])
         expected_mean = -2.0
-    draws = vdist.sample(jax.random.key(82), (2000,), at_position=position)["loc"]
+    draws = vdist.sample((2000,), seed=jax.random.key(82), at_position=position)["loc"]
     np.testing.assert_allclose(draws.mean(), expected_mean, atol=0.04)
     np.testing.assert_allclose(draws.std(), expected_scale, atol=0.04)
 

@@ -34,6 +34,10 @@ ELBO loss:
 >>> elbo = opt.NegElboLoss.from_vdist(vdist, nsamples=2)
 >>> repr(elbo)
 'NegElboLoss(nsamples=2)'
+>>> elbo.regularize_q_prior
+False
+>>> vdist.var.dist_node.init_dist().stddev()
+Array([0.1], dtype=float32)
 >>> elbo.position(vdist.parameters).keys()
 dict_keys(['(mu)_loc', 'h((mu)_scale)'])
 
@@ -221,9 +225,10 @@ class NegElboLoss(LossMixin):
         Optional variational distribution builder that created ``q``. Stored for
         introspection and convenience; it is not required for evaluating the loss.
     regularize_q_prior
-        Whether priors in ``q`` should be added to the ELBO as regularization terms.
-        Defaults to ``True``. Set to ``False`` to omit these additional priors;
-        target-model priors remain part of the ELBO.
+        Defaults to ``False``: optimize the ordinary ELBO, including target-model
+        priors. Set ``True`` to add log-prior penalties on the fixed optimization
+        parameters in ``q``. These penalties change the objective; they are not
+        part of the density of variational draws. See :ref:`vi-q-prior-penalties`.
     entropy
         ``"auto"`` (default) uses differentiable distribution entropies where
         implemented, falling back to Monte Carlo per term on ``NotImplementedError``.
@@ -298,7 +303,7 @@ class NegElboLoss(LossMixin):
     >>> sorted(custom_loss.position(list(q.parameters)))
     ['q_loc', 'q_log_scale']
     >>> custom_loss.estimate_elbo(
-    ...     custom_loss.position(list(q.parameters)), jax.random.key(2), p.state
+    ...     custom_loss.position(list(q.parameters)), jax.random.key(2)
     ... ).shape
     ()
     """
@@ -312,7 +317,7 @@ class NegElboLoss(LossMixin):
         q_to_p: Callable[[Position], Position] = lambda x: x,
         scale: bool = False,
         vdist: VDist | CompositeVDist | None = None,
-        regularize_q_prior: bool = True,
+        regularize_q_prior: bool = False,
         entropy: Literal["auto", "mc"] = "auto",
     ):
         _validate_positive_int(nsamples, "nsamples")
@@ -390,7 +395,7 @@ class NegElboLoss(LossMixin):
         split: SplitConfig | None = None,
         nsamples: int = 10,
         scale: bool = False,
-        regularize_q_prior: bool = True,
+        regularize_q_prior: bool = False,
         entropy: Literal["auto", "mc"] = "auto",
     ) -> NegElboLoss:
         """
@@ -411,8 +416,9 @@ class NegElboLoss(LossMixin):
             Whether to normalize losses by the training sample size. For
             :class:`.PositionSplitManager`, this is the total branch training size.
         regularize_q_prior
-            Whether priors in ``vdist.q`` should be added to the ELBO as
-            regularization terms.
+            Defaults to ``False``. Set ``True`` to add log-prior penalties on
+            variational parameters. Target-model priors remain included either way.
+            See :ref:`vi-q-prior-penalties`.
 
         entropy
             ``"auto"`` uses analytic entropy where supported, with per-term Monte
@@ -465,9 +471,9 @@ class NegElboLoss(LossMixin):
         split: SplitConfig | None = None,
         nsamples: int = 10,
         scale: bool = False,
-        regularize_q_prior: bool = True,
+        regularize_q_prior: bool = False,
         loc: jax.typing.ArrayLike | None = None,
-        scale_diag: Literal["laplace"] | jax.typing.ArrayLike = 0.01,
+        scale_diag: Literal["laplace"] | jax.typing.ArrayLike = 0.1,
         scale_diag_bijector: ScaleBijectorConfig = "auto",
         to_float32: bool | None = None,
         entropy: Literal["auto", "mc"] = "auto",
@@ -492,12 +498,15 @@ class NegElboLoss(LossMixin):
             Whether to normalize losses by the training sample size. For
             :class:`.PositionSplitManager`, this is the total branch training size.
         regularize_q_prior
-            Whether priors in the variational model should be added to the ELBO as
-            regularization terms.
+            Defaults to ``False``. Set ``True`` to add log-prior penalties on
+            variational parameters. Target-model priors remain included either way.
+            See :ref:`vi-q-prior-penalties`.
         loc
             Initial location of the variational distribution. If ``None``, the
             current flattened target position is used.
         scale_diag
+            Defaults to ``0.1`` (initial SD in model units), a heuristic you
+            can override; see :ref:`vi-initial-scale`.
             Initial marginal standard deviations. A scalar is broadcast to all flat
             components. The special value ``"laplace"`` initializes from local
             curvature at ``loc`` and assumes that ``loc`` is already a useful
@@ -551,9 +560,9 @@ class NegElboLoss(LossMixin):
         split: SplitConfig | None = None,
         nsamples: int = 10,
         scale: bool = False,
-        regularize_q_prior: bool = True,
+        regularize_q_prior: bool = False,
         loc: jax.typing.ArrayLike | None = None,
-        scale_tril: Literal["laplace"] | jax.typing.ArrayLike = 0.01,
+        scale_tril: Literal["laplace"] | jax.typing.ArrayLike = 0.1,
         scale_tril_bijector: ScaleBijectorConfig = "auto",
         to_float32: bool | None = None,
         entropy: Literal["auto", "mc"] = "auto",
@@ -578,12 +587,15 @@ class NegElboLoss(LossMixin):
             Whether to normalize losses by the training sample size. For
             :class:`.PositionSplitManager`, this is the total branch training size.
         regularize_q_prior
-            Whether priors in the variational model should be added to the ELBO as
-            regularization terms.
+            Defaults to ``False``. Set ``True`` to add log-prior penalties on
+            variational parameters. Target-model priors remain included either way.
+            See :ref:`vi-q-prior-penalties`.
         loc
             Initial location of the variational distribution. If ``None``, the
             current flattened target position is used.
         scale_tril
+            Defaults to ``0.1`` (initial SD in model units), a heuristic you
+            can override; see :ref:`vi-initial-scale`.
             Initial lower Cholesky factor. A scalar is interpreted as a multiple of
             the identity matrix. The special value ``"laplace"`` initializes from
             local curvature at ``loc`` and assumes that ``loc`` is already a useful
@@ -636,8 +648,8 @@ class NegElboLoss(LossMixin):
         split: SplitConfig | None = None,
         nsamples: int = 10,
         scale: bool = False,
-        regularize_q_prior: bool = True,
-        scale_tril: Literal["laplace"] | jax.typing.ArrayLike = 0.01,
+        regularize_q_prior: bool = False,
+        scale_tril: Literal["laplace"] | jax.typing.ArrayLike = 0.1,
         scale_tril_bijector: ScaleBijectorConfig = "auto",
         to_float32: bool | None = None,
         entropy: Literal["auto", "mc"] = "auto",
@@ -662,9 +674,12 @@ class NegElboLoss(LossMixin):
             Whether to normalize losses by the training sample size. For
             :class:`.PositionSplitManager`, this is the total branch training size.
         regularize_q_prior
-            Whether priors in the variational model should be added to the ELBO as
-            regularization terms.
+            Defaults to ``False``. Set ``True`` to add log-prior penalties on
+            variational parameters. Target-model priors remain included either way.
+            See :ref:`vi-q-prior-penalties`.
         scale_tril
+            Defaults to ``0.1`` (initial SD in model units), a heuristic you
+            can override; see :ref:`vi-initial-scale`.
             Shared initial lower Cholesky factor passed to each parameter block. A
             scalar is interpreted as a multiple of each block's identity matrix. The
             special value ``"laplace"`` initializes each block from local curvature
@@ -749,7 +764,7 @@ class NegElboLoss(LossMixin):
         return self._q_to_p(q_position)
 
     def approximate_joint_posterior(
-        self, result: OptimResult, *, at: str = "min_monitor"
+        self, result: OptimResult, *, at: str = "final"
     ) -> VariationalApproximation:
         """Bind the fitted variational distribution for posterior sampling.
 
@@ -762,9 +777,11 @@ class NegElboLoss(LossMixin):
             values. Keep the variational graph, nonparameter values and ``q_to_p``
             mapping unchanged while using the returned object.
         at
-            ``"min_monitor"`` (default) selects ``result.position_min_monitor``;
-            ``"final"`` selects ``result.position_final``. An unavailable minimum
-            does not fall back to the final position.
+            ``"final"`` (default) selects ``result.position_final``;
+            ``"min_monitor"`` selects ``result.position_min_monitor``. VI uses the
+            final iterate to avoid selection on a noisy monitoring minimum, unlike
+            deterministic MAP/Laplace approximation defaults. Neither choice
+            certifies convergence. An unavailable minimum does not fall back.
 
         Returns
         -------
@@ -829,7 +846,7 @@ class NegElboLoss(LossMixin):
         self,
         params: Position,
         key: jax.Array,
-        p_state: ModelState,
+        p_state: ModelState | None = None,
         q_state: ModelState | None = None,
         obs: Position | None = None,
         scale_log_lik_p_by: float = 1.0,
@@ -846,7 +863,8 @@ class NegElboLoss(LossMixin):
         ``E_q[log p(theta, y)] + H(q)``. In automatic entropy mode, supported
         variational terms use analytic entropy; other terms use sampled negative
         log densities. Conditional entropies are averaged over sampled parents.
-        Priors in ``q`` remain a separate regularization contribution.
+        Target-model priors are included. Priors on ``q`` parameters contribute
+        only when ``regularize_q_prior=True``; see :ref:`vi-q-prior-penalties`.
         Mini-batch training passes
         ``batches`` so observed log-likelihood terms can be scaled by the active
         batch configuration. ``NegElboLoss`` rejects validation splits, so any
@@ -859,7 +877,8 @@ class NegElboLoss(LossMixin):
         key
             JAX pseudo-random key used for sampling from ``q``.
         p_state
-            Current state of the target model ``p``.
+            Optional state of the target model ``p``. Defaults to its current
+            ``self.p.state``; an explicit state is used unchanged as the template.
         q_state
             Optional state of the variational model ``q``. Defaults to
             ``self.q.state``.
@@ -886,6 +905,7 @@ class NegElboLoss(LossMixin):
             Scalar Monte Carlo estimate of the ELBO.
         """
         obs = Position({}) if obs is None else obs
+        p_state = self.p.state if p_state is None else p_state
         q_state = self.q.state if q_state is None else q_state
 
         nsamples = nsamples if nsamples is not None else self.nsamples
@@ -1039,6 +1059,12 @@ class VDist:
     represent the initial value finitely; otherwise construction raises ValueError.
     Negative dense diagonals are allowed with no bijector or a compatible custom
     bijector, but not with the automatic positive-diagonal transform.
+
+    Gaussian builders default to initial standard deviation ``0.1`` in each
+    governed parameter's units (transformed units for transformed parameters).
+    This is a heuristic, not a scale-invariant or universally superior choice.
+    Set ``scale``, ``scale_diag``, or ``scale_tril`` explicitly when appropriate;
+    see :ref:`vi-initial-scale`.
 
     A scalar ``loc`` remains one learned shared location, broadcast to the governed
     parameters. Use a vector to learn their means separately. Scalar scales expand
@@ -1327,7 +1353,7 @@ class VDist:
     def normal(
         self,
         loc: jax.typing.ArrayLike | None = None,
-        scale: Literal["laplace"] | jax.typing.ArrayLike = 0.01,
+        scale: Literal["laplace"] | jax.typing.ArrayLike = 0.1,
         scale_bijector: type[jb.Bijector]
         | jb.Bijector
         | None
@@ -1349,6 +1375,8 @@ class VDist:
             Initial location. If ``None``, the current flattened target position is
             used. A scalar is one learned location shared by all governed parameters.
         scale
+            Defaults to ``0.1`` (initial SD in model units), a heuristic you
+            can override; see :ref:`vi-initial-scale`.
             Initial scale. A scalar is broadcast to all flat components. The special
             value ``"laplace"`` initializes the scale from the diagonal of a
             Laplace-style covariance computed from the local curvature of the target
@@ -1415,7 +1443,7 @@ class VDist:
     def mvn_diag(
         self,
         loc: jax.typing.ArrayLike | None = None,
-        scale_diag: Literal["laplace"] | jax.typing.ArrayLike = 0.01,
+        scale_diag: Literal["laplace"] | jax.typing.ArrayLike = 0.1,
         scale_diag_bijector: type[jb.Bijector]
         | jb.Bijector
         | None
@@ -1436,6 +1464,8 @@ class VDist:
             ``None``, the current flattened target position is used. A scalar is
             one learned location shared by all governed parameters.
         scale_diag
+            Defaults to ``0.1`` (initial SD in model units), a heuristic you
+            can override; see :ref:`vi-initial-scale`.
             Initial value for the square roots of the diagonal elements of the
             variational distribution's covariance matrix. In other words: The marginal
             standard deviations/scales. A scalar is broadcast to all flat components.
@@ -1502,7 +1532,7 @@ class VDist:
     def mvn_tril(
         self,
         loc: jax.typing.ArrayLike | None = None,
-        scale_tril: Literal["laplace"] | jax.typing.ArrayLike = 0.01,
+        scale_tril: Literal["laplace"] | jax.typing.ArrayLike = 0.1,
         scale_tril_bijector: type[jb.Bijector]
         | jb.Bijector
         | None
@@ -1524,6 +1554,8 @@ class VDist:
             ``None``, the current flattened target position is used. A scalar is
             one learned location shared by all governed parameters.
         scale_tril
+            Defaults to ``0.1`` (initial SD in model units), a heuristic you
+            can override; see :ref:`vi-initial-scale`.
             Initial value for the lower Cholesky factor, must have non-zero diagonal
             elements. A scalar is interpreted as a multiple of the identity matrix.
             The special value ``"laplace"`` initializes the lower Cholesky factor
@@ -1613,8 +1645,9 @@ class VDist:
 
     def sample(
         self,
+        sample_shape: int | Sequence[int] = (),
+        *,
         seed: jax.Array,
-        sample_shape: Sequence[int] = (),
         at_position: Position | None = None,
     ) -> Position:
         """
@@ -1622,10 +1655,11 @@ class VDist:
 
         Parameters
         ----------
-        seed
-            A jax key array, the seed for pseudo-random number generation.
         sample_shape
-            Desired sample shape.
+            Leading sample shape as an integer or sequence. Defaults to one draw
+            in the original parameter shapes.
+        seed
+            Required keyword-only JAX key for pseudo-random number generation.
         at_position
             Position dictionary holding parameter values (position) of the variational
             distribution q to use for sampling. No leading batching dimensions are
@@ -1646,7 +1680,7 @@ class VDist:
         >>> theta = lsl.Var.new_param(jnp.array([0.0]), name="theta")
         >>> p = lsl.Model(theta)
         >>> vdist = opt.VDist(["theta"], p).mvn_diag().build()
-        >>> samples = vdist.sample(jax.random.key(1), sample_shape=(3,))
+        >>> samples = vdist.sample(3, seed=jax.random.key(1))
         >>> samples["theta"].shape
         (3, 1)
         """
@@ -1781,11 +1815,15 @@ def _sample_variational_model(
     q: Model | None,
     q_to_p: Callable[[Position], Position],
     seed: jax.Array,
-    sample_shape: Sequence[int],
+    sample_shape: int | Sequence[int],
     at_position: Position | None,
 ) -> Position:
     if q is None:
         raise ValueError("The object has no model.")
+
+    sample_shape = (
+        (sample_shape,) if isinstance(sample_shape, int) else tuple(sample_shape)
+    )
 
     if at_position is not None:
         at_position = jax.tree.map(lambda x: jnp.expand_dims(x, (0, 1)), at_position)
@@ -1833,11 +1871,8 @@ class VariationalApproximation:
         Use :meth:`liesel.model.Model.predict` to evaluate derived quantities or
         transform draws back to constrained parameter scales.
         """
-        shape = (
-            (sample_shape,) if isinstance(sample_shape, int) else tuple(sample_shape)
-        )
         return _sample_variational_model(
-            self._q, self._q_to_p, seed, shape, self._position
+            self._q, self._q_to_p, seed, sample_shape, self._position
         )
 
 
@@ -1997,8 +2032,9 @@ class CompositeVDist:
     @usedocs(VDist.sample)
     def sample(
         self,
+        sample_shape: int | Sequence[int] = (),
+        *,
         seed: jax.Array,
-        sample_shape: Sequence[int] = (),
         at_position: Position | None = None,
     ) -> Position:
         return _sample_variational_model(

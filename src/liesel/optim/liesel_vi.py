@@ -37,7 +37,10 @@ class LieselVI:
     batches, and wraps a supplied Optax transformation over all variational
     parameters. Variational-family initialization belongs to
     :class:`.NegElboLoss` and :class:`.VDist`; pass a custom ``NegElboLoss`` when you
-    need Laplace or custom initialization.
+    need Laplace or custom initialization. Built-in families start with standard
+    deviation ``0.1`` in model units, an overridable heuristic; see
+    :ref:`vi-initial-scale`. The default objective is the ordinary ELBO, including
+    target priors; extra q-parameter penalties are opt-in (:ref:`vi-q-prior-penalties`).
 
     Parameters
     ----------
@@ -60,7 +63,9 @@ class LieselVI:
         deterministic objective.
     stopper
         Maximum-epoch and early-stopping configuration. ``None`` creates a fresh
-        :class:`.Stopper` with ``epochs=1000``, ``patience=10``, and ``rtol=1e-6``.
+        :class:`.Stopper` with ``epochs=1000``, ``patience=1000``, and ``rtol=1e-6``.
+        This is a fixed budget, not a convergence check. Pass an explicit stopper
+        with smaller patience to opt into early stopping on the stochastic monitor.
     seed
         Seed for variational draws and batch shuffling, defaulting to zero.
         ``None`` uses the current Unix time in whole seconds. An explicitly
@@ -68,7 +73,10 @@ class LieselVI:
     split
         Optional split. If omitted and ``loss`` is not an explicit
         :class:`.NegElboLoss`, all strong observed inputs are used for training.
-        Multi-size observed data automatically uses :class:`.PositionSplitManager`.
+        Multiple observation sizes raise ValueError. Opt in explicitly with
+        ``split=PositionSplit.from_model(model, multi_size="manager")`` after
+        checking the groups. Declare shared arrays with ``split_axes={key: None}``;
+        equal lengths alone do not establish row alignment.
         An explicit loss supplies its own split; if both are passed, they must be
         the same object. Validation data is not supported for ELBO losses.
         Use :meth:`.PositionSplit.from_model` for data keys, split axes and
@@ -91,8 +99,10 @@ class LieselVI:
         sample size. Must be a boolean. This setting has no effect when
         ``loss`` is an explicit :class:`.NegElboLoss`.
     regularize_q_prior
-        Whether internally constructed ELBOs should include priors in the
-        variational model as regularization terms.
+        Defaults to ``False``. Set ``True`` to add log-prior penalties on
+        variational parameters to internally constructed ELBOs. Target priors
+        remain included either way. An explicit loss retains its own setting.
+        See :ref:`vi-q-prior-penalties`.
     entropy
         Entropy estimator for internally constructed losses: ``"auto"`` uses
         analytic entropy where supported with per-term Monte Carlo fallback;
@@ -152,7 +162,7 @@ class LieselVI:
         loss: Literal["mvn_diag", "mvn_tril", "mvn_blocked"] | NegElboLoss = "mvn_diag",
         nsamples: int = 10,
         scale_loss: bool = True,
-        regularize_q_prior: bool = True,
+        regularize_q_prior: bool = False,
         entropy: Literal["auto", "mc"] = "auto",
         save_position_history: bool = True,
         show_progress: bool = True,
@@ -166,7 +176,9 @@ class LieselVI:
         self.model = model
         self.seed = int(time.time()) if seed is None else seed
         self.stopper = (
-            Stopper(epochs=1000, patience=10, rtol=1e-6) if stopper is None else stopper
+            Stopper(epochs=1000, patience=1000, rtol=1e-6)
+            if stopper is None
+            else stopper
         )
         self.split = self._resolve_split(loss, split)
         self.loss_monitor = loss_monitor
@@ -226,7 +238,7 @@ class LieselVI:
         return PositionSplit.from_model(
             self.model,
             shuffle=False,
-            multi_size="manager",
+            multi_size="error",
         )
 
     def _resolve_loss(
