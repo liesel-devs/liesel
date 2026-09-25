@@ -16,11 +16,11 @@ shuffling batches never changes the held-out data. Selecting rows must
 preserve their {ref}`likelihood contributions <optimizer-row-wise>`.
 The optimizer does not check this property.
 
-This page uses a small Gaussian regression. Expand the setup to run the
-examples from top to bottom.
+The examples assume a Gaussian regression `model` with observed `X` and `y`,
+as in the {doc}`first tutorial <tutorials/notebooks/09-liesel-optim-basic>`.
 
 ```{code-cell} ipython3
-:tags: [hide-input]
+:tags: [remove-cell]
 
 import logging
 
@@ -36,14 +36,27 @@ logging.getLogger("liesel").setLevel(logging.WARNING)
 
 rng = np.random.default_rng(42)
 x = np.linspace(-1.0, 1.0, 128)
+
 X = lsl.Var.new_obs(jnp.asarray(x), name="X")
-beta = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, 0.0, 5.0), name="beta")
+beta = lsl.Var.new_param(
+    0.0,
+    dist=lsl.Dist(tfd.Normal, 0.0, 5.0),
+    name="beta",
+)
+
 log_sigma = lsl.Var.new_param(0.0, name="log_sigma")
 sigma = lsl.Var.new_calc(jnp.exp, log_sigma, name="sigma")
-mu = lsl.Var.new_calc(lambda X, beta: X * beta, X, beta, name="mu")
+
+mu = lsl.Var.new_calc(
+    lambda X, beta: X * beta,
+    X,
+    beta,
+    name="mu",
+)
+
 y = lsl.Var.new_obs(
     jnp.asarray(0.5 * x + rng.normal(scale=0.7, size=x.size)),
-    lsl.Dist(tfd.Normal, mu, sigma),
+    dist=lsl.Dist(tfd.Normal, mu, sigma),
     name="y",
 )
 model = lsl.Model(y)
@@ -67,7 +80,13 @@ split = opt.PositionSplit.from_model(
 
 ```{code-cell} ipython3
 pd.DataFrame(
-    {"rows": [split.train_axis_size, split.validate_axis_size, split.test_axis_size]},
+    {
+        "rows": [
+            split.train_axis_size,
+            split.validate_axis_size,
+            split.test_axis_size,
+        ],
+    },
     index=["training", "validation", "test"],
 )
 ```
@@ -94,17 +113,22 @@ data. For independent groups, opt in to grouping by length and inspect the resul
 ```{code-cell} ipython3
 y_a = lsl.Var.new_obs(
     rng.normal(size=80),
-    lsl.Dist(tfd.Normal, 0.0, 1.0),
+    dist=lsl.Dist(tfd.Normal, 0.0, 1.0),
     name="y_a",
 )
+
 y_b = lsl.Var.new_obs(
     rng.normal(size=40),
-    lsl.Dist(tfd.Normal, 0.0, 1.0),
+    dist=lsl.Dist(tfd.Normal, 0.0, 1.0),
     name="y_b",
 )
 grouped_model = lsl.Model([y_a, y_b])
+
 grouped_split = opt.PositionSplit.from_model(
-    grouped_model, multi_size="manager", validate_axis_share=0.2, seed=42
+    grouped_model,
+    multi_size="manager",
+    validate_axis_share=0.2,
+    seed=42,
 )
 ```
 
@@ -117,7 +141,7 @@ pd.DataFrame(
             "validation": group.validate_axis_size,
         }
         for group in grouped_split.splits
-    ]
+    ],
 )
 ```
 

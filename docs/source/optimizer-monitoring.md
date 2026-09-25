@@ -23,11 +23,11 @@ An epoch runs all configured batches. The two full-data monitors each add one
 loss evaluation at the end of every epoch. Validation uses likelihood only by
 default; set `validation_strategy="log_prob"` to include priors.
 
-This page uses a small Gaussian regression. Expand the setup to run the
-examples from top to bottom.
+The examples assume a Gaussian regression `model` with observed `X` and `y`,
+as in the {doc}`first tutorial <tutorials/notebooks/09-liesel-optim-basic>`.
 
 ```{code-cell} ipython3
-:tags: [hide-input]
+:tags: [remove-cell]
 
 import logging
 
@@ -43,14 +43,27 @@ logging.getLogger("liesel").setLevel(logging.WARNING)
 
 rng = np.random.default_rng(42)
 x = np.linspace(-1.0, 1.0, 128)
+
 X = lsl.Var.new_obs(jnp.asarray(x), name="X")
-beta = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, 0.0, 5.0), name="beta")
+beta = lsl.Var.new_param(
+    0.0,
+    dist=lsl.Dist(tfd.Normal, 0.0, 5.0),
+    name="beta",
+)
+
 log_sigma = lsl.Var.new_param(0.0, name="log_sigma")
 sigma = lsl.Var.new_calc(jnp.exp, log_sigma, name="sigma")
-mu = lsl.Var.new_calc(lambda X, beta: X * beta, X, beta, name="mu")
+
+mu = lsl.Var.new_calc(
+    lambda X, beta: X * beta,
+    X,
+    beta,
+    name="mu",
+)
+
 y = lsl.Var.new_obs(
     jnp.asarray(0.5 * x + rng.normal(scale=0.7, size=x.size)),
-    lsl.Dist(tfd.Normal, mu, sigma),
+    dist=lsl.Dist(tfd.Normal, mu, sigma),
     name="y",
 )
 model = lsl.Model(y)
@@ -60,6 +73,7 @@ model = lsl.Model(y)
 
 ```{code-cell} ipython3
 stopper = opt.Stopper(epochs=500, patience=20, rtol=1e-4)
+
 builder = opt.LieselOptim(
     model,
     optimizers=optax.adam(0.01),
@@ -67,6 +81,7 @@ builder = opt.LieselOptim(
     stopper=stopper,
     show_progress=False,
 )
+
 result = builder.fit()
 ```
 

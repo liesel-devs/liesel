@@ -29,7 +29,7 @@ import liesel.model as lsl
 loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
 y = lsl.Var.new_obs(
     jnp.array([1.0, 2.0, 3.0]),
-    lsl.Dist(tfd.Normal, loc=loc, scale=1.0),
+    dist=lsl.Dist(tfd.Normal, loc=loc, scale=1.0),
     name="y",
 )
 model = lsl.Model(y)
@@ -38,6 +38,8 @@ model = lsl.Model(y)
 Before (deprecated):
 
 ```{code-cell} ipython3
+:tags: [remove-stderr]
+
 import liesel.goose as gs
 
 result = gs.optim_flat(
@@ -72,6 +74,7 @@ engine = opt.LieselOptim(
     show_progress=False,
     save_position_history=True,
 ).build_engine()
+
 result = engine.fit()
 position = result.position_min_monitor
 fitted_state = model.update_state(position, model.state)
@@ -137,11 +140,13 @@ the scalar total log likelihood and the array of individual log likelihoods:
 
 ```{code-cell} ipython3
 import jax
+import pandas as pd
 
 track_keys = ["_model_log_lik", "y_log_prob"]
-history = {
-    key: values[: result.n_epochs] for key, values in result.history.position.items()
-}
+history = jax.tree.map(
+    lambda values: values[: result.n_epochs],
+    result.history.position,
+)
 
 
 def extract_quantities(position):
@@ -150,11 +155,6 @@ def extract_quantities(position):
 
 
 derived_history = jax.vmap(extract_quantities)(history)
-```
-
-```{code-cell} ipython3
-import pandas as pd
-
 tracked = pd.DataFrame({"log_lik": derived_history["_model_log_lik"]})
 ```
 

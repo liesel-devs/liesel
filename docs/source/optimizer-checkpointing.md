@@ -27,7 +27,9 @@ logging.getLogger("liesel").setLevel(logging.WARNING)
 
 loc = lsl.Var.new_param(0.0, name="loc")
 y = lsl.Var.new_obs(
-    jnp.array([1.0, 2.0, 3.0]), lsl.Dist(tfd.Normal, loc, 1.0), name="y"
+    jnp.array([1.0, 2.0, 3.0]),
+    dist=lsl.Dist(tfd.Normal, loc, 1.0),
+    name="y",
 )
 model = lsl.Model(y)
 
@@ -79,7 +81,12 @@ from tempfile import TemporaryDirectory
 
 with TemporaryDirectory() as directory:
     checkpoint_path = Path(directory) / "optim.pkl"
-    first = engine.fit(checkpoint=checkpoint_path, checkpoint_every=10, pause_after=10)
+    first = engine.fit(
+        checkpoint=checkpoint_path,
+        checkpoint_every=10,
+        pause_after=10,
+    )
+
     result = engine.fit(checkpoint=checkpoint_path, checkpoint_every=10)
 ```
 
