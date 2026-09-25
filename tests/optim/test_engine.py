@@ -185,6 +185,25 @@ def test_unbatched_split_entries_use_training_rows(debug, holdout, mode):
         assert jnp.isnan(info.reproduce_step(engine).position["loc"])
 
 
+def test_engine_lets_custom_losses_validate_data_dependencies():
+    class DataDependentLoss(SequenceLoss):
+        def _validate_data_keys(self, split, optimizer_keys):
+            if "y" in split.position_keys and "theta" in optimizer_keys:
+                raise ValueError("Data 'y' must stay dynamic when fitting 'theta'.")
+
+    with pytest.raises(ValueError, match="Data 'y' must stay dynamic"):
+        OptimEngine(
+            loss=DataDependentLoss(_split()),
+            batches=Batches(["y"], axis_size=1, batch_size=None),
+            optimizers=[_optimizer()],
+            stopper=Stopper(epochs=1, patience=1),
+            seed=1,
+            initial_state={},
+            loss_monitor="train_full_data",
+            show_progress=False,
+        )
+
+
 def test_ema_train_loss_monitor_required_and_explicit_windows():
     with pytest.raises(TypeError):
         EmaTrainLossMonitor()  # ty: ignore[missing-argument]

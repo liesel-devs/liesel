@@ -248,6 +248,14 @@ class LossMixin:
     loss_train_batched: Callable[[Position, "OptimCarry"], tuple[jax.Array, Any]]
     """Training objective differentiated by :meth:`grad` and :meth:`value_and_grad`."""
 
+    def _validate_data_keys(
+        self, split: SplitConfig, optimizer_keys: Sequence[str]
+    ) -> None:
+        """Optionally validate data dependencies when constructing an engine."""
+
+    def _validate_batch_keys(self, groups: Sequence[Sequence[str]]) -> None:
+        """Optionally validate the data groups evaluated in separate batches."""
+
     def init_state(self, params: Position, carry: "OptimCarry") -> Any:
         """Returns None for a stateless loss; override to initialize loss state.
 
@@ -442,6 +450,14 @@ class NegLogProbLoss(LossMixin):
         self.validation_strategy = validation_strategy
         self.scale = scale
         self.scalar = _training_loss_scalar(self.split) if self.scale else 1.0
+
+    def _validate_data_keys(
+        self, split: SplitConfig, optimizer_keys: Sequence[str]
+    ) -> None:
+        validate_model_data_keys(self.model, split.position_keys, optimizer_keys)
+
+    def _validate_batch_keys(self, groups: Sequence[Sequence[str]]) -> None:
+        validate_likelihood_groups(self.model, groups)
 
     @property
     def model(self) -> Model:

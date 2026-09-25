@@ -391,6 +391,7 @@ class LaplaceLoss(LossMixin):
         if not latent:
             raise ValueError("latent must contain at least one continuous coordinate.")
         self._latent_nodes = self._coordinate_nodes(latent)
+        validate_model_data_keys(model, self.split.position_keys, latent)
         self.latent_names = tuple(sorted(latent))
         self._initial_latent = model.extract_position(self.latent_names)
         self._seed, self._unravel_latent = ravel_pytree(self._initial_latent)
@@ -410,6 +411,11 @@ class LaplaceLoss(LossMixin):
             else inner_tol
         )
 
+    def _validate_data_keys(
+        self, split: SplitConfig, optimizer_keys: Sequence[str]
+    ) -> None:
+        validate_model_data_keys(self.model, split.position_keys, optimizer_keys)
+
     def position(self, position_keys: Sequence[str]) -> Position:
         """Validate and extract outer parameters, excluding latents and data."""
         nodes = self._coordinate_nodes(position_keys)
@@ -418,9 +424,7 @@ class LaplaceLoss(LossMixin):
         return self.model.extract_position(position_keys)
 
     def _coordinate_nodes(self, keys: Sequence[str]) -> set:
-        nodes = continuous_coordinate_nodes(self.model, keys, self._data_nodes)
-        validate_model_data_keys(self.model, self.split.position_keys, keys)
-        return nodes
+        return continuous_coordinate_nodes(self.model, keys, self._data_nodes)
 
     def init_state(self, params: Position, carry: OptimCarry) -> LaplaceState:
         """Create an uninitialized latent guess with a stable state structure."""
