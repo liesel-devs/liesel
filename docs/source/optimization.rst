@@ -77,5 +77,5 @@ Common tasks
    optimizer-migration
 
 For arguments and defaults, see the :ref:`optimizer-api`.
-``goose.optim_flat`` is deprecated as of version 0.8.0; use the migration guide
+``goose.optim_flat`` is deprecated and will be removed in 0.8.0; use the migration guide
 above to update existing code.
