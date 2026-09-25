@@ -6,12 +6,22 @@ on:
 
 jobs:
   pytest-pull:
+    name: pytest-pull (${{ matrix.python-version }}, ${{ matrix.group.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.13", "3.14"]
+        group:
+          - name: optim
+            paths: tests/optim
+          - name: goose
+            paths: tests/goose
+          # Catch-all: liesel.model and every other test directory, including new ones.
+          - name: model and others
+            paths: --ignore=tests/optim --ignore=tests/goose
 
     steps:
       - name: Check out repository
@@ -28,4 +38,6 @@ jobs:
         run: uv sync --locked --group dev --group pymc
 
       - name: Run pytest
-        run: uv run pytest
+        # Skip a dedicated group whose test directory does not exist on this branch.
+        if: matrix.group.name != 'optim' || hashFiles('tests/optim/**') != ''
+        run: uv run pytest ${{ matrix.group.paths }}
