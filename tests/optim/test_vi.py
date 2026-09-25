@@ -142,124 +142,132 @@ def test_neg_elbo_mvn_blocked_forwards_shared_scale_initialization():
     assert jnp.allclose(scale_trils[1], 0.2 * jnp.eye(2))
 
 
-def test_neg_elbo_mvn_diag_inherits_target_model_to_float32():
-    p = _laplace_model()
+def test_model_float32_policy_has_no_public_getter():
+    assert not hasattr(_laplace_model(), "to_float32")
 
-    elbo = opt.NegElboLoss.mvn_diag(p)
 
-    assert elbo.q.to_float32 is p.to_float32
+@pytest.mark.parametrize("family", ["mvn_diag", "mvn_tril", "mvn_blocked"])
+@pytest.mark.parametrize("to_float32", [True, False])
+def test_neg_elbo_family_inherits_target_model_to_float32(family, to_float32):
+    with jax.enable_x64(True):
+        loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
+        y = lsl.Var.new_obs(
+            jnp.zeros(2),
+            lsl.Dist(tfp.distributions.Normal, loc=loc, scale=1.0),
+            name="y",
+        )
+        p = lsl.Model([y], to_float32=to_float32)
+        loss = getattr(opt.NegElboLoss, family)(p)
+        expected = jnp.float32 if to_float32 else jnp.float64
+        assert all(
+            value.dtype == expected
+            for value in loss.q.extract_position(list(loss.q.parameters)).values()
+        )
+        assert loss.vdist is not None
+        assert loss.vdist.sample(jax.random.key(1), (3,))["loc"].dtype == expected
 
 
 def test_vdist_float64():
-    x = lsl.Var.new_obs(
-        0.0,
-        name="x",
-    )
-    model = lsl.Model([x], to_float32=False)
-    q = opt.VDist(["x"], model).normal(0.0, 1.0)
-
-    assert not q.p.to_float32
-    assert q._to_float32 is False
+    with jax.enable_x64(True):
+        x = lsl.Var.new_obs(0.0, name="x")
+        model = lsl.Model([x], to_float32=False)
+        q = opt.VDist(["x"], model).normal(0.0, 1.0).build()
+        assert q.q is not None
+        assert q.q.extract_position(q.parameters)["(x)_loc"].dtype == jnp.float64
+        assert q.sample(jax.random.key(1), (3,))["x"].dtype == jnp.float64
 
 
 def test_vdist_default_inherits_target_model_to_float32():
-    x = lsl.Var.new_obs(
-        jnp.array(0.0),
-        name="x",
-    )
-    model = lsl.Model([x], to_float32=True)
-
-    q = opt.VDist(["x"], model).normal(0.0, 1.0).build()
-
-    assert q.p.to_float32 is True
-    assert q.q is not None
-    assert q.q.to_float32 is True
+    with jax.enable_x64(True):
+        x = lsl.Var.new_obs(jnp.array(0.0), name="x")
+        model = lsl.Model([x], to_float32=True)
+        q = opt.VDist(["x"], model).normal(0.0, 1.0).build()
+        assert model.vars["x"].value.dtype == jnp.float32
+        assert q.q is not None
+        assert q.q.extract_position(q.parameters)["(x)_loc"].dtype == jnp.float32
+        assert q.sample(jax.random.key(1), (3,))["x"].dtype == jnp.float32
 
 
 def test_vdist_can_override_target_model_to_float32():
-    x = lsl.Var.new_obs(
-        jnp.array(0.0),
-        name="x",
-    )
-    model = lsl.Model([x], to_float32=True)
-
-    q = opt.VDist(["x"], model, to_float32=False).normal(0.0, 1.0).build()
-
-    assert q.p.to_float32 is True
-    assert q.q is not None
-    assert q.q.to_float32 is False
+    with jax.enable_x64(True):
+        x = lsl.Var.new_obs(jnp.array(0.0), name="x")
+        model = lsl.Model([x], to_float32=True)
+        q = opt.VDist(["x"], model, to_float32=False).normal(0.0, 1.0).build()
+        assert model.vars["x"].value.dtype == jnp.float32
+        assert q.q is not None
+        assert q.q.extract_position(q.parameters)["(x)_loc"].dtype == jnp.float64
+        assert q.sample(jax.random.key(1), (3,))["x"].dtype == jnp.float64
 
 
 @pytest.mark.parametrize("initializer", ["normal", "mvn_diag", "mvn_tril"])
 def test_vdist_can_still_force_variational_model_to_float32(initializer):
     with jax.enable_x64(True):
-        x = lsl.Var.new_obs(
-            jnp.array(0.0, dtype=jnp.float32),
-            name="x",
-        )
+        x = lsl.Var.new_obs(jnp.array(0.0, dtype=jnp.float32), name="x")
         model = lsl.Model([x], to_float32=False)
-
         vdist = opt.VDist(["x"], model, to_float32=True)
         loc = jnp.array([0.0], dtype=jnp.float64)
         q = getattr(vdist, initializer)(loc=loc).build()
-
-    assert q.q is not None
-    assert q.q.to_float32 is True
-    assert q.q.extract_position(q.parameters)["(x)_loc"].dtype == jnp.float32
+        assert q.q is not None
+        assert q.q.extract_position(q.parameters)["(x)_loc"].dtype == jnp.float32
+        assert q.sample(jax.random.key(1), (3,))["x"].dtype == jnp.float32
 
 
 @pytest.mark.parametrize("initializer", ["normal", "mvn_diag", "mvn_tril"])
 def test_vdist_uses_float64_under_x64_when_not_converting(initializer):
     with jax.enable_x64(True):
-        x = lsl.Var.new_obs(
-            jnp.array(0.0),
-            name="x",
-        )
+        x = lsl.Var.new_obs(jnp.array(0.0), name="x")
         model = lsl.Model([x], to_float32=False)
-
         vdist = opt.VDist(["x"], model)
         q = getattr(vdist, initializer)().build()
-
-    assert q.q is not None
-    assert q.q.to_float32 is False
-    assert q.q.extract_position(q.parameters)["(x)_loc"].dtype == jnp.float64
+        assert q.q is not None
+        assert q.q.extract_position(q.parameters)["(x)_loc"].dtype == jnp.float64
+        assert q.sample(jax.random.key(1), (3,))["x"].dtype == jnp.float64
 
 
 def test_compositevdist_float64():
-    x = lsl.Var.new_obs(
-        0.0,
-        name="x",
-    )
-    model = lsl.Model([x], to_float32=False)
-    q = opt.VDist(["x"], model).normal(0.0, 1.0)
-
-    vi_dist = opt.CompositeVDist(q).build()
-
-    assert not vi_dist._to_float32()
+    with jax.enable_x64(True):
+        x = lsl.Var.new_obs(0.0, name="x")
+        model = lsl.Model([x], to_float32=False)
+        q = opt.VDist(["x"], model).normal(0.0, 1.0)
+        vi_dist = opt.CompositeVDist(q).build()
+        assert vi_dist.q is not None
+        assert (
+            vi_dist.q.extract_position(vi_dist.parameters)["(x)_loc"].dtype
+            == jnp.float64
+        )
+        assert vi_dist.sample(jax.random.key(1), (3,))["x"].dtype == jnp.float64
 
 
 def test_vdist_exp_bijector_float64():
-    x = lsl.Var.new_obs(
-        0.0,
-        name="x",
-    )
-    model = lsl.Model([x], to_float32=False)
-    q = opt.VDist(["x"], model).normal(0.0, 1.0, scale_bijector=tfb.Exp())
-
-    assert not q.p.to_float32
+    with jax.enable_x64(True):
+        x = lsl.Var.new_obs(0.0, name="x")
+        model = lsl.Model([x], to_float32=False)
+        q = opt.VDist(["x"], model).normal(0.0, 1.0, scale_bijector=tfb.Exp()).build()
+        assert q.q is not None
+        assert q.q.extract_position(q.parameters)["(x)_loc"].dtype == jnp.float64
+        assert q.sample(jax.random.key(1), (3,))["x"].dtype == jnp.float64
 
 
 def test_compositevdist_exp_bijector_float64():
-    x = lsl.Var.new_obs(
-        0.0,
-        name="x",
-    )
-    model = lsl.Model([x], to_float32=False)
-    q = opt.VDist(["x"], model).normal(0.0, 1.0, scale_bijector=tfb.Exp())
+    with jax.enable_x64(True):
+        x = lsl.Var.new_obs(0.0, name="x")
+        model = lsl.Model([x], to_float32=False)
+        q = opt.VDist(["x"], model).normal(0.0, 1.0, scale_bijector=tfb.Exp())
+        vi_dist = opt.CompositeVDist(q).build()
+        assert vi_dist.q is not None
+        assert (
+            vi_dist.q.extract_position(vi_dist.parameters)["(x)_loc"].dtype
+            == jnp.float64
+        )
+        assert vi_dist.sample(jax.random.key(1), (3,))["x"].dtype == jnp.float64
 
-    vi_dist = opt.CompositeVDist(q).build()
 
-    assert not vi_dist._to_float32()
+def test_compositevdist_rejects_inconsistent_dtype_policy():
+    model = _two_parameter_model()
+    q1 = opt.VDist(["alpha"], model, to_float32=True).normal()
+    q2 = opt.VDist(["beta"], model, to_float32=False).mvn_diag()
+    with pytest.raises(ValueError, match="setting must be consistent"):
+        opt.CompositeVDist(q1, q2).build()
 
 
 class TestVDist:

@@ -373,7 +373,7 @@ class NegElboLoss(LossMixin):
             leaves the scale parameter untransformed.
         to_float32
             Whether to convert values in the variational model to ``float32``. If
-            ``None``, inherits ``p.to_float32``.
+            ``None``, inherits the ``to_float32`` policy set when constructing ``p``.
 
         entropy
             ``"auto"`` uses analytic entropy where supported, with per-term Monte
@@ -459,7 +459,7 @@ class NegElboLoss(LossMixin):
             ``None`` leaves the scale parameter untransformed.
         to_float32
             Whether to convert values in the variational model to ``float32``. If
-            ``None``, inherits ``p.to_float32``.
+            ``None``, inherits the ``to_float32`` policy set when constructing ``p``.
 
         entropy
             ``"auto"`` uses analytic entropy where supported, with per-term Monte
@@ -542,7 +542,7 @@ class NegElboLoss(LossMixin):
             parameter untransformed.
         to_float32
             Whether to convert values in the variational model to ``float32``. If
-            ``None``, inherits ``p.to_float32``.
+            ``None``, inherits the ``to_float32`` policy set when constructing ``p``.
 
         entropy
             ``"auto"`` uses analytic entropy where supported, with per-term Monte
@@ -808,7 +808,7 @@ class VDist:
         :class:`.VDist`.
     to_float32
         Whether to convert values in the variational model to ``float32``. If
-        ``None``, inherits ``p.to_float32``.
+        ``None``, inherits the ``to_float32`` policy set when constructing ``p``.
 
     See Also
     --------
@@ -909,7 +909,7 @@ class VDist:
         self.var: Var | None = None
         self.q: Model | None = None
 
-        self._to_float32 = p.to_float32 if to_float32 is None else to_float32
+        self._to_float32 = p._to_float32 if to_float32 is None else to_float32
 
     @property
     def p(self) -> Model:
