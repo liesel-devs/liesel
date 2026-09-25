@@ -32,6 +32,7 @@ from ._engine_utils import (
     _validate_positive_int,
 )
 from ._log_lik import validate_likelihood_groups
+from ._model_utils import validate_model_data_keys
 from .batch import Batches, BatchManager
 from .laplace import LaplaceLoss
 from .loss import Loss, LossMixin, NegLogProbLoss, _check_evaluation
@@ -551,6 +552,9 @@ class OptimEngine:
             else (self.batches,)
         )
         if isinstance(self.loss, NegLogProbLoss):
+            validate_model_data_keys(
+                self.loss.model, self.split.position_keys, self.position_keys
+            )
             validate_likelihood_groups(
                 self.loss.model, [batch.position_keys for batch in batches]
             )
@@ -789,11 +793,11 @@ class OptimEngine:
         carry._data_states = {}
         if self.batches.is_full_data or self.loss_monitor == "train_full_data":
             carry._data_states["train"] = model.update_state(
-                self.split.train, carry.model_state
+                self.split.train, carry.model_state, allow_weak_vars=True
             )
         if self.loss_monitor == "validation":
             carry._data_states["validate"] = model.update_state(
-                self.split.validate, carry.model_state
+                self.split.validate, carry.model_state, allow_weak_vars=True
             )
 
     def _data_structure(self) -> tuple:

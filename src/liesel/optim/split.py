@@ -676,7 +676,7 @@ class PositionSplit:
             if n_part == 0:
                 continue
 
-            state = model.update_state(position, model.state)
+            state = model.update_state(position, model.state, allow_weak_vars=True)
             sizes[part] = _infer_sample_size_for_part(model, state, self, part)
 
         return self.set_sample_sizes(sizes)

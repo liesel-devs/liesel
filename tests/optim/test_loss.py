@@ -233,6 +233,125 @@ def test_prepared_partitions_keep_omitted_batch_keys_on_training_rows(
     np.testing.assert_allclose(result.history.loss_monitor, expected / 5, rtol=1e-5)
 
 
+@pytest.mark.parametrize(
+    "batch_size,monitor",
+    [(None, "validation"), (1, "validation"), (1, "ema"), (1, "train_full_data")],
+)
+def test_fit_batches_computed_basis_without_callbacks(batch_size, monitor):
+    model, calls = _counted_basis_model(extra_branch=True)
+
+    def fit(data_key):
+        split = PositionSplit.from_model(
+            model,
+            position_keys=[[data_key, "y"], ["z"]],
+            multi_size="manager",
+            validate_axis_share=0.5,
+            shuffle=False,
+        )
+        return LieselOptim(
+            model,
+            split=split,
+            batches=Batches.from_split(
+                split,
+                position_keys=[data_key, "y"],
+                batch_size=batch_size,
+                shuffle=False,
+            ),
+            optimizers=optax.sgd(0.01),
+            loss_monitor=(
+                EmaTrainLossMonitor(effective_window=2) if monitor == "ema" else monitor
+            ),
+            stopper=Stopper(epochs=3, patience=3, min_epochs=3),
+            seed=12,
+            show_progress=False,
+        ).fit()
+
+    calls.clear()
+    computed = fit("basis")
+    jax.effects_barrier()
+    assert not calls
+    raw = fit("x")
+    assert computed.history.position is not None
+    assert raw.history.position is not None
+    np.testing.assert_allclose(
+        computed.history.position["beta"], raw.history.position["beta"], rtol=1e-6
+    )
+    np.testing.assert_allclose(
+        computed.history.loss_monitor, raw.history.loss_monitor, rtol=1e-6
+    )
+    # Gaussian SGD reference: the omitted z group contributes only training [1, 1].
+    expected = (
+        (198 / 101) * (1 - 0.798 ** np.arange(1, 4))
+        if batch_size is None
+        else [1.082866944, 1.5709256790939157, 1.7908985300718774]
+    )
+    np.testing.assert_allclose(computed.history.position["beta"], expected, rtol=1e-5)
+
+
+def test_fit_mixes_precomputed_matrix_rows_and_native_covariate_batches():
+    calls = []
+
+    def matrix(values):
+        calls.append(np.asarray(values).copy())
+        return np.column_stack((np.ones_like(values), values))
+
+    def basis_fn(values):
+        return io_callback(
+            matrix,
+            jax.ShapeDtypeStruct((values.size, 2), values.dtype),
+            values,
+            ordered=True,
+        )
+
+    x1 = lsl.Var.new_obs(jnp.arange(-2.0, 6.0), name="x1")
+    x2 = lsl.Var.new_obs(
+        jnp.array([1.0, 3.0, -1.0, 2.0, 0.0, 4.0, -2.0, 1.0]), name="x2"
+    )
+    basis = lsl.Var.new_calc(basis_fn, x1, name="basis")
+    beta = lsl.Var.new_param(jnp.zeros(2), lsl.Dist(tfd.Normal, 0.0, 1.0), name="beta")
+    gamma = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, 0.0, 1.0), name="gamma")
+    loc = lsl.Var.new_calc(
+        lambda basis, beta, x2, gamma: basis @ beta + gamma * x2**2,
+        basis,
+        beta,
+        x2,
+        gamma,
+    )
+    y = lsl.Var.new_obs(jnp.arange(8.0) / 5, lsl.Dist(tfd.Normal, loc, 1.0), name="y")
+    model = lsl.Model(y)
+    jax.effects_barrier()
+
+    def fit(data_key):
+        split = PositionSplit.from_model(
+            model,
+            position_keys=[data_key, "x2", "y"],
+            validate_axis_share=0.25,
+            seed=12,
+        )
+        return LieselOptim(
+            model,
+            split=split,
+            batch_size=2,
+            optimizers=optax.sgd(0.005),
+            loss_monitor="validation",
+            stopper=Stopper(epochs=3, patience=3, min_epochs=3),
+            seed=13,
+            show_progress=False,
+        ).fit()
+
+    calls.clear()
+    computed = fit("basis")
+    jax.effects_barrier()
+    assert not calls
+    raw = fit("x1")
+    jax.effects_barrier()
+    assert calls
+    for actual, expected in zip(
+        jax.tree.leaves(computed.history), jax.tree.leaves(raw.history), strict=True
+    ):
+        np.testing.assert_allclose(actual, expected, rtol=1e-6, atol=1e-7)
+
+
 @pytest.mark.parametrize("debug", [False, True])
 @pytest.mark.parametrize("monitor", ["ema", "validation"])
 def test_minibatches_skip_full_training_basis_and_keep_omitted_training_rows(

@@ -1,5 +1,7 @@
 """Copula factors follow their strong data inputs through splits and batches."""
 
+from typing import Any
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -65,16 +67,111 @@ FACTORIES = [
 
 
 @pytest.mark.parametrize("factory", FACTORIES)
-def test_factories_select_strong_inputs_and_reject_explicit_weak_keys(factory):
+def test_factories_default_to_strong_inputs_and_reject_computed_node_keys(factory):
     model = copula_model()
     kwargs = {"batch_size": 2} if factory in (opt.Batches, opt.BatchManager) else {}
     result = factory.from_model(model, **kwargs)
     assert set(result.position_keys) == {"x1", "x2"}
-    for key in ("copula", model.vars["copula"].value_node.name):
-        with pytest.raises(ValueError, match="weak variable.*strong source"):
-            factory.from_model(model, position_keys=[key], **kwargs)
+    with pytest.raises(ValueError, match="variable name"):
+        factory.from_model(
+            model, position_keys=[model.vars["copula"].value_node.name], **kwargs
+        )
     with pytest.raises(ValueError, match="one explicit group"):
         factory.from_model(model, position_keys=[["x1"], ["x2"]], **kwargs)
+
+
+@pytest.mark.parametrize("factory", FACTORIES)
+def test_factories_accept_computed_matrix_data_keys(factory):
+    x = lsl.Var.new_value(jnp.arange(4.0), name="x")
+    basis = lsl.Var.new_calc(
+        lambda values: jnp.stack((values, values**2), axis=-1), x, name="basis"
+    )
+    loc = lsl.Var.new_calc(lambda matrix: matrix.sum(axis=-1), basis)
+    y = lsl.Var.new_obs(jnp.zeros(4), lsl.Dist(tfd.Normal, loc, 1.0), name="y")
+    model = lsl.Model(y)
+    kwargs = {"batch_size": 2} if factory in (opt.Batches, opt.BatchManager) else {}
+    result = factory.from_model(model, position_keys=["basis", "y"], **kwargs)
+    assert result.position_keys == ["basis", "y"]
+    if factory in (opt.Batches, opt.BatchManager):
+        batch = result if isinstance(result, opt.Batches) else result.batches[0]
+        assert batch.sample_size == 4
+        assert batch.batch_sample_size == 2
+    if isinstance(result, opt.PositionSplit):
+        assert result.train_sample_size == 4
+
+
+@pytest.mark.parametrize("factory", [*FACTORIES, opt.NegLogProbLoss])
+@pytest.mark.parametrize("invalid", ["ancestor", "descendant", "transient"])
+def test_factories_reject_ambiguous_or_transient_computed_data(factory, invalid):
+    x = lsl.Var.new_obs(jnp.arange(4.0), name="x")
+    basis = lsl.Var.new_calc(jnp.square, x, name="basis", cache=invalid != "transient")
+    shifted = lsl.Var.new_calc(lambda value: value + 1, basis, name="shifted")
+    y = lsl.Var.new_obs(jnp.zeros(4), lsl.Dist(tfd.Normal, shifted, 1.0), name="y")
+    model = lsl.Model(y)
+    keys = ["basis", "y"]
+    if invalid != "transient":
+        keys.append("x" if invalid == "ancestor" else "shifted")
+    if factory in (opt.Batches, opt.BatchManager):
+        kwargs = {"batch_size": 2, "infer_sample_size": False}
+    elif factory in (opt.PositionSplit, opt.PositionSplitManager):
+        kwargs = {"infer_sample_sizes": False}
+    else:
+        kwargs = {}
+    message = "transient" if invalid == "transient" else "Ambiguous"
+    with pytest.raises(ValueError, match=message):
+        if factory is opt.NegLogProbLoss:
+            split = opt.Split(keys, axis_size=4).split_position(
+                {key: jnp.zeros(4) for key in keys}
+            )
+            factory(model, split)
+        else:
+            factory.from_model(model, position_keys=keys, **kwargs)
+
+
+@pytest.mark.parametrize("direct_engine", [False, True])
+@pytest.mark.parametrize("optimize_beta", [False, True])
+def test_computed_data_requires_fixed_parameter_dependencies(
+    direct_engine, optimize_beta
+):
+    x = lsl.Var.new_value(jnp.arange(1.0, 5.0), name="x")
+    beta = lsl.Var.new_param(1.0, name="beta")
+    mean = lsl.Var.new_calc(lambda b, v: b * v, beta, x, name="mean")
+    alpha = lsl.Var.new_param(0.0, name="alpha")
+    loc = lsl.Var.new_calc(lambda a, m: a + m, alpha, mean)
+    y = lsl.Var.new_obs(2 + x.value, lsl.Dist(tfd.Normal, loc, 1.0), name="y")
+    model = lsl.Model(y)
+    split = opt.PositionSplit.from_model(model, position_keys=["mean", "y"])
+
+    def build_engine():
+        options: dict[str, Any] = {
+            "optimizers": [
+                opt.LBFGS(["alpha", "beta"] if optimize_beta else ["alpha"])
+            ],
+            "loss_monitor": "train_full_data",
+            "stopper": opt.Stopper(epochs=10, patience=3),
+            "show_progress": False,
+        }
+        if direct_engine:
+            return opt.OptimEngine(
+                loss=opt.NegLogProbLoss(model, split),
+                batches=opt.Batches.from_split(split, batch_size=None),
+                initial_state=model.state,
+                seed=0,
+                **options,
+            )
+        return opt.LieselOptim(model, split=split, **options).build_engine()
+
+    if optimize_beta:
+        with pytest.raises(
+            ValueError,
+            match="Computed data key 'mean' depends on optimized parameter 'beta'",
+        ):
+            build_engine()
+    else:
+        result = build_engine().fit()
+        np.testing.assert_allclose(result.position_final["alpha"], 2.0, atol=1e-5)
+        assert set(result.position_final) == {"alpha"}
+        assert model.vars["beta"].value == 1.0
 
 
 @pytest.mark.parametrize("repair_existing_model", [False, True])
