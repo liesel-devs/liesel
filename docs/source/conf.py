@@ -163,6 +163,10 @@ myst_heading_anchors = 3  # auto-generate 3 levels of heading anchors
 myst_enable_extensions = ["amsmath", "dollarmath", "html_image"]
 myst_dmath_double_inline = True
 
+# Executable guides must fail the build when an example fails.
+nb_execution_raise_on_error = True
+nb_execution_timeout = 180
+
 
 # --------------------------------------------------------------------------------------
 # rtds-action settings
