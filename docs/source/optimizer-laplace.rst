@@ -1,5 +1,5 @@
-Laplace approximation and REML
-==============================
+Laplace and REML
+================
 
 :class:`liesel.optim.LaplaceLoss` integrates selected continuous parameters out
 of the model's joint density, then fits the remaining parameters. Here we fit a
