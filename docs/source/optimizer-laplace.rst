@@ -7,16 +7,18 @@ Poisson model's mean and random-effect scale while integrating eight group effec
 
 .. note::
 
-   **Relation to REML.** In Gaussian linear mixed models, restricted maximum
-   likelihood (REML) can be obtained by integrating out both random effects and
-   fixed-effect coefficients, with a flat prior on the latter. Laplace integration
-   is exact in this setting; see `Bates et al., Section 3.4
-   <https://lme4.github.io/lme4/articles/lmer.pdf#page=16>`__.
+   **Relation to REML.** ``LaplaceLoss`` approximates integration over selected
+   parameters in smooth models, including non-Gaussian and nonlinear models.
+   The integrated coordinates, priors, and Jacobians determine the target. Here
+   we integrate the group effects and retain parameter priors, yielding a
+   marginal posterior.
 
-   ``LaplaceLoss`` provides this integration machinery. Recovering classical REML
-   also requires that priors on the remaining parameters and transformation
-   Jacobians do not alter the likelihood objective. Here we integrate only the
-   group effects and retain parameter priors, so we fit a marginal posterior.
+   Classical restricted maximum likelihood (REML) is a special case: integrate
+   both random effects and fixed-effect coefficients in a Gaussian linear mixed
+   model, with flat priors on the latter and no additional prior or Jacobian terms
+   on the remaining parameters. Laplace integration is then exact; see
+   `Bates et al., Section 3.4
+   <https://lme4.github.io/lme4/articles/lmer.pdf#page=16>`__.
 
 Build and inspect the model
 ---------------------------
