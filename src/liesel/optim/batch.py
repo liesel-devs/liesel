@@ -1064,7 +1064,9 @@ class Batches:
             if batch_sample_size is None:
                 obs = model.extract_position(pos_keys)
                 batch = batches.get_batched_position(obs, 0)
-                batch_state = model.update_state(batch, model.state)
+                batch_state = model.update_state(
+                    batch, model.state, allow_weak_vars=True
+                )
                 assert batches.batch_size is not None
                 batches.batch_sample_size = _infer_sample_size_from_state(
                     model,
