@@ -1570,7 +1570,7 @@ def flatten_leading_batch(pytree, batch_ndim: int):
 
     def _f(x):
         x = jnp.asarray(x)
-        b = int(jnp.prod(jnp.array(x.shape[:batch_ndim])))
+        b = prod(x.shape[:batch_ndim])
         return x.reshape((b,) + x.shape[batch_ndim:])
 
     return jax.tree.map(_f, pytree)

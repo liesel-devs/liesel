@@ -59,11 +59,15 @@ def test_posterior_samples_match_existing_sampler(family):
     for shape in ((), 7, (2, 7)):
         axes = (shape,) if isinstance(shape, int) else shape
         actual = posterior.sample(shape, seed=key)
+        compiled = jax.jit(lambda key, shape=shape: posterior.sample(shape, seed=key))(
+            key
+        )
         expected = vdist.sample(key, axes, at_position=position)
         assert actual["alpha"].shape == axes
         assert actual["beta"].shape == axes + (2,)
         for name in expected:
             np.testing.assert_array_equal(actual[name], expected[name])
+            np.testing.assert_allclose(compiled[name], expected[name], rtol=1e-6)
 
 
 @pytest.mark.parametrize("problem", ["unknown", "shape", "dtype", "numpy_float64"])
