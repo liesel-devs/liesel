@@ -10,6 +10,10 @@ import optax
 import pytest
 import tensorflow_probability.substrates.jax.bijectors as tfb
 import tensorflow_probability.substrates.jax.distributions as tfd
+from scipy.integrate import quad
+from scipy.interpolate import BSpline
+from scipy.optimize import brentq
+from scipy.special import gammaln
 
 import liesel.model as lsl
 import liesel.optim as opt
@@ -183,65 +187,71 @@ def test_outer_selection_rejects_latent_overlap_and_duplicate_aliases(keys):
 
 
 @pytest.mark.parametrize("case", ["nonconcave", "overflow_trial"])
-def test_safeguarded_solve_recovers_from_bad_curvature_and_nonfinite_trials(case):
-    if case == "nonconcave":
+@pytest.mark.parametrize("x64", [False, True])
+def test_safeguarded_solve_recovers_from_bad_curvature_and_nonfinite_trials(case, x64):
+    with jax.enable_x64(x64):
+        if case == "nonconcave":
 
-        def joint(t, z):
-            return (z * z - 1) ** 2 / 4 - 0.2 * z + t * t / 2
+            def joint(t, z):
+                return (z * z - 1) ** 2 / 4 - 0.2 * z + t * t / 2
 
-        seed, expected = 0.1, 1.08803391469129
-    else:
+            seed, expected = 0.1, 1.08803391469129
+        else:
 
-        def joint(t, z):
-            return jnp.exp(z) - 2 * z + t * t / 2
+            def joint(t, z):
+                return jnp.exp(z) - 2 * z + t * t / 2
 
-        seed, expected = -5.0, math.log(2.0)
-    model, split = density_model(joint, theta=jnp.array(0.0), z=jnp.array(seed))
-    loss = opt.LaplaceLoss(model, split, latent=["z"])
-    position, carry = loss_carry(loss, ["theta"])
-    value, state = jax.jit(loss.loss_train)(position, carry)
-    assert int(state.status) == 1
-    assert jnp.isfinite(value)
-    np.testing.assert_allclose(state.latent_position["z"], expected, rtol=0, atol=0.002)
-    assert float(state.newton_decrement_squared) / 2 <= loss.inner_tol
+            seed, expected = -5.0, math.log(2.0)
+        model, split = density_model(joint, theta=jnp.array(0.0), z=jnp.array(seed))
+        loss = opt.LaplaceLoss(model, split, latent=["z"])
+        position, carry = loss_carry(loss, ["theta"])
+        value, state = jax.jit(loss.loss_train)(position, carry)
+        assert int(state.status) == 1
+        assert jnp.isfinite(value)
+        np.testing.assert_allclose(
+            state.latent_position["z"], expected, rtol=0, atol=0.002
+        )
+        assert float(state.newton_decrement_squared) / 2 <= loss.inner_tol
 
 
 @pytest.mark.parametrize(
     "case,status", [("saddle", 5), ("nonfinite", 4), ("budget", 2), ("backtracking", 3)]
 )
-def test_unsuccessful_inner_proposals_cannot_supply_a_finite_loss(case, status):
-    if case == "saddle":
+@pytest.mark.parametrize("x64", [False, True])
+def test_unsuccessful_inner_proposals_cannot_supply_a_finite_loss(case, status, x64):
+    with jax.enable_x64(x64):
+        if case == "saddle":
 
-        def joint(t, z):
-            return t * t / 2 - jnp.sum(z * z) / 2
+            def joint(t, z):
+                return t * t / 2 - jnp.sum(z * z) / 2
 
-        seed, max_iter = jnp.zeros(2), 100
-    elif case == "nonfinite":
+            seed, max_iter = jnp.zeros(2), 100
+        elif case == "nonfinite":
 
-        def joint(t, z):
-            return t * t / 2 + jnp.log(z)
+            def joint(t, z):
+                return t * t / 2 + jnp.log(z)
 
-        seed, max_iter = jnp.array(-1.0), 100
-    elif case == "budget":
+            seed, max_iter = jnp.array(-1.0), 100
+        elif case == "budget":
 
-        def joint(t, z):
-            return t * t / 2 + z**4 / 4 - 2 * z
+            def joint(t, z):
+                return t * t / 2 + z**4 / 4 - 2 * z
 
-        seed, max_iter = jnp.array(3.0), 1
-    else:
+            seed, max_iter = jnp.array(3.0), 1
+        else:
 
-        def joint(t, z):
-            return t * t / 2 + jnp.where(z == 0, z, jnp.inf)
+            def joint(t, z):
+                return t * t / 2 + jnp.where(z == 0, z, jnp.inf)
 
-        seed, max_iter = jnp.array(0.0), 100
-    model, split = density_model(joint, theta=jnp.array(0.0), z=seed)
-    loss = opt.LaplaceLoss(model, split, latent=["z"], inner_max_iter=max_iter)
-    position, carry = loss_carry(loss, ["theta"])
-    value, proposed = jax.jit(loss.loss_train)(position, carry)
-    assert int(proposed.status) == status
-    assert not jnp.isfinite(value)
-    assert int(carry.loss_state.status) == 0
-    np.testing.assert_array_equal(carry.loss_state.latent_position["z"], seed)
+            seed, max_iter = jnp.array(0.0), 100
+        model, split = density_model(joint, theta=jnp.array(0.0), z=seed)
+        loss = opt.LaplaceLoss(model, split, latent=["z"], inner_max_iter=max_iter)
+        position, carry = loss_carry(loss, ["theta"])
+        value, proposed = jax.jit(loss.loss_train)(position, carry)
+        assert int(proposed.status) == status
+        assert not jnp.isfinite(value)
+        assert int(carry.loss_state.status) == 0
+        np.testing.assert_array_equal(carry.loss_state.latent_position["z"], seed)
 
 
 @pytest.mark.parametrize("x64", [False, True])
@@ -1164,3 +1174,181 @@ def test_posterior_detects_nonfinite_derivatives_at_a_terminal_monitored_point()
     )
     assert not failed.valid
     assert "Non-finite" in failed.diagnostics["reason"]
+
+
+@pytest.mark.parametrize("x64", [False, True])
+def test_poisson_random_intercept_matches_independent_scalar_laplace_and_quadrature(
+    x64,
+):
+    counts = np.array([0.0, 1.0, 3.0, 2.0])
+    constant = math.log(2 * math.pi) + math.log(2) + gammaln(counts + 1).sum()
+
+    def joint(theta, z):
+        return (
+            theta**2 / 8
+            + z**2 / 2
+            + len(counts) * math.exp(theta + z)
+            - counts.sum() * (theta + z)
+            + constant
+        )
+
+    def reference(theta):
+        mode = brentq(
+            lambda z: z + len(counts) * math.exp(theta + z) - counts.sum(),
+            -20.0,
+            10.0,
+            xtol=1e-14,
+        )
+        precision = 1 + len(counts) * math.exp(theta + mode)
+        value = joint(theta, mode) + math.log(precision / (2 * math.pi)) / 2
+        return value, mode
+
+    expected, mode = reference(0.4)
+    h = 1e-4
+    expected_gradient = (reference(0.4 + h)[0] - reference(0.4 - h)[0]) / (2 * h)
+    # Normal tails outside +/-20 contribute less than 6e-89 before centering.
+    integral, error = quad(
+        lambda z: math.exp(joint(0.4, mode) - joint(0.4, z)),
+        -20,
+        20,
+        epsabs=1e-12,
+        epsrel=1e-12,
+    )
+    exact = joint(0.4, mode) - math.log(integral)
+    assert error < 1e-10
+    # This is approximation error, distinct from the numerical checks below.
+    assert 0.001 < abs(expected - exact) < 0.02
+
+    with jax.enable_x64(x64):
+        dtype = jnp.float64 if x64 else jnp.float32
+        theta = lsl.Var.new_param(
+            jnp.array(0.4, dtype), lsl.Dist(tfd.Normal, 0.0, 2.0), name="theta"
+        )
+        z = lsl.Var.new_param(
+            jnp.array(-1.0, dtype), lsl.Dist(tfd.Normal, 0.0, 1.0), name="z"
+        )
+        eta = lsl.Var.new_calc(lambda t, z: t + z, theta, z, name="eta")
+        y = lsl.Var.new_obs(
+            jnp.asarray(counts, dtype), lsl.Dist(tfd.Poisson, log_rate=eta), name="y"
+        )
+        model = lsl.Model([y], to_float32=False)
+        loss = opt.LaplaceLoss(model, latent=["z"])
+        position, carry = loss_carry(loss, ["theta"])
+        (value, state), gradient = jax.jit(loss.value_and_grad)(position, carry)
+        assert int(state.status) == 1
+        np.testing.assert_allclose(value, expected, atol=5e-6 if x64 else 2e-5, rtol=0)
+        np.testing.assert_allclose(
+            gradient["theta"], expected_gradient, atol=5e-6 if x64 else 2e-4, rtol=0
+        )
+        np.testing.assert_allclose(
+            state.latent_position["z"], mode, atol=1e-5 if x64 else 5e-4, rtol=0
+        )
+        assert float(state.newton_decrement_squared) / 2 <= loss.inner_tol
+
+
+@pytest.mark.parametrize("x64", [False, True])
+def test_coupled_spline_penalty_matches_exact_gaussian_marginal(x64):
+    x = np.linspace(0, 1, 16)
+    knots = np.r_[np.zeros(4), [0.25, 0.5, 0.75], np.ones(4)]
+    design = BSpline.design_matrix(x, knots, k=3).toarray()
+    n, d = design.shape
+    difference = np.diff(np.eye(d), n=2, axis=0)
+    # A proper prior: second-difference penalty with its null space regularized.
+    precision = difference.T @ difference + 0.2 * np.eye(d)
+    prior_covariance = np.linalg.inv(precision)
+    y_value = 0.3 + np.sin(2 * math.pi * x)
+    covariance = 0.25 * np.eye(n) + design @ prior_covariance @ design.T
+    residual = y_value - 0.2
+    solved = np.linalg.solve(covariance, residual)
+    expected = (
+        (
+            residual @ solved
+            + np.linalg.slogdet(covariance)[1]
+            + n * math.log(2 * math.pi)
+        )
+        / 2
+        + 0.2**2 / 8
+        + math.log(2)
+        + math.log(2 * math.pi) / 2
+    )
+    expected_gradient = 0.2 / 4 - solved.sum()
+    conditional_precision = precision + design.T @ design / 0.25
+    expected_mode = np.linalg.solve(conditional_precision, design.T @ residual / 0.25)
+
+    with jax.enable_x64(x64):
+        dtype = jnp.float64 if x64 else jnp.float32
+        theta = lsl.Var.new_param(
+            jnp.array(0.2, dtype), lsl.Dist(tfd.Normal, 0.0, 2.0), name="theta"
+        )
+        coef = lsl.Var.new_param(
+            jnp.ones(d, dtype),
+            lsl.Dist(
+                tfd.MultivariateNormalTriL,
+                loc=jnp.zeros(d, dtype),
+                scale_tril=jnp.asarray(np.linalg.cholesky(prior_covariance), dtype),
+            ),
+            name="coef",
+        )
+        mean = lsl.Var.new_calc(
+            lambda t, c: t + jnp.asarray(design, dtype) @ c, theta, coef, name="mean"
+        )
+        y = lsl.Var.new_obs(
+            jnp.asarray(y_value, dtype), lsl.Dist(tfd.Normal, mean, 0.5), name="y"
+        )
+        model = lsl.Model([y], to_float32=False)
+        loss = opt.LaplaceLoss(model, latent=["coef"])
+        position, carry = loss_carry(loss, ["theta"])
+        (value, state), gradient = jax.jit(loss.value_and_grad)(position, carry)
+        assert int(state.status) == 1
+        accuracy = 1e-8 if x64 else 5e-4
+        np.testing.assert_allclose(value, expected, atol=accuracy, rtol=0)
+        np.testing.assert_allclose(
+            gradient["theta"], expected_gradient, atol=accuracy, rtol=0
+        )
+        np.testing.assert_allclose(
+            state.latent_position["coef"], expected_mode, atol=accuracy, rtol=0
+        )
+        np.testing.assert_allclose(
+            state.latent_precision_cholesky,
+            np.linalg.cholesky(conditional_precision),
+            atol=accuracy,
+            rtol=0,
+        )
+
+
+@pytest.mark.parametrize("x64", [False, True])
+def test_large_poisson_count_converges_from_a_remote_start(x64):
+    count, theta_value = 100_000.0, 3.0
+    mode = brentq(lambda z: z + math.exp(theta_value + z) - count, 0, 20, xtol=1e-14)
+    rate = math.exp(theta_value + mode)
+    expected_gradient = theta_value / 4 - mode + rate / (2 * (1 + rate) ** 2)
+    with jax.enable_x64(x64):
+        dtype = jnp.float64 if x64 else jnp.float32
+        theta = lsl.Var.new_param(
+            jnp.array(theta_value, dtype), lsl.Dist(tfd.Normal, 0.0, 2.0), name="theta"
+        )
+        z = lsl.Var.new_param(
+            jnp.array(-3.0, dtype), lsl.Dist(tfd.Normal, 0.0, 1.0), name="z"
+        )
+        eta = lsl.Var.new_calc(lambda t, z: t + z, theta, z, name="eta")
+        y = lsl.Var.new_obs(
+            jnp.array([count], dtype), lsl.Dist(tfd.Poisson, log_rate=eta), name="y"
+        )
+        loss = opt.LaplaceLoss(lsl.Model([y], to_float32=False), latent=["z"])
+        position, carry = loss_carry(loss, ["theta"])
+        (value, state), gradient = jax.jit(loss.value_and_grad)(position, carry)
+        assert int(state.status) == 1
+        assert jnp.isfinite(value)
+        assert float(state.newton_decrement_squared) / 2 <= loss.inner_tol
+        np.testing.assert_allclose(
+            state.latent_position["z"], mode, atol=1e-7 if x64 else 1e-5, rtol=0
+        )
+        np.testing.assert_allclose(
+            gradient["theta"], expected_gradient, atol=1e-7 if x64 else 2e-4, rtol=0
+        )
+        np.testing.assert_allclose(
+            state.latent_precision_cholesky,
+            [[math.sqrt(1 + rate)]],
+            atol=1e-5 if x64 else 0.002,
+            rtol=0,
+        )
