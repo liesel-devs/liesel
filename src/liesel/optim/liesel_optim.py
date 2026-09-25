@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from .state import OptimResult
 
 
-class LieselOptim:
+class LieselOptim[LossType: Loss = NegLogProbLoss]:
     """
     Builds an :class:`.OptimEngine` for a Liesel model using sensible defaults.
 
@@ -152,7 +152,7 @@ class LieselOptim:
         split: SplitConfig | None = None,
         batch_size: int | None = None,
         batches: BatchConfig | None = None,
-        loss: Loss | None = None,
+        loss: LossType | None = None,
         validation_strategy: Literal["log_lik", "log_prob"] = "log_lik",
         scale_loss: bool = True,
         save_position_history: bool = True,
@@ -227,10 +227,10 @@ class LieselOptim:
 
     def _resolve_loss(
         self,
-        loss: Loss | None,
+        loss: LossType | None,
         validation_strategy: Literal["log_lik", "log_prob"],
         scale_loss: bool,
-    ) -> Loss:
+    ) -> LossType | NegLogProbLoss:
         if loss is not None:
             return loss
 

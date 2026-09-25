@@ -11,17 +11,45 @@ For an existing Liesel ``model``, a full-data fit takes:
 
    import liesel.optim as opt
 
-   result = opt.LieselOptim(
+   optim = opt.LieselOptim(
        model,
        optimizers="lbfgs",
        loss_monitor="train_full_data",
-   ).fit()
+   )
+   result = optim.fit()
    position = result.position_min_monitor
 
 L-BFGS needs the full data and a deterministic loss. For minibatches, use Adam.
 The ``optimizers`` argument is required. Pass a configured Optax transformation,
 such as ``optimizers=optax.adam(0.01)``, to optimize all parameters with it.
 The fitted values are returned separately; fitting does not change your model.
+
+Approximate posterior uncertainty
+---------------------------------
+
+After a joint MAP fit, the default :class:`~liesel.optim.NegLogProbLoss` can
+construct a Gaussian posterior approximation and draw parameter dictionaries:
+
+.. code-block:: python
+
+   import jax
+
+   posterior = optim.loss.approximate_joint_posterior(result)
+   draws = posterior.sample(jax.random.key(42), sample_shape=(1000,))
+
+The default ``at="min_monitor"`` selects ``position_min_monitor``;
+``at="final"`` selects ``position_final``. Both use full-training curvature,
+regardless of loss scaling or monitoring strategy. A validation or EMA minimum
+may not be a posterior mode; the helper checks stationarity and raises if the
+selected position is unsuitable. Only optimized parameters enter the
+approximation, with omitted parameters held fixed at their model values.
+
+Use ``model.predict`` to transform draws and evaluate derived quantities.
+:class:`~liesel.optim.LaplaceApproximation` also provides the full covariance and
+named marginal covariance, marginal precision factor, and conditional precision
+blocks. See :doc:`optimizer-laplace` for examples of drawing and using joint
+uncertainty. In hierarchical models, joint MAP can favor vanishing scale
+parameters; that guide shows how to integrate selected effects before fitting.
 
 Start here
 ----------

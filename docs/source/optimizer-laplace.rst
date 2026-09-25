@@ -207,7 +207,8 @@ To work with one parameter, request its block by name:
 
    b_covariance = posterior.marginal_covariance_blocks(["b"])["b"]
 
-This 8 × 8 matrix retains the uncertainty associated with ``mu`` and ``h(tau)``.
+This 8 × 8 matrix is the marginal covariance of ``b``; it includes the
+uncertainty that ``mu`` and ``h(tau)`` propagate to ``b``.
 Omit the name selection to get a dictionary of blocks for every parameter.
 For a factor of each block's inverse, use
 ``posterior.marginal_precision_cholesky_blocks()``.
@@ -216,9 +217,9 @@ For precision conditional on all the other parameters, use
 joint precision and generally differ from the marginal precisions.
 
 The helper adds curvature work once per call and checks stationarity and positive
-definiteness. It selects ``at="best"`` by default; use ``at="final"`` for the final
-snapshot. Keep the model, data, and fixed parameters unchanged between fitting and
-this call. See :meth:`~liesel.optim.LaplaceLoss.approximate_joint_posterior` for controls.
+definiteness. It selects ``at="min_monitor"`` by default; use ``at="final"`` for the
+final snapshot. Keep the model, data, and fixed parameters unchanged between fitting
+and this call. See :meth:`~liesel.optim.LaplaceLoss.approximate_joint_posterior` for controls.
 
 Inspect a failure deliberately
 ------------------------------

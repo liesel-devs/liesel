@@ -11,13 +11,16 @@ import jax
 import jax.numpy as jnp
 import jax.scipy as jsp
 from jax.flatten_util import ravel_pytree
-from tensorflow_probability.substrates.jax.distributions.distribution import (
-    DiscreteDistributionMixin,
-)
 
 from ..goose.pytree import register_dataclass_as_pytree
-from ..model import Model, Value
+from ..model import Model
 from ._engine_utils import _validate_positive_int
+from ._model_utils import continuous_coordinate_nodes
+from .approximation import (
+    LaplaceApproximation,
+    _positive_definite,
+    _prepare_approximation,
+)
 from .loss import LossMixin, SplitConfig, _validate_bool
 from .split import PositionSplit
 from .state import OptimCarry, OptimResult
@@ -50,144 +53,6 @@ class LaplaceState:
     n_resolution_steps: jax.Array
     latent_names: tuple[str, ...] = field(metadata={"static": True})
     latent_shapes: tuple[tuple[int, ...], ...] = field(metadata={"static": True})
-
-
-@dataclass
-class LaplaceApproximation:
-    """Joint Gaussian approximation in optimized and latent coordinate order.
-
-    The lower triangular ``precision_cholesky`` factors the joint precision.
-    ``mean`` contains optimized outer and integrated latent coordinates. Their
-    flattened order is given by ``names`` and ``shapes``: sorted outer names first,
-    then sorted latent names. Construct instances through
-    :meth:`LaplaceLoss.approximate_joint_posterior`.
-
-    ``valid=False`` denotes a diagnostic object with no precision factor.
-    ``diagnostics['reason']`` explains failure; any evaluated raw curvature and
-    gradients remain available there. Invalid objects reject sampling and
-    covariance construction. A dense covariance is only allocated on request.
-    """
-
-    mean: Position
-    precision_cholesky: jax.Array | None
-    names: tuple[str, ...]
-    shapes: tuple[tuple[int, ...], ...]
-    valid: bool
-    diagnostics: dict[str, Any]
-
-    def covariance(self) -> jax.Array:
-        """Construct the dense joint covariance on request."""
-        if not self.valid or self.precision_cholesky is None:
-            raise RuntimeError("Cannot use an invalid Laplace approximation.")
-        factor = self.precision_cholesky
-        return jsp.linalg.cho_solve(
-            (factor, True), jnp.eye(factor.shape[0], dtype=factor.dtype)
-        )
-
-    def _block_slices(self, position_keys):
-        if isinstance(position_keys, str):
-            raise ValueError("Pass coordinate names as a sequence, not a string.")  # noqa: TRY004
-        slices = {}
-        offset = 0
-        for name, shape in zip(self.names, self.shapes, strict=True):
-            width = math.prod(shape)
-            slices[name] = slice(offset, offset + width)
-            offset += width
-        keys = self.names if position_keys is None else position_keys
-        if len(set(keys)) != len(keys):
-            raise ValueError("Duplicate coordinate names.")
-        for name in keys:
-            if name not in slices:
-                raise ValueError(f"Unknown coordinate {name!r}.")
-        return {name: slices[name] for name in keys}
-
-    def marginal_covariance_blocks(
-        self, position_keys: Sequence[str] | None = None
-    ) -> Position:
-        """Return named diagonal blocks of the joint covariance.
-
-        Each block describes a parameter's marginal uncertainty, retaining the
-        effect of correlations with all other parameters. Blocks are flattened
-        two-dimensional matrices, including (1, 1) for scalars. None selects all
-        names; an explicit selection preserves its order. Only selected blocks
-        are constructed, without allocating the full covariance. Unknown or
-        duplicate names, and a string instead of a sequence, raise ValueError.
-        """
-        if not self.valid or self.precision_cholesky is None:
-            raise RuntimeError("Cannot use an invalid Laplace approximation.")
-        factor = self.precision_cholesky
-        blocks = Position({})
-        for name, section in self._block_slices(position_keys).items():
-            selected = jax.nn.one_hot(
-                jnp.arange(section.start, section.stop),
-                factor.shape[0],
-                dtype=factor.dtype,
-            ).T
-            solved = jsp.linalg.solve_triangular(factor, selected, lower=True)
-            blocks[name] = solved.T @ solved
-        return blocks
-
-    def marginal_precision_cholesky_blocks(
-        self, position_keys: Sequence[str] | None = None
-    ) -> Position:
-        """Factor the inverse of each selected marginal covariance block.
-
-        Each lower triangular factor L satisfies L @ L.T = inverse(Sigma_ii).
-        These are not diagonal blocks of the joint precision Cholesky factor.
-        Selection and flattened shapes follow :meth:`marginal_covariance_blocks`.
-        """
-        blocks = Position({})
-        for name, covariance in self.marginal_covariance_blocks(position_keys).items():
-            precision = jsp.linalg.cho_solve(
-                (jnp.linalg.cholesky(covariance), True),
-                jnp.eye(covariance.shape[0], dtype=covariance.dtype),
-            )
-            blocks[name] = jnp.linalg.cholesky(precision)
-        return blocks
-
-    def conditional_precision_blocks(
-        self, position_keys: Sequence[str] | None = None
-    ) -> Position:
-        """Return named diagonal blocks of the joint precision.
-
-        Each block is the precision of that parameter conditional on all other
-        coordinates. Its inverse is a conditional covariance, generally different
-        from the marginal covariance. Selection and flattened shapes follow
-        :meth:`marginal_covariance_blocks`. The full precision is not constructed.
-        """
-        if not self.valid or self.precision_cholesky is None:
-            raise RuntimeError("Cannot use an invalid Laplace approximation.")
-        blocks = Position({})
-        for name, section in self._block_slices(position_keys).items():
-            rows = self.precision_cholesky[section, :]
-            blocks[name] = rows @ rows.T
-        return blocks
-
-    def sample(self, key: jax.Array, sample_shape: tuple[int, ...] = ()) -> Position:
-        """Draw coordinate dictionaries with common leading sample axes.
-
-        The default returns one draw in the original coordinate shapes. Pass
-        ``(draws,)`` or ``(chains, draws)`` for leading axes accepted by
-        :meth:`liesel.model.Model.predict`.
-        """
-        if not self.valid or self.precision_cholesky is None:
-            raise RuntimeError("Cannot sample an invalid Laplace approximation.")
-        factor = self.precision_cholesky
-        sample_shape = tuple(sample_shape)
-        size = factor.shape[0]
-        noise = jax.random.normal(key, sample_shape + (size,), dtype=factor.dtype)
-        centered = jsp.linalg.solve_triangular(
-            factor, noise.reshape((-1, size)).T, lower=True, trans="T"
-        ).T.reshape(sample_shape + (size,))
-        samples = Position({})
-        offset = 0
-        for name, shape in zip(self.names, self.shapes, strict=True):
-            width = math.prod(shape)
-            samples[name] = self.mean[name] + centered[
-                ..., offset : offset + width
-            ].reshape(sample_shape + shape)
-            offset += width
-        return samples
 
 
 def _evaluate(joint, theta, z):
@@ -540,37 +405,7 @@ class LaplaceLoss(LossMixin):
         return self.model.extract_position(position_keys)
 
     def _coordinate_nodes(self, keys: Sequence[str]) -> set:
-        if isinstance(keys, str):
-            raise ValueError("Pass coordinate names as a sequence, not a string.")  # noqa: TRY004
-        nodes = set()
-        for key in keys:
-            if key in self.model.nodes:
-                node = self.model.nodes[key]
-            elif key in self.model.vars:
-                node = self.model.vars[key].value_node
-            else:
-                raise ValueError(f"Unknown coordinate {key!r}.")
-            if node in nodes:
-                raise ValueError(f"Duplicate coordinate or alias {key!r}.")
-            if not isinstance(node, Value) or not jnp.issubdtype(
-                jnp.asarray(node.value).dtype, jnp.floating
-            ):
-                raise ValueError(f"{key!r} must be a writable continuous coordinate.")
-            if node in self._data_nodes or (node.var is not None and node.var.observed):
-                raise ValueError(f"{key!r} is a training input or observation.")
-            dist = (
-                node.var.dist_node.init_dist()
-                if node.var is not None and node.var.dist_node is not None
-                else None
-            )
-            while dist is not None:
-                if isinstance(dist, DiscreteDistributionMixin):
-                    raise ValueError(f"{key!r} has a discrete distribution.")  # noqa: TRY004
-                dist = getattr(
-                    dist, "distribution", getattr(dist, "components_distribution", None)
-                )
-            nodes.add(node)
-        return nodes
+        return continuous_coordinate_nodes(self.model, keys, self._data_nodes)
 
     def init_state(self, params: Position, carry: OptimCarry) -> LaplaceState:
         """Create an uninitialized latent guess with a stable state structure."""
@@ -613,13 +448,13 @@ class LaplaceLoss(LossMixin):
         self,
         result: OptimResult,
         *,
-        at: str = "best",
+        at: str = "min_monitor",
         raise_on_failure: bool = True,
         stationarity_tol: float = 1e-4,
     ) -> LaplaceApproximation:
         """Construct joint uncertainty from marginal and conditional curvature.
 
-        The selected best or final state must belong to this model, loss, and
+        The selected minimum-monitor or final state must belong to this model, loss, and
         training data. Omitted outer coordinates retain their model values.
         This optional calculation uses higher implicit derivatives and does no
         work during ordinary fitting.
@@ -629,7 +464,7 @@ class LaplaceLoss(LossMixin):
         result
             Fit result with a matching successful conditional state.
         at
-            ``"best"`` (default) selects the smallest monitoring loss;
+            ``"min_monitor"`` (default) selects the smallest monitoring loss;
             ``"final"`` selects the final committed position.
         raise_on_failure
             Raise RuntimeError on an invalid approximation (default True).
@@ -655,39 +490,20 @@ class LaplaceLoss(LossMixin):
         ``joint_precision``. Model graph and data equality are the caller's
         responsibility; coordinate metadata and saved configuration are checked.
         """
-        if at not in ("best", "final"):
-            raise ValueError("at must be 'best' or 'final'.")
-        _validate_bool(raise_on_failure, "raise_on_failure")
-        if (
-            isinstance(stationarity_tol, bool)
-            or not isinstance(stationarity_tol, Real)
-            or not math.isfinite(stationarity_tol)
-            or stationarity_tol <= 0
-        ):
-            raise ValueError("stationarity_tol must be a positive finite real number.")
-        approximation = LaplaceApproximation(
-            mean=Position({}),
-            precision_cholesky=None,
-            names=(),
-            shapes=(),
-            valid=False,
-            diagnostics={"reason": None},
+        approximation = _prepare_approximation(
+            result, at, raise_on_failure, stationarity_tol
         )
+        if approximation.diagnostics["reason"] is not None:
+            return approximation
+        position = approximation.mean
 
         def failed(reason):
-            approximation.diagnostics["reason"] = reason
-            if raise_on_failure:
-                raise RuntimeError(reason)
-            return approximation
+            return approximation._failed(reason, raise_on_failure)
 
-        try:
-            position = (
-                result.position_min_monitor if at == "best" else result.position_final
-            )
-        except RuntimeError as error:
-            return failed(f"The selected position is unavailable: {error}")
         state = (
-            result.loss_state_min_monitor if at == "best" else result.loss_state_final
+            result.loss_state_min_monitor
+            if at == "min_monitor"
+            else result.loss_state_final
         )
         if not isinstance(state, LaplaceState) or int(state.status) != 1:
             return failed(
@@ -761,7 +577,7 @@ class LaplaceLoss(LossMixin):
                 "outer_newton_decrement_squared": 2 * outer["decrement"],
             }
         )
-        if not bool(jnp.all(jnp.isfinite(inner["factor"]))):
+        if not bool(_positive_definite(inner["hessian"], inner["factor"])):
             return failed(
                 "Invalid latent curvature: positive definiteness is required."
             )
@@ -771,7 +587,7 @@ class LaplaceLoss(LossMixin):
             )
         if not bool(_finite(outer)):
             return failed("Non-finite marginal value or derivatives.")
-        if not bool(jnp.all(jnp.isfinite(outer["factor"]))):
+        if not bool(_positive_definite(outer["hessian"], outer["factor"])):
             return failed("Invalid outer curvature: positive definiteness is required.")
         if not bool(outer["decrement"] <= stationarity_tol):
             return failed(
@@ -788,7 +604,7 @@ class LaplaceLoss(LossMixin):
         factor = jnp.linalg.cholesky(precision)
         approximation.diagnostics["mode_jacobian"] = -solved_cross
         approximation.diagnostics["joint_precision"] = precision
-        if not bool(jnp.all(jnp.isfinite(factor))):
+        if not bool(_positive_definite(precision, factor)):
             return failed("Invalid joint curvature: positive definiteness is required.")
         approximation.precision_cholesky = factor
         approximation.valid = True

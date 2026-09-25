@@ -10,16 +10,24 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 import jax
 import jax.numpy as jnp
+import jax.scipy as jsp
 import networkx as nx
+from jax.flatten_util import ravel_pytree
 
 from ..model import Calc, Model
 from ..model.model import _reduced_sum
 from ._log_lik import validate_likelihood_groups
+from ._model_utils import continuous_coordinate_nodes
+from .approximation import (
+    LaplaceApproximation,
+    _positive_definite,
+    _prepare_approximation,
+)
 from .split import PositionSplit, PositionSplitManager
 from .types import Position
 
 if TYPE_CHECKING:
-    from .state import OptimCarry
+    from .state import OptimCarry, OptimResult
 
 SplitConfig = PositionSplit | PositionSplitManager
 
@@ -545,6 +553,134 @@ class NegLogProbLoss(LossMixin):
             loss -= new_state["_model_log_prior"].value
 
         return (loss / self.scalar), None
+
+    def approximate_joint_posterior(
+        self,
+        result: "OptimResult",
+        *,
+        at: str = "min_monitor",
+        raise_on_failure: bool = True,
+        stationarity_tol: float = 1e-4,
+    ) -> LaplaceApproximation:
+        """Construct a joint Gaussian approximation at the selected fitted mode.
+
+        Curvature comes from the full training log-likelihood plus log-prior,
+        including transformation Jacobians. Validation and test data are excluded,
+        and loss normalization (``scale`` or ``LieselOptim.scale_loss``) does not
+        affect the approximation. Only optimized coordinates are included;
+        omitted coordinates retain their model values.
+
+        Parameters
+        ----------
+        result
+            Fit result belonging to this model, loss, and training data. Keep
+            the model, split, and fixed parameters unchanged after fitting.
+        at
+            ``"min_monitor"`` (default) uses ``result.position_min_monitor``;
+            ``"final"`` uses ``result.position_final``. A minimum validation or
+            EMA monitoring loss need not identify a stationary posterior mode.
+        raise_on_failure
+            Raise RuntimeError on an invalid approximation (default True).
+            False returns an inspectable object with ``valid=False`` whose
+            sampling, covariance, and block methods raise. Invalid argument
+            values always raise ValueError.
+        stationarity_tol
+            Positive finite bound on half the squared Newton decrement for the
+            unscaled full-training objective. Defaults to 1e-4.
+
+        Notes
+        -----
+        This optional calculation evaluates a dense Hessian once per call;
+        it does not refit the model. Finite values and derivatives, positive
+        definite curvature, and stationarity are required. No jitter or
+        eigenvalue clipping is used. Diagnostics retain ``value``, ``gradient``,
+        ``joint_precision``, and ``newton_decrement_squared`` when available;
+        ``reason`` explains a failure. Names are sorted, with parameter entries
+        flattened within each name. Use ``Model.predict`` to transform draws
+        back to the original parameter scales.
+
+        In hierarchical models, joint MAP can favor vanishing scale parameters.
+        :class:`~liesel.optim.LaplaceLoss` instead integrates selected effects
+        before optimizing the remaining parameters.
+        """
+        approximation = _prepare_approximation(
+            result, at, raise_on_failure, stationarity_tol
+        )
+        if approximation.diagnostics["reason"] is not None:
+            return approximation
+        try:
+            data_nodes = {
+                self.model._node_for_position_key(k) for k in self.split.train
+            }
+            continuous_coordinate_nodes(self.model, approximation.names, data_nodes)
+            expected = self.position(approximation.names)
+        except ValueError as error:
+            return approximation._failed(
+                f"Incompatible optimized coordinates: {error}", raise_on_failure
+            )
+        if any(
+            jnp.shape(value) != jnp.shape(expected[name])
+            or jnp.asarray(value).dtype != jnp.asarray(expected[name]).dtype
+            for name, value in approximation.mean.items()
+        ):
+            return approximation._failed(
+                "Selected coordinates have incompatible shapes or dtypes.",
+                raise_on_failure,
+            )
+        flat, unravel = ravel_pytree(approximation.mean)
+        if not flat.size:
+            return approximation._failed(
+                "No optimized coordinates are available.", raise_on_failure
+            )
+
+        def joint(flat):
+            position = Position(unravel(flat) | self.split.train)
+            state = self.model.update_state(position, self.model.state)
+            log_lik = self.split.scaled_log_lik(self.model, state, part="train")
+            return -(log_lik + state["_model_log_prior"].value)
+
+        @jax.jit
+        def derivatives(flat):
+            def grad_with_value(flat):
+                value, gradient = jax.value_and_grad(joint)(flat)
+                return gradient, (value, gradient)
+
+            precision, (value, gradient) = jax.jacfwd(grad_with_value, has_aux=True)(
+                flat
+            )
+            return value, gradient, precision
+
+        value, gradient, precision = derivatives(flat)
+        factor = jnp.linalg.cholesky(precision)
+        decrement = gradient @ jsp.linalg.cho_solve((factor, True), gradient)
+        approximation.diagnostics.update(
+            value=value,
+            gradient=gradient,
+            joint_precision=precision,
+            newton_decrement_squared=decrement,
+        )
+        if not bool(
+            jnp.isfinite(value)
+            & jnp.isfinite(gradient).all()
+            & jnp.isfinite(precision).all()
+        ):
+            return approximation._failed(
+                "Non-finite posterior value or derivatives.", raise_on_failure
+            )
+        if not bool(_positive_definite(precision, factor)):
+            return approximation._failed(
+                "Invalid posterior curvature: positive definiteness is required.",
+                raise_on_failure,
+            )
+        if not bool(decrement / 2 <= stationarity_tol):
+            return approximation._failed(
+                "Stationarity check failed: half the squared Newton decrement "
+                "exceeds stationarity_tol.",
+                raise_on_failure,
+            )
+        approximation.precision_cholesky = factor
+        approximation.valid = True
+        return approximation
 
     def __repr__(self) -> str:
         """Returns a compact representation showing the validation strategy."""

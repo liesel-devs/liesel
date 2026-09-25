@@ -989,6 +989,23 @@ def test_posterior_rejects_two_negative_curvature_directions(curvature):
     assert failed.precision_cholesky is None
 
 
+def test_posterior_rejects_singular_outer_precision():
+    model, split = density_model(
+        lambda theta, z: jnp.sum(theta) ** 2 + z**2 / 2,
+        theta=jnp.zeros(2),
+        z=jnp.array(0.0),
+    )
+    loss = opt.LaplaceLoss(model, split, latent=["z"])
+    result = fit_engine(loss, optax.sgd(0.0), epochs=1).fit()
+    with pytest.raises(RuntimeError, match="curvature"):
+        loss.approximate_joint_posterior(result)
+    failed = loss.approximate_joint_posterior(result, raise_on_failure=False)
+    assert not failed.valid
+    np.testing.assert_allclose(
+        failed.diagnostics["outer_precision"], [[2.0, 2.0], [2.0, 2.0]]
+    )
+
+
 @pytest.mark.parametrize(
     "field,value",
     [
@@ -1057,7 +1074,7 @@ def test_posterior_can_inspect_a_fit_with_no_valid_snapshot():
     loss = opt.LaplaceLoss(model, split, latent=["z"])
     result = fit_engine(loss, optax.sgd(0.1)).fit()
     assert result.status == "numerical_failure"
-    for at in ("best", "final"):
+    for at in ("min_monitor", "final"):
         failed = loss.approximate_joint_posterior(result, at=at, raise_on_failure=False)
         assert not failed.valid
         assert failed.diagnostics["reason"]
@@ -1136,7 +1153,7 @@ def test_posterior_selects_matched_best_and_final_snapshots():
         )
         loss = opt.LaplaceLoss(model, split, latent=["z"])
         result = fit_engine(loss, optax.sgd(2.5), epochs=2).fit()
-        for at, theta in (("best", -6.0), ("final", 9.0)):
+        for at, theta in (("min_monitor", -6.0), ("final", 9.0)):
             # An explicit loose stationarity threshold isolates selection here.
             approximation = loss.approximate_joint_posterior(
                 result, at=at, stationarity_tol=100.0
