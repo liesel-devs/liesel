@@ -5,12 +5,16 @@ the default negative log-probability loss for Liesel models. The same protocol i
 implemented by variational losses such as :class:`.NegElboLoss`.
 """
 
+from collections import Counter
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Literal, Protocol
 
 import jax
+import networkx as nx
 
-from ..model import Model
+from ..model import Calc, Model
+from ..model.model import _reduced_sum
+from ._log_lik import validate_likelihood_groups
 from .split import PositionSplit, PositionSplitManager
 from .types import Position
 
@@ -34,6 +38,59 @@ def _validate_bool(value: bool, name: str) -> None:
         )
 
 
+def _validate_model_decomposition(model: Model) -> None:
+    """Require the factorization used by the built-in split/batch loss."""
+    likelihood = Counter(
+        var.dist_node.name for var in model.observed.values() if var.has_dist
+    )
+    prior = Counter(
+        var.dist_node.name for var in model.parameters.values() if var.has_dist
+    )
+    for name, expected in (
+        ("_model_log_lik", likelihood),
+        ("_model_log_prior", prior),
+        ("_model_log_prob", likelihood + prior),
+    ):
+        node = model.nodes[name]
+        actual = Counter(parent.name for parent in node.inputs)
+        standard_sum = (
+            isinstance(node, Calc)
+            and node.function is _reduced_sum
+            and not node.kwinputs
+        )
+        if not standard_sum or actual != expected:
+            hint = ""
+            if name == "_model_log_prob" and standard_sum:
+                unexpected = actual - expected
+                observed_values = {var.value_node for var in model.observed.values()}
+                for var in model.vars.values():
+                    if (
+                        var.weak
+                        and not var.observed
+                        and not var.parameter
+                        and var.dist_node is not None
+                        and var.dist_node.name in unexpected
+                        and observed_values
+                        & nx.ancestors(model.node_graph, var.value_node)
+                    ):
+                        hint += (
+                            f" {var.name!r} is a weak variable with a distribution "
+                            "that is neither observed nor a parameter and depends "
+                            "on observed data. If it represents part of the "
+                            f"likelihood, set model.vars[{var.name!r}].observed = True."
+                        )
+            raise ValueError(
+                f"NegLogProbLoss cannot decompose {name!r}: expected the standard "
+                "sum of observed likelihoods and parameter priors. "
+                f"Unexpected inputs: {list((actual - expected).elements())}; "
+                f"missing inputs: {list((expected - actual).elements())}. "
+                "Custom aggregate objectives require a custom Loss. Unclassified "
+                "factors must be assigned their intended role or handled by a "
+                "custom Loss. A manual split does not change the objective "
+                f"decomposition.{hint}"
+            )
+
+
 class Loss(Protocol):
     """
     Protocol for optimizer losses.
@@ -42,11 +99,6 @@ class Loss(Protocol):
     object satisfying this protocol can be optimized: it must expose the split used
     for training and validation, provide initial parameter positions, compute
     training and validation losses, and provide gradients for optimizer updates.
-
-    Attributes
-    ----------
-    split
-        Train/validation/test split used by the loss.
 
     Notes
     -----
@@ -114,22 +166,13 @@ class LossMixin:
     mixin provides validation-position helpers and JAX gradient methods used by
     :class:`.Optimizer`.
 
-    Attributes
-    ----------
-    split
-        Train/validation/test split used by the loss.
-    loss_train_batched
-        Callable training objective differentiated by :meth:`grad` and
-        :meth:`value_and_grad`.
-
     Examples
     --------
     A minimal quadratic loss can inherit from ``LossMixin`` and immediately use the
     gradient helpers:
 
     >>> import jax.numpy as jnp
-    >>> from liesel.optim import PositionSplit
-    >>> from liesel.optim.loss import LossMixin
+    >>> from liesel.optim import LossMixin, PositionSplit
     >>> from liesel.optim.types import Position
     >>> class Quadratic(LossMixin):
     ...     def __init__(self):
@@ -153,7 +196,10 @@ class LossMixin:
     """
 
     split: SplitConfig
+    """Train/validation/test split used by the loss."""
+
     loss_train_batched: Callable[[Position, "OptimCarry"], jax.Array]
+    """Training objective differentiated by :meth:`grad` and :meth:`value_and_grad`."""
 
     def loss_train(self, params: Position, carry: "OptimCarry") -> jax.Array:
         """
@@ -260,6 +306,12 @@ class NegLogProbLoss(LossMixin):
     branch-specific scaling for multi-size observed data. Validation loss uses
     ``split.scaled_log_lik(...)`` for the same reason.
 
+    The model must use the standard sums of observed distribution factors and
+    parameter priors. Weak observed variables and weak parameters contribute
+    their likelihoods and priors like strong ones.
+    Custom aggregate nodes or additional unclassified distribution factors
+    require a custom :class:`Loss`; supplying a manual split is not sufficient.
+
     Parameters
     ----------
     model
@@ -304,6 +356,9 @@ class NegLogProbLoss(LossMixin):
         validation_strategy: Literal["log_lik", "log_prob"] = "log_lik",
         scale: bool = False,
     ):
+        _validate_model_decomposition(model)
+        splits = split.splits if isinstance(split, PositionSplitManager) else (split,)
+        validate_likelihood_groups(model, [part.split_position_keys for part in splits])
         self._model = model
         self.split = split
         if validation_strategy not in ("log_lik", "log_prob"):
@@ -364,7 +419,9 @@ class NegLogProbLoss(LossMixin):
             ``self.scalar``.
         """
         position = Position(params | carry.batch | carry.fixed_position)
-        new_state = self.model.update_state(position, carry.model_state)
+        states = getattr(carry, "_data_states", {})
+        state = states.get("train", carry.model_state)
+        new_state = self.model.update_state(position, state)
 
         log_lik = carry.batches.scaled_log_lik(
             self.model, new_state, batch_index=carry.i_batch
@@ -389,8 +446,11 @@ class NegLogProbLoss(LossMixin):
             Negative full-data log-likelihood plus log-prior, optionally normalized
             by ``self.scalar``.
         """
-        position = Position(params | self.split.train | carry.fixed_position)
-        new_state = self.model.update_state(position, carry.model_state)
+        states = getattr(carry, "_data_states", {})
+        data = {} if "train" in states else self.split.train
+        position = Position(params | data | carry.fixed_position)
+        state = states.get("train", carry.model_state)
+        new_state = self.model.update_state(position, state)
 
         log_lik = self.split.scaled_log_lik(self.model, new_state, part="train")
         log_prior = new_state["_model_log_prior"].value
@@ -413,9 +473,13 @@ class NegLogProbLoss(LossMixin):
             Negative scaled validation log-likelihood. If
             ``validation_strategy="log_prob"``, the log-prior is included as well.
         """
-        position = Position(params | self.obs_validate | carry.fixed_position)
-        new_state = self.model.update_state(position, carry.model_state)
-        loss = -self.split.scaled_log_lik(self.model, new_state, part="validate")
+        part = "validate" if self.split.has_validation else "train"
+        states = getattr(carry, "_data_states", {})
+        data = {} if part in states else self.obs_validate
+        position = Position(params | data | carry.fixed_position)
+        state = states.get(part, carry.model_state)
+        new_state = self.model.update_state(position, state)
+        loss = -self.split.scaled_log_lik(self.model, new_state, part=part)
         if self.validation_strategy == "log_prob":
             loss -= new_state["_model_log_prior"].value
 

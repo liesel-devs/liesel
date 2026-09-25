@@ -17,8 +17,7 @@ We set up the model in Python with
 [Liesel-GAM documentation and
 examples](https://github.com/liesel-devs/liesel_gam#readme) for more
 information about additive terms and predictors. We load the data set
-from R with [ryp](https://github.com/Wainberg/ryp) and then continue
-with a pure Python model specification and sampling workflow.
+with pandas and use Python throughout the tutorial.
 
 ``` python
 from pathlib import Path
@@ -26,6 +25,7 @@ from pathlib import Path
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import seaborn as sns
 import tensorflow_probability.substrates.jax.bijectors as tfb
 import tensorflow_probability.substrates.jax.distributions as tfd
@@ -33,17 +33,17 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 import liesel.goose as gs
 import liesel.model as lsl
 import liesel_gam as gam
-from ryp import r, to_py
 ```
 
-We start by loading the data set from the R package `MASS` and
-converting it to a pandas data frame.
+We load the `MASS::mcycle` data set from the
+[Rdatasets CSV collection](https://vincentarelbundock.github.io/Rdatasets/)
+into a pandas data frame.
 
 ``` python
-r("library(MASS)")
-r("data(mcycle); mcycle <- as.data.frame(mcycle)")
-
-mcycle = to_py("mcycle", format="pandas")
+mcycle = pd.read_csv(
+    "https://vincentarelbundock.github.io/Rdatasets/csv/MASS/mcycle.csv",
+    usecols=["times", "accel"],
+)
 ```
 
 ``` python

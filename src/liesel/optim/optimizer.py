@@ -197,7 +197,7 @@ class Optimizer:
         )
         return pos
 
-    def init(self, position: Position) -> optax.OptState:
+    def init(self, position: Position) -> Any:
         """
         Initializes the wrapped Optax transformation.
 
@@ -245,7 +245,15 @@ class Optimizer:
 
         opt_state = carry.optimizer_states[self.identifier]
         value, grad = loss.value_and_grad(pos, carry)
-        updates, opt_state = self.optimizer.update(grad, opt_state, params=pos)
+        try:
+            updates, opt_state = self.optimizer.update(grad, opt_state, params=pos)
+        except TypeError as error:
+            raise TypeError(
+                "Optax update failed with gradients, state and parameters only. "
+                "If the transformation requires objective evaluations, use "
+                "optimizers='lbfgs' or a custom OptimizerLike. "
+                f"Original error: {error}"
+            ) from error
         updated_position = cast(Position, optax.apply_updates(pos, updates))
 
         carry.position = Position(carry.position | updated_position)
@@ -294,9 +302,12 @@ class LBFGS(Optimizer):
     :func:`optax.value_and_grad_from_state` inside :meth:`step`, which lets Optax
     reuse value/gradient information stored by the L-BFGS transformation.
 
-    L-BFGS requires full-data batches and a deterministic objective. The engine
-    rejects mini-batches, but cannot detect stochastic objective evaluations. For
-    the deterministic objective, the returned scalar is the value used for the
+    L-BFGS requires full-data batches, a deterministic objective, and must be the
+    sole optimizer. Other parameter updates would invalidate its cached objective
+    and curvature history. Use one joint L-BFGS for all selected parameters;
+    unselected parameters stay fixed. The engine rejects mini-batches and mixed
+    optimizer configurations, but cannot detect stochastic objective evaluations.
+    For a deterministic objective, the returned scalar is the value used for the
     update at the supplied pre-update position.
 
     Parameters
@@ -353,8 +364,14 @@ class LBFGS(Optimizer):
         pos = position
         opt_state = carry.optimizer_states[self.identifier]
 
-        def loss_fn(pos: Position) -> jax.Array:
-            return loss.loss_train_batched(pos, carry)
+        def loss_fn(candidate: Position) -> jax.Array:
+            # Line-search step sizes can promote float32 parameters under x64.
+            candidate = jax.tree.map(
+                lambda value, ref: jnp.asarray(value, dtype=jnp.asarray(ref).dtype),
+                candidate,
+                pos,
+            )
+            return loss.loss_train_batched(candidate, carry)
 
         value_and_grad = optax.value_and_grad_from_state(loss_fn)
         value, grad = value_and_grad(pos, state=opt_state)

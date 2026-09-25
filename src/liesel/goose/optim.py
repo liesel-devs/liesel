@@ -1,3 +1,4 @@
+import warnings
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, NotRequired, TypedDict
@@ -286,6 +287,10 @@ def optim_flat(
     """
     Optimize the parameters of a  Liesel :class:`.Model`.
 
+    .. deprecated:: 0.8.0
+        Use :class:`liesel.optim.LieselOptim` instead. See
+        :doc:`/optimizer-migration` for a migration example.
+
     Approximates maximum a posteriori (MAP) parameter estimates by minimizing the
     negative log posterior probability of the model. If you use batching, be aware that
     the batching functionality implemented here assumes a "flat" model structure.
@@ -428,6 +433,11 @@ def optim_flat(
     sampling.
 
     """
+    warnings.warn(
+        "liesel.goose.optim_flat is deprecated; use liesel.optim.LieselOptim instead.",
+        FutureWarning,
+        stacklevel=2,
+    )
     track_keys = track_keys if track_keys is not None else []
     # ---------------------------------------------------------------------------------
     # Validation input

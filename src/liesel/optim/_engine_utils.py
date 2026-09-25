@@ -1,20 +1,30 @@
 from __future__ import annotations
 
-from math import ceil
+from collections.abc import Sequence
 
 from .batch import Batches, BatchManager
+from .optimizer import LBFGS, OptimizerLike
 from .split import PositionSplit, PositionSplitManager
 
 BatchConfig = Batches | BatchManager
 SplitConfig = PositionSplit | PositionSplitManager
 
 
-def _progress_print_rate(total: int, progress_n_updates: int) -> int:
-    return max(ceil(total / progress_n_updates), 1)
-
-
-def _progress_n_updates(total: int, progress_update_every: int) -> int:
-    return ceil(total / progress_update_every)
+def _validate_optimizer_batches(
+    optimizers: Sequence[OptimizerLike], batches: BatchConfig
+) -> None:
+    has_lbfgs = any(isinstance(opt, LBFGS) for opt in optimizers)
+    if has_lbfgs and len(optimizers) > 1:
+        raise ValueError(
+            "LBFGS must be the sole optimizer: other parameter updates invalidate "
+            "its cached objective and curvature history. Use one joint LBFGS over "
+            "the selected parameters, or ordinary Optax optimizers for separate blocks."
+        )
+    if has_lbfgs and not batches.is_full_data:
+        raise ValueError(
+            "LBFGS requires full-data batches and a deterministic objective; "
+            "configure full-data batches or use another optimizer."
+        )
 
 
 def _validate_positive_int(value: int, name: str) -> None:

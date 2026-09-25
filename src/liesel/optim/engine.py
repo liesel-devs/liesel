@@ -16,6 +16,7 @@ import time
 import warnings
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
+from numbers import Integral
 from pathlib import Path
 from typing import Literal, cast
 
@@ -27,12 +28,12 @@ from tqdm import tqdm
 from ._engine_utils import (
     BatchConfig,
     SplitConfig,
-    _progress_n_updates,
-    _progress_print_rate,
+    _validate_optimizer_batches,
     _validate_positive_int,
 )
-from .batch import Batches
-from .loss import Loss, NegLogProbLoss
+from ._log_lik import validate_likelihood_groups
+from .batch import Batches, BatchManager
+from .loss import Loss, LossMixin, NegLogProbLoss
 from .optimizer import LBFGS, Optimizer, OptimizerLike
 from .split import PositionSplitManager
 from .state import (
@@ -183,8 +184,8 @@ class OptimEngine:
     """
     Runs an optimization loop over epochs, batches, and optimizers.
 
-    ``OptimEngine`` is the low-level execution object behind the experimental
-    optimization API. Each epoch starts by asking ``batches`` for fresh batch indices,
+    ``OptimEngine`` runs the fit configured by :class:`.LieselOptim`.
+    Each epoch starts by asking ``batches`` for fresh batch indices,
     then iterates over all full batches. For each batch, each optimizer gets a turn
     to update the subset of parameters named in its ``position_keys``. The first
     active optimizer's pre-update loss supplies the batch observation; if none is
@@ -207,7 +208,10 @@ class OptimEngine:
     stopper
         Early-stopping and maximum-epoch configuration.
     seed
-        Integer seed or JAX PRNG key used for batching and stochastic losses.
+        Integer seed or JAX PRNG key for batch shuffling or random batch sampling,
+        and for losses or optimizers that use ``carry.key``. Starting parameters
+        come from ``loss.position()``; the data split is already defined. Resuming
+        a checkpoint uses its saved random key.
     initial_state
         Initial model state passed into :class:`.OptimCarry`.
     prune_history
@@ -218,10 +222,6 @@ class OptimEngine:
     save_position_history
         Whether to store the full position history. The minimum-monitor position is
         tracked independently of this setting.
-    progress_n_updates
-        Compatibility alias for configuring an approximate maximum number of epoch
-        progress-bar updates. The value is converted to ``progress_update_every``;
-        reading it returns the resulting effective number of updates.
     loss_monitor
         Source for the epoch-level stopping and progress loss. Pass
         :class:`EmaTrainLossMonitor` for a continuous EMA of pre-update losses,
@@ -244,22 +244,11 @@ class OptimEngine:
     step_progress_update_every
         Update the batch progress bar after this many completed batches. Defaults to
         10. The final state of an interrupted epoch is always rendered.
-    step_progress_n_updates
-        Compatibility alias for configuring an approximate maximum number of batch
-        progress-bar updates per epoch. Reading it returns the resulting effective
-        number of updates.
-
-    Attributes
-    ----------
-    position_keys
-        Flattened list of all parameter keys claimed by the optimizers.
-    split
-        Train/validation/test split provided by ``loss.split``.
 
     Notes
     -----
     ``OptimEngine`` uses ``carry.epoch`` as the number of completed epochs and as the
-    next history index to be written. This matches :class:`.Stopper`'s experimental
+    next history index to be written. This matches :class:`.Stopper`'s
     indexing convention. Built-in :class:`.LBFGS` is accepted only with full-data
     batches and also requires a deterministic objective, which the engine cannot
     validate. Exact monitor minima retain the post-update position used for the
@@ -269,11 +258,35 @@ class OptimEngine:
 
     Examples
     --------
-    ``OptimEngine`` is usually constructed through a convenience wrapper:
+    Start with :class:`.LieselOptim` for ordinary fits. To assemble the pieces
+    yourself:
 
-    >>> from liesel.optim import LieselOptim
-    >>> LieselOptim.__name__
-    'LieselOptim'
+    >>> import jax.numpy as jnp
+    >>> import optax
+    >>> import tensorflow_probability.substrates.jax.distributions as tfd
+    >>> import liesel.model as lsl
+    >>> import liesel.optim as opt
+    >>> loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
+    >>> y = lsl.Var.new_obs(
+    ...     jnp.array([1.0, 2.0, 3.0]),
+    ...     lsl.Dist(tfd.Normal, loc=loc, scale=1.0),
+    ...     name="y",
+    ... )
+    >>> model = lsl.Model([y])
+    >>> split = opt.PositionSplit.from_model(model)
+    >>> engine = opt.OptimEngine(
+    ...     loss=opt.NegLogProbLoss(model, split, scale=True),
+    ...     batches=opt.Batches.from_split(split, batch_size=None),
+    ...     optimizers=[opt.Optimizer(["loc"], optax.adam(0.01))],
+    ...     stopper=opt.Stopper(epochs=5, patience=5),
+    ...     initial_state=model.state,
+    ...     loss_monitor="train_full_data",
+    ...     seed=42,
+    ...     show_progress=False,
+    ... )
+    >>> result = engine.fit()
+    >>> result.n_epochs
+    5
     """
 
     loss: Loss
@@ -302,26 +315,23 @@ class OptimEngine:
         prune_history: bool = True,
         show_progress: bool = True,
         save_position_history: bool = True,
-        progress_n_updates: int | None = None,
-        debug_nans: bool = False,
         *,
+        debug_nans: bool = False,
         loss_monitor: LossMonitor,
         progress_update_every: int = 10,
         show_step_progress: bool = False,
         step_progress_update_every: int = 10,
-        step_progress_n_updates: int | None = None,
     ) -> None:
-        """Initializes an optimization engine.
-
-        ``progress_n_updates`` retains its historical positional and keyword slot.
-        When supplied, it takes precedence over ``progress_update_every``. The batch
-        aliases follow the same rule.
-        """
+        """Initializes an optimization engine."""
         self.loss = loss
         self.batches = batches
         self.optimizers = optimizers
         self.stopper = stopper
-        self.seed = jax.random.key(seed) if isinstance(seed, int) else seed
+        self.seed = (
+            jax.random.key(int(seed))
+            if isinstance(seed, Integral)
+            else cast(jax.Array, seed)
+        )
         self.initial_state = initial_state
         self.prune_history = prune_history
         self.show_progress = show_progress
@@ -331,11 +341,6 @@ class OptimEngine:
         self.debug_nans = debug_nans
         self.show_step_progress = show_step_progress
         self.step_progress_update_every = step_progress_update_every
-
-        if progress_n_updates is not None:
-            self.progress_n_updates = progress_n_updates
-        if step_progress_n_updates is not None:
-            self.step_progress_n_updates = step_progress_n_updates
 
         self.__post_init__()
 
@@ -374,34 +379,6 @@ class OptimEngine:
             The split object stored on ``self.loss.split``.
         """
         return self.loss.split
-
-    @property
-    def progress_n_updates(self) -> int:
-        """Effective number of epoch updates implied by the update interval."""
-        _validate_positive_int(self.progress_update_every, "progress_update_every")
-        return _progress_n_updates(self.stopper.epochs, self.progress_update_every)
-
-    @progress_n_updates.setter
-    def progress_n_updates(self, value: int) -> None:
-        _validate_positive_int(value, "progress_n_updates")
-        self.progress_update_every = _progress_print_rate(self.stopper.epochs, value)
-
-    @property
-    def step_progress_n_updates(self) -> int:
-        """Effective number of batch updates implied by the update interval."""
-        _validate_positive_int(
-            self.step_progress_update_every, "step_progress_update_every"
-        )
-        return _progress_n_updates(
-            self.batches.n_full_batches, self.step_progress_update_every
-        )
-
-    @step_progress_n_updates.setter
-    def step_progress_n_updates(self, value: int) -> None:
-        _validate_positive_int(value, "step_progress_n_updates")
-        self.step_progress_update_every = _progress_print_rate(
-            self.batches.n_full_batches, value
-        )
 
     @property
     def position_keys(self) -> list[str]:
@@ -495,7 +472,8 @@ class OptimEngine:
         Raises
         ------
         ValueError
-            If ``loss_monitor`` is not one of the supported sources.
+            If ``loss_monitor`` is unsupported, validation data is missing, or
+            full-data monitoring uses the unimplemented :class:`.LossMixin` stub.
         """
         if not isinstance(self.loss_monitor, EmaTrainLossMonitor) and (
             self.loss_monitor not in ("validation", "train_full_data")
@@ -509,6 +487,15 @@ class OptimEngine:
         if self.loss_monitor == "validation" and not self.split.has_validation:
             raise ValueError(
                 "loss_monitor='validation' requires a split with validation data."
+            )
+
+        if self.loss_monitor == "train_full_data" and (
+            getattr(self.loss.loss_train, "__func__", None) is LossMixin.loss_train
+        ):
+            raise ValueError(
+                "loss_monitor='train_full_data' requires the custom loss to "
+                "implement loss_train(). Implement it or use "
+                "EmaTrainLossMonitor(effective_window=...)."
             )
 
     def _validate_debug_nans(self) -> None:
@@ -527,15 +514,17 @@ class OptimEngine:
         """
         Validates batch, split, and built-in L-BFGS compatibility.
 
-        L-BFGS requires full-data batches and a deterministic objective. Only the
-        batch requirement can be validated here.
+        L-BFGS must be the sole optimizer and requires full-data batches and a
+        deterministic objective. Stochastic objective evaluations cannot be
+        detected here.
 
         Raises
         ------
         ValueError
             If a multi-size split is paired with single-size batches, or if batches
-            reference keys missing from the training split, or if built-in L-BFGS
-            is paired with mini-batches.
+            reference missing keys or incompatible array shapes in the training
+            split, or if built-in L-BFGS is paired with mini-batches or another
+            optimizer.
         """
         if isinstance(self.split, PositionSplitManager) and isinstance(
             self.batches, Batches
@@ -545,13 +534,7 @@ class OptimEngine:
                 "PositionSplitManager."
             )
 
-        if not self.batches.is_full_data and any(
-            isinstance(opt, LBFGS) for opt in self.optimizers
-        ):
-            raise ValueError(
-                "LBFGS requires full-data batches and a deterministic objective; "
-                "configure full-data batches or use another optimizer."
-            )
+        _validate_optimizer_batches(self.optimizers, self.batches)
 
         missing = sorted(
             key for key in self.batches.position_keys if key not in self.split.train
@@ -561,6 +544,18 @@ class OptimEngine:
                 "Batch position keys must be present in split.train, but these keys "
                 f"are missing: {missing}."
             )
+
+        batches = (
+            self.batches.batches
+            if isinstance(self.batches, BatchManager)
+            else (self.batches,)
+        )
+        if isinstance(self.loss, NegLogProbLoss):
+            validate_likelihood_groups(
+                self.loss.model, [batch.position_keys for batch in batches]
+            )
+        for batch in batches:
+            batch._validate_position(self.split.train)
 
     def _name_optimizers(self) -> Sequence[OptimizerLike]:
         """
@@ -613,8 +608,8 @@ class OptimEngine:
         Returns
         -------
         OptimResult
-            Processed optimizer history, recommended and diagnostic positions,
-            monitoring provenance, cumulative active runtime, status, and an
+            Processed history, final and best-monitor positions,
+            monitoring source, cumulative active runtime, status, and an
             independent checkpoint for continuation (``None`` on NaN failure).
 
         Notes
@@ -622,6 +617,10 @@ class OptimEngine:
         Reconstruct the same model, data, and optimizer settings before resuming.
         Parameter and observed-variable names, shapes, and dtypes must agree.
         Compatibility checks cannot detect changed data or learning rates.
+        Resuming a checkpoint that permits no further epochs under the current
+        stopper settings issues a warning and returns its result. Use a new path
+        or call ``fit()`` without a checkpoint to start a fresh run. Extending the
+        epoch budget permits continuation only if early stopping does not apply.
         A failed checkpoint write raises and preserves the previous file.
         Interruptions recover from the last successful periodic save.
         """
@@ -667,6 +666,21 @@ class OptimEngine:
             if checkpoint is None
             else self._restore_carry(checkpoint)
         )
+        if checkpoint is not None:
+            status = self._fit_status(carry)
+            if status in ("max_epochs", "early_stopping"):
+                location = (
+                    f" at {checkpoint_path}" if checkpoint_path is not None else ""
+                )
+                warnings.warn(
+                    f"Checkpoint{location} is already complete under the current "
+                    f"stopper settings ({int(carry.epoch)} epochs, {status}); "
+                    "returning its result without running additional epochs. "
+                    "Use a new path or call fit() without a checkpoint to start "
+                    "a fresh run.",
+                    UserWarning,
+                    stacklevel=2,
+                )
         end_epoch = self.stopper.epochs
         if pause_after is not None:
             end_epoch = min(end_epoch, int(carry.epoch) + pause_after)
@@ -701,7 +715,7 @@ class OptimEngine:
         n_epochs = int(carry.epoch)
         position_final = carry.position
 
-        if n_epochs == 0:
+        if n_epochs == 0 or not bool(jnp.isfinite(carry.min_monitor_loss)):
             position_min_monitor = None
             min_monitor_epoch = None
         else:
@@ -744,6 +758,21 @@ class OptimEngine:
             type(opt) in (Optimizer, LBFGS) for opt in self.optimizers
         )
 
+    def _prepare_data_states(self, carry: OptimCarry) -> None:
+        # Only NegLogProbLoss consumes prepared partition templates. Custom
+        # losses/optimizers may evolve model_state and cannot reuse them.
+        if type(self.loss) is not NegLogProbLoss or not self._can_rebuild_model_state():
+            return
+        carry._data_states = {}
+        if self.batches.is_full_data or self.loss_monitor == "train_full_data":
+            carry._data_states["train"] = self.loss.model.update_state(
+                self.split.train, carry.model_state
+            )
+        if self.loss_monitor == "validation":
+            carry._data_states["validate"] = self.loss.model.update_state(
+                self.split.validate, carry.model_state
+            )
+
     def _data_structure(self) -> tuple:
         return tuple(
             {
@@ -760,6 +789,7 @@ class OptimEngine:
             # Reconstruct this static template from the caller's model. Internal
             # anonymous node names may differ between otherwise identical models.
             snapshot.model_state = {}
+            snapshot._data_states = {}
             if snapshot.nan_debug_state is not None:
                 snapshot.nan_debug_state.reproduction_model_state = {}
         return OptimCheckpoint(
@@ -803,6 +833,7 @@ class OptimEngine:
         carry = jax.tree.map(lambda x: x, checkpoint._carry)
         if checkpoint._rebuild_model_state:
             carry.model_state = jax.tree.map(lambda x: x, self.initial_state)
+            self._prepare_data_states(carry)
             if carry.nan_debug_state is not None:
                 carry.nan_debug_state.reproduction_model_state = jax.tree.map(
                     lambda x: x, self.initial_state
@@ -812,7 +843,6 @@ class OptimEngine:
         history = OptimHistory.from_epochs(
             capacity,
             carry.position if carry.history.position is not None else None,
-            carry.tracked if carry.history.tracked is not None else None,
             carry.history.loss_train.dtype,
         )
         carry.history = jax.tree.map(
@@ -878,11 +908,11 @@ class OptimEngine:
         reproduction_carry = OptimCarry(
             key=debug_state.reproduction_key,
             position=debug_state.reproduction_position,
-            tracked=carry.tracked,
             history=carry.history,
             batches=debug_state.reproduction_batches,
             optimizer_states=debug_state.reproduction_optimizer_states,
             model_state=debug_state.reproduction_model_state,
+            _data_states=carry._data_states,
             batch=debug_state.obs_batch,
             fixed_position=fixed_position,
             position_min_monitor=carry.position_min_monitor,
@@ -935,10 +965,6 @@ class OptimEngine:
             for name, value in history.position.items():
                 history.position[name] = value.at[i:, ...].set(jnp.nan)
 
-            if history.tracked is not None:
-                for name, value in history.tracked.items():
-                    history.tracked[name] = value.at[i:, ...].set(jnp.nan)
-
         if not self.prune_history:
             return history
 
@@ -949,10 +975,6 @@ class OptimEngine:
             assert history.position is not None
             for name, value in history.position.items():
                 history.position[name] = value[:i, ...]
-
-            if history.tracked is not None:
-                for name, value in history.tracked.items():
-                    history.tracked[name] = value[:i, ...]
 
         return history
 
@@ -988,14 +1010,30 @@ class OptimEngine:
 
         return carry, loss
 
-    def _debug_obs_batch_template(self, batches: BatchConfig) -> Position:
-        if not batches.is_full_data or self.split.has_validation or self.split.has_test:
-            return batches.get_batched_position(self.split.train, batch_index=0)
+    def _observed_batch(
+        self,
+        batches: BatchConfig,
+        batch_index: int | jax.Array = 0,
+        *,
+        prepared: bool = False,
+    ) -> Position:
+        """Keep omitted keys on training rows, either via a template or an overlay."""
+        has_holdout = self.split.has_validation or self.split.has_test
+        children = batches.batches if isinstance(batches, BatchManager) else [batches]
+        if prepared and batches.is_full_data and not any(b.shuffle for b in children):
+            return Position({})
+        if not batches.is_full_data or has_holdout:
+            batch = batches.get_batched_position(self.split.train, batch_index)
+            if has_holdout and not prepared:
+                return Position(self.split.train | batch)
+            return batch
 
         return Position({})
 
     def _init_nan_debug_state(self, carry: OptimCarry) -> OptimNaNDebugState:
-        obs_batch = self._debug_obs_batch_template(carry.batches)
+        obs_batch = self._observed_batch(
+            carry.batches, prepared="train" in carry._data_states
+        )
         loss_dtype = jnp.asarray(carry.loss_train).dtype
         return OptimNaNDebugState.new(
             key=carry.key,
@@ -1119,12 +1157,9 @@ class OptimEngine:
         OptimCarry
             Updated carry with accumulated epoch training loss.
         """
-        Bi = carry.batches
-
-        if not Bi.is_full_data or self.split.has_validation or self.split.has_test:
-            obs_batch = Bi.get_batched_position(self.split.train, batch_index=j)
-        else:
-            obs_batch = Position({})
+        obs_batch = self._observed_batch(
+            carry.batches, j, prepared="train" in carry._data_states
+        )
         carry.batch = obs_batch
         carry.i_batch = j
 
@@ -1265,12 +1300,9 @@ class OptimEngine:
     def _run_batch_debug_body(
         self, j: int | jax.Array, carry: OptimCarry
     ) -> OptimCarry:
-        Bi = carry.batches
-
-        if not Bi.is_full_data or self.split.has_validation or self.split.has_test:
-            obs_batch = Bi.get_batched_position(self.split.train, batch_index=j)
-        else:
-            obs_batch = Position({})
+        obs_batch = self._observed_batch(
+            carry.batches, j, prepared="train" in carry._data_states
+        )
         carry.batch = obs_batch
         carry.i_batch = j
 
@@ -1442,7 +1474,7 @@ class OptimEngine:
         Runs one full epoch over the configured batches.
 
         The method starts a new batch epoch, runs the batch loop, records train and
-        monitoring losses, updates position/tracked histories, updates the global best
+        monitoring losses, updates position history, updates the global best
         position, and increments ``carry.epoch``.
 
         Parameters
@@ -1509,10 +1541,6 @@ class OptimEngine:
             carry.history.position = carry.history.update_position_history(
                 carry.epoch, carry.history.position, carry.position
             )
-            if carry.history.tracked is not None and carry.tracked is not None:
-                carry.history.tracked = carry.history.update_position_history(
-                    carry.epoch, carry.history.tracked, carry.tracked
-                )
 
         def update_carry(carry: OptimCarry):
             carry.min_monitor_loss = carry.loss_monitor
@@ -1521,7 +1549,8 @@ class OptimEngine:
             return carry
 
         carry = jax.lax.cond(
-            carry.loss_monitor < carry.min_monitor_loss,
+            jnp.isfinite(carry.loss_monitor)
+            & (carry.loss_monitor < carry.min_monitor_loss),
             update_carry,
             lambda carry: carry,
             carry,
@@ -1586,13 +1615,15 @@ class OptimEngine:
             key=key,
             epochs=epochs,
             position=initial_position,
-            tracked=None,
             optimizers=self.optimizers,
             model_state=self.initial_state,
             save_position_history=self.save_position_history,
         )
+        self._prepare_data_states(carry)
         if self.debug_nans:
-            carry.batch = self._debug_obs_batch_template(carry.batches)
+            carry.batch = self._observed_batch(
+                carry.batches, prepared="train" in carry._data_states
+            )
             carry.nan_debug_state = self._init_nan_debug_state(carry)
 
         return carry

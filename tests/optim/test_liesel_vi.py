@@ -158,7 +158,7 @@ def test_batch_size_and_old_keyword_are_mutually_exclusive():
 
 
 def test_user_provided_batches_are_not_mutated():
-    model = _normal_model()
+    model = _normal_model(n=2)
     batches = Batches(["y"], axis_size=2, batch_size=None)
 
     vi = LieselVI(model, loss_monitor=LOSS_MONITOR, batches=batches, seed=1)
@@ -338,7 +338,7 @@ def test_progress_and_loss_monitor_are_passed_to_engine():
     model = _normal_model()
     loss_monitor = EmaTrainLossMonitor(0.5)
 
-    engine = LieselVI(
+    setup = LieselVI(
         model,
         batch_size=1,
         loss_monitor=loss_monitor,
@@ -349,15 +349,17 @@ def test_progress_and_loss_monitor_are_passed_to_engine():
         step_progress_update_every=4,
         step_progress_n_updates=4,
         seed=1,
-    ).build_engine()
+    )
+
+    assert setup.progress_n_updates == 7
+    assert setup.step_progress_n_updates == 3
+    engine = setup.build_engine()
 
     assert engine.loss_monitor is loss_monitor
     assert engine.show_progress is False
-    assert engine.progress_n_updates == 7
     assert engine.progress_update_every == 143
     assert engine.show_step_progress is True
     assert engine.step_progress_update_every == 2
-    assert engine.step_progress_n_updates == 3
 
 
 def test_fit_returns_optim_result():

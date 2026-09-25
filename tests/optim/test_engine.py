@@ -12,7 +12,9 @@ import jax
 import jax.numpy as jnp
 import optax
 import pytest
+import tensorflow_probability.substrates.jax.distributions as tfd
 
+import liesel.model as lsl
 import liesel.optim as opt
 import liesel.optim.engine as engine_module
 from liesel.optim import (
@@ -33,11 +35,67 @@ from liesel.optim import (
     Stopper,
     VDist,
 )
-from liesel.optim.engine import _progress_print_rate
 from liesel.optim.liesel_optim import LieselOptim as LieselOptimFromQuick
 from liesel.optim.loss import Loss, LossMixin
 from liesel.optim.state import OptimCarry
 from liesel.optim.types import Position
+
+
+@pytest.mark.parametrize("debug", [False, True])
+@pytest.mark.parametrize("holdout", ["validate", "test"])
+@pytest.mark.parametrize("mode", ["no_keys", "group_full", "group_mini"])
+def test_unbatched_split_entries_use_training_rows(debug, holdout, mode):
+    loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
+    y1 = lsl.Var.new_obs(
+        jnp.array([2.0] * 5 + [100.0] * 5),
+        lsl.Dist(tfd.Normal, loc=loc, scale=1.0),
+        name="y1",
+    )
+    y2 = lsl.Var.new_obs(
+        jnp.array([1.0] * 3 + [200.0] * 3),
+        lsl.Dist(tfd.Normal, loc=loc, scale=1.0),
+        name="y2",
+    )
+    model = lsl.Model([y1] if mode == "no_keys" else [y1, y2])
+    split = PositionSplit.from_model(
+        model,
+        multi_size="manager",
+        shuffle=False,
+        validate_axis_share=0.5 if holdout == "validate" else 0.0,
+        test_axis_share=0.5 if holdout == "test" else 0.0,
+    )
+    batches = (
+        Batches([], axis_size=5, batch_size=None)
+        if mode == "no_keys"
+        else Batches.from_split(
+            split, position_keys=["y1"], batch_size=1 if mode == "group_mini" else None
+        )
+    )
+    engine = LieselOptim(
+        model,
+        split=split,
+        batches=batches,
+        optimizers=[Optimizer(["loc"], optax.sgd(0.1))],
+        loss_monitor="train_full_data",
+        stopper=Stopper(epochs=150, patience=150),
+        seed=1,
+        show_progress=False,
+    ).build_engine()
+    engine.debug_nans = debug
+    expected_mean = 2.0 if mode == "no_keys" else 1.625
+    carry = engine._run_batch(0, engine._init_carry(150))
+    # The first SGD update checks the training-only gradient directly.
+    assert float(carry.position["loc"]) == pytest.approx(0.1 * expected_mean)
+    result = engine.fit()
+    assert float(result.position_final["loc"]) == pytest.approx(expected_mean, abs=1e-5)
+    if debug:
+        engine.optimizers = [NanOptimizer(["loc"])]
+        info = engine.fit().nan_debug
+        assert info is not None
+        assert info.obs_batch.keys() == split.train.keys()
+        for name, values in info.obs_batch.items():
+            assert jnp.all(values == split.train[name][0])
+        assert jnp.isnan(info.reproduce_step(engine).position["loc"])
 
 
 def test_ema_train_loss_monitor_required_and_explicit_windows():
@@ -760,22 +818,6 @@ def test_duplicate_optimizer_identifiers_after_naming_raise():
         )
 
 
-@pytest.mark.parametrize("progress_n_updates", [0, True, 1.5, "100"])
-def test_invalid_progress_n_updates_raises(progress_n_updates):
-    with pytest.raises(ValueError, match="progress_n_updates"):
-        OptimEngine(
-            loss=_loss(),
-            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
-            batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
-            optimizers=[_optimizer()],
-            stopper=Stopper(epochs=4, patience=2),
-            seed=1,
-            initial_state={},
-            show_progress=False,
-            progress_n_updates=progress_n_updates,
-        )
-
-
 @pytest.mark.parametrize(
     "name", ["progress_update_every", "step_progress_update_every"]
 )
@@ -797,10 +839,9 @@ def test_invalid_progress_update_interval_raises(name, value):
 
 
 @pytest.mark.parametrize("name", ["progress_n_updates", "step_progress_n_updates"])
-@pytest.mark.parametrize("value", [0, True, 1.5, "10"])
-def test_invalid_progress_update_count_raises(name, value):
-    kwargs = {name: value}
-    with pytest.raises(ValueError, match=name):
+def test_removed_progress_count_arguments_are_rejected(name):
+    kwargs = {name: 10}
+    with pytest.raises(TypeError, match=name):
         OptimEngine(
             loss=_loss(),
             loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
@@ -810,7 +851,7 @@ def test_invalid_progress_update_count_raises(name, value):
             seed=1,
             initial_state={},
             show_progress=False,
-            **kwargs,
+            **kwargs,  # ty: ignore[invalid-argument-type]
         )
 
 
@@ -868,7 +909,8 @@ def test_debug_nans_no_active_loss_capture_reproduces_loss():
     info = result.nan_debug
     assert info is not None
     assert result.n_epochs == 0
-    assert result.position_min_monitor is None
+    with pytest.raises(RuntimeError, match="No finite monitoring loss"):
+        _ = result.position_min_monitor
     assert result.min_monitor_epoch is None
     assert result.position_final["theta"] == pytest.approx(0.0)
     assert info.kind == "loss"
@@ -913,10 +955,11 @@ def test_debug_nans_position_after_reproduces_second_optimizer_step():
     info = result.nan_debug
     assert info is not None
     assert result.n_epochs == 0
-    assert result.position_min_monitor is None
+    with pytest.raises(RuntimeError, match="No finite monitoring loss"):
+        _ = result.position_min_monitor
     assert result.min_monitor_epoch is None
-    assert result.position_final["theta"] == pytest.approx(1.0)
-    assert bool(jnp.isnan(result.position_final["eta"]))
+    with pytest.raises(RuntimeError, match="position_final.*NaN or infinity"):
+        _ = result.position_final
     assert info.kind == "position_after"
     assert info.batch == 0
     assert info.optimizer_index == 1
@@ -994,6 +1037,77 @@ def test_debug_nans_position_before_capture():
     assert info.optimizer_index is None
     assert info.nan_position is not None
     assert bool(jnp.isnan(info.nan_position["theta"]))
+
+
+@pytest.mark.parametrize("debug_nans", [False, True])
+@pytest.mark.parametrize("trigger_epoch", [0, 1])
+def test_result_positions_after_nan_loss(debug_nans, trigger_epoch):
+    split = PositionSplit(
+        train=Position({"y": jnp.array([0.0, 1.0])}),
+        validate=Position({}),
+        test=Position({}),
+        train_axis_size=2,
+        validate_axis_size=0,
+        test_axis_size=0,
+    )
+    result = OptimEngine(
+        loss=DebugNaNLoss(split, trigger_batch_value=0.0, trigger_epoch=trigger_epoch),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
+        batches=Batches(["y"], axis_size=2, batch_size=1, shuffle=False),
+        optimizers=[AddOneOptimizer(["theta"])],
+        stopper=Stopper(epochs=3, patience=3),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+        debug_nans=debug_nans,
+    ).fit()
+
+    assert result.status == "nan"
+    assert bool(jnp.isfinite(result.position_final["theta"]))
+    if trigger_epoch == 0:
+        assert result.min_monitor_epoch is None
+        with pytest.raises(RuntimeError, match="No finite monitoring loss"):
+            _ = result.position_min_monitor
+    else:
+        assert result.min_monitor_epoch == 0
+        assert result.position_min_monitor["theta"] == pytest.approx(2.0)
+
+
+@pytest.mark.parametrize("loss", [float("nan"), float("inf"), -float("inf")])
+def test_result_has_no_best_position_without_finite_monitor_loss(loss):
+    result = OptimEngine(
+        loss=EpochSequenceLoss(_split(), epoch_losses=jnp.array([loss])),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
+        batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
+        optimizers=[DebugNoOpOptimizer(["theta"])],
+        stopper=Stopper(epochs=1, patience=1),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+    ).fit()
+
+    assert result.min_monitor_epoch is None
+    with pytest.raises(RuntimeError, match="No finite monitoring loss"):
+        _ = result.position_min_monitor
+    assert result.position_final["theta"] == pytest.approx(-1.0)
+    assert len(result.history.loss_monitor) == 1
+
+
+@pytest.mark.parametrize("loss", [float("inf"), -float("inf")])
+def test_finite_monitor_loss_can_follow_infinite_loss(loss):
+    result = OptimEngine(
+        loss=EpochSequenceLoss(_split(), epoch_losses=jnp.array([loss, 3.0])),
+        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
+        batches=Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
+        optimizers=[_optimizer()],
+        stopper=Stopper(epochs=2, patience=2),
+        seed=1,
+        initial_state={},
+        show_progress=False,
+    ).fit()
+
+    assert result.min_monitor_epoch == 1
+    assert result.position_min_monitor["theta"] == pytest.approx(5.0)
 
 
 def test_debug_nans_disabled_keeps_existing_nan_loss_behavior():
@@ -1244,8 +1358,11 @@ def test_nan_updated_position_stops_ordinary_fit():
     assert result.n_epochs == 1
     assert bool(jnp.isnan(result.history.loss_train[0]))
     assert bool(jnp.isnan(result.history.loss_monitor[0]))
-    assert result.position_final["theta"] == pytest.approx(1.0)
-    assert bool(jnp.isnan(result.position_final["eta"]))
+    with pytest.raises(RuntimeError, match="position_final.*NaN or infinity"):
+        _ = result.position_final
+    assert result.history.position is not None
+    assert result.history.position["theta"][-1] == pytest.approx(1.0)
+    assert bool(jnp.isnan(result.history.position["eta"][-1]))
 
 
 def test_ema_monitor_adds_no_full_data_evaluation():
@@ -1264,6 +1381,52 @@ def test_ema_monitor_adds_no_full_data_evaluation():
     result = engine.fit()
 
     assert result.history.loss_monitor.tolist() == pytest.approx([2.5])
+
+
+@pytest.mark.parametrize(
+    "implementation", ["missing", "inherited", "instance", "protocol"]
+)
+def test_full_data_monitor_validates_custom_loss(implementation, monkeypatch):
+    class BatchedLoss(LossMixin, SequenceLoss):
+        pass
+
+    class InheritedLoss(UnitGradientLoss):
+        pass
+
+    loss = {
+        "missing": BatchedLoss,
+        "inherited": InheritedLoss,
+        "instance": BatchedLoss,
+        "protocol": SequenceLoss,
+    }[implementation](_split())
+    if implementation == "instance":
+        monkeypatch.setattr(loss, "loss_train", lambda params, carry: params["theta"])
+
+    def build_engine(monitor):
+        return OptimEngine(
+            loss=loss,
+            batches=Batches(["y"], axis_size=1, batch_size=None),
+            optimizers=[_optimizer()],
+            stopper=Stopper(epochs=1, patience=1),
+            seed=1,
+            initial_state={},
+            show_progress=False,
+            loss_monitor=monitor,
+        )
+
+    if implementation == "missing":
+        with pytest.raises(
+            ValueError, match="implement loss_train.*EmaTrainLossMonitor"
+        ):
+            build_engine("train_full_data")
+        engine = build_engine(EmaTrainLossMonitor(1.0))
+        assert engine.fit().n_epochs == 1
+        engine.loss_monitor = "train_full_data"
+        with pytest.raises(ValueError, match="implement loss_train"):
+            engine.fit()
+    else:
+        engine = build_engine("train_full_data")
+        assert engine.fit().history.loss_monitor.tolist() == pytest.approx([0.0])
 
 
 def test_validation_monitor_is_unsmoothed():
@@ -1379,6 +1542,45 @@ def test_split_manager_requires_batch_manager():
         )
 
 
+@pytest.mark.parametrize("axis", [1, -2])
+def test_batch_axis_must_exist_in_training_array(axis):
+    with pytest.raises(ValueError, match="batch axis.*shape"):
+        OptimEngine(
+            loss=_loss(),
+            loss_monitor="train_full_data",
+            batches=Batches(
+                ["y"], axis_size=1, batch_size=None, default_batch_axis=axis
+            ),
+            optimizers=[_optimizer()],
+            stopper=Stopper(epochs=4, patience=2),
+            seed=1,
+            initial_state={},
+        )
+
+
+@pytest.mark.parametrize(
+    "batches",
+    [
+        Batches([], axis_size=10, batch_size=None),
+        Batches(
+            ["y"], axis_size=1, batch_size=None, sample_size=10, batch_sample_size=10
+        ),
+    ],
+)
+def test_batch_validation_allows_full_data_adapters_and_custom_sample_sizes(batches):
+    engine = OptimEngine(
+        loss=_loss(),
+        loss_monitor="train_full_data",
+        batches=batches,
+        optimizers=[_optimizer()],
+        stopper=Stopper(epochs=4, patience=2),
+        seed=1,
+        initial_state={},
+    )
+
+    assert engine.batches is batches
+
+
 def test_batch_keys_must_be_present_in_training_split():
     with pytest.raises(ValueError, match="split.train"):
         OptimEngine(
@@ -1423,13 +1625,7 @@ def test_api_imports_after_engine_refactor():
     assert not hasattr(engine_module, "LieselVI")
 
 
-def test_progress_count_conversion_uses_a_ceiling():
-    assert _progress_print_rate(100, 10) == 10
-    assert _progress_print_rate(101, 100) == 2
-    assert _progress_print_rate(201, 100) == 3
-
-
-def test_progress_defaults_and_linked_count_properties():
+def test_progress_defaults():
     engine = OptimEngine(
         loss=_loss(),
         loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
@@ -1440,65 +1636,28 @@ def test_progress_defaults_and_linked_count_properties():
         initial_state={},
         show_progress=False,
     )
-
     assert engine.progress_update_every == 10
     assert engine.step_progress_update_every == 10
     assert engine.show_step_progress is False
-    assert engine.progress_n_updates == 11
-    assert engine.step_progress_n_updates == 1
-
-    engine.progress_n_updates = 100
-    assert engine.progress_update_every == 2
-    assert engine.progress_n_updates == 51
-
-    engine.stopper = Stopper(epochs=201, patience=10)
-    assert engine.progress_n_updates == 101
-
-    engine.batches = Batches(["y"], axis_size=23, batch_size=1, shuffle=False)
-    engine.step_progress_n_updates = 10
-    assert engine.step_progress_update_every == 3
-    assert engine.step_progress_n_updates == 8
+    assert not hasattr(engine, "progress_n_updates")
+    assert not hasattr(engine, "step_progress_n_updates")
 
 
-def test_progress_count_aliases_override_intervals():
-    engine = OptimEngine(
-        loss=_loss(),
-        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
-        batches=Batches(["y"], axis_size=10, batch_size=1, shuffle=False),
-        optimizers=[_optimizer()],
-        stopper=Stopper(epochs=10, patience=10),
-        seed=1,
-        initial_state={},
-        show_progress=False,
-        progress_update_every=2,
-        progress_n_updates=3,
-        step_progress_update_every=2,
-        step_progress_n_updates=4,
-    )
-
-    assert engine.progress_update_every == 4
-    assert engine.progress_n_updates == 3
-    assert engine.step_progress_update_every == 3
-    assert engine.step_progress_n_updates == 4
-
-
-def test_progress_count_keeps_historical_positional_slot():
-    engine = OptimEngine(
-        _loss(),
-        Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
-        [_optimizer()],
-        Stopper(epochs=10, patience=10),
-        1,
-        {},
-        True,
-        False,
-        True,
-        3,
-        loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
-    )
-
-    assert engine.progress_update_every == 4
-    assert engine.progress_n_updates == 3
+def test_removed_progress_count_positional_argument_is_rejected():
+    with pytest.raises(TypeError):
+        OptimEngine(
+            _loss(),
+            Batches(["y"], axis_size=1, batch_size=None, shuffle=False),
+            [_optimizer()],
+            Stopper(epochs=10, patience=10),
+            1,
+            {},
+            True,
+            False,
+            True,
+            3,  # ty: ignore[too-many-positional-arguments]
+            loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
+        )
 
 
 def test_nested_progress_matches_monolithic_and_never_uses_callback(monkeypatch):

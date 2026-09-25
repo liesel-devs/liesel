@@ -7,6 +7,12 @@ from collections.abc import Mapping, Sequence
 import jax.numpy as jnp
 
 from ..model import Model
+from ._log_lik import observed_log_lik_node_names, validate_likelihood_groups
+
+
+def strong_observed_keys(model: Model) -> list[str]:
+    """Observed inputs whose values can be replaced by split or batch data."""
+    return [name for name, var in model.observed.items() if not var.weak]
 
 
 def position_key_groups_from_model(
@@ -21,6 +27,8 @@ def position_key_groups_from_model(
     ``None`` are passthrough data and are omitted from the groups. Keys without an
     override use ``default_split_axis``. Flat inputs are grouped by axis length;
     nested inputs retain explicit boundaries, even for equal-sized groups.
+    Inferred groups must contain an observed likelihood; otherwise callers must
+    specify explicit nested groups or mark shared data as passthrough.
     The flat keys retain passthrough entries for extraction from the model.
     """
     split_axes = split_axes or {}
@@ -40,6 +48,13 @@ def position_key_groups_from_model(
     flat_keys = [key for group in selections for key in group]
     if len(set(flat_keys)) != len(flat_keys):
         raise ValueError(f"Duplicate position_keys are not allowed: {flat_keys}")
+    for var in model.vars.values():
+        if var.weak and (var.name in flat_keys or var.value_node.name in flat_keys):
+            raise ValueError(
+                f"Cannot split or batch weak variable {var.name!r} directly. "
+                "Select its strong source data instead; weak observed values "
+                "and their likelihoods are recomputed from those inputs."
+            )
     position = model.extract_position(flat_keys)
     groups = []
 
@@ -50,7 +65,16 @@ def position_key_groups_from_model(
             if axis is None:
                 continue
 
-            n_key = int(jnp.shape(position[key])[axis])
+            shape = jnp.shape(position[key])
+            if not -len(shape) <= axis < len(shape):
+                raise ValueError(
+                    f"Cannot split or batch {key!r} with shape {shape} on axis "
+                    f"{axis}. For scalars or shared data, construct a split with "
+                    f"PositionSplit.from_model(..., split_axes={{{key!r}: None}}), "
+                    "then use LieselOptim(..., split=split) or "
+                    "Batches.from_split(split, ...)."
+                )
+            n_key = int(shape[axis])
             by_size.setdefault(n_key, []).append(key)
         if explicit and not by_size:
             raise ValueError(
@@ -64,4 +88,19 @@ def position_key_groups_from_model(
             )
         groups.extend(by_size.items())
 
+    if not explicit:
+        for _, keys in groups:
+            if not observed_log_lik_node_names(model, keys):
+                passthrough = dict.fromkeys(keys)
+                raise ValueError(
+                    f"Cannot infer an observation group for {keys}: no observed "
+                    "likelihood belongs to this group. For shared data, construct "
+                    "PositionSplit.from_model(..., "
+                    f"split_axes={passthrough!r}), then use "
+                    "LieselOptim(..., split=split) or Batches.from_split(split, ...). "
+                    "For intentional row groups without a likelihood, provide "
+                    "explicit nested position_keys."
+                )
+
+    validate_likelihood_groups(model, [keys for _, keys in groups])
     return flat_keys, groups

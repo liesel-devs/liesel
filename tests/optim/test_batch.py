@@ -9,6 +9,21 @@ from liesel.optim import Batches, BatchManager, PositionSplit, PositionSplitMana
 from liesel.optim.types import Position
 
 
+def test_managers_own_their_child_batch_indices():
+    child = Batches(["x"], axis_size=6, batch_size=2)
+    original = child.indices.copy()
+    first = BatchManager(
+        [child, Batches(["y"], axis_size=8, batch_size=2)], epoch_size="max"
+    )
+    second = BatchManager([child], epoch_size="min")
+    second_indices = second.batches[0].indices.copy()
+    first.start_epoch(jax.random.key(42))
+    assert first.batches[0].indices.size == 8
+    assert second.batches[0].indices.size == 6
+    assert jnp.array_equal(child.indices, original)
+    assert jnp.array_equal(second.batches[0].indices, second_indices)
+
+
 class TestBatches:
     def test_removed_construction_mode_is_rejected(self):
         split = PositionSplit(
@@ -80,6 +95,179 @@ class TestBatches:
         assert batches.axis_size == (6, 4)
         assert batches.n_full_batches == 3
 
+    @pytest.mark.parametrize("factory", [Batches.from_split, BatchManager.from_split])
+    @pytest.mark.parametrize("managed", [False, True])
+    def test_from_split_supports_weighted_sampling_and_scaling(self, factory, managed):
+        split = PositionSplit(
+            Position({"x": jnp.arange(12).reshape(2, 6)}),
+            Position({}),
+            Position({}),
+            6,
+            0,
+            0,
+            sample_sizes={"train": 24},
+        )
+        result = factory(
+            PositionSplitManager([split]) if managed else split,
+            batch_size=2,
+            batch_axes={"x": -1},
+            sample_with_replacement=True,
+            sampling_weights={"x": jnp.arange(1.0, 7.0)},
+            sample_size=30,
+            batch_sample_size=5,
+            likelihood_axes={"x": -1},
+            epoch_size=4,
+        )
+        started = result.start_epoch(key(1))
+        child = started.batches[0] if isinstance(started, BatchManager) else started
+        assert child.axis_size == 6
+        assert child.batch_sample_scale == 6
+        assert child.likelihood_axes == {"x": -1}
+        assert jnp.allclose(child.sampling_probabilities, jnp.arange(1.0, 7.0) / 21)
+        assert child.get_batched_position(split.train, 0)["x"].shape == (2, 2)
+        assert jnp.all((child.batch_indices >= 0) & (child.batch_indices < 6))
+        if isinstance(started, BatchManager):
+            assert started.n_full_batches == 4
+
+    @pytest.mark.parametrize("factory", [Batches.from_split, BatchManager.from_split])
+    def test_from_split_preserves_equal_sized_groups_and_routes_weights(self, factory):
+        split = PositionSplitManager(
+            [
+                PositionSplit(
+                    Position({"x": jnp.arange(4)}),
+                    Position({}),
+                    Position({}),
+                    4,
+                    0,
+                    0,
+                    sample_sizes={"train": 8},
+                ),
+                PositionSplit(
+                    Position({"y": jnp.arange(4)}),
+                    Position({}),
+                    Position({}),
+                    4,
+                    0,
+                    0,
+                    sample_sizes={"train": 12},
+                ),
+            ]
+        )
+        batches = factory(
+            split,
+            batch_size=2,
+            sample_with_replacement=True,
+            sampling_weights={"y": jnp.array([1.0, 2.0, 3.0, 4.0])},
+        )
+        assert isinstance(batches, BatchManager)
+        assert [child.position_keys for child in batches.batches] == [["x"], ["y"]]
+        assert batches.sample_sizes == (8, 12)
+        assert batches.batch_sample_sizes == (4, 6)
+        assert batches.batches[0].sampling_probabilities is None
+        assert jnp.allclose(
+            batches.batches[1].sampling_probabilities, jnp.array([0.1, 0.2, 0.3, 0.4])
+        )
+        selected = factory(
+            split, batch_size=2, position_keys=["y"], infer_sample_size=False
+        )
+        assert isinstance(selected, BatchManager)
+        assert selected.position_keys == ["y"]
+        assert selected.sample_sizes == (None,)
+        assert selected.batch_sample_scales == (2.0,)
+
+    @pytest.mark.parametrize("factory", [Batches.from_split, BatchManager.from_split])
+    def test_from_split_batches_different_axes_and_passthrough_data(self, factory):
+        split = PositionSplit(
+            Position({"y": jnp.arange(24).reshape(3, 8)}),
+            Position({"y": jnp.empty((0, 8))}),
+            Position({"y": jnp.empty((0, 8))}),
+            3,
+            0,
+            0,
+            passthrough=Position({"x": jnp.arange(8)}),
+        )
+        batches = factory(
+            split,
+            batch_size=2,
+            position_keys=["y", "x"],
+            batch_axes={"y": -1},
+            shuffle=False,
+        )
+        child = batches.batches[0] if isinstance(batches, BatchManager) else batches
+        assert child.axis_size == 8
+        assert child.batch_sample_scale == 4
+        result = child.get_batched_position(split.train, 0)
+        assert result["y"].shape == (3, 2)
+        assert result["x"].tolist() == [0, 1]
+
+    @pytest.mark.parametrize("factory", [Batches.from_split, BatchManager.from_split])
+    @pytest.mark.parametrize(
+        "kwargs, message",
+        [
+            ({"axis_size": 7}, "axis_size"),
+            ({"default_batch_axis": 1}, "invalid batch axis"),
+            ({"position_keys": ["missing"]}, "missing from split.train"),
+            ({"position_keys": ["x", "x"]}, "Duplicate position_keys"),
+            ({"sample_with_replacement": True, "shuffle": False}, "shuffle=True"),
+            ({"sampling_weights": jnp.ones(6)}, "sample_with_replacement=True"),
+            (
+                {"sample_with_replacement": True, "sampling_weights": jnp.ones(8)},
+                "length axis_size",
+            ),
+            (
+                {"sampling_weights": {"missing": jnp.ones(6)}},
+                "Unknown sampling_weights",
+            ),
+        ],
+    )
+    def test_from_split_rejects_invalid_options(self, factory, kwargs, message):
+        split = PositionSplit(
+            Position({"x": jnp.arange(6)}), Position({}), Position({}), 6, 0, 0
+        )
+        with pytest.raises((ValueError, TypeError), match=message):
+            factory(split, batch_size=2, **kwargs)
+
+    def test_manager_from_split_enables_oversized_replacement(self):
+        split = PositionSplit(
+            Position({"x": jnp.arange(3)}), Position({}), Position({}), 3, 0, 0
+        )
+        batches = BatchManager.from_split(split, batch_size=5)
+        assert batches.batches[0].sample_with_replacement
+        assert batches.batch_size == (5,)
+
+    @pytest.mark.parametrize("factory", [Batches.from_split, BatchManager.from_split])
+    @pytest.mark.parametrize("keys", [None, []])
+    def test_from_split_full_data_and_empty_key_adapters(self, factory, keys):
+        split = PositionSplit(
+            Position({"x": jnp.arange(6)}), Position({}), Position({}), 6, 0, 0
+        )
+        batches = factory(split, batch_size=None, position_keys=keys)
+        child = batches.batches[0] if isinstance(batches, BatchManager) else batches
+        assert child.is_full_data
+        assert not child.shuffle
+        assert child.batch_sample_scale == 1
+        assert child.position_keys == (["x"] if keys is None else [])
+
+    @pytest.mark.parametrize(
+        "factory, source",
+        [
+            (Batches, ["x"]),
+            (Batches.from_model, None),
+            (BatchManager.from_model, None),
+            (Batches.from_split, "split"),
+            (BatchManager.from_split, "split"),
+        ],
+    )
+    def test_batch_axis_size_is_rejected(self, factory, source):
+        if source is None:
+            source = lsl.Model([lsl.Var.new_obs(jnp.arange(6.0), name="x")])
+        elif source == "split":
+            source = PositionSplit(
+                Position({"x": jnp.arange(6)}), Position({}), Position({}), 6, 0, 0
+            )
+        with pytest.raises(TypeError, match="batch_axis_size"):
+            factory(source, batch_size=2, batch_axis_size=2)
+
     def test_runs(self):
         Bi = Batches(["x"], axis_size=30, batch_size=4, shuffle=True)
         assert Bi.batch_indices.shape == (7, 4)
@@ -111,16 +299,6 @@ class TestBatches:
 
         assert indices.shape == (10,)
         assert jnp.array_equal(jnp.sort(indices), jnp.arange(10))
-
-    def test_old_batch_axis_size_keyword_still_works(self):
-        batches = Batches(["x"], axis_size=10, batch_axis_size=4, shuffle=False)
-
-        assert batches.batch_size == 4
-        assert batches.batch_indices.shape == (2, 4)
-
-    def test_batch_size_and_old_keyword_are_mutually_exclusive(self):
-        with pytest.raises(TypeError, match="batch_size or batch_axis_size"):
-            Batches(["x"], axis_size=10, batch_size=4, batch_axis_size=4)
 
     def test_no_batching(self):
         Bi = Batches(["x"], axis_size=30, batch_size=None, shuffle=False)
@@ -204,26 +382,21 @@ class TestBatches:
         )
 
     def test_from_model_rejects_multi_size_by_default(self):
-        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
-        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        x = lsl.Var.new_obs(
+            jnp.arange(8.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="x"
+        )
+        y = lsl.Var.new_obs(
+            jnp.arange(5.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y"
+        )
         model = lsl.Model([x, y])
 
         with pytest.raises(ValueError, match="multi_size"):
             Batches.from_model(model, batch_size=2, position_keys=["x", "y"])
 
-    def test_from_model_accepts_old_batch_axis_size_keyword(self):
-        y = lsl.Var.new_obs(jnp.arange(6.0), name="y")
-        model = lsl.Model([y])
-
-        batches = Batches.from_model(
-            model, batch_axis_size=2, position_keys=["y"], shuffle=False
-        )
-
-        assert isinstance(batches, Batches)
-        assert batches.batch_size == 2
-
     def test_from_model_empty_position_keys_allow_full_data_adapter(self):
-        y = lsl.Var.new_obs(jnp.arange(6.0), name="y")
+        y = lsl.Var.new_obs(
+            jnp.arange(6.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y"
+        )
         model = lsl.Model([y])
 
         batches = Batches.from_model(model, batch_size=None, position_keys=[])
@@ -242,8 +415,12 @@ class TestBatches:
             Batches.from_model(model, batch_size=2, position_keys=[])
 
     def test_from_model_empty_position_keys_multi_size_requires_axis_size(self):
-        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
-        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        x = lsl.Var.new_obs(
+            jnp.arange(8.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="x"
+        )
+        y = lsl.Var.new_obs(
+            jnp.arange(5.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y"
+        )
         model = lsl.Model([x, y])
 
         with pytest.raises(ValueError, match="axis_size"):
@@ -257,8 +434,12 @@ class TestBatches:
         assert batches.is_full_data
 
     def test_from_model_can_return_batch_manager_for_multi_size_data(self):
-        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
-        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        x = lsl.Var.new_obs(
+            jnp.arange(8.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="x"
+        )
+        y = lsl.Var.new_obs(
+            jnp.arange(5.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y"
+        )
         model = lsl.Model([x, y])
 
         manager = Batches.from_model(
@@ -277,8 +458,12 @@ class TestBatches:
         assert tuple(index.shape for index in started.batch_indices) == ((4, 2), (4, 2))
 
     def test_from_model_global_replacement_reaches_every_child(self):
-        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
-        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        x = lsl.Var.new_obs(
+            jnp.arange(8.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="x"
+        )
+        y = lsl.Var.new_obs(
+            jnp.arange(5.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y"
+        )
         model = lsl.Model([x, y])
 
         manager = Batches.from_model(
@@ -299,8 +484,12 @@ class TestBatches:
         )
 
     def test_manager_from_model_global_replacement_reaches_every_child(self):
-        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
-        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        x = lsl.Var.new_obs(
+            jnp.arange(8.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="x"
+        )
+        y = lsl.Var.new_obs(
+            jnp.arange(5.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y"
+        )
         manager = BatchManager.from_model(
             lsl.Model([x, y]),
             batch_size=2,
@@ -310,8 +499,12 @@ class TestBatches:
         assert all(batch.sample_with_replacement for batch in manager.batches)
 
     def test_manager_from_model_oversized_child_requires_shuffle(self):
-        x = lsl.Var.new_obs(jnp.arange(12.0), name="x")
-        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        x = lsl.Var.new_obs(
+            jnp.arange(12.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="x"
+        )
+        y = lsl.Var.new_obs(
+            jnp.arange(5.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y"
+        )
         with pytest.raises(ValueError, match="shuffle=True"):
             BatchManager.from_model(
                 lsl.Model([x, y]),
@@ -321,8 +514,12 @@ class TestBatches:
             )
 
     def test_from_model_multi_size_manager_returns_batches_for_one_size(self):
-        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
-        y = lsl.Var.new_obs(jnp.arange(8.0), name="y")
+        x = lsl.Var.new_obs(
+            jnp.arange(8.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="x"
+        )
+        y = lsl.Var.new_obs(
+            jnp.arange(8.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y"
+        )
         model = lsl.Model([x, y])
 
         batches = Batches.from_model(
@@ -336,8 +533,12 @@ class TestBatches:
         assert batches.position_keys == ["x", "y"]
 
     def test_from_model_rejects_scalar_axis_size_for_multi_size_manager(self):
-        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
-        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        x = lsl.Var.new_obs(
+            jnp.arange(8.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="x"
+        )
+        y = lsl.Var.new_obs(
+            jnp.arange(5.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y"
+        )
         model = lsl.Model([x, y])
 
         with pytest.raises(ValueError, match="Single axis"):
@@ -607,8 +808,12 @@ class TestBatchManager:
         )
 
     def test_from_model_groups_observed_variables_by_sample_size(self):
-        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
-        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        x = lsl.Var.new_obs(
+            jnp.arange(8.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="x"
+        )
+        y = lsl.Var.new_obs(
+            jnp.arange(5.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y"
+        )
         model = lsl.Model([x, y])
 
         manager = BatchManager.from_model(
@@ -622,22 +827,13 @@ class TestBatchManager:
         assert manager.batch_size == (2, 2)
         assert manager.n_full_batches == 4
 
-    def test_from_model_accepts_old_batch_axis_size_keyword(self):
-        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
-        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
-        model = lsl.Model([x, y])
-
-        manager = BatchManager.from_model(
-            model,
-            batch_axis_size=2,
-            position_keys=["x", "y"],
-        )
-
-        assert manager.batch_size == (2, 2)
-
     def test_from_model_supports_full_data_multi_size_batches(self):
-        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
-        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        x = lsl.Var.new_obs(
+            jnp.arange(8.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="x"
+        )
+        y = lsl.Var.new_obs(
+            jnp.arange(5.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y"
+        )
         model = lsl.Model([x, y])
 
         manager = BatchManager.from_model(
@@ -653,8 +849,12 @@ class TestBatchManager:
         assert all(not batch.shuffle for batch in manager.batches)
 
     def test_from_model_strict_epoch_size_rejects_unequal_child_batch_counts(self):
-        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
-        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        x = lsl.Var.new_obs(
+            jnp.arange(8.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="x"
+        )
+        y = lsl.Var.new_obs(
+            jnp.arange(5.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y"
+        )
         model = lsl.Model([x, y])
 
         with pytest.raises(ValueError, match="same n_full_batches"):
@@ -666,8 +866,12 @@ class TestBatchManager:
             )
 
     def test_from_model_allows_oversized_child_batch(self):
-        x = lsl.Var.new_obs(jnp.arange(12.0), name="x")
-        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        x = lsl.Var.new_obs(
+            jnp.arange(12.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="x"
+        )
+        y = lsl.Var.new_obs(
+            jnp.arange(5.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y"
+        )
         model = lsl.Model([x, y])
 
         manager = BatchManager.from_model(
@@ -687,8 +891,12 @@ class TestBatchManager:
         assert jnp.all(batched["y"] < 5)
 
     def test_from_model_rejects_additional_batches_without_shuffle(self):
-        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
-        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        x = lsl.Var.new_obs(
+            jnp.arange(8.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="x"
+        )
+        y = lsl.Var.new_obs(
+            jnp.arange(5.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y"
+        )
         model = lsl.Model([x, y])
 
         with pytest.raises(ValueError, match="additional batches"):
@@ -700,8 +908,14 @@ class TestBatchManager:
             )
 
     def test_from_model_uses_axes_when_grouping_observed_variables(self):
-        x = lsl.Var.new_obs(jnp.arange(16.0).reshape(2, 8), name="x")
-        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        x = lsl.Var.new_obs(
+            jnp.arange(16.0).reshape(2, 8),
+            lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+            name="x",
+        )
+        y = lsl.Var.new_obs(
+            jnp.arange(5.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y"
+        )
         model = lsl.Model([x, y])
 
         manager = BatchManager.from_model(

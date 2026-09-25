@@ -75,42 +75,6 @@ def assert_same_run(actual, expected):
     assert actual.min_monitor_epoch == expected.min_monitor_epoch
 
 
-def test_unweighted_checkpoint_without_alias_state_still_resumes(tmp_path):
-    expected = make_engine().fit()
-    checkpoint = make_engine().fit(pause_after=2).checkpoint
-    # Old unweighted Batches instances had no alias-table attribute.
-    vars(checkpoint._carry.batches).pop("_alias_table", None)
-    path = tmp_path / "legacy-unweighted.pkl"
-    checkpoint.save(path)
-    assert_same_run(make_engine().fit(checkpoint=path), expected)
-
-
-@pytest.mark.parametrize("monitor", [EmaTrainLossMonitor(1.0), "train_full_data"])
-def test_legacy_ema_accumulators_are_converted_when_loading(tmp_path, monitor):
-    engine = make_model_engine("adam")
-    engine.loss_monitor = monitor
-    first = engine.fit(pause_after=2)
-    expected = engine.fit(checkpoint=first.checkpoint)
-
-    # Recreate the old pickle layout, including its two accumulator fields.
-    state = vars(first.checkpoint._carry)
-    mean = state.pop("_ema_mean")
-    state.pop("_ema_compensation")
-    weight = jnp.asarray(0.5 if isinstance(monitor, EmaTrainLossMonitor) else 0.0)
-    state.update(_ema_numerator=mean * weight, _ema_weight=weight)
-    checkpoint = replace(
-        first.checkpoint, versions={**first.checkpoint.versions, "liesel": "legacy"}
-    )
-    path = tmp_path / "legacy-ema.pkl"
-    checkpoint.save(path)
-
-    with pytest.raises(ValueError, match="version.*liesel"):
-        engine.fit(checkpoint=path)
-    with pytest.warns(UserWarning, match="version.*liesel"):
-        actual = engine.fit(checkpoint=path, allow_version_mismatch=True)
-    assert_same_run(actual, expected)
-
-
 @pytest.mark.parametrize("save_position_history", [False, True])
 def test_pause_and_resume_matches_uninterrupted_stochastic_optimization(
     save_position_history,
@@ -152,12 +116,14 @@ def test_snapshots_survive_continuation_and_budget_extension(progress, prune):
     assert first.history is not first.checkpoint.history
     assert first.history.position is not first.checkpoint.history.position
     assert first.history.position["theta"] is first.checkpoint.history.position["theta"]
-    assert_same_run(engine.fit(checkpoint=first.checkpoint), first)
+    with pytest.warns(UserWarning, match="already complete.*max_epochs"):
+        assert_same_run(engine.fit(checkpoint=first.checkpoint), first)
 
     engine.stopper.epochs = 6
+    engine.stopper.min_epochs = 6
     resumed = engine.fit(checkpoint=first.checkpoint)
     reference = make_engine(prune_history=prune)
-    reference.stopper.min_epochs = 3
+    assert resumed.n_epochs == 6
     assert_same_run(resumed, reference.fit())
     np.testing.assert_array_equal(first.history.position["theta"], saved)
 
@@ -276,7 +242,7 @@ def test_failed_write_preserves_previous_checkpoint(tmp_path, monkeypatch, opera
     assert_same_run(make_engine().fit(checkpoint=path), make_engine().fit())
 
 
-@pytest.mark.parametrize("contents", [b"garbage", b"liesel.optim.checkpoint\x00\x02\n"])
+@pytest.mark.parametrize("contents", [b"garbage", b"liesel.optim.checkpoint\x00\x01\n"])
 def test_invalid_file_is_not_overwritten(tmp_path, contents):
     path = tmp_path / "optim.pkl"
     path.write_bytes(contents)
@@ -318,6 +284,39 @@ def test_nan_failure_preserves_last_successful_checkpoint(
     assert OptimCheckpoint.load(path).n_epochs == 2
 
 
+@pytest.mark.parametrize("on_disk", [False, True])
+@pytest.mark.parametrize("early_stop", [False, True])
+def test_completed_checkpoint_warns_after_learning_rate_change(
+    tmp_path, on_disk, early_stop
+):
+    path = tmp_path / "optim.pkl"
+    engine = make_engine(epochs=6 if early_stop else 3)
+    if early_stop:
+        engine.stopper.min_epochs = 0
+        engine.stopper.atol = 1e9
+    first = engine.fit(checkpoint=path if on_disk else None)
+    checkpoint = path if on_disk else first.checkpoint
+    engine.optimizers = [Optimizer(["theta"], optax.adam(0.5))]
+
+    with pytest.warns(UserWarning, match=f"already complete.*{first.status}") as caught:
+        resumed = engine.fit(checkpoint=checkpoint)
+
+    assert len(caught) == 1
+    message = str(caught[0].message)
+    assert f"{first.n_epochs} epochs" in message
+    assert "new path" in message and "fit() without a checkpoint" in message
+    if on_disk:
+        assert str(path) in message
+    assert resumed.status == first.status
+    assert_same_run(resumed, first)
+    for actual, expected in zip(
+        jax.tree.leaves(resumed.checkpoint._carry.optimizer_states),
+        jax.tree.leaves(first.checkpoint._carry.optimizer_states),
+        strict=True,
+    ):
+        np.testing.assert_array_equal(actual, expected)
+
+
 def test_early_stop_takes_precedence_over_pause_and_survives_budget_extension(tmp_path):
     path = tmp_path / "optim.pkl"
     engine = make_engine()
@@ -328,7 +327,8 @@ def test_early_stop_takes_precedence_over_pause_and_survives_budget_extension(tm
     assert result.n_epochs == 3
     assert OptimCheckpoint.load(path).n_epochs == 3
     engine.stopper.epochs = 20
-    resumed = engine.fit(checkpoint=path)
+    with pytest.warns(UserWarning, match="already complete.*early_stopping"):
+        resumed = engine.fit(checkpoint=path)
     assert resumed.status == "early_stopping"
     assert_same_run(resumed, result)
 
@@ -343,11 +343,17 @@ def make_model_engine(optimizer):
         )
         for n in (8, 5)
     ]
+    model = lsl.Model(observations)
+    batches = (
+        Batches.from_model(model, batch_size=2, multi_size="manager")
+        if optimizer == "adam"
+        else None
+    )
     return LieselOptim(
-        lsl.Model(observations),
+        model,
         loss_monitor="train_full_data",
-        batch_size=2 if optimizer == "adam" else None,
-        optimizers=optimizer,
+        batches=batches,
+        optimizers=optax.adam(0.02) if optimizer == "adam" else optimizer,
         stopper=Stopper(epochs=6, patience=2, min_epochs=6),
         seed=21,
         show_progress=False,
@@ -377,7 +383,8 @@ def test_model_checkpoint_recovers_in_a_fresh_python_process(tmp_path, optimizer
         timeout=60,
     )
     assert recovery.returncode == 0, recovery.stderr
-    actual = make_model_engine(optimizer).fit(checkpoint=path)
+    with pytest.warns(UserWarning, match="already complete.*max_epochs"):
+        actual = make_model_engine(optimizer).fit(checkpoint=path)
     assert_same_run(actual, make_model_engine(optimizer).fit())
 
 

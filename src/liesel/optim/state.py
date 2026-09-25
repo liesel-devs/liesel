@@ -24,7 +24,6 @@ import jax.numpy as jnp
 import optax
 import pandas as pd
 import plotnine as p9
-from mizani.breaks import breaks_extended
 
 from liesel.goose.types import ModelState
 
@@ -199,16 +198,14 @@ class OptimHistory:
     position
         Optional parameter position history. Each array has a leading epoch
         dimension.
-    tracked
-        Optional history for additional tracked quantities.
 
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from liesel.optim.state import OptimHistory
+    >>> from liesel.optim import OptimHistory
     >>> from liesel.optim.types import Position
     >>> position = Position({"theta": jnp.array([1.0, 2.0])})
-    >>> history = OptimHistory.from_epochs(epochs=3, position=position, tracked=None)
+    >>> history = OptimHistory.from_epochs(epochs=3, position=position)
     >>> history.loss_train.shape
     (3,)
     >>> history.position["theta"].shape
@@ -220,14 +217,12 @@ class OptimHistory:
     loss_train: jax.Array
     loss_monitor: jax.Array
     position: Position | None
-    tracked: Position | None
 
     @classmethod
     def from_epochs(
         cls,
         epochs: int,
         position: Position | None,
-        tracked: Position | None,
         loss_dtype: jnp.dtype | None = None,
     ) -> OptimHistory:
         """
@@ -240,12 +235,9 @@ class OptimHistory:
         position
             Initial position used to infer the shape of the stored parameter history.
             If ``None``, no parameter history is allocated.
-        tracked
-            Initial tracked position used to infer the shape of tracked history. If
-            ``None``, no tracked history is allocated.
         loss_dtype
             Optional dtype for the loss history. If omitted, the first floating dtype
-            in ``position`` or ``tracked`` is used, falling back to JAX's default.
+            in ``position`` is used, falling back to JAX's default.
 
         Returns
         -------
@@ -255,20 +247,14 @@ class OptimHistory:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.optim.state import OptimHistory
+        >>> from liesel.optim import OptimHistory
         >>> from liesel.optim.types import Position
-        >>> history = OptimHistory.from_epochs(
-        ...     2, Position({"theta": jnp.array(1.0)}), tracked=None
-        ... )
+        >>> history = OptimHistory.from_epochs(2, Position({"theta": jnp.array(1.0)}))
         >>> history.loss_monitor.tolist()
         [inf, inf]
         >>> history.position["theta"].tolist()
         [0.0, 0.0]
         """
-        tracked_init = (
-            cls.init_position_history(tracked, epochs) if tracked is not None else None
-        )
-
         position_init = (
             cls.init_position_history(position, epochs)
             if position is not None
@@ -276,13 +262,12 @@ class OptimHistory:
         )
 
         if loss_dtype is None:
-            loss_dtype = _first_floating_dtype(position, tracked)
+            loss_dtype = _first_floating_dtype(position)
 
         inst = cls(
             loss_train=jnp.full((epochs,), fill_value=jnp.inf, dtype=loss_dtype),
             loss_monitor=jnp.full((epochs,), fill_value=jnp.inf, dtype=loss_dtype),
             position=position_init,
-            tracked=tracked_init,
         )
         return inst
 
@@ -299,8 +284,8 @@ class OptimHistory:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.optim.state import OptimHistory
-        >>> history = OptimHistory.from_epochs(epochs=2, position=None, tracked=None)
+        >>> from liesel.optim import OptimHistory
+        >>> history = OptimHistory.from_epochs(epochs=2, position=None)
         >>> history.loss_train = history.loss_train.at[0].set(1.5)
         >>> history.loss_monitor = history.loss_monitor.at[0].set(2.5)
         >>> history.loss_df().iloc[0].to_dict()
@@ -332,14 +317,14 @@ class OptimHistory:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.optim.state import OptimHistory
+        >>> from liesel.optim import OptimHistory
         >>> from liesel.optim.types import Position
         >>> history = OptimHistory.from_epochs(
-        ...     2, Position({"theta": jnp.array([1.0, 2.0])}), tracked=None
+        ...     2, Position({"theta": jnp.array([1.0, 2.0])})
         ... )
         >>> history.position_df().columns.tolist()
         ['epoch', 'theta0', 'theta1']
-        >>> no_position = OptimHistory.from_epochs(2, position=None, tracked=None)
+        >>> no_position = OptimHistory.from_epochs(2, position=None)
         >>> try:
         ...     no_position.position_df()
         ... except TypeError as error:
@@ -352,38 +337,6 @@ class OptimHistory:
             )
         return position_df(self.position, subset)
 
-    def tracked_df(self, subset: Sequence[str] | None = None) -> pd.DataFrame:
-        """
-        Converts tracked quantities into a data frame.
-
-        Parameters
-        ----------
-        subset
-            Optional sequence of tracked quantity names to keep.
-
-        Raises
-        ------
-        ValueError
-            If no tracked history is available.
-
-        Examples
-        --------
-        >>> import jax.numpy as jnp
-        >>> from liesel.optim.state import OptimHistory
-        >>> from liesel.optim.types import Position
-        >>> tracked = Position({"mean": jnp.array(0.0)})
-        >>> history = OptimHistory.from_epochs(epochs=2, position=None, tracked=tracked)
-        >>> history.tracked = OptimHistory.update_position_history(
-        ...     0, history.tracked, Position({"mean": jnp.array(1.5)})
-        ... )
-        >>> history.tracked_df().iloc[0].to_dict()
-        {'epoch': 0.0, 'mean': 1.5}
-        """
-        if self.tracked is None:
-            raise ValueError(f"{self.tracked=}")
-
-        return position_df(self.tracked, subset)
-
     @staticmethod
     def init_position_history(position: Position, epochs: int) -> Position:
         """
@@ -394,7 +347,7 @@ class OptimHistory:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.optim.state import OptimHistory
+        >>> from liesel.optim import OptimHistory
         >>> from liesel.optim.types import Position
         >>> position = Position({"theta": jnp.ones((2,))})
         >>> history = OptimHistory.init_position_history(position, epochs=3)
@@ -436,7 +389,7 @@ class OptimHistory:
         Examples
         --------
         >>> import jax.numpy as jnp
-        >>> from liesel.optim.state import OptimHistory
+        >>> from liesel.optim import OptimHistory
         >>> from liesel.optim.types import Position
         >>> position = Position({"theta": jnp.array([1.0, 2.0])})
         >>> history = OptimHistory.init_position_history(position, epochs=2)
@@ -582,8 +535,6 @@ class OptimCarry:
         Current JAX pseudo-random key.
     position
         Current parameter position.
-    tracked
-        Optional tracked quantities for diagnostics.
     history
         Preallocated optimizer history.
     batches
@@ -619,7 +570,6 @@ class OptimCarry:
     key: jax.Array  # random number key
 
     position: Position  # parameter position (estimation targets)
-    tracked: Position | None  # recorded position (for diagnosis)
 
     history: OptimHistory
     batches: BatchConfig
@@ -642,15 +592,8 @@ class OptimCarry:
     i_batch: int | jax.Array = 0  # inner for-loop index over batches
     nan_debug_state: OptimNaNDebugState | None = None
 
-    def __setstate__(self, state: dict[str, Any]) -> None:
-        # Legacy checkpoints stored the unnormalized EMA and its weight.
-        # Preserve their last value; historical rounding cannot be recovered.
-        if "_ema_numerator" in state:
-            numerator = state.pop("_ema_numerator")
-            weight = state.pop("_ema_weight")
-            state["_ema_mean"] = numerator / jnp.where(weight == 0, 1, weight)
-            state["_ema_compensation"] = jnp.zeros_like(numerator)
-        self.__dict__.update(state)
+    # Read-only partition templates, prepared outside the compiled fit loop.
+    _data_states: dict[str, ModelState] = field(default_factory=dict, repr=False)
 
     @classmethod
     def new(
@@ -658,7 +601,6 @@ class OptimCarry:
         key: jax.Array,
         epochs: int,
         position: Position,
-        tracked: Position | None,
         batches: BatchConfig,
         optimizers: Sequence[OptimizerLike],
         model_state: ModelState,
@@ -683,7 +625,6 @@ class OptimCarry:
         ...     key=jax.random.key(0),
         ...     epochs=2,
         ...     position=position,
-        ...     tracked=None,
         ...     batches=Batches(["y"], axis_size=4, batch_size=2),
         ...     optimizers=[Optimizer(["theta"], optax.sgd(0.1))],
         ...     model_state={},
@@ -713,9 +654,9 @@ class OptimCarry:
         opt_states = {opt.identifier: opt.init(position) for opt in optimizers}
         loss_dtype = _first_floating_dtype(position)
         if save_position_history:
-            history = OptimHistory.from_epochs(epochs, position, tracked, loss_dtype)
+            history = OptimHistory.from_epochs(epochs, position, loss_dtype)
         else:
-            history = OptimHistory.from_epochs(epochs, None, tracked, loss_dtype)
+            history = OptimHistory.from_epochs(epochs, None, loss_dtype)
 
         inf = _inf_with_dtype(loss_dtype)
         zero = jnp.zeros_like(inf)
@@ -723,7 +664,6 @@ class OptimCarry:
         inst = cls(
             key=key,
             position=position,
-            tracked=tracked,
             history=history,
             batches=batches,
             optimizer_states=opt_states,
@@ -750,6 +690,11 @@ class OptimNaNDebugInfo:
     Use :meth:`reproduce_step` for NaNs introduced by an optimizer update and
     :meth:`reproduce_loss` for NaNs returned by an optimizer's pre-update loss or
     by the explicit batched loss evaluation when no optimizer is active.
+
+    The reported optimizer is where NaN was first detected. An earlier update
+    may have produced finite values outside the model's valid parameter domain.
+    Inspect ``last_non_nan_position``: it is free of NaNs, but is not necessarily
+    a valid model state.
     """
 
     kind: OptimNaNKind
@@ -824,7 +769,7 @@ def _checkpoint_versions() -> dict[str, str]:
     }
 
 
-_CHECKPOINT_HEADER = b"liesel.optim.checkpoint\x00\x01\n"
+_CHECKPOINT_HEADER = b"liesel.optim.checkpoint\x00\x02\n"
 
 
 @dataclass(frozen=True)
@@ -901,7 +846,7 @@ class OptimCheckpoint:
         return replace(checkpoint, duration=duration)
 
 
-@dataclass
+@dataclass(init=False)
 class OptimResult:
     """
     Result returned by an optimizer run.
@@ -909,8 +854,9 @@ class OptimResult:
     ``OptimResult`` bundles the processed history, the terminal and minimum-monitor
     positions, and small metadata about the run. Choose explicitly between
     ``position_final`` and ``position_min_monitor`` when using fitted parameters.
-    It also provides convenience plotting methods for losses and saved parameter
-    histories.
+    Accessing an unavailable position or one containing NaN or infinity raises
+    :class:`RuntimeError`. History, status, and diagnostics remain available.
+    It also provides plotting methods for losses and saved parameter histories.
 
     Parameters
     ----------
@@ -919,16 +865,17 @@ class OptimResult:
     position_final
         Actual terminal position, including an interrupted partial epoch.
     position_min_monitor
-        Position with the smallest recorded monitoring loss, or ``None`` if no
-        epoch completed. For exact validation and full-training monitors, this is
+        Position with the smallest finite monitoring loss, or ``None`` if no
+        finite monitoring loss was recorded. For exact validation and full-training
+        monitors, this is
         the post-update position used for that loss evaluation. For an EMA, it is
         the associated parameter snapshot, not a position whose exact loss equals
         the EMA.
     n_epochs
         Number of completed epochs included in the processed history.
     min_monitor_epoch
-        Epoch at which the smallest monitoring loss was recorded, or ``None`` if no
-        epoch completed.
+        Epoch at which the smallest finite monitoring loss was recorded, or
+        ``None`` if no finite monitoring loss was recorded.
     monitor_source
         Configured monitoring source: ``"train_ema"``, ``"validation"``, or
         ``"train_full_data"``.
@@ -950,9 +897,10 @@ class OptimResult:
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from liesel.optim.state import OptimHistory, OptimResult
+    >>> from liesel.optim import OptimResult
+    >>> from liesel.optim import OptimHistory
     >>> from liesel.optim.types import Position
-    >>> history = OptimHistory.from_epochs(epochs=2, position=None, tracked=None)
+    >>> history = OptimHistory.from_epochs(epochs=2, position=None)
     >>> position_final = Position({"theta": jnp.array(2.0)})
     >>> position_min_monitor = Position({"theta": jnp.array(1.0)})
     >>> result = OptimResult(
@@ -971,8 +919,8 @@ class OptimResult:
 
     history: OptimHistory
 
-    position_final: Position
-    position_min_monitor: Position | None
+    _position_final: Position
+    _position_min_monitor: Position | None
     n_epochs: int
     min_monitor_epoch: int | None
     monitor_source: Literal["train_ema", "validation", "train_full_data"]
@@ -981,6 +929,67 @@ class OptimResult:
     nan_debug: OptimNaNDebugInfo | None = None
     checkpoint: OptimCheckpoint | None = None
     status: Literal["paused", "max_epochs", "early_stopping", "nan"] = "max_epochs"
+
+    def __init__(
+        self,
+        history: OptimHistory,
+        position_final: Position,
+        position_min_monitor: Position | None,
+        n_epochs: int,
+        min_monitor_epoch: int | None,
+        monitor_source: Literal["train_ema", "validation", "train_full_data"],
+        patience: int,
+        duration: float,
+        nan_debug: OptimNaNDebugInfo | None = None,
+        checkpoint: OptimCheckpoint | None = None,
+        status: Literal["paused", "max_epochs", "early_stopping", "nan"] = "max_epochs",
+    ):
+        self.history = history
+        self._position_final = position_final
+        self._position_min_monitor = position_min_monitor
+        self.n_epochs = n_epochs
+        self.min_monitor_epoch = min_monitor_epoch
+        self.monitor_source = monitor_source
+        self.patience = patience
+        self.duration = duration
+        self.nan_debug = nan_debug
+        self.checkpoint = checkpoint
+        self.status = status
+
+    @staticmethod
+    def _checked_position(position: Position, name: str) -> Position:
+        if any(not bool(jnp.all(jnp.isfinite(x))) for x in jax.tree.leaves(position)):
+            raise RuntimeError(
+                f"{name} contains NaN or infinity. "
+                "Inspect result.status, result.history, and result.nan_debug."
+            )
+        return position
+
+    @property
+    def position_final(self) -> Position:
+        """Terminal parameters, including a finite interrupted partial epoch.
+
+        Raises :class:`RuntimeError` if any parameter contains NaN or infinity.
+        """
+        return self._checked_position(self._position_final, "position_final")
+
+    @property
+    def position_min_monitor(self) -> Position:
+        """Parameters saved at the smallest finite monitoring loss.
+
+        An earlier best position remains available after a later failure.
+        Raises :class:`RuntimeError` if no finite monitoring loss was recorded,
+        or if the saved parameters contain NaN or infinity.
+        """
+        if self._position_min_monitor is None:
+            raise RuntimeError(
+                "No finite monitoring loss was recorded; "
+                "position_min_monitor is unavailable. "
+                "Inspect result.status, result.history, and result.nan_debug."
+            )
+        return self._checked_position(
+            self._position_min_monitor, "position_min_monitor"
+        )
 
     def plot_loss(
         self, legend: bool = True, title: str | None = None, window: int | None = None
@@ -1073,21 +1082,6 @@ class OptimResult:
         recent = self.plot_loss(window=window, legend=False) + p9.labs(
             subtitle="Recent loss history"
         )
-
-        if self.n_epochs:
-            first_epoch = max(self.n_epochs - window, 0)
-            last_epoch = self.n_epochs - 1
-            default_breaks = breaks_extended()
-            recent += p9.scale_x_continuous(
-                breaks=lambda limits: sorted(
-                    {first_epoch, last_epoch}
-                    | {
-                        value
-                        for value in default_breaks(limits)
-                        if first_epoch < value < last_epoch
-                    }
-                )
-            )
 
         overview = (self.plot_loss() + p9.labs(subtitle="Full loss history")) / recent
         return overview + p9.theme(figure_size=(8, 7))

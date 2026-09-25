@@ -10,9 +10,7 @@ Liesel: A Probabilistic Programming Framework
    :maxdepth: 1
 
    tutorials_overview
-   optimizer-data-flow
-   optimizer-weighted-batching
-   optimizer-checkpointing
+   optimization
 
 
 API Reference
@@ -128,33 +126,13 @@ acccess to important diagnostics.
     ~liesel.goose.plot_density
     ~liesel.goose.plot_param
 
-Optimization
-*************
-
-It can often be beneficial to find good starting values to get your MCMC sampling scheme
-going. Goose provides the function :func:`.optim_flat` for this purpose, which allows you
-to run stochastic gradient descent on a liesel model.
-
-.. autosummary::
-    :toctree: generated
-    :caption: Optimization
-    :recursive:
-    :nosignatures:
-
-    ~liesel.goose.optim_flat
-    ~liesel.goose.Stopper
-    ~liesel.goose.history_to_df
-    ~liesel.goose.OptimResult
+.. _optimizer-api:
 
 Optimizer API
 *************
 
-The :mod:`liesel.optim` module provides the newer optimization engine, data-splitting
-utilities, and variational inference helpers.
-
-The :doc:`optimizer-data-flow` guide provides interactive overviews of the splitting,
-batching, and likelihood-scaling behavior.
-The :doc:`optimizer-checkpointing` guide covers pausing and recovering interrupted runs.
+Start with the :doc:`optimization` guide. These pages describe the arguments
+and defaults.
 
 .. autosummary::
     :toctree: generated
@@ -165,22 +143,46 @@ The :doc:`optimizer-checkpointing` guide covers pausing and recovering interrupt
     ~liesel.optim.LieselOptim
     ~liesel.optim.LieselVI
     ~liesel.optim.OptimEngine
-    ~liesel.optim.EmaTrainLossMonitor
     ~liesel.optim.OptimCheckpoint
-    ~liesel.optim.state.OptimResult
+    ~liesel.optim.OptimHistory
+    ~liesel.optim.OptimResult
+    ~liesel.optim.OptimNaNDebugInfo
+    ~liesel.optim.Loss
+    ~liesel.optim.LossMixin
     ~liesel.optim.NegLogProbLoss
     ~liesel.optim.NegElboLoss
     ~liesel.optim.VDist
     ~liesel.optim.CompositeVDist
     ~liesel.optim.Optimizer
+    ~liesel.optim.OptimizerLike
     ~liesel.optim.LBFGS
     ~liesel.optim.Stopper
+    ~liesel.optim.EmaTrainLossMonitor
+    ~liesel.optim.LossMonitor
     ~liesel.optim.Batches
     ~liesel.optim.BatchManager
     ~liesel.optim.Split
     ~liesel.optim.SplitManager
     ~liesel.optim.PositionSplit
     ~liesel.optim.PositionSplitManager
+
+Legacy optimization (deprecated)
+********************************
+
+:func:`liesel.goose.optim_flat` is deprecated and emits a ``FutureWarning``.
+Use :class:`liesel.optim.LieselOptim` for new code, including finding starting
+values for MCMC. See :doc:`optimizer-migration` for a before-and-after example.
+
+.. autosummary::
+    :toctree: generated
+    :caption: Legacy optimization (deprecated)
+    :recursive:
+    :nosignatures:
+
+    ~liesel.goose.optim_flat
+    ~liesel.goose.Stopper
+    ~liesel.goose.history_to_df
+    ~liesel.goose.OptimResult
 
 Model (Advanced)
 ************************

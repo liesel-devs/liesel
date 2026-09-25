@@ -31,14 +31,14 @@ a comparison of different samplers, and more:
    tutorials/md/07-error-correction
    tutorials/md/08-custom-kernel
 
-The optimization and variational inference tutorials introduce the :mod:`liesel.optim`
-workflow for models with one or several observed-data branches:
+For parameter fitting, start with the :doc:`optimization` guide. It links to
+two worked examples and short guides for common tasks.
+
+The variational inference tutorials introduce :class:`liesel.optim.LieselVI`:
 
 .. toctree::
    :maxdepth: 1
-   :caption: Optimization
+   :caption: Variational inference
 
-   tutorials/notebooks/09-liesel-optim-basic
-   tutorials/notebooks/10-liesel-optim-advanced
    tutorials/notebooks/11-liesel-vi-basic
    tutorials/notebooks/12-liesel-vi-advanced

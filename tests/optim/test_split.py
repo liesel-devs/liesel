@@ -2,6 +2,7 @@ import math
 
 import jax
 import jax.numpy as jnp
+import optax
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 
@@ -47,6 +48,39 @@ def _matrix_obs_model(shape=(4, 8)):
 
 
 class TestSplit:
+    def test_inferred_key_recipe_is_reusable_with_passthrough(self):
+        recipe = Split(axis_size=4, validate_axis_size=1, split_axes={"tab": None})
+        tab = jnp.arange(2)
+        for name in ("x", "y"):
+            split = recipe.split_position(Position({name: jnp.arange(4), "tab": tab}))
+            assert split.split_position_keys == [name]
+            assert split.train[name].size == 3
+            assert jnp.array_equal(split.validate["tab"], tab)
+        assert recipe.position_keys is None
+
+    @pytest.mark.parametrize("share, expected", [(0.29, 29), (0.289, 28), (0.0, 0)])
+    def test_share_counts_tolerate_roundoff(self, share, expected):
+        for part in ("validate", "test"):
+            recipe = Split.from_axis_shares(
+                ["x"], axis_size=100, **{f"{part}_axis_share": share}
+            )
+            assert getattr(recipe, f"{part}_axis_size") == expected
+            assert recipe.train_axis_size == 100 - expected
+
+    def test_share_counts_and_grouped_holdout_detection_agree(self):
+        model = lsl.Model(
+            [
+                lsl.Var.new_obs(jnp.arange(49), name="x"),
+                lsl.Var.new_obs(jnp.arange(49), name="y"),
+            ]
+        )
+        # This product is one ULP below 1.0, but both groups need a holdout.
+        manager = SplitManager.from_model(
+            model, position_keys=[["x"], ["y"]], validate_axis_share=1 / 49, seed=7
+        )
+        assert manager.validate_axis_sizes == (1, 1)
+        assert not jnp.array_equal(manager.splits[0].indices, manager.splits[1].indices)
+
     def test_split_position_keeps_none_axis_keys_unchanged(self):
         response = jnp.arange(24.0).reshape(4, 6)
         land = jnp.arange(6.0).reshape(6, 1)
@@ -108,8 +142,12 @@ class TestSplit:
             )
 
     def test_from_model_defaults_to_all_observed_keys(self):
-        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
-        y = lsl.Var.new_obs(jnp.arange(8.0), name="y")
+        x = lsl.Var.new_obs(
+            jnp.arange(8.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="x"
+        )
+        y = lsl.Var.new_obs(
+            jnp.arange(8.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y"
+        )
 
         split = Split.from_model(lsl.Model([x, y]), validate_axis_share=0.25)
 
@@ -154,8 +192,12 @@ class TestSplit:
         )
 
     def test_from_model_preserves_passthrough_keys(self):
-        y = lsl.Var.new_obs(jnp.arange(8.0), name="y")
-        shared = lsl.Var.new_obs(jnp.arange(3.0), name="shared")
+        y = lsl.Var.new_obs(
+            jnp.arange(8.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y"
+        )
+        shared = lsl.Var.new_obs(
+            jnp.arange(3.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="shared"
+        )
         model = lsl.Model([y, shared])
 
         splitter = Split.from_model(model, split_axes={"shared": None})
@@ -168,7 +210,9 @@ class TestSplit:
         assert jnp.array_equal(split.train["shared"], shared.value)
 
     def test_from_model_trusts_explicit_axis_size_for_another_position(self):
-        y = lsl.Var.new_obs(jnp.arange(8.0), name="y")
+        y = lsl.Var.new_obs(
+            jnp.arange(8.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y"
+        )
         splitter = Split.from_model(
             lsl.Model([y]), axis_size=6, validate_axis_share=0.5
         )
@@ -180,8 +224,12 @@ class TestSplit:
         assert split.validate_axis_size == 3
 
     def test_from_model_rejects_invalid_model_groups(self):
-        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
-        y = lsl.Var.new_obs(jnp.arange(5.0), name="y")
+        x = lsl.Var.new_obs(
+            jnp.arange(8.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="x"
+        )
+        y = lsl.Var.new_obs(
+            jnp.arange(5.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y"
+        )
         model = lsl.Model([x, y])
 
         with pytest.raises(ValueError, match="at least one position key"):
@@ -346,6 +394,35 @@ class TestSplit:
 
 
 class TestPositionSplit:
+    @pytest.mark.parametrize("part", ["train", "validate", "test"])
+    def test_empty_parts_can_contain_only_passthrough(self, part):
+        positions = {name: Position({}) for name in ("train", "validate", "test")}
+        positions[part] = Position({"x": jnp.arange(3)})
+        sizes = {f"{name}_axis_size": 3 if name == part else 0 for name in positions}
+        split = PositionSplit(
+            positions["train"],
+            positions["validate"],
+            positions["test"],
+            sizes["train_axis_size"],
+            sizes["validate_axis_size"],
+            sizes["test_axis_size"],
+            passthrough=Position({"tab": jnp.arange(2)}),
+        )
+        assert split.split_position_keys == ["x"]
+        for position in (split.train, split.validate, split.test):
+            assert position["tab"].tolist() == [0, 1]
+        sizes[f"{next(name for name in positions if name != part)}_axis_size"] = 1
+        with pytest.raises(ValueError, match="must contain position entries"):
+            PositionSplit(
+                positions["train"],
+                positions["validate"],
+                positions["test"],
+                sizes["train_axis_size"],
+                sizes["validate_axis_size"],
+                sizes["test_axis_size"],
+                passthrough=Position({"tab": jnp.arange(2)}),
+            )
+
     def test_from_model_keeps_position_keys_authoritative(self):
         model, _, _ = _two_branch_model()
 
@@ -693,8 +770,12 @@ class TestSplitManager:
             assert jnp.allclose(split1.indices, split2.indices)
 
     def test_from_model_rejects_mixed_availability_from_axis_shares_rounding(self):
-        y1 = lsl.Var.new_obs(jnp.arange(10.0), name="y1")
-        y2 = lsl.Var.new_obs(jnp.arange(4.0), name="y2")
+        y1 = lsl.Var.new_obs(
+            jnp.arange(10.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y1"
+        )
+        y2 = lsl.Var.new_obs(
+            jnp.arange(4.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y2"
+        )
         model = lsl.Model([y1, y2])
 
         with pytest.raises(ValueError, match="zero validation observations"):
@@ -802,8 +883,12 @@ class TestSplitManager:
             )
 
     def test_position_split_from_model_manager_mode_returns_scalar_for_one_size(self):
-        x = lsl.Var.new_obs(jnp.arange(8.0), name="x")
-        y = lsl.Var.new_obs(jnp.arange(8.0), name="y")
+        x = lsl.Var.new_obs(
+            jnp.arange(8.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="x"
+        )
+        y = lsl.Var.new_obs(
+            jnp.arange(8.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y"
+        )
         model = lsl.Model([x, y])
 
         split = PositionSplit.from_model(
@@ -896,7 +981,6 @@ class TestSplitManager:
             key=jax.random.key(0),
             epochs=1,
             position=Position({}),
-            tracked=None,
             batches=Batches([], axis_size=1, batch_size=None),
             optimizers=[],
             model_state=model.state,
@@ -923,6 +1007,7 @@ class TestSplitManager:
 
         quick = LieselOptim(
             model,
+            optimizers=optax.adam(0.02),
             loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
             split=split,
         )
@@ -947,7 +1032,121 @@ class TestSplitManager:
         with pytest.raises(ValueError, match="BatchManager"):
             LieselOptim(
                 model,
+                optimizers=optax.adam(0.02),
                 loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
                 split=split,
                 batches=batches,
             ).build_engine()
+
+
+@pytest.mark.parametrize(
+    "factory",
+    [
+        Split.from_model,
+        SplitManager.from_model,
+        PositionSplit.from_model,
+        PositionSplitManager.from_model,
+        Batches.from_model,
+        BatchManager.from_model,
+    ],
+)
+@pytest.mark.parametrize("value_node_keys", [False, True])
+def test_model_factories_require_explicit_groups_without_likelihood(
+    factory, value_node_keys
+):
+    lookup = lsl.Var.new_obs(jnp.arange(5.0), name="lookup")
+    model = lsl.Model([lookup])
+    keys = [lookup.value_node.name if value_node_keys else lookup.name]
+    kwargs = (
+        {"batch_size": None}
+        if factory in (Batches.from_model, BatchManager.from_model)
+        else {}
+    )
+    with pytest.raises(ValueError, match="explicit nested position_keys"):
+        factory(model, position_keys=keys, **kwargs)
+    configured = factory(model, position_keys=[keys], **kwargs)
+    assert list(configured.position_keys) == keys
+
+
+@pytest.mark.parametrize("has_likelihood", [False, True])
+def test_scalar_observations_require_explicit_passthrough(has_likelihood):
+    fixed = lsl.Var.new_obs(
+        jnp.array(0.5),
+        lsl.Dist(tfd.Normal, loc=0.0, scale=1.0) if has_likelihood else None,
+        name="fixed",
+    )
+    loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
+    y = lsl.Var.new_obs(
+        jnp.arange(4.0), lsl.Dist(tfd.Normal, loc=loc, scale=fixed), name="y"
+    )
+    model = lsl.Model([y])
+    with pytest.raises(ValueError, match="fixed.*shape.*axis"):
+        LieselOptim(model, optimizers=optax.adam(0.02), loss_monitor="train_full_data")
+    split = PositionSplit.from_model(model, split_axes={"fixed": None})
+    quick = LieselOptim(
+        model, optimizers=optax.adam(0.02), split=split, loss_monitor="train_full_data"
+    )
+    assert quick.batches.position_keys == ["y"]
+    assert split.train["fixed"] == 0.5
+    assert jnp.allclose(
+        split.scaled_log_lik(model, model.state, part="train"), model.log_lik
+    )
+
+
+def test_model_factory_invalid_axis_is_informative():
+    model, _ = _matrix_obs_model()
+    with pytest.raises(ValueError, match="shape.*axis 2"):
+        PositionSplit.from_model(model, split_axes={"y": 2})
+
+
+@pytest.mark.parametrize("holdout", [0.0, 0.2])
+@pytest.mark.parametrize("batch_size", [None, 4])
+def test_lookup_model_uses_manual_passthrough(holdout, batch_size):
+    beta = lsl.Var.new_param(jnp.array(1.0), name="beta")
+    z = lsl.Var.new_obs(jnp.arange(1.0, 6.0), name="z")
+    g = lsl.Var.new_obs(jnp.tile(jnp.arange(5), 4), name="g")
+    mu = lsl.Var.new_calc(lambda beta, z, g: beta * z[g], beta, z, g, name="mu")
+    y = lsl.Var.new_obs(
+        2 * z.value[g.value], lsl.Dist(tfd.Normal, loc=mu, scale=1.0), name="y"
+    )
+    model = lsl.Model([y])
+    with pytest.raises(ValueError, match="no observed likelihood"):
+        LieselOptim(
+            model,
+            optimizers=optax.adam(0.02),
+            batch_size=batch_size,
+            loss_monitor="train_full_data",
+        )
+    split = PositionSplit.from_model(
+        model, split_axes={"z": None}, validate_axis_share=holdout
+    )
+    engine = LieselOptim(
+        model,
+        optimizers=optax.adam(0.02),
+        split=split,
+        batch_size=batch_size,
+        loss_monitor="train_full_data",
+    ).build_engine()
+    loss = engine.loss
+    assert isinstance(loss, NegLogProbLoss)
+    carry = engine._init_carry(2)
+    carry.batch = engine._observed_batch(carry.batches)
+    # Full-data runs may use the model-state template instead of an explicit batch.
+    rows = split.train | carry.batch
+
+    def expected(beta):
+        return (
+            -tfd.Normal(loc=beta * z.value[rows["g"]], scale=1.0)
+            .log_prob(rows["y"])
+            .sum()
+            * carry.batches.batch_sample_scale
+            / loss.scalar
+        )
+
+    def actual(beta):
+        return engine.loss.loss_train_batched(Position({"beta": beta}), carry)
+
+    assert jnp.allclose(actual(1.0), expected(1.0))
+    assert jnp.allclose(jax.grad(actual)(1.0), jax.grad(expected)(1.0))
+    for part in (split.train, split.validate, split.test):
+        assert jnp.array_equal(part["z"], z.value)

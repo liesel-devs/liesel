@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Sequence
+from math import ceil
 from typing import TYPE_CHECKING, Literal, cast
 
 import optax
@@ -12,8 +13,6 @@ from ..model import Model
 from ._engine_utils import (
     BatchConfig,
     SplitConfig,
-    _progress_n_updates,
-    _progress_print_rate,
     _validate_positive_int,
 )
 from .batch import Batches
@@ -243,12 +242,12 @@ class LieselVI:
     def progress_n_updates(self) -> int:
         """Effective number of epoch updates implied by the update interval."""
         _validate_positive_int(self.progress_update_every, "progress_update_every")
-        return _progress_n_updates(self.stopper.epochs, self.progress_update_every)
+        return ceil(self.stopper.epochs / self.progress_update_every)
 
     @progress_n_updates.setter
     def progress_n_updates(self, value: int) -> None:
         _validate_positive_int(value, "progress_n_updates")
-        self.progress_update_every = _progress_print_rate(self.stopper.epochs, value)
+        self.progress_update_every = max(ceil(self.stopper.epochs / value), 1)
 
     @property
     def step_progress_n_updates(self) -> int:
@@ -256,15 +255,13 @@ class LieselVI:
         _validate_positive_int(
             self.step_progress_update_every, "step_progress_update_every"
         )
-        return _progress_n_updates(
-            self.batches.n_full_batches, self.step_progress_update_every
-        )
+        return ceil(self.batches.n_full_batches / self.step_progress_update_every)
 
     @step_progress_n_updates.setter
     def step_progress_n_updates(self, value: int) -> None:
         _validate_positive_int(value, "step_progress_n_updates")
-        self.step_progress_update_every = _progress_print_rate(
-            self.batches.n_full_batches, value
+        self.step_progress_update_every = max(
+            ceil(self.batches.n_full_batches / value), 1
         )
 
     def _resolve_split(

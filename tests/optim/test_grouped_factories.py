@@ -1,10 +1,12 @@
 """Explicit observation groups through public split and batch factories."""
 
 from types import SimpleNamespace
+from typing import assert_type
 
 import jax
 import jax.numpy as jnp
 import pytest
+import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.model as lsl
 import liesel.optim.split as split_module
@@ -25,9 +27,9 @@ def _model(*, shared=False):
     b = a + 100
     variables = [
         lsl.Var.new_obs(jnp.stack([a, a + 10]), name="x_a"),
-        lsl.Var.new_obs(a, name="y_a"),
+        lsl.Var.new_obs(a, lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y_a"),
         lsl.Var.new_obs(b[:, None], name="x_b"),
-        lsl.Var.new_obs(b, name="y_b"),
+        lsl.Var.new_obs(b, lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y_b"),
     ]
     if shared:
         variables.append(lsl.Var.new_obs(jnp.array(7.0), name="shared"))
@@ -37,8 +39,12 @@ def _model(*, shared=False):
 def test_split_recipe_infers_multiple_groups_and_materializes_them():
     model = lsl.Model(
         [
-            lsl.Var.new_obs(jnp.arange(12.0), name="a"),
-            lsl.Var.new_obs(jnp.arange(8.0), name="b"),
+            lsl.Var.new_obs(
+                jnp.arange(12.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="a"
+            ),
+            lsl.Var.new_obs(
+                jnp.arange(8.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="b"
+            ),
         ]
     )
     recipe = Split.from_model(
@@ -102,8 +108,36 @@ def test_single_split_factory_accepts_one_explicit_group_by_default():
     assert recipe.position_keys == ["y_a"]
 
 
+def test_factory_overloads_preserve_scalar_defaults_and_positional_calls():
+    model = lsl.Model(
+        [
+            lsl.Var.new_obs(
+                jnp.arange(4.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="y"
+            )
+        ]
+    )
+    assert_type(Split.from_model(model), Split)
+    assert_type(Batches.from_model(model, 2), Batches)
+    assert_type(Split.from_model(model, multi_size="manager"), Split | SplitManager)
+    assert_type(
+        Batches.from_model(model, 2, multi_size="manager"), Batches | BatchManager
+    )
+    recipe = assert_type(
+        Split.from_model(
+            model, None, None, 0.0, 0.0, None, 0, True, 0, None, "manager"
+        ),
+        Split | SplitManager,
+    )
+    batches = assert_type(
+        Batches.from_model(model, 2, None, None, True, None, 0, "manager"),
+        Batches | BatchManager,
+    )
+    assert isinstance(recipe, Split)
+    assert isinstance(batches, Batches)
+
+
 @pytest.mark.parametrize("factory", [PositionSplit, PositionSplitManager, Split])
-def test_groups_and_passthrough_survive_position_splits_and_automatic_batches(factory):
+def test_groups_and_passthrough_survive_position_splits_and_explicit_batches(factory):
     model = _model(shared=True)
     kwargs = {"multi_size": "manager"} if factory in (PositionSplit, Split) else {}
     split = factory.from_model(
@@ -124,8 +158,7 @@ def test_groups_and_passthrough_survive_position_splits_and_automatic_batches(fa
         model,
         split=split,
         optimizers=[],
-        split_axes={"x_a": 1, "shared": None},
-        batch_size=4,
+        batches=Batches.from_split(split, batch_size=4, batch_axes={"x_a": 1}),
         loss_monitor=EmaTrainLossMonitor(1),
         seed=42,
     )
@@ -270,6 +303,32 @@ def _split_via(factory, *, share=0.25, **kwargs):
     if isinstance(result, (Split, SplitManager)):
         result = result.split_position(model.extract_position(result.position_keys))
     return result
+
+
+@pytest.mark.parametrize("factory", SPLIT_FACTORIES)
+def test_split_factories_default_to_seed_zero(factory, monkeypatch):
+    def unexpected_clock_read():
+        raise AssertionError("Default splitting must not read the clock")
+
+    monkeypatch.setattr(
+        split_module, "time", SimpleNamespace(time=unexpected_clock_read)
+    )
+    default = _split_via(factory)
+    repeated = _split_via(factory)
+    explicit = _split_via(factory, seed=0)
+    other = _split_via(factory, seed=42)
+    for name in default.train:
+        assert jnp.array_equal(default.train[name], repeated.train[name])
+        assert jnp.array_equal(default.train[name], explicit.train[name])
+    assert not jnp.array_equal(default.train["y_a"], other.train["y_a"])
+
+
+@pytest.mark.parametrize("factory", SPLIT_FACTORIES)
+def test_split_factories_allow_explicit_time_seed(factory, monkeypatch):
+    monkeypatch.setattr(split_module, "time", SimpleNamespace(time=lambda: 1234.5))
+    timed = _split_via(factory, seed=None)
+    explicit = _split_via(factory, seed=1234)
+    assert jnp.array_equal(timed.train["y_a"], explicit.train["y_a"])
 
 
 @pytest.mark.parametrize("factory", SPLIT_FACTORIES)
