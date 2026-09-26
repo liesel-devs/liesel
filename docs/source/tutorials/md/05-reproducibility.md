@@ -9,7 +9,7 @@ generation](https://docs.jax.dev/en/latest/random-numbers.html). JAX
 does not use a single global random state; random numbers are generated
 from explicit PRNG keys. In the high-level Goose workflow, this is
 usually handled by passing an integer seed to
-{meth}`~.goose.LieselMCMC.run_for_epochs`:
+{meth}`run_for_epochs <liesel.goose.LieselMCMC.run_for_epochs>`:
 
 ``` python
 results = gs.LieselMCMC(model).run_for_epochs(
@@ -20,7 +20,7 @@ results = gs.LieselMCMC(model).run_for_epochs(
 )
 ```
 
-If you work with the lower-level {class}`~.goose.EngineBuilder`, you
+If you work with the lower-level {class}`EngineBuilder <liesel.goose.EngineBuilder>`, you
 also provide the seed when initializing the builder.
 
 Current JAX versions use typed PRNG keys created with
@@ -75,8 +75,8 @@ information:
 
 - the exact code and data used for the analysis,
 - all model initial values and jitter settings,
-- the seed passed to {class}`~.goose.LieselMCMC` or
-  {class}`~.goose.EngineBuilder`,
+- the seed passed to {class}`LieselMCMC <liesel.goose.LieselMCMC>` or
+  {class}`EngineBuilder <liesel.goose.EngineBuilder>`,
 - the number of chains, adaptation iterations, posterior iterations,
   thinning, and stored positions,
 - the installed versions of Liesel and its numerical dependencies,

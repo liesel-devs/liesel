@@ -98,7 +98,7 @@ outliers. Their API pages describe accepted inputs.
 
 For several groups, pass a mapping such as
 `sampling_weights={"y_a": weights_a, "y_b": weights_b}` to
-`Batches.from_split`. Each vector must follow its group's training-row order.
+{meth}`Batches.from_split <liesel.optim.Batches.from_split>`. Each vector must follow its group's training-row order.
 
 Use one selected variable name as the key for each group. Omitted groups use
 uniform sampling. See {py:meth}`~liesel.optim.Batches.from_split` for other settings.

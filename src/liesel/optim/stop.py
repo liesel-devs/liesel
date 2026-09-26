@@ -17,7 +17,8 @@ class Stopper:
     """
     Handles maximum-epoch and early stopping decisions.
 
-    ``Stopper`` uses a rolling patience window over the recorded monitoring loss.
+    :class:`~liesel.optim.Stopper` uses a rolling patience window over the recorded
+    monitoring loss.
     In the experimental optimizer engine, the argument ``i`` passed to the stopper is
     the number of completed epochs, which is also the next epoch index to be written.
     Therefore, the recent patience window is ``loss_history[i - patience : i]`` once
@@ -96,10 +97,15 @@ class Stopper:
     """
 
     epochs: int
+    """The maximum number of optimization epochs."""
     patience: int
+    """Length of the rolling early-stopping window."""
     atol: float = 0.0
+    """Absolute tolerance for early stopping."""
     rtol: float = 0.0
+    """Relative tolerance for early stopping."""
     min_epochs: int = 0
+    """Minimum number of completed epochs before early stopping can happen."""
 
     def __post_init__(self):
         _validate_int_type(self.epochs, "epochs")
@@ -125,7 +131,7 @@ class Stopper:
 
     @property
     def max_iter(self) -> int:
-        """Read-only alias for :attr:`epochs`."""
+        """Read-only alias for :attr:`~liesel.optim.Stopper.epochs`."""
         return self.epochs
 
     def stop_early(self, i: int | Array, loss_history: Array):
@@ -172,7 +178,10 @@ class Stopper:
         return stop_early | stop_epochs
 
     def continue_(self, i: int | Array, loss_history: Array):
-        """Whether optimization should continue (inverse of :meth:`.stop_now`)."""
+        """
+        Whether optimization should continue (inverse of
+        :meth:`~liesel.optim.Stopper.stop_now`).
+        """
         return ~self.stop_now(i=i, loss_history=loss_history)
 
     def which_best_in_recent_history(self, i: int, loss_history: Array):

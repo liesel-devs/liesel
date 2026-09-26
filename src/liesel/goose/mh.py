@@ -11,7 +11,7 @@ from .kernel import DefaultTransitionInfo
 from .types import KeyArray, ModelInterface, ModelState, Position, Scalar
 
 mh_error_book = {0: "no errors", 90: "nan acceptance prob"}
-"""The error book of the :func:`.mh_step` function."""
+"""The error book of the :func:`~liesel.goose.mh_step` function."""
 
 
 def mh_step(
@@ -42,7 +42,8 @@ def mh_step(
 
     Returns
     -------
-    A tuple of a :class:`.TransitionInfo` and a :class:`.ModelState` (= a pytree).
+    A tuple of a :class:`~liesel.goose.TransitionInfo` and a :class:`.ModelState` (= a
+    pytree).
     """
 
     current_log_prob = jnp.asarray(model.log_prob(model_state))

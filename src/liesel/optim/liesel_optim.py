@@ -29,13 +29,16 @@ if TYPE_CHECKING:
 
 class LieselOptim:
     """
-    Builds an :class:`.OptimEngine` for a Liesel model using sensible defaults.
+    Builds an :class:`~liesel.optim.OptimEngine` for a Liesel model using sensible
+    defaults.
 
-    ``LieselOptim`` is the quick-start wrapper for regular model optimization. It
+    :class:`~liesel.optim.LieselOptim` is the quick-start wrapper for regular model
+    optimization. It
     creates a negative log-posterior loss, full-data training batches,
     and wraps a supplied Optax transformation over all model parameters. Call
-    :meth:`build_engine` to inspect or modify the low-level engine
-    before fitting, or :meth:`fit` for the direct path.
+    :meth:`~liesel.optim.LieselOptim.build_engine` to inspect or modify the low-level
+    engine
+    before fitting, or :meth:`~liesel.optim.LieselOptim.fit` for the direct path.
 
     Parameters
     ----------
@@ -43,7 +46,8 @@ class LieselOptim:
         Liesel model to optimize.
     loss_monitor
         Source for the epoch-level stopping and progress loss. Pass
-        :class:`.EmaTrainLossMonitor` for a continuous EMA of pre-update losses,
+        :class:`~liesel.optim.EmaTrainLossMonitor` for a continuous EMA of pre-update
+        losses,
         ``"validation"`` for one complete validation-loss evaluation after each
         epoch, or ``"train_full_data"`` for one complete training-loss evaluation
         after each epoch. Exact monitors use the post-update epoch position.
@@ -55,14 +59,16 @@ class LieselOptim:
         for the built-in full-data L-BFGS optimizer, or a sequence of explicit
         optimizers for selected parameters. If a parameter is weak (computed),
         automatic selection raises an error. Explicitly name its strong source
-        variables with :class:`.Optimizer` or :class:`.LBFGS`; those sources need
+        variables with :class:`~liesel.optim.Optimizer` or :class:`~liesel.optim.LBFGS`;
+        those sources need
         not be marked as parameters. Priors on weak parameters remain in the loss.
         Pass a configured transformation, not an optimizer factory.
         Transformations must support updates from
         gradients, state and parameters without extra objective arguments.
     stopper
         Maximum-epoch and early-stopping configuration. ``None`` creates a new
-        :class:`.Stopper` with ``epochs=1000``, ``patience=10``, and ``rtol=1e-6``.
+        :class:`~liesel.optim.Stopper` with ``epochs=1000``, ``patience=10``, and
+        ``rtol=1e-6``.
     seed
         Integer seed for batch shuffling or random batch sampling, and for custom
         losses or optimizers that use ``carry.key``. Starting parameter values
@@ -79,12 +85,14 @@ class LieselOptim:
         ``split_axes={key: None}`` for shared values. With a custom loss, the split must
         be the same object as ``loss.split``. Models with ``per_obs=False``
         require an explicitly constructed split: use
-        :meth:`.PositionSplit.from_model` with ``infer_sample_sizes=False`` for
+        :meth:`PositionSplit.from_model <liesel.optim.PositionSplit.from_model>` with
+        ``infer_sample_sizes=False`` for
         axis counts, or supply effective ``sample_sizes`` there. Custom aggregate
         likelihood or probability nodes require a custom loss as well as an
         explicit split.
     batch_size
-        Rows per batch in each training group. Uses :meth:`.Batches.from_split`
+        Rows per batch in each training group. Uses :meth:`Batches.from_split
+        <liesel.optim.Batches.from_split>`
         with otherwise default settings. ``None`` uses all training data.
         Pass ``batches`` instead for custom settings, such as non-leading axes.
     batches
@@ -94,10 +102,12 @@ class LieselOptim:
         Custom loss. Uses ``loss.split`` and overrides ``validation_strategy`` and
         ``scale_loss``.
     validation_strategy
-        Validation strategy passed to :class:`.NegLogProbLoss` when ``loss`` is not
+        Validation strategy passed to :class:`~liesel.optim.NegLogProbLoss` when
+        ``loss`` is not
         supplied.
     scale_loss
-        Whether the default :class:`.NegLogProbLoss` should divide losses by the
+        Whether the default :class:`~liesel.optim.NegLogProbLoss` should divide losses
+        by the
         training sample size. Defaults to ``True``.
         This setting has no effect when ``loss`` is supplied.
     save_position_history
@@ -140,6 +150,44 @@ class LieselOptim:
     >>> type(engine).__name__
     'OptimEngine'
     """
+
+    if TYPE_CHECKING:
+        batches: BatchConfig
+        """Explicit batch configuration."""
+        loss: Loss
+        """Custom loss."""
+        loss_monitor: LossMonitor
+        """Source for the epoch-level stopping and progress loss."""
+        model: Model
+        """Liesel model to optimize."""
+        optimizers: Sequence[OptimizerLike]
+        """Required optimizer choice."""
+        progress_update_every: int
+        """Update the epoch progress bar after this many completed epochs."""
+        save_position_history: bool
+        """Whether to save parameter values at every epoch."""
+        seed: int
+        """
+        Integer seed for batch shuffling or random batch sampling, and for custom losses
+        or optimizers that use ``carry.key``.
+        """
+        show_progress: bool
+        """Whether the built engine should show ``tqdm`` progress bars."""
+        show_step_progress: bool
+        """
+        Whether to show an additional progress bar for batches within each epoch when
+        ``show_progress`` is enabled.
+        """
+        split: SplitConfig
+        """Optional split."""
+        step_progress_update_every: int
+        """Update the batch progress bar after this many completed batches."""
+        stopper: Stopper
+        """
+        Maximum-epoch and early-stopping configuration. ``None`` creates a new
+        :class:`~liesel.optim.Stopper` with ``epochs=1000``, ``patience=10``, and
+        ``rtol=1e-6``.
+        """
 
     def __init__(
         self,
@@ -298,7 +346,7 @@ class LieselOptim:
         -------
         OptimEngine
             Configured engine. Users may modify engine attributes before calling
-            :meth:`OptimEngine.fit`.
+            :meth:`OptimEngine.fit <liesel.optim.OptimEngine.fit>`.
         """
         from .engine import OptimEngine
 
@@ -324,6 +372,6 @@ class LieselOptim:
         Returns
         -------
         OptimResult
-            Result returned by :meth:`OptimEngine.fit`.
+            Result returned by :meth:`OptimEngine.fit <liesel.optim.OptimEngine.fit>`.
         """
         return self.build_engine().fit()

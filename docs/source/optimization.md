@@ -78,5 +78,5 @@ optimizer-migration
 ```
 
 For arguments and defaults, see the {ref}`optimizer-api`.
-`goose.optim_flat` is deprecated and will be removed in 0.8.0; use the migration guide
+{func}`goose.optim_flat <liesel.goose.optim_flat>` is deprecated and will be removed in 0.8.0; use the migration guide
 above to update existing code.
