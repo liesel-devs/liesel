@@ -27,6 +27,13 @@ Use Sphinx's special `self` entry, not the page's filename, so Overview links to
 the landing page without nested children. Preserve the remaining entries and
 their order. Check the sidebar on both the landing page and its child pages.
 
+Use short, descriptive sidebar sections and keep common entry points visible.
+Group related APIs, such as MCMC kernels, behind short expandable labels when
+this helps readers choose among them. Allow at most one group level within a
+section, with page links directly inside each group. Do not nest groups inside
+groups or repeat a page in multiple sidebar locations. Keep section and group
+labels on one line at normal desktop widths; retain descriptive page titles.
+
 ## Lead with the main workflow
 
 Introduce a feature's general purpose before relating it to special cases. Show
