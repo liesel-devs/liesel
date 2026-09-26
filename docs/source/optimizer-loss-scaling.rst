@@ -11,7 +11,7 @@ relative weight of the groups.
 Validation and test likelihoods include only the split branches and are scaled
 to the corresponding training size. Unsplit observed likelihoods contribute to
 training only, including observations explicitly marked as passthrough.
-``LieselOptim`` then divides losses by the total training sample size by default;
+:class:`LieselOptim <liesel.optim.LieselOptim>` then divides losses by the total training sample size by default;
 use ``scale_loss=False`` to keep the sum. Sample size counts likelihood terms,
 which need not equal the number of array elements.
 
@@ -57,7 +57,7 @@ automatic sample-size inference. Construct the split explicitly:
 
 This chooses split-axis counts for scaling. Alternatively, supply effective
 ``sample_sizes`` to the split factory. Setting ``scale_loss=False`` on
-``LieselOptim`` only disables final loss normalization; it does not disable
+:class:`LieselOptim <liesel.optim.LieselOptim>` only disables final loss normalization; it does not disable
 split inference or specify batch scaling.
 
 Handle custom objectives
@@ -69,7 +69,7 @@ change the objective used by
 :class:`~liesel.optim.NegLogProbLoss`. That loss accepts the standard sums
 of observed distribution factors and parameter priors, including weak observed
 variables. Other distribution factors must be classified appropriately or handled
-by a custom loss. ``LaplaceLoss`` uses the model's actual joint density,
+by a custom loss. :class:`LaplaceLoss <liesel.optim.LaplaceLoss>` uses the model's actual joint density,
 including custom aggregates, with full training observations substituted. If
 automatic split inference fails, supply an explicit full-training split.
 

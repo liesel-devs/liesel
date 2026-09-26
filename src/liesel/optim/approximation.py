@@ -31,11 +31,23 @@ class LaplaceApproximation:
     """
 
     mean: Position
+    """Fitted parameter values at the Gaussian mean."""
     precision_cholesky: jax.Array | None
+    """
+    Lower Cholesky factor of the joint precision, or ``None`` for an invalid
+    approximation.
+    """
     names: tuple[str, ...]
+    """Parameter names in flattened order: optimized names, then latent names."""
     shapes: tuple[tuple[int, ...], ...]
+    """
+    Original parameter shapes in the order of
+    :attr:`~liesel.optim.LaplaceApproximation.names`.
+    """
     valid: bool
+    """Whether this approximation supports sampling and covariance construction."""
     diagnostics: dict[str, Any]
+    """Curvature diagnostics and, on failure, its reason."""
 
     def _failed(self, reason, raise_on_failure):
         self.diagnostics["reason"] = reason
@@ -102,7 +114,8 @@ class LaplaceApproximation:
 
         Each lower triangular factor L satisfies L @ L.T = inverse(Sigma_ii).
         These are not diagonal blocks of the joint precision Cholesky factor.
-        Selection and flattened shapes follow :meth:`marginal_covariance_blocks`.
+        Selection and flattened shapes follow
+        :meth:`~liesel.optim.LaplaceApproximation.marginal_covariance_blocks`.
         """
         blocks = Position({})
         for name, covariance in self.marginal_covariance_blocks(position_keys).items():
@@ -121,7 +134,8 @@ class LaplaceApproximation:
         Each block is the precision of that parameter conditional on all other
         parameters. Its inverse is a conditional covariance, generally different
         from the marginal covariance. Selection and flattened shapes follow
-        :meth:`marginal_covariance_blocks`. The full precision is not constructed.
+        :meth:`~liesel.optim.LaplaceApproximation.marginal_covariance_blocks`. The full
+        precision is not constructed.
         """
         if not self.valid or self.precision_cholesky is None:
             raise RuntimeError("Cannot use an invalid Laplace approximation.")
@@ -138,7 +152,8 @@ class LaplaceApproximation:
 
         The default returns one draw in the original parameter shapes. Pass
         ``draws``, ``(draws,)``, or ``(chains, draws)`` for leading axes accepted
-        by :meth:`liesel.model.Model.predict`. The JAX random key ``seed`` is
+        by :meth:`liesel.model.Model.predict <liesel.model.Model.predict>`. The JAX
+        random key ``seed`` is
         required and keyword-only, for example ``sample(1000, seed=key)``.
         """
         if not self.valid or self.precision_cholesky is None:

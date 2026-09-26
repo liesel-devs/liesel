@@ -13,7 +13,7 @@ help page). It contains the following two variables:
 
 We set up the model in Python with
 [Liesel-GAM](https://github.com/liesel-devs/liesel_gam), using
-{class}`liesel_gam.TermBuilder` for the P-spline terms. See the
+`liesel_gam.TermBuilder` for the P-spline terms. See the
 [Liesel-GAM documentation and
 examples](https://github.com/liesel-devs/liesel_gam#readme) for more
 information about additive terms and predictors. We load the data set
@@ -3222,7 +3222,7 @@ nuts_model.plot()
 src="04-mcycle_files/figure-commonmark/transformed-graph-output-1.png"
 id="transformed-graph" />
 
-Now we can run the sampler from the `MCMCSpec` objects stored in the
+Now we can run the sampler from the {class}`MCMCSpec <liesel.goose.MCMCSpec>` objects stored in the
 model. In complex models like this one, it can be beneficial to sample
 the parameters of each additive term in a separate NUTS block.
 

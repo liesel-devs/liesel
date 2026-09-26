@@ -43,7 +43,7 @@ class OptimHistory(TypedDict):
 
 @dataclass
 class OptimResult:
-    """Holds the results of model optimization with :func:`.optim_flat`."""
+    """Holds the results of model optimization with :func:`~liesel.goose.optim_flat`."""
 
     model_state: ModelState
     """Final model state after optimization."""
@@ -112,7 +112,7 @@ def _validate_sample_size(value: int | None, name: str) -> int | None:
 @dataclass
 class Stopper:
     """
-    Handles (early) stopping for :func:`.optim_flat`.
+    Handles (early) stopping for :func:`~liesel.goose.optim_flat`.
 
     Parameters
     ----------
@@ -176,9 +176,13 @@ class Stopper:
     """
 
     max_iter: int
+    """The maximum number of optimization steps."""
     patience: int
+    """Length of the recent loss window considered for early stopping."""
     atol: float = 1e-3
+    """The non-negative absolute tolerance for early stopping."""
     rtol: float = 0.0
+    """The non-negative relative tolerance for early stopping."""
 
     def __post_init__(self):
         if self.max_iter < 1:
@@ -224,7 +228,10 @@ class Stopper:
         return stop_early | stop_max_iter
 
     def continue_(self, i: int | Array, loss_history: Array):
-        """Whether optimization should continue (inverse of :meth:`.stop_now`)."""
+        """
+        Whether optimization should continue (inverse of
+        :meth:`~liesel.goose.Stopper.stop_now`).
+        """
         return ~self.stop_now(i=i, loss_history=loss_history)
 
     def which_best_in_recent_history(self, i: int, loss_history: Array):
@@ -285,10 +292,10 @@ def optim_flat(
     auto_n_obs: bool = False,
 ) -> OptimResult:
     """
-    Optimize the parameters of a  Liesel :class:`.Model`.
+    Optimize the parameters of a  Liesel :class:`~liesel.model.Model`.
 
     .. deprecated:: 0.8.0
-        Use :class:`liesel.optim.LieselOptim` instead. See
+        Use :class:`liesel.optim.LieselOptim <liesel.optim.LieselOptim>` instead. See
         :doc:`/optimizer-migration` for a migration example.
 
     Approximates maximum a posteriori (MAP) parameter estimates by minimizing the
@@ -313,7 +320,8 @@ def optim_flat(
         An optimizer from the ``optax`` library. If ``None`` , \
         ``optax.adam(learning_rate=1e-2)`` is used.
     stopper
-        A :class:`.Stopper` that carries information about the maximum number of\
+        A :class:`~liesel.goose.Stopper` that carries information about the maximum
+        number of\
         iterations and early stopping.
     batch_size
         The batch size. If ``None``, batching is disabled and each optimization step\
@@ -333,12 +341,14 @@ def optim_flat(
         and validation losses are identical.
     restore_best_position
         If ``True``, the position with the lowest loss within the patience defined\
-        by the supplied :class:`.Stopper` is restored as the final position. If \
+        by the supplied :class:`~liesel.goose.Stopper` is restored as the final
+        position. If \
         ``False``, the last iteration's position is used.
     prune_history
         If ``True``, the history is pruned to the length of the final iteration. This\
         means, the history can be shorter than the maximum number of iterations defined\
-        by the supplied :class:`.Stopper`. If ``False``, unused history entries are set\
+        by the supplied :class:`~liesel.goose.Stopper`. If ``False``, unused history
+        entries are set\
         to ``jax.numpy.nan`` if optimization stops early.
     validate_log_prob_decomposition
         Whether to check that the model log probability is equal to the sum of the\
@@ -370,11 +380,13 @@ def optim_flat(
 
     Returns
     -------
-    A dataclass of type :class:`.OptimResult`, giving access to the results.
+    A dataclass of type :class:`~liesel.goose.OptimResult`, giving access to the
+    results.
 
     See Also
     --------
-    .history_to_df : A helper to turn :attr:`liesel.goose.OptimResult.history` into
+    .history_to_df : A helper to turn :attr:`liesel.goose.OptimResult.history
+        <liesel.goose.OptimResult.history>` into
         a ``pandas.DataFrame`` - nice for quickly plotting results.
 
     Notes
@@ -383,13 +395,15 @@ def optim_flat(
     If ``batch_size`` is ``None``, batching is disabled. If you use batching, be aware
     that the batching functionality implemented here assumes a "flat" model structure.
     This means
-    that this function assumes that, for all :class:`.Var` objects in your model, it
+    that this function assumes that, for all :class:`~liesel.model.Var` objects in your
+    model, it
     is valid to index their values like this::
 
         var_object.value[batch_indices, ...]
 
     The batching functionality also assumes that all objects that should be batched
-    are included as :class:`.Var` objects with ``Var.observed`` set to ``True``.
+    are included as :class:`~liesel.model.Var` objects with :attr:`Var.observed
+    <liesel.model.Var.observed>` set to ``True``.
     With batching enabled, the training loss rescales the batched log likelihood by
     ``n_train / batch_size``. The validation loss rescales the validation log likelihood
     by ``n_train / n_validation`` when a separate validation model is supplied.
@@ -429,7 +443,8 @@ def optim_flat(
     {'coef': Array([0.38, 1.24], dtype=float32)}
 
     We can now, for example, use ``result.model_state`` in
-    :meth:`.EngineBuilder.set_initial_values` to implement a "warm start" of MCMC
+    :meth:`EngineBuilder.set_initial_values
+    <liesel.goose.EngineBuilder.set_initial_values>` to implement a "warm start" of MCMC
     sampling.
 
     """
@@ -829,7 +844,8 @@ def optim_flat(
 
 def history_to_df(history: Mapping[str, Any]) -> pd.DataFrame:
     """
-    Turns :attr:`liesel.goose.OptimResult.history` into a ``pandas.DataFrame``.
+    Turns :attr:`liesel.goose.OptimResult.history <liesel.goose.OptimResult.history>`
+    into a ``pandas.DataFrame``.
     """
     data: dict[str, Array] = {}
 

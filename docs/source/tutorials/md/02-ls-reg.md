@@ -106,8 +106,8 @@ to the positive real line. Hence, setting a normal prior distribution
 for $\gamma$ is feasible, leading to an almost symmetric specification
 of the location and scale parts of the model. The variables `beta` and
 `gamma` are initialized as parameter variables with weakly informative
-normal priors. We also attach {class}`~.goose.MCMCSpec` objects that
-tell {class}`.LieselMCMC` to sample each parameter block with a NUTS
+normal priors. We also attach {class}`MCMCSpec <liesel.goose.MCMCSpec>` objects that
+tell {class}`LieselMCMC <liesel.goose.LieselMCMC>` to sample each parameter block with a NUTS
 kernel:
 
 ``` python
@@ -164,7 +164,7 @@ id="build-and-plot-graph" />
 
 We generate posterior samples with the No-U-Turn sampler. The sampler
 setup is taken from the inference specifications on `beta` and `gamma`,
-so {class}`.LieselMCMC` can construct the two NUTS kernels directly from
+so {class}`LieselMCMC <liesel.goose.LieselMCMC>` can construct the two NUTS kernels directly from
 the model. We run 1000 adaptation iterations and then draw 1000
 posterior samples per chain.
 

@@ -1,8 +1,11 @@
 """State containers and history helpers for experimental optimizers.
 
-This module mostly supports :class:`.OptimEngine` internally. The most useful
-user-facing pieces are :class:`OptimResult`, returned by optimizer runs, and
-:class:`OptimHistory`, which converts recorded losses and positions into tidy
+This module mostly supports :class:`~liesel.optim.OptimEngine` internally. The most
+useful
+user-facing pieces are :class:`~liesel.optim.OptimResult`, returned by optimizer runs,
+and
+:class:`~liesel.optim.OptimHistory`, which converts recorded losses and positions into
+tidy
 ``pandas`` data frames.
 """
 
@@ -175,9 +178,10 @@ class OptimHistory:
     """
     Stores loss values and optional position histories for optimizer runs.
 
-    ``OptimHistory`` is allocated before an optimization starts. Loss arrays are
+    :class:`~liesel.optim.OptimHistory` is allocated before an optimization starts. Loss
+    arrays are
     initialized with ``jnp.inf``. Position histories, when requested, are initialized
-    with zeros and updated epoch by epoch by :class:`.OptimEngine`.
+    with zeros and updated epoch by epoch by :class:`~liesel.optim.OptimEngine`.
 
     Parameters
     ----------
@@ -215,8 +219,17 @@ class OptimHistory:
     """
 
     loss_train: jax.Array
+    """
+    Equal-weight mean of the pre-update losses within each completed epoch, with shape
+    ``(epochs,)``.
+    """
     loss_monitor: jax.Array
+    """
+    Epoch-level series used for stopping and identifying the minimum-monitor position,
+    with shape ``(epochs,)``.
+    """
     position: Position | None
+    """Optional parameter position history."""
 
     @classmethod
     def from_epochs(
@@ -377,7 +390,7 @@ class OptimHistory:
         i
             Epoch index to update.
         position_history
-            History created by :meth:`init_position_history`.
+            History created by :meth:`~liesel.optim.OptimHistory.init_position_history`.
         position
             Position values to store at epoch ``i``.
 
@@ -523,14 +536,14 @@ class OptimNaNDebugState:
 @dataclass
 class OptimCarry:
     """
-    Mutable optimizer loop state used by :class:`.OptimEngine`.
+    Mutable optimizer loop state used by :class:`~liesel.optim.OptimEngine`.
 
     ``OptimCarry`` is passed through the epoch and mini-batch loops. It contains the
     current parameter position, model state, optimizer states, batch configuration,
     current losses, minimum-monitor values, and preallocated history.
 
     Most users do not need to construct this class directly. Use
-    :meth:`OptimCarry.new` when testing custom engine logic.
+    ``OptimCarry.new`` when testing custom engine logic.
 
     Parameters
     ----------
@@ -708,10 +721,12 @@ class OptimCarry:
 @dataclass
 class OptimNaNDebugInfo:
     """
-    Reproduction data for the first NaN captured by :class:`.OptimEngine`.
+    Reproduction data for the first NaN captured by :class:`~liesel.optim.OptimEngine`.
 
-    Use :meth:`reproduce_step` for NaNs introduced by an optimizer update and
-    :meth:`reproduce_loss` for NaNs returned by an optimizer's pre-update loss or
+    Use :meth:`~liesel.optim.OptimNaNDebugInfo.reproduce_step` for NaNs introduced by an
+    optimizer update and
+    :meth:`~liesel.optim.OptimNaNDebugInfo.reproduce_loss` for NaNs returned by an
+    optimizer's pre-update loss or
     by the explicit batched loss evaluation when no optimizer is active.
 
     The reported optimizer is where NaN was first detected. An earlier update
@@ -721,17 +736,29 @@ class OptimNaNDebugInfo:
     """
 
     kind: OptimNaNKind
+    """Stage at which the first NaN was detected."""
     epoch: int
+    """Epoch index at which the NaN was detected."""
     batch: int
+    """Batch index at which the NaN was detected."""
     obs_batch: Position
+    """Observed batch used when the NaN was detected."""
     last_non_nan_position: Position
+    """Last position free of NaNs; it need not be a valid model state."""
     nan_position: Position | None
+    """Position containing the detected NaN, if available."""
     loss: jax.Array | None
+    """Loss value associated with the captured event, if available."""
     optimizer_index: int | None
+    """Index of the optimizer at detection, if known."""
     optimizer_identifier: str | None
+    """Identifier of the optimizer at detection, if known."""
     optimizer_position_keys: tuple[str, ...] | None
+    """Position keys handled by the optimizer at detection, if known."""
     reproduction_position: Position
+    """Parameter position used to reproduce the captured event."""
     reproduction_carry: OptimCarry
+    """Optimizer carry used to reproduce the captured event."""
 
     @property
     def position(self) -> Position:
@@ -799,7 +826,8 @@ _CHECKPOINT_HEADER = b"liesel.optim.checkpoint\x00\x03\n"
 class OptimCheckpoint:
     """An explicit snapshot from which an optimization run can continue.
 
-    Pass a result's ``checkpoint`` to :meth:`.OptimEngine.fit`. The snapshot
+    Pass a result's ``checkpoint`` to :meth:`OptimEngine.fit
+    <liesel.optim.OptimEngine.fit>`. The snapshot
     retains optimizer and random state as well as the completed history; it does
     not retain an engine or loss callable. Treat snapshots as read-only. Mutable
     containers are independent of the result, but their immutable JAX arrays are
@@ -808,7 +836,9 @@ class OptimCheckpoint:
 
     _carry: OptimCarry
     duration: float = 0.0
+    """Cumulative active optimization runtime in seconds."""
     versions: dict[str, str] = field(default_factory=_checkpoint_versions)
+    """Package versions recorded with the checkpoint."""
     _rebuild_model_state: bool = False
     _data_structure: tuple = ()
     _loss_configuration: tuple | None = None
@@ -875,7 +905,8 @@ class OptimResult:
     """
     Result returned by an optimizer run.
 
-    ``OptimResult`` bundles the processed history, the terminal and minimum-monitor
+    :class:`~liesel.optim.OptimResult` bundles the processed history, the terminal and
+    minimum-monitor
     positions, and small metadata about the run. Choose explicitly between
     ``position_final`` and ``position_min_monitor`` when using fitted parameters.
     Accessing an unavailable position or one containing NaN or infinity raises
@@ -956,23 +987,54 @@ class OptimResult:
     """
 
     history: OptimHistory
+    """Processed optimizer history."""
 
     _position_final: Position
     _position_min_monitor: Position | None
     n_epochs: int
+    """Number of completed epochs included in the processed history."""
     min_monitor_epoch: int | None
+    """
+    Epoch at which the smallest finite monitoring loss was recorded, or ``None`` if no
+    finite monitoring loss was recorded.
+    """
     monitor_source: Literal["train_ema", "validation", "train_full_data"]
+    """
+    Configured monitoring source: ``"train_ema"``, ``"validation"``, or
+    ``"train_full_data"``.
+    """
     patience: int
+    """Patience configured for early stopping, measured in epochs."""
     duration: float
+    """
+    Cumulative active runtime in seconds, including checkpoint writes and excluding time
+    paused between calls.
+    """
     nan_debug: OptimNaNDebugInfo | None = None
+    """
+    Reproduction data for the first captured NaN when engine NaN debugging was enabled,
+    otherwise ``None``.
+    """
     checkpoint: OptimCheckpoint | None = None
+    """Explicit resumable state. ``None`` on numerical or NaN failure."""
     status: Literal[
         "paused", "max_epochs", "early_stopping", "nan", "numerical_failure"
     ] = "max_epochs"
+    """
+    Why fitting returned: ``"paused"``, ``"max_epochs"``, ``"early_stopping"``,
+    ``"numerical_failure"``, or ``"nan"``.
+    """
     loss_state_final: Any = None
+    """
+    Loss state matched to ``position_final``, or ``None`` if no completed full-training
+    evaluation exists for that position.
+    """
     loss_state_min_monitor: Any = None
+    """Loss state matched to ``position_min_monitor``, or ``None`` if unavailable."""
     failed_loss_state: Any = None
+    """Available proposal from a handled numerical failure, for inspection only."""
     failure_reason: str | None = None
+    """Explanation of a handled numerical failure, otherwise ``None``."""
 
     def __init__(
         self,
@@ -1073,7 +1135,8 @@ class OptimResult:
         -------
         plotnine.ggplot
             Plot object with training and monitoring loss curves. A vertical line
-            marks :attr:`min_monitor_epoch` when it is inside the displayed window.
+            marks :attr:`~liesel.optim.OptimResult.min_monitor_epoch` when it is inside
+            the displayed window.
         """
         history = self.history.loss_df()
         n_iter = history.shape[0]
@@ -1125,7 +1188,7 @@ class OptimResult:
         ----------
         window
             Number of final epochs to show in the lower panel. The default is
-            twice the configured :attr:`patience`.
+            twice the configured :attr:`~liesel.optim.OptimResult.patience`.
 
         Returns
         -------

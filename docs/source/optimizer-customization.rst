@@ -47,7 +47,7 @@ For the ``beta`` and ``log_sigma`` parameters in the basic tutorial:
        opt.Optimizer(["log_sigma"], optax.adam(0.001)),
    ]
 
-Pass this list as ``optimizers=optimizers`` to ``LieselOptim``. Each optimizer
+Pass this list as ``optimizers=optimizers`` to :class:`LieselOptim <liesel.optim.LieselOptim>`. Each optimizer
 updates its own parameters in list order on every batch. Their parameter names
 must not overlap. Parameters left out of the list stay fixed.
 Each active standard optimizer evaluates its own objective and gradient per batch,
@@ -110,7 +110,7 @@ early stopping ends the run sooner. Its parameter storage costs approximately
 ``epochs * total_parameter_bytes``: one million float32 parameters across 1,000
 epochs take about 4 GB. Disabling it retains scalar losses and final/best positions.
 
-Use ``build_engine()`` for settings beyond the wrapper's arguments.
+Use :meth:`build_engine() <liesel.optim.LieselOptim.build_engine>` for settings beyond the wrapper's arguments.
 See :class:`~liesel.optim.OptimEngine` for all settings, or
 :doc:`optimizer-checkpointing` to pause and resume a fit.
 
@@ -130,6 +130,6 @@ commits a proposal only at a finite full-training monitor evaluation after an
 epoch; proposals during optimizer updates and line searches are discarded.
 Stateful losses require full-data batches and ``loss_monitor="train_full_data"``.
 
-Set ``default_position_keys`` to select the parameters used by ``LieselOptim``
+Set ``default_position_keys`` to select the parameters used by :class:`LieselOptim <liesel.optim.LieselOptim>`
 with a bare Optax transformation or ``"lbfgs"``. The default ``None`` selects all
 model parameters. Explicit optimizer blocks always retain their own keys.

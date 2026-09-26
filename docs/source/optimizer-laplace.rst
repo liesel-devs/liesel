@@ -7,7 +7,7 @@ Poisson model's mean and random-effect scale while integrating eight group effec
 
 .. note::
 
-   **Relation to REML.** ``LaplaceLoss`` approximates integration over selected
+   **Relation to REML.** :class:`LaplaceLoss <liesel.optim.LaplaceLoss>` approximates integration over selected
    parameters in smooth models, including non-Gaussian and nonlinear models.
    The integrated parameters, priors, and Jacobians determine the target. Here
    we integrate the group effects and retain parameter priors, yielding a
@@ -120,16 +120,16 @@ Each effect multiplies the baseline rate ``exp(mu)`` by ``exp(b)``.
 For the first group, the multiplier is about ``exp(-1.272) = 0.28``;
 for the last group, it is about ``exp(1.328) = 3.77``.
 
-For the final snapshot, pair ``position_final`` with ``loss_state_final``.
+For the final snapshot, pair :attr:`position_final <liesel.optim.OptimResult.position_final>` with :attr:`loss_state_final <liesel.optim.OptimResult.loss_state_final>`.
 See :class:`~liesel.optim.LaplaceState` for convergence diagnostics, parameter
-ordering, and the saved curvature in ``latent_precision_cholesky``.
+ordering, and the saved curvature in :attr:`latent_precision_cholesky <liesel.optim.LaplaceState.latent_precision_cholesky>`.
 
 Construct joint uncertainty on request
 --------------------------------------
 
 Turn the completed fit into a joint Gaussian approximation for ``mu``, ``h(tau)``,
 and all eight group effects. It includes their correlations, so each draw is a
-complete parameter set that can be passed directly to ``Model.predict``:
+complete parameter set that can be passed directly to :meth:`Model.predict <liesel.model.Model.predict>`:
 
 .. code-block:: python
 
@@ -139,7 +139,7 @@ complete parameter set that can be passed directly to ``Model.predict``:
    tau_draws = predicted["tau"]
    rate_draws = jnp.exp(predicted["log_rate"])
 
-``Model.predict`` transforms draws back to the positive ``tau`` scale and evaluates
+:meth:`Model.predict <liesel.model.Model.predict>` transforms draws back to the positive ``tau`` scale and evaluates
 the log rates. For example, summarize the between-group scale with its 5th, 50th,
 and 95th percentiles:
 
@@ -198,8 +198,8 @@ The approximate posterior median is 0.79, with a 90% credible interval of
    to expected counts. New observations also vary according to the Poisson
    distribution.
 
-For matrix calculations, ``posterior.covariance()`` constructs the full covariance
-on request. ``posterior.names`` and ``posterior.shapes`` describe its ordering.
+For matrix calculations, :meth:`posterior.covariance() <liesel.optim.LaplaceApproximation.covariance>` constructs the full covariance
+on request. :attr:`posterior.names <liesel.optim.LaplaceApproximation.names>` and :attr:`posterior.shapes <liesel.optim.LaplaceApproximation.shapes>` describe its ordering.
 
 To work with one parameter, request its block by name:
 
@@ -211,9 +211,9 @@ This 8 × 8 matrix is the marginal covariance of ``b``; it includes the
 uncertainty that ``mu`` and ``h(tau)`` propagate to ``b``.
 Omit the name selection to get a dictionary of blocks for every parameter.
 For a factor of each block's inverse, use
-``posterior.marginal_precision_cholesky_blocks()``.
+:meth:`posterior.marginal_precision_cholesky_blocks() <liesel.optim.LaplaceApproximation.marginal_precision_cholesky_blocks>`.
 For precision conditional on all the other parameters, use
-``posterior.conditional_precision_blocks()``; these are diagonal blocks of the
+:meth:`posterior.conditional_precision_blocks() <liesel.optim.LaplaceApproximation.conditional_precision_blocks>`; these are diagonal blocks of the
 joint precision and generally differ from the marginal precisions.
 
 The helper adds curvature work once per call and checks stationarity and positive

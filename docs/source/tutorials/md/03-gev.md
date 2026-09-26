@@ -5,7 +5,7 @@ In this tutorial, we illustrate how to set up a distributional
 regression model with the generalized extreme value distribution as a
 response distribution. We configure the model in Python with
 [Liesel-GAM](https://github.com/liesel-devs/liesel_gam), using
-{class}`liesel_gam.TermBuilder` for linear terms and P-splines. See the
+`liesel_gam.TermBuilder` for linear terms and P-splines. See the
 [Liesel-GAM documentation and
 examples](https://github.com/liesel-devs/liesel_gam#readme) for a
 broader overview of the available term types.
@@ -117,7 +117,7 @@ model = lsl.Model([y_var])
 loc_smooth_tau2_name = loc_smooth.scale.value_node[0].name
 ```
 
-We use Liesel’s `MCMCSpec` objects, which are added automatically by
+We use Liesel’s {class}`MCMCSpec <liesel.goose.MCMCSpec>` objects, which are added automatically by
 Liesel-GAM, to set up the sampler. The default Liesel-GAM setup uses
 IWLS kernels for regression coefficients and a Gibbs kernel for the
 smoothing variance of the P-spline.

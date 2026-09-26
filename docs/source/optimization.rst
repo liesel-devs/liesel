@@ -37,14 +37,14 @@ construct a Gaussian posterior approximation and draw parameter dictionaries:
    posterior = optim.loss.approximate_joint_posterior(result)
    draws = posterior.sample(1000, seed=jax.random.key(42))
 
-The default ``at="min_monitor"`` selects ``position_min_monitor``;
-``at="final"`` selects ``position_final``. Both use full-training curvature,
+The default ``at="min_monitor"`` selects :attr:`position_min_monitor <liesel.optim.OptimResult.position_min_monitor>`;
+``at="final"`` selects :attr:`position_final <liesel.optim.OptimResult.position_final>`. Both use full-training curvature,
 regardless of loss scaling or monitoring strategy. A validation or EMA minimum
 may not be a posterior mode; the helper checks stationarity and raises if the
 selected position is unsuitable. Only optimized parameters enter the
 approximation, with omitted parameters held fixed at their model values.
 
-Use ``model.predict`` to transform draws and evaluate derived quantities.
+Use :meth:`model.predict <liesel.model.Model.predict>` to transform draws and evaluate derived quantities.
 :class:`~liesel.optim.LaplaceApproximation` also provides the full covariance and
 named marginal covariance, marginal precision factor, and conditional precision
 blocks. See :doc:`optimizer-laplace` for examples of drawing and using joint
@@ -79,5 +79,5 @@ Common tasks
 
 For arguments and defaults, see the :ref:`optimizer-api`.
 For missing covariates, see :doc:`missing-values` for sampling and optimization.
-``goose.optim_flat`` is deprecated and will be removed in 0.8.0; use the migration guide
+:func:`goose.optim_flat <liesel.goose.optim_flat>` is deprecated and will be removed in 0.8.0; use the migration guide
 above to update existing code.

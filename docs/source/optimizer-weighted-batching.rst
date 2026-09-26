@@ -10,7 +10,7 @@ Weight the training rows
 ------------------------
 
 Starting with a ``model`` and its ``split``, build batches and pass them to
-``LieselOptim``. Here, ``X`` and ``y`` have matching rows:
+:class:`LieselOptim <liesel.optim.LieselOptim>`. Here, ``X`` and ``y`` have matching rows:
 
 .. code-block:: python
 

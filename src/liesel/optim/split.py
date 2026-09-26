@@ -6,7 +6,7 @@ import math
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Literal, overload
+from typing import TYPE_CHECKING, Literal, overload
 
 import jax
 import jax.numpy as jnp
@@ -416,8 +416,10 @@ class PositionSplit:
     """
     Container for train, validation, and test position dictionaries.
 
-    A ``PositionSplit`` is usually returned by :meth:`Split.split_position` or
-    :meth:`PositionSplit.from_model`. It stores the split observed position entries
+    A :class:`~liesel.optim.PositionSplit` is usually returned by
+    :meth:`Split.split_position <liesel.optim.Split.split_position>` or
+    :meth:`PositionSplit.from_model <liesel.optim.PositionSplit.from_model>`. It stores
+    the split observed position entries
     together with the corresponding split sizes.
 
     Parameters
@@ -436,8 +438,10 @@ class PositionSplit:
         Number of test observations.
     sample_sizes
         Optional effective sample sizes for train, validation, and test scaling.
-        If omitted, split-axis counts are used. Use :meth:`from_model` or
-        :meth:`add_inferred_sample_sizes_from_model` to infer these values from
+        If omitted, split-axis counts are used. Use
+        :meth:`~liesel.optim.PositionSplit.from_model` or
+        :meth:`~liesel.optim.PositionSplit.add_inferred_sample_sizes_from_model` to
+        infer these values from
         pointwise observed log-probability arrays.
     passthrough
         Keyword-only position entries included unchanged in ``train``, ``validate``,
@@ -466,16 +470,27 @@ class PositionSplit:
     """
 
     train: Position
+    """Position entries used for optimization."""
     validate: Position
+    """Position entries used for validation or early stopping."""
     test: Position
+    """Position entries reserved for testing."""
 
     train_axis_size: int
+    """Number of training observations."""
     validate_axis_size: int
+    """Number of validation observations."""
     test_axis_size: int
+    """Number of test observations."""
     sample_sizes: SampleSizes | None = None
+    """Optional effective sample sizes for train, validation, and test scaling."""
     passthrough: Position = field(
         default_factory=lambda: Position({}), kw_only=True, repr=False
     )
+    """
+    Keyword-only position entries included unchanged in ``train``, ``validate``, and
+    ``test``.
+    """
 
     def __post_init__(self):
         self.passthrough = Position(dict(self.passthrough))
@@ -857,8 +872,10 @@ class PositionSplit:
         training split. Validation and test likelihoods are therefore multiplied
         by ``train_sample_size / sample_size(part)``.
 
-        For a :class:`.Model`, observed likelihood terms belonging to this split's
-        :attr:`position_keys` are multiplied by the branch scale for ``part``.
+        For a :class:`~liesel.model.Model`, observed likelihood terms belonging to this
+        split's
+        :attr:`~liesel.optim.PositionSplit.position_keys` are multiplied by the branch
+        scale for ``part``.
         Other observed likelihood terms are included unscaled only for training;
         validation and test scores exclude them. For a generic model
         interface, the scalar ``"_model_log_lik"`` state entry is scaled.
@@ -941,7 +958,8 @@ class PositionSplit:
         infer_sample_sizes: bool = True,
     ) -> PositionSplit | PositionSplitManager:
         """
-        Builds a :class:`PositionSplit` from the observed variables in a model.
+        Builds a :class:`~liesel.optim.PositionSplit` from the observed variables in a
+        model.
 
         Parameters
         ----------
@@ -982,9 +1000,11 @@ class PositionSplit:
             full-data splits.
         multi_size
             How to handle multiple inferred or explicit observation groups.
-            The default ``"error"`` keeps :class:`PositionSplit` scalar and raises
+            The default ``"error"`` keeps :class:`~liesel.optim.PositionSplit` scalar
+            and raises
             a helpful error. Use ``"manager"`` to return a
-            :class:`PositionSplitManager` when multiple groups are detected, even
+            :class:`~liesel.optim.PositionSplitManager` when multiple groups are
+            detected, even
             if they have equal axis sizes. One group still returns a scalar split.
         sample_sizes
             Optional effective sample sizes for train, validation, and test
@@ -1150,19 +1170,23 @@ def _child_sample_sizes_from_totals(
 @dataclass
 class PositionSplitManager:
     """
-    Coordinates multiple :class:`PositionSplit` objects as one split interface.
+    Coordinates multiple :class:`~liesel.optim.PositionSplit` objects as one split
+    interface.
 
-    ``PositionSplitManager`` is the split-side counterpart to
-    :class:`.BatchManager`. It is useful when a model has observed branches with
-    different axis sizes. Each child :class:`PositionSplit` stores the split data
+    :class:`~liesel.optim.PositionSplitManager` is the split-side counterpart to
+    :class:`~liesel.optim.BatchManager`. It is useful when a model has observed branches
+    with
+    different axis sizes. Each child :class:`~liesel.optim.PositionSplit` stores the
+    split data
     for one branch, while the manager exposes merged ``train``, ``validate``, and
     ``test`` positions.
 
     Parameters
     ----------
     splits
-        Non-empty sequence of :class:`PositionSplit` objects. Their
-        :attr:`PositionSplit.position_keys` must not overlap. Either all children
+        Non-empty sequence of :class:`~liesel.optim.PositionSplit` objects. Their
+        :attr:`PositionSplit.position_keys <liesel.optim.PositionSplit.position_keys>`
+        must not overlap. Either all children
         must contain validation data or none may contain validation data; the same
         rule applies to test data.
     passthrough
@@ -1179,14 +1203,22 @@ class PositionSplitManager:
 
     Notes
     -----
-    Branch-specific sizes are available as :attr:`axis_sizes`,
-    :attr:`train_axis_sizes`, :attr:`validate_axis_sizes`, and
-    :attr:`test_axis_sizes`. Branch-specific likelihood sizes are available as
-    :attr:`sample_sizes`, :attr:`train_sample_sizes`,
-    :attr:`validate_sample_sizes`, and :attr:`test_sample_sizes`. Scalar aliases
-    such as :attr:`train_axis_size`, :attr:`validate_axis_share`, and
-    :attr:`validate_sample_scale` are available only when all children have the
-    same value. Use :meth:`sample_size` for the total likelihood sample size of a
+    Branch-specific sizes are available as
+    :attr:`~liesel.optim.PositionSplitManager.axis_sizes`,
+    :attr:`~liesel.optim.PositionSplitManager.train_axis_sizes`,
+    :attr:`~liesel.optim.PositionSplitManager.validate_axis_sizes`, and
+    :attr:`~liesel.optim.PositionSplitManager.test_axis_sizes`. Branch-specific
+    likelihood sizes are available as
+    :attr:`~liesel.optim.PositionSplitManager.sample_sizes`,
+    :attr:`~liesel.optim.PositionSplitManager.train_sample_sizes`,
+    :attr:`~liesel.optim.PositionSplitManager.validate_sample_sizes`, and
+    :attr:`~liesel.optim.PositionSplitManager.test_sample_sizes`. Scalar aliases
+    such as :attr:`~liesel.optim.PositionSplitManager.train_axis_size`,
+    :attr:`~liesel.optim.PositionSplitManager.validate_axis_share`, and
+    :attr:`~liesel.optim.PositionSplitManager.validate_sample_scale` are available only
+    when all children have the
+    same value. Use :meth:`~liesel.optim.PositionSplitManager.sample_size` for the total
+    likelihood sample size of a
     split part across all branches.
 
     Examples
@@ -1236,9 +1268,14 @@ class PositionSplitManager:
     """
 
     splits: Sequence[PositionSplit]
+    """Non-empty sequence of :class:`~liesel.optim.PositionSplit` objects."""
     passthrough: Position = field(
         default_factory=lambda: Position({}), kw_only=True, repr=False
     )
+    """
+    Keyword-only shared position entries included unchanged in the manager's merged
+    ``train``, ``validate``, and ``test`` positions.
+    """
     _train: Position = field(init=False, repr=False)
     _validate: Position = field(init=False, repr=False)
     _test: Position = field(init=False, repr=False)
@@ -1297,10 +1334,12 @@ class PositionSplitManager:
         Builds grouped position splits from a model.
 
         Flat position keys are grouped by inferred axis size; nested position keys
-        preserve explicit groups. One :class:`Split` is constructed per group and
+        preserve explicit groups. One :class:`~liesel.optim.Split` is constructed per
+        group and
         applied to the model's observed position.
 
-        Parameters are the same as :meth:`SplitManager.from_model`. When
+        Parameters are the same as :meth:`SplitManager.from_model
+        <liesel.optim.SplitManager.from_model>`. When
         a selected key is mapped to ``None`` in ``split_axes``, it is included
         unchanged in ``train``, ``validate``, and ``test`` and is not split or
         batched automatically. This is intended for shared lookup tables or
@@ -1310,7 +1349,8 @@ class PositionSplitManager:
         sample sizes for the whole manager. The totals are distributed to contained
         splits in proportion to their axis sizes for the corresponding split part.
         For custom per-child sample sizes, construct the child
-        :class:`PositionSplit` objects manually. When ``infer_sample_sizes=True``,
+        :class:`~liesel.optim.PositionSplit` objects manually. When
+        ``infer_sample_sizes=True``,
         inference counts pointwise log-probability scalars, not observed value
         elements; for multivariate observation distributions, one observed event
         may have several value dimensions but one pointwise log-probability scalar.
@@ -1606,8 +1646,9 @@ class PositionSplitManager:
         Raises
         ------
         ValueError
-            If child validation scales differ. Use :meth:`scaled_log_lik` for
-            per-branch scaling with a Liesel :class:`.Model`.
+            If child validation scales differ. Use
+            :meth:`~liesel.optim.PositionSplitManager.scaled_log_lik` for
+            per-branch scaling with a Liesel :class:`~liesel.model.Model`.
         """
         return _common_value(
             self.validate_sample_scales,
@@ -1686,10 +1727,10 @@ class PositionSplitManager:
         training split. Validation and test likelihoods are therefore multiplied
         by each branch's ``train_sample_size / sample_size(part)``.
 
-        For a Liesel :class:`.Model`, each child split scales the observed
+        For a Liesel :class:`~liesel.model.Model`, each child split scales the observed
         likelihood terms belonging to its own ``position_keys``. Uncovered terms
         are included unscaled only for training, not validation or testing. For a
-        :class:`.ModelInterface`, a common scalar scale is required because observed
+        ``ModelInterface``, a common scalar scale is required because observed
         likelihood terms cannot be separated.
 
         Parameters
@@ -1775,21 +1816,25 @@ class PositionSplitManager:
 @dataclass
 class SplitManager:
     """
-    Wraps multiple :class:`Split` objects for multi-branch splitting.
+    Wraps multiple :class:`~liesel.optim.Split` objects for multi-branch splitting.
 
-    ``Split`` stays scalar: each instance assumes one axis size. ``SplitManager``
+    :class:`~liesel.optim.Split` stays scalar: each instance assumes one axis size.
+    :class:`~liesel.optim.SplitManager`
     coordinates several such scalar splitters and returns a
-    :class:`PositionSplitManager` with merged train/validation/test positions.
+    :class:`~liesel.optim.PositionSplitManager` with merged train/validation/test
+    positions.
 
     Parameters
     ----------
     splits
-        Non-empty sequence of :class:`Split` objects. Their ``position_keys`` must
+        Non-empty sequence of :class:`~liesel.optim.Split` objects. Their
+        ``position_keys`` must
         not overlap. Either all children must define validation data or none may; the
         same rule applies to test data.
     passthrough_position_keys
         Keyword-only names included unchanged in ``train``, ``validate``, and
-        ``test``. They are not assigned to a child :class:`Split` or batched
+        ``test``. They are not assigned to a child :class:`~liesel.optim.Split` or
+        batched
         automatically. Use this for shared lookup tables or constants, not
         per-observation data.
 
@@ -1827,9 +1872,13 @@ class SplitManager:
     """
 
     splits: Sequence[Split]
+    """Non-empty sequence of :class:`~liesel.optim.Split` objects."""
     passthrough_position_keys: Sequence[str] = field(
         default_factory=tuple, kw_only=True
     )
+    """
+    Keyword-only names included unchanged in ``train``, ``validate``, and ``test``.
+    """
 
     def __post_init__(self):
         self.splits = tuple(self.splits)
@@ -1876,7 +1925,7 @@ class SplitManager:
         seed: jax.Array | int | None = 0,
     ) -> SplitManager:
         """
-        Builds a :class:`SplitManager` from inferred or explicit groups.
+        Builds a :class:`~liesel.optim.SplitManager` from inferred or explicit groups.
 
         Parameters
         ----------
@@ -1915,7 +1964,8 @@ class SplitManager:
         Returns
         -------
         SplitManager
-            Split manager with one child :class:`Split` per observation group.
+            Split manager with one child :class:`~liesel.optim.Split` per observation
+            group.
 
         Examples
         --------
@@ -2043,7 +2093,8 @@ class SplitManager:
         Parameters
         ----------
         position
-            Mapping containing every key claimed by :attr:`position_keys`.
+            Mapping containing every key claimed by
+            :attr:`~liesel.optim.SplitManager.position_keys`.
 
         Returns
         -------
@@ -2096,7 +2147,7 @@ class Split:
     """
     Defines how observed position entries are split into train, validation, and test.
 
-    ``Split`` stores a vector of observation indices. The first
+    :class:`~liesel.optim.Split` stores a vector of observation indices. The first
     ``train_axis_size`` indices become the training split, the next
     ``validate_axis_size`` indices become the validation split, and the final
     ``test_axis_size`` indices become the test split. If ``shuffle=True``, the
@@ -2107,7 +2158,8 @@ class Split:
     ----------
     position_keys
         Names of position entries that should be included. If omitted,
-        :meth:`split_position` uses all keys in the supplied position. Entries
+        :meth:`~liesel.optim.Split.split_position` uses all keys in the supplied
+        position. Entries
         mapped to ``None`` in ``split_axes`` are included unchanged in ``train``,
         ``validate``, and ``test`` and are not batched automatically.
     axis_size
@@ -2137,17 +2189,11 @@ class Split:
         full-data splits.
     sample_sizes
         Optional effective sample sizes passed to the resulting
-        :class:`PositionSplit`.
+        :class:`~liesel.optim.PositionSplit`.
     keep_in_train
         Positional row indices that must belong to the training partition. Reserved
         rows count toward ``train_axis_size``; this controls membership, not order.
         This is useful when a random split must retain rare categories in training.
-
-    Attributes
-    ----------
-    indices
-        Current observation order. Initialized as ``jnp.arange(axis_size)`` and
-        optionally shuffled in :meth:`__post_init__`.
 
     Raises
     ------
@@ -2199,16 +2245,34 @@ class Split:
     """
 
     position_keys: Sequence[str] | None = None
+    """Names of position entries that should be included."""
     axis_size: int = 0
+    """Number of observations along each split axis."""
     validate_axis_size: int = 0
+    """Number of validation observations."""
     test_axis_size: int = 0
+    """Number of test observations."""
     train_axis_size: int | None = None
+    """Number of training observations."""
     split_axes: dict[str, int | None] | None = field(default_factory=dict)
+    """Optional mapping from position key to split axis."""
     default_split_axis: int = 0
+    """Split axis for all position keys not listed in ``split_axes``."""
     shuffle: bool = True
+    """Whether to shuffle observations during initialization; defaults to ``True``."""
     seed: jax.Array | int | None = 0
+    """Seed or JAX pseudo-random key used for shuffled holdouts."""
     sample_sizes: SampleSizes | None = None
+    """
+    Optional effective sample sizes passed to the resulting
+    :class:`~liesel.optim.PositionSplit`.
+    """
     keep_in_train: Sequence[int] | None = None
+    """Positional row indices that must belong to the training partition."""
+
+    if TYPE_CHECKING:
+        indices: jax.Array = field(init=False, repr=False, compare=False)
+        """Observation order, optionally shuffled once during initialization."""
 
     def __post_init__(self):
         if self.split_axes is None:
@@ -2418,8 +2482,9 @@ class Split:
         """Builds reusable split recipes from inferred or explicit groups.
 
         By default, selected entries must form one observation group. Set
-        ``multi_size="manager"`` to return a :class:`SplitManager` for multiple
-        groups. One group still returns a :class:`Split`. Entries
+        ``multi_size="manager"`` to return a :class:`~liesel.optim.SplitManager` for
+        multiple
+        groups. One group still returns a :class:`~liesel.optim.Split`. Entries
         mapped to ``None`` in ``split_axes`` become passthrough data: when the
         recipe is applied, they are included unchanged in ``train``, ``validate``,
         and ``test``, are not split or batched automatically, and do not participate
@@ -2458,12 +2523,15 @@ class Split:
             full-data splits.
         sample_sizes
             Optional effective sample sizes passed to the resulting
-            :class:`PositionSplit`. Only supported for a single group; construct
-            child :class:`Split` recipes explicitly for per-group overrides.
+            :class:`~liesel.optim.PositionSplit`. Only supported for a single group;
+            construct
+            child :class:`~liesel.optim.Split` recipes explicitly for per-group
+            overrides.
         multi_size
             How to handle multiple observation groups. The default ``"error"``
-            raises; ``"manager"`` returns a :class:`SplitManager` for multiple
-            groups. One group always returns :class:`Split`.
+            raises; ``"manager"`` returns a :class:`~liesel.optim.SplitManager` for
+            multiple
+            groups. One group always returns :class:`~liesel.optim.Split`.
 
         Returns
         -------
@@ -2565,7 +2633,7 @@ class Split:
         sample_sizes: SampleSizes | None = None,
     ) -> Split:
         """
-        Builds a :class:`Split` from validation and test proportions.
+        Builds a :class:`~liesel.optim.Split` from validation and test proportions.
 
         The number of validation and test observations is computed with
         flooring ``axis_size * share``, snapping products within two floating-point
@@ -2597,7 +2665,7 @@ class Split:
             full-data splits.
         sample_sizes
             Optional effective sample sizes passed to the resulting
-            :class:`PositionSplit`.
+            :class:`~liesel.optim.PositionSplit`.
 
         Returns
         -------
@@ -2660,7 +2728,7 @@ class Split:
         """
         Returns a random permutation of the current index vector.
 
-        This method does not mutate :attr:`indices`.
+        This method does not mutate :attr:`~liesel.optim.Split.indices`.
 
         Parameters
         ----------
@@ -2670,7 +2738,7 @@ class Split:
         Returns
         -------
         jax.Array
-            Permuted copy of :attr:`indices`.
+            Permuted copy of :attr:`~liesel.optim.Split.indices`.
 
         Examples
         --------
@@ -2753,7 +2821,8 @@ class Split:
         Parameters
         ----------
         position
-            Mapping containing every key in :attr:`position_keys`. Each selected
+            Mapping containing every key in :attr:`~liesel.optim.Split.position_keys`.
+            Each selected
             entry must have length ``axis_size`` along its split axis.
 
         Returns

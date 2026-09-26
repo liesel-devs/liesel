@@ -60,6 +60,15 @@ non-import build setup, such as logging configuration and fixture models or data
 
 - State prerequisites, such as an existing `model`, before a snippet. Make
   complete tutorials runnable from top to bottom.
+- Prefer existing public Liesel helpers over manual calculations that repeat model
+  definitions or library functionality. For example, use
+  `model.predict(samples, predict=[...], newdata=...)` to evaluate model quantities
+  at posterior draws and new inputs instead of repeating design-matrix products
+  and transformations. Keep necessary postprocessing explicit: identify sample
+  axes and state whether transformations happen before averaging. Retain manual
+  calculations when they teach a distinct concept or no suitable helper exists.
+  Execute revised examples and verify that their statistical meaning and results
+  are preserved.
 - Keep code blocks orderly and consistent with the repository formatter. Group
   imports, use blank lines between logical steps, and separate model construction,
   fitting, and inspection into focused blocks. Lay out data and long calls so they
@@ -97,12 +106,42 @@ figure cannot be generated reliably there. Record the source command and refresh
 the image when the example changes. Keep essential explanations readable without
 interacting with a visual.
 
+## Document public attributes compactly
+
+Document public class attributes in the API reference's compact Attributes table,
+with one row per attribute and a concise description. Follow the `LossMixin` and
+`NegElboLoss` pattern: use class-level type annotations with adjacent attribute
+docstrings so the existing autosummary template generates the table. Keep
+property documentation in the property's docstring. Avoid separate standalone
+attribute headings or duplicating these descriptions in a class-level
+`Attributes` section. Preserve runtime behavior when adding annotations,
+including dataclass fields and constructor signatures. Keep generated attribute
+pages available as cross-reference targets.
+
+Build affected API pages and inspect their rendered tables for completeness,
+readability, and duplication.
+
+## Link documented API objects
+
+Use Sphinx cross-references consistently when mentioning documented classes,
+methods, functions, or attributes, including in parameter descriptions, return
+descriptions, notes, and attribute tables. Use MyST roles in Markdown and
+reStructuredText roles in docstrings, with fully qualified targets and short,
+readable labels. For example, write
+``{meth}`model.predict <liesel.model.Model.predict>` `` in MyST,
+and ``:meth:`NegElboLoss.from_vdist <liesel.optim.NegElboLoss.from_vdist>` ``
+in a docstring. Instance-style wording can remain the label.
+
+Keep executable examples unchanged when adding cross-references. Use plain inline
+code for local variables, argument values, and expressions without a documentation
+target. Build affected pages, resolve broken references, and inspect the rendered
+links. Links intended for use outside the docs must work from that context.
+
 ## Check the finished result
 
 Execute changed examples and notebooks, refresh affected saved outputs, and
 inspect the plots. Build the docs when changing rendering or navigation, and
-check that links resolve. Use Sphinx cross-references for internal pages and API
-objects. Links intended for use outside the docs must work from that context.
+check that links resolve.
 Run the relevant hooks on the edited files.
 
 Match descriptions to actual behavior. A migration guide should show the old

@@ -16,7 +16,7 @@ Pause in memory
 
 ``pause_after`` limits additional epochs in that call. Early stopping still
 applies. To extend the total budget, change ``engine.stopper.epochs`` before
-resuming. Calling ``fit()`` without a checkpoint starts a new run.
+resuming. Calling :meth:`fit() <liesel.optim.LieselOptim.fit>` without a checkpoint starts a new run.
 
 The result's ``status`` tells you why fitting stopped: ``"paused"``,
 ``"max_epochs"``, ``"early_stopping"``, ``"numerical_failure"``, or ``"nan"``.
@@ -41,10 +41,10 @@ Use a different path for a new experiment and only one writer per path. The
 parent directory must exist.
 
 If the checkpoint permits no additional epochs under the current stopper
-settings, ``fit`` warns and returns its result without further optimization.
+settings, :meth:`fit <liesel.optim.LieselOptim.fit>` warns and returns its result without further optimization.
 This applies to both paths and in-memory checkpoints. Increasing
 ``engine.stopper.epochs`` allows continuation only if early stopping does not
-apply. Use a new path or call ``fit()`` without a checkpoint for a fresh run,
+apply. Use a new path or call :meth:`fit() <liesel.optim.LieselOptim.fit>` without a checkpoint for a fresh run,
 including when changing data or optimizer settings for a new experiment.
 
 Resume safely
@@ -64,10 +64,10 @@ History and monitoring continue across pauses. Earlier results stay unchanged;
 keeping many snapshots uses extra memory. Treat checkpoint contents as read-only.
 Custom losses must keep their model state and loss-state PyTrees compatible
 and serializable with pickle. Committed and best loss states survive recovery.
-For ``LaplaceLoss``, keep the latent parameters and inner-solver controls unchanged;
+For :class:`LaplaceLoss <liesel.optim.LaplaceLoss>`, keep the latent parameters and inner-solver controls unchanged;
 checkpoint recovery checks these settings as well as state structure and dtype.
 
 For manual snapshots, use :meth:`liesel.optim.OptimCheckpoint.save` and
 :meth:`liesel.optim.OptimCheckpoint.load`. Passing a checkpoint object resumes
-in memory; pass a path to ``fit()`` for automatic disk saves. See
+in memory; pass a path to :meth:`fit() <liesel.optim.LieselOptim.fit>` for automatic disk saves. See
 :meth:`liesel.optim.OptimEngine.fit` for all recovery options.

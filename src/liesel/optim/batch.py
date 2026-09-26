@@ -4,7 +4,7 @@ import math
 from collections.abc import Mapping, Sequence
 from copy import copy
 from dataclasses import InitVar, dataclass, field
-from typing import Literal, overload
+from typing import TYPE_CHECKING, Literal, overload
 
 import jax
 import jax.numpy as jnp
@@ -168,7 +168,8 @@ class Batches:
     """
     Defines mini-batches for observed entries in an optimizer position.
 
-    ``Batches`` owns the observation indices for the current epoch and reshapes complete
+    :class:`~liesel.optim.Batches` owns the observation indices for the current epoch
+    and reshapes complete
     parts of shuffled passes into batches. The observed position entries named in
     ``position_keys`` are sliced with these indices. By default, every entry is
     sliced along axis ``0``; use ``default_batch_axis`` or ``batch_axes`` for
@@ -186,8 +187,10 @@ class Batches:
         Number of observations per batch. If ``None``, batching is disabled by using
         a single batch with all ``axis_size`` observations.
     shuffle
-        Whether :meth:`permute_indices` should return a random permutation of the
-        indices. If ``False``, :meth:`permute_indices` returns the indices unchanged.
+        Whether :meth:`~liesel.optim.Batches.permute_indices` should return a random
+        permutation of the
+        indices. If ``False``, :meth:`~liesel.optim.Batches.permute_indices` returns the
+        indices unchanged.
     batch_axes
         Optional mapping from position key to batching axis. Keys missing from this
         mapping use ``default_batch_axis``.
@@ -201,7 +204,8 @@ class Batches:
     sample_size
         Optional effective likelihood sample size represented by the full data. If
         omitted, likelihood scaling falls back to ``axis_size``. Use
-        :meth:`from_model` to infer this value from pointwise observed
+        :meth:`~liesel.optim.Batches.from_model` to infer this value from pointwise
+        observed
         log-probability arrays.
     batch_sample_size
         Optional effective likelihood sample size represented by one batch. If
@@ -222,13 +226,6 @@ class Batches:
         reductions or transpositions. The declared axis must enumerate the sampled
         observations; matching dimension sizes alone cannot establish this.
 
-    Attributes
-    ----------
-    indices
-        Current ordering of the observations. Initialized as
-        ``jnp.arange(axis_size)`` and used by :attr:`batch_indices`. Assign the
-        result of :meth:`permute_indices` to this attribute to use a fresh order.
-
     Notes
     -----
     If ``axis_size`` is not divisible by ``batch_size``, only full batches
@@ -238,13 +235,17 @@ class Batches:
 
     With replacement sampling, an epoch retains the same number of batches but
     does not guarantee coverage. Weighted groups apply an extra per-index factor
-    ``1 / (axis_size * p_i)`` through :meth:`scaled_log_lik`, preserving the
-    original objective in expectation. :class:`.NegLogProbLoss` applies this
+    ``1 / (axis_size * p_i)`` through :meth:`~liesel.optim.Batches.scaled_log_lik`,
+    preserving the
+    original objective in expectation. :class:`~liesel.optim.NegLogProbLoss` applies
+    this
     automatically. Other losses must use that
-    method or apply :meth:`correction_factors` before summing likelihood values.
+    method or apply :meth:`~liesel.optim.Batches.correction_factors` before summing
+    likelihood values.
 
     A no-key full-data adapter can be useful when an optimizer workflow expects a
-    :class:`Batches` object but the model should always be evaluated on the full
+    :class:`~liesel.optim.Batches` object but the model should always be evaluated on
+    the full
     observed data. Use ``position_keys=[]`` and ``batch_size=None`` for this case.
 
     Examples
@@ -292,17 +293,42 @@ class Batches:
     """
 
     position_keys: Sequence[str]
+    """Names of the position entries that should be batched."""
     axis_size: int
+    """Number of observations along each batched axis."""
     batch_size: int | None
+    """Number of observations per batch."""
     shuffle: bool = True
+    """
+    Whether :meth:`~liesel.optim.Batches.permute_indices` should return a random
+    permutation of the indices.
+    """
     batch_axes: dict[str, int] | None = None
+    """Optional mapping from position key to batching axis."""
     default_batch_axis: int = 0
+    """Batching axis for all position keys not listed in ``batch_axes``."""
     sample_with_replacement: bool = False
+    """
+    Whether every assembled batch draws observations independently with replacement.
+    """
     sample_size: int | float | None = None
+    """Optional effective likelihood sample size represented by the full data."""
     batch_sample_size: int | float | None = None
+    """Optional effective likelihood sample size represented by one batch."""
     likelihood_axes: dict[str, int]
+    """
+    Optional mapping from observed-variable name to its pointwise log-likelihood axis.
+    """
     _sampling_probabilities: jax.Array | None
     _alias_table: _alias.AliasTable | None
+
+    if TYPE_CHECKING:
+        indices: jax.Array
+        """
+        Current observation order used by :attr:`~liesel.optim.Batches.batch_indices`;
+        assign the result of :meth:`~liesel.optim.Batches.permute_indices` to refresh
+        it.
+        """
 
     def __init__(
         self,
@@ -447,7 +473,7 @@ class Batches:
         ----------
         labels
             One-dimensional category labels in training-row order, with the same
-            requirements as :meth:`weights_balanced`.
+            requirements as :meth:`~liesel.optim.Batches.weights_balanced`.
         shares
             Mapping from every observed category to its finite, strictly positive
             sampling share. Missing or extra categories are rejected. A category
@@ -461,7 +487,8 @@ class Batches:
         -------
         numpy.ndarray
             Float64 weights in input order, computed on the host outside JIT.
-            Weights are not normalized here; :class:`Batches` normalizes them into
+            Weights are not normalized here; :class:`~liesel.optim.Batches` normalizes
+            them into
             sampling probabilities. Unrepresentable zero weights are rejected.
             Shares describe expected frequencies, not fixed quotas per minibatch.
 
@@ -519,7 +546,8 @@ class Batches:
             may be infinite. Intervals include their left endpoint and exclude
             their right, except that the final right endpoint is included.
         strength
-            Finite scalar between zero and one, as in :meth:`weights_balanced`.
+            Finite scalar between zero and one, as in
+            :meth:`~liesel.optim.Batches.weights_balanced`.
             Defaults to partial balancing with strength ``0.5``.
 
         Returns
@@ -664,7 +692,8 @@ class Batches:
             Axis for variables missing from ``batch_axes``.
         epoch_size
             For multiple groups, choose ``"max"``, ``"min"``, ``"strict"``, or a
-            positive number of steps. See :class:`BatchManager` for the policies.
+            positive number of steps. See :class:`~liesel.optim.BatchManager` for the
+            policies.
         position_keys
             Entries to batch. Defaults to the split's partitioned entries, leaving
             passthrough data untouched. Explicit keys may include passthrough data.
@@ -690,12 +719,13 @@ class Batches:
             groups use uniform sampling. Requires replacement sampling.
         likelihood_axes
             Map observed variable names to axes of their pointwise log probabilities
-            for weighted likelihood correction. See :class:`Batches`.
+            for weighted likelihood correction. See :class:`~liesel.optim.Batches`.
 
         Returns
         -------
         Batches or BatchManager
-            A manager for a :class:`PositionSplitManager`, otherwise one batch
+            A manager for a :class:`~liesel.optim.PositionSplitManager`, otherwise one
+            batch
             configuration. Explicit size overrides apply to every selected group.
             For different settings per group, build children from individual splits
             and pass them to ``BatchManager([...])``.
@@ -860,7 +890,7 @@ class Batches:
         likelihood_axes: dict[str, int] | None = None,
     ) -> Batches | BatchManager:
         """
-        Builds a :class:`Batches` object from a Liesel model.
+        Builds a :class:`~liesel.optim.Batches` object from a Liesel model.
 
         Parameters
         ----------
@@ -883,7 +913,8 @@ class Batches:
             Number of observations. If ``None``, the number is guessed from the model's
             observed variables along ``default_batch_axis``.
         shuffle
-            Whether epoch-wise calls to :meth:`permute_indices` should shuffle the
+            Whether epoch-wise calls to :meth:`~liesel.optim.Batches.permute_indices`
+            should shuffle the
             indices. This is forced to ``False`` when ``batch_size`` is ``None``.
         batch_axes
             Optional mapping from position key to batching axis.
@@ -892,10 +923,12 @@ class Batches:
             from ``batch_axes``.
         multi_size
             How to handle multiple inferred or explicit observation groups.
-            The default ``"error"`` keeps :class:`Batches` scalar and raises a
-            helpful error. Use ``"manager"`` to return a :class:`BatchManager` when
+            The default ``"error"`` keeps :class:`~liesel.optim.Batches` scalar and
+            raises a
+            helpful error. Use ``"manager"`` to return a
+            :class:`~liesel.optim.BatchManager` when
             multiple groups are detected, even with equal axis sizes. One group
-            still returns a scalar :class:`Batches` object.
+            still returns a scalar :class:`~liesel.optim.Batches` object.
         epoch_size
             Batch manager epoch size used only when ``multi_size="manager"``.
         sample_size
@@ -923,20 +956,22 @@ class Batches:
             its vector. The vector applies to all aligned entries in that group.
             Unknown keys and multiple entries for one group are rejected; omitted
             groups use uniform sampling. Weighted groups require replacement
-            sampling. See :class:`Batches` for validation and likelihood correction.
+            sampling. See :class:`~liesel.optim.Batches` for validation and likelihood
+            correction.
 
         likelihood_axes
             Map observed variable names to axes of their pointwise log probabilities
             for weighted correction. Each child receives entries for its own group.
-            See :class:`Batches` for axis semantics.
+            See :class:`~liesel.optim.Batches` for axis semantics.
 
         Returns
         -------
         Batches or BatchManager
             Batch configuration for the model's observed data. A
-            :class:`BatchManager` is returned only when ``multi_size="manager"`` and
+            :class:`~liesel.optim.BatchManager` is returned only when
+            ``multi_size="manager"`` and
             multiple groups are detected, even with equal axis sizes. One group
-            still returns a scalar :class:`Batches` object.
+            still returns a scalar :class:`~liesel.optim.Batches` object.
 
         Examples
         --------
@@ -1083,7 +1118,8 @@ class Batches:
         Returns
         -------
         tuple[float]
-            A one-element tuple containing :attr:`batch_sample_scale`.
+            A one-element tuple containing
+            :attr:`~liesel.optim.Batches.batch_sample_scale`.
 
         Examples
         --------
@@ -1163,7 +1199,8 @@ class Batches:
         """
         Returns epoch indices, optionally shuffled.
 
-        This method does not mutate :attr:`indices`. Assign the return value to
+        This method does not mutate :attr:`~liesel.optim.Batches.indices`. Assign the
+        return value to
         ``indices`` if the object should use the new order.
 
         Parameters
@@ -1278,13 +1315,14 @@ class Batches:
             JAX pseudo-random key used for epoch assembly.
         n_batches
             ``None`` assembles the natural epoch. For ordinary batching, the
-            unused incomplete tail remains in :attr:`indices`. A positive integer
+            unused incomplete tail remains in :attr:`~liesel.optim.Batches.indices`. A
+            positive integer
             requests exactly that many complete batch rows.
 
         Returns
         -------
         Batches
-            This object with freshly assigned :attr:`indices`.
+            This object with freshly assigned :attr:`~liesel.optim.Batches.indices`.
 
         Examples
         --------
@@ -1353,7 +1391,7 @@ class Batches:
             ``position_keys`` must be present and have length ``axis_size`` along
             its batching axis.
         batch_index
-            Row number in :attr:`batch_indices`.
+            Row number in :attr:`~liesel.optim.Batches.batch_indices`.
 
         Returns
         -------
@@ -1417,7 +1455,7 @@ class Batches:
         model_state
             State from which ``position_keys`` are extracted.
         batch_number
-            Row number in :attr:`batch_indices`.
+            Row number in :attr:`~liesel.optim.Batches.batch_indices`.
 
         Returns
         -------
@@ -1443,7 +1481,7 @@ class Batches:
         """Return extra factors ``1 / (axis_size * p_i)`` for the selected batch.
 
         Uniform sampling returns ones. These factors do not include
-        :attr:`batch_sample_scale`.
+        :attr:`~liesel.optim.Batches.batch_sample_scale`.
         """
         indices = self.batch_indices[batch_index]
         if self.sampling_probabilities is None:
@@ -1531,8 +1569,9 @@ class Batches:
         """
         Returns the log likelihood with this batch group's likelihood scaled.
 
-        For a :class:`.Model`, observed likelihood terms belonging to
-        :attr:`position_keys` are multiplied by :attr:`batch_sample_scale`. Other
+        For a :class:`~liesel.model.Model`, observed likelihood terms belonging to
+        :attr:`~liesel.optim.Batches.position_keys` are multiplied by
+        :attr:`~liesel.optim.Batches.batch_sample_scale`. Other
         observed likelihood terms are left unscaled.
 
         Parameters
@@ -1542,9 +1581,12 @@ class Batches:
         model_state
             Updated model state containing the current log-likelihood values.
         batch_index
-            Row of :attr:`batch_indices` used to produce ``model_state``. Required
-            for weighted sampling. Applies :meth:`correction_factors` before
-            summation in addition to :attr:`batch_sample_scale`. Reduced scalar
+            Row of :attr:`~liesel.optim.Batches.batch_indices` used to produce
+            ``model_state``. Required
+            for weighted sampling. Applies
+            :meth:`~liesel.optim.Batches.correction_factors` before
+            summation in addition to :attr:`~liesel.optim.Batches.batch_sample_scale`.
+            Reduced scalar
             likelihoods and ambiguous axis mappings are rejected.
 
         Returns
@@ -1624,17 +1666,21 @@ class Batches:
 @dataclass
 class BatchManager:
     """
-    Coordinates multiple :class:`Batches` objects as one batching interface.
+    Coordinates multiple :class:`~liesel.optim.Batches` objects as one batching
+    interface.
 
-    A ``BatchManager`` is useful when a model contains observed branches with
-    different observation sizes. Each contained :class:`Batches` object owns the
+    A :class:`~liesel.optim.BatchManager` is useful when a model contains observed
+    branches with
+    different observation sizes. Each contained :class:`~liesel.optim.Batches` object
+    owns the
     slicing rules for one branch. The manager combines them into one joint batched
     position for every optimizer step.
 
     Parameters
     ----------
     batches
-        Non-empty sequence of :class:`Batches` objects. Their ``position_keys`` must
+        Non-empty sequence of :class:`~liesel.optim.Batches` objects. Their
+        ``position_keys`` must
         not overlap.
     epoch_size
         Epoch length policy: ``"strict"``, ``"min"``, ``"max"``, or a positive
@@ -1652,20 +1698,25 @@ class BatchManager:
     ValueError
         If ``batches`` is empty, if any ``position_keys`` are claimed by more than
         one child, if ``epoch_size`` is invalid, or if strict sizing is used with
-        unequal child :attr:`Batches.n_full_batches`.
+        unequal child :attr:`Batches.n_full_batches
+        <liesel.optim.Batches.n_full_batches>`.
 
     Notes
     -----
-    The properties :attr:`axis_size`, :attr:`batch_size`, and
-    :attr:`batch_sample_scales` return tuples in child-batch order. The scalar
+    The properties :attr:`~liesel.optim.BatchManager.axis_size`,
+    :attr:`~liesel.optim.BatchManager.batch_size`, and
+    :attr:`~liesel.optim.BatchManager.batch_sample_scales` return tuples in child-batch
+    order. The scalar
     aliases are available only when all children have the same likelihood scale.
-    With unequal scales, use :meth:`scaled_log_lik` so each branch is scaled by
+    With unequal scales, use :meth:`~liesel.optim.BatchManager.scaled_log_lik` so each
+    branch is scaled by
     its own sample-size ratio.
 
     Use manual ``BatchManager([Batches(...)])`` construction when child groups need
     custom per-branch ``sample_size`` or ``batch_sample_size`` values.
 
-    Like :class:`Batches`, :meth:`start_epoch` mutates and returns ``self``.
+    Like :class:`~liesel.optim.Batches`, :meth:`~liesel.optim.BatchManager.start_epoch`
+    mutates and returns ``self``.
 
     Examples
     --------
@@ -1733,10 +1784,18 @@ class BatchManager:
     """
 
     batches: Sequence[Batches]
+    """Non-empty sequence of :class:`~liesel.optim.Batches` objects."""
     epoch_size: Literal["strict", "min", "max"] | int = "strict"
+    """
+    Epoch length policy: ``"strict"``, ``"min"``, ``"max"``, or a positive integer.
+    """
     sampling_weights: InitVar[Array | Mapping[str, Array] | None] = field(
         default=None, kw_only=True
     )
+    """
+    Optional keyword-only weights: a vector for a single child, or a mapping from one
+    child position key per group to its vector.
+    """
 
     def __post_init__(self, sampling_weights):
         self.batches = tuple(copy(batch) for batch in self.batches)
@@ -1792,7 +1851,8 @@ class BatchManager:
     ) -> BatchManager:
         """Build a manager from training data, including a single split.
 
-        Accepts the same options as :meth:`Batches.from_split` and always returns
+        Accepts the same options as :meth:`Batches.from_split
+        <liesel.optim.Batches.from_split>` and always returns
         a manager. Split groups stay separate, even when their lengths match.
         Weights must follow training-row order; size overrides apply to each group.
         For different options per group, use
@@ -1836,10 +1896,11 @@ class BatchManager:
         likelihood_axes: dict[str, int] | None = None,
     ) -> BatchManager:
         """
-        Builds a :class:`BatchManager` from inferred or explicit groups.
+        Builds a :class:`~liesel.optim.BatchManager` from inferred or explicit groups.
 
         Flat keys are grouped by inferred length along their batching axes; nested
-        keys specify exact groups. One child :class:`Batches` is created per group using
+        keys specify exact groups. One child :class:`~liesel.optim.Batches` is created
+        per group using
         the same ``batch_size``. With the default ``epoch_size="max"``, shorter
         branches assemble additional shuffled passes for the joint steps.
 
@@ -1886,18 +1947,20 @@ class BatchManager:
             in the group, in current data order. Omitted groups use uniform sampling.
             Unknown keys and multiple entries for one group are rejected. Weighted
             groups must use replacement sampling; normally set
-            ``sample_with_replacement=True``. See :class:`Batches` for validation
+            ``sample_with_replacement=True``. See :class:`~liesel.optim.Batches` for
+            validation
             and likelihood correction.
 
         likelihood_axes
             Map observed variable names to axes of their pointwise log probabilities
             for weighted correction. Each child receives entries for its own group.
-            See :class:`Batches` for axis semantics.
+            See :class:`~liesel.optim.Batches` for axis semantics.
 
         Returns
         -------
         BatchManager
-            Batch manager with one child :class:`Batches` object per observation
+            Batch manager with one child :class:`~liesel.optim.Batches` object per
+            observation
             group, including separate groups of equal size.
 
         Examples
@@ -2039,7 +2102,7 @@ class BatchManager:
         Returns
         -------
         tuple[int, ...]
-            One axis size per child :class:`Batches` object.
+            One axis size per child :class:`~liesel.optim.Batches` object.
 
         Examples
         --------
@@ -2072,7 +2135,7 @@ class BatchManager:
         Returns
         -------
         tuple[int, ...]
-            One batch size per child :class:`Batches` object.
+            One batch size per child :class:`~liesel.optim.Batches` object.
 
         Examples
         --------
@@ -2134,7 +2197,7 @@ class BatchManager:
         ------
         ValueError
             If the contained batch objects have unequal values in
-            :attr:`batch_sample_scales`.
+            :attr:`~liesel.optim.BatchManager.batch_sample_scales`.
 
         Examples
         --------
@@ -2148,7 +2211,8 @@ class BatchManager:
         >>> manager.batch_sample_scale
         3.0
 
-        With unequal child scales, use :meth:`scaled_log_lik` instead:
+        With unequal child scales, use :meth:`~liesel.optim.BatchManager.scaled_log_lik`
+        instead:
 
         >>> unequal = BatchManager(
         ...     [
@@ -2183,8 +2247,9 @@ class BatchManager:
         Number of joint batch steps in one epoch.
 
         With ``epoch_size="strict"``, this is the common child
-        :attr:`Batches.n_full_batches`; otherwise it is determined by
-        :attr:`epoch_size`.
+        :attr:`Batches.n_full_batches <liesel.optim.Batches.n_full_batches>`; otherwise
+        it is determined by
+        :attr:`~liesel.optim.BatchManager.epoch_size`.
 
         Returns
         -------
@@ -2241,8 +2306,8 @@ class BatchManager:
         Returns
         -------
         bool
-            ``True`` if all contained :class:`Batches` objects have
-            :attr:`Batches.is_full_data`.
+            ``True`` if all contained :class:`~liesel.optim.Batches` objects have
+            :attr:`Batches.is_full_data <liesel.optim.Batches.is_full_data>`.
 
         Examples
         --------
@@ -2269,8 +2334,10 @@ class BatchManager:
         """
         Returns fresh epoch indices for every contained batch object.
 
-        This method mirrors :meth:`Batches.permute_indices` for each child. It does
-        not mutate the manager or the child ``indices``. Use :meth:`start_epoch` to
+        This method mirrors :meth:`Batches.permute_indices
+        <liesel.optim.Batches.permute_indices>` for each child. It does
+        not mutate the manager or the child ``indices``. Use
+        :meth:`~liesel.optim.BatchManager.start_epoch` to
         update the manager in place.
 
         Parameters
@@ -2281,7 +2348,7 @@ class BatchManager:
         Returns
         -------
         tuple[jax.Array, ...]
-            One index vector per contained :class:`Batches` object.
+            One index vector per contained :class:`~liesel.optim.Batches` object.
 
         Examples
         --------
@@ -2306,7 +2373,8 @@ class BatchManager:
         """
         Starts a new joint epoch.
 
-        The manager updates every child via :meth:`Batches.start_epoch` and
+        The manager updates every child via :meth:`Batches.start_epoch
+        <liesel.optim.Batches.start_epoch>` and
         updates every child with exactly the joint number of assembled rows.
 
         Parameters
@@ -2371,14 +2439,16 @@ class BatchManager:
         """
         Returns the joint batched position for one optimizer step.
 
-        Each child :class:`Batches` object slices the entries named in its own
+        Each child :class:`~liesel.optim.Batches` object slices the entries named in its
+        own
         ``position_keys``. The resulting partial positions are merged into a single
         :class:`Position`.
 
         Parameters
         ----------
         position
-            Mapping containing every key in :attr:`position_keys`.
+            Mapping containing every key in
+            :attr:`~liesel.optim.BatchManager.position_keys`.
         batch_index
             Joint batch row in ``0, ..., n_full_batches - 1``.
 
@@ -2438,7 +2508,8 @@ class BatchManager:
         interface
             Model or model interface used to extract the observed position entries.
         model_state
-            State from which :attr:`position_keys` are extracted.
+            State from which :attr:`~liesel.optim.BatchManager.position_keys` are
+            extracted.
         batch_number
             Joint batch row in ``0, ..., n_full_batches - 1``.
 
@@ -2482,14 +2553,17 @@ class BatchManager:
         """
         Returns a log likelihood with per-child batch scaling.
 
-        For a :class:`.Model`, each child group scales the observed likelihood terms
+        For a :class:`~liesel.model.Model`, each child group scales the observed
+        likelihood terms
         belonging to its ``position_keys`` by that child's
-        :attr:`Batches.batch_sample_scale`. Observed likelihood terms not covered
+        :attr:`Batches.batch_sample_scale <liesel.optim.Batches.batch_sample_scale>`.
+        Observed likelihood terms not covered
         by any child are left unscaled.
 
-        For a generic :class:`.ModelInterface`, per-branch decomposition is not
+        For a generic ``ModelInterface``, per-branch decomposition is not
         available. In that case, this method can only use the old scalar path and
-        therefore requires a common :attr:`batch_sample_scale`.
+        therefore requires a common
+        :attr:`~liesel.optim.BatchManager.batch_sample_scale`.
 
         Parameters
         ----------

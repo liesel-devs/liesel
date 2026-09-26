@@ -30,7 +30,7 @@ This puts 70% of rows in training, 20% in validation, and 10% in testing, subjec
 to rounding. Splits with validation or test data shuffle by default; set
 ``shuffle=False`` for an ordered split. Without holdouts, splits preserve the
 original row order and ignore the seed, even with ``shuffle=True``. This is also
-the behavior of ``LieselOptim``'s automatic full-training split.
+the behavior of :class:`LieselOptim <liesel.optim.LieselOptim>`'s automatic full-training split.
 
 Fits using the built-in model losses and optimizers retain one prepared set of
 data-derived node values per partition evaluated in full. Training values are
@@ -39,7 +39,7 @@ validation values are prepared only for validation monitoring. This uses extra
 memory to avoid recomputing those values at every full-data evaluation.
 
 The split's ``seed`` chooses which rows go into each part. The seed passed to
-``LieselOptim`` controls batch shuffling or random batch sampling during fitting.
+:class:`LieselOptim <liesel.optim.LieselOptim>` controls batch shuffling or random batch sampling during fitting.
 Custom losses and optimizers can also use its random key through ``carry.key``.
 Both seeds default to ``0``, making split and fitting randomness reproducible in
 the same environment. Choose other integer seeds for different runs. Explicit
@@ -80,8 +80,8 @@ as ``LieselOptim(..., split=split)``. This also works for scalar constants.
 Automatic setup raises an informative error for scalars or inferred groups
 without a likelihood instead of guessing how to split them.
 
-``PositionSplit`` holds the split data. ``Split`` holds reusable row indices;
-call ``split_position()`` to apply them. Manager classes handle several groups.
+:class:`PositionSplit <liesel.optim.PositionSplit>` holds the split data. :class:`Split <liesel.optim.Split>` holds reusable row indices;
+call :meth:`split_position() <liesel.optim.Split.split_position>` to apply them. Manager classes handle several groups.
 See :meth:`~liesel.optim.PositionSplit.from_model` for the factory options.
 
 For reduced likelihoods or custom objectives, see :doc:`optimizer-loss-scaling`.

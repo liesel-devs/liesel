@@ -70,7 +70,7 @@ What changes
 * To optimize only selected parameters (the old ``params=``), wrap the
   transformation in ``opt.Optimizer(params, transformation)`` as above. A bare
   Optax transformation optimizes all model parameters.
-* ``LieselOptim`` requires ``optimizers``. Pass a configured Optax transformation
+* :class:`LieselOptim <liesel.optim.LieselOptim>` requires ``optimizers``. Pass a configured Optax transformation
   for all parameters, ``"lbfgs"``, or explicit per-parameter optimizers.
 * Replace ``batch_seed`` with ``seed``. The new default, ``seed=0``, is
   deterministic; ``seed=None`` uses the current time. A separately constructed
@@ -83,11 +83,11 @@ What changes
 * Keep ``scale_loss=False`` to retain the old default objective scale. The new
   builder otherwise divides by the training sample size. Set stopping tolerances
   explicitly too; their defaults differ.
-* Use ``position_final`` to replace ``restore_best_position=False``. Use
-  ``position_min_monitor`` for the best monitoring loss across the run. The old
-  default selected within the final patience window. Use ``model.update_state``
+* Use :attr:`position_final <liesel.optim.OptimResult.position_final>` to replace ``restore_best_position=False``. Use
+  :attr:`position_min_monitor <liesel.optim.OptimResult.position_min_monitor>` for the best monitoring loss across the run. The old
+  default selected within the final patience window. Use :meth:`model.update_state <liesel.model.Model.update_state>`
   to get a fitted model state.
-* Use ``result.plot_loss_overview()`` or ``result.history.loss_df()`` instead of
+* Use :meth:`result.plot_loss_overview() <liesel.optim.OptimResult.plot_loss_overview>` or :meth:`result.history.loss_df() <liesel.optim.OptimHistory.loss_df>` instead of
   ``gs.history_to_df(result.history)``.
 
 Validation and minibatches
@@ -96,7 +96,7 @@ Validation and minibatches
 Models with custom aggregate likelihood, prior, or probability nodes require a
 custom :class:`~liesel.optim.Loss`. The built-in loss supports only the standard
 sum of observed likelihoods and parameter priors. A manual split alone does not
-replace ``optim_flat``'s handling of custom aggregate objectives or its optional
+replace :func:`optim_flat <liesel.goose.optim_flat>`'s handling of custom aggregate objectives or its optional
 decomposition-check override.
 
 Use :class:`liesel.optim.PositionSplit` instead of ``model_validation`` and set
@@ -136,7 +136,7 @@ the scalar total log likelihood and the array of individual log likelihoods:
 
 Explicitly supplying ``engine.split.train`` makes data-dependent quantities refer
 to complete training data, even after a minibatch fit. Slicing to
-``result.n_epochs`` excludes unused history entries when history pruning is
+:attr:`result.n_epochs <liesel.optim.OptimResult.n_epochs>` excludes unused history entries when history pruning is
 disabled. This reconstructs deterministic model quantities at each saved epoch
 position; it cannot reconstruct transient optimizer internals or past stochastic
 draws.

@@ -122,7 +122,7 @@ them; NUTS requires continuous parameters.
 Integrate the missing values out
 --------------------------------
 
-Pass ``LaplaceLoss`` to :class:`~liesel.optim.LieselOptim` to integrate
+Pass :class:`LaplaceLoss <liesel.optim.LaplaceLoss>` to :class:`~liesel.optim.LieselOptim` to integrate
 ``x_missing`` out and optimize the marginal posterior for ``alpha``, ``beta``,
 and ``h(sigma)``. Priors and the transformation Jacobian remain in the objective,
 so the maximum a posteriori (MAP) estimate is defined on this parameter scale.
@@ -165,11 +165,11 @@ Posterior means and a marginal mode summarize different aspects of the posterior
    Dense curvature limits this implementation to a few hundred missing values;
    see :doc:`optimizer-laplace`. For more, use MCMC. In this normal model, an
    analytically integrated likelihood can instead be written as ordinary per-row
-   terms and minibatched exactly. ``LaplaceLoss`` itself requires full-data fits.
+   terms and minibatched exactly. :class:`LaplaceLoss <liesel.optim.LaplaceLoss>` itself requires full-data fits.
 
 .. warning::
 
-   Without ``LaplaceLoss``, the default loss optimizes missing values jointly
+   Without :class:`LaplaceLoss <liesel.optim.LaplaceLoss>`, the default loss optimizes missing values jointly
    with the other parameters. Here that gives a joint-MAP slope of about 1.943
    and noise scale of 0.441. In this normal model, joint MAP systematically
    inflates nonzero slope magnitudes and biases jointly estimated noise or
@@ -193,7 +193,7 @@ Treating them as observed covariates can bias subsequent estimates involving
 the response and understates uncertainty.
 
 For imputations with uncertainty, construct a joint Gaussian approximation and
-draw the parameters and missing values together. ``Model.predict`` reconstructs
+draw the parameters and missing values together. :meth:`Model.predict <liesel.model.Model.predict>` reconstructs
 the completed covariate and transforms the scale for each draw:
 
 .. code-block:: python
@@ -304,7 +304,7 @@ variance :math:`\sigma^2 + \beta^2`.
 
 .. note::
 
-   ``LaplaceLoss`` requires ``loss_monitor="train_full_data"`` and does not
+   :class:`LaplaceLoss <liesel.optim.LaplaceLoss>` requires ``loss_monitor="train_full_data"`` and does not
    evaluate the validation loss. Score the held-out responses separately.
    The calculation below integrates over missing covariates, conditional on
    the fitted regression coefficients and noise scale.

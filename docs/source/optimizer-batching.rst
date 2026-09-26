@@ -14,7 +14,7 @@ Batch one or several groups
 
 For an existing ``model`` and a :doc:`split with validation data
 <optimizer-splitting>`, create batches from its training rows and pass both
-to ``LieselOptim``:
+to :class:`LieselOptim <liesel.optim.LieselOptim>`:
 
 .. code-block:: python
 
@@ -31,7 +31,7 @@ to ``LieselOptim``:
        seed=43,
    ).fit()
 
-For default batch settings, pass ``batch_size=32`` directly to ``LieselOptim``.
+For default batch settings, pass ``batch_size=32`` directly to :class:`LieselOptim <liesel.optim.LieselOptim>`.
 This calls ``Batches.from_split(split, batch_size=32)``. Omit both ``batch_size``
 and ``batches`` to use all training data in each update. For custom shuffling,
 axes, or epoch policy, create ``batches`` explicitly instead.
@@ -44,7 +44,7 @@ Only complete batches are used. With shuffling, the leftover rows can change
 between epochs. For multiple groups, a :class:`~liesel.optim.BatchManager`
 supplies one batch from each group at every update.
 
-The ``Batches.from_split`` default, ``epoch_size="max"``, follows the group with
+The :meth:`Batches.from_split <liesel.optim.Batches.from_split>` default, ``epoch_size="max"``, follows the group with
 the most batches. Smaller groups start another shuffled pass as needed. Other
 choices are ``"min"`` (stop with the shortest group), ``"strict"`` (require equal batch
 counts), or a positive number of steps. Direct managers default to ``"strict"``.
@@ -57,7 +57,7 @@ size. Such an epoch need not visit every row. For weighted sampling, pass
 :meth:`~liesel.optim.Batches.from_split` also accepts custom sample sizes and
 likelihood axes. :meth:`~liesel.optim.BatchManager.from_split` accepts the same
 options and always returns a manager. For different settings per group, create
-each child with ``Batches.from_split`` and combine them with ``BatchManager``.
+each child with :meth:`Batches.from_split <liesel.optim.Batches.from_split>` and combine them with :class:`BatchManager <liesel.optim.BatchManager>`.
 
 .. raw:: html
 
@@ -124,7 +124,7 @@ also selects its original lag:
    )
    ar_batches = opt.Batches.from_split(ar_split, batch_size=2)
 
-Pass ``ar_split`` and ``ar_batches`` to ``LieselOptim`` to fit this conditional
+Pass ``ar_split`` and ``ar_batches`` to :class:`LieselOptim <liesel.optim.LieselOptim>` to fit this conditional
 model. Choose temporal holdouts according to the intended prediction task;
 this example does not define a forecasting-validation procedure.
 

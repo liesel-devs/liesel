@@ -28,7 +28,7 @@ Both are documented with examples, so make sure to check them out.
 The model building workflow in Liesel consists of the following steps:
 
 1. Set up the nodes and variables that make up your model.
-2. Initialize a :class:`.Model` with your root variable(s).
+2. Initialize a :class:`Model <liesel.model.Model>` with your root variable(s).
 
 .. autosummary::
     :toctree: generated
@@ -43,14 +43,14 @@ The model building workflow in Liesel consists of the following steps:
 MCMC Setup
 ************
 
-To set up an MCMC engine, goose provides the :class:`~.goose.EngineBuilder`. Please refer to
+To set up an MCMC engine, goose provides the :class:`EngineBuilder <liesel.goose.EngineBuilder>`. Please refer to
 the linked EngineBuilder documentation to learn how to use it.
 
-A recent addition is the :class:`~.goose.MCMCSpec`, which can be passed to the
-``inference`` argument of a :class:`.model.Var` upon initialization to tell the variable
+A recent addition is the :class:`MCMCSpec <liesel.goose.MCMCSpec>`, which can be passed to the
+``inference`` argument of a :class:`model.Var <liesel.model.Var>` upon initialization to tell the variable
 directly how it should be sampled. You can then use the method
-:meth:`~.goose.LieselMCMC.get_engine_builder` of :class:`~.goose.LieselMCMC` to
-conveniently initialize your :class:`~.goose.EngineBuilder`.
+:meth:`get_engine_builder <liesel.goose.LieselMCMC.get_engine_builder>` of :class:`LieselMCMC <liesel.goose.LieselMCMC>` to
+conveniently initialize your :class:`EngineBuilder <liesel.goose.EngineBuilder>`.
 
 .. autosummary::
     :toctree: generated
@@ -69,11 +69,11 @@ MCMC Kernels
 
 Goose makes it easy for you to combine different MCMC kernels for different blocks of
 model parameters. You can also define your own kernel by implementing
-the :class:`.Kernel` protocol.
+the :class:`Kernel <liesel.goose.Kernel>` protocol.
 
 To draw samples from your posterior, you will want to call
-:meth:`~.goose.Engine.sample_all_epochs`. Once sampling is done, you can obtain the results
-with :meth:`~.goose.Engine.get_results`, which will return a :class:`~.goose.SamplingResults`
+:meth:`sample_all_epochs <liesel.goose.Engine.sample_all_epochs>`. Once sampling is done, you can obtain the results
+with :meth:`get_results <liesel.goose.Engine.get_results>`, which will return a :class:`SamplingResults <liesel.goose.SamplingResults>`
 instance.
 
 .. autosummary::
@@ -107,9 +107,9 @@ The central classes for handling your sampling results are:
     ~liesel.goose.loo
 
 You can obtain your posterior samples as a dictionary via
-:meth:`~.goose.SamplingResults.get_posterior_samples`. There is also experimental support
+:meth:`get_posterior_samples <liesel.goose.SamplingResults.get_posterior_samples>`. There is also experimental support
 for turning your samples into an ArviZ data object via
-:func:`.to_arviz_inference_data`.
+:func:`to_arviz_inference_data <liesel.experimental.arviz.to_arviz_inference_data>`.
 
 Goose also comes with a number of plotting functions that give you quick
 acccess to important diagnostics.
@@ -212,7 +212,7 @@ Model Interfaces
 
 A natural option for setting up your model is the use of ``liesel.model``.
 However, you are not locked
-in to using :class:`.Model`. Goose currently includes the following interfaces:
+in to using :class:`Model <liesel.model.Model>`. Goose currently includes the following interfaces:
 
 .. autosummary::
     :toctree: generated
