@@ -115,6 +115,15 @@ class EmaTrainLossMonitor:
     the large-span approximation
     :math:`e = 2h / \log(2)` for a requested half-life :math:`h`. The exact
     finite-step relationship also depends on the number of batches per epoch.
+
+    The EMA trails the current loss. Its weights have a mean age of
+    :math:`(W - 1) / 2` observations, so once the bias correction has faded, a
+    loss that changes at a steady rate is monitored with this delay. Each
+    observation is taken before the updates of its batch, so relative to the
+    position at the end of an epoch the delay is :math:`(W + 1) / 2` batches. For
+    :math:`eN \geq 1`, this is :math:`e / 2 + 1 / (2N)` epoch equivalents, roughly
+    half of ``effective_window`` when epochs have many batches. The half-life is
+    shorter than this delay because the weights decay exponentially.
     """
 
     effective_window: float

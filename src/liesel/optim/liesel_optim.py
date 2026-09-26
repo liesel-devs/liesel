@@ -144,7 +144,7 @@ class LieselOptim:
     >>> engine = LieselOptim(
     ...     model,
     ...     optimizers=optax.adam(0.01),
-    ...     loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
+    ...     loss_monitor=EmaTrainLossMonitor(effective_window=2.0),
     ...     seed=1,
     ... ).build_engine()
     >>> type(engine).__name__
