@@ -17,13 +17,11 @@ import os
 
 html_context = {}
 
-on_rtd = os.environ.get("READTHEDOCS") == "True"
-
 # Set canonical URL from the Read the Docs Domain
 html_baseurl = os.environ.get("READTHEDOCS_CANONICAL_URL", "")
 
 # Tell Jinja2 templates the build is running on Read the Docs
-if on_rtd:
+if os.environ.get("READTHEDOCS", "") == "True":
     html_context["READTHEDOCS"] = True
 
 # -- Project information -----------------------------------------------------
