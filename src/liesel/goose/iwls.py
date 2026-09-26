@@ -11,6 +11,7 @@ import jax.numpy as jnp
 import jax.numpy.linalg as jnpla
 from jax import grad, jacfwd
 from jax.flatten_util import ravel_pytree
+from jax.typing import ArrayLike
 
 from .da import (
     DualAvgState,
@@ -32,7 +33,7 @@ from .kernel import (
 )
 from .mh import mh_step
 from .pytree import register_dataclass_as_pytree
-from .types import Array, KeyArray, ModelState, Position, Scalar
+from .types import KeyArray, ModelState, Position, PositionInput, Scalar
 
 
 @register_dataclass_as_pytree
@@ -128,7 +129,7 @@ class IWLSKernel(
     """Tuple of position keys handled by this kernel."""
 
     if TYPE_CHECKING:
-        chol_info_fn: Callable[[ModelState], Array] | None
+        chol_info_fn: Callable[[ModelState], ArrayLike] | None
         """
         A custom function that takes a model state and returns the Cholesky
         decomposition of the information matrix to produce the IWLS proposal.
@@ -149,7 +150,7 @@ class IWLSKernel(
     def __init__(
         self,
         position_keys: Sequence[str],
-        chol_info_fn: Callable[[ModelState], Array] | None = None,
+        chol_info_fn: Callable[[ModelState], ArrayLike] | None = None,
         initial_step_size: float = 0.01,
         da_tune_step_size=True,
         da_target_accept: float = 0.8,
@@ -192,7 +193,7 @@ class IWLSKernel(
     def untuned(
         cls,
         position_keys: Sequence[str],
-        chol_info_fn: Callable[[ModelState], Array] | None = None,
+        chol_info_fn: Callable[[ModelState], ArrayLike] | None = None,
         fallback_chol_info: CholInfoFallbackOptions | None = "identity",
     ) -> Self:
         """
@@ -209,14 +210,14 @@ class IWLSKernel(
         return kernel
 
     def _flat_log_prob_fn(
-        self, model_state: ModelState, unravel_fn: Callable[[Array], Position]
-    ) -> Callable[[Array], Scalar]:
+        self, model_state: ModelState, unravel_fn: Callable[[jax.Array], Position]
+    ) -> Callable[[jax.Array], Scalar]:
         """
         Returns a callable which takes a flat position and returns the log-probability
         of the model.
         """
 
-        def flat_log_prob_fn(flat_position: Array) -> Scalar:
+        def flat_log_prob_fn(flat_position: jax.Array) -> Scalar:
             position = unravel_fn(flat_position)
             new_model_state = self.model.update_state(position, model_state)
             return self.model.log_prob(new_model_state)
@@ -224,8 +225,8 @@ class IWLSKernel(
         return flat_log_prob_fn
 
     def _score(
-        self, model_state: ModelState, flat_score_fn: Callable[[Array], Array]
-    ) -> Array:
+        self, model_state: ModelState, flat_score_fn: Callable[[jax.Array], jax.Array]
+    ) -> jax.Array:
         """
         Calls :func:`.flat_score_fn` on a flat position.
 
@@ -236,8 +237,8 @@ class IWLSKernel(
         return flat_score_fn(flat_position)
 
     def _chol_info(
-        self, model_state: ModelState, flat_hessian_fn: Callable[[Array], Array]
-    ) -> tuple[Array, int]:
+        self, model_state: ModelState, flat_hessian_fn: Callable[[jax.Array], jax.Array]
+    ) -> tuple[jax.Array, jax.Array]:
         """
         Computes the Cholesky decomposition of the Fisher information matrix via
         :attr:`.flat_hessian_fn`.
@@ -259,11 +260,11 @@ class IWLSKernel(
             chol = jnpla.cholesky(info_matrix)
             return self._safe_chol(chol, info_matrix)
 
-        chol = self.chol_info_fn(model_state)
+        chol = jnp.asarray(self.chol_info_fn(model_state))
         chol, error_code = self._safe_chol(chol, info_matrix=None)
         return chol, error_code
 
-    def _safe_chol(self, chol, info_matrix) -> tuple[Array, int]:
+    def _safe_chol(self, chol, info_matrix) -> tuple[jax.Array, jax.Array]:
         """
         Makes sure that the cholesky decomposition does not contain any nan values, if
         the argument ``fallback_chol_info`` was not set to "none".
@@ -397,7 +398,7 @@ class IWLSKernel(
         kernel_state: IWLSKernelState,
         model_state: ModelState,
         epoch: EpochState,
-        history: Position | None = None,
+        history: PositionInput | None = None,
     ) -> TuningOutcome[IWLSKernelState, IWLSTuningInfo]:
         """
         Currently does nothing.

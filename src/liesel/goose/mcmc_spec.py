@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import (
@@ -14,12 +14,13 @@ from typing import (
     assert_never,
 )
 
+import jax.numpy as jnp
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 from .builder import EngineBuilder
 from .engine import SamplingResults
 from .interface import LieselInterface
-from .types import Array, JitterFunctions, Kernel, KeyArray
+from .types import JitterFunctions, Kernel, KeyArray, PyTree
 
 if TYPE_CHECKING:
     from liesel.model import Model, Var
@@ -421,7 +422,7 @@ class LieselMCMC:
 @dataclass
 class _KernelGroup:
     kernel: Callable[..., Kernel]
-    kwargs: dict[str, Any] = field(default_factory=dict)
+    kwargs: Mapping[str, Any] = field(default_factory=dict)
     position_keys: list[str] = field(default_factory=list)
     order: int = 99
 
@@ -450,7 +451,9 @@ class MCMCSpec:
         provided with position
         keys and keyword arguments.
     kernel_kwargs
-        Additional keyword arguments to be passed to the kernel callable.
+        Additional keyword arguments to be passed to the kernel callable. This mapping
+        is retained without copying: specifications in the same kernel group that
+        provide nonempty arguments must share the same mapping object.
     kernel_group
         Name of the kernel group this variable belongs to. Variables in the same group \
         must share the same kernel type and arguments.
@@ -516,7 +519,7 @@ class MCMCSpec:
     A KernelFactory that returns a :class:`~liesel.goose.Kernel` instance when provided
     with position keys and keyword arguments.
     """
-    kernel_kwargs: dict[str, Any] = field(default_factory=dict)
+    kernel_kwargs: Mapping[str, Any] = field(default_factory=dict)
     """Additional keyword arguments to be passed to the kernel callable."""
     kernel_group: str | None = None
     """Name of the kernel group this variable belongs to."""
@@ -535,7 +538,7 @@ class MCMCSpec:
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.kernel}, {self.kernel_group=})"
 
-    def apply_jitter(self, seed: KeyArray, value: Array) -> Array:
+    def apply_jitter(self, seed: KeyArray, value: PyTree) -> PyTree:
         """
         Apply random jitter to a given value using the specified jitter distribution.
 
@@ -556,6 +559,8 @@ class MCMCSpec:
         """
         if self.jitter_dist is None:
             return value
+
+        value = jnp.asarray(value)
 
         # check compatibility of shapes
         if (

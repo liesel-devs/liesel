@@ -7,7 +7,9 @@ from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING, ClassVar
 
+import jax
 import jax.numpy as jnp
+import numpy as np
 from blackjax import nuts as nuts_kernel
 from blackjax.adaptation.step_size import find_reasonable_step_size
 from blackjax.mcmc import hmc, nuts
@@ -34,7 +36,7 @@ from .kernel import (
 )
 from .mm import tune_inv_mm_diag, tune_inv_mm_full
 from .pytree import register_dataclass_as_pytree
-from .types import Array, KeyArray, ModelState, Position, Scalar
+from .types import KeyArray, ModelState, Position, PositionInput, Scalar
 
 
 @register_dataclass_as_pytree
@@ -46,7 +48,7 @@ class NUTSKernelState:
     """
 
     step_size: Scalar
-    inverse_mass_matrix: Array
+    inverse_mass_matrix: jax.Array | np.ndarray
     da_state: DualAvgState | None = None
 
     def __post_init__(self):
@@ -77,7 +79,7 @@ class NUTSTransitionInfo(DefaultTransitionInfo):
     """The number of computed leapfrog steps."""
 
 
-def _error_code(*args: bool) -> ArrayLike:
+def _error_code(*args: bool) -> jax.Array:
     return jnp.array(args) @ (2 ** jnp.arange(len(args)))
 
 
@@ -173,7 +175,7 @@ class NUTSKernel(
         """The adaptation iteration offset."""
         da_target_accept: float
         """Target acceptance probability for dual averaging algorithm."""
-        initial_inverse_mass_matrix: Array | None
+        initial_inverse_mass_matrix: ArrayLike | None
         """
         Starting value for the inverse mass matrix (the precision matrix of the
         momentum).
@@ -192,7 +194,7 @@ class NUTSKernel(
         self,
         position_keys: Sequence[str],
         initial_step_size: float | None = None,
-        initial_inverse_mass_matrix: Array | None = None,
+        initial_inverse_mass_matrix: ArrayLike | None = None,
         max_treedepth: int = 10,
         da_target_accept: float = 0.8,
         da_gamma: float = 0.05,
@@ -237,7 +239,7 @@ class NUTSKernel(
             else:
                 inverse_mass_matrix = jnp.eye(flat_position.size)
         else:
-            inverse_mass_matrix = self.initial_inverse_mass_matrix
+            inverse_mass_matrix = jnp.asarray(self.initial_inverse_mass_matrix)
 
         if self.initial_step_size is None:
             blackjax_kernel = self._blackjax_kernel
@@ -320,7 +322,7 @@ class NUTSKernel(
         kernel_state: NUTSKernelState,
         model_state: ModelState,
         epoch: EpochState,
-        history: Position | None = None,
+        history: PositionInput | None = None,
     ) -> TuningOutcome[NUTSKernelState, NUTSTuningInfo]:
         """
         Currently does nothing.
@@ -335,7 +337,7 @@ class NUTSKernel(
         kernel_state: NUTSKernelState,
         model_state: ModelState,
         epoch: EpochState,
-        history: Position | None = None,
+        history: PositionInput | None = None,
     ) -> TuningOutcome[NUTSKernelState, NUTSTuningInfo]:
         """
         Tunes the inverse mass vector or matrix using the samples from the last epoch.
