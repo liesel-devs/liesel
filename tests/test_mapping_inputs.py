@@ -91,11 +91,17 @@ def test_prediction_and_sampling_mappings(mapping_type):
     # The narrower value type also checks Mapping covariance with ty.
     dists: dict[str, CustomDist] = {"y": CustomDist(tfd.Deterministic, loc=7.0)}
     for sampler in (model.sample, y.sample):
-        drawn = sampler((2,), jax.random.key(0), samples, newdata=newdata, dists=dists)
+        drawn = sampler(
+            (2,),
+            seed=jax.random.key(0),
+            posterior_samples=samples,
+            newdata=newdata,
+            dists=dists,
+        )
         mapped = sampler(
             (2,),
-            jax.random.key(0),
-            samples,
+            seed=jax.random.key(0),
+            posterior_samples=samples,
             newdata=newdata,
             dists=ReadOnlyMapping(dists),
         )

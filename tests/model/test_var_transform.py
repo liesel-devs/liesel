@@ -1,3 +1,4 @@
+import copy
 import pickle
 
 import dill
@@ -6,6 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 import tensorflow_probability.substrates.jax as tfp
+import tensorflow_probability.substrates.numpy.bijectors as nb
 import tensorflow_probability.substrates.numpy.distributions as nd
 
 import liesel.model as lsl
@@ -216,6 +218,39 @@ class TestVarTransform:
         assert gradient == pytest.approx(-1.5)
         loaded.vars["log_variance"].value = jnp.log(0.5)
         assert loaded.vars["variance"].value == pytest.approx(0.5)
+
+    @pytest.mark.parametrize("method", ("transform", "biject"))
+    def test_user_supplied_invert_roundtrip(self, method, tmp_path) -> None:
+        prior = lsl.Dist(tfp.distributions.InverseGamma, concentration=2.0, scale=1.0)
+        variance = lsl.Var.new_param(2.0, prior, name="variance")
+        model = lsl.Model([variance])
+        bijector = tfp.bijectors.Invert(tfp.bijectors.Log())
+        getattr(variance, method)(bijector, name="log_variance")
+
+        # Invert(Log) is Exp, so the expected log density matches the Exp case.
+        expected = -2.0 * np.log(2.0) - 0.5
+        state = model.update_state({"log_variance": jnp.log(2.0)})
+        assert state["_model_log_prob"].value == pytest.approx(expected)
+
+        filename = str(tmp_path / "model.pkl")
+        lsl.save_model(model, filename)
+        loaded = lsl.load_model(filename)
+        state = loaded.update_state({"log_variance": jnp.log(2.0)})
+        assert state["_model_log_prob"].value == pytest.approx(expected)
+        loaded.vars["log_variance"].value = jnp.log(0.5)
+        assert loaded.vars["variance"].value == pytest.approx(0.5)
+
+    @pytest.mark.parametrize("bijectors", (tfp.bijectors, nb))
+    def test_invert_can_be_copied_and_pickled(self, bijectors) -> None:
+        bijector = bijectors.Invert(bijectors.Log())
+        copies = (
+            copy.deepcopy(bijector),
+            pickle.loads(pickle.dumps(bijector)),
+            dill.loads(dill.dumps(bijector)),
+        )
+        for copied in copies:
+            assert isinstance(copied, bijectors.Invert)
+            assert copied.forward(1.0) == pytest.approx(np.e)
 
     @pytest.mark.parametrize("name", ("newname", None))
     def test_transform_class_with_args(self, name) -> None:
