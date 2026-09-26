@@ -33,7 +33,7 @@ from .kernel import (
 )
 from .mm import tune_inv_mm_diag, tune_inv_mm_full
 from .pytree import register_dataclass_as_pytree
-from .types import Array, KeyArray, ModelState, Position, Scalar
+from .types import Array, KeyArray, ModelState, Position, PositionInput, Scalar
 
 
 @register_dataclass_as_pytree
@@ -295,7 +295,7 @@ class HMCKernel(
         kernel_state: HMCKernelState,
         model_state: ModelState,
         epoch: EpochState,
-        history: Position | None = None,
+        history: PositionInput | None = None,
     ) -> TuningOutcome[HMCKernelState, HMCTuningInfo]:
         """
         Currently does nothing.
@@ -310,7 +310,7 @@ class HMCKernel(
         kernel_state: HMCKernelState,
         model_state: ModelState,
         epoch: EpochState,
-        history: Position | None = None,
+        history: PositionInput | None = None,
     ) -> TuningOutcome[HMCKernelState, HMCTuningInfo]:
         """
         Tunes the inverse mass vector or matrix using the samples from the last epoch.

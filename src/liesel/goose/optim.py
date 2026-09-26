@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from ..model import Model
 from .interface import LieselInterface
-from .types import Array, KeyArray, ModelState, Position
+from .types import Array, KeyArray, ModelState, Position, PositionInput
 
 
 def array_to_dict(
@@ -72,9 +72,9 @@ def _find_observed(model: Model) -> dict[str, Array]:
     return obs
 
 
-def batched_nodes(nodes: dict[str, Array], batch_indices: Array) -> dict[str, Array]:
+def batched_nodes(nodes: Mapping[str, Array], batch_indices: Array) -> dict[str, Array]:
     """Returns a subset of the model state using the given batch indices."""
-    return jax.tree_util.tree_map(lambda x: x[batch_indices, ...], nodes)
+    return jax.tree_util.tree_map(lambda x: x[batch_indices, ...], dict(nodes))
 
 
 def _generate_batch_indices(
@@ -252,7 +252,7 @@ class Stopper:
 
 
 def _validate_log_prob_decomposition(
-    interface: LieselInterface, position: Position, state: ModelState
+    interface: LieselInterface, position: PositionInput, state: ModelState
 ) -> bool:
     updated_state = interface.update_state(position, state)
     log_prob = updated_state["_model_log_prob"].value

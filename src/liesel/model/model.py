@@ -21,14 +21,15 @@ import jax.random
 import networkx as nx
 import pandas as pd
 
-from ..goose.types import ModelState
-from ..types import Position
+from ..types import Position, PositionInput
 from ._mapping import _KeyCompletableMapping, _KeyCompletableProperty
 from .nodes import (
     Array,
     Calc,
     Dist,
     Group,
+    LieselModelState,
+    LieselModelStateInput,
     Node,
     NodeState,
     TransientNode,
@@ -130,7 +131,7 @@ def _compile_prediction(
     predict_names = tuple(predict_names)
 
     def predict_one(
-        samples: dict[str, Array], model_state: dict[str, NodeState]
+        samples: dict[str, Array], model_state: LieselModelState
     ) -> dict[str, Array]:
         updated_state = model.update_state(samples, model_state, inplace=False)
         return model.extract_position(predict_names, updated_state)
@@ -140,7 +141,7 @@ def _compile_prediction(
     else:
 
         def predict_batched(
-            samples: dict[str, Array], model_state: dict[str, NodeState]
+            samples: dict[str, Array], model_state: LieselModelState
         ) -> dict[str, Array]:
             def predict_from_samples(samples):
                 return predict_one(samples, model_state)
@@ -170,7 +171,7 @@ def _validate_chunk_size(chunk_size: int | None) -> int | None:
 
 def _compile_sampling(
     model: Model,
-    sampling_specs: dict[str, _SamplingSpec],
+    sampling_specs: Mapping[str, _SamplingSpec],
     posterior_size: int,
     chunk_size: int | None = None,
 ) -> jax.stages.Wrapped:
@@ -185,7 +186,7 @@ def _compile_sampling(
         draw_index: Array,
         seeds: Array,
         posterior_samples: dict[str, Array],
-        model_state: dict[str, NodeState],
+        model_state: LieselModelState,
     ) -> dict[str, Array]:
         posterior_index = draw_index % posterior_size
         position = jax.tree.map(
@@ -213,7 +214,7 @@ def _compile_sampling(
         draw_indices: Array,
         seeds: Array,
         posterior_samples: dict[str, Array],
-        model_state: dict[str, NodeState],
+        model_state: LieselModelState,
     ) -> dict[str, Array]:
         def draw(draw_index):
             return one_draw(
@@ -2407,10 +2408,10 @@ class Model:
         sample_shape: int | Sequence[int] = (),
         *,
         seed: jax.Array,
-        posterior_samples: Position | None = None,
+        posterior_samples: PositionInput | None = None,
         fixed: Sequence[str] = (),
-        newdata: Position | None = None,
-        dists: dict[str, Dist] | None = None,
+        newdata: PositionInput | None = None,
+        dists: Mapping[str, Dist] | None = None,
         chunk_size: int | None = 64,
     ) -> Position:
         """
@@ -2696,12 +2697,12 @@ class Model:
         return Position(jax.tree.map(reshape, drawn_samples))
 
     @property
-    def state(self) -> dict[str, NodeState]:
+    def state(self) -> LieselModelState:
         """The state of the model as a dict of node names and states."""
         return {name: node.state for name, node in self._nodes.items()}
 
     @state.setter
-    def state(self, state: dict[str, NodeState]):
+    def state(self, state: LieselModelStateInput):
         for name, node_state in state.items():
             self._nodes[name].state = node_state
 
@@ -2935,7 +2936,7 @@ class Model:
     def extract_position(
         self,
         position_keys: Sequence[str],
-        model_state: dict[str, NodeState] | None = None,
+        model_state: LieselModelStateInput | None = None,
     ) -> Position:
         """
         Extracts a position from a model state.
@@ -2968,7 +2969,7 @@ class Model:
 
     def convert_position(
         self,
-        position: Mapping[str, Any],
+        position: PositionInput,
         *,
         allow_unknown: bool = False,
     ) -> Position:
@@ -3002,7 +3003,7 @@ class Model:
 
         return Position(converted)
 
-    def _validate_weak_var_position(self, position: dict[str, Array]) -> None:
+    def _validate_weak_var_position(self, position: PositionInput) -> None:
         """
         Validates that weak variable updates in a position are unambiguous.
 
@@ -3048,19 +3049,19 @@ class Model:
 
     def update_state(
         self,
-        position: dict[str, Array],
-        model_state: dict[str, NodeState] | None = None,
+        position: PositionInput,
+        model_state: LieselModelStateInput | None = None,
         inplace: bool = False,
         *,
         allow_weak_vars: bool = False,
-    ) -> ModelState:
+    ) -> LieselModelState:
         """
         Updates and returns a model state given a position.
 
         Parameters
         ----------
         position
-            A dictionary of variable or node names and values.
+            A mapping of variable or node names and values. The mapping is not modified.
         model_state
             A dictionary of node names and their corresponding ``NodeState``. \
             If ``None`` (default), the model's current state is used.
@@ -3083,6 +3084,10 @@ class Model:
         nodes. Updates can only be triggered through new variable or node values in the
         ``position``. If you supply a ``model_state`` with outdated nodes, these nodes
         and their outputs will not be updated.
+
+        When applying ``jax.jit`` or ``jax.vmap`` to this method, arguments must be
+        JAX-compatible pytrees. Convert unregistered mappings to dictionaries before
+        passing them to the transformed function.
         """
         model = self._copy_computational_model() if not inplace else self
 
@@ -3135,9 +3140,9 @@ class Model:
 
     def predict(
         self,
-        samples: Position,
+        samples: PositionInput,
         predict: Sequence[str] | None = None,
-        newdata: Position | None = None,
+        newdata: PositionInput | None = None,
         chunk_size: int | None = 64,
     ) -> dict[str, Array]:
         """
@@ -3480,8 +3485,8 @@ class TemporaryModel:
 
 def log_prob_pointwise(
     vars_: Mapping[str, Var],
-    samples: Position,
-    newdata: Position | None = None,
+    samples: PositionInput,
+    newdata: PositionInput | None = None,
 ) -> dict[str, jax.Array]:
     """
     Returns a dictionary of pointwise log probabilities for the supplied variables.

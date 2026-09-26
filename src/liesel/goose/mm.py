@@ -7,16 +7,16 @@ This module uses the error codes 70-79.
 import jax
 import jax.numpy as jnp
 
-from .types import Array, Position
+from .types import Array, PositionInput
 
 _vravel = jax.vmap(jnp.ravel, in_axes=0, out_axes=0)
 
 
-def _history_to_matrix(history: Position) -> Array:
+def _history_to_matrix(history: PositionInput) -> Array:
     return jnp.column_stack([_vravel(x) for x in history.values()])
 
 
-def tune_inv_mm_diag(history: Position) -> Array:
+def tune_inv_mm_diag(history: PositionInput) -> Array:
     """
     Tunes an inverse mass vector with the sample variances of the history.
 
@@ -35,7 +35,7 @@ def tune_inv_mm_diag(history: Position) -> Array:
     return var
 
 
-def tune_inv_mm_full(history: Position) -> Array:
+def tune_inv_mm_full(history: PositionInput) -> Array:
     """
     Tunes an inverse mass matrix with the sample variance-covariance matrix of
     the history.

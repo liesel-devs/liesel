@@ -2,7 +2,7 @@
 Liesel modeling framework.
 """
 
-from ..types import Position
+from ..types import Position, PositionInput
 from .distreg import DistRegBuilder, dist_reg_mcmc, tau2_gibbs_kernel
 from .legacy import (
     PIT,
@@ -29,6 +29,8 @@ from .nodes import (
     Distribution,  # TODO: Bijector?
     Group,
     InputGroup,
+    LieselModelState,
+    LieselModelStateInput,
     Node,
     NodeState,
     TransientCalc,
@@ -59,12 +61,15 @@ __all__ = [
     "Hyperparameter",
     "InputGroup",
     "InverseLink",
+    "LieselModelState",
+    "LieselModelStateInput",
     "LogProb",
     "Model",
     "Node",
     "NodeState",
     "Parameter",
     "Position",
+    "PositionInput",
     "Predictor",
     "RegressionCoef",
     "Response",

@@ -4,7 +4,7 @@ from typing import Any, Literal
 import jax
 import jax.flatten_util
 
-from .types import ModelInterface, ModelState, Position
+from .types import ModelInterface, ModelState, PositionInput
 
 Array = Any
 
@@ -15,6 +15,10 @@ class InterfaceLogProb:
     interface.
 
     Also provides access to the first and second derivatives.
+
+    Derivative methods convert position mappings to dictionaries before differentiation.
+    When applying JAX transformations externally, pass a dictionary or another
+    registered pytree to the transformed function.
 
     Parameters
     ----------
@@ -50,27 +54,27 @@ class InterfaceLogProb:
             raise ValueError(f"Unrecognized argument value {diff_mode=}")
         self.diff_mode = diff_mode
 
-    def __call__(self, position: Position) -> Array:
+    def __call__(self, position: PositionInput) -> Array:
         return self.log_prob(position=position)
 
-    def log_prob(self, position: Position) -> Array:
+    def log_prob(self, position: PositionInput) -> Array:
         """
         Log probability function evaluated at provided ``position``.
         """
         updated_state = self.model.update_state(position, self.model_state)
         return self.model.log_prob(updated_state)
 
-    def grad(self, position: Position) -> dict[str, Array]:
+    def grad(self, position: PositionInput) -> dict[str, Array]:
         """
         Gradient of the log probability function with respect to the ``position``.
         """
-        return self._grad_fn(position)
+        return self._grad_fn(dict(position))
 
-    def hessian(self, position: Position) -> dict[str, Array]:
+    def hessian(self, position: PositionInput) -> dict[str, Array]:
         """
         Hessian of the log probability function with respect to the ``position``.
         """
-        return self._hessian_fn(position)
+        return self._hessian_fn(dict(position))
 
 
 class FlatInterfaceLogProb:

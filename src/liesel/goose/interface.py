@@ -7,10 +7,11 @@ from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING
 
 from ..docs import usedocs
-from .types import ModelInterface, ModelState, Position, Scalar
+from .types import ModelInterface, ModelState, Position, PositionInput, Scalar
 
 if TYPE_CHECKING:
     from ..model.model import Model
+    from ..model.nodes import LieselModelState, LieselModelStateInput
 
 LogProbFunction = Callable[[ModelState], Scalar]
 
@@ -87,7 +88,9 @@ class DictInterface:
         """
         return Position({key: model_state[key] for key in position_keys})
 
-    def update_state(self, position: Position, model_state: ModelState) -> ModelState:
+    def update_state(
+        self, position: PositionInput, model_state: ModelState
+    ) -> ModelState:
         """
         Updates and returns a model state given a position.
 
@@ -98,7 +101,7 @@ class DictInterface:
         model_state
             An dictionary of variable or node names and values.
         """
-        return model_state | position
+        return {**model_state, **position}
 
     def log_prob(self, model_state: ModelState) -> Scalar:
         """
@@ -204,7 +207,9 @@ class DataclassInterface:
         """
         return self._log_prob_fn(model_state)
 
-    def update_state(self, position: Position, model_state: ModelState) -> ModelState:
+    def update_state(
+        self, position: PositionInput, model_state: ModelState
+    ) -> ModelState:
         """
         Updates and returns a model state given a position.
 
@@ -269,7 +274,7 @@ class LieselInterface:
         self._model = model._copy_computational_model()
 
     def extract_position(
-        self, position_keys: Sequence[str], model_state: ModelState
+        self, position_keys: Sequence[str], model_state: "LieselModelStateInput"
     ) -> Position:
         """
         Extracts a position from a model state.
@@ -283,7 +288,9 @@ class LieselInterface:
         """
         return self._model.extract_position(position_keys, model_state)
 
-    def update_state(self, position: Position, model_state: ModelState) -> ModelState:
+    def update_state(
+        self, position: PositionInput, model_state: "LieselModelStateInput"
+    ) -> "LieselModelState":
         """
         Updates and returns a model state given a position.
 
@@ -303,7 +310,7 @@ class LieselInterface:
         """
         return self._model.update_state(position, model_state)
 
-    def log_prob(self, model_state: ModelState) -> Scalar:
+    def log_prob(self, model_state: "LieselModelStateInput") -> Scalar:
         """
         Returns the log-probability from a model state.
 
@@ -394,7 +401,9 @@ class NamedTupleInterface:
         """
         return {key: getattr(model_state, key) for key in position_keys}
 
-    def update_state(self, position, model_state: ModelState) -> ModelState:
+    def update_state(
+        self, position: PositionInput, model_state: ModelState
+    ) -> ModelState:
         """
         Updates and returns a model state given a position.
 
