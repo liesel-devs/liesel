@@ -1,7 +1,7 @@
 """Runtime and static contracts for numerical values and arbitrary pytrees."""
 
 from types import MappingProxyType
-from typing import Any, NamedTuple, assert_type
+from typing import TYPE_CHECKING, Any, NamedTuple, assert_type
 
 import jax
 import jax.numpy as jnp
@@ -87,6 +87,8 @@ def test_flat_derivatives_have_array_outputs(interface: bool) -> None:
     np.testing.assert_allclose(gradient, -position)
     np.testing.assert_allclose(hessian, -np.eye(2))
     np.testing.assert_allclose(jax.jit(log_prob.grad)(position), gradient)
+    if TYPE_CHECKING:
+        log_prob.log_prob(object())  # ty: ignore[invalid-argument-type]
 
 
 def test_scalar_and_numpy_log_prob_outputs_are_preserved() -> None:
@@ -120,6 +122,8 @@ def test_distribution_inputs_and_preserved_metadata() -> None:
     assert_type(dist.loc, jax.Array)
     assert_type(dist.prec, jax.Array)
     assert isinstance(dist.loc, jax.Array)
+    if TYPE_CHECKING:
+        MultivariateNormalDegenerate(object(), np.eye(2))  # ty: ignore[invalid-argument-type]
     assert dist.rank is rank
     assert dist.log_pdet is log_pdet
     assert dist.dtype == np.dtype("float32")
@@ -145,6 +149,8 @@ def test_array_to_dict_preserves_array_backend(constructor) -> None:
 def test_array_to_dict_specific_types_and_scalars() -> None:
     assert_type(array_to_dict(jnp.ones(2)), dict[str, jax.Array])
     assert_type(array_to_dict(1.0), dict[str, float])
+    if TYPE_CHECKING:
+        array_to_dict(object())  # ty: ignore[invalid-argument-type]
     assert array_to_dict(1) == {"x": 1}
     assert array_to_dict(np.float32(2.0))["x"] == 2.0
     with pytest.raises(ValueError, match="ndim <= 2"):
@@ -156,6 +162,8 @@ def test_numerical_helpers_accept_scalar_inputs() -> None:
         np.ones(1, dtype=np.float32), 0.0, np.eye(1, dtype=np.float32)
     )
     assert_type(density, jax.Array)
+    if TYPE_CHECKING:
+        mvn_log_prob(object(), 0.0, np.eye(1))  # ty: ignore[invalid-argument-type]
     np.testing.assert_allclose(density, -0.5 * (np.log(2 * np.pi) + 1))
     spec = gs.MCMCSpec(gs.HMCKernel, jitter_dist=tfd.Normal(0.0, 1.0))
     jittered = spec.apply_jitter(jax.random.key(0), 1.0)
@@ -180,4 +188,6 @@ def test_spline_inputs_keep_sequence_support() -> None:
     basis = basis_matrix([-0.5, 0.5], knots)
     assert_type(knots, jax.Array)
     assert_type(basis, jax.Array)
+    if TYPE_CHECKING:
+        basis_matrix(object(), knots)  # ty: ignore[invalid-argument-type]
     assert basis.shape == (2, 5)
