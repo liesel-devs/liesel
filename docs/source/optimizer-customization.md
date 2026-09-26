@@ -15,8 +15,8 @@ configured Optax transformation, such as `optimizers=optax.adam(0.01)`, to use
 it for all parameters, or `optimizers="lbfgs"` for a full-data, deterministic
 fit. L-BFGS cannot use minibatches.
 
-This page uses a small Gaussian regression. Expand the setup to run the
-examples from top to bottom.
+The examples assume a Gaussian regression `model` with observed `X` and `y`,
+as in the {doc}`first tutorial <tutorials/notebooks/09-liesel-optim-basic>`.
 
 ```{code-cell} ipython3
 import logging
@@ -31,20 +31,33 @@ import liesel.optim as opt
 ```
 
 ```{code-cell} ipython3
-:tags: [hide-input]
+:tags: [remove-cell]
 
 logging.getLogger("liesel").setLevel(logging.WARNING)
 
 rng = np.random.default_rng(42)
 x = np.linspace(-1.0, 1.0, 128)
+
 X = lsl.Var.new_obs(jnp.asarray(x), name="X")
-beta = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, 0.0, 5.0), name="beta")
+beta = lsl.Var.new_param(
+    0.0,
+    dist=lsl.Dist(tfd.Normal, 0.0, 5.0),
+    name="beta",
+)
+
 log_sigma = lsl.Var.new_param(0.0, name="log_sigma")
 sigma = lsl.Var.new_calc(jnp.exp, log_sigma, name="sigma")
-mu = lsl.Var.new_calc(lambda X, beta: X * beta, X, beta, name="mu")
+
+mu = lsl.Var.new_calc(
+    lambda X, beta: X * beta,
+    X,
+    beta,
+    name="mu",
+)
+
 y = lsl.Var.new_obs(
     jnp.asarray(0.5 * x + rng.normal(scale=0.7, size=x.size)),
-    lsl.Dist(tfd.Normal, mu, sigma),
+    dist=lsl.Dist(tfd.Normal, mu, sigma),
     name="y",
 )
 model = lsl.Model(y)
@@ -56,8 +69,11 @@ Pass a configured Optax optimizer directly:
 
 ```{code-cell} ipython3
 schedule = optax.exponential_decay(
-    init_value=0.01, transition_steps=100, decay_rate=0.9
+    init_value=0.01,
+    transition_steps=100,
+    decay_rate=0.9,
 )
+
 result = opt.LieselOptim(
     model,
     optimizers=optax.adam(schedule),
@@ -120,6 +136,7 @@ first = opt.LieselOptim(
     show_progress=False,
 ).fit()
 model.state = model.update_state(first.position_final, model.state)
+
 result = opt.LieselOptim(
     model,
     optimizers="lbfgs",

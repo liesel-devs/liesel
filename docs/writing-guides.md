@@ -52,33 +52,29 @@ summaries that restate the section.
 
 ## Make examples easy to use
 
-Use executable MyST Markdown for guides with code and results. Put runnable
+Use executable MyST Markdown for guides with code examples. Put runnable
 Python in `{code-cell}` blocks without interactive prompts (`>>>` or `...`).
 
 - State prerequisites, such as an existing `model`, before a snippet. Make
-  complete tutorials runnable from top to bottom.
+  complete tutorials runnable from top to bottom. Tag build-only setup cells
+  with `:tags: [remove-cell]`: they execute but show no code, output, or expandable
+  box. Keep prerequisites and links to relevant tutorials visible in the prose.
   Imports stay visible in a code cell at the top of each guide. Hide only
   non-import build setup, such as logging configuration and fixture models or data.
 - Use existing public helpers instead of manual setup or calculations that they
   already handle. Include a lower-level recipe or alternative only when it serves
   a distinct task or helps the reader make a meaningful choice.
-- Keep code consistent with the repository formatter. Group imports, leave blank
-  lines between meaningful stages and substantial independent definitions, and
-  keep short, closely related statements together. Format for visual readability,
-  not just line length. Apply this judgment to all functions and constructors.
-  Wrap dense calls so functions or lambdas, inputs, nested expressions, and named
-  options are easy to distinguish. Use trailing commas to preserve the layout
-  under Ruff; keep simple calls compact. Brief comments can label conceptual
-  groups when the surrounding prose does not make them clear.
-  Keep related setup and modifications together in one cell. Give each inspection
+- Format for visual readability, not just line length. Group code into meaningful
+  stages, with blank lines between stages and substantial independent definitions.
+  Keep short, closely related statements together. Use brief comments to label
+  conceptual groups when the surrounding prose does not make them clear.
+- Apply this judgment to all functions and constructors: wrap dense calls so
+  functions or lambdas, inputs, nested expressions, and named options are easy to
+  distinguish. Use trailing commas so Ruff preserves the layout; keep simple
+  calls compact and follow the repository formatter.
+- Keep related setup and modifications together in one cell. Give each inspection
   expression its own `{code-cell}`, with its native output immediately below.
-- Tag build-only setup cells with `:tags: [remove-cell]`. They still execute, but
-  show no code, output, or expandable box. Keep prerequisites and links to relevant
-  tutorials visible in the prose; keep setup that teaches the workflow visible.
-- Imports stay visible in a code cell at the top of each guide. Hide only
-  non-import build setup, such as logging configuration and fixture models or data.
-- Pass distributions to `lsl.Var` and its factory methods using `dist=`, not
-  positional arguments.
+- Pass distributions to `lsl.Var` and its factory methods using `dist=`.
 - Pass a single model root directly, as in `lsl.Model(y)`. Choose `to_float32`
   for the needs of the example, independently of this calling style.
 - Use realistic data, fixed seeds, and only the settings needed for the task.
@@ -96,18 +92,16 @@ before-and-after tables; describe the current behavior instead.
 ## Show useful visuals
 
 Use built-in Liesel/Goose plotting helpers where available, and plotnine for
-custom statistical plots. Prefer helpers such as `model.plot()` and
-`gs.plot_trace()` over hand-built equivalents. Put each plotting call in its own
-code cell, directly above its rendered figure. Keep construction and fitting
-separate from plotting. Explain what
-readers should look for and what the plot cannot establish. Use enough contrast,
+plots without a suitable helper. Put each plotting call, such as `model.plot()`
+or `gs.plot_trace()`, in its own code cell directly above its rendered figure.
+Keep model construction and fitting separate. Explain what readers should look
+for and what the plot cannot establish. Use enough contrast,
 distinct shapes, or small positional offsets to keep overlapping marks visible.
 
-In model walkthroughs, include `model.plot()` in its own cell after constructing
-the model and show the graph immediately below. The Read the Docs build installs
-Graphviz for layout. Give every figure descriptive alt text. For cell outputs,
-use `mystnb.image.alt` cell metadata and check that it appears on the rendered
-image.
+In model walkthroughs, include `model.plot()` after constructing the model.
+The Read the Docs build installs Graphviz for layout. Give every figure
+descriptive alt text. For cell outputs, use `mystnb.image.alt` cell metadata
+and check that it appears on the rendered image.
 
 Embed interactive explanations beside the relevant text. A separate-page link
 can supplement the embed. Keep essential explanations readable without
@@ -124,9 +118,9 @@ output blocks by hand.
 
 Read the guide from top to bottom for flow, missing prerequisites, repetition,
 and unnecessary detours. Match verification to the change: execute changed
-examples, refresh affected saved outputs, and inspect plots. Build the docs when
-changing rendering or navigation; check both sidebars and that links resolve.
-Run the relevant hooks on edited files.
+examples, refresh affected saved outputs, and inspect the rendered code and plots.
+Check that build-only setup is absent, both sidebars remain readable, and links
+resolve. Run the relevant hooks on edited files.
 
 Use Sphinx cross-references for internal pages and API objects. Links intended
 for use outside the docs must work from that context. Report validation accurately,

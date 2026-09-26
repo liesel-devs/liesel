@@ -31,16 +31,23 @@ logging.getLogger("liesel").setLevel(logging.WARNING)
 
 loc = lsl.Var.new_param(0.0, name="loc")
 y = lsl.Var.new_obs(
-    jnp.array([1.0, 2.0, 3.0]), lsl.Dist(tfd.Normal, loc, 1.0), name="y"
+    jnp.array([1.0, 2.0, 3.0]),
+    dist=lsl.Dist(tfd.Normal, loc, 1.0),
+    name="y",
 )
 model = lsl.Model(y)
+```
 
+Fit its mean with L-BFGS:
+
+```{code-cell} ipython3
 optim = opt.LieselOptim(
     model,
     optimizers="lbfgs",
     loss_monitor="train_full_data",
     show_progress=False,
 )
+
 result = optim.fit()
 ```
 

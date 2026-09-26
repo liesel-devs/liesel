@@ -60,20 +60,41 @@ counts = jnp.array(
         [2.0, 4.0, 3.0, 2.0],
         [5.0, 8.0, 6.0, 7.0],
         [20.0, 23.0, 19.0, 21.0],
-    ]
+    ],
 )
 group = jnp.repeat(jnp.arange(8), 4)
 
-mu = lsl.Var.new_param(1.0, lsl.Dist(tfd.Normal, 0.0, 2.0), name="mu")
+mu = lsl.Var.new_param(
+    1.0,
+    dist=lsl.Dist(tfd.Normal, 0.0, 2.0),
+    name="mu",
+)
+
 tau = lsl.Var.new_param(
     0.5,
-    lsl.Dist(tfd.LogNormal, jnp.log(0.5), 0.7),
+    dist=lsl.Dist(tfd.LogNormal, jnp.log(0.5), 0.7),
     bijector=tfb.Exp(),
     name="tau",
 )
-b = lsl.Var.new_param(jnp.zeros(8), lsl.Dist(tfd.Normal, 0.0, tau), name="b")
-log_rate = lsl.Var.new_calc(lambda mu, b: mu + b[group], mu, b, name="log_rate")
-y = lsl.Var.new_obs(counts.ravel(), lsl.Dist(tfd.Poisson, log_rate=log_rate), name="y")
+
+b = lsl.Var.new_param(
+    jnp.zeros(8),
+    dist=lsl.Dist(tfd.Normal, 0.0, tau),
+    name="b",
+)
+
+log_rate = lsl.Var.new_calc(
+    lambda mu, b: mu + b[group],
+    mu,
+    b,
+    name="log_rate",
+)
+
+y = lsl.Var.new_obs(
+    counts.ravel(),
+    dist=lsl.Dist(tfd.Poisson, log_rate=log_rate),
+    name="y",
+)
 
 model = lsl.Model(y, to_float32=False)
 ```
@@ -94,6 +115,7 @@ The group effects `b` enter the log rate; `tau` controls their prior scale.
 ```{code-cell} ipython3
 loss = opt.LaplaceLoss(model, latent=["b"])
 stopper = opt.Stopper(epochs=60, patience=10, rtol=1e-10)
+
 result = opt.LieselOptim(
     model,
     loss=loss,
@@ -128,14 +150,16 @@ b_mode = state.latent_position["b"]
 
 ```{code-cell} ipython3
 pd.DataFrame(
-    {"estimate": [float(outer["mu"]), float(outer["h(tau)"])]}, index=["mu", "log(tau)"]
+    {"estimate": [float(outer["mu"]), float(outer["h(tau)"])]},
+    index=["mu", "log(tau)"],
 ).round(3)
 ```
 
 ```{code-cell} ipython3
-pd.DataFrame({"conditional_mode": b_mode}, index=range(1, 9)).rename_axis(
-    "group"
-).round(3)
+pd.DataFrame(
+    {"conditional_mode": b_mode},
+    index=range(1, 9),
+).rename_axis("group").round(3)
 ```
 
 Each effect multiplies the baseline rate `exp(mu)` by `exp(b)`.
@@ -155,6 +179,7 @@ complete parameter set that can be passed directly to `Model.predict`:
 ```{code-cell} ipython3
 posterior = loss.approximate_joint_posterior(result)
 draws = posterior.sample(1000, seed=jax.random.key(42))
+
 predicted = model.predict(draws, predict=["tau", "log_rate"])
 tau_draws = predicted["tau"]
 rate_draws = jnp.exp(predicted["log_rate"])
@@ -167,7 +192,8 @@ and 95th percentiles:
 
 ```{code-cell} ipython3
 pd.DataFrame(
-    {"tau": jnp.quantile(tau_draws, quantiles)}, index=["5%", "50%", "95%"]
+    {"tau": jnp.quantile(tau_draws, quantiles)},
+    index=["5%", "50%", "95%"],
 ).round(3)
 ```
 
@@ -175,7 +201,8 @@ The approximate posterior median is 0.79, with a 90% credible interval of
 0.52 to 1.19. The same draws give intervals for each group's expected count:
 
 ```{code-cell} ipython3
-group_rates = rate_draws[:, ::4]  # Four observations share each group's rate.
+# Four observations share each group's rate.
+group_rates = rate_draws[:, ::4]
 lower, median, upper = jnp.quantile(group_rates, quantiles, axis=0)
 rate_summary = pd.DataFrame(
     {
@@ -184,11 +211,22 @@ rate_summary = pd.DataFrame(
         "lower": lower,
         "upper": upper,
         "observed": counts.mean(axis=1),
-    }
+    },
 )
-rate_plot = (
+```
+
+```{code-cell} ipython3
+---
+mystnb:
+  image:
+    alt: "Posterior medians and 90 percent credible intervals for eight group rates, with observed means marked by black crosses slightly to the right."
+---
+(
     p9.ggplot(rate_summary, p9.aes(x="group", y="median"))
-    + p9.geom_pointrange(p9.aes(ymin="lower", ymax="upper"), color="#1f77b4")
+    + p9.geom_pointrange(
+        p9.aes(ymin="lower", ymax="upper"),
+        color="#1f77b4",
+    )
     + p9.geom_point(
         p9.aes(y="observed"),
         shape="x",
@@ -202,15 +240,6 @@ rate_plot = (
     + p9.theme_minimal()
     + p9.theme(figure_size=(7, 3.5))
 )
-```
-
-```{code-cell} ipython3
----
-mystnb:
-  image:
-    alt: "Posterior medians and 90 percent credible intervals for eight group rates, with observed means marked by black crosses slightly to the right."
----
-rate_plot
 ```
 
 Blue points and bars show posterior medians and 90% credible intervals;
@@ -280,7 +309,10 @@ an invalid diagnostic object with available gradients, curvature, and the failur
 reason:
 
 ```{code-cell} ipython3
-diagnostic = short_loss.approximate_joint_posterior(failed, raise_on_failure=False)
+diagnostic = short_loss.approximate_joint_posterior(
+    failed,
+    raise_on_failure=False,
+)
 ```
 
 ```{code-cell} ipython3
