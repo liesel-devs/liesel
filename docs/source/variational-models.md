@@ -16,7 +16,8 @@ Use {class}`~liesel.optim.VDist` for one group of target parameters and
 variational model and map draws back to the target's names and shapes.
 
 Start with the fitting workflow in {doc}`variational-inference`. Here we compare
-Gaussian families, then build an {ref}`advanced custom graph <vi-custom-graph>`.
+Gaussian families, {ref}`supply your own distribution <vi-custom-distribution>`,
+then build an {ref}`advanced custom graph <vi-custom-graph>`.
 
 ## Define the target
 
@@ -141,6 +142,37 @@ pd.DataFrame(initial_draws)
 
 These are initial draws. Fitted draws use {meth}`loss.approximate_joint_posterior(result) <liesel.optim.NegElboLoss.approximate_joint_posterior>`.
 
+(vi-custom-distribution)=
+
+## Use your own distribution
+
+{meth}`VDist.init() <liesel.optim.VDist.init>` accepts any
+{class}`~liesel.model.Dist` over the block's parameters, so a few Liesel
+variables define the family: heavier tails, other shapes, or shared and
+transformed inputs. Here each parameter gets a logistic distribution, which has
+heavier tails than a normal, with its own learned location and scale:
+
+```{code-cell} python
+q_loc = lsl.Var.new_param(jnp.zeros(2), name="q_loc")
+q_log_scale = lsl.Var.new_param(jnp.log(jnp.full(2, 0.5)), name="q_log_scale")
+q_scale = lsl.Var.new_calc(jnp.exp, q_log_scale, name="q_scale")
+
+logistic = lsl.Dist(tfd.Logistic, loc=q_loc, scale=q_scale)
+heavy_tailed = opt.VDist(["alpha", "beta"], model).init(logistic).build()
+```
+
+The distribution describes the block's flattened parameters: names in sorted
+order, each flattened, so `alpha` then `beta` here. Its draws must be fully
+reparameterized. Mark the inputs to optimize as parameters; computed inputs such
+as `q_scale` follow them. These are the names the optimizer adjusts:
+
+```{code-cell} python
+heavy_tailed.parameters
+```
+
+The result is an ordinary block: combine it with other blocks or connect it to
+a loss as shown below.
+
 ## Combine independent blocks
 
 Choose a distribution on each {class}`VDist <liesel.optim.VDist>`, then combine the initialized blocks.
@@ -167,6 +199,7 @@ per target parameter automatically, use {meth}`~liesel.optim.NegElboLoss.mvn_blo
 ```{code-cell} python
 dense_loss = opt.NegElboLoss.from_vdist(dense, nsamples=16, scale=True)
 blocked_loss = opt.NegElboLoss.from_vdist(blocked, nsamples=16, scale=True)
+heavy_tailed_loss = opt.NegElboLoss.from_vdist(heavy_tailed, nsamples=16, scale=True)
 ```
 
 Pass either loss to `LieselVI(model, ...)`. Fitting does not update the helper's
@@ -174,8 +207,7 @@ model values: sample the fitted posterior through
 {meth}`loss.approximate_joint_posterior(result) <liesel.optim.NegElboLoss.approximate_joint_posterior>`, or supply `at_position` to the helper's
 `sample` method.
 
-For a custom distribution over a flattened block, see
-{meth}`~liesel.optim.VDist.init`. For conditional dependencies, define a graph below.
+For conditional dependencies between parameters, define a graph below.
 
 (vi-custom-graph)=
 
