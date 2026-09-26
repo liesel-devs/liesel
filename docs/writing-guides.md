@@ -50,6 +50,9 @@ for the reader.
 
 ## Make examples easy to use
 
+Imports stay visible in a code cell at the top of each guide. Hide only
+non-import build setup, such as logging configuration and fixture models or data.
+
 - State prerequisites, such as an existing `model`, before a snippet. Make
   complete tutorials runnable from top to bottom.
 - Keep code blocks orderly and consistent with the repository formatter. Group
