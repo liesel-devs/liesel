@@ -182,7 +182,7 @@ vi_result = opt.LieselVI(
     model,
     loss=vi_loss,
     optimizers=optax.adam(0.001),
-    loss_monitor=opt.EmaTrainLossMonitor(effective_window=2.0),
+    loss_monitor=opt.EmaTrainLossMonitor(effective_window=20.0),
     stopper=opt.Stopper(epochs=30, patience=30),
     seed=42,
     show_progress=False,
