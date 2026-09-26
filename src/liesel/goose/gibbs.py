@@ -36,7 +36,7 @@ class GibbsKernel(
     ReprMixin,
 ):
     """
-    A Gibbs kernel implementing the :class:`.Kernel` protocol.
+    A Gibbs kernel implementing the :class:`~liesel.goose.Kernel` protocol.
 
     Parameters
     ----------
@@ -101,7 +101,8 @@ class GibbsKernel(
 
     >>> engine = builder.build()
 
-    From here, you can continue with :meth:`~.goose.Engine.sample_all_epochs` to draw
+    From here, you can continue with :meth:`~liesel.goose.Engine.sample_all_epochs` to
+    draw
     samples from your posterior distribution.
 
     See Also
@@ -110,9 +111,16 @@ class GibbsKernel(
     """
 
     error_book: ClassVar[dict[int, str]] = {0: "no errors"}
+    """Error codes and their meanings."""
     needs_history: ClassVar[bool] = False
+    """Whether this kernel requires its history for tuning."""
     identifier: str = ""
+    """
+    Unique kernel identifier assigned by :class:`liesel.goose.EngineBuilder
+    <liesel.goose.EngineBuilder>`.
+    """
     position_keys: tuple[str, ...]
+    """Position keys updated by this kernel."""
 
     def __init__(
         self,
@@ -133,9 +141,10 @@ class GibbsKernel(
         Return a Gibbs kernel factory with a fixed transition function.
 
         This helper is useful when a Gibbs kernel should be configured through an
-        :class:`.MCMCSpec`. The returned callable accepts the position keys and an
+        :class:`~liesel.goose.MCMCSpec`. The returned callable accepts the position keys
+        and an
         optional identifier, matching the kernel factory interface expected by
-        :class:`.LieselMCMC`.
+        :class:`~liesel.goose.LieselMCMC`.
 
         Parameters
         ----------
@@ -147,7 +156,8 @@ class GibbsKernel(
         Returns
         -------
         Callable
-            A kernel factory that creates :class:`.GibbsKernel` instances for a given
+            A kernel factory that creates :class:`~liesel.goose.GibbsKernel` instances
+            for a given
             sequence of position keys.
         """
 

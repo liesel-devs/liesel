@@ -432,7 +432,8 @@ def plot_trace(
         Result object of the sampling process. Must have a method \
         ``get_posterior_samples()`` which extracts all samples from the posterior \
         distribution. Alternatively, you can directly supply a dictionary of samples, \
-        for example the output of :meth:`.SamplingResults.get_posterior_samples`.
+        for example the output of :meth:`SamplingResults.get_posterior_samples
+        <liesel.goose.SamplingResults.get_posterior_samples>`.
     params
         Names of the model parameters that are contained in the plot. Must coincide \
         with the dictionary keys of the `Position` with the posterior samples. If \
@@ -558,7 +559,8 @@ def plot_density(
         Result object of the sampling process. Must have a method \
         ``get_posterior_samples()`` which extracts all samples from the posterior \
         distribution. Alternatively, you can directly supply a dictionary of samples, \
-        for example the output of :meth:`.SamplingResults.get_posterior_samples`.
+        for example the output of :meth:`SamplingResults.get_posterior_samples
+        <liesel.goose.SamplingResults.get_posterior_samples>`.
     params
         Names of the model parameters that are contained in the plot. Must coincide \
         with the dictionary keys of the ``Position`` with the posterior samples. If \
@@ -692,7 +694,8 @@ def plot_cor(
         Result object of the sampling process. Must have a method \
         ``get_posterior_samples()`` which extracts all samples from the posterior \
         distribution. Alternatively, you can directly supply a dictionary of samples, \
-        for example the output of :meth:`.SamplingResults.get_posterior_samples`.
+        for example the output of :meth:`SamplingResults.get_posterior_samples
+        <liesel.goose.SamplingResults.get_posterior_samples>`.
     params
         Names of the model parameters that are contained in the plot. Must coincide \
         with the dictionary keys of the ``Position`` with the posterior samples. If \
@@ -805,7 +808,8 @@ def plot_cor(
 
 def _raise_multi_param_error(plot_df: pd.DataFrame, param: str) -> None:
     """
-    :func:`.plot_param` function can only display all three diagnostic plots for a
+    :func:`~liesel.goose.plot_param` function can only display all three diagnostic
+    plots for a
     single subparameter. Throws an informative error otherwise.
     """
 
@@ -937,7 +941,8 @@ def plot_param(
         Result object of the sampling process. Must have a method \
         ``get_posterior_samples()`` which extracts all samples from the posterior \
         distribution. Alternatively, you can directly supply a dictionary of samples, \
-        for example the output of :meth:`.SamplingResults.get_posterior_samples`.
+        for example the output of :meth:`SamplingResults.get_posterior_samples
+        <liesel.goose.SamplingResults.get_posterior_samples>`.
     param
         Name of a single model parameter that is contained in the plot. Must coincide \
         with one dictionary key of the ``Position`` with the posterior samples.
@@ -1041,7 +1046,8 @@ def plot_scatter(
         Result object of the sampling process. Must have a method \
         ``get_posterior_samples()`` which extracts all samples from the posterior \
         distribution. Alternatively, you can directly supply a dictionary of samples, \
-        for example the output of :meth:`.SamplingResults.get_posterior_samples`.
+        for example the output of :meth:`SamplingResults.get_posterior_samples
+        <liesel.goose.SamplingResults.get_posterior_samples>`.
     params
         Names of the model parameters that are contained in the plot. Must coincide  \
         with the dictionary keys of the ``Position`` with the posterior samples.
@@ -1165,7 +1171,8 @@ def plot_pairs(
         Result object of the sampling process. Must have a method \
         ``get_posterior_samples()`` which extracts all samples from the posterior \
         distribution. Alternatively, you can directly supply a dictionary of samples, \
-        for example the output of :meth:`.SamplingResults.get_posterior_samples`.
+        for example the output of :meth:`SamplingResults.get_posterior_samples
+        <liesel.goose.SamplingResults.get_posterior_samples>`.
     params
         Names of the model parameters that are contained in the plot. Must coincide  \
         with the dictionary keys of the ``Position`` with the posterior samples. If \

@@ -19,6 +19,10 @@ from liesel.goose.optim import (
 )
 from liesel.goose.types import Array
 
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:liesel.goose.optim_flat is deprecated:FutureWarning"
+)
+
 key = jax.random.PRNGKey(42)
 key, subkey = jax.random.split(key)
 target_params = 0.5
@@ -63,6 +67,22 @@ def models() -> Iterator[tuple[lsl.Model, lsl.Model]]:
 
 
 class TestOptim:
+    def test_optim_flat_deprecation(self, models):
+        model, _ = models
+        with pytest.warns(
+            FutureWarning, match="deprecated; use liesel.optim.LieselOptim"
+        ) as caught:
+            result = gs.optim_flat(
+                model,
+                ["coef"],
+                stopper=Stopper(max_iter=2, patience=2),
+                progress_bar=False,
+            )
+
+        assert len(caught) == 1
+        assert caught[0].filename == __file__
+        assert "coef" in result.position
+
     def test_optim_flat_jointly(self, models):
         model, _ = models
 

@@ -8,12 +8,18 @@ version: 2
 # Set the version of Python and other tools you might need
 build:
   os: ubuntu-24.04
+  apt_packages:
+    - graphviz
   tools:
     python: "3.13"
   jobs:
     post_install:
+      - dot -V
       - pip install uv
       - UV_PROJECT_ENVIRONMENT=$READTHEDOCS_VIRTUALENV_PATH uv sync --locked --dev --group pymc --link-mode=copy
+    build:
+      html:
+        - python -m sphinx -T -b html -j 3 -W --keep-going -d _build/doctrees docs/source "$READTHEDOCS_OUTPUT/html"
 
 # Build documentation in the docs/ directory with Sphinx
 sphinx:

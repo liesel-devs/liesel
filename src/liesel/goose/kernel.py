@@ -57,25 +57,26 @@ class DefaultTuningInfo:
 @dataclass
 class TransitionOutcome[TKernelState, TTransitionInfo: TransitionInfo]:
     """
-    A dataclass for the return value of the kernel method :meth:`.Kernel.transition`.
-    Different kernels can use different types of :class:`.KernelState`'s and
-    :class:`.TransitionInfo`'s.
+    A dataclass for the return value of the kernel method :meth:`Kernel.transition
+    <liesel.goose.Kernel.transition>`.
+    Different kernels can use different types of :attr:`~liesel.goose.KernelState`'s and
+    :class:`~liesel.goose.TransitionInfo`'s.
     """
 
     info: TTransitionInfo
     """
-    A transition info object, see :class:`.DefaultTransitionInfo`.
+    A transition info object, see :class:`~liesel.goose.DefaultTransitionInfo`.
     """
     kernel_state: TKernelState
     """
-    A kernel state object, see :class:`.DAKernelState`.
+    A kernel state object, see :class:`~liesel.goose.da.DAKernelState`.
     """
     model_state: ModelState
     """
     Model state that results from the transition.
 
     The exact definition depends on the model being used. See, for example,
-    :class:`.DictModel`.
+    :class:`~liesel.goose.DictInterface`.
 
     """
 
@@ -84,18 +85,19 @@ class TransitionOutcome[TKernelState, TTransitionInfo: TransitionInfo]:
 @dataclass
 class TuningOutcome[TKernelState, TTuningInfo: TuningInfo]:
     """
-    A dataclass for the return value of the kernel method :meth:`.Kernel.tune`.
-    Different kernels can use different types of :class:`.KernelState`'s and
-    :class:`.TuningInfo`'s.
+    A dataclass for the return value of the kernel method :meth:`Kernel.tune
+    <liesel.goose.Kernel.tune>`.
+    Different kernels can use different types of :attr:`~liesel.goose.KernelState`'s and
+    :class:`~liesel.goose.TuningInfo`'s.
     """
 
     info: TTuningInfo
     """
-    A tuning info object, see :class:`.DefaultTuningInfo`.
+    A tuning info object, see :class:`~liesel.goose.DefaultTuningInfo`.
     """
     kernel_state: TKernelState
     """
-    A kernel state object, see :class:`.DAKernelState`.
+    A kernel state object, see :class:`~liesel.goose.da.DAKernelState`.
     """
 
 
@@ -103,15 +105,16 @@ class TuningOutcome[TKernelState, TTuningInfo: TuningInfo]:
 @dataclass
 class WarmupOutcome[TKernelState]:
     """
-    A dataclass for the return value of the kernel method :meth:`.Kernel.end_warmup`.
-    Different kernels can use different types of :class:`.KernelState`'s.
+    A dataclass for the return value of the kernel method :meth:`Kernel.end_warmup
+    <liesel.goose.Kernel.end_warmup>`.
+    Different kernels can use different types of :attr:`~liesel.goose.KernelState`'s.
     """
 
     error_code: int
     """Error code for the transition."""
     kernel_state: TKernelState
     """
-    A kernel state object, see :class:`.DAKernelState`.
+    A kernel state object, see :class:`~liesel.goose.da.DAKernelState`.
     """
 
 
@@ -121,6 +124,7 @@ class ModelMixin:
     """
 
     position_keys: tuple[str, ...]
+    """Position keys handled by this kernel."""
     _model: ModelInterface | None
 
     @property

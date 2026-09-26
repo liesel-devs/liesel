@@ -11,6 +11,7 @@ location-scale models:
    :maxdepth: 1
    :caption: Basics
 
+   Overview <self>
    tutorials/md/01a-lin-reg
    tutorials/md/01b-model
    tutorials/md/01d-gibbs-sampling
@@ -30,3 +31,6 @@ a comparison of different samplers, and more:
    tutorials/md/06-pymc
    tutorials/md/07-error-correction
    tutorials/md/08-custom-kernel
+
+For parameter fitting, start with the :doc:`optimization` guide. It links to
+two worked examples and short guides for common tasks.

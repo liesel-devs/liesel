@@ -4,7 +4,7 @@ Hamiltonian/Hybrid Monte Carlo (HMC).
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import jax
 import jax.numpy as jnp
@@ -42,8 +42,8 @@ from .types import KeyArray, ModelState, Position, PositionInput, Scalar
 @dataclass
 class HMCKernelState:
     """
-    A dataclass for the state of a :class:`.HMCKernel`, implementing the
-    :class:`.DAKernelState` protocol.
+    A dataclass for the state of a :class:`~liesel.goose.HMCKernel`, implementing the
+    :class:`~liesel.goose.da.DAKernelState` protocol.
     """
 
     step_size: Scalar
@@ -92,7 +92,7 @@ class HMCKernel(
 ):
     """
     A HMC kernel with dual averaging and an inverse mass matrix tuner,
-    implementing the :class:`.Kernel` protocol.
+    implementing the :class:`~liesel.goose.Kernel` protocol.
 
     Parameters
     ----------
@@ -117,15 +117,16 @@ class HMCKernel(
     mm_diag
         Whether to use a diagonal mass matrix for drawing the momentum vector.
         If True, the inverse mass matrix will be tuned during adaptation using
-        :func:`.tune_inv_mm_diag`. If set to False, the mass matrix will be tuned
-        using :func:`.tune_inv_mm_full` instead.
+        :func:`~liesel.goose.mm.tune_inv_mm_diag`. If set to False, the mass matrix will
+        be tuned
+        using :func:`~liesel.goose.mm.tune_inv_mm_full` instead.
     identifier
         An string acting as a unique identifier for this kernel.
 
     Notes
     -----
     For more information on step size tuning via dual averaging,
-    see :func:`.da_step` and :class:`.DAKernelState`.
+    see :func:`~liesel.goose.da.da_step` and :class:`~liesel.goose.da.DAKernelState`.
 
     .. [#stan] `Stan Development Team, Stan Reference Manual (2021), Chapter 15.2
        <https://mc-stan.org/docs/2_28/reference-manual/hmc-algorithm-parameters.html>`_.
@@ -136,9 +137,30 @@ class HMCKernel(
     needs_history: ClassVar[bool] = True
     """Whether this kernel needs its history for tuning."""
     identifier: str = ""
-    """Kernel identifier, set by :class:`~.goose.EngineBuilder`"""
+    """Kernel identifier, set by :class:`~liesel.goose.EngineBuilder`"""
     position_keys: tuple[str, ...]
     """Tuple of position keys handled by this kernel."""
+
+    if TYPE_CHECKING:
+        da_gamma: float
+        """The adaptation regularization scale."""
+        da_kappa: float
+        """The adaptation relaxation exponent."""
+        da_t0: int
+        """The adaptation iteration offset."""
+        da_target_accept: float
+        """Target acceptance probability for dual averaging algorithm."""
+        initial_inverse_mass_matrix: ArrayLike | None
+        """
+        Starting value for the inverse mass matrix (the precision matrix of the
+        momentum).
+        """
+        initial_step_size: float | None
+        """Value at which to start step size tuning."""
+        mm_diag: bool
+        """Whether to use a diagonal mass matrix for drawing the momentum vector."""
+        num_integration_steps: int
+        """Number of integration steps used in the leapfrog algorithm."""
 
     def __init__(
         self,

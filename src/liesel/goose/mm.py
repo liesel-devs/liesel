@@ -25,7 +25,7 @@ def tune_inv_mm_diag(history: Mapping[str, ArrayLike]) -> jax.Array:
     ----------
     history
             Holds the history of the position. It is to be understood as in
-            :meth:`liesel.goose.types.Kernel.tune`. Each value must be an array
+            :meth:`~liesel.goose.Kernel.tune`. Each value must be an array
             with a leading sample axis, rather than a nested pytree.
     """
 
@@ -46,7 +46,7 @@ def tune_inv_mm_full(history: Mapping[str, ArrayLike]) -> jax.Array:
     ----------
     history
             Holds the history of the position. It is to be understood as in
-            :meth:`liesel.goose.types.Kernel.tune`. Each value must be an array
+            :meth:`~liesel.goose.Kernel.tune`. Each value must be an array
             with a leading sample axis, rather than a nested pytree.
 
     """

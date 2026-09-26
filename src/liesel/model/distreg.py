@@ -314,11 +314,12 @@ def dist_reg_mcmc(
     apply_jitter: bool = True,
 ) -> EngineBuilder:
     """
-    Configures an :class:`~.goose.EngineBuilder` for a distributional regression model.
+    Configures an :class:`~liesel.goose.EngineBuilder` for a distributional regression
+    model.
 
     The EngineBuilder uses a Metropolis-in-Gibbs MCMC algorithm with an
-    :class:`~.goose.IWLSKernel` for the regression coefficients and a
-    :class:`~.goose.GibbsKernel` for the smoothing parameters for a distributional
+    :class:`~liesel.goose.IWLSKernel` for the regression coefficients and a
+    :class:`~liesel.goose.GibbsKernel` for the smoothing parameters for a distributional
     regression model.
 
     Parameters
@@ -332,7 +333,7 @@ def dist_reg_mcmc(
     apply_jitter
         If ``False``, disables the jittering of the initial distributions regardless of
         the configuration in the variables inference configuration (see
-        :class:`~.goose.MCMCSpec`).
+        :class:`~liesel.goose.MCMCSpec`).
     """
 
     lslmcmc = LieselMCMC(model)
