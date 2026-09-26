@@ -347,52 +347,61 @@ class Node(ABC):
     A node of a computational graph that can cache its value.
 
     Liesel represents statistical models as directed acyclic graphs (DAGs) of
-    random variables (see :class:`.Var`) and computational nodes. The graph of
+    random variables (see :class:`~liesel.model.Var`) and computational nodes. The graph
+    of
     random variables is built on top of the computational graph. The nodes of the
     computational graph will typically express computations in JAX returning arrays
     or pytrees_, but in general, they can represent arbitrary operations in Python.
 
     Nodes can cache the result of the operations they represent, improving
     the efficiency of the graph. The cached values are part of the model state
-    (see :attr:`.Model.state`), and can be stored in a chain by Liesel's MCMC engine
+    (see :attr:`Model.state <liesel.model.Model.state>`), and can be stored in a chain
+    by Liesel's MCMC engine
     Goose.
 
     .. note::
         This class is an abstract class that cannot be initialized without defining the
-        :meth:`.update` method. See below for the most important concrete node classes.
+        :meth:`~liesel.model.Node.update` method. See below for the most important
+        concrete node classes.
 
     Parameters
     ----------
     inputs
-        Non-keyword inputs. Any inputs that are not already nodes or :class:`.Var`
-        will be converted to :class:`.Value` nodes.
+        Non-keyword inputs. Any inputs that are not already nodes or
+        :class:`~liesel.model.Var`
+        will be converted to :class:`~liesel.model.Value` nodes.
     _name
         The name of the node. If you do not specify a name, a unique name will be \
-        automatically generated upon initialization of a :class:`.Model`.
+        automatically generated upon initialization of a :class:`~liesel.model.Model`.
     _needs_seed
         Whether the node needs a seed / PRNG key.
     convert
         A function used to process the value of this node. The default uses the
-        function stored in :meth:`.Node.convert_value`, which is
+        function stored in :meth:`Node.convert_value <liesel.model.Node.convert_value>`,
+        which is
         ``jax.numpy.asarray``. Conversion functions must be idempotent.
 
     See Also
     --------
-    .Calc :
+    ~liesel.model.Calc :
         A node representing a general calculation/operation
         in JAX or Python.
-    .Value :
+    ~liesel.model.Value :
         A node representing some static data.
-    .Dist :
+    ~liesel.model.Dist :
         A node representing a ``tensorflow_probability``
         :class:`~tfp.distributions.Distribution`.
-    .Var : A variable in a statistical model, typically with a probability
+    ~liesel.model.Var : A variable in a statistical model, typically with a probability
         distribution.
 
 
     .. _pytrees: https://jax.readthedocs.io/en/latest/pytrees.html
     .. _TensorFlow Probability: https://www.tensorflow.org/probability
     """
+
+    if TYPE_CHECKING:
+        monitor: bool
+        """Whether this node is included when monitoring model values."""
 
     def __init__(
         self,
@@ -566,6 +575,7 @@ class Node(ABC):
 
     @property
     def seed_node(self) -> Value | None:
+        """Value node supplying the random seed, or ``None`` if unset."""
         return self._seed_node
 
     @seed_node.setter
@@ -629,7 +639,7 @@ class Node(ABC):
         """
         The state of the node.
 
-        For the default node, a :class:`.NodeState` with the value and the
+        For the default node, a ``NodeState`` with the value and the
         outdated flag, but subclasses can add extra information to the state.
         """
         return NodeState(self.value, self.outdated)
@@ -648,8 +658,10 @@ class Node(ABC):
         """
         The value of the node.
 
-        Can only be set for a :class:`.Value` node, but not a :class:`.Calc` or
-        :class:`.Dist` node. If the node is part of a :class:`.Model` ``m`` with
+        Can only be set for a :class:`~liesel.model.Value` node, but not a
+        :class:`~liesel.model.Calc` or
+        :class:`~liesel.model.Dist` node. If the node is part of a
+        :class:`~liesel.model.Model` ``m`` with
         ``m.auto_update == True``, setting the value of the node triggers an update
         of the model. The auto-update can be disabled to improve the performance if
         multiple model parameters are updated at once.
@@ -776,7 +788,8 @@ class TransientNode(Node):
     A node that does not cache its value.
 
     A transient node is outdated if and only if at least one of its input nodes
-    is outdated. The :attr:`.outdated` property checks this condition on-the-fly.
+    is outdated. The :attr:`~liesel.model.TransientNode.outdated` property checks this
+    condition on-the-fly.
     """
 
     @property
@@ -833,7 +846,7 @@ class InputGroup(TransientNode):
 
     Essentially, this node "forwards" the val
     ues of its inputs to its outputs
-    as an :class:`.ArgGroup`.
+    as an ``ArgGroup``.
     """
 
     @property
@@ -845,16 +858,18 @@ class InputGroup(TransientNode):
 
 class Value(Node):
     r"""
-    A :class:`.Node` subclass that holds constant values.
+    A :class:`~liesel.model.Node` subclass that holds constant values.
 
     Since the information represented by a value node does not change, it is
     always up-to-date.
     A common usecase for value nodes is to cache computed values.
 
     - By default, value nodes *will* appear in the node graph created by
-      :func:`.viz.plot_nodes`, but they will *not* appear in the model graph created by
-      :func:`.viz.plot_vars`.
-    - You can wrap a value node in a :class:`.Var` to make it appear in the model
+      ``liesel.model.viz.plot_nodes``, but they will *not* appear in the model graph
+      created by
+      ``liesel.model.viz.plot_vars``.
+    - You can wrap a value node in a :class:`~liesel.model.Var` to make it appear in the
+      model
       graph.
 
     Parameters
@@ -863,26 +878,30 @@ class Value(Node):
         The value of the node.
     _name
         The name of the node. If you do not specify a name, a unique name will
-        be automatically generated upon initialization of a :class:`.Model`.
+        be automatically generated upon initialization of a
+        :class:`~liesel.model.Model`.
     convert
         A function used to process the value of this node. The default uses the
-        function stored in :meth:`.Node.convert_value`, which is
+        function stored in :meth:`Node.convert_value <liesel.model.Node.convert_value>`,
+        which is
         ``jax.numpy.asarray``. Conversion functions must be idempotent.
 
 
     See Also
     --------
-    .Calc :
+    ~liesel.model.Calc :
         A node representing a general calculation/operation in JAX or Python.
-    .Dist :
+    ~liesel.model.Dist :
         A node representing a ``tensorflow_probability``
         :class:`~tfp.distributions.Distribution`.
-    .Var : A variable in a statistical model, typically with a probability
+    ~liesel.model.Var : A variable in a statistical model, typically with a probability
         distribution.
-    .param :
-        A helper function to initialize a :class:`.Var` as a model parameter.
-    .obs :
-        A helper function to initialize a :class:`.Var` as an observed variable.
+    ~liesel.model.Var.new_param :
+        A helper function to initialize a :class:`~liesel.model.Var` as a model
+        parameter.
+    ~liesel.model.Var.new_obs :
+        A helper function to initialize a :class:`~liesel.model.Var` as an observed
+        variable.
 
 
     Examples
@@ -955,30 +974,33 @@ class Value(Node):
 
 class Data(Value):
     """
-    A :class:`.Node` subclass that holds constant data.
+    A :class:`~liesel.model.Node` subclass that holds constant data.
 
-    This is an alias for :class:`.Value`.
+    This is an alias for :class:`~liesel.model.Value`.
 
     See Also
     --------
-    .Value :
-        Alias for :class:`.Value`. For full documentation, please consult
-        :class:`.Value`.
+    ~liesel.model.Value :
+        Alias for :class:`~liesel.model.Value`. For full documentation, please consult
+        :class:`~liesel.model.Value`.
     """
 
 
 class Calc(Node):
     """
-    A :class:`.Node` subclass that calculates its value based on its inputs nodes.
+    A :class:`~liesel.model.Node` subclass that calculates its value based on its inputs
+    nodes.
 
     Calculator nodes are a central element of the Liesel graph building toolkit.
     They wrap arbitrary calculations in pure JAX functions.
 
     - By default, calculator nodes *will* appear in the node graph created by
-      :func:`.viz.plot_nodes`, but they will *not* appear in the model graph created by
-      :func:`.viz.plot_vars`.
-    - You can use :meth:`~.Var.new_calc` if you want your calculation to be treated
-      as a model variable and thus be shown in :func:`.viz.plot_vars`.
+      ``liesel.model.viz.plot_nodes``, but they will *not* appear in the model graph
+      created by
+      ``liesel.model.viz.plot_vars``.
+    - You can use :meth:`~liesel.model.Var.new_calc` if you want your calculation to be
+      treated
+      as a model variable and thus be shown in ``liesel.model.viz.plot_vars``.
 
     .. tip::
         The wrapped function must be jit-compilable by JAX. This mainly means that
@@ -993,12 +1015,14 @@ class Calc(Node):
     function
         The function to be wrapped. Must be jit-compilable by JAX.
     *inputs
-        Non-keyword inputs. Any inputs that are not already nodes or :class:`.Var`
-        will be converted to :class:`.Value` nodes. The values of these inputs will be
+        Non-keyword inputs. Any inputs that are not already nodes or
+        :class:`~liesel.model.Var`
+        will be converted to :class:`~liesel.model.Value` nodes. The values of these
+        inputs will be
         passed to the wrapped function in the same order they are entered here.
     _name
         The name of the node. If you do not specify a name, a unique name will be \
-        automatically generated upon initialization of a :class:`.Model`.
+        automatically generated upon initialization of a :class:`~liesel.model.Model`.
     _needs_seed
         Whether the node needs a seed / PRNG key.
     _update_on_init
@@ -1006,25 +1030,29 @@ class Calc(Node):
         initialization.
     convert_inputs
         A function used to process the values of this node's inputs.
-        The default uses the function stored in :meth:`.Node.convert_value`, which is
+        The default uses the function stored in :meth:`Node.convert_value
+        <liesel.model.Node.convert_value>`, which is
         ``jax.numpy.asarray``.
     **kwinputs
-        Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
-        will be converted to :class:`.Value` nodes. The values of these inputs will be
+        Keyword inputs. Any inputs that are not already nodes or
+        :class:`~liesel.model.Var` objects
+        will be converted to :class:`~liesel.model.Value` nodes. The values of these
+        inputs will be
         passed to the wrapped function as keyword arguments.
 
     See Also
     --------
-    .Var.new_calc :
+    ~liesel.model.Var.new_calc :
         Initializes a weak variable that is a function of other variables.
-    .Var : A variable in a statistical model, typically with a probability
+    ~liesel.model.Var : A variable in a statistical model, typically with a probability
         distribution.
-    .Var.new_param : Initializes a strong variable that acts as a model parameter.
-    .Var.new_obs : Initializes a strong variable that holds observed data.
-    .Var.new_value : Initializes a strong variable without a distribution.
-    .Value :
+    ~liesel.model.Var.new_param : Initializes a strong variable that acts as a model
+        parameter.
+    ~liesel.model.Var.new_obs : Initializes a strong variable that holds observed data.
+    ~liesel.model.Var.new_value : Initializes a strong variable without a distribution.
+    ~liesel.model.Value :
         A node representing some static data.
-    .Dist :
+    ~liesel.model.Dist :
         A node representing a ``tensorflow_probability``
         :class:`~tfp.distributions.Distribution`.
 
@@ -1038,7 +1066,8 @@ class Calc(Node):
     >>> print(scale.value)
     1.0
 
-    The value of the calculator node is updated when :meth:`.Calc.update` is called.
+    The value of the calculator node is updated when :meth:`Calc.update
+    <liesel.model.Calc.update>` is called.
 
     >>> scale.update()
     Calc(name="")
@@ -1146,7 +1175,7 @@ class TransientIdentity(TransientCalc):
 
 class VarValue(TransientIdentity):
     """
-    A proxy node for the value of a :class:`.Var`.
+    A proxy node for the value of a :class:`~liesel.model.Var`.
 
     This node type is used to keep the references to a variable intact,
     even if the underlying value node is replaced.
@@ -1155,15 +1184,16 @@ class VarValue(TransientIdentity):
 
 class Dist(Node):
     """
-    A :class:`.Node` subclass that wraps a probability distribution.
+    A :class:`~liesel.model.Node` subclass that wraps a probability distribution.
 
     Distribution nodes wrap distribution classes that follow the
     ``tensorflow_probability`` :class:`~tfp.distributions.Distribution` interface.
     They can be used to represent observation models and priors.
 
     Distribution nodes *will* appear in the node graph created by
-    :func:`.viz.plot_nodes`, but they will *not* appear in the model graph created by
-    :func:`.viz.plot_vars`.
+    ``liesel.model.viz.plot_nodes``, but they will *not* appear in the model graph
+    created by
+    ``liesel.model.viz.plot_vars``.
 
     Parameters
     ----------
@@ -1171,30 +1201,36 @@ class Dist(Node):
         The wrapped distribution class that follows the ``tensorflow_probability``
         :class:`~tfp.distributions.Distribution` interface.
     *inputs
-        Non-keyword inputs. Any inputs that are not already nodes or :class:`.Var`
-        will be converted to :class:`.Value` nodes. The values of these inputs will be
+        Non-keyword inputs. Any inputs that are not already nodes or
+        :class:`~liesel.model.Var`
+        will be converted to :class:`~liesel.model.Value` nodes. The values of these
+        inputs will be
         passed to the wrapped distribution in the same order they are entered here.
     _name
         The name of the node. If you do not specify a name, a unique name will be \
-        automatically generated upon initialization of a :class:`.Model`.
+        automatically generated upon initialization of a :class:`~liesel.model.Model`.
     _needs_seed
         Whether the node needs a seed / PRNG key.
     bijectors
         Optional parameter bijector specification for transforming
-        distribution parameters. See :meth:`.Dist.biject_parameters` for supported
+        distribution parameters. See :meth:`Dist.biject_parameters
+        <liesel.model.Dist.biject_parameters>` for supported
         formats and behavior.
     convert_inputs
         A function used to process the values of this node's inputs.
-        The default uses the function stored in :meth:`.Node.convert_value`, which is
+        The default uses the function stored in :meth:`Node.convert_value
+        <liesel.model.Node.convert_value>`, which is
         ``jax.numpy.asarray``.
     **kwinputs
-        Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
-        will be converted to :class:`.Value` nodes. The values of these inputs will be
+        Keyword inputs. Any inputs that are not already nodes or
+        :class:`~liesel.model.Var` objects
+        will be converted to :class:`~liesel.model.Value` nodes. The values of these
+        inputs will be
         passed to the wrapped distribution as keyword arguments.
 
     See Also
     --------
-    .Var : A variable in a statistical model, typically with a probability
+    ~liesel.model.Var : A variable in a statistical model, typically with a probability
         distribution.
     .MultivariateNormalDegenerate : A custom distribution class that implements
         a degenerate multivariate normal distribution in the ``tensorflow_probability``
@@ -1391,7 +1427,7 @@ class Dist(Node):
 
         See Also
         --------
-        .Var.biject : Method for transforming individual variables.
+        ~liesel.model.Var.biject : Method for transforming individual variables.
 
         Examples
         --------
@@ -1722,49 +1758,60 @@ class Var:
     A variable in a statistical model.
 
     A variable in Liesel is often a random variable, e.g. an observed or
-    latent variable with a probability distribution (see :meth:`~.Var.new_obs`),
-    or a model parameter with a prior distribution (see :meth:`~.Var.new_param`).
+    latent variable with a probability distribution (see
+    :meth:`~liesel.model.Var.new_obs`),
+    or a model parameter with a prior distribution (see
+    :meth:`~liesel.model.Var.new_param`).
 
     Other quantities can also be declared as variables, e.g. fixed data like
-    hyperparameters or design matrices (see :meth:`~.Var.new_value`),
+    hyperparameters or design matrices (see :meth:`~liesel.model.Var.new_value`),
     or quantities that are computed from other nodes, e.g. structured additive
-    predictors in semi-parametric regression models (see :meth:`~.Var.new_calc`).
+    predictors in semi-parametric regression models (see
+    :meth:`~liesel.model.Var.new_calc`).
 
     .. tip::
         You should initialize variables through one of the four constructors:
-        :meth:`.new_param`, :meth:`.new_obs`, :meth:`.new_calc`, and :meth:`.new_value`.
+        :meth:`~liesel.model.Var.new_param`, :meth:`~liesel.model.Var.new_obs`,
+        :meth:`~liesel.model.Var.new_calc`, and :meth:`~liesel.model.Var.new_value`.
 
     .. rubric:: Accessing inputs
 
-    :class:`.Calc` and :class:`.Dist` objects support access to their inputs via
-    square-bracket syntax. Thus, with a :class:`.Var` object, you can use square bracket
-    indexing on its attributes :attr:`.Var.value_node` and :attr:`.Var.dist_node`.
+    :class:`~liesel.model.Calc` and :class:`~liesel.model.Dist` objects support access
+    to their inputs via
+    square-bracket syntax. Thus, with a :class:`~liesel.model.Var` object, you can use
+    square bracket
+    indexing on its attributes :attr:`Var.value_node <liesel.model.Var.value_node>` and
+    :attr:`Var.dist_node <liesel.model.Var.dist_node>`.
     You can access both keyword and positional arguments this way.
 
     >>> import tensorflow_probability.substrates.jax.distributions as tfd
 
-    Access keyword inputs to a calculator :attr:`.Var.value_node`:
+    Access keyword inputs to a calculator :attr:`Var.value_node
+    <liesel.model.Var.value_node>`:
 
     >>> a = lsl.Var.new_value(2.0, name="a")
     >>> b = lsl.Var.new_calc(lambda x: x + 1.0, x=a)
     >>> b.value_node["x"]
     Var(name="a")
 
-    Access positional inputs to a calculator :attr:`.Var.value_node`:
+    Access positional inputs to a calculator :attr:`Var.value_node
+    <liesel.model.Var.value_node>`:
 
     >>> a = lsl.Var.new_value(2.0, name="a")
     >>> b = lsl.Var.new_calc(lambda x: x + 1.0, a)
     >>> b.value_node[0]
     Var(name="a")
 
-    Access keyword inputs to a distribution :attr:`.Var.dist_node`:
+    Access keyword inputs to a distribution :attr:`Var.dist_node
+    <liesel.model.Var.dist_node>`:
 
     >>> a = lsl.Var.new_value(2.0, name="a")
     >>> b = lsl.Var.new_obs(1.0, lsl.Dist(tfd.Normal, loc=a, scale=1.0))
     >>> b.dist_node["loc"]
     Var(name="a")
 
-    Access positional inputs to a distribution :attr:`.Var.dist_node`:
+    Access positional inputs to a distribution :attr:`Var.dist_node
+    <liesel.model.Var.dist_node>`:
 
     >>> a = lsl.Var.new_value(2.0, name="a")
     >>> b = lsl.Var.new_obs(1.0, lsl.Dist(tfd.Normal, a, scale=1.0))
@@ -1773,7 +1820,7 @@ class Var:
 
     .. note::
         Note that, for accessing keyword arguments, you do *not* use the
-        :attr:`.Var.name`
+        :attr:`Var.name <liesel.model.Var.name>`
         attribute of the looked-for input variable or node, but the *argument name*.
         Consider this case from above::
 
@@ -1786,11 +1833,14 @@ class Var:
 
     .. rubric:: Swapping out inputs
 
-    You can also use square-bracket indexing on :attr:`.Var.value_node` and
-    :attr:`.Var.dist_node` to swap out existing inputs. This allows you to easily make
+    You can also use square-bracket indexing on :attr:`Var.value_node
+    <liesel.model.Var.value_node>` and
+    :attr:`Var.dist_node <liesel.model.Var.dist_node>` to swap out existing inputs. This
+    allows you to easily make
     changes to your model.
 
-    Swap out inputs to a calculator via :attr:`.Var.value_node`:
+    Swap out inputs to a calculator via :attr:`Var.value_node
+    <liesel.model.Var.value_node>`:
 
     >>> a = lsl.Var.new_value(2.0, name="a")
     >>> b = lsl.Var.new_calc(lambda x: x + 1.0, x=a)
@@ -1799,7 +1849,8 @@ class Var:
     >>> b.value_node["x"]
     Var(name="c")
 
-    Swap out inputs to a distribution via :attr:`.Var.dist_node`:
+    Swap out inputs to a distribution via :attr:`Var.dist_node
+    <liesel.model.Var.dist_node>`:
 
     >>> a = lsl.Var.new_value(2.0, name="a")
     >>> b = lsl.Var.new_obs(1.0, lsl.Dist(tfd.Normal, loc=a, scale=1.0))
@@ -1815,22 +1866,23 @@ class Var:
     dist
         The probability distribution of the variable.
     name
-        The name of the variable. If you do not specify a name, a unique name will be \
-        automatically generated upon initialization of a :class:`.Model`.
+        The name of the variable. If you do not specify a name, a unique name will be
+        automatically generated upon initialization of a :class:`~liesel.model.Model`.
     inference
         Additional information that can be used to set up inference algorithms.
         Mapping inputs are shallow-copied; the contained specifications remain shared.
         Direct assignment to ``var.inference`` does not copy the assigned object.
     bijector
-        Bijector for variable transformation. If ``"auto"``, uses the default event \
-        space bijector defined by the variable's distribution. \
-        If ``None``, no transformation takes place. If not ``None``, the variable will \
-        call :meth:`.biject` with this bijector upon initialization. \
-        Any supplied inference information will be passed to the bijected \
+        Bijector for variable transformation. If ``"auto"``, uses the default event
+        space bijector defined by the variable's distribution.
+        If ``None``, no transformation takes place. If not ``None``, the variable will
+        call :meth:`~liesel.model.Var.biject` with this bijector upon initialization.
+        Any supplied inference information will be passed to the bijected
         variable.
     convert
         A function used to process the value of this variable. The default uses the
-        function stored in :meth:`.Var.convert_value`, which is ``jax.numpy.asarray``.
+        function stored in :meth:`Var.convert_value <liesel.model.Var.convert_value>`,
+        which is ``jax.numpy.asarray``.
         Conversion functions must be idempotent.
 
     distribution
@@ -1841,23 +1893,27 @@ class Var:
     See Also
     --------
 
-    .Var.new_obs : Initializes a strong variable that holds observed data.
-    .Var.new_param : Initializes a strong variable that acts as a model parameter.
-    .Var.new_calc :
+    liesel.model.Var.new_obs : Initializes a strong variable that holds observed data.
+    liesel.model.Var.new_param :
+        Initializes a strong variable that acts as a model parameter.
+    liesel.model.Var.new_calc :
         Initializes a weak variable that is a function of other variables.
-    .Var.new_value : Initializes a strong variable without a distribution.
-    :meth:`.Var.transform` : Transforms a variable by adding a new transformed
+    liesel.model.Var.new_value : Initializes a strong variable without a distribution.
+    liesel.model.Var.transform : Transforms a variable by adding
+        a new transformed
         variable as an input. This is useful for variables that are constrained to a
         certain domain, e.g. positive values.
-    .Calc :
+    liesel.model.Calc :
         A node representing a general calculation/operation in JAX or Python. Use this
-        instead of :meth:`~.Var.new_calc` if you want to hide your calculation in the
-        model graph produced by :func:`.plot_vars`.
-    .Value :
+        instead of :meth:`~liesel.model.Var.new_calc` if you want to hide your
+        calculation in the
+        model graph produced by :meth:`~liesel.model.Var.plot_vars`.
+    liesel.model.Value :
         A node representing a static value. Use this
-        instead of :meth:`~.Var.new_value` if you want to hide your value in the
-        model graph produced by :func:`.plot_vars`.
-    .Dist :
+        instead of :meth:`~liesel.model.Var.new_value` if you want to hide your value in
+        the
+        model graph produced by :meth:`~liesel.model.Var.plot_vars`.
+    liesel.model.Dist :
         A node representing a ``tensorflow_probability``
         :class:`~tfp.distributions.Distribution`.
 
@@ -1879,6 +1935,12 @@ class Var:
         "inference",
         "info",
     )
+
+    if TYPE_CHECKING:
+        inference: InferenceTypes
+        """Inference configuration associated with this variable."""
+        info: dict[str, Any]
+        """Additional metadata associated with this variable."""
 
     def __init__(
         self,
@@ -1984,8 +2046,9 @@ class Var:
         Initializes a strong variable that acts as a model parameter.
 
         A parameter is a strong variable that can have a distribution. If it does have a
-        distribution, its :attr:`~.Var.log_prob` is counted in a model's log prior, i.e.
-        :attr:`~.Model.log_prior`.
+        distribution, its :attr:`~liesel.model.Var.log_prob` is counted in a model's log
+        prior, i.e.
+        :attr:`~liesel.model.Model.log_prior`.
 
         Parameters
         ----------
@@ -1995,19 +2058,22 @@ class Var:
             The probability distribution of the variable.
         name
             The name of the variable. If you do not specify a name, a unique name will \
-            be automatically generated upon initialization of a :class:`.Model`.
+            be automatically generated upon initialization of a
+            :class:`~liesel.model.Model`.
         inference
             Additional information that can be used to set up inference algorithms.
         bijector
             Bijector for variable transformation. If ``"auto"``, uses the default \
             event space bijector defined by the variable's distribution. \
             If ``None``, no transformation takes place. If not ``None``, the variable \
-            will call :meth:`.biject` with this bijector upon initialization. \
+            will call :meth:`~liesel.model.Var.biject` with this bijector upon
+            initialization. \
             Any supplied inference information will be passed to the bijected \
             variable.
         convert
             A function used to process the value of this variable. The default uses the
-            function stored in :meth:`.Var.convert_value`, which is
+            function stored in :meth:`Var.convert_value
+            <liesel.model.Var.convert_value>`, which is
             ``jax.numpy.asarray``.
         distribution
             Deprecated argument name for the probability distribution of the variable,
@@ -2016,10 +2082,12 @@ class Var:
 
         See Also
         --------
-        .Var.new_obs : Initializes a strong variable that holds observed data.
-        .Var.new_calc :
+        ~liesel.model.Var.new_obs : Initializes a strong variable that holds observed
+            data.
+        ~liesel.model.Var.new_calc :
             Initializes a weak variable that is a function of other variables.
-        .Var.new_value : Initializes a strong variable without a distribution.
+        ~liesel.model.Var.new_value : Initializes a strong variable without a
+            distribution.
 
         Examples
         --------
@@ -2067,8 +2135,9 @@ class Var:
         Initializes a strong variable that holds observed data.
 
         An observed variables is a strong variable that can have a distribution.
-        If it does have a distribution, its :attr:`~.Var.log_prob` is counted in
-        a model's log likelihood, i.e. :attr:`~.Model.log_lik`.
+        If it does have a distribution, its :attr:`~liesel.model.Var.log_prob` is
+        counted in
+        a model's log likelihood, i.e. :attr:`~liesel.model.Model.log_lik`.
 
         Parameters
         ----------
@@ -2078,10 +2147,12 @@ class Var:
             The probability distribution of the variable.
         name
             The name of the variable. If you do not specify a name, a unique name will \
-            be automatically generated upon initialization of a :class:`.Model`.
+            be automatically generated upon initialization of a
+            :class:`~liesel.model.Model`.
         convert
             A function used to process the value of this variable. The default uses the
-            function stored in :meth:`.Var.convert_value`, which is
+            function stored in :meth:`Var.convert_value
+            <liesel.model.Var.convert_value>`, which is
             ``jax.numpy.asarray``.
         distribution
             Deprecated argument name for the probability distribution of the variable,
@@ -2090,10 +2161,12 @@ class Var:
 
         See Also
         --------
-        .Var.new_param : Initializes a strong variable that acts as a model parameter.
-        .Var.new_calc :
+        ~liesel.model.Var.new_param : Initializes a strong variable that acts as a model
+            parameter.
+        ~liesel.model.Var.new_calc :
             Initializes a weak variable that is a function of other variables.
-        .Var.new_value : Initializes a strong variable without a distribution.
+        ~liesel.model.Var.new_value : Initializes a strong variable without a
+            distribution.
 
         Examples
         --------
@@ -2148,15 +2221,18 @@ class Var:
         function
             The function to be wrapped. Must be jit-compilable by JAX.
         *inputs
-            Non-keyword inputs. Any inputs that are not already nodes or :class:`.Var` \
-            will be converted to :class:`.Value` nodes. The values of these inputs \
+            Non-keyword inputs. Any inputs that are not already nodes or
+            :class:`~liesel.model.Var` \
+            will be converted to :class:`~liesel.model.Value` nodes. The values of these
+            inputs \
             will be passed to the wrapped function in the same order they are entered \
             here.
         dist
             The probability distribution of the variable.
         name
             The name of the node. If you do not specify a name, a unique name will be \
-            automatically generated upon initialization of a :class:`.Model`.
+            automatically generated upon initialization of a
+            :class:`~liesel.model.Model`.
         _needs_seed
             Whether the node needs a seed / PRNG key.
         _update_on_init
@@ -2164,7 +2240,8 @@ class Var:
             initialization.
         convert_inputs
             A function used to process the values of this variable's inputs.
-            The default uses the function stored in :meth:`.Var.convert_value`,
+            The default uses the function stored in :meth:`Var.convert_value
+            <liesel.model.Var.convert_value>`,
             which is ``jax.numpy.asarray``.
         cache
             If ``False``, this variable will not store a cache of its value. This means,
@@ -2173,26 +2250,33 @@ class Var:
             trivial (such as prepending an axis to an array), but it can greatly slow
             down computations otherwise (such as when the function performs a
             matrix inversion). Internally, if ``cache=True``, this variable wraps a
-            :class:`.Calc`, and if ``cache=False``, it wraps a :class:`.TransientCalc`.
+            :class:`~liesel.model.Calc`, and if ``cache=False``, it wraps a
+            :class:`~liesel.model.TransientCalc`.
         distribution
             Deprecated argument name for the probability distribution of the variable,
             kept for backwards-compatibility.
             Please use the new name ``dist``.
         **kwinputs
-            Keyword inputs. Any inputs that are not already nodes or :class:`.Var`s
-            will be converted to :class:`.Data` nodes. The values of these inputs will \
+            Keyword inputs. Any inputs that are not already nodes or
+            :class:`~liesel.model.Var` objects
+            will be converted to :class:`~liesel.model.Value` nodes. The values of these
+            inputs will \
             be passed to the wrapped function as keyword arguments.
 
         Notes
         -----
-        Internally, this constructor initializes and wraps a :class:`.Calc` node.
+        Internally, this constructor initializes and wraps a :class:`~liesel.model.Calc`
+        node.
 
         See Also
         --------
-        .Var.new_param : Initializes a strong variable that acts as a model parameter.
-        .Var.new_obs : Initializes a strong variable that holds observed data.
-        .Var.new_value : Initializes a strong variable without a distribution.
-        .Calc : The calculator node class.
+        ~liesel.model.Var.new_param : Initializes a strong variable that acts as a model
+            parameter.
+        ~liesel.model.Var.new_obs : Initializes a strong variable that holds observed
+            data.
+        ~liesel.model.Var.new_value : Initializes a strong variable without a
+            distribution.
+        ~liesel.model.Calc : The calculator node class.
 
         Examples
         --------
@@ -2213,7 +2297,8 @@ class Var:
         >>> print(variance.value)
         1.0
 
-        The value of the calculating variable is updated when :meth:`~.Var.update` is
+        The value of the calculating variable is updated when
+        :meth:`~liesel.model.Var.update` is
         called.
 
         >>> log_scale = lsl.Var.new_param(0.0, name="log_scale")
@@ -2270,19 +2355,23 @@ class Var:
             The probability distribution of the variable.
         name
             The name of the variable. If you do not specify a name, a unique name will \
-            be automatically generated upon initialization of a :class:`.Model`.
+            be automatically generated upon initialization of a
+            :class:`~liesel.model.Model`.
         inference
             Additional information that can be used to set up inference algorithms.
         convert
             A function used to process the value of this variable. The default uses the
-            function stored in :meth:`.Var.convert_value`, which is
+            function stored in :meth:`Var.convert_value
+            <liesel.model.Var.convert_value>`, which is
             ``jax.numpy.asarray``.
 
         See Also
         --------
-        .Var.new_param : Initializes a strong variable that acts as a model parameter.
-        .Var.new_obs : Initializes a strong variable that acts as an observed variable.
-        .Var.new_calc :
+        ~liesel.model.Var.new_param : Initializes a strong variable that acts as a model
+            parameter.
+        ~liesel.model.Var.new_obs : Initializes a strong variable that acts as an
+            observed variable.
+        ~liesel.model.Var.new_calc :
             Initializes a weak variable that is a function of other variables.
 
         Examples
@@ -2367,7 +2456,7 @@ class Var:
         <https://www.tensorflow.org/probability/api_docs/python/tfp/bijectors>`_.
 
         - **Stored transformed variable**: After the transformation, you can
-            access the transformed variable via :attr:`.bijected_var`.
+            access the transformed variable via :attr:`~liesel.model.Var.bijected_var`.
 
 
         Parameters
@@ -2409,8 +2498,8 @@ class Var:
         ValueError
             If the argument ``bijector`` is ``None``, but the distribution does
             not have a default event space bijector. Also, if in the arguments to
-            :meth:`.transform` is ``inference=None`` but the variable
-            attribute :attr:`.inference` is not ``None``.
+            :meth:`~liesel.model.Var.transform` is ``inference=None`` but the variable
+            attribute :attr:`~liesel.model.Var.inference` is not ``None``.
 
         See Also
         --------
@@ -2455,10 +2544,10 @@ class Var:
                 # return the new variable
                 return new_var
 
-        The value of the attribute :attr:`~liesel.model.nodes.Var.parameter` is
+        The value of the attribute :attr:`~liesel.model.Var.parameter` is
         transferred to the transformed variable and set to ``False`` on the original
-        variable. The attributes :attr:`~liesel.model.nodes.Var.observed` and
-        :attr:`~liesel.model.nodes.Var.role` have the default values for
+        variable. The attributes :attr:`~liesel.model.Var.observed` and
+        :attr:`~liesel.model.Var.role` have the default values for
         the transformed variable and remain unchanged on the original variable.
 
         Examples
@@ -2612,9 +2701,11 @@ class Var:
         Transforms the variable using a bijector.
 
         - **Eager evaluation**: The transformation is applied immediately.
-        - **Stored transformed variable**: Access via :attr:`.bijected_var`.
+        - **Stored transformed variable**: Access via
+          :attr:`~liesel.model.Var.bijected_var`.
 
-        This method is similar to :meth:`.transform`, but with key differences:
+        This method is similar to :meth:`~liesel.model.Var.transform`, but with key
+        differences:
 
         - **Returns self**: Returns the original variable (now weakened) for chaining.
         - **Default "auto"**: Default uses the distribution's event space bijector.
@@ -2638,7 +2729,8 @@ class Var:
         Returns
         -------
         The original variable (self), now weak and depending on the transformed
-        variable. Access the transformed variable via :attr:`.bijected_var`.
+        variable. Access the transformed variable via
+        :attr:`~liesel.model.Var.bijected_var`.
 
         See Also
         --------
@@ -2676,12 +2768,14 @@ class Var:
     def bijected_var(self) -> Var:
         """
         Transformed variable.
-        Either supplied manually or automatically created by :meth:`.biject`.
+        Either supplied manually or automatically created by
+        :meth:`~liesel.model.Var.biject`.
 
         Raises
         ------
         RuntimeError
-            If no bijected variable exists. Use :attr:`.has_bijected_var` to check
+            If no bijected variable exists. Use
+            :attr:`~liesel.model.Var.has_bijected_var` to check
             whether one exists without raising an error.
         """
         if self._bijected_var is None:
@@ -2870,19 +2964,22 @@ class Var:
 
         If a variable is observed and has an associated
         probability distribution, its log-probability is automatically added to the
-        model log-likelihood (see :attr:`.Model.log_lik`).
+        model log-likelihood (see :attr:`Model.log_lik <liesel.model.Model.log_lik>`).
 
         See Also
         --------
-        .obs : Helper function to declare a variable as a parameter.
-        .Model.log_prior : The log-prior of a Liesel model.
-        .Var.parameter : Whether the variable is a parameter. If a variable is \
+        ~liesel.model.Var.new_obs : Helper function to declare a variable as a
+            parameter.
+        ~liesel.model.Model.log_prior : The log-prior of a Liesel model.
+        ~liesel.model.Var.parameter : Whether the variable is a parameter. If a variable
+            is \
             a parameter, it is not observed.
 
         Notes
         -----
 
-        We recommend to use the :func:`.obs` helper function to declare an observed
+        We recommend to use the :meth:`~liesel.model.Var.new_obs` helper function to
+        declare an observed
         variable.
         """
         return self._observed
@@ -2901,19 +2998,21 @@ class Var:
 
         If the variable is a parameter and has an associated
         probability distribution, its log-probability is added to the
-        model's :attr:`~.Model.log_prior`.
+        model's :attr:`~liesel.model.Model.log_prior`.
 
         See Also
         --------
-        .param : Helper function to declare a variable as a parameter.
-        .Model.log_prior : The log-prior of a Liesel model.
-        .Var.observed : Whether the variable is observed. If a variable is \
-            a parameter, it is not observed.
+        ~liesel.model.Var.new_param : Helper function to declare a variable as a
+            parameter.
+        ~liesel.model.Model.log_prior : The log-prior of a Liesel model.
+        ~liesel.model.Var.observed : Whether the variable is observed.
+            A parameter is not observed.
 
         Notes
         -----
 
-        We recommend to use the :func:`.param` helper function to declare a variable
+        We recommend to use the :meth:`~liesel.model.Var.new_param` helper function to
+        declare a variable
         as a parameter.
 
         """
@@ -2967,7 +3066,8 @@ class Var:
         The value of the variable.
 
         Can only be set if the variable is strong. If the variable is part of
-        a :class:`.Model` ``m`` with ``m.auto_update == True``, setting the value of
+        a :class:`~liesel.model.Model` ``m`` with ``m.auto_update == True``, setting the
+        value of
         the variable triggers an update of the model. The auto-update can be disabled
         to improve the performance if multiple model parameters are updated at once.
         """
@@ -3084,7 +3184,8 @@ class Var:
         """
         Plots the variables of the Liesel sub-model that terminates in this variable.
 
-        Wraps :func:`~.viz.plot_vars`. Alias for :meth:`.Var.plot_vars`.
+        Wraps ``liesel.model.viz.plot_vars``. Alias for :meth:`Var.plot_vars
+        <liesel.model.Var.plot_vars>`.
 
         Parameters
         ----------
@@ -3111,14 +3212,16 @@ class Var:
 
         See Also
         --------
-        .Var.plot_vars : Plots the variables of the Liesel sub-model that terminates in
+        ~liesel.model.Var.plot_vars : Plots the variables of the Liesel sub-model that
+            terminates in
             this variable.
-        .Var.plot_nodes : Plots the nodes of the Liesel sub-model that terminates in
+        ~liesel.model.Var.plot_nodes : Plots the nodes of the Liesel sub-model that
+            terminates in
             this variable.
-        .Model.plot_vars : Plots the variables of a Liesel model.
-        .Model.plot_nodes : Plots the nodes of a Liesel model.
-        .viz.plot_vars : Plots the variables of a Liesel model.
-        .viz.plot_nodes : Plots the nodes of a Liesel model.
+        ~liesel.model.Model.plot_vars : Plots the variables of a Liesel model.
+        ~liesel.model.Model.plot_nodes : Plots the nodes of a Liesel model.
+        ~liesel.model.Var.plot_vars : Plots the variables of a Liesel model.
+        ~liesel.model.Var.plot_nodes : Plots the nodes of a Liesel model.
         """
         return self.plot_vars(
             verbose=verbose,
@@ -3145,7 +3248,7 @@ class Var:
         """
         Plots the variables of the Liesel sub-model that terminates in this variable.
 
-        Wraps :func:`~.viz.plot_vars`.
+        Wraps ``liesel.model.viz.plot_vars``.
 
         Parameters
         ----------
@@ -3172,14 +3275,16 @@ class Var:
 
         See Also
         --------
-        .Var.plot_vars : Plots the variables of the Liesel sub-model that terminates in
+        ~liesel.model.Var.plot_vars : Plots the variables of the Liesel sub-model that
+            terminates in
             this variable.
-        .Var.plot_nodes : Plots the nodes of the Liesel sub-model that terminates in
+        ~liesel.model.Var.plot_nodes : Plots the nodes of the Liesel sub-model that
+            terminates in
             this variable.
-        .Model.plot_vars : Plots the variables of a Liesel model.
-        .Model.plot_nodes : Plots the nodes of a Liesel model.
-        .viz.plot_vars : Plots the variables of a Liesel model.
-        .viz.plot_nodes : Plots the nodes of a Liesel model.
+        ~liesel.model.Model.plot_vars : Plots the variables of a Liesel model.
+        ~liesel.model.Model.plot_nodes : Plots the nodes of a Liesel model.
+        ~liesel.model.Var.plot_vars : Plots the variables of a Liesel model.
+        ~liesel.model.Var.plot_nodes : Plots the nodes of a Liesel model.
         """
         return self._plot(
             which="vars",
@@ -3316,9 +3421,11 @@ class Var:
             model-specific converters. If ``None`` (default), the current variable \
             values are used.
         dists
-            Can be used to provide a dictionary of variable names and :class:`.Dist` \
+            Can be used to provide a dictionary of variable names and
+            :class:`~liesel.model.Dist` \
             instances to use in sampling. If ``None`` (default), samples are drawn for \
-            each variable using their :attr:`.Var.dist_node`.
+            each variable using their :attr:`Var.dist_node
+            <liesel.model.Var.dist_node>`.
         chunk_size
             Maximum number of flattened requested-draw and posterior-sample \
             combinations to evaluate in parallel. Defaults to ``64``. Pass ``None`` \
@@ -3392,7 +3499,7 @@ class Var:
         """
         Plots the nodes of the Liesel sub-model that terminates in this variable.
 
-        Wraps :func:`~.viz.plot_nodes`.
+        Wraps ``liesel.model.viz.plot_nodes``.
 
         Parameters
         ----------
@@ -3417,14 +3524,16 @@ class Var:
 
         See Also
         --------
-        .Var.plot_vars : Plots the variables of the Liesel sub-model that terminates in
+        ~liesel.model.Var.plot_vars : Plots the variables of the Liesel sub-model that
+            terminates in
             this variable.
-        .Var.plot_nodes : Plots the nodes of the Liesel sub-model that terminates in
+        ~liesel.model.Var.plot_nodes : Plots the nodes of the Liesel sub-model that
+            terminates in
             this variable.
-        .Model.plot_vars : Plots the variables of a Liesel model.
-        .Model.plot_nodes : Plots the nodes of a Liesel model.
-        .viz.plot_vars : Plots the variables of a Liesel model.
-        .viz.plot_nodes : Plots the nodes of a Liesel model.
+        ~liesel.model.Model.plot_vars : Plots the variables of a Liesel model.
+        ~liesel.model.Model.plot_nodes : Plots the nodes of a Liesel model.
+        ~liesel.model.Var.plot_vars : Plots the variables of a Liesel model.
+        ~liesel.model.Var.plot_nodes : Plots the nodes of a Liesel model.
         """
         return self._plot(
             which="nodes",
@@ -3682,15 +3791,18 @@ def _transform_var_without_dist_with_bijector_class(
 
 class Group:
     """
-    A group holds a collection of related :class:`.Var` and/or :class:`.Node` objects.
+    A group holds a collection of related :class:`~liesel.model.Var` and/or
+    :class:`~liesel.model.Node` objects.
 
     They allow you to do three basic things:
 
     1. Store related nodes together for easier access.
     2. Access their member nodes and variables via ``group["name"]``, where ``"name"``
-       is the group-specific name, which can be different from the :attr:`.Var.name` /
-       :attr:`.Node.name`.
-    3. Easily retrieve a variable's or a node's value from a :attr:`.Model.state` based
+       is the group-specific name, which can be different from the :attr:`Var.name
+       <liesel.model.Var.name>` /
+       :attr:`Node.name <liesel.model.Node.name>`.
+    3. Easily retrieve a variable's or a node's value from a :attr:`Model.state
+    <liesel.model.Model.state>` based
        on their group-specific name via :meth:`.value_from`.
 
     Parameters
@@ -3704,9 +3816,11 @@ class Group:
 
     See Also
     --------
-    * :attr:`.Node.groups` and :attr:`.Var.groups` are read-only mappings of the
+    * :attr:`Node.groups <liesel.model.Node.groups>` and :attr:`Var.groups
+      <liesel.model.Var.groups>` are read-only mappings of the
       groups whose member the respective object is.
-    * :meth:`.GraphBuilder.groups` and :meth:`.Model.groups` are methods that collect
+    * :meth:`GraphBuilder.groups <liesel.model.GraphBuilder.groups>` and
+      :meth:`Model.groups <liesel.model.Model.groups>` are methods that collect
       and return all groups within the graph/model.
 
     Notes
@@ -3773,7 +3887,7 @@ class Group:
         Parameters
         ----------
         model_state
-            The state of a Liesel model, i.e. a :class:`~.Model.state`.
+            The state of a Liesel model, i.e. a :class:`~liesel.model.Model.state`.
         name
             The name of the node or variable within this group.
 
@@ -3796,7 +3910,7 @@ class Group:
         A mapping of the variables in the group with their names as keys.
 
         Values are dynamically typed to allow subclass-specific operations after
-        lookup, as in :attr:`.Model.vars`.
+        lookup, as in :attr:`Model.vars <liesel.model.Model.vars>`.
         """
         return _KeyCompletableMapping(self._vars)
 

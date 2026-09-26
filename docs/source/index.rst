@@ -10,6 +10,7 @@ Liesel: A Probabilistic Programming Framework
    :maxdepth: 1
 
    tutorials_overview
+   optimization
 
 
 API Reference
@@ -26,7 +27,7 @@ Both are documented with examples, so make sure to check them out.
 The model building workflow in Liesel consists of the following steps:
 
 1. Set up the nodes and variables that make up your model.
-2. Initialize a :class:`.Model` with your root variable(s).
+2. Initialize a :class:`Model <liesel.model.Model>` with your root variable(s).
 
 .. autosummary::
     :toctree: generated
@@ -41,14 +42,14 @@ The model building workflow in Liesel consists of the following steps:
 MCMC Setup
 ************
 
-To set up an MCMC engine, goose provides the :class:`~.goose.EngineBuilder`. Please refer to
+To set up an MCMC engine, goose provides the :class:`EngineBuilder <liesel.goose.EngineBuilder>`. Please refer to
 the linked EngineBuilder documentation to learn how to use it.
 
-A recent addition is the :class:`~.goose.MCMCSpec`, which can be passed to the
-``inference`` argument of a :class:`.model.Var` upon initialization to tell the variable
+A recent addition is the :class:`MCMCSpec <liesel.goose.MCMCSpec>`, which can be passed to the
+``inference`` argument of a :class:`model.Var <liesel.model.Var>` upon initialization to tell the variable
 directly how it should be sampled. You can then use the method
-:meth:`~.goose.LieselMCMC.get_engine_builder` of :class:`~.goose.LieselMCMC` to
-conveniently initialize your :class:`~.goose.EngineBuilder`.
+:meth:`get_engine_builder <liesel.goose.LieselMCMC.get_engine_builder>` of :class:`LieselMCMC <liesel.goose.LieselMCMC>` to
+conveniently initialize your :class:`EngineBuilder <liesel.goose.EngineBuilder>`.
 
 .. autosummary::
     :toctree: generated
@@ -67,11 +68,11 @@ MCMC Kernels
 
 Goose makes it easy for you to combine different MCMC kernels for different blocks of
 model parameters. You can also define your own kernel by implementing
-the :class:`.Kernel` protocol.
+the :class:`Kernel <liesel.goose.Kernel>` protocol.
 
 To draw samples from your posterior, you will want to call
-:meth:`~.goose.Engine.sample_all_epochs`. Once sampling is done, you can obtain the results
-with :meth:`~.goose.Engine.get_results`, which will return a :class:`~.goose.SamplingResults`
+:meth:`sample_all_epochs <liesel.goose.Engine.sample_all_epochs>`. Once sampling is done, you can obtain the results
+with :meth:`get_results <liesel.goose.Engine.get_results>`, which will return a :class:`SamplingResults <liesel.goose.SamplingResults>`
 instance.
 
 .. autosummary::
@@ -105,9 +106,9 @@ The central classes for handling your sampling results are:
     ~liesel.goose.loo
 
 You can obtain your posterior samples as a dictionary via
-:meth:`~.goose.SamplingResults.get_posterior_samples`. There is also experimental support
+:meth:`get_posterior_samples <liesel.goose.SamplingResults.get_posterior_samples>`. There is also experimental support
 for turning your samples into an ArviZ data object via
-:func:`.to_arviz_inference_data`.
+:func:`to_arviz_inference_data <liesel.experimental.arviz.to_arviz_inference_data>`.
 
 Goose also comes with a number of plotting functions that give you quick
 acccess to important diagnostics.
@@ -125,16 +126,52 @@ acccess to important diagnostics.
     ~liesel.goose.plot_density
     ~liesel.goose.plot_param
 
-Optimization
+.. _optimizer-api:
+
+Optimizer API
 *************
 
-It can often be beneficial to find good starting values to get your MCMC sampling scheme
-going. Goose provides the function :func:`.optim_flat` for this purpose, which allows you
-to run stochastic gradient descent on a liesel model.
+Start with the :doc:`optimization` guide. These pages describe the arguments
+and defaults.
 
 .. autosummary::
     :toctree: generated
-    :caption: Optimization
+    :caption: Optimizer API
+    :recursive:
+    :nosignatures:
+
+    ~liesel.optim.LieselOptim
+    ~liesel.optim.OptimEngine
+    ~liesel.optim.OptimCheckpoint
+    ~liesel.optim.OptimHistory
+    ~liesel.optim.OptimResult
+    ~liesel.optim.OptimNaNDebugInfo
+    ~liesel.optim.Loss
+    ~liesel.optim.LossMixin
+    ~liesel.optim.NegLogProbLoss
+    ~liesel.optim.Optimizer
+    ~liesel.optim.OptimizerLike
+    ~liesel.optim.LBFGS
+    ~liesel.optim.Stopper
+    ~liesel.optim.EmaTrainLossMonitor
+    ~liesel.optim.LossMonitor
+    ~liesel.optim.Batches
+    ~liesel.optim.BatchManager
+    ~liesel.optim.Split
+    ~liesel.optim.SplitManager
+    ~liesel.optim.PositionSplit
+    ~liesel.optim.PositionSplitManager
+
+Legacy optimization (deprecated)
+********************************
+
+:func:`liesel.goose.optim_flat` is deprecated and emits a ``FutureWarning``.
+Use :class:`liesel.optim.LieselOptim` for new code, including finding starting
+values for MCMC. See :doc:`optimizer-migration` for a before-and-after example.
+
+.. autosummary::
+    :toctree: generated
+    :caption: Legacy optimization (deprecated)
     :recursive:
     :nosignatures:
 
@@ -171,7 +208,7 @@ Model Interfaces
 
 A natural option for setting up your model is the use of ``liesel.model``.
 However, you are not locked
-in to using :class:`.Model`. Goose currently includes the following interfaces:
+in to using :class:`Model <liesel.model.Model>`. Goose currently includes the following interfaces:
 
 .. autosummary::
     :toctree: generated
@@ -244,10 +281,10 @@ Experimental API
 .. autosummary::
     :toctree: generated
     :caption: Experimental API
-    :recursive:
     :nosignatures:
 
-    ~liesel.experimental
+    ~liesel.experimental.arviz
+    ~liesel.experimental.pymc
 
 
 Effort-Based Versioning

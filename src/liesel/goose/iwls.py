@@ -4,7 +4,7 @@ Iteratively weighted least squares (IWLS) sampler
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import ClassVar, Literal, Self, get_args
+from typing import TYPE_CHECKING, ClassVar, Literal, Self, get_args
 
 import jax
 import jax.numpy as jnp
@@ -39,8 +39,8 @@ from .types import Array, KeyArray, ModelState, Position, PositionInput, Scalar
 @dataclass
 class IWLSKernelState:
     """
-    A dataclass for the state of a :class:`.IWLSKernel`, implementing the
-    :class:`.liesel.goose.da.DAKernelState` protocol.
+    A dataclass for the state of a :class:`~liesel.goose.IWLSKernel`, implementing the
+    :class:`~liesel.goose.da.DAKernelState` protocol.
     """
 
     step_size: Scalar
@@ -64,7 +64,7 @@ class IWLSKernel(
     """
     An IWLS kernel with dual averaging and an (optional) user-defined function for
     computing the Cholesky decomposition of the Fisher information matrix, implementing
-    the :class:`.liesel.goose.types.Kernel` protocol.
+    the :class:`~liesel.goose.Kernel` protocol.
 
     Parameters
     ----------
@@ -101,7 +101,7 @@ class IWLSKernel(
     Notes
     -----
     For more information on step size tuning via dual averaging,
-    see :func:`.da_step` and :class:`.DAKernelState`.
+    see :func:`~liesel.goose.da.da_step` and :class:`~liesel.goose.da.DAKernelState`.
     """
 
     error_book: ClassVar[dict[int, str]] = {
@@ -123,9 +123,28 @@ class IWLSKernel(
     needs_history: ClassVar[bool] = False
     """Whether this kernel needs its history for tuning."""
     identifier: str = ""
-    """Kernel identifier, set by :class:`~.goose.EngineBuilder`"""
+    """Kernel identifier, set by :class:`~liesel.goose.EngineBuilder`"""
     position_keys: tuple[str, ...]
     """Tuple of position keys handled by this kernel."""
+
+    if TYPE_CHECKING:
+        chol_info_fn: Callable[[ModelState], Array] | None
+        """
+        A custom function that takes a model state and returns the Cholesky
+        decomposition of the information matrix to produce the IWLS proposal.
+        """
+        da_gamma: float
+        """The adaptation regularization scale."""
+        da_kappa: float
+        """The adaptation relaxation exponent."""
+        da_t0: int
+        """The adaptation iteration offset."""
+        da_target_accept: float
+        """Target acceptance probability for dual averaging algorithm."""
+        da_tune_step_size: bool
+        """Whether to tune the step size using dual averaging."""
+        initial_step_size: float
+        """Value at which to start step size tuning."""
 
     def __init__(
         self,
@@ -156,6 +175,7 @@ class IWLSKernel(
 
     @property
     def fallback_chol_info(self) -> CholInfoFallbackOptions | None:
+        """Fallback strategy when the information matrix cannot be factorized."""
         return self._fallback_chol_info
 
     @fallback_chol_info.setter
@@ -223,7 +243,8 @@ class IWLSKernel(
         :attr:`.flat_hessian_fn`.
 
         The flat position is extracted from the :attr:`.model_state`. If the user
-        provided a :attr:`.chol_info_fn` when initializing the kernel, this function is
+        provided a :attr:`~liesel.goose.IWLSKernel.chol_info_fn` when initializing the
+        kernel, this function is
         called instead.
         """
 

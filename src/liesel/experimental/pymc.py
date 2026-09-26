@@ -1,5 +1,5 @@
 """
-A :class:`.ModelInterface` for PyMC models.
+A ``ModelInterface`` for PyMC models.
 
 To use this module, the PyMC package must be installed. To do so,
 please install Liesel with the optional dependency PyMC:
@@ -94,14 +94,16 @@ except ImportError as e:
 
 class PyMCInterface:
     """
-    An implementation of the Goose :class:`~liesel.goose.types.ModelInterface`
+    An implementation of the Goose ``ModelInterface``
     to be used with a PyMC model.
 
-    The initial position can be extracted with :meth:`.get_initial_state`.
+    The initial position can be extracted with
+    :meth:`~liesel.experimental.pymc.PyMCInterface.get_initial_state`.
     The model state is represented as a ``Position``.
 
     By default, only non-observed random variables are available via
-    :meth:`.extract_position`. This includes transformed but not untransformed
+    :meth:`~liesel.experimental.pymc.PyMCInterface.extract_position`. This includes
+    transformed but not untransformed
     variables. Also, ``Deterministic``'s are not available. To make them trackable
     for the Goose :class:`~liesel.goose.engine.Engine`, these variables must be
     mentioned in the constructor.
@@ -111,7 +113,8 @@ class PyMCInterface:
     model
         A PyMC model.
     additional_vars
-        Variables that should be available via :meth:`.extract_position` \
+        Variables that should be available via
+        :meth:`~liesel.experimental.pymc.PyMCInterface.extract_position` \
         but are not by default.
     """
 

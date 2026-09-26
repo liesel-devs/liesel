@@ -118,7 +118,8 @@ class SamplingResults:
     Contains the results of the MCMC engine.
 
     Easy access to the samples is provided via the methods
-    :meth:`.get_samples` and :meth:`.get_posterior_samples`.
+    :meth:`~liesel.goose.SamplingResults.get_samples` and
+    :meth:`~liesel.goose.SamplingResults.get_posterior_samples`.
     """
 
     positions: EpochChainManager
@@ -360,13 +361,13 @@ class SamplingResults:
         return Option(error_log)
 
     def pkl_save(self, path) -> None:
-        """Save result as a pickled object under :attr:`.path`."""
+        """Save result as a pickled object under ``path``."""
         with open(path, "wb") as f:
             pickle.dump(self, f)
 
     @staticmethod
     def pkl_load(path) -> SamplingResults:
-        """Loads the pickled object from :attr:`.path`."""
+        """Loads the pickled object from ``path``."""
         with open(path, "rb") as f:
             return pickle.load(f)
 

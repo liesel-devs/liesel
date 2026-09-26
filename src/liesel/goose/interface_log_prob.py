@@ -83,7 +83,8 @@ class FlatInterfaceLogProb:
     interface.
 
     Also provides access to the first and second derivatives. The methods
-    :meth:`.FlatLogProb.grad` and :meth:`.FlatLogProb.hessian` are flattened, which
+    :meth:`FlatLogProb.grad <liesel.model.FlatLogProb.grad>` and
+    :meth:`FlatLogProb.hessian <liesel.model.FlatLogProb.hessian>` are flattened, which
     means they expect arrays as inputs and return arrays.
 
     Parameters

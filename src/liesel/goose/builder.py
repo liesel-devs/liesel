@@ -13,7 +13,7 @@ import logging
 import math
 from collections.abc import Iterable, Mapping
 from functools import partial
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import jax
 import jax.numpy as jnp
@@ -57,7 +57,7 @@ def _find_duplicate(xs: list[str]) -> Option[str]:
 
 class EngineBuilder:
     """
-    The :class:`.EngineBuilder` is used to construct an MCMC Engine.
+    The :class:`~liesel.goose.EngineBuilder` is used to construct an MCMC Engine.
 
     .. rubric:: Liesel Workflow
 
@@ -67,29 +67,41 @@ class EngineBuilder:
         :class:`~liesel.goose.MCMCSpec` that specify how each variable should be
         sampled.
     #. You initilize an EngineBuilder using the method
-        :meth:`~.goose.LieselMCMC.get_engine_builder` of :class:`~.goose.LieselMCMC`.
+        :meth:`~liesel.goose.LieselMCMC.get_engine_builder` of
+        :class:`~liesel.goose.LieselMCMC`.
     #. Set the desired number of warmup and posterior samples with
-        :meth:`.add_burnin`, :meth:`.add_adaptation`, and :meth:`.add_posterior`.
-    #. Build an :class:`~.goose.Engine` with :meth:`.build`.
+        :meth:`~liesel.goose.EngineBuilder.add_burnin`,
+        :meth:`~liesel.goose.EngineBuilder.add_adaptation`, and
+        :meth:`~liesel.goose.EngineBuilder.add_posterior`.
+    #. Build an :class:`~liesel.goose.Engine` with
+       :meth:`~liesel.goose.EngineBuilder.build`.
 
     .. rubric:: General Workflow
 
     The general workflow usually looks something like this:
 
-    #. Create a builder with :class:`.EngineBuilder`.
+    #. Create a builder with :class:`~liesel.goose.EngineBuilder`.
     #. Set the desired number of warmup and posterior samples with
-        :meth:`.add_burnin`, :meth:`.add_adaptation`, and :meth:`.add_posterior`.
-    #. Set the model interface with :meth:`.set_model`.
-    #. Set the initial values with :meth:`.set_initial_values`.
-    #. Add MCMC kernels with :meth:`.add_kernel`.
-    #. Build an :class:`~.goose.Engine` with :meth:`.build`.
+        :meth:`~liesel.goose.EngineBuilder.add_burnin`,
+        :meth:`~liesel.goose.EngineBuilder.add_adaptation`, and
+        :meth:`~liesel.goose.EngineBuilder.add_posterior`.
+    #. Set the model interface with :meth:`~liesel.goose.EngineBuilder.set_model`.
+    #. Set the initial values with
+       :meth:`~liesel.goose.EngineBuilder.set_initial_values`.
+    #. Add MCMC kernels with :meth:`~liesel.goose.EngineBuilder.add_kernel`.
+    #. Build an :class:`~liesel.goose.Engine` with
+       :meth:`~liesel.goose.EngineBuilder.build`.
 
     Optionally, you can also:
 
-    - Add position keys to :attr:`.positions_included` for tracking. If you are using a
-      :class:`.Model` object, position keys are the names of variables or nodes in the
-      model. Refer to :attr:`.positions_included` for more information.
-    - Add custom jittering for start values with :meth:`.set_jitter_fns`.
+    - Add position keys to :attr:`~liesel.goose.EngineBuilder.positions_included` for
+      tracking. If you are using a
+      :class:`~liesel.model.Model` object, position keys are the names of variables or
+      nodes in the
+      model. Refer to :attr:`~liesel.goose.EngineBuilder.positions_included` for more
+      information.
+    - Add custom jittering for start values with
+      :meth:`~liesel.goose.EngineBuilder.set_jitter_fns`.
 
     Parameters
     ----------
@@ -101,17 +113,21 @@ class EngineBuilder:
 
     See Also
     --------
-    ~.goose.Engine : The MCMC engine, output of :meth:`.build`. ~.goose.LieselInterface
-    : Interface for a :class:`~liesel.model.model.Model` object. ~.goose.NUTSKernel :
-    The NUTS kernel. ~.goose.HMCKernel : The HMC kernel. ~.goose.IWLSKernel : The IWLS
-    kernel. ~.goose.RWKernel : The random walk kernel.
+    liesel.goose.Engine : The MCMC engine returned by :meth:`build
+        <liesel.goose.EngineBuilder.build>`.
+    liesel.goose.LieselInterface : Interface for a :class:`~liesel.model.Model`.
+    liesel.goose.NUTSKernel : The NUTS kernel.
+    liesel.goose.HMCKernel : The HMC kernel.
+    liesel.goose.IWLSKernel : The IWLS kernel.
+    liesel.goose.RWKernel : The random walk kernel.
 
     Notes
     -----
 
     By default, only position keys associated with an MCMC kernel is tracked. This
-    behavior can be adjusted with the fields :attr:`.positions_included` and
-    :attr:`.positions_excluded`.
+    behavior can be adjusted with the fields
+    :attr:`~liesel.goose.EngineBuilder.positions_included` and
+    :attr:`~liesel.goose.EngineBuilder.positions_excluded`.
 
     Examples
     --------
@@ -140,7 +156,8 @@ class EngineBuilder:
 
     >>> engine = builder.build()
 
-    From here, you can continue with :meth:`~.goose.Engine.sample_all_epochs` to draw
+    From here, you can continue with :meth:`~liesel.goose.Engine.sample_all_epochs` to
+    draw
     samples from your posterior distribution.
 
     .. rubric:: General Workflow
@@ -175,9 +192,22 @@ class EngineBuilder:
 
     >>> engine = builder.build()
 
-    From here, you can continue with :meth:`~.goose.Engine.sample_all_epochs` to draw
+    From here, you can continue with :meth:`~liesel.goose.Engine.sample_all_epochs` to
+    draw
     samples from your posterior distribution.
     """
+
+    if TYPE_CHECKING:
+        minimize_transition_infos: bool
+        """Whether to retain only minimal transition information."""
+        positions_excluded: list[str]
+        """Position keys excluded from the sampling results."""
+        positions_included: list[str]
+        """Additional position keys to retain in the sampling results."""
+        show_progress: bool
+        """Whether to show progress bars during sampling."""
+        store_kernel_states: bool
+        """Whether to retain kernel states in the sampling results."""
 
     def __init__(self, seed: int | KeyArray, num_chains: int):
         if isinstance(seed, int):
@@ -214,9 +244,10 @@ class EngineBuilder:
         List of additional position keys that should be tracked.
 
         If a position key is tracked that means the correspond element of the model
-        state will be saved and included in the :class:`~.goose.SamplingResults` and the
+        state will be saved and included in the :class:`~liesel.goose.SamplingResults`
+        and the
         posterior samples returned by
-        :meth:`~.goose.SamplingResults.get_posterior_samples`.
+        :meth:`~liesel.goose.SamplingResults.get_posterior_samples`.
 
         By default, only position keys associated with an MCMC kernel are tracked. You
         can easily add additional position keys by appending to this list.
@@ -277,7 +308,7 @@ class EngineBuilder:
         return self._engine_key
 
     def add_kernel(self, kernel: Kernel):
-        """Adds a :class:`.Kernel`."""
+        """Adds a :class:`~liesel.goose.Kernel`."""
         self._kernels.append(kernel)
 
     @property
@@ -286,7 +317,7 @@ class EngineBuilder:
         return tuple(self._kernels)
 
     def add_quantity_generator(self, generator: QuantityGenerator):
-        """Adds a :class:`.QuantityGenerator`."""
+        """Adds a ``QuantityGenerator``."""
         self._quantity_generators.append(generator)
 
     @property
@@ -298,10 +329,12 @@ class EngineBuilder:
         """
         Sets the initial model state.
 
-        If :attr:`.multiple_chains` is true the :attr:`.model_state` will be used as is;
-        otherwise :attr:`.model_state` will be used as the initial values for each
-        chain. Note that if :attr:`.multiple_chains` is true, the first axis of each
-        leaf of :attr:`.model_state` refers to the chain.
+        If ``multiple_chains`` is true the
+        :attr:`~liesel.goose.EngineBuilder.model_state` will be used as is;
+        otherwise :attr:`~liesel.goose.EngineBuilder.model_state` will be used as the
+        initial values for each
+        chain. Note that if ``multiple_chains`` is true, the first axis of each
+        leaf of :attr:`~liesel.goose.EngineBuilder.model_state` refers to the chain.
         """
         if not multiple_chains:
             model_states = stack_leaves(model_state for _ in range(self._num_chains))
@@ -337,7 +370,8 @@ class EngineBuilder:
         >>> key = jax.random.PRNGKey(42)
 
         In this example, we show how to use the method
-        :meth:`.EngineBuilder.set_jitter_fns` to apply jittering
+        :meth:`EngineBuilder.set_jitter_fns <liesel.goose.EngineBuilder.set_jitter_fns>`
+        to apply jittering
         to the initial values of each chain.
 
         First, we sample 500 data points from a Normal Distrbution
@@ -360,8 +394,10 @@ class EngineBuilder:
 
         >>> model = lsl.Model([x])
 
-        Finally, we build the model with :class:`.EngineBuilder`. We will use 4
-        parallel chains and sample our varaible using a :class:`~.goose.NUTSKernel`.
+        Finally, we build the model with :class:`~liesel.goose.EngineBuilder`. We will
+        use 4
+        parallel chains and sample our varaible using a
+        :class:`~liesel.goose.NUTSKernel`.
 
         >>> builder = gs.EngineBuilder(seed=1337, num_chains=4)
         >>> builder.set_model(gs.LieselInterface(model))
@@ -457,23 +493,31 @@ class EngineBuilder:
         -----
 
         There are some differences in the details between the methods
-        :meth:`.add_posterior`, :meth:`.add_adaptation`, :meth:`.add_burnin` and
-        :meth:`.set_duration`.
+        :meth:`~liesel.goose.EngineBuilder.add_posterior`,
+        :meth:`~liesel.goose.EngineBuilder.add_adaptation`,
+        :meth:`~liesel.goose.EngineBuilder.add_burnin` and
+        :meth:`~liesel.goose.EngineBuilder.set_duration`.
 
-        - :meth:`.set_duration` overwrites all existing epochs with the epochs defined
+        - :meth:`~liesel.goose.EngineBuilder.set_duration` overwrites all existing
+          epochs with the epochs defined
           in this method. In contrast, the ``add_`` methods only add additional epochs
           that are appended to the potentially existing ones.
-        - :meth:`.set_duration` sets both adaptation and posterior epochs, while each
+        - :meth:`~liesel.goose.EngineBuilder.set_duration` sets both adaptation and
+          posterior epochs, while each
           ``add_`` method only adds epochs of one type.
-        - :meth:`.set_duration` has an argument ``term_duration`` that defines the
+        - :meth:`~liesel.goose.EngineBuilder.set_duration` has an argument
+          ``term_duration`` that defines the
           number of samples drawn in the *final fast* adaptation epoch, and it defaults
-          to a fixed value of 50 samples. In contrast, :meth:`.add_adaptation` defines
+          to a fixed value of 50 samples. In contrast,
+          :meth:`~liesel.goose.EngineBuilder.add_adaptation` defines
           the number of samples drawn in the *final fast* adaptation epoch as a fraction
           of the total number of adaptation samples, and allows users to change this
-          fraction via the argument ``term``. As a result, if :meth:`.add_adaptation`
+          fraction via the argument ``term``. As a result, if
+          :meth:`~liesel.goose.EngineBuilder.add_adaptation`
           is used, the length of the final fast
           adaptation phase increases automatically, if the total number of warmup
-          samples increases, while it remains constant if :meth:`.set_duration` is
+          samples increases, while it remains constant if
+          :meth:`~liesel.goose.EngineBuilder.set_duration` is
           used.
 
 
@@ -526,13 +570,18 @@ class EngineBuilder:
         --------
 
         If you use any MCMC kernel that expects hyperparameter tuning an adaptation
-        phase, like :class:`.NUTSKernel`, :class:`.HMCKernel` or
-        our default implementation of :class:`.IWLSKernel`, you *must* add
-        an adaptation phase via :meth:`.add_adaptation`. Pure burnin
-        epochs like the ones added with :meth:`.add_burnin` do not perform any
+        phase, like :class:`~liesel.goose.NUTSKernel`, :class:`~liesel.goose.HMCKernel`
+        or
+        our default implementation of :class:`~liesel.goose.IWLSKernel`, you *must* add
+        an adaptation phase via :meth:`~liesel.goose.EngineBuilder.add_adaptation`. Pure
+        burnin
+        epochs like the ones added with :meth:`~liesel.goose.EngineBuilder.add_burnin`
+        do not perform any
         adaptation during warmup. They are only applicable if you *exclusively* use
-        MCMC kernels that do not require adaptation, such as :class:`.GibbsKernel`
-        or classic, untuned IWLS kernels via :meth:`.IWLSKernel.untuned`.
+        MCMC kernels that do not require adaptation, such as
+        :class:`~liesel.goose.GibbsKernel`
+        or classic, untuned IWLS kernels via :meth:`IWLSKernel.untuned
+        <liesel.goose.IWLSKernel.untuned>`.
 
 
         See Also
@@ -547,23 +596,31 @@ class EngineBuilder:
         -----
 
         There are some differences in the details between the methods
-        :meth:`.add_posterior`, :meth:`.add_adaptation`, :meth:`.add_burnin` and
-        :meth:`.set_duration`.
+        :meth:`~liesel.goose.EngineBuilder.add_posterior`,
+        :meth:`~liesel.goose.EngineBuilder.add_adaptation`,
+        :meth:`~liesel.goose.EngineBuilder.add_burnin` and
+        :meth:`~liesel.goose.EngineBuilder.set_duration`.
 
-        - :meth:`.set_duration` overwrites all existing epochs with the epochs defined
+        - :meth:`~liesel.goose.EngineBuilder.set_duration` overwrites all existing
+          epochs with the epochs defined
           in this method. In contrast, the ``add_`` methods only add additional epochs
           that are appended to the potentially existing ones.
-        - :meth:`.set_duration` sets both adaptation and posterior epochs, while each
+        - :meth:`~liesel.goose.EngineBuilder.set_duration` sets both adaptation and
+          posterior epochs, while each
           ``add_`` method only adds epochs of one type.
-        - :meth:`.set_duration` has an argument ``term_duration`` that defines the
+        - :meth:`~liesel.goose.EngineBuilder.set_duration` has an argument
+          ``term_duration`` that defines the
           number of samples drawn in the *final fast* adaptation epoch, and it defaults
-          to a fixed value of 50 samples. In contrast, :meth:`.add_adaptation` defines
+          to a fixed value of 50 samples. In contrast,
+          :meth:`~liesel.goose.EngineBuilder.add_adaptation` defines
           the number of samples drawn in the *final fast* adaptation epoch as a fraction
           of the total number of adaptation samples, and allows users to change this
-          fraction via the argument ``term``. As a result, if :meth:`.add_adaptation`
+          fraction via the argument ``term``. As a result, if
+          :meth:`~liesel.goose.EngineBuilder.add_adaptation`
           is used, the length of the final fast
           adaptation phase increases automatically, if the total number of warmup
-          samples increases, while it remains constant if :meth:`.set_duration` is
+          samples increases, while it remains constant if
+          :meth:`~liesel.goose.EngineBuilder.set_duration` is
           used.
         """
         epoch = _EpochConfig(EpochType.BURNIN, duration, thinning)
@@ -588,23 +645,31 @@ class EngineBuilder:
         -----
 
         There are some differences in the details between the methods
-        :meth:`.add_posterior`, :meth:`.add_adaptation`, :meth:`.add_burnin` and
-        :meth:`.set_duration`.
+        :meth:`~liesel.goose.EngineBuilder.add_posterior`,
+        :meth:`~liesel.goose.EngineBuilder.add_adaptation`,
+        :meth:`~liesel.goose.EngineBuilder.add_burnin` and
+        :meth:`~liesel.goose.EngineBuilder.set_duration`.
 
-        - :meth:`.set_duration` overwrites all existing epochs with the epochs defined
+        - :meth:`~liesel.goose.EngineBuilder.set_duration` overwrites all existing
+          epochs with the epochs defined
           in this method. In contrast, the ``add_`` methods only add additional epochs
           that are appended to the potentially existing ones.
-        - :meth:`.set_duration` sets both adaptation and posterior epochs, while each
+        - :meth:`~liesel.goose.EngineBuilder.set_duration` sets both adaptation and
+          posterior epochs, while each
           ``add_`` method only adds epochs of one type.
-        - :meth:`.set_duration` has an argument ``term_duration`` that defines the
+        - :meth:`~liesel.goose.EngineBuilder.set_duration` has an argument
+          ``term_duration`` that defines the
           number of samples drawn in the *final fast* adaptation epoch, and it defaults
-          to a fixed value of 50 samples. In contrast, :meth:`.add_adaptation` defines
+          to a fixed value of 50 samples. In contrast,
+          :meth:`~liesel.goose.EngineBuilder.add_adaptation` defines
           the number of samples drawn in the *final fast* adaptation epoch as a fraction
           of the total number of adaptation samples, and allows users to change this
-          fraction via the argument ``term``. As a result, if :meth:`.add_adaptation`
+          fraction via the argument ``term``. As a result, if
+          :meth:`~liesel.goose.EngineBuilder.add_adaptation`
           is used, the length of the final fast
           adaptation phase increases automatically, if the total number of warmup
-          samples increases, while it remains constant if :meth:`.set_duration` is
+          samples increases, while it remains constant if
+          :meth:`~liesel.goose.EngineBuilder.set_duration` is
           used.
         """
         epoch = _EpochConfig(EpochType.POSTERIOR, duration, thinning)
@@ -628,13 +693,18 @@ class EngineBuilder:
         your model runs successfully.
 
         If you use any MCMC kernel that expects hyperparameter tuning an adaptation
-        phase, like :class:`.NUTSKernel`, :class:`.HMCKernel` or
-        our default implementation of :class:`.IWLSKernel`, you *must* add
-        an adaptation phase via :meth:`.add_adaptation`. Pure burnin
-        epochs like the ones added with :meth:`.add_burnin` do not perform any
+        phase, like :class:`~liesel.goose.NUTSKernel`, :class:`~liesel.goose.HMCKernel`
+        or
+        our default implementation of :class:`~liesel.goose.IWLSKernel`, you *must* add
+        an adaptation phase via :meth:`~liesel.goose.EngineBuilder.add_adaptation`. Pure
+        burnin
+        epochs like the ones added with :meth:`~liesel.goose.EngineBuilder.add_burnin`
+        do not perform any
         adaptation during warmup. They are only applicable if you *exclusively* use
-        MCMC kernels that do not require adaptation, such as :class:`.GibbsKernel`
-        or classic, untuned IWLS kernels via :meth:`.IWLSKernel.untuned`.
+        MCMC kernels that do not require adaptation, such as
+        :class:`~liesel.goose.GibbsKernel`
+        or classic, untuned IWLS kernels via :meth:`IWLSKernel.untuned
+        <liesel.goose.IWLSKernel.untuned>`.
 
         See Also
         --------
@@ -648,23 +718,31 @@ class EngineBuilder:
         -----
 
         There are some differences in the details between the methods
-        :meth:`.add_posterior`, :meth:`.add_adaptation`, :meth:`.add_burnin` and
-        :meth:`.set_duration`.
+        :meth:`~liesel.goose.EngineBuilder.add_posterior`,
+        :meth:`~liesel.goose.EngineBuilder.add_adaptation`,
+        :meth:`~liesel.goose.EngineBuilder.add_burnin` and
+        :meth:`~liesel.goose.EngineBuilder.set_duration`.
 
-        - :meth:`.set_duration` overwrites all existing epochs with the epochs defined
+        - :meth:`~liesel.goose.EngineBuilder.set_duration` overwrites all existing
+          epochs with the epochs defined
           in this method. In contrast, the ``add_`` methods only add additional epochs
           that are appended to the potentially existing ones.
-        - :meth:`.set_duration` sets both adaptation and posterior epochs, while each
+        - :meth:`~liesel.goose.EngineBuilder.set_duration` sets both adaptation and
+          posterior epochs, while each
           ``add_`` method only adds epochs of one type.
-        - :meth:`.set_duration` has an argument ``term_duration`` that defines the
+        - :meth:`~liesel.goose.EngineBuilder.set_duration` has an argument
+          ``term_duration`` that defines the
           number of samples drawn in the *final fast* adaptation epoch, and it defaults
-          to a fixed value of 50 samples. In contrast, :meth:`.add_adaptation` defines
+          to a fixed value of 50 samples. In contrast,
+          :meth:`~liesel.goose.EngineBuilder.add_adaptation` defines
           the number of samples drawn in the *final fast* adaptation epoch as a fraction
           of the total number of adaptation samples, and allows users to change this
-          fraction via the argument ``term``. As a result, if :meth:`.add_adaptation`
+          fraction via the argument ``term``. As a result, if
+          :meth:`~liesel.goose.EngineBuilder.add_adaptation`
           is used, the length of the final fast
           adaptation phase increases automatically, if the total number of warmup
-          samples increases, while it remains constant if :meth:`.set_duration` is
+          samples increases, while it remains constant if
+          :meth:`~liesel.goose.EngineBuilder.set_duration` is
           used.
         """
         epochs = []
@@ -683,9 +761,9 @@ class EngineBuilder:
         thinning_warmup: int = 1,
     ):
         """
-        Sets epochs using the :func:`.stan_epochs` function.
+        Sets epochs using the ``liesel.goose.stan_epochs`` function.
 
-        Note that :attr:`.term_duration` needs to be long enough that tuning algorithms
+        Note that ``term_duration`` needs to be long enough that tuning algorithms
         like dual averaging can converge.
 
         See Also
@@ -700,23 +778,31 @@ class EngineBuilder:
         -----
 
         There are some differences in the details between the methods
-        :meth:`.add_posterior`, :meth:`.add_adaptation`, :meth:`.add_burnin` and
-        :meth:`.set_duration`.
+        :meth:`~liesel.goose.EngineBuilder.add_posterior`,
+        :meth:`~liesel.goose.EngineBuilder.add_adaptation`,
+        :meth:`~liesel.goose.EngineBuilder.add_burnin` and
+        :meth:`~liesel.goose.EngineBuilder.set_duration`.
 
-        - :meth:`.set_duration` overwrites all existing epochs with the epochs defined
+        - :meth:`~liesel.goose.EngineBuilder.set_duration` overwrites all existing
+          epochs with the epochs defined
           in this method. In contrast, the ``add_`` methods only add additional epochs
           that are appended to the potentially existing ones.
-        - :meth:`.set_duration` sets both adaptation and posterior epochs, while each
+        - :meth:`~liesel.goose.EngineBuilder.set_duration` sets both adaptation and
+          posterior epochs, while each
           ``add_`` method only adds epochs of one type.
-        - :meth:`.set_duration` has an argument ``term_duration`` that defines the
+        - :meth:`~liesel.goose.EngineBuilder.set_duration` has an argument
+          ``term_duration`` that defines the
           number of samples drawn in the *final fast* adaptation epoch, and it defaults
-          to a fixed value of 50 samples. In contrast, :meth:`.add_adaptation` defines
+          to a fixed value of 50 samples. In contrast,
+          :meth:`~liesel.goose.EngineBuilder.add_adaptation` defines
           the number of samples drawn in the *final fast* adaptation epoch as a fraction
           of the total number of adaptation samples, and allows users to change this
-          fraction via the argument ``term``. As a result, if :meth:`.add_adaptation`
+          fraction via the argument ``term``. As a result, if
+          :meth:`~liesel.goose.EngineBuilder.add_adaptation`
           is used, the length of the final fast
           adaptation phase increases automatically, if the total number of warmup
-          samples increases, while it remains constant if :meth:`.set_duration` is
+          samples increases, while it remains constant if
+          :meth:`~liesel.goose.EngineBuilder.set_duration` is
           used.
         """
         epochs = stan_epochs(

@@ -12,7 +12,7 @@ Liesel.
 ## Probabilistic graphical models
 
 In a Liesel model, each model variable is represented as a
-{class}`.Var`. There are two basic types of variables: strong and weak
+{class}`Var <liesel.model.Var>`. There are two basic types of variables: strong and weak
 variables. A strong variable has its value supplied externally, for
 example observed data, a fixed hyperparameter, or a model parameter
 whose value is changed by an inference algorithm. A weak variable has
@@ -21,7 +21,7 @@ variables. A transformed parameter, a linear predictor, or an inverse
 link function would typically be weak variables.
 
 In addition, each variable can have an optional probability
-distribution, represented by the {class}`.Dist` class. The probability
+distribution, represented by the {class}`Dist <liesel.model.Dist>` class. The probability
 density or mass function of this distribution evaluated at the current
 value of the variable gives the variable’s log-probability contribution.
 In a typical Bayesian regression model, the response variable has a
@@ -98,20 +98,20 @@ inputs and work our way toward the response.
 
 In the linear regression tutorial, we assumed the weakly informative
 prior $\beta_0, \beta_1 \sim \mathcal{N}(0, 100^2)$, so we start from
-there. First, we define the prior distribution using the {class}`.Dist`
+there. First, we define the prior distribution using the {class}`Dist <liesel.model.Dist>`
 class.
 
 ``` python
 beta_prior = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
 ```
 
-Note that you could also provide {class}`.Var` instances for the `loc`
+Note that you could also provide {class}`Var <liesel.model.Var>` instances for the `loc`
 and `scale` arguments; this is how hierarchical dependencies between
 distributions are expressed. If you provide floats like we do here,
 Liesel turns them into constant inputs under the hood.
 
 With this distribution object, we can now create the variable for our
-regression coefficient with the {meth}`.Var.new_param` constructor. A
+regression coefficient with the {meth}`Var.new_param <liesel.model.Var.new_param>` constructor. A
 parameter variable is a strong variable, and its distribution is counted
 as part of the model’s log prior.
 
@@ -134,7 +134,7 @@ sigma_sq_prior = lsl.Dist(tfd.InverseGamma, concentration=a, scale=b)
 sigma_sq = lsl.Var.new_param(value=10.0, dist=sigma_sq_prior, name="sigma_sq")
 ```
 
-The variable constructor {meth}`.Var.new_calc` creates a weak variable.
+The variable constructor {meth}`Var.new_calc <liesel.model.Var.new_calc>` creates a weak variable.
 It takes a function as its first argument and the variables to be used
 as function inputs as the following arguments. Here we compute the
 square root of the variance because the normal likelihood is
@@ -177,7 +177,7 @@ Since all other variables are directly or indirectly connected to `y`,
 the model collects the full graph automatically by following the inputs
 of the response variable.
 
-The resulting {class}`.Model` object stores dictionaries of all
+The resulting {class}`Model <liesel.model.Model>` object stores dictionaries of all
 variables, parameter variables, and observed variables.
 
 ``` python
@@ -189,7 +189,7 @@ list(model.vars), list(model.parameters), list(model.observed)
      ['X', 'y'])
 
 To visualize the statistical graph of a model we call
-{meth}`.Model.plot`. Strong variables are shown in blue, weak variables
+{meth}`Model.plot <liesel.model.Model.plot>`. Strong variables are shown in blue, weak variables
 in red. Variables with a probability distribution are highlighted with a
 star. In the figure below, we can see the tree-like structure of the
 graph and identify the two branches for the mean and the standard
