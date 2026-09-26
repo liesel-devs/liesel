@@ -1,8 +1,11 @@
+from .approximation import LaplaceApproximation as LaplaceApproximation
 from .batch import Batches as Batches
 from .batch import BatchManager as BatchManager
 from .engine import EmaTrainLossMonitor as EmaTrainLossMonitor
 from .engine import LossMonitor as LossMonitor
 from .engine import OptimEngine as OptimEngine
+from .laplace import LaplaceLoss as LaplaceLoss
+from .laplace import LaplaceState as LaplaceState
 from .liesel_optim import LieselOptim as LieselOptim
 from .loss import Loss as Loss
 from .loss import LossMixin as LossMixin
@@ -25,6 +28,9 @@ __all__ = [
     "BatchManager",
     "Batches",
     "EmaTrainLossMonitor",
+    "LaplaceApproximation",
+    "LaplaceLoss",
+    "LaplaceState",
     "LieselOptim",
     "Loss",
     "LossMixin",
