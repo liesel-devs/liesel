@@ -15,6 +15,8 @@ uses Adam so we can inspect it partway through fitting.
 
 ```{code-cell} ipython3
 import logging
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import jax.numpy as jnp
 import optax
@@ -76,9 +78,6 @@ Use the same checkpoint path on the first job and after an interruption.
 This example uses a temporary directory so rerunning the guide starts fresh:
 
 ```{code-cell} ipython3
-from pathlib import Path
-from tempfile import TemporaryDirectory
-
 with TemporaryDirectory() as directory:
     checkpoint_path = Path(directory) / "optim.pkl"
     first = engine.fit(

@@ -31,6 +31,7 @@ import logging
 import jax.numpy as jnp
 import numpy as np
 import optax
+import pandas as pd
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.model as lsl
@@ -168,13 +169,6 @@ from the original series. Keep both arrays in one group so selecting a response
 also selects its original lag:
 
 ```{code-cell} ipython3
-import jax.numpy as jnp
-import pandas as pd
-import tensorflow_probability.substrates.jax.distributions as tfd
-
-import liesel.model as lsl
-import liesel.optim as opt
-
 series = jnp.array([0.0, 0.7, 0.4, -0.1, 0.3, 0.9, 0.5])
 
 lag = lsl.Var.new_obs(series[:-1], name="lag")
