@@ -1,0 +1,43 @@
+name: docs-outputs-prune
+
+on:
+  schedule:
+    - cron: '17 9 * * 1'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Show the keep-set without changing the branch
+        type: boolean
+        required: true
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-outputs-prune
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          sparse-checkout: docs/scripts/executed_notebooks.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+        run: python3 -S docs/scripts/executed_notebooks.py prune --dry-run
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)
+        run: python3 -S docs/scripts/executed_notebooks.py prune
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

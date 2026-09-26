@@ -156,7 +156,7 @@ def invoke_publish(root, bundle, monkeypatch, posts):
     return SCRIPT_MODULE.main(["publish", "--bundle", str(bundle)])
 
 
-def test_collect_apply_round_trip_has_only_commit_manifest(tmp_path):
+def test_collect_apply_round_trip_has_only_commit_manifest(tmp_path, monkeypatch):
     root, executed = make_repo(tmp_path, myst=True)
     commit = git(root, "rev-parse", "HEAD")
     bundle = collect_bundle(root, executed, tmp_path)
@@ -170,7 +170,11 @@ def test_collect_apply_round_trip_has_only_commit_manifest(tmp_path):
         "tutorials/page.ipynb",
     }
 
-    result = cli(root, "apply", "--bundle", str(bundle))
+    make_remote(root, tmp_path)
+    assert invoke_publish(root, bundle, monkeypatch, []) == 0
+    gate = cli(root, "gate", "--commit", commit)
+    assert gate.returncode == 0, gate.stderr
+    result = cli(root, "apply")
 
     assert result.returncode == 0, result.stderr
     assert read_json(root / "docs/source/page.ipynb") == read_json(
@@ -339,3 +343,61 @@ def test_publish_refetches_and_retries_one_rejected_push(tmp_path, monkeypatch):
         "https://app.readthedocs.org/api/v3/projects/liesel/versions/latest/builds/"
     ]
     assert git(remote, "rev-parse", "refs/heads/docs-outputs")
+
+
+def prune_env(root, monkeypatch, pulls):
+    from types import SimpleNamespace
+
+    monkeypatch.chdir(root)
+    monkeypatch.setenv("GITHUB_REPOSITORY", "liesel-devs/liesel")
+    monkeypatch.setenv("GITHUB_TOKEN", "test-token")
+    response = SimpleNamespace(headers={}, read=lambda: json.dumps(pulls).encode())
+    monkeypatch.setattr(
+        SCRIPT_MODULE, "urlopen", lambda *a, **kw: nullcontext(response)
+    )
+
+
+def test_keep_commits_includes_main_tags_and_same_repo_prs(tmp_path, monkeypatch):
+    root, _ = make_repo(tmp_path)
+    make_remote(root, tmp_path)
+    main = git(root, "rev-parse", "HEAD")
+    git(root, "push", "origin", "HEAD:main")
+    git(root, "commit", "--allow-empty", "-qm", "tagged commit")
+    tag = git(root, "rev-parse", "HEAD")
+    git(root, "tag", "-a", "v1", "-m", "release")
+    git(root, "push", "origin", "v1")
+    pulls = [
+        {"head": {"sha": sha, "repo": {"full_name": repo}}}
+        for sha, repo in [("1" * 40, "liesel-devs/liesel"), ("2" * 40, "fork/liesel")]
+    ]
+    prune_env(root, monkeypatch, pulls)
+
+    kept = SCRIPT_MODULE.keep_commits(root)
+
+    assert {main, tag, "1" * 40} <= kept
+    assert "2" * 40 not in kept
+
+
+def test_prune_dry_run_does_not_change_outputs(tmp_path, monkeypatch, capsys):
+    root, _ = make_repo(tmp_path)
+    remote = make_remote(root, tmp_path)
+    main = git(root, "rev-parse", "HEAD")
+    git(root, "push", "origin", "HEAD:main")
+    git(root, "checkout", "--orphan", "outputs")
+    git(root, "rm", "-rf", ".")
+    for sha in (main, "f" * 40):
+        folder = root / "outputs" / sha
+        folder.mkdir(parents=True)
+        (folder / "manifest.json").write_text("{}")
+    git(root, "add", "outputs")
+    git(root, "commit", "-qm", "outputs")
+    git(root, "push", "origin", "HEAD:docs-outputs")
+    before = git(remote, "rev-parse", "docs-outputs")
+    prune_env(root, monkeypatch, [])
+
+    assert SCRIPT_MODULE.main(["prune", "--dry-run"]) == 0
+
+    output = capsys.readouterr().out
+    assert f"keep {main}" in output
+    assert f"prune {'f' * 40}" in output
+    assert git(remote, "rev-parse", "docs-outputs") == before

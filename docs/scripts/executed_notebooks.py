@@ -10,6 +10,7 @@ import base64
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -33,7 +34,14 @@ class MissingBundle(BundleError):
 
 def git(root, *args, check=True, env=None):
     return subprocess.run(
-        ["git", *args],
+        [
+            "git",
+            "-c",
+            "user.name=github-actions[bot]",
+            "-c",
+            "user.email=github-actions[bot]@users.noreply.github.com",
+            *args,
+        ],
         cwd=root,
         check=check,
         capture_output=True,
@@ -149,16 +157,15 @@ def fetch_outputs(root):
     return git(root, "rev-parse", PIN_REF).stdout.strip()
 
 
-def gate(root, commit, pin):
+def gate(root, commit):
     tip = fetch_outputs(root)
     if tip is None or not git(root, "ls-tree", tip, f"outputs/{commit}").stdout:
         raise MissingBundle(f"no executed docs bundle for {commit}")
-    pin.parent.mkdir(parents=True, exist_ok=True)
-    pin.write_text(json.dumps({"tree": f"{tip}:outputs/{commit}"}) + "\n")
 
 
-def apply_pin(root, pin):
-    tree = json.loads(pin.read_text())["tree"]
+def apply_pinned(root):
+    commit = git(root, "rev-parse", "HEAD").stdout.strip()
+    tree = f"{PIN_REF}:outputs/{commit}"
     archive = subprocess.run(
         ["git", "archive", tree], cwd=root, check=True, capture_output=True, timeout=60
     ).stdout
@@ -169,6 +176,19 @@ def apply_pin(root, pin):
         apply(root, bundle)
 
 
+def push_environment():
+    environment = os.environ.copy()
+    auth = base64.b64encode(
+        f"x-access-token:{os.environ['GITHUB_TOKEN']}".encode()
+    ).decode()
+    environment.update(
+        GIT_CONFIG_COUNT="1",
+        GIT_CONFIG_KEY_0="http.extraheader",
+        GIT_CONFIG_VALUE_0=f"AUTHORIZATION: basic {auth}",
+    )
+    return environment
+
+
 def publish(root, bundle):
     token = os.environ.get("READTHEDOCS_TOKEN")
     if not token:
@@ -177,11 +197,6 @@ def publish(root, bundle):
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
     kind = os.environ["GITHUB_EVENT_NAME"]
     if kind == "pull_request":
-        if (
-            event["pull_request"]["head"]["repo"]["full_name"]
-            != os.environ["GITHUB_REPOSITORY"]
-        ):
-            return
         slugs = [str(event["number"])]
     elif kind == "workflow_dispatch":
         slugs = [event["inputs"]["target"]]
@@ -194,15 +209,6 @@ def publish(root, bundle):
         )
     commit = json.loads((bundle / "manifest.json").read_text())["commit"]
     remote = git(root, "remote", "get-url", "origin").stdout.strip()
-    push_env = os.environ.copy()
-    auth = base64.b64encode(
-        f"x-access-token:{os.environ['GITHUB_TOKEN']}".encode()
-    ).decode()
-    push_env.update(
-        GIT_CONFIG_COUNT="1",
-        GIT_CONFIG_KEY_0="http.extraheader",
-        GIT_CONFIG_VALUE_0=f"AUTHORIZATION: basic {auth}",
-    )
     with tempfile.TemporaryDirectory() as temporary:
         for attempt in range(3):
             work = Path(temporary) / str(attempt)
@@ -218,16 +224,7 @@ def publish(root, bundle):
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(bundle, destination)
             git(work, "add", "outputs")
-            git(
-                work,
-                "-c",
-                "user.name=Liesel docs",
-                "-c",
-                "user.email=docs@liesel.org",
-                "commit",
-                "-qm",
-                f"Publish docs {commit}",
-            )
+            git(work, "commit", "-qm", f"Publish docs {commit}")
             pushed = git(
                 work,
                 "push",
@@ -235,7 +232,7 @@ def publish(root, bundle):
                 "origin",
                 f"HEAD:{OUTPUTS_REF}",
                 check=False,
-                env=push_env,
+                env=push_environment(),
             )
             if pushed.returncode == 0:
                 break
@@ -252,6 +249,72 @@ def publish(root, bundle):
             pass
 
 
+def keep_commits(root):
+    refs = dict(
+        line.split()[::-1]
+        for line in git(
+            root, "ls-remote", "origin", "refs/heads/main", "refs/tags/*"
+        ).stdout.splitlines()
+    )
+    if "refs/heads/main" not in refs:
+        raise BundleError("main is missing from the remote ref listing")
+    kept = set(refs.values())
+    repository = os.environ["GITHUB_REPOSITORY"]
+    url = f"https://api.github.com/repos/{repository}/pulls?state=open&per_page=100"
+    while url:
+        request = Request(
+            url, headers={"Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}"}
+        )
+        with urlopen(request, timeout=30) as response:
+            pulls = json.loads(response.read())
+            if not isinstance(pulls, list):
+                raise BundleError("invalid pull request listing")
+            kept.update(
+                pull["head"]["sha"]
+                for pull in pulls
+                if (pull["head"]["repo"] or {}).get("full_name") == repository
+            )
+            next_page = re.search(
+                r'<([^>]+)>; rel="next"', response.headers.get("Link", "")
+            )
+            url = next_page[1] if next_page else ""
+    return kept
+
+
+def prune(root, dry_run):
+    tip = fetch_outputs(root)
+    if tip is None:
+        print("No docs outputs to prune")
+        return
+    kept = keep_commits(root)
+    remote = git(root, "remote", "get-url", "origin").stdout.strip()
+    with tempfile.TemporaryDirectory() as temporary:
+        work = Path(temporary)
+        git(work, "init", "-q")
+        git(work, "fetch", "--depth=1", str(root), tip)
+        git(work, "checkout", "--detach", "FETCH_HEAD")
+        for folder in sorted((work / "outputs").glob("*")):
+            retain = folder.name in kept
+            print(f"{'keep' if retain else 'prune'} {folder.name}")
+            if not retain:
+                shutil.rmtree(folder)
+        if dry_run:
+            return
+        git(work, "add", "-A")
+        tree = git(work, "write-tree").stdout.strip()
+        commit = git(
+            work, "commit-tree", tree, "-m", "Prune docs outputs"
+        ).stdout.strip()
+        git(
+            work,
+            "push",
+            f"--force-with-lease={OUTPUTS_REF}:{tip}",
+            remote,
+            f"{commit}:{OUTPUTS_REF}",
+            env=push_environment(),
+        )
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -259,25 +322,26 @@ def main(argv=None):
     collector.add_argument("--executed", type=Path, required=True)
     collector.add_argument("--bundle", type=Path, required=True)
     applier = commands.add_parser("apply")
-    inputs = applier.add_mutually_exclusive_group(required=True)
-    inputs.add_argument("--bundle", type=Path)
-    inputs.add_argument("--pin", type=Path)
+    applier.add_argument("--bundle", type=Path)
     gating = commands.add_parser("gate")
     gating.add_argument("--commit", required=True)
-    gating.add_argument("--pin", type=Path, required=True)
     publisher = commands.add_parser("publish")
     publisher.add_argument("--bundle", type=Path, required=True)
+    pruner = commands.add_parser("prune")
+    pruner.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     root = Path.cwd()
     try:
         if args.command == "collect":
             collect(root, args.executed, args.bundle)
         elif args.command == "gate":
-            gate(root, args.commit, args.pin)
+            gate(root, args.commit)
         elif args.command == "publish":
             publish(root, args.bundle.resolve())
-        elif args.pin:
-            apply_pin(root, args.pin)
+        elif args.command == "prune":
+            prune(root, args.dry_run)
+        elif args.bundle is None:
+            apply_pinned(root)
         else:
             apply(root, args.bundle)
     except MissingBundle as exc:
