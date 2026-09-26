@@ -15,8 +15,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: docs-outputs-prune
-  cancel-in-progress: false
+  group: docs-outputs
+  queue: max
 
 jobs:
   prune:
@@ -26,18 +26,43 @@ jobs:
     permissions:
       contents: write
       pull-requests: read
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
     steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.workflow_sha }}
-          sparse-checkout: docs/scripts/executed_notebooks.py
-          sparse-checkout-cone-mode: false
-          persist-credentials: false
-      - if: github.event_name == 'workflow_dispatch' && inputs.dry_run
-        run: python3 -S docs/scripts/executed_notebooks.py prune --dry-run
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)
-        run: python3 -S docs/scripts/executed_notebooks.py prune
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Prune obsolete notebook outputs
+        shell: bash
+        run: |
+          gh auth setup-git
+          git init "$RUNNER_TEMP/docs-outputs"
+          cd "$RUNNER_TEMP/docs-outputs"
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          if git ls-remote --exit-code origin refs/heads/docs-outputs; then
+            git fetch --depth=1 origin refs/heads/docs-outputs
+          else
+            status=$?
+            [ "$status" -ne 2 ] || exit 0
+            exit "$status"
+          fi
+          tip=$(git rev-parse FETCH_HEAD)
+          git checkout --detach "$tip"
+          git ls-remote origin refs/heads/main 'refs/tags/*' > "$RUNNER_TEMP/refs"
+          grep -q 'refs/heads/main$' "$RUNNER_TEMP/refs"
+          awk '{print $1}' "$RUNNER_TEMP/refs" > "$RUNNER_TEMP/keep"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/pulls?state=open&per_page=100" | \
+            jq -r --arg repo "$GITHUB_REPOSITORY" '.[] | select(.head.repo.full_name == $repo) | .head.sha' >> "$RUNNER_TEMP/keep"
+          for folder in outputs/*; do
+            [ -d "$folder" ] || continue
+            if grep -Fxq "${folder#outputs/}" "$RUNNER_TEMP/keep"; then
+              echo "keep $folder"
+            else
+              echo "prune $folder"
+              rm -rf "$folder"
+            fi
+          done
+          [ "$DRY_RUN" != true ] || exit 0
+          git add -A
+          tree=$(git write-tree)
+          commit=$(git -c user.name='github-actions[bot]' -c user.email='github-actions[bot]@users.noreply.github.com' \
+            commit-tree "$tree" -m 'Prune docs outputs')
+          git push --force-with-lease="refs/heads/docs-outputs:$tip" origin "$commit:refs/heads/docs-outputs"

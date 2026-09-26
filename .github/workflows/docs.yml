@@ -29,11 +29,15 @@ jobs:
     if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      commit: ${{ steps.source.outputs.commit }}
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
           persist-credentials: false
+      - id: source
+        run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends graphviz
       - uses: astral-sh/setup-uv@v10.2.0
       - uses: actions/setup-python@v7
@@ -43,7 +47,7 @@ jobs:
       - run: uv run python -m sphinx -E -b html -j 3 -W --keep-going docs/source docs/build/html
         env:
           LIESEL_DOCS_EXECUTED: '0'
-      - run: uv run --no-sync python docs/scripts/executed_notebooks.py collect --executed docs/build/jupyter_execute --bundle "$RUNNER_TEMP/docs-bundle"
+      - run: uv run --no-sync python docs/scripts/executed_notebooks.py docs/build/jupyter_execute "$RUNNER_TEMP/docs-bundle"
       - uses: actions/upload-artifact@v7
         with:
           name: docs-bundle-${{ github.run_id }}-${{ github.run_attempt }}
@@ -64,19 +68,61 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
+    concurrency:
+      group: docs-outputs
+      queue: max
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      READTHEDOCS_TOKEN: ${{ secrets.READTHEDOCS_TOKEN }}
+      SOURCE_COMMIT: ${{ needs.build.outputs.commit }}
     steps:
-      # The control helper runs with credentials; bundle contents remain data.
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.workflow_sha }}
-          sparse-checkout: docs/scripts/executed_notebooks.py
-          sparse-checkout-cone-mode: false
-          persist-credentials: false
+      # Publish data only: no checkout or execution of the source branch.
       - uses: actions/download-artifact@v8
         with:
           name: docs-bundle-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/docs-bundle
-      - run: python3 -S docs/scripts/executed_notebooks.py publish --bundle "$RUNNER_TEMP/docs-bundle"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          READTHEDOCS_TOKEN: ${{ secrets.READTHEDOCS_TOKEN }}
+      - name: Publish notebooks
+        if: env.READTHEDOCS_TOKEN != ''
+        shell: bash
+        run: |
+          [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          gh auth setup-git
+          git init "$RUNNER_TEMP/docs-outputs"
+          cd "$RUNNER_TEMP/docs-outputs"
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          tip=''
+          if git ls-remote --exit-code origin refs/heads/docs-outputs; then
+            git fetch --depth=1 origin refs/heads/docs-outputs
+            tip=$(git rev-parse FETCH_HEAD)
+            git checkout --detach "$tip"
+          else
+            status=$?
+            [ "$status" -eq 2 ] || exit "$status"
+          fi
+          mkdir -p outputs
+          rm -rf "outputs/$SOURCE_COMMIT"
+          cp -R "$RUNNER_TEMP/docs-bundle" "outputs/$SOURCE_COMMIT"
+          git add outputs
+          git -c user.name='github-actions[bot]' -c user.email='github-actions[bot]@users.noreply.github.com' \
+            commit --allow-empty -m "Publish docs $SOURCE_COMMIT"
+          git push --force-with-lease="refs/heads/docs-outputs:$tip" origin HEAD:refs/heads/docs-outputs
+      - name: Trigger Read the Docs
+        if: env.READTHEDOCS_TOKEN != ''
+        shell: bash
+        run: |
+          case "$GITHUB_EVENT_NAME" in
+            pull_request) jq -r '.number' "$GITHUB_EVENT_PATH" > "$RUNNER_TEMP/rtd-targets" ;;
+            workflow_dispatch) jq -r '.inputs.target' "$GITHUB_EVENT_PATH" > "$RUNNER_TEMP/rtd-targets" ;;
+            *)
+              if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+                printf '%s\nstable\n' "${GITHUB_REF#refs/tags/}" > "$RUNNER_TEMP/rtd-targets"
+              else
+                echo latest > "$RUNNER_TEMP/rtd-targets"
+              fi ;;
+          esac
+          while IFS= read -r target; do
+            slug=$(jq -rn --arg target "$target" '$target | @uri')
+            curl --fail-with-body --silent --show-error --max-time 30 -X POST \
+              -H "Authorization: Token $READTHEDOCS_TOKEN" \
+              "https://app.readthedocs.org/api/v3/projects/liesel/versions/$slug/builds/"
+          done < "$RUNNER_TEMP/rtd-targets"
