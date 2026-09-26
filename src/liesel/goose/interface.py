@@ -31,7 +31,7 @@ class DictInterface:
     --------
     .DataclassInterface : A model interface for a model state represented by a
         :obj:`~dataclasses.dataclass` and a corresponding log-probability function.
-    .LieselInterface : A model interface for a Liesel :class:`.Model`.
+    .LieselInterface : A model interface for a Liesel :class:`~liesel.model.Model`.
 
     Examples
     --------
@@ -128,7 +128,7 @@ class DataclassInterface:
     --------
     .DictInterface : A model interface for a model state represented by a
         ``dict[str, Array]`` and a corresponding log-probability function.
-    .LieselInterface : A model interface for a Liesel :class:`.Model`.
+    .LieselInterface : A model interface for a Liesel :class:`~liesel.model.Model`.
 
     Examples
     --------
@@ -228,16 +228,17 @@ class DataclassInterface:
 
 class LieselInterface:
     """
-    A :class:`.ModelInterface` for a Liesel :class:`.Model`.
+    A ``ModelInterface`` for a Liesel :class:`~liesel.model.Model`.
 
     Parameters
     ----------
     model
-        A Liesel :class:`.Model`.
+        A Liesel :class:`~liesel.model.Model`.
 
     See Also
     --------
-    .GraphBuilder : The graph builder class, used to set up a :class:`.Model`.
+    ~liesel.model.GraphBuilder : The graph builder class, used to set up a
+        :class:`~liesel.model.Model`.
 
     See Also
     --------
@@ -245,7 +246,7 @@ class LieselInterface:
         ``dict[str, Array]`` and a corresponding log-probability function.
     .DataclassInterface : A model interface for a model state represented by a
         :obj:`~dataclasses.dataclass` and a corresponding log-probability function.
-    .LieselInterface : A model interface for a Liesel :class:`.Model`.
+    .LieselInterface : A model interface for a Liesel :class:`~liesel.model.Model`.
 
     Examples
     --------
@@ -260,7 +261,8 @@ class LieselInterface:
 
     >>> interface = gs.LieselInterface(model)
 
-    The interface instance can now be used in :meth:`~.goose.EngineBuilder.set_model`.
+    The interface instance can now be used in
+    :meth:`~liesel.goose.EngineBuilder.set_model`.
     """
 
     def __init__(self, model: "Model"):
@@ -330,7 +332,7 @@ class NamedTupleInterface:
         ``dict[str, Array]`` and a corresponding log-probability function.
     .DataclassInterface : A model interface for a model state represented by a
         :obj:`~dataclasses.dataclass` and a corresponding log-probability function.
-    .LieselInterface : A model interface for a Liesel :class:`.Model`.
+    .LieselInterface : A model interface for a Liesel :class:`~liesel.model.Model`.
 
     Examples
     --------

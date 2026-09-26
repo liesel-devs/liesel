@@ -4,4 +4,3 @@
 .. currentmodule:: {{ module }}
 
 .. auto{{ objtype }}:: {{ objname }}
-   :no-index:

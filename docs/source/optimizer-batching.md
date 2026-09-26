@@ -105,7 +105,7 @@ result = opt.LieselOptim(
 result.position_min_monitor
 ```
 
-For default batch settings, pass `batch_size=32` directly to `LieselOptim`.
+For default batch settings, pass `batch_size=32` directly to {class}`LieselOptim <liesel.optim.LieselOptim>`.
 This calls `Batches.from_split(split, batch_size=32)`. Omit both `batch_size`
 and `batches` to use all training data in each update. For custom shuffling,
 axes, or epoch policy, create `batches` explicitly instead.
@@ -118,7 +118,7 @@ Only complete batches are used. With shuffling, the leftover rows can change
 between epochs. For multiple groups, first {ref}`opt in and inspect the split
 groups <optimizer-split-groups>`, then pass that split to `Batches.from_split`.
 It returns a {py:class}`~liesel.optim.BatchManager` that supplies one batch from
-each group at every update. The groups come from your split; `LieselOptim` raises
+each group at every update. The groups come from your split; {class}`LieselOptim <liesel.optim.LieselOptim>` raises
 if different observed lengths require a grouping choice you have not supplied.
 
 With several groups, the default `epoch_size="max"` follows the group with
@@ -196,7 +196,7 @@ ar_batches = opt.Batches.from_split(ar_split, batch_size=2)
 pd.DataFrame(ar_split.train)
 ```
 
-Pass `ar_split` and `ar_batches` to `LieselOptim` to fit this conditional
+Pass `ar_split` and `ar_batches` to {class}`LieselOptim <liesel.optim.LieselOptim>` to fit this conditional
 model. Choose temporal holdouts according to the intended prediction task;
 this example does not define a forecasting-validation procedure.
 

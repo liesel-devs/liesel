@@ -30,9 +30,10 @@ if TYPE_CHECKING:
 
 class LieselVI:
     """
-    Builds an :class:`.OptimEngine` for variational inference.
+    Builds an :class:`~liesel.optim.OptimEngine` for variational inference.
 
-    Configures a :class:`.NegElboLoss`, batches, and optimizers over variational
+    Configures a :class:`~liesel.optim.NegElboLoss`, batches, and optimizers over
+    variational
     parameters. Pass an explicit loss for custom families or initialization.
     Built-in Gaussians start at SD ``0.1`` in model units (:ref:`vi-initial-scale`).
     Target priors are included; extra q-parameter penalties are opt-in
@@ -45,21 +46,24 @@ class LieselVI:
         otherwise construction raises ValueError.
     loss_monitor
         Source for the epoch-level stopping and progress loss. Pass
-        :class:`.EmaTrainLossMonitor` for a continuous EMA of pre-update losses or
+        :class:`~liesel.optim.EmaTrainLossMonitor` for a continuous EMA of pre-update
+        losses or
         ``"train_full_data"`` for one complete training-loss evaluation after each
         epoch. Validation monitoring is unavailable because ELBO losses do not
         support validation splits.
     optimizers
         A configured Optax transformation, such as ``optax.adam(learning_rate=0.01)``,
         applied to all variational q parameters, or a sequence of explicit
-        :class:`.Optimizer` objects selecting q parameter blocks. Pass a
+        :class:`~liesel.optim.Optimizer` objects selecting q parameter blocks. Pass a
         transformation, not an optimizer factory. L-BFGS has no string shortcut
-        because ELBO estimates are usually stochastic; an explicit :class:`.LBFGS`
+        because ELBO estimates are usually stochastic; an explicit
+        :class:`~liesel.optim.LBFGS`
         must be the sole optimizer and requires full-data batches and a
         deterministic objective.
     stopper
         Maximum-epoch and early-stopping configuration. ``None`` creates a fresh
-        :class:`.Stopper` with ``epochs=1000``, ``patience=1000``, and ``rtol=1e-6``.
+        :class:`~liesel.optim.Stopper` with ``epochs=1000``, ``patience=1000``, and
+        ``rtol=1e-6``.
         This is a fixed budget, not a convergence check. Pass an explicit stopper
         with smaller patience to opt into early stopping on the stochastic monitor.
     seed
@@ -68,14 +72,16 @@ class LieselVI:
         constructed split has its own seed for selecting train/test rows.
     split
         Optional split. If omitted and ``loss`` is not an explicit
-        :class:`.NegElboLoss`, all strong observed inputs are used for training.
+        :class:`~liesel.optim.NegElboLoss`, all strong observed inputs are used for
+        training.
         Multiple observation sizes raise ValueError. Opt in explicitly with
         ``split=PositionSplit.from_model(model, multi_size="manager")`` after
         checking the groups. Declare shared arrays with ``split_axes={key: None}``;
         equal lengths alone do not establish row alignment.
         An explicit loss supplies its own split; if both are passed, they must be
         the same object. Validation data is not supported for ELBO losses.
-        Use :meth:`.PositionSplit.from_model` for data keys, split axes and
+        Use :meth:`PositionSplit.from_model <liesel.optim.PositionSplit.from_model>` for
+        data keys, split axes and
         train/test fractions. For distributions with ``per_obs=False``, supply
         ``sample_sizes`` or choose axis counts with ``infer_sample_sizes=False``.
     batch_size
@@ -83,17 +89,19 @@ class LieselVI:
         batches.
     batches
         Optional explicit batch configuration. Cannot be combined with
-        ``batch_size``. Use :meth:`.Batches.from_split` for custom batch axes,
-        shuffling or epoch size, and :class:`.BatchManager` for multiple groups.
+        ``batch_size``. Use :meth:`Batches.from_split <liesel.optim.Batches.from_split>`
+        for custom batch axes,
+        shuffling or epoch size, and :class:`~liesel.optim.BatchManager` for multiple
+        groups.
     loss
         Either one of ``"mvn_diag"``, ``"mvn_tril"``, and ``"mvn_blocked"``, or an
-        explicit :class:`.NegElboLoss` instance.
+        explicit :class:`~liesel.optim.NegElboLoss` instance.
     nsamples
         Monte Carlo sample count for internally constructed training ELBOs.
     scale_loss
         Whether internally constructed ELBO losses should be divided by the training
         sample size. Must be a boolean. This setting has no effect when
-        ``loss`` is an explicit :class:`.NegElboLoss`.
+        ``loss`` is an explicit :class:`~liesel.optim.NegElboLoss`.
     regularize_q_prior
         Defaults to ``False``. Set ``True`` to add log-prior penalties on
         variational parameters to internally constructed ELBOs. Target priors
@@ -143,6 +151,51 @@ class LieselVI:
     >>> type(engine.loss).__name__
     'NegElboLoss'
     """
+
+    if TYPE_CHECKING:
+        batches: BatchConfig
+        """Optional explicit batch configuration."""
+        loss: NegElboLoss
+        """
+        Either one of ``"mvn_diag"``, ``"mvn_tril"``, and ``"mvn_blocked"``, or an
+        explicit :class:`~liesel.optim.NegElboLoss` instance.
+        """
+        loss_monitor: LossMonitor
+        """Source for the epoch-level stopping and progress loss."""
+        model: Model
+        """Target Liesel model."""
+        optimizers: Sequence[OptimizerLike]
+        """
+        A configured Optax transformation, such as ``optax.adam(learning_rate=0.01)``,
+        applied to all variational q parameters, or a sequence of explicit
+        :class:`~liesel.optim.Optimizer` objects selecting q parameter blocks.
+        """
+        progress_update_every: int
+        """Update the epoch progress bar after this many completed epochs."""
+        save_position_history: bool
+        """Whether to save parameter positions after each epoch."""
+        seed: int
+        """
+        Seed for variational draws and batch shuffling, defaulting to zero. ``None``
+        uses the current Unix time in whole seconds.
+        """
+        show_progress: bool
+        """Whether the built engine should show ``tqdm`` progress bars."""
+        show_step_progress: bool
+        """
+        Whether to show an additional progress bar for batches within each epoch when
+        ``show_progress`` is enabled.
+        """
+        split: SplitConfig
+        """Optional split."""
+        step_progress_update_every: int
+        """Update the batch progress bar after this many completed batches."""
+        stopper: Stopper
+        """
+        Maximum-epoch and early-stopping configuration. ``None`` creates a fresh
+        :class:`~liesel.optim.Stopper` with ``epochs=1000``, ``patience=1000``, and
+        ``rtol=1e-6``.
+        """
 
     def __init__(
         self,
@@ -327,7 +380,7 @@ class LieselVI:
         -------
         OptimEngine
             Configured engine. Users may modify engine attributes before calling
-            :meth:`OptimEngine.fit`.
+            :meth:`OptimEngine.fit <liesel.optim.OptimEngine.fit>`.
         """
         from .engine import OptimEngine
 
@@ -353,6 +406,6 @@ class LieselVI:
         Returns
         -------
         OptimResult
-            Result returned by :meth:`OptimEngine.fit`.
+            Result returned by :meth:`OptimEngine.fit <liesel.optim.OptimEngine.fit>`.
         """
         return self.build_engine().fit()

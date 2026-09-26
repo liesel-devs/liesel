@@ -10,7 +10,7 @@ mystnb:
 
 # Fit your first model
 
-Fit a Gaussian regression with `LieselOptim`, then add validation data and
+Fit a Gaussian regression with {class}`LieselOptim <liesel.optim.LieselOptim>`, then add validation data and
 minibatches. You should already know how to build a Liesel model.
 
 ```{code-cell} ipython3
@@ -111,8 +111,8 @@ The fitted intercept (about 0.70), slope (−1.37), and noise standard
 deviation (0.58) are close to the simulated values 0.7, −1.4, and 0.6.
 Finite data and the priors mean we should not expect an exact match.
 
-`position_min_monitor` gives the saved parameters with the lowest monitoring
-loss. Use `position_final` for the last update instead. Fitting leaves the
+{attr}`position_min_monitor <liesel.optim.OptimResult.position_min_monitor>` gives the saved parameters with the lowest monitoring
+loss. Use {attr}`position_final <liesel.optim.OptimResult.position_final>` for the last update instead. Fitting leaves the
 original model unchanged.
 
 ## Hold out data

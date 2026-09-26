@@ -3,12 +3,12 @@
 ## Custom Metropolis-Hastings kernel
 
 The easiest way to use a custom MCMC kernel in `liesel.goose` is to
-provide a proposal function for a {class}`.MHKernel`. The function must
+provide a proposal function for a {class}`MHKernel <liesel.goose.MHKernel>`. The function must
 accept a pseudo-random number key, a model state and a step size as
 arguments, and be compatible with just-in-time compilation via `jax`
-(i.e., pure, without side-effects). It returns a {class}`.MHProposal`,
+(i.e., pure, without side-effects). It returns a {class}`MHProposal <liesel.goose.MHProposal>`,
 which simply wraps the proposed value and the Metropolis-Hastings
-log-correction factor. The {class}`.MHKernel` handles the
+log-correction factor. The {class}`MHKernel <liesel.goose.MHKernel>` handles the
 acceptance/rejection logic and is fully equipped with dual averaging
 functionality for step size tuning, which can be switched on by passing
 `da_tune_step_size` as a keyword argument to the kernel. In this case,
@@ -16,7 +16,7 @@ users should ensure that their settings for the initial step size
 (default: $1$) and the target acceptance probability (default: $.234$)
 are suitable.
 
-As an example, a random walk kernel (like {class}`.RWKernel`) can be
+As an example, a random walk kernel (like {class}`RWKernel <liesel.goose.RWKernel>`) can be
 implemented with
 
 ``` python
@@ -48,21 +48,21 @@ In this case, the proposal distribution is symmetric, so the log
 correction factor is zero by definition. We still compute it here
 explicitly for the purpose of demonstration.
 
-While a custom proposal function for a {class}`.MHKernel` can be written
+While a custom proposal function for a {class}`MHKernel <liesel.goose.MHKernel>` can be written
 conveniently, it may not cover cases in which a custom MCMC kernel
 requires additional hyperparameters or specialized tuning. For such
 cases, `liesel.goose` provides tools for users to write their own
-classes, implementing the {class}`.Kernel` protocol.
+classes, implementing the {class}`Kernel <liesel.goose.Kernel>` protocol.
 
 The next section shows you how to write such a fully custom kernel
 class.
 
 ## Fully customized MCMC kernel
 
-Any Python class that implements the {class}`.Kernel` protocol can be
+Any Python class that implements the {class}`Kernel <liesel.goose.Kernel>` protocol can be
 used as an MCMC kernel class in `liesel.goose`. The protocol requires
 the implementation of several attributes and methods, the most important
-of which are {meth}`.Kernel.transition` and {meth}`.Kernel.tune`. These
+of which are {meth}`Kernel.transition <liesel.goose.Kernel.transition>` and {meth}`Kernel.tune <liesel.goose.Kernel.tune>`. These
 methods are called by the engine and need to be pure and jittable.
 
 ### Overview
@@ -84,34 +84,34 @@ MCMC step, e.g.~a Metropolis-Hastings algorithm. Its signature is:
 ...         ...
 ```
 
-Since the {meth}`.Kernel.transition` method must be pure, and MCMC
+Since the {meth}`Kernel.transition <liesel.goose.Kernel.transition>` method must be pure, and MCMC
 transitions generally involve the generation of random numbers, a key
 for pseudo-random number generation (PRNG) needs to be provided as an
-argument. In addition, the {meth}`.Kernel.transition` method receives
+argument. In addition, the {meth}`Kernel.transition <liesel.goose.Kernel.transition>` method receives
 the kernel state, the model state and the epoch state as arguments, and
-returns a {class}`.TransitionOutcome` object, which wraps the new kernel
+returns a {class}`TransitionOutcome <liesel.goose.TransitionOutcome>` object, which wraps the new kernel
 state, the new model state and some meta-information about the
 transition, e.g.~an error code or the acceptance probability (in a
-{class}`.TransitionInfo` object). An error code of zero indicates that
+{class}`TransitionInfo <liesel.goose.TransitionInfo>` object). An error code of zero indicates that
 the transition did not produce an error.
 
 All inputs and outputs must be valid *pytrees* (i.e.~arrays or nested
 lists, tuples or dicts of arrays). The structure of these objects,
 e.g.~the shape of the arrays in the kernel state, must not change
 between transitions. This allows the kernels to have specialized
-{class}`.KernelState` and {class}`.TransitionInfo` classes. A kernel
+{class}`KernelState <liesel.goose.KernelState>` and {class}`TransitionInfo <liesel.goose.TransitionInfo>` classes. A kernel
 state can be any pytree.
 
-**The tune method.** The {meth}`.Kernel.tune` method updates the kernel
+**The tune method.** The {meth}`Kernel.tune <liesel.goose.Kernel.tune>` method updates the kernel
 hyperparameters at the end of an adaptation epoch. The method receives
 the PRNG key, the model state, the kernel state, the epoch state, and
 (optionally) the *history*, i.e.~the samples from the previous epoch, as
-arguments. It returns a {class}`.TuningOutcome` object that wraps the
+arguments. It returns a {class}`TuningOutcome <liesel.goose.TuningOutcome>` object that wraps the
 new kernel state and some meta-information about the tuning process,
-e.g.~an error code. As for the transition, the {class}`.TuningInfo`
+e.g.~an error code. As for the transition, the {class}`TuningInfo <liesel.goose.TuningInfo>`
 class can be kernel-specific but must be a valid pytree.
 
-The signature of the {meth}`.Kernel.tune` method is as follows:
+The signature of the {meth}`Kernel.tune <liesel.goose.Kernel.tune>` method is as follows:
 
 ``` python
 >>> class Kernel:
@@ -129,14 +129,14 @@ The signature of the {meth}`.Kernel.tune` method is as follows:
 
 ### Step-by-step tutorial
 
-We will now go through the definition of the {class}`.RWKernel`
+We will now go through the definition of the {class}`RWKernel <liesel.goose.RWKernel>`
 step-by-step.
 
 #### The kernel state
 
-First, we define the {class}`.KernelState`. Since we plan to use dual
+First, we define the {class}`KernelState <liesel.goose.KernelState>`. Since we plan to use dual
 averaging for step size tuning in this kernel class, we define a kernel
-state that follows the {class}`.DAKernelState` protocol.
+state that follows the {class}`DAKernelState <liesel.goose.da.DAKernelState>` protocol.
 
 ``` python
 from dataclasses import dataclass
@@ -168,12 +168,12 @@ class RWKernelState:
 We now define the actual kernel class. The class inherits from two
 mixins provided by `liesel.goose`.
 
-The {class}`.ModelMixin` gives the kernel access to the model and
-provides convenience methods such as {meth}`.ModelMixin.position`, which
+The {class}`ModelMixin <liesel.goose.ModelMixin>` gives the kernel access to the model and
+provides convenience methods such as {meth}`ModelMixin.position <liesel.goose.ModelMixin.position>`, which
 extracts the part of the model state handled by this kernel.
 
-The {class}`.TransitionMixin` provides the public
-{meth}`.TransitionMixin.transition` method. Internally, it dispatches to
+The {class}`TransitionMixin <liesel.goose.TransitionMixin>` provides the public
+{meth}`TransitionMixin.transition <liesel.goose.TransitionMixin.transition>` method. Internally, it dispatches to
 `_standard_transition` or `_adaptive_transition`, depending on the
 current epoch. This means that we only have to implement these two
 methods.
@@ -205,14 +205,14 @@ class RWKernel(
 At the beginning of the class, we define a few class attributes required
 by the kernel protocol.
 
-The `error_book` maps error codes to human-readable messages. By
+The {attr}`error_book <liesel.goose.Kernel.error_book>` maps error codes to human-readable messages. By
 convention, an error code of zero means that no error occurred.
 
-The `needs_history` attribute tells the engine whether the kernel
+The {attr}`needs_history <liesel.goose.Kernel.needs_history>` attribute tells the engine whether the kernel
 requires the samples from the previous epoch for tuning. This random
 walk kernel does not use the history, so we set it to `False`.
 
-The `identifier` is set by the {class}`~.goose.EngineBuilder` and can be
+The {attr}`identifier <liesel.goose.Kernel.identifier>` is set by the {class}`EngineBuilder <liesel.goose.EngineBuilder>` and can be
 used to distinguish between kernels. Finally, `position_keys` stores the
 names of the model variables handled by this kernel.
 
@@ -223,7 +223,7 @@ updated by this kernel.
 The remaining arguments configure the initial step size and the dual
 averaging algorithm. These values are stored on the kernel object, but
 they are not part of the kernel state. The mutable, chain-specific part
-of the kernel is stored separately in the {class}`.RWKernelState`.
+of the kernel is stored separately in the `RWKernelState`.
 
 ``` python
     def __init__(
@@ -246,7 +246,7 @@ of the kernel is stored separately in the {class}`.RWKernelState`.
         self.identifier = identifier
 ```
 
-Before sampling starts, the engine calls `init_state`. This method
+Before sampling starts, the engine calls {meth}`init_state <liesel.goose.Kernel.init_state>`. This method
 creates the initial kernel state for one chain. In our case, the only
 user-facing state variable is the current step size.
 
@@ -301,11 +301,11 @@ def _standard_transition(...):
         proposal = unravel_fn(flat_proposal)
 ```
 
-Finally, we pass the proposal to {func}`.mh_step`. This function
+Finally, we pass the proposal to {func}`mh_step <liesel.goose.mh_step>`. This function
 evaluates the proposed model state and performs the Metropolis-Hastings
 accept/reject step.
 
-The result is returned as a {class}`.TransitionOutcome`, which contains
+The result is returned as a {class}`TransitionOutcome <liesel.goose.TransitionOutcome>`, which contains
 the transition information, the kernel state, and the updated model
 state.
 
@@ -352,13 +352,13 @@ and the dual averaging hyperparameters stored on the kernel object.
         return outcome
 ```
 
-The `tune` method is called by the engine at the end of a tuning epoch.
+The {meth}`tune <liesel.goose.Kernel.tune>` method is called by the engine at the end of a tuning epoch.
 This particular kernel does not perform any additional tuning at the end
 of an epoch, because the step size adaptation already happens during the
 adaptive transitions.
 
 Still, the method must be implemented to satisfy the kernel protocol. We
-therefore return a successful {class}`.TuningOutcome` with the unchanged
+therefore return a successful {class}`TuningOutcome <liesel.goose.TuningOutcome>` with the unchanged
 kernel state.
 
 ``` python
@@ -379,7 +379,7 @@ kernel state.
 ```
 
 At the beginning of each adaptation epoch, we reset the dual averaging
-state. This is done in `start_epoch`.
+state. This is done in {meth}`start_epoch <liesel.goose.Kernel.start_epoch>`.
 
 This reset does not discard the current step size itself. Instead, it
 reinitializes the auxiliary quantities used internally by the dual
@@ -421,7 +421,7 @@ found during the epoch.
         return kernel_state
 ```
 
-Finally, the engine calls `end_warmup` after all warmup epochs have
+Finally, the engine calls {meth}`end_warmup <liesel.goose.Kernel.end_warmup>` after all warmup epochs have
 finished. This hook can be used for final warmup-specific adjustments.
 Our random walk kernel does not need any such adjustment, so we simply
 return the unchanged kernel state.
@@ -443,7 +443,7 @@ return the unchanged kernel state.
 
 This completes the kernel class. The main logic is contained in
 `_standard_transition`, which constructs a random walk proposal and
-delegates the Metropolis-Hastings correction to {func}`.mh_step`. The
+delegates the Metropolis-Hastings correction to {func}`mh_step <liesel.goose.mh_step>`. The
 adaptive version adds one more step: it updates the step size using dual
 averaging based on the observed acceptance probability.
 

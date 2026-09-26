@@ -15,7 +15,7 @@ gamma model has one response for whether a value is zero and another for its
 positive amount. We keep matching rows together within each group.
 
 Start with [the first tutorial](09-liesel-optim-basic.md) if you are new to
-`LieselOptim`.
+{class}`LieselOptim <liesel.optim.LieselOptim>`.
 
 ```{code-cell} ipython3
 import logging
@@ -150,8 +150,8 @@ pd.DataFrame(
 
 ## Fit both groups together
 
-`Batches.from_split()` builds a `BatchManager` for the two groups. Pass it to
-`LieselOptim`. Each update uses 32 rows from each group. The default epoch length follows the larger group; the smaller
+{meth}`Batches.from_split() <liesel.optim.Batches.from_split>` builds a {class}`BatchManager <liesel.optim.BatchManager>` for the two groups. Pass it to
+{class}`LieselOptim <liesel.optim.LieselOptim>`. Each update uses 32 rows from each group. The default epoch length follows the larger group; the smaller
 group starts another shuffled pass when needed. The loss scales each group's
 batch to its training size.
 

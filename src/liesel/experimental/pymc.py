@@ -1,5 +1,5 @@
 """
-A :class:`.ModelInterface` for PyMC models.
+A ``ModelInterface`` for PyMC models.
 
 To use this module, the PyMC package must be installed. To do so,
 please install Liesel with the optional dependency PyMC:
@@ -94,7 +94,7 @@ except ImportError as e:
 
 class PyMCInterface:
     """
-    An implementation of the Goose :class:`~liesel.goose.types.ModelInterface`
+    An implementation of the Goose ``ModelInterface``
     to be used with a PyMC model.
 
     The initial position can be extracted with :meth:`.get_initial_state`.

@@ -67,7 +67,7 @@ model.plot()
 ## Use Gaussian loss shortcuts
 
 For a Gaussian over **all** target parameters, these shortcuts return a ready
-loss. They build a `VDist` internally; no separate `build()` call is needed.
+loss. They build a {class}`VDist <liesel.optim.VDist>` internally; no separate {meth}`build() <liesel.optim.VDist.build>` call is needed.
 
 Use {meth}`~liesel.optim.NegElboLoss.mvn_diag` for independent components, each
 with its own learned mean and standard deviation:
@@ -97,22 +97,22 @@ components independent; the dense family can learn correlations. Its Cholesky
 factor requires quadratic storage rather than linear storage for diagonal scales.
 `scale=True` normalizes the loss, independently of the Gaussian scale.
 
-Pass either loss to `LieselVI` as in {doc}`variational-inference`. The next
+Pass either loss to {class}`LieselVI <liesel.optim.LieselVI>` as in {doc}`variational-inference`. The next
 sections show how to select parameters and choose your own blocks.
 
 ## Build one Gaussian block
 
-`VDist` selects named target parameters, including vectors and matrices. Use
+{class}`VDist <liesel.optim.VDist>` selects named target parameters, including vectors and matrices. Use
 unconstrained names for transformed parameters. Its Gaussian constructors return
-the helper; `build()` creates the underlying model in `.q`.
+the helper; {meth}`build() <liesel.optim.VDist.build>` creates the underlying model in `.q`.
 
-Use `.mvn_diag()` for independent components:
+Use {meth}`.mvn_diag() <liesel.optim.VDist.mvn_diag>` for independent components:
 
 ```{code-cell} python
 diagonal = opt.VDist(["alpha", "beta"], model).mvn_diag(scale_diag=0.5).build()
 ```
 
-Use `.mvn_tril()` to learn correlations within the block:
+Use {meth}`.mvn_tril() <liesel.optim.VDist.mvn_tril>` to learn correlations within the block:
 
 ```{code-cell} python
 dense = opt.VDist(["alpha", "beta"], model).mvn_tril(scale_tril=0.5).build()
@@ -139,11 +139,11 @@ initial_draws = dense.sample(4, seed=jax.random.key(40))
 pd.DataFrame(initial_draws)
 ```
 
-These are initial draws. Fitted draws use `loss.approximate_joint_posterior(result)`.
+These are initial draws. Fitted draws use {meth}`loss.approximate_joint_posterior(result) <liesel.optim.NegElboLoss.approximate_joint_posterior>`.
 
 ## Combine independent blocks
 
-Choose a distribution on each `VDist`, then combine the initialized blocks.
+Choose a distribution on each {class}`VDist <liesel.optim.VDist>`, then combine the initialized blocks.
 They must share one target model, with no target name appearing in two blocks:
 
 ```{code-cell} python
@@ -171,7 +171,7 @@ blocked_loss = opt.NegElboLoss.from_vdist(blocked, nsamples=16, scale=True)
 
 Pass either loss to `LieselVI(model, ...)`. Fitting does not update the helper's
 model values: sample the fitted posterior through
-`loss.approximate_joint_posterior(result)`, or supply `at_position` to the helper's
+{meth}`loss.approximate_joint_posterior(result) <liesel.optim.NegElboLoss.approximate_joint_posterior>`, or supply `at_position` to the helper's
 `sample` method.
 
 For a custom distribution over a flattened block, see
@@ -235,7 +235,7 @@ The prior on `alpha_loc` is ignored by default; target priors on `alpha` and
 ### Fit and sample
 
 The observed names and shapes in `q` match the target parameters, so no explicit
-mapping is needed. Pass the same target model to the loss and `LieselVI`:
+mapping is needed. Pass the same target model to the loss and {class}`LieselVI <liesel.optim.LieselVI>`:
 
 ```{code-cell} python
 loss = opt.NegElboLoss(model, q, nsamples=16, scale=True)
@@ -300,7 +300,7 @@ pd.DataFrame(
 ```
 
 The difference is the log prior at the fitted `alpha_loc`. To optimize this
-penalized objective, pass `regularized_loss` to `LieselVI`; wrapper flags do not
+penalized objective, pass `regularized_loss` to {class}`LieselVI <liesel.optim.LieselVI>`; wrapper flags do not
 modify an explicit loss.
 
 ### Map names and shapes
@@ -308,7 +308,7 @@ modify an explicit loss.
 Supply `q_to_p` for structural renaming or reshaping of one draw. The mapping
 must be one-to-one and density-preserving: no Jacobian is added for it. Put
 nonlinear transforms inside `q`, including their Jacobians in its density.
-`VDist` supplies its unflattening mapping automatically.
+{class}`VDist <liesel.optim.VDist>` supplies its unflattening mapping automatically.
 
 Custom joint densities and auxiliary variables require care; see the
 {class}`~liesel.optim.NegElboLoss` contract before defining them.
