@@ -1,17 +1,19 @@
 """Variational inference losses and variational distribution builders.
 
-This module provides the pieces used by :class:`.LieselVI` and by custom
+This module provides the pieces used by :class:`~liesel.optim.LieselVI` and by custom
 variational workflows:
 
-``NegElboLoss``
-    A :class:`.LossMixin` implementation that evaluates a Monte Carlo estimate of
+:class:`~liesel.optim.NegElboLoss`
+    A :class:`~liesel.optim.LossMixin` implementation that evaluates a Monte Carlo
+    estimate of
     the negative evidence lower bound (ELBO) loss.
-``VDist``
+:class:`~liesel.optim.VDist`
     A builder for one variational block. The block governs one or more parameters
     from a target Liesel model and turns them into a flattened observed variable in
     a variational model.
-``CompositeVDist``
-    A builder that combines several independent ``VDist`` blocks into one
+:class:`~liesel.optim.CompositeVDist`
+    A builder that combines several independent :class:`~liesel.optim.VDist` blocks into
+    one
     variational model.
 
 Examples
@@ -64,7 +66,7 @@ import operator
 from collections.abc import Callable, Sequence
 from functools import partial
 from math import prod
-from typing import Any, Literal, Self, cast
+from typing import TYPE_CHECKING, Any, Literal, Self, cast
 
 import jax
 import jax.flatten_util
@@ -188,7 +190,7 @@ class NegElboLoss(LossMixin):
 
     Connects a target model ``p`` to a variational model ``q`` through the draw
     mapping ``q_to_p``. Training methods return the negative ELBO for minimization;
-    :meth:`estimate_elbo` returns the ELBO itself.
+    :meth:`~liesel.optim.NegElboLoss.estimate_elbo` returns the ELBO itself.
 
     Parameters
     ----------
@@ -202,7 +204,8 @@ class NegElboLoss(LossMixin):
         distributions and weak marked parameters raise ValueError.
     split
         Train/test split for observed data in ``p``. Validation data is not
-        supported for ELBO losses. If omitted, :meth:`.PositionSplit.from_model` is
+        supported for ELBO losses. If omitted, :meth:`PositionSplit.from_model
+        <liesel.optim.PositionSplit.from_model>` is
         used. Computed data keys must be fixed with respect to inferred target
         positions. Dependencies or overlap with inferred targets raise
         :class:`ValueError` when constructing the loss; batch fixed inputs instead.
@@ -210,7 +213,8 @@ class NegElboLoss(LossMixin):
         Number of Monte Carlo samples used for training losses.
     q_to_p
         Function mapping a sampled position from ``q`` to a position accepted by
-        ``p``. Builders such as :class:`VDist` provide this mapping automatically.
+        ``p``. Builders such as :class:`~liesel.optim.VDist` provide this mapping
+        automatically.
         With computed data keys, this mapping is also evaluated on the current
         observed position of ``q`` at construction to identify inferred target keys.
         Use a pure, one-to-one structural name/shape mapping whose output keys do
@@ -218,7 +222,8 @@ class NegElboLoss(LossMixin):
         change-of-variables Jacobian is added for this mapping.
     scale
         If ``True``, divide losses by the training sample size. For
-        :class:`.PositionSplitManager`, the scalar is the sum of all branch-specific
+        :class:`~liesel.optim.PositionSplitManager`, the scalar is the sum of all
+        branch-specific
         training sizes.
     vdist
         Optional variational distribution builder that created ``q``. Stored for
@@ -248,7 +253,8 @@ class NegElboLoss(LossMixin):
 
     Examples
     --------
-    The convenience constructor :meth:`mvn_diag` builds a diagonal multivariate
+    The convenience constructor :meth:`~liesel.optim.NegElboLoss.mvn_diag` builds a
+    diagonal multivariate
     normal variational distribution over all parameters of ``p``:
 
     >>> import jax
@@ -307,6 +313,24 @@ class NegElboLoss(LossMixin):
 
     scalar: float
     """Normalization constant used when ``scale=True``."""
+
+    if TYPE_CHECKING:
+        entropy: Literal["auto", "mc"]
+        """
+        ``"auto"`` (default) uses differentiable distribution entropies where
+        implemented, falling back to Monte Carlo per term on ``NotImplementedError``.
+        """
+        nsamples: int
+        """Number of Monte Carlo samples used for training losses."""
+        regularize_q_prior: bool
+        """
+        Defaults to ``False``: optimize the ordinary ELBO, including target-model
+        priors.
+        """
+        scale: bool
+        """If ``True``, divide losses by the training sample size."""
+        vdist: VDist | CompositeVDist | None
+        """Optional variational distribution builder that created ``q``."""
 
     def __init__(
         self,
@@ -404,17 +428,21 @@ class NegElboLoss(LossMixin):
         Parameters
         ----------
         vdist
-            Built :class:`VDist` or :class:`CompositeVDist`. Its :attr:`q` model must
-            already be available, usually by calling :meth:`VDist.build` or
-            :meth:`CompositeVDist.build`.
+            Built :class:`~liesel.optim.VDist` or :class:`~liesel.optim.CompositeVDist`.
+            Its :attr:`~liesel.optim.NegElboLoss.q` model must
+            already be available, usually by calling :meth:`VDist.build
+            <liesel.optim.VDist.build>` or
+            :meth:`CompositeVDist.build <liesel.optim.CompositeVDist.build>`.
         split
             Optional data split for the target model. Must not contain validation data.
-            If omitted, :meth:`PositionSplit.from_model` is used.
+            If omitted, :meth:`PositionSplit.from_model
+            <liesel.optim.PositionSplit.from_model>` is used.
         nsamples
             Number of Monte Carlo samples used for training losses.
         scale
             Whether to normalize losses by the training sample size. For
-            :class:`.PositionSplitManager`, this is the total branch training size.
+            :class:`~liesel.optim.PositionSplitManager`, this is the total branch
+            training size.
         regularize_q_prior
             Defaults to ``False``. Set ``True`` to add log-prior penalties on
             variational parameters. Target-model priors remain included either way.
@@ -482,7 +510,8 @@ class NegElboLoss(LossMixin):
         Builds a diagonal multivariate normal ELBO over all parameters of ``p``.
 
         Each unconstrained parameter in ``p.parameters`` is included in one joint
-        :class:`VDist` with a diagonal covariance matrix. Use :meth:`mvn_tril` when
+        :class:`~liesel.optim.VDist` with a diagonal covariance matrix. Use
+        :meth:`~liesel.optim.NegElboLoss.mvn_tril` when
         the variational approximation should model posterior correlations.
 
         Parameters
@@ -491,12 +520,14 @@ class NegElboLoss(LossMixin):
             Target model.
         split
             Optional data split. Must not contain validation data. If omitted,
-            :meth:`PositionSplit.from_model` is used by :class:`NegElboLoss`.
+            :meth:`PositionSplit.from_model <liesel.optim.PositionSplit.from_model>` is
+            used by :class:`~liesel.optim.NegElboLoss`.
         nsamples
             Number of Monte Carlo samples used for training losses.
         scale
             Whether to normalize losses by the training sample size. For
-            :class:`.PositionSplitManager`, this is the total branch training size.
+            :class:`~liesel.optim.PositionSplitManager`, this is the total branch
+            training size.
         regularize_q_prior
             Defaults to ``False``. Set ``True`` to add log-prior penalties on
             variational parameters. Target-model priors remain included either way.
@@ -513,7 +544,8 @@ class NegElboLoss(LossMixin):
             approximation to the posterior mode.
         scale_diag_bijector
             Bijector applied to the diagonal scale parameter. ``"auto"`` delegates
-            the choice to :meth:`liesel.model.Dist.biject_parameters`; ``None``
+            the choice to :meth:`liesel.model.Dist.biject_parameters
+            <liesel.model.Dist.biject_parameters>`; ``None``
             leaves the scale parameter untransformed.
         to_float32
             Whether to convert values in the variational model to ``float32``. If
@@ -570,7 +602,8 @@ class NegElboLoss(LossMixin):
         """
         Builds a dense multivariate normal ELBO over all parameters of ``p``.
 
-        The variational distribution uses a single :class:`VDist` block with a full
+        The variational distribution uses a single :class:`~liesel.optim.VDist` block
+        with a full
         lower-triangular scale matrix. This can represent correlations among all
         optimized parameters.
 
@@ -580,12 +613,14 @@ class NegElboLoss(LossMixin):
             Target model.
         split
             Optional data split. Must not contain validation data. If omitted,
-            :meth:`PositionSplit.from_model` is used by :class:`NegElboLoss`.
+            :meth:`PositionSplit.from_model <liesel.optim.PositionSplit.from_model>` is
+            used by :class:`~liesel.optim.NegElboLoss`.
         nsamples
             Number of Monte Carlo samples used for training losses.
         scale
             Whether to normalize losses by the training sample size. For
-            :class:`.PositionSplitManager`, this is the total branch training size.
+            :class:`~liesel.optim.PositionSplitManager`, this is the total branch
+            training size.
         regularize_q_prior
             Defaults to ``False``. Set ``True`` to add log-prior penalties on
             variational parameters. Target-model priors remain included either way.
@@ -602,7 +637,8 @@ class NegElboLoss(LossMixin):
             approximation to the posterior mode.
         scale_tril_bijector
             Bijector applied to the lower-triangular scale parameter. ``"auto"``
-            delegates the choice to :meth:`liesel.model.Dist.biject_parameters`;
+            delegates the choice to :meth:`liesel.model.Dist.biject_parameters
+            <liesel.model.Dist.biject_parameters>`;
             ``None`` leaves the scale parameter untransformed.
         to_float32
             Whether to convert values in the variational model to ``float32``. If
@@ -657,7 +693,8 @@ class NegElboLoss(LossMixin):
         """
         Builds an ELBO with one dense normal variational block per parameter.
 
-        The resulting :class:`CompositeVDist` treats parameter blocks as independent,
+        The resulting :class:`~liesel.optim.CompositeVDist` treats parameter blocks as
+        independent,
         but each individual parameter can have an internal dense covariance structure
         when it is vector-valued.
 
@@ -667,12 +704,14 @@ class NegElboLoss(LossMixin):
             Target model.
         split
             Optional data split. Must not contain validation data. If omitted,
-            :meth:`PositionSplit.from_model` is used by :class:`NegElboLoss`.
+            :meth:`PositionSplit.from_model <liesel.optim.PositionSplit.from_model>` is
+            used by :class:`~liesel.optim.NegElboLoss`.
         nsamples
             Number of Monte Carlo samples used for training losses.
         scale
             Whether to normalize losses by the training sample size. For
-            :class:`.PositionSplitManager`, this is the total branch training size.
+            :class:`~liesel.optim.PositionSplitManager`, this is the total branch
+            training size.
         regularize_q_prior
             Defaults to ``False``. Set ``True`` to add log-prior penalties on
             variational parameters. Target-model priors remain included either way.
@@ -684,11 +723,13 @@ class NegElboLoss(LossMixin):
             scalar is interpreted as a multiple of each block's identity matrix. The
             special value ``"laplace"`` initializes each block from local curvature
             at the current parameter position. Custom per-block locations are
-            intentionally left to manual :class:`CompositeVDist` construction.
+            intentionally left to manual :class:`~liesel.optim.CompositeVDist`
+            construction.
         scale_tril_bijector
             Bijector applied to each block's lower-triangular scale parameter.
             ``"auto"`` delegates the choice to
-            :meth:`liesel.model.Dist.biject_parameters`; ``None`` leaves the scale
+            :meth:`liesel.model.Dist.biject_parameters
+            <liesel.model.Dist.biject_parameters>`; ``None`` leaves the scale
             parameter untransformed.
         to_float32
             Whether to convert values in the variational model to ``float32``. If
@@ -867,7 +908,8 @@ class NegElboLoss(LossMixin):
         only when ``regularize_q_prior=True``; see :ref:`vi-q-prior-penalties`.
         Mini-batch training passes
         ``batches`` so observed log-likelihood terms can be scaled by the active
-        batch configuration. ``NegElboLoss`` rejects validation splits, so any
+        batch configuration. :class:`~liesel.optim.NegElboLoss` rejects validation
+        splits, so any
         ``split`` supplied here is expected to have no validation part.
 
         Parameters
@@ -990,7 +1032,7 @@ class NegElboLoss(LossMixin):
 
         ``carry.batch`` supplies observed mini-batch values, and ``carry.batches``
         supplies the corresponding likelihood scaling, including per-branch scaling
-        for :class:`.BatchManager`.
+        for :class:`~liesel.optim.BatchManager`.
         """
         elbo = self.estimate_elbo(
             Position(params | carry.fixed_position),
@@ -1008,7 +1050,8 @@ class NegElboLoss(LossMixin):
         """
         Computes the negative full-training-data ELBO.
 
-        This method uses :attr:`split.train` as observed data and ignores the
+        This method uses :attr:`split.train <liesel.optim.PositionSplit.train>`
+        as observed data and ignores the
         current mini-batch in ``carry.batch``. It is useful for diagnostics or
         full-data optimization.
         """
@@ -1044,7 +1087,7 @@ class VDist:
     position_keys
         Names of target parameters governed by this block.
     p
-        Target :class:`.Model`.
+        Target :class:`~liesel.model.Model`.
     to_float32
         Whether to convert values in the variational model to ``float32``. If
         ``None``, inherits the ``to_float32`` policy set when constructing ``p``.
@@ -1103,7 +1146,8 @@ class VDist:
 
     .. rubric:: Custom variational distributions
 
-    Supply a fully reparameterized :class:`.Dist` matching the flattened block
+    Supply a fully reparameterized :class:`~liesel.model.Dist` matching the flattened
+    block
     shape. Mark its trainable inputs as parameters:
 
     >>> q_loc = lsl.Var.new_param(jnp.zeros(2), name="q_loc")
@@ -1117,6 +1161,14 @@ class VDist:
     See :doc:`/variational-models` for fitting and conditional families.
 
     """
+
+    if TYPE_CHECKING:
+        position_keys: Sequence[str]
+        """Names of target parameters governed by this block."""
+        q: Model | None
+        """Variational model constructed by :meth:`~liesel.optim.VDist.build`."""
+        var: Var | None
+        """Variable representing this block in the variational model."""
 
     def __init__(
         self, position_keys: Sequence[str], p: Model, to_float32: bool | None = None
@@ -1154,7 +1206,7 @@ class VDist:
         Returns
         -------
         Model
-            Model passed to :class:`VDist`.
+            Model passed to :class:`~liesel.optim.VDist`.
         """
         return self._p
 
@@ -1162,7 +1214,8 @@ class VDist:
         """
         Maps a flat variational position back to the target-model representation.
 
-        ``VDist`` represents the governed target parameters as one flattened
+        :class:`~liesel.optim.VDist` represents the governed target parameters as one
+        flattened
         pseudo-observed variable in ``q``. This method unflattens that variable into
         the original target-model position.
 
@@ -1175,7 +1228,7 @@ class VDist:
         Returns
         -------
         Position
-            Position in the representation expected by :attr:`p`.
+            Position in the representation expected by :attr:`~liesel.optim.VDist.p`.
 
         Examples
         --------
@@ -1198,7 +1251,7 @@ class VDist:
         ----------
         pos
             Position in the target-model representation. Its keys must match
-            :attr:`position_keys` in the same order.
+            :attr:`~liesel.optim.VDist.position_keys` in the same order.
 
         Returns
         -------
@@ -1221,8 +1274,10 @@ class VDist:
         Names of the variational parameters in ``q``.
 
         Returns an empty list before the variational distribution has been
-        initialized with :meth:`.VDist.init`, :meth:`.VDist.normal`,
-        :meth:`.VDist.mvn_diag`, or :meth:`.VDist.mvn_tril`.
+        initialized with :meth:`VDist.init <liesel.optim.VDist.init>`,
+        :meth:`VDist.normal <liesel.optim.VDist.normal>`,
+        :meth:`VDist.mvn_diag <liesel.optim.VDist.mvn_diag>`, or :meth:`VDist.mvn_tril
+        <liesel.optim.VDist.mvn_tril>`.
 
         Examples
         --------
@@ -1290,23 +1345,28 @@ class VDist:
         """
         Initializes this block with a custom variational distribution.
 
-        Populates the :attr:`.var` attribute with an observed :class:`.Var`. This
-        variable represents the flattened position governed by this :class:`.VDist`.
+        Populates the :attr:`~liesel.optim.VDist.var` attribute with an observed
+        :class:`~liesel.model.Var`. This
+        variable represents the flattened position governed by this
+        :class:`~liesel.optim.VDist`.
 
         Parameters
         ----------
         dist
-            A :class:`.Dist`, representing the joint variational distribution for
-            the flattened position governed by this :class:`.VDist`.
+            A :class:`~liesel.model.Dist`, representing the joint variational
+            distribution for
+            the flattened position governed by this :class:`~liesel.optim.VDist`.
 
         Notes
         -----
-        The docstring of :class:`.VDist` includes an example using this method.
+        The docstring of :class:`~liesel.optim.VDist` includes an example using this
+        method.
 
         Returns
         -------
         Self
-            This ``VDist`` instance, allowing chained calls to :meth:`build`.
+            This :class:`~liesel.optim.VDist` instance, allowing chained calls to
+            :meth:`~liesel.optim.VDist.build`.
         """
         self._validate(dist)
 
@@ -1335,7 +1395,8 @@ class VDist:
 
         The governed target-model position is flattened, and each flat component is
         assigned a ``tfd.Normal`` variational distribution. For vector-valued
-        governed positions, use :meth:`mvn_diag` if you prefer one multivariate
+        governed positions, use :meth:`~liesel.optim.VDist.mvn_diag` if you prefer one
+        multivariate
         distribution with diagonal covariance.
 
         Parameters
@@ -1354,7 +1415,8 @@ class VDist:
             is performed.
         scale_bijector
             Bijector applied to the scale parameter. ``"auto"`` delegates the choice
-            to :meth:`liesel.model.Dist.biject_parameters`; ``None`` leaves the scale
+            to :meth:`liesel.model.Dist.biject_parameters
+            <liesel.model.Dist.biject_parameters>`; ``None`` leaves the scale
             parameter untransformed.
         *bijector_args
             Positional arguments passed to ``scale_bijector`` when a bijector class
@@ -1366,7 +1428,8 @@ class VDist:
         Returns
         -------
         Self
-            This ``VDist`` instance, initialized with a normal variational
+            This :class:`~liesel.optim.VDist` instance, initialized with a normal
+            variational
             distribution.
 
         Examples
@@ -1424,7 +1487,7 @@ class VDist:
         Initializes a multivariate normal distribution with diagonal covariance matrix
         as the variational distribution q.
 
-        Internally calls :meth:`.VDist.init`.
+        Internally calls :meth:`VDist.init <liesel.optim.VDist.init>`.
 
         Parameters
         ----------
@@ -1445,7 +1508,8 @@ class VDist:
             is performed.
         scale_diag_bijector
             Bijector applied to the diagonal scale parameter. ``"auto"`` delegates
-            to :meth:`liesel.model.Dist.biject_parameters`; ``None`` leaves the
+            to :meth:`liesel.model.Dist.biject_parameters
+            <liesel.model.Dist.biject_parameters>`; ``None`` leaves the
             parameter untransformed.
         *bijector_args
             Positional arguments passed to ``scale_diag_bijector`` when a bijector
@@ -1457,12 +1521,14 @@ class VDist:
         Returns
         -------
         Self
-            This ``VDist`` instance, initialized with a diagonal multivariate normal
+            This :class:`~liesel.optim.VDist` instance, initialized with a diagonal
+            multivariate normal
             variational distribution.
 
         Notes
         -----
-        The docstring of :class:`.VDist` includes an example using this method.
+        The docstring of :class:`~liesel.optim.VDist` includes an example using this
+        method.
         """
         loc_value = self._prepare_loc(loc)
         loc_dtype = loc_value.dtype
@@ -1534,7 +1600,8 @@ class VDist:
             the mode is performed.
         scale_tril_bijector
             Bijector applied to the lower-triangular scale parameter. ``"auto"``
-            delegates to :meth:`liesel.model.Dist.biject_parameters`; ``None`` leaves
+            delegates to :meth:`liesel.model.Dist.biject_parameters
+            <liesel.model.Dist.biject_parameters>`; ``None`` leaves
             the parameter untransformed.
         *bijector_args
             Positional arguments passed to ``scale_tril_bijector`` when a bijector
@@ -1546,7 +1613,8 @@ class VDist:
         Returns
         -------
         Self
-            This ``VDist`` instance, initialized with a dense multivariate normal
+            This :class:`~liesel.optim.VDist` instance, initialized with a dense
+            multivariate normal
             variational distribution.
 
         Notes
@@ -1554,7 +1622,8 @@ class VDist:
         The bijector :class:`tfp.bijectors.FillScaleTril` will be automatically applied
         to ``scale_tril`` to map its elements to the real line.
 
-        The docstring of :class:`.VDist` includes an example using this method.
+        The docstring of :class:`~liesel.optim.VDist` includes an example using this
+        method.
         """
         loc_value = self._prepare_loc(loc)
         loc_dtype = loc_value.dtype
@@ -1593,19 +1662,22 @@ class VDist:
 
     def build(self) -> Self:
         """
-        Builds the :class:`.Model` for the variational distribution, populates
-        :attr:`.q`.
+        Builds the :class:`~liesel.model.Model` for the variational distribution,
+        populates
+        :attr:`~liesel.optim.VDist.q`.
 
         Returns
         -------
         Self
-            This ``VDist`` instance with :attr:`q` populated.
+            This :class:`~liesel.optim.VDist` instance with
+            :attr:`~liesel.optim.VDist.q` populated.
 
         Raises
         ------
         ValueError
-            If :attr:`.var` has not been populated yet. See :meth:`.VDist.init` to
-            populate :attr:`.var`.
+            If :attr:`~liesel.optim.VDist.var` has not been populated yet. See
+            :meth:`VDist.init <liesel.optim.VDist.init>` to
+            populate :attr:`~liesel.optim.VDist.var`.
         """
         if self.var is None:
             raise ValueError("The .var attribute must be set, but is currently None.")
@@ -1637,8 +1709,9 @@ class VDist:
         Returns
         -------
         Position
-            Samples for the parameters governed by this :class:`.VDist` in the
-            representation of :attr:`p`.
+            Samples for the parameters governed by this :class:`~liesel.optim.VDist` in
+            the
+            representation of :attr:`~liesel.optim.VDist.p`.
 
         Examples
         --------
@@ -1751,7 +1824,7 @@ def vmap_batched(
     pos
         Batched position passed to ``fun``.
     fun
-        Function mapping one unbatched :class:`Position` to another.
+        Function mapping one unbatched ``Position`` to another.
     batch_shape
         Leading batch shape in every leaf of ``pos``.
 
@@ -1815,7 +1888,8 @@ def _sample_variational_model(
 class VariationalApproximation:
     """Fitted variational posterior in the target model's parameter representation.
 
-    Construct through :meth:`NegElboLoss.approximate_joint_posterior`.
+    Construct through :meth:`NegElboLoss.approximate_joint_posterior
+    <liesel.optim.NegElboLoss.approximate_joint_posterior>`.
     Variational parameter values are held independently of the fit result.
     Keep the variational graph, nonparameter values, and the position mapping
     unchanged while using this object.
@@ -1839,7 +1913,8 @@ class VariationalApproximation:
         The default returns one draw in the original parameter shapes. Pass an
         integer, a tuple such as ``(1000,)``, or ``(chains, draws)`` for leading
         sample axes. The JAX random key ``seed`` is required and keyword-only.
-        Use :meth:`liesel.model.Model.predict` to evaluate derived quantities or
+        Use :meth:`liesel.model.Model.predict <liesel.model.Model.predict>` to evaluate
+        derived quantities or
         transform draws back to constrained parameter scales.
         """
         return _sample_variational_model(
@@ -1849,7 +1924,7 @@ class VariationalApproximation:
 
 class CompositeVDist:
     r"""
-    Combines independent :class:`.VDist` blocks into one variational model.
+    Combines independent :class:`~liesel.optim.VDist` blocks into one variational model.
 
     Parameters
     ----------
@@ -1865,7 +1940,8 @@ class CompositeVDist:
     Notes
     -----
     Blocks are independent; a dense block can represent dependence within its
-    parameters. Call :meth:`build` on the composite after initializing its blocks.
+    parameters. Call :meth:`~liesel.optim.CompositeVDist.build` on the composite after
+    initializing its blocks.
 
     Examples
     --------
@@ -1897,6 +1973,15 @@ class CompositeVDist:
 
     >>> vdist = opt.VDist(["mu", "h(sigma)"], p).mvn_tril().build()
     """
+
+    if TYPE_CHECKING:
+        q: Model | None
+        """
+        Combined variational model constructed by
+        :meth:`~liesel.optim.CompositeVDist.build`.
+        """
+        vi_dists: tuple[VDist, ...]
+        """Independent variational blocks combined by this object."""
 
     def __init__(self, *vdists: VDist):
         if not vdists:

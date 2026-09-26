@@ -86,7 +86,7 @@ optimizers = [
 ]
 ```
 
-Pass this list as `optimizers=optimizers` to `LieselOptim`. Each optimizer
+Pass this list as `optimizers=optimizers` to {class}`LieselOptim <liesel.optim.LieselOptim>`. Each optimizer
 updates its own parameters in list order on every batch. Their parameter names
 must not overlap. Parameters left out of the list stay fixed.
 Separate blocks each evaluate the loss and gradient, adding work.
@@ -156,6 +156,6 @@ early stopping ends the run sooner. Its parameter storage costs approximately
 `epochs * total_parameter_bytes`: one million float32 parameters across 1,000
 epochs take about 4 GB. Disabling it retains scalar losses and final/best positions.
 
-Use `build_engine()` for settings beyond the wrapper's arguments.
+Use {meth}`build_engine() <liesel.optim.LieselOptim.build_engine>` for settings beyond the wrapper's arguments.
 See {py:class}`~liesel.optim.OptimEngine` for all settings, or
 {doc}`optimizer-checkpointing` to pause and resume a fit.

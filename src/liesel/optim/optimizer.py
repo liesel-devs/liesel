@@ -1,4 +1,4 @@
-"""Optimizer wrappers used by :class:`.OptimEngine`.
+"""Optimizer wrappers used by :class:`~liesel.optim.OptimEngine`.
 
 The classes in this module adapt Optax gradient transformations to the
 position-dictionary workflow used by the experimental optimizer engine. Each
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 
 class OptimizerLike(Protocol):
-    """Structural interface consumed by :class:`.OptimEngine`."""
+    """Structural interface consumed by :class:`~liesel.optim.OptimEngine`."""
 
     @property
     def position_keys(self) -> Sequence[str]:
@@ -73,8 +73,10 @@ class Optimizer:
     """
     Wraps an Optax gradient transformation for selected position entries.
 
-    ``Optimizer`` is the default adapter used by :class:`.OptimEngine`. It extracts
-    the entries named in :attr:`position_keys`, differentiates the configured loss
+    :class:`~liesel.optim.Optimizer` is the default adapter used by
+    :class:`~liesel.optim.OptimEngine`. It extracts
+    the entries named in :attr:`~liesel.optim.Optimizer.position_keys`, differentiates
+    the configured loss
     with respect to only those entries, applies an Optax update, and merges the
     updated subset back into the full engine position.
 
@@ -87,8 +89,8 @@ class Optimizer:
         ``optax.sgd(...)``.
     identifier
         Optional identifier used to store this optimizer's state in
-        :class:`.OptimCarry`. Missing identifiers are filled by
-        :class:`.OptimEngine`.
+        ``OptimCarry``. Missing identifiers are filled by
+        :class:`~liesel.optim.OptimEngine`.
     activate_after_epochs
         Number of completed epochs required before this optimizer participates in
         batch updates. ``0`` activates it from the first epoch.
@@ -96,7 +98,8 @@ class Optimizer:
     Notes
     -----
     Multiple optimizers can be used in the same engine, but their
-    :attr:`position_keys` and identifiers must be disjoint after automatic naming.
+    :attr:`~liesel.optim.Optimizer.position_keys` and identifiers must be disjoint after
+    automatic naming.
     ``position_keys`` are normalized to a tuple during initialization.
 
     Examples
@@ -116,13 +119,25 @@ class Optimizer:
     """
 
     position_keys: Sequence[str]
+    """Names of the parameter entries owned by this optimizer."""
     optimizer: optax.GradientTransformation
+    """
+    Optax gradient transformation, for example ``optax.adam(...)`` or
+    ``optax.sgd(...)``.
+    """
     identifier: str = ""
+    """
+    Optional identifier used to store this optimizer's state in ``OptimCarry``.
+    """
     activate_after_epochs: int = 0
+    """
+    Number of completed epochs required before this optimizer participates in batch
+    updates. ``0`` activates it from the first epoch.
+    """
 
     def __post_init__(self) -> None:
         """
-        Validates and normalizes :attr:`position_keys`.
+        Validates and normalizes :attr:`~liesel.optim.Optimizer.position_keys`.
 
         Raises
         ------
@@ -160,13 +175,15 @@ class Optimizer:
         Returns
         -------
         Position
-            Mapping containing only keys listed in :attr:`position_keys`. Values are
+            Mapping containing only keys listed in
+            :attr:`~liesel.optim.Optimizer.position_keys`. Values are
             converted with :func:`jax.numpy.asarray`.
 
         Raises
         ------
         KeyError
-            If any key listed in :attr:`position_keys` is missing from ``position``.
+            If any key listed in :attr:`~liesel.optim.Optimizer.position_keys` is
+            missing from ``position``.
         """
         missing = [key for key in self.position_keys if key not in position]
         if missing:
@@ -188,7 +205,8 @@ class Optimizer:
         Returns
         -------
         Position
-            Mapping containing entries whose keys are not in :attr:`position_keys`.
+            Mapping containing entries whose keys are not in
+            :attr:`~liesel.optim.Optimizer.position_keys`.
             During engine updates, this subset is exposed as
             ``carry.fixed_position`` so losses can still evaluate the full position.
         """
@@ -204,7 +222,8 @@ class Optimizer:
         Parameters
         ----------
         position
-            Full optimizer position. Only :attr:`position_keys` are passed to the
+            Full optimizer position. Only :attr:`~liesel.optim.Optimizer.position_keys`
+            are passed to the
             Optax transformation.
 
         Returns
@@ -221,7 +240,8 @@ class Optimizer:
         """
         Runs one optimizer step on ``position``.
 
-        :meth:`.Loss.value_and_grad` computes the returned loss and gradient
+        :meth:`Loss.value_and_grad <liesel.optim.Loss.value_and_grad>` computes the
+        returned loss and gradient
         together, using the same mini-batch, parameter position, PRNG key, and
         stochastic objective draw.
 
@@ -230,7 +250,7 @@ class Optimizer:
         position
             Parameter subset owned by this optimizer.
         loss
-            Loss object providing :meth:`value_and_grad`.
+            Loss object providing :meth:`~liesel.optim.Loss.value_and_grad`.
         carry
             Current optimizer carry. The optimizer state for this object is read from
             and written to ``carry.optimizer_states[self.identifier]``.
@@ -298,8 +318,9 @@ class LBFGS(Optimizer):
     """
     Optimizer wrapper using Optax L-BFGS.
 
-    ``LBFGS`` behaves like :class:`Optimizer` but uses
-    :func:`optax.value_and_grad_from_state` inside :meth:`step`, which lets Optax
+    :class:`~liesel.optim.LBFGS` behaves like :class:`~liesel.optim.Optimizer` but uses
+    :func:`optax.value_and_grad_from_state` inside :meth:`~liesel.optim.LBFGS.step`,
+    which lets Optax
     reuse value/gradient information stored by the L-BFGS transformation.
 
     L-BFGS requires full-data batches, a deterministic objective, and must be the
@@ -317,7 +338,8 @@ class LBFGS(Optimizer):
     optimizer
         Optax L-BFGS transformation. Defaults to ``optax.lbfgs()``.
     identifier
-        Optional optimizer-state identifier filled by :class:`.OptimEngine` when
+        Optional optimizer-state identifier filled by :class:`~liesel.optim.OptimEngine`
+        when
         omitted.
     activate_after_epochs
         Number of completed epochs required before this optimizer participates in
@@ -336,8 +358,14 @@ class LBFGS(Optimizer):
     """
 
     position_keys: Sequence[str]
+    """Names of the parameter entries owned by this optimizer."""
     optimizer: optax.GradientTransformationExtraArgs = optax.lbfgs()  # noqa: RUF009
+    """Optax L-BFGS transformation."""
     identifier: str = ""
+    """
+    Optional optimizer-state identifier filled by :class:`~liesel.optim.OptimEngine`
+    when omitted.
+    """
 
     def step(
         self, position: Position, loss: Loss, carry: OptimCarry
@@ -350,7 +378,7 @@ class LBFGS(Optimizer):
         position
             Parameter subset owned by this optimizer.
         loss
-            Loss object providing :meth:`loss_train_batched`.
+            Loss object providing :meth:`~liesel.optim.Loss.loss_train_batched`.
         carry
             Current optimizer carry. The L-BFGS state is read from and written to
             ``carry.optimizer_states[self.identifier]``.

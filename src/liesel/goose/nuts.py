@@ -5,7 +5,7 @@ No U-Turn Sampler (NUTS).
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import partial
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import jax.numpy as jnp
 from blackjax import nuts as nuts_kernel
@@ -41,7 +41,7 @@ from .types import Array, KeyArray, ModelState, Position, Scalar
 @dataclass
 class NUTSKernelState:
     """
-    A dataclass for the state of a :class:`.NUTSKernel`, implementing the
+    A dataclass for the state of a :class:`~liesel.goose.NUTSKernel`, implementing the
     :class:`.DAKernelState` protocol.
     """
 
@@ -108,7 +108,7 @@ class NUTSKernel(
 ):
     """
     A NUTS kernel with dual averaging and an inverse mass matrix tuner, implementing the
-    :class:`.Kernel` protocol.
+    :class:`~liesel.goose.Kernel` protocol.
 
     Parameters
     ----------
@@ -159,9 +159,33 @@ class NUTSKernel(
     needs_history: ClassVar[bool] = True
     """Whether this kernel needs its history for tuning."""
     identifier: str = ""
-    """Kernel identifier, set by :class:`~.goose.EngineBuilder`"""
+    """Kernel identifier, set by :class:`~liesel.goose.EngineBuilder`"""
     position_keys: tuple[str, ...]
     """Tuple of position keys handled by this kernel."""
+
+    if TYPE_CHECKING:
+        da_gamma: float
+        """The adaptation regularization scale."""
+        da_kappa: float
+        """The adaptation relaxation exponent."""
+        da_t0: int
+        """The adaptation iteration offset."""
+        da_target_accept: float
+        """Target acceptance probability for dual averaging algorithm."""
+        initial_inverse_mass_matrix: Array | None
+        """
+        Starting value for the inverse mass matrix (the precision matrix of the
+        momentum).
+        """
+        initial_step_size: float | None
+        """Value at which to start step size tuning."""
+        max_treedepth: int
+        """
+        The maximum number of times that the length of the trajectory is doubled before
+        returning if no U-turn has been obserbed or no divergence has occured.
+        """
+        mm_diag: bool
+        """Whether to use a diagonal mass matrix for drawing the momentum vector."""
 
     def __init__(
         self,

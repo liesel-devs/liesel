@@ -1,8 +1,10 @@
 """Low-level optimization engine for experimental optimizers.
 
-The :class:`OptimEngine` class coordinates losses, optimizers, mini-batches,
+The :class:`~liesel.optim.OptimEngine` class coordinates losses, optimizers,
+mini-batches,
 train/validation/test splits, early stopping, and optimizer history recording. Most
-users will usually construct it through :class:`.LieselOptim`, but direct construction
+users will usually construct it through :class:`~liesel.optim.LieselOptim`, but direct
+construction
 is useful for custom losses or optimizer schedules.
 """
 
@@ -110,12 +112,14 @@ class EmaTrainLossMonitor:
     inclusion window or half-life. With a typical multi-batch epoch, a span of one
     epoch equivalent has a half-life of roughly 0.35 epoch equivalents, so recent
     batches receive substantially more weight than early batches from the same
-    epoch. The :meth:`from_half_life` constructor uses the large-span approximation
+    epoch. The :meth:`~liesel.optim.EmaTrainLossMonitor.from_half_life` constructor uses
+    the large-span approximation
     :math:`e = 2h / \log(2)` for a requested half-life :math:`h`. The exact
     finite-step relationship also depends on the number of batches per epoch.
     """
 
     effective_window: float
+    """Effective averaging window of the exponential moving average."""
 
     def __post_init__(self) -> None:
         try:
@@ -183,7 +187,8 @@ class OptimEngine:
     """
     Runs an optimization loop over epochs, batches, and optimizers.
 
-    ``OptimEngine`` runs the fit configured by :class:`.LieselOptim`.
+    :class:`~liesel.optim.OptimEngine` runs the fit configured by
+    :class:`~liesel.optim.LieselOptim`.
     Each epoch starts by asking ``batches`` for fresh batch indices,
     then iterates over all full batches. For each batch, each optimizer gets a turn
     to update the subset of parameters named in its ``position_keys``. The first
@@ -197,13 +202,16 @@ class OptimEngine:
     loss
         Loss object implementing the :class:`.loss.Loss` protocol.
     batches
-        Batch configuration used for the training data. Use :class:`.Batches` for a
-        single observation size and :class:`.BatchManager` for multi-branch models
+        Batch configuration used for the training data. Use
+        :class:`~liesel.optim.Batches` for a
+        single observation size and :class:`~liesel.optim.BatchManager` for multi-branch
+        models
         with different observation sizes.
     optimizers
         Sequence of optimizers. Each optimizer must claim a disjoint set of position
         keys. Individual optimizers may delay activation with
-        :attr:`.Optimizer.activate_after_epochs`.
+        :attr:`Optimizer.activate_after_epochs
+        <liesel.optim.Optimizer.activate_after_epochs>`.
     stopper
         Early-stopping and maximum-epoch configuration.
     seed
@@ -212,7 +220,7 @@ class OptimEngine:
         come from ``loss.position()``; the data split is already defined. Resuming
         a checkpoint uses its saved random key.
     initial_state
-        Initial model state passed into :class:`.OptimCarry`.
+        Initial model state passed into ``OptimCarry``.
     prune_history
         If ``True``, remove unused history entries after early stopping.
     show_progress
@@ -223,7 +231,8 @@ class OptimEngine:
         tracked independently of this setting.
     loss_monitor
         Source for the epoch-level stopping and progress loss. Pass
-        :class:`EmaTrainLossMonitor` for a continuous EMA of pre-update losses,
+        :class:`~liesel.optim.EmaTrainLossMonitor` for a continuous EMA of pre-update
+        losses,
         ``"validation"`` for one complete validation-loss evaluation after each
         epoch, or ``"train_full_data"`` for one complete training-loss evaluation
         after each epoch. Exact monitors are evaluated at the final post-update
@@ -246,9 +255,11 @@ class OptimEngine:
 
     Notes
     -----
-    ``OptimEngine`` uses ``carry.epoch`` as the number of completed epochs and as the
-    next history index to be written. This matches :class:`.Stopper`'s
-    indexing convention. Built-in :class:`.LBFGS` is accepted only with full-data
+    :class:`~liesel.optim.OptimEngine` uses ``carry.epoch`` as the number of completed
+    epochs and as the
+    next history index to be written. This matches :class:`~liesel.optim.Stopper`'s
+    indexing convention. Built-in :class:`~liesel.optim.LBFGS` is accepted only with
+    full-data
     batches and also requires a deterministic objective, which the engine cannot
     validate. Exact monitor minima retain the post-update position used for the
     evaluation. An EMA minimum instead retains the associated parameter snapshot;
@@ -257,7 +268,8 @@ class OptimEngine:
 
     Examples
     --------
-    Start with :class:`.LieselOptim` for ordinary fits. To assemble the pieces
+    Start with :class:`~liesel.optim.LieselOptim` for ordinary fits. To assemble the
+    pieces
     yourself:
 
     >>> import jax.numpy as jnp
@@ -289,19 +301,39 @@ class OptimEngine:
     """
 
     loss: Loss
+    """Loss object implementing the :class:`.loss.Loss` protocol."""
     batches: BatchConfig
+    """Batch configuration used for the training data."""
     optimizers: Sequence[OptimizerLike]
+    """Sequence of optimizers."""
     stopper: Stopper
+    """Early-stopping and maximum-epoch configuration."""
     seed: jax.Array
+    """
+    Integer seed or JAX PRNG key for batch shuffling or random batch sampling, and for
+    losses or optimizers that use ``carry.key``.
+    """
     initial_state: ModelState
+    """Initial model state passed into ``OptimCarry``."""
     loss_monitor: LossMonitor
+    """Source for the epoch-level stopping and progress loss."""
     prune_history: bool = True
+    """If ``True``, remove unused history entries after early stopping."""
     show_progress: bool = True
+    """Whether to show ``tqdm`` progress bars."""
     save_position_history: bool = True
+    """Whether to store the full position history."""
     progress_update_every: int = 10
+    """Update the epoch progress bar after this many completed epochs."""
     debug_nans: bool = False
+    """Whether to capture first-NaN reproduction data during batch updates."""
     show_step_progress: bool = False
+    """
+    Whether to show an additional progress bar for batches within each epoch when
+    ``show_progress`` is enabled.
+    """
     step_progress_update_every: int = 10
+    """Update the batch progress bar after this many completed batches."""
 
     def __init__(
         self,
@@ -370,7 +402,7 @@ class OptimEngine:
     @property
     def split(self) -> SplitConfig:
         """
-        Train/validation/test split supplied by :attr:`loss`.
+        Train/validation/test split supplied by :attr:`~liesel.optim.OptimEngine.loss`.
 
         Returns
         -------
@@ -472,7 +504,8 @@ class OptimEngine:
         ------
         ValueError
             If ``loss_monitor`` is unsupported, validation data is missing, or
-            full-data monitoring uses the unimplemented :class:`.LossMixin` stub.
+            full-data monitoring uses the unimplemented :class:`~liesel.optim.LossMixin`
+            stub.
         """
         if not isinstance(self.loss_monitor, EmaTrainLossMonitor) and (
             self.loss_monitor not in ("validation", "train_full_data")
@@ -562,7 +595,7 @@ class OptimEngine:
         """
         Fills missing optimizer identifiers with stable numeric names.
 
-        Optimizer states are stored by identifier in :class:`.OptimCarry`. This
+        Optimizer states are stored by identifier in ``OptimCarry``. This
         method mutates optimizers whose ``identifier`` is empty and leaves existing
         identifiers unchanged.
 
@@ -590,7 +623,8 @@ class OptimEngine:
         Parameters
         ----------
         checkpoint
-            ``None`` starts fresh in memory. An :class:`.OptimCheckpoint` resumes
+            ``None`` starts fresh in memory. An :class:`~liesel.optim.OptimCheckpoint`
+            resumes
             in memory. A path selects a persistent run: load it if present, or
             start fresh if absent, and save subsequent checkpoints there. The
             parent directory must exist. Only load trusted checkpoint files.
@@ -1619,7 +1653,7 @@ class OptimEngine:
 
     def _init_carry(self, epochs: int) -> OptimCarry:
         """
-        Creates the initial :class:`.OptimCarry` for a fit.
+        Creates the initial ``OptimCarry`` for a fit.
 
         Parameters
         ----------

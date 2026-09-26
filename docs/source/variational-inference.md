@@ -51,7 +51,7 @@ model.plot()
 ```
 
 {class}`~liesel.optim.VDist` selects `loc` and builds its Gaussian family;
-`NegElboLoss.from_vdist` connects it to the target model. We choose initial SD
+{meth}`NegElboLoss.from_vdist <liesel.optim.NegElboLoss.from_vdist>` connects it to the target model. We choose initial SD
 `0.5`, 16 Monte Carlo draws per step, and a 300-epoch budget. The default objective
 includes target priors; extra {ref}`q-parameter penalties <vi-q-prior-penalties>`
 are opt-in.
@@ -101,14 +101,14 @@ pd.DataFrame(
 The exact posterior mean in this example is 6/7 and its standard deviation is
 1/sqrt(7). Monte Carlo summaries fluctuate around the fitted family's values.
 
-`approximate_joint_posterior` binds the final iterate by default. Selecting the
+{meth}`approximate_joint_posterior <liesel.optim.NegElboLoss.approximate_joint_posterior>` binds the final iterate by default. Selecting the
 minimum noisy monitoring loss can favor a lucky estimate; use `at="min_monitor"`
 only when you intend that selection. Use a result from the same loss and keep its
 variational graph and draw mapping unchanged; see
 {class}`~liesel.optim.VariationalApproximation` for the full contract.
 
-`sample(seed=key)` returns one draw in the target's original parameter shapes.
-An integer or tuple adds leading sample axes, also accepted by `model.predict`:
+{meth}`sample(seed=key) <liesel.optim.VariationalApproximation.sample>` returns one draw in the target's original parameter shapes.
+An integer or tuple adds leading sample axes, also accepted by {meth}`model.predict <liesel.model.Model.predict>`:
 
 ```{code-cell} python
 samples = posterior.sample((1, 1_000), seed=jax.random.key(44))
@@ -144,7 +144,7 @@ stronger smoothing reduces noise but responds more slowly to changes. The span
 is neither a hard window nor a half-life. `"train_full_data"` instead evaluates
 all training rows after each epoch; its variational draws still make it noisy.
 
-Without an explicit stopper, `LieselVI` runs 1,000 epochs without early stopping.
+Without an explicit stopper, {class}`LieselVI <liesel.optim.LieselVI>` runs 1,000 epochs without early stopping.
 A smaller `patience` enables early stopping, which stochastic fluctuations can
 trigger prematurely. See {doc}`optimizer-monitoring` for stopping and histories.
 ELBO losses do not support validation splits; use held-out test data for a final

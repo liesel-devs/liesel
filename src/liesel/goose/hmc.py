@@ -4,7 +4,7 @@ Hamiltonian/Hybrid Monte Carlo (HMC).
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import jax.numpy as jnp
 from blackjax import hmc as hmc_kernel
@@ -40,7 +40,7 @@ from .types import Array, KeyArray, ModelState, Position, Scalar
 @dataclass
 class HMCKernelState:
     """
-    A dataclass for the state of a :class:`.HMCKernel`, implementing the
+    A dataclass for the state of a :class:`~liesel.goose.HMCKernel`, implementing the
     :class:`.DAKernelState` protocol.
     """
 
@@ -90,7 +90,7 @@ class HMCKernel(
 ):
     """
     A HMC kernel with dual averaging and an inverse mass matrix tuner,
-    implementing the :class:`.Kernel` protocol.
+    implementing the :class:`~liesel.goose.Kernel` protocol.
 
     Parameters
     ----------
@@ -134,9 +134,30 @@ class HMCKernel(
     needs_history: ClassVar[bool] = True
     """Whether this kernel needs its history for tuning."""
     identifier: str = ""
-    """Kernel identifier, set by :class:`~.goose.EngineBuilder`"""
+    """Kernel identifier, set by :class:`~liesel.goose.EngineBuilder`"""
     position_keys: tuple[str, ...]
     """Tuple of position keys handled by this kernel."""
+
+    if TYPE_CHECKING:
+        da_gamma: float
+        """The adaptation regularization scale."""
+        da_kappa: float
+        """The adaptation relaxation exponent."""
+        da_t0: int
+        """The adaptation iteration offset."""
+        da_target_accept: float
+        """Target acceptance probability for dual averaging algorithm."""
+        initial_inverse_mass_matrix: Array | None
+        """
+        Starting value for the inverse mass matrix (the precision matrix of the
+        momentum).
+        """
+        initial_step_size: float | None
+        """Value at which to start step size tuning."""
+        mm_diag: bool
+        """Whether to use a diagonal mass matrix for drawing the momentum vector."""
+        num_integration_steps: int
+        """Number of integration steps used in the leapfrog algorithm."""
 
     def __init__(
         self,
