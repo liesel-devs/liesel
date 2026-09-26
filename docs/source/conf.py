@@ -80,6 +80,7 @@ napoleon_use_rtype = False
 # sphinx_autodoc_typehints options
 typehints_defaults = "comma"
 always_use_bars_union = True
+autodoc_type_aliases = {"ArrayTree": "typing.Any"}
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
@@ -92,6 +93,7 @@ exclude_patterns = [
     "generated/liesel.distributions.GaussianCopula.kl_divergence.rst",
     "generated/liesel.distributions.MultivariateNormalDegenerate.cross_entropy.rst",
     "generated/liesel.distributions.MultivariateNormalDegenerate.kl_divergence.rst",
+    "generated/liesel.experimental.rst",
 ]
 
 
@@ -108,6 +110,8 @@ html_logo = "../../misc/logo/logo-light.png"
 html_theme_options = {
     "repository_url": "https://github.com/liesel-devs/liesel",
     "use_repository_button": True,
+    "show_navbar_depth": 1,
+    "max_navbar_depth": 2,
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,

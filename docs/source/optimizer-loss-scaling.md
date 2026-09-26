@@ -24,6 +24,11 @@ training only, including observations explicitly marked as passthrough.
 use `scale_loss=False` to keep the sum. Sample size counts likelihood terms,
 which need not equal the number of array elements.
 
+{py:class}`~liesel.optim.LieselVI` applies the same training-likelihood scaling to
+{py:class}`~liesel.optim.NegElboLoss`. Its default `scale_loss=True` divides the
+complete negative ELBO by the training sample size, including entropy and prior
+terms. For an explicitly constructed loss, set `scale` on that loss instead.
+
 Validation leaves out priors by default. Use `validation_strategy="log_prob"`
 to include them. See {py:class}`~liesel.optim.NegLogProbLoss` for details.
 

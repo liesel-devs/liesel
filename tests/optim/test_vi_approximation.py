@@ -1,0 +1,249 @@
+import gc
+import inspect
+import weakref
+from typing import Any
+
+import jax
+import jax.numpy as jnp
+import numpy as np
+import optax
+import pytest
+import tensorflow_probability.substrates.jax.distributions as tfd
+
+import liesel.model as lsl
+import liesel.optim as opt
+from liesel.optim.types import Position
+
+
+def _model():
+    alpha = lsl.Var.new_param(0.0, name="alpha")
+    beta = lsl.Var.new_param(jnp.zeros(2), name="beta")
+    positive = lsl.Var.new_calc(jnp.exp, alpha, name="positive")
+    y = lsl.Var.new_obs(
+        jnp.array([1.0, 2.0]), lsl.Dist(tfd.Normal, alpha, 1.0), name="y"
+    )
+    return lsl.Model([y, beta, positive])
+
+
+def _result(final, minimum):
+    return opt.OptimResult(
+        history=opt.OptimHistory.from_epochs(epochs=1, position=None),
+        position_final=final,
+        position_min_monitor=minimum,
+        n_epochs=1,
+        min_monitor_epoch=0 if minimum is not None else None,
+        monitor_source="train_ema",
+        patience=1,
+        duration=0.0,
+    )
+
+
+@pytest.mark.parametrize("sampler", ["builder", "composite", "posterior"])
+def test_integer_like_sample_counts_match_python_counts(sampler):
+    block = opt.VDist(["alpha", "beta"], _model()).mvn_diag()
+    vdist = (
+        opt.CompositeVDist(block).build() if sampler == "composite" else block.build()
+    )
+    loss = opt.NegElboLoss.from_vdist(vdist)
+    position = loss.position(vdist.parameters)
+    posterior = loss.approximate_joint_posterior(_result(position, position))
+    sample: Any = posterior.sample if sampler == "posterior" else vdist.sample
+    key = jax.random.key(39)
+
+    for shape, expected_shape in [
+        (np.int64(4), 4),
+        (jnp.array(4), 4),
+        ((np.int64(2), jnp.array(3)), (2, 3)),
+    ]:
+        actual = sample(shape, seed=key)
+        expected = sample(expected_shape, seed=key)
+        for name in expected:
+            np.testing.assert_array_equal(actual[name], expected[name])
+
+
+@pytest.mark.parametrize("family", ["diagonal", "dense", "composite"])
+def test_posterior_samples_match_existing_sampler(family):
+    model = _model()
+    if family == "composite":
+        vdist = opt.CompositeVDist(
+            opt.VDist(["alpha"], model).normal(),
+            opt.VDist(["beta"], model).mvn_diag(),
+        ).build()
+    elif family == "dense":
+        factor = jnp.array([[0.3, 0.0, 0.0], [0.1, 0.4, 0.0], [-0.1, 0.2, 0.5]])
+        vdist = opt.VDist(["alpha", "beta"], model).mvn_tril(scale_tril=factor).build()
+    else:
+        vdist = opt.VDist(["alpha", "beta"], model).mvn_diag().build()
+    loss = opt.NegElboLoss.from_vdist(vdist)
+    position = loss.position(vdist.parameters)
+    result = _result(position, position)
+    posterior = loss.approximate_joint_posterior(result)
+    assert isinstance(posterior, opt.VariationalApproximation)
+    key = jax.random.key(51)
+    for shape in ((), 7, (2, 7)):
+        axes = (shape,) if isinstance(shape, int) else shape
+        actual = posterior.sample(shape, seed=key)
+        compiled = jax.jit(lambda key, shape=shape: posterior.sample(shape, seed=key))(
+            key
+        )
+        expected = vdist.sample(axes, seed=key, at_position=position)
+        assert actual["alpha"].shape == axes
+        assert actual["beta"].shape == axes + (2,)
+        for name in expected:
+            np.testing.assert_array_equal(actual[name], expected[name])
+            np.testing.assert_allclose(compiled[name], expected[name], rtol=1e-6)
+
+
+@pytest.mark.parametrize("problem", ["unknown", "shape", "dtype", "numpy_float64"])
+def test_incompatible_fit_position_is_rejected(problem):
+    loss = opt.NegElboLoss.mvn_diag(_model())
+    position = loss.position(list(loss.q.parameters))
+    key = next(iter(position))
+    if problem == "unknown":
+        position["unknown"] = position.pop(key)
+    elif problem == "shape":
+        position[key] = jnp.zeros((99,), dtype=position[key].dtype)
+    elif problem == "numpy_float64":
+        position[key] = np.asarray(position[key], dtype=np.float64)
+    else:
+        position[key] = position[key].astype(jnp.int32)
+    with pytest.raises(ValueError, match="Unknown|shapes or dtypes"):
+        loss.approximate_joint_posterior(_result(position, position))
+
+
+def test_selected_position_is_a_snapshot_without_retaining_result():
+    model = _model()
+    vdist = opt.VDist(["alpha", "beta"], model).mvn_diag(scale_diag=0.2).build()
+    loss = opt.NegElboLoss.from_vdist(vdist)
+    loc_key = next(key for key in vdist.parameters if key.endswith("_loc"))
+    minimum = Position({loc_key: np.full(3, 2.0, dtype=np.float32)})
+    final = Position({loc_key: jnp.full(3, 5.0)})
+    result = _result(final, minimum)
+    result_ref, history_ref = weakref.ref(result), weakref.ref(result.history)
+    posterior = loss.approximate_joint_posterior(result, at="min_monitor")
+    terminal = loss.approximate_joint_posterior(result)
+    key = jax.random.key(7)
+    expected = vdist.sample(
+        (8,), seed=key, at_position=Position({loc_key: jnp.full(3, 2.0)})
+    )
+    minimum[loc_key][...] = -100.0
+    minimum.clear()
+    del result
+    gc.collect()
+    assert result_ref() is None and history_ref() is None
+    actual = posterior.sample(8, seed=key)
+    final_draws = terminal.sample(8, seed=key)
+    for name in expected:
+        np.testing.assert_array_equal(actual[name], expected[name])
+        np.testing.assert_allclose(final_draws[name] - actual[name], 3.0, atol=1e-6)
+
+
+def test_direct_custom_loss_sampling_and_prediction():
+    model = _model()
+    lower = lsl.Var.new_param(-1.0, name="lower")
+    z = lsl.Var.new_obs(0.5, lsl.Dist(tfd.Uniform, lower, 2.0), name="z")
+    q = lsl.Model([z])
+
+    def mapping(position):
+        return Position(
+            {"alpha": position["z"], "beta": jnp.stack([position["z"], -position["z"]])}
+        )
+
+    loss = opt.NegElboLoss(model, q, q_to_p=mapping)
+    position = Position({"lower": jnp.array(-2.0)})
+    posterior = loss.approximate_joint_posterior(_result(position, position))
+    draws = posterior.sample((1, 1000), seed=jax.random.key(4))
+    assert draws["alpha"].shape == (1, 1000)
+    assert jnp.all((draws["alpha"] >= -2.0) & (draws["alpha"] <= 2.0))
+    assert draws["alpha"].min() < -1.0  # The fitted lower bound, not q's initial one.
+    np.testing.assert_array_equal(draws["beta"][..., 0], draws["alpha"])
+    np.testing.assert_array_equal(draws["beta"][..., 1], -draws["alpha"])
+    predicted = model.predict(draws, predict=["positive"])
+    np.testing.assert_allclose(
+        predicted["positive"], jnp.exp(draws["alpha"]), rtol=1e-6
+    )
+
+
+def test_omitted_parameters_with_priors_are_bound_at_construction():
+    loc = lsl.Var.new_param(3.0, lsl.Dist(tfd.Normal, 10.0, 1.0), name="loc")
+    scale = lsl.Var.new_param(0.1, name="scale")
+    z = lsl.Var.new_obs(0.0, lsl.Dist(tfd.Normal, loc, scale), name="z")
+    q = lsl.Model([z])
+    loss = opt.NegElboLoss(
+        _model(), q, q_to_p=lambda pos: Position({"alpha": pos["z"]})
+    )
+    position = Position({"scale": jnp.array(0.2)})
+    posterior = loss.approximate_joint_posterior(_result(position, position))
+    draws = posterior.sample(2000, seed=jax.random.key(82))["alpha"]
+    np.testing.assert_allclose(draws.mean(), 3.0, atol=0.02)
+    np.testing.assert_allclose(draws.std(), 0.2, atol=0.02)
+    q.vars["loc"].value = -20.0
+    np.testing.assert_array_equal(
+        posterior.sample(2000, seed=jax.random.key(82))["alpha"], draws
+    )
+
+
+def test_nonparameter_position_is_rejected():
+    loss = opt.NegElboLoss.mvn_diag(_model())
+    position = loss.position(list(loss.q.observed))
+    with pytest.raises(ValueError, match="variational parameter"):
+        loss.approximate_joint_posterior(_result(position, position))
+
+
+def test_parameter_node_aliases_and_duplicate_targets():
+    loss = opt.NegElboLoss.mvn_diag(_model())
+    position = loss.position(list(loss.q.parameters))
+    aliases = Position(
+        {
+            loss.q.parameters[name].value_node.name: value
+            for name, value in position.items()
+        }
+    )
+    expected = loss.approximate_joint_posterior(_result(position, position))
+    actual = loss.approximate_joint_posterior(_result(aliases, aliases))
+    key = jax.random.key(8)
+    for name, draws in expected.sample(5, seed=key).items():
+        np.testing.assert_array_equal(actual.sample(5, seed=key)[name], draws)
+    aliases.update(position)
+    with pytest.raises(ValueError, match="Multiple keys"):
+        loss.approximate_joint_posterior(_result(aliases, aliases))
+
+
+def test_posterior_from_actual_fit():
+    model = _model()
+    loss = opt.NegElboLoss.mvn_diag(model, nsamples=2)
+    result = opt.LieselVI(
+        model,
+        loss=loss,
+        optimizers=optax.adam(0.01),
+        loss_monitor=opt.EmaTrainLossMonitor(1),
+        stopper=opt.Stopper(epochs=3, patience=3),
+        show_progress=False,
+    ).fit()
+    posterior = loss.approximate_joint_posterior(result)
+    draws = posterior.sample((1, 10), seed=jax.random.key(18))
+    predicted = model.predict(draws, predict=["positive"])
+    assert jnp.isfinite(predicted["positive"]).all()
+    np.testing.assert_allclose(
+        predicted["positive"], jnp.exp(draws["alpha"]), rtol=1e-6
+    )
+    seed_parameter = inspect.signature(posterior.sample).parameters["seed"]
+    assert seed_parameter.kind is inspect.Parameter.KEYWORD_ONLY
+    assert seed_parameter.default is inspect.Parameter.empty
+
+
+def test_unavailable_nonfinite_and_invalid_selection():
+    loss = opt.NegElboLoss.mvn_diag(_model())
+    position = loss.position(list(loss.q.parameters))
+    result = _result(position, None)
+    with pytest.raises(RuntimeError, match="No finite monitoring loss"):
+        loss.approximate_joint_posterior(result, at="min_monitor")
+    loss.approximate_joint_posterior(result)
+    with pytest.raises(ValueError, match="at must be"):
+        loss.approximate_joint_posterior(result, at="best")
+    name = next(iter(position))
+    position[name] = jnp.full_like(position[name], jnp.nan)
+    result = _result(position, position)
+    for at in ("final", "min_monitor"):
+        with pytest.raises(RuntimeError, match="NaN or infinity"):
+            loss.approximate_joint_posterior(result, at=at)

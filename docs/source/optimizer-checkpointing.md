@@ -111,6 +111,11 @@ extends the budget but does not override early stopping.
   They save run state, not model code, and are meant for recovery rather than
   long-term model storage.
 
+With the built-in {py:class}`~liesel.optim.NegLogProbLoss` or
+{py:class}`~liesel.optim.NegElboLoss` and optimizers, anonymous internal nodes and
+constants do not need stable names: their read-only evaluation state is rebuilt
+from the caller's model.
+
 History and monitoring continue across pauses. Earlier results stay unchanged;
 keeping many snapshots uses extra memory. Treat checkpoint contents as read-only.
 Custom losses that change model state must keep that state compatible and

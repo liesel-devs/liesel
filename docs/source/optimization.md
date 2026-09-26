@@ -14,6 +14,8 @@ Use {py:class}`liesel.optim.LieselOptim` to fit model parameters or find startin
 values for MCMC. It minimizes the negative log posterior: likelihood plus priors.
 Without priors, this gives a maximum likelihood fit.
 
+To fit an approximate posterior distribution, use {doc}`variational-inference`.
+
 For a small Normal model, a full-data fit takes:
 
 ```{code-cell} ipython3

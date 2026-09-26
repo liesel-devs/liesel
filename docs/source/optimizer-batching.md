@@ -200,8 +200,8 @@ Its values must remain valid as parameters change, and selecting rows must prese
 their {ref}`likelihood contributions <optimizer-row-wise>`. Raw covariates can still
 be used for inexpensive JAX calculations in the same fit.
 
-Built-in fits also prepare data-derived values once for inputs that batches
-leave unchanged, including unbatched groups and shared data. They retain full
+Fits using {py:class}`~liesel.optim.NegLogProbLoss` also prepare data-derived
+values once for inputs that batches leave unchanged, including unbatched groups and shared data. They retain full
 training values only for full-data batches or full-training monitoring, and
 prepare validation values only for validation monitoring. When batches supply
 every training key, EMA or validation monitoring avoids retaining extra
@@ -210,6 +210,13 @@ full-training values. These prepared values save computation at a memory cost.
 Use the computed variable's name. Transient variables and calculation-node keys
 are rejected. A computed value cannot be selected together with an ancestor or
 descendant data key; for example, choose either `basis` or the covariate it uses.
+
+For {py:class}`~liesel.optim.LieselVI`, fixed JAX-computed data can also be selected
+explicitly. Omit validation data from its split. {py:class}`~liesel.optim.NegElboLoss`
+rejects computed data that depend on or overlap an inferred target position;
+batch the fixed inputs instead. A dependency may remain fixed outside the
+variational distribution. This support does not extend to ordered callback-based
+computations, which may fail inside VI's vectorized, differentiated ELBO evaluation.
 
 (optimizer-weak-observations)=
 

@@ -58,6 +58,10 @@ y = lsl.Var.new_obs(
 model = lsl.Model(y)
 ```
 
+{py:class}`~liesel.optim.LieselVI` accepts the EMA and full-training monitors, but
+no validation monitor. Its full-training ELBO still uses variational draws and
+can fluctuate; see {doc}`variational-inference`.
+
 ## Choose when to stop
 
 ```{code-cell} ipython3

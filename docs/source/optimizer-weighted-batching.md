@@ -115,3 +115,8 @@ or transposed likelihood arrays, set `likelihood_axes` to the axis that follows
 the sampled rows. A likelihood already summed to a scalar cannot be corrected.
 Custom losses must apply {py:meth}`~liesel.optim.Batches.scaled_log_lik` or
 {py:meth}`~liesel.optim.Batches.correction_factors` themselves.
+
+The same correction applies to {py:class}`~liesel.optim.NegElboLoss`. Pass the
+weighted batches to {py:class}`~liesel.optim.LieselVI` or
+{py:class}`~liesel.optim.OptimEngine`; variational sampling and entropy estimation
+remain unchanged.

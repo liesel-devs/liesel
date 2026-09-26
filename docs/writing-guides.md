@@ -27,6 +27,13 @@ Use Sphinx's special `self` entry, not the page's filename, so Overview links to
 the landing page without nested children. Preserve the remaining entries and
 their order. Check the sidebar on both the landing page and its child pages.
 
+Use short, descriptive sidebar sections and keep common entry points visible.
+Group related APIs, such as MCMC kernels, behind short expandable labels when
+this helps readers choose among them. Allow at most one group level within a
+section, with page links directly inside each group. Do not nest groups inside
+groups or repeat a page in multiple sidebar locations. Keep section and group
+labels on one line at normal desktop widths; retain descriptive page titles.
+
 ## Lead with the main workflow
 
 Introduce a feature's general purpose before relating it to special cases. Show
@@ -74,9 +81,22 @@ Python in `{code-cell}` blocks without interactive prompts (`>>>` or `...`).
   Execute revised examples and verify that their statistical meaning and results
   are preserved.
 - Keep code consistent with the repository formatter. Group imports, leave blank
-  lines between steps, and lay out data and long calls so they are easy to scan.
+  lines between meaningful stages and substantial independent definitions, and
+  keep short, closely related statements together. Format for visual readability,
+  not just line length. Apply this judgment to all functions and constructors.
+  Wrap dense calls so functions or lambdas, inputs, nested expressions, and named
+  options are easy to distinguish. Use trailing commas to preserve the layout
+  under Ruff; keep simple calls compact. Brief comments can label conceptual
+  groups when the surrounding prose does not make them clear.
   Keep related setup and modifications together in one cell. Give each inspection
   expression its own `{code-cell}`, with its native output immediately below.
+- Tag build-only setup cells with `:tags: [remove-cell]`. They still execute, but
+  show no code, output, or expandable box. Keep prerequisites and links to relevant
+  tutorials visible in the prose; keep setup that teaches the workflow visible.
+- Imports stay visible in a code cell at the top of each guide. Hide only
+  non-import build setup, such as logging configuration and fixture models or data.
+- Pass distributions to `lsl.Var` and its factory methods using `dist=`, not
+  positional arguments.
 - Pass a single model root directly, as in `lsl.Model(y)`. Choose `to_float32`
   for the needs of the example, independently of this calling style.
 - Use realistic data, fixed seeds, and only the settings needed for the task.
@@ -94,7 +114,10 @@ before-and-after tables; describe the current behavior instead.
 ## Show useful visuals
 
 Use built-in Liesel/Goose plotting helpers where available, and plotnine for
-custom statistical plots. Show the rendered plot with its code. Explain what
+custom statistical plots. Prefer helpers such as `model.plot()` and
+`gs.plot_trace()` over hand-built equivalents. Put each plotting call in its own
+code cell, directly above its rendered figure. Keep construction and fitting
+separate from plotting. Explain what
 readers should look for and what the plot cannot establish. Use enough contrast,
 distinct shapes, or small positional offsets to keep overlapping marks visible.
 
