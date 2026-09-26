@@ -10,7 +10,6 @@ Liesel: A Probabilistic Programming Framework
    :maxdepth: 1
 
    model-building
-   tutorials_overview
    optimization
    sampling
    examples

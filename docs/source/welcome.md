@@ -44,11 +44,11 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 import tensorflow_probability.substrates.jax.bijectors as tfb
 ```
 
-# Tutorials
+# Guides
 
 Start with {doc}`model-building` to construct and inspect a model, then follow
-{doc}`sampling` or {doc}`optimization` for inference. See {doc}`tutorials_overview`
-for complete learning workflows and {doc}`examples` for statistical applications.
+{doc}`sampling` or {doc}`optimization` for inference. See {doc}`examples` for
+statistical applications.
 
 # Further Reading
 
