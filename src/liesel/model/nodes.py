@@ -4,7 +4,10 @@ Nodes and variables.
 
 from __future__ import annotations
 
+import copyreg
+import inspect
 import logging
+import warnings
 import weakref
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Hashable, Iterable, Sequence
@@ -64,6 +67,21 @@ type Distribution = jd.Distribution | nd.Distribution
 type Bijector = jb.Bijector | nb.Bijector
 
 logger = logging.getLogger(__name__)
+
+
+def _rebuild_invert(cls: type[Bijector], parameters: dict[str, Any]) -> Bijector:
+    return cls(**parameters)
+
+
+def _reduce_invert(bijector: jb.Invert | nb.Invert) -> tuple:
+    return _rebuild_invert, (type(bijector), dict(bijector.parameters))
+
+
+# TFP's Invert requires its bijector in __new__, which copy, pickle, and dill do
+# not pass when they rebuild an object. Model.update_state deep-copies the model,
+# and save_model uses dill, so models containing Invert need this reduction.
+for _invert in (jb.Invert, nb.Invert):
+    copyreg.pickle(_invert, _reduce_invert)
 
 
 def _unique_tuple[T: Hashable](*args: Iterable[T]) -> tuple[T, ...]:
@@ -163,6 +181,64 @@ def _transformed_distribution_bijector(distribution: Distribution) -> Bijector:
     raise TypeError(
         f"Expected a transformed distribution, but got {type(distribution).__name__}."
     )
+
+
+def _sample_compat(fn):
+    """Accept the deprecated sampling arguments until 0.9.0."""
+    signature = inspect.signature(fn)
+    positional_names = tuple(signature.parameters)[2:]
+
+    @wraps(fn)
+    def wrapped(self, *args, **kwargs):
+        old_shape = "shape" in kwargs
+        old_positional = len(args) > 1
+        if old_shape:
+            if args or "sample_shape" in kwargs:
+                raise TypeError("Pass only one of 'shape' and 'sample_shape'.")
+            if kwargs["shape"] is None:
+                raise TypeError("shape=None is not supported; use sample_shape=().")
+            kwargs["sample_shape"] = kwargs.pop("shape")
+        if old_positional:
+            if len(args) > len(positional_names) + 1:
+                raise TypeError(
+                    f"{fn.__qualname__}() received too many positional arguments"
+                )
+            for name, value in zip(positional_names, args[1:]):
+                if name in kwargs:
+                    raise TypeError(
+                        f"{fn.__qualname__}() got multiple values for '{name}'"
+                    )
+                kwargs[name] = value
+            args = args[:1]
+        if "seed" not in kwargs:
+            raise TypeError(
+                f"{fn.__qualname__}() requires a seed; pass seed= by keyword."
+            )
+        signature.bind(self, *args, **kwargs)
+        if old_shape or old_positional:
+            deprecated = (
+                "'shape='" if old_shape else "positional arguments after sample_shape"
+            )
+            warnings.warn(
+                f"{fn.__qualname__}(): {deprecated} is deprecated since 0.6 and will "
+                "be removed in 0.9.0. Use sample(sample_shape=..., seed=..., "
+                "posterior_samples=..., fixed=..., newdata=..., dists=..., "
+                "chunk_size=...).",
+                FutureWarning,
+                stacklevel=2,
+            )
+        return fn(self, *args, **kwargs)
+
+    # JAX validates static_argnames against this signature before calling the shim.
+    wrapped.__dict__["__signature__"] = signature.replace(
+        parameters=[
+            *signature.parameters.values(),
+            inspect.Parameter("shape", inspect.Parameter.KEYWORD_ONLY, default=None),
+        ]
+    )
+    # Sphinx's type-hint extension unwraps the function before inspecting it.
+    fn.__dict__["__signature__"] = wrapped.__dict__["__signature__"]
+    return wrapped
 
 
 def in_model_method(fn):
@@ -3287,9 +3363,11 @@ class Var:
 
         return model.diagnose(verbose=verbose)
 
+    @_sample_compat
     def sample(
         self,
-        shape: Sequence[int],
+        sample_shape: int | Sequence[int] = (),
+        *,
         seed: jax.Array,
         posterior_samples: Position | None = None,
         fixed: Sequence[str] = (),
@@ -3302,8 +3380,9 @@ class Var:
 
         Parameters
         ----------
-        shape
-            Sample shape.
+        sample_shape
+            Shape of the requested draws. An int requests that many draws, equivalent \
+            to a one-tuple. Defaults to ``()``, one draw with no leading sample axes.
         seed
             The seed is split and distributed to the seed nodes of the model. \
             Must be a jax RNG key array that satisfies \
@@ -3338,10 +3417,22 @@ class Var:
             potential cost of lower accelerator utilization. It does not reduce the \
             memory required to store the returned samples.
 
+        shape
+            Deprecated alias for ``sample_shape``; do not supply both. Removed in 0.9.0.
+
         Notes
         -----
-        When compiling this function with ``jax.jit``, the arguments ``shape``,
+        When compiling this function with ``jax.jit``, the arguments ``sample_shape``,
         ``fixed``, ``dists``, and ``chunk_size`` must be static.
+
+        .. deprecated:: 0.6
+            The ``shape=`` alias and passing ``seed`` or later arguments positionally
+            will be removed in 0.9.0. Pass ``seed`` and later arguments by keyword.
+            For example, replace ``var.sample((4,), key)`` or
+            ``var.sample(shape=(4,), seed=key)`` with
+            ``var.sample(sample_shape=(4,), seed=key)``.
+            When using ``jax.jit``, also replace ``"shape"`` with ``"sample_shape"``
+            in ``static_argnames``. In 0.9.0, only ``sample_shape`` will remain.
 
         Returns
         -------
@@ -3351,7 +3442,7 @@ class Var:
         if self.model:
             submodel = self.model.parental_submodel(self)
             drawn_samples = submodel.sample(
-                shape=shape,
+                sample_shape=sample_shape,
                 seed=seed,
                 posterior_samples=posterior_samples,
                 fixed=fixed,
@@ -3366,7 +3457,7 @@ class Var:
         to_float32 = _to_float32_for_temporary_model()
         with TemporaryModel(self, silent=True, to_float32=to_float32) as model:
             drawn_samples = model.sample(
-                shape=shape,
+                sample_shape=sample_shape,
                 seed=seed,
                 posterior_samples=posterior_samples,
                 fixed=fixed,
@@ -3460,7 +3551,6 @@ def _transform_var_with_bijector_instance(var: Var, bijector_inst: jb.Bijector) 
     kwinputs: dict[str, Any] = dict(dist_node.kwinputs)
 
     def transform_dist(*args, **kwargs):
-        # Construct Invert here: capturing it prevents saved models from reloading.
         return jd.TransformedDistribution(
             InputDist(*args, **kwargs), jb.Invert(bijector_inst)
         )

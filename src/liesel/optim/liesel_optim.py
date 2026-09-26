@@ -79,9 +79,11 @@ class LieselOptim[LossType: Loss = NegLogProbLoss]:
     split
         Optional split. If neither ``split`` nor ``loss`` is supplied, all observed
         data is used for training; weak observations are recomputed from their
-        strong inputs. Multi-size observed data automatically uses
-        :class:`~liesel.optim.PositionSplitManager`. With a custom loss, an explicit
-        split must
+        strong inputs. Observed arrays with different axis lengths require an
+        explicit split. Check their row alignment before opting in with
+        ``split=PositionSplit.from_model(model, multi_size="manager")``. Use
+        nested ``position_keys`` to specify independent groups and
+        ``split_axes={key: None}`` for shared values. With a custom loss, the split must
         be the same object as ``loss.split``. Models with ``per_obs=False``
         require an explicitly constructed split: use
         :meth:`PositionSplit.from_model <liesel.optim.PositionSplit.from_model>` with
@@ -270,7 +272,7 @@ class LieselOptim[LossType: Loss = NegLogProbLoss]:
 
         return PositionSplit.from_model(
             self.model,
-            multi_size="manager",
+            multi_size="error",
             shuffle=False,
         )
 

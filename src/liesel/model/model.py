@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import math
+import operator
 import re
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -34,6 +35,7 @@ from .nodes import (
     Value,
     Var,
     VarValue,
+    _sample_compat,
     _transformed_distribution_bijector,
 )
 from .viz import plot_nodes, plot_vars
@@ -2399,9 +2401,11 @@ class Model:
 
         return self
 
+    @_sample_compat
     def sample(
         self,
-        shape: Sequence[int],
+        sample_shape: int | Sequence[int] = (),
+        *,
         seed: jax.Array,
         posterior_samples: Position | None = None,
         fixed: Sequence[str] = (),
@@ -2414,8 +2418,9 @@ class Model:
 
         Parameters
         ----------
-        shape
-            Sample shape.
+        sample_shape
+            Shape of the requested draws. An int requests that many draws, equivalent \
+            to a one-tuple. Defaults to ``()``, one draw with no leading sample axes.
         seed
             The seed is split and distributed to the seed nodes of the model. \
             Must be a jax RNG key array that satisfies \
@@ -2450,10 +2455,22 @@ class Model:
             potential cost of lower accelerator utilization. It does not reduce the \
             memory required to store the returned samples.
 
+        shape
+            Deprecated alias for ``sample_shape``; do not supply both. Removed in 0.9.0.
+
         Notes
         -----
-        When compiling this function with ``jax.jit``, the arguments ``shape``,
+        When compiling this function with ``jax.jit``, the arguments ``sample_shape``,
         ``fixed``, ``dists``, and ``chunk_size`` must be static.
+
+        .. deprecated:: 0.6
+            The ``shape=`` alias and passing ``seed`` or later arguments positionally
+            will be removed in 0.9.0. Pass ``seed`` and later arguments by keyword.
+            For example, replace ``model.sample((4,), key)`` or
+            ``model.sample(shape=(4,), seed=key)`` with
+            ``model.sample(sample_shape=(4,), seed=key)``.
+            When using ``jax.jit``, also replace ``"shape"`` with ``"sample_shape"``
+            in ``static_argnames``. In 0.9.0, only ``sample_shape`` will remain.
 
         Returns
         -------
@@ -2462,7 +2479,11 @@ class Model:
         """
 
         chunk_size = _validate_chunk_size(chunk_size)
-        shape = tuple(shape)
+        shape_arg: Any = sample_shape
+        try:
+            shape = (operator.index(shape_arg),)
+        except TypeError:
+            shape = tuple(shape_arg)
         posterior_samples = (
             posterior_samples if posterior_samples is not None else Position({})
         )

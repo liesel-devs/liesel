@@ -54,16 +54,18 @@ y = tfd.GeneralizedExtremeValue(
     concentration=true_concentration,
 ).sample(seed=key_y)
 
-data = pd.DataFrame({
-    "y": np.asarray(y),
-    "intercept": np.ones_like(y),
-    "x0": np.asarray(x0),
-    "x1": np.asarray(x1),
-    "x2": np.asarray(x2),
-    "true_loc": np.asarray(true_loc),
-    "true_scale": np.asarray(true_scale),
-    "true_concentration": np.asarray(true_concentration),
-})
+data = pd.DataFrame(
+    {
+        "y": np.asarray(y),
+        "intercept": np.ones_like(y),
+        "x0": np.asarray(x0),
+        "x1": np.asarray(x1),
+        "x2": np.asarray(x2),
+        "true_loc": np.asarray(true_loc),
+        "true_scale": np.asarray(true_scale),
+        "true_concentration": np.asarray(true_concentration),
+    }
+)
 ```
 
 Here is the simulated response:

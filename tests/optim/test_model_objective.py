@@ -167,6 +167,19 @@ def test_weak_parameter_prior_requires_explicit_strong_optimization_keys(optimiz
     automatic = optax.adam(0.05) if optimizer == "adam" else "lbfgs"
     with pytest.raises(ValueError, match="weak parameters.*Explicitly name.*strong"):
         opt.LieselOptim(model, optimizers=automatic, loss_monitor="train_full_data")
+    weak_optimizer = (
+        opt.Optimizer(["location"], optax.adam(0.05))
+        if optimizer == "adam"
+        else opt.LBFGS(["location"])
+    )
+    with pytest.raises(RuntimeError, match="weak"):
+        opt.LieselOptim(
+            model,
+            optimizers=[weak_optimizer],
+            loss_monitor="train_full_data",
+            stopper=opt.Stopper(epochs=2, patience=2),
+            show_progress=False,
+        ).fit()
     explicit = (
         opt.Optimizer(["source"], optax.adam(0.05))
         if optimizer == "adam"

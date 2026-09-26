@@ -33,7 +33,6 @@ from ._engine_utils import (
     _validate_optimizer_batches,
     _validate_positive_int,
 )
-from ._log_lik import validate_likelihood_groups
 from .batch import Batches, BatchManager
 from .laplace import LaplaceLoss
 from .loss import Loss, LossMixin, NegLogProbLoss, _check_evaluation
@@ -583,10 +582,12 @@ class OptimEngine:
             if isinstance(self.batches, BatchManager)
             else (self.batches,)
         )
-        if isinstance(self.loss, NegLogProbLoss):
-            validate_likelihood_groups(
-                self.loss.model, [batch.position_keys for batch in batches]
-            )
+        getattr(self.loss, "_validate_data_keys", lambda *_: None)(
+            self.split, self.position_keys
+        )
+        getattr(self.loss, "_validate_batch_keys", lambda *_: None)(
+            [batch.position_keys for batch in batches]
+        )
         for batch in batches:
             batch._validate_position(self.split.train)
 
@@ -823,11 +824,25 @@ class OptimEngine:
         carry._data_states = {}
         if self.batches.is_full_data or self.loss_monitor == "train_full_data":
             carry._data_states["train"] = model.update_state(
-                self.split.train, carry.model_state
+                self.split.train, carry.model_state, allow_weak_vars=True
             )
+            carry._prepared_training_keys = tuple(self.split.train)
+        else:
+            data = Position(
+                {
+                    key: value
+                    for key, value in self.split.train.items()
+                    if key not in self.batches.position_keys
+                }
+            )
+            if data:
+                carry.model_state = model.update_state(
+                    data, carry.model_state, allow_weak_vars=True
+                )
+            carry._prepared_training_keys = tuple(data)
         if self.loss_monitor == "validation":
             carry._data_states["validate"] = model.update_state(
-                self.split.validate, carry.model_state
+                self.split.validate, carry.model_state, allow_weak_vars=True
             )
 
     def _data_structure(self) -> tuple:
@@ -850,6 +865,7 @@ class OptimEngine:
             # anonymous node names may differ between otherwise identical models.
             snapshot.model_state = {}
             snapshot._data_states = {}
+            snapshot._prepared_training_keys = None
             if snapshot.nan_debug_state is not None:
                 snapshot.nan_debug_state.reproduction_model_state = {}
         return OptimCheckpoint(
@@ -899,7 +915,7 @@ class OptimEngine:
             self._prepare_data_states(carry)
             if carry.nan_debug_state is not None:
                 carry.nan_debug_state.reproduction_model_state = jax.tree.map(
-                    lambda x: x, self.initial_state
+                    lambda x: x, carry.model_state
                 )
         self._validate_checkpoint_tree(
             carry.loss_state, self.loss.init_state(position, carry), "loss state"
@@ -1004,6 +1020,7 @@ class OptimEngine:
                 else None
             ),
             _data_states=carry._data_states,
+            _prepared_training_keys=carry._prepared_training_keys,
             batch=debug_state.obs_batch,
             fixed_position=fixed_position,
             position_min_monitor=carry.position_min_monitor,
@@ -1106,24 +1123,32 @@ class OptimEngine:
         batches: BatchConfig,
         batch_index: int | jax.Array = 0,
         *,
-        prepared: bool = False,
+        prepared_keys: tuple[str, ...] | None = None,
     ) -> Position:
         """Keep omitted keys on training rows, either via a template or an overlay."""
         has_holdout = self.split.has_validation or self.split.has_test
         children = batches.batches if isinstance(batches, BatchManager) else [batches]
-        if prepared and batches.is_full_data and not any(b.shuffle for b in children):
-            return Position({})
-        if not batches.is_full_data or has_holdout:
+        if (
+            prepared_keys is not None
+            and batches.is_full_data
+            and not any(b.shuffle for b in children)
+        ):
+            batch = Position({})
+        elif not batches.is_full_data or has_holdout:
             batch = batches.get_batched_position(self.split.train, batch_index)
-            if has_holdout and not prepared:
-                return Position(self.split.train | batch)
-            return batch
+        else:
+            batch = Position({})
 
-        return Position({})
+        if prepared_keys is not None:
+            missing = self.split.train.keys() - batch.keys() - set(prepared_keys)
+            return Position({key: self.split.train[key] for key in missing} | batch)
+        if has_holdout:
+            return Position(self.split.train | batch)
+        return batch
 
     def _init_nan_debug_state(self, carry: OptimCarry) -> OptimNaNDebugState:
         obs_batch = self._observed_batch(
-            carry.batches, prepared="train" in carry._data_states
+            carry.batches, prepared_keys=carry._prepared_training_keys
         )
         loss_dtype = jnp.asarray(carry.loss_train).dtype
         return OptimNaNDebugState.new(
@@ -1253,7 +1278,7 @@ class OptimEngine:
             Updated carry with accumulated epoch training loss.
         """
         obs_batch = self._observed_batch(
-            carry.batches, j, prepared="train" in carry._data_states
+            carry.batches, j, prepared_keys=carry._prepared_training_keys
         )
         carry.batch = obs_batch
         carry.i_batch = j
@@ -1398,7 +1423,7 @@ class OptimEngine:
         self, j: int | jax.Array, carry: OptimCarry
     ) -> OptimCarry:
         obs_batch = self._observed_batch(
-            carry.batches, j, prepared="train" in carry._data_states
+            carry.batches, j, prepared_keys=carry._prepared_training_keys
         )
         carry.batch = obs_batch
         carry.i_batch = j
@@ -1799,7 +1824,7 @@ class OptimEngine:
             )
         if self.debug_nans:
             carry.batch = self._observed_batch(
-                carry.batches, prepared="train" in carry._data_states
+                carry.batches, prepared_keys=carry._prepared_training_keys
             )
             carry.nan_debug_state = self._init_nan_debug_state(carry)
 

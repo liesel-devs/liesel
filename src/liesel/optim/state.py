@@ -622,6 +622,10 @@ class OptimCarry:
 
     # Read-only partition templates, prepared outside the compiled fit loop.
     _data_states: dict[str, ModelState] = field(default_factory=dict, repr=False)
+    # Keys covered by the training template or model_state; None keeps custom paths.
+    _prepared_training_keys: tuple[str, ...] | None = field(
+        default=None, repr=False, metadata={"static": True}
+    )
 
     def _record_failure(self, reason, state):
         first = (self._numerical_failure == 0) & (reason != 0)

@@ -68,9 +68,9 @@ x = 10 + 5 * jax.random.normal(key, n)  # create the true x
 sigma_u_true = 1  # variance of the replicates
 
 keys = jax.random.split(key, n)
-x_tilde = jnp.array([
-    x[i] + sigma_u_true * jax.random.normal(keys[i], (M,)) for i in range(n)
-])  # observed x-values
+x_tilde = jnp.array(
+    [x[i] + sigma_u_true * jax.random.normal(keys[i], (M,)) for i in range(n)]
+)  # observed x-values
 ```
 
 ``` python

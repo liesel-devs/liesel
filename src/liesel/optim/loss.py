@@ -18,7 +18,7 @@ from jax.flatten_util import ravel_pytree
 from ..model import Calc, Model
 from ..model.model import _reduced_sum
 from ._log_lik import validate_likelihood_groups
-from ._model_utils import continuous_coordinate_nodes
+from ._model_utils import continuous_coordinate_nodes, validate_model_data_keys
 from .approximation import (
     LaplaceApproximation,
     _positive_definite,
@@ -261,6 +261,14 @@ class LossMixin:
     :meth:`~liesel.optim.LossMixin.value_and_grad`.
     """
 
+    def _validate_data_keys(
+        self, split: SplitConfig, optimizer_keys: Sequence[str]
+    ) -> None:
+        """Optionally validate data dependencies when constructing an engine."""
+
+    def _validate_batch_keys(self, groups: Sequence[Sequence[str]]) -> None:
+        """Optionally validate the data groups evaluated in separate batches."""
+
     def init_state(self, params: Position, carry: "OptimCarry") -> Any:
         """Returns None for a stateless loss; override to initialize loss state.
 
@@ -458,6 +466,7 @@ class NegLogProbLoss(LossMixin):
         scale: bool = False,
     ):
         _validate_model_decomposition(model)
+        validate_model_data_keys(model, split.position_keys)
         splits = split.splits if isinstance(split, PositionSplitManager) else (split,)
         validate_likelihood_groups(model, [part.split_position_keys for part in splits])
         self._model = model
@@ -471,6 +480,14 @@ class NegLogProbLoss(LossMixin):
         self.validation_strategy = validation_strategy
         self.scale = scale
         self.scalar = _training_loss_scalar(self.split) if self.scale else 1.0
+
+    def _validate_data_keys(
+        self, split: SplitConfig, optimizer_keys: Sequence[str]
+    ) -> None:
+        validate_model_data_keys(self.model, split.position_keys, optimizer_keys)
+
+    def _validate_batch_keys(self, groups: Sequence[Sequence[str]]) -> None:
+        validate_likelihood_groups(self.model, groups)
 
     @property
     def model(self) -> Model:
@@ -498,6 +515,12 @@ class NegLogProbLoss(LossMixin):
         Position
             Model position restricted to ``position_keys``.
         """
+        for key in position_keys:
+            if key in self.model.vars and self.model.vars[key].weak:
+                raise RuntimeError(
+                    f"Cannot optimize weak variable {key!r}; name its strong source "
+                    "instead."
+                )
         return self.model.extract_position(position_keys)
 
     def loss_train_batched(
@@ -524,7 +547,7 @@ class NegLogProbLoss(LossMixin):
         position = Position(params | carry.batch | carry.fixed_position)
         states = getattr(carry, "_data_states", {})
         state = states.get("train", carry.model_state)
-        new_state = self.model.update_state(position, state)
+        new_state = self.model.update_state(position, state, allow_weak_vars=True)
 
         log_lik = carry.batches.scaled_log_lik(
             self.model, new_state, batch_index=carry.i_batch
@@ -555,7 +578,7 @@ class NegLogProbLoss(LossMixin):
         data = {} if "train" in states else self.split.train
         position = Position(params | data | carry.fixed_position)
         state = states.get("train", carry.model_state)
-        new_state = self.model.update_state(position, state)
+        new_state = self.model.update_state(position, state, allow_weak_vars=True)
 
         log_lik = self.split.scaled_log_lik(self.model, new_state, part="train")
         log_prior = new_state["_model_log_prior"].value
@@ -585,7 +608,7 @@ class NegLogProbLoss(LossMixin):
         data = {} if part in states else self.obs_validate
         position = Position(params | data | carry.fixed_position)
         state = states.get(part, carry.model_state)
-        new_state = self.model.update_state(position, state)
+        new_state = self.model.update_state(position, state, allow_weak_vars=True)
         loss = -self.split.scaled_log_lik(self.model, new_state, part=part)
         if self.validation_strategy == "log_prob":
             loss -= new_state["_model_log_prior"].value
@@ -672,7 +695,9 @@ class NegLogProbLoss(LossMixin):
                 "No optimized coordinates are available.", raise_on_failure
             )
 
-        training_state = self.model.update_state(self.split.train, self.model.state)
+        training_state = self.model.update_state(
+            self.split.train, self.model.state, allow_weak_vars=True
+        )
 
         def joint(flat):
             state = self.model.update_state(unravel(flat), training_state)

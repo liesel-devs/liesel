@@ -17,7 +17,11 @@ from ._log_lik import (
     scaled_common_log_lik,
     scaled_liesel_log_lik,
 )
-from ._model_utils import position_key_groups_from_model, strong_observed_keys
+from ._model_utils import (
+    multi_size_error_message,
+    position_key_groups_from_model,
+    strong_observed_keys,
+)
 from .types import Array, ModelInterface, ModelState, Position
 
 SplitPart = Literal["train", "validate", "test"]
@@ -691,7 +695,7 @@ class PositionSplit:
             if n_part == 0:
                 continue
 
-            state = model.update_state(position, model.state)
+            state = model.update_state(position, model.state, allow_weak_vars=True)
             sizes[part] = _infer_sample_size_for_part(model, state, self, part)
 
         return self.set_sample_sizes(sizes)
@@ -1099,12 +1103,7 @@ class PositionSplit:
             )
 
         if len(groups) > 1:
-            raise ValueError(
-                "PositionSplit.from_model() found multiple observation groups "
-                f"with axis sizes {[size for size, _ in groups]}. Use "
-                "PositionSplit.from_model(..., multi_size='manager') or "
-                "PositionSplitManager.from_model(...)."
-            )
+            raise ValueError(multi_size_error_message("PositionSplit", groups))
 
         if axis_size is None:
             axis_size = groups[0][0]
@@ -2600,12 +2599,7 @@ class Split:
             )
 
         if len(groups) > 1:
-            raise ValueError(
-                "Split.from_model() found multiple observation groups "
-                f"with axis sizes {[size for size, _ in groups]}. Use "
-                "Split.from_model(..., multi_size='manager') or "
-                "SplitManager.from_model(...)."
-            )
+            raise ValueError(multi_size_error_message("Split", groups))
 
         return cls.from_axis_shares(
             position_keys=pos_keys,

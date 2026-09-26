@@ -15,7 +15,7 @@ from jax.flatten_util import ravel_pytree
 from ..goose.pytree import register_dataclass_as_pytree
 from ..model import Model
 from ._engine_utils import _validate_positive_int
-from ._model_utils import continuous_coordinate_nodes
+from ._model_utils import continuous_coordinate_nodes, validate_model_data_keys
 from .approximation import (
     LaplaceApproximation,
     _positive_definite,
@@ -334,8 +334,11 @@ class LaplaceLoss(LossMixin):
         current state are left unchanged.
     split
         Training observations to substitute into that density. If omitted, use
-        the usual model-derived full-training split. Custom aggregate densities
-        may need an explicit :class:`~liesel.optim.PositionSplit`.
+        all observations for training and raise for different observed axis lengths.
+        For independent groups, pass a checked split from
+        :meth:`~liesel.optim.PositionSplit.from_model` with ``multi_size="manager"``.
+        Use ``split_axes={key: None}`` there for shared values. Custom aggregate
+        densities may need an explicit :class:`~liesel.optim.PositionSplit`.
     latent
         Nonempty sequence of writable continuous parameter names to integrate.
         Scalars, vectors, and matrices can be combined. Duplicate aliases, weak
@@ -413,7 +416,7 @@ class LaplaceLoss(LossMixin):
             raise ValueError("inner_tol must be a positive finite real number.")
         self.model = model
         self.split = (
-            PositionSplit.from_model(model, multi_size="manager", shuffle=False)
+            PositionSplit.from_model(model, multi_size="error", shuffle=False)
             if split is None
             else split
         )
@@ -421,6 +424,7 @@ class LaplaceLoss(LossMixin):
         if not latent:
             raise ValueError("latent must contain at least one continuous coordinate.")
         self._latent_nodes = self._coordinate_nodes(latent)
+        validate_model_data_keys(model, self.split.position_keys, latent)
         self.latent_names = tuple(sorted(latent))
         self._initial_latent = model.extract_position(self.latent_names)
         self._seed, self._unravel_latent = ravel_pytree(self._initial_latent)
@@ -439,6 +443,11 @@ class LaplaceLoss(LossMixin):
             if inner_tol is None
             else inner_tol
         )
+
+    def _validate_data_keys(
+        self, split: SplitConfig, optimizer_keys: Sequence[str]
+    ) -> None:
+        validate_model_data_keys(self.model, split.position_keys, optimizer_keys)
 
     def position(self, position_keys: Sequence[str]) -> Position:
         """Validate and extract outer parameters, excluding latents and data."""
@@ -593,7 +602,9 @@ class LaplaceLoss(LossMixin):
         )
         theta, unravel_outer = ravel_pytree(position)
         seed, unravel_latent = ravel_pytree(state.latent_position)
-        training_state = self.model.update_state(self.split.train, self.model.state)
+        training_state = self.model.update_state(
+            self.split.train, self.model.state, allow_weak_vars=True
+        )
 
         def joint(t, z):
             return self._joint(unravel_outer(t), unravel_latent(z), training_state)
@@ -667,7 +678,7 @@ class LaplaceLoss(LossMixin):
         training_state = getattr(carry, "_data_states", {}).get("train")
         if training_state is None:
             training_state = self.model.update_state(
-                self.split.train, carry.model_state
+                self.split.train, carry.model_state, allow_weak_vars=True
             )
 
         def joint(t, z):
