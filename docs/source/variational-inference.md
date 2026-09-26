@@ -11,10 +11,9 @@ mystnb:
 
 # Variational inference
 
-Use {class}`liesel.optim.LieselVI` to fit an approximate posterior for a Liesel
-model. It minimizes the negative evidence lower bound (ELBO) by adjusting the
-parameters of a variational distribution. The fitted values describe that
-distribution; draw samples from it to summarize the target model's parameters.
+{class}`liesel.optim.LieselVI` fits an approximate posterior by minimizing the
+negative evidence lower bound (ELBO). Fit a variational distribution, then sample
+it to summarize the target model's parameters.
 
 ## Fit a Gaussian family
 
@@ -51,15 +50,11 @@ mystnb:
 model.plot()
 ```
 
-Choose an initial scale appropriate for the parameter's units. The Gaussian
-builders default to SD `0.1`, an overridable heuristic; here we choose `0.5`.
-See {ref}`vi-initial-scale` for the tradeoff. The default objective includes target
-priors and excludes extra penalties on variational parameters; see
-{ref}`vi-q-prior-penalties`.
-
-We use a 300-epoch budget here. Without an explicit stopper, `LieselVI` uses
-1,000 epochs without early stopping. A budget is not a convergence check.
-Sixteen draws per step estimate the ELBO; more draws cost more computation.
+{class}`~liesel.optim.VDist` selects `loc` and builds its Gaussian family;
+`NegElboLoss.from_vdist` connects it to the target model. We choose initial SD
+`0.5`, 16 Monte Carlo draws per step, and a 300-epoch budget. The default objective
+includes target priors; extra {ref}`q-parameter penalties <vi-q-prior-penalties>`
+are opt-in.
 
 ```{code-cell} python
 vdist = opt.VDist(["loc"], model).mvn_diag(scale_diag=0.5).build()
@@ -85,13 +80,9 @@ mystnb:
 result.plot_loss()
 ```
 
-{class}`~liesel.optim.VDist` selects the target parameters to approximate. Here,
-`mvn_diag` assigns a Gaussian with diagonal covariance to `loc`, and `build()`
-creates its variational model. `NegElboLoss.from_vdist` connects that family to the
-target, including the mapping back to the target's parameter names and shapes.
-The loss keeps the helper in `loss.vdist`; fitting leaves the supplied model
-unchanged. Inspect the curve and posterior predictions before treating the fit
-as converged; a decreasing loss alone does not establish posterior accuracy.
+Fitting leaves the supplied model unchanged. Inspect loss and parameter paths
+and posterior predictions: a decreasing loss alone does not establish accuracy.
+See {doc}`variational-models` for Gaussian shortcuts and independent blocks.
 
 ## Sample the fitted family
 
@@ -110,19 +101,14 @@ pd.DataFrame(
 The exact posterior mean in this example is 6/7 and its standard deviation is
 1/sqrt(7). Monte Carlo summaries fluctuate around the fitted family's values.
 
-`approximate_joint_posterior` selects the final iterate by default. Unlike a
-deterministic MAP/Laplace objective, VI's monitoring loss is noisy; selecting its
-minimum can favor a lucky estimate. Pass `at="min_monitor"` to select that saved
-position explicitly. Neither selection guarantees posterior accuracy.
-The returned {class}`~liesel.optim.VariationalApproximation` keeps those values
-without retaining fit history. Variational parameters omitted from the fit are
-bound to their current model values. Keep its variational graph, nonparameter
-values, and position mapping unchanged, and use a result from the same loss.
+`approximate_joint_posterior` binds the final iterate by default. Selecting the
+minimum noisy monitoring loss can favor a lucky estimate; use `at="min_monitor"`
+only when you intend that selection. Use a result from the same loss and keep its
+variational graph and draw mapping unchanged; see
+{class}`~liesel.optim.VariationalApproximation` for the full contract.
 
-Sampling uses the learned distribution, including custom families and mappings.
-It does not refit the model or compute a Hessian. Finite fitted values do not
-certify convergence. The default `sample(seed=key)` returns one draw in the
-original parameter shapes. An integer or tuple adds leading sample axes:
+`sample(seed=key)` returns one draw in the target's original parameter shapes.
+An integer or tuple adds leading sample axes, also accepted by `model.predict`:
 
 ```{code-cell} python
 samples = posterior.sample((1, 1_000), seed=jax.random.key(44))
@@ -133,60 +119,36 @@ predicted = model.predict(samples)
 samples["loc"].shape
 ```
 
-These leading axes also work when predicting derived quantities or transforming
-constrained parameters. The fitted approximation API also accepts a directly
-constructed {class}`~liesel.optim.NegElboLoss` without a `VDist`. Custom transformed
-families remain subject to [issue #418](https://github.com/liesel-devs/liesel/issues/418).
-
-For a dense Gaussian or independent groups of parameters, see the worked
-{class}`~liesel.optim.VDist` and {class}`~liesel.optim.CompositeVDist` examples in
-{doc}`variational-models`. Its {ref}`Gaussian shortcuts <vi-gaussian-shortcuts>`
-section shows how `NegElboLoss.mvn_diag` and `NegElboLoss.mvn_tril` construct a
-loss directly when one Gaussian family covers all target parameters. An explicit
-loss keeps its own sample count, scaling, entropy,
-and prior settings; configure them on that loss.
-
 (vi-initial-scale)=
 
 ## Choose an initial scale
 
-Gaussian builders and loss factories default to SD `0.1` for each governed
-parameter. For dense blocks, this means a Cholesky factor `0.1 * I`, hence
-covariance `0.01 * I`. Locations start at the current target-model values.
+Gaussian builders default to SD `0.1` in each parameter's units, including
+transformed units such as log standard deviations. Dense blocks start with
+Cholesky factor `0.1 * I`; locations use current target values.
 
-`0.1` is a convenience heuristic in each parameter's units, including transformed
-units for parameters such as log standard deviations. It is not scale-invariant,
-a posterior uncertainty estimate, or a generally superior choice to `0.01` or `1`.
-Narrow initialization keeps initial draws local but can take many updates to expand;
-wider initialization can produce more variable gradients or reach unstable regions.
-The learning rate, parameterization, and iteration budget also matter.
+This is an initialization heuristic, not a posterior uncertainty estimate or a
+scale-invariant recommendation. Narrow starts keep draws local but may expand
+slowly; wider starts can increase gradient noise or reach unstable regions.
+Choose `scale_diag` or `scale_tril` for your parameter units. Arrays allow different
+initial scales across parameters. Check fitted uncertainty and loss paths, and
+adjust the learning rate or iteration budget if needed.
 
-Override `scale_diag` as in the fit above or use `scale_tril` for dense blocks.
-Arrays allow different initial scales for different parameters. Pass an explicitly
-constructed loss to `LieselVI` to preserve
-those settings. Check loss paths and fitted uncertainty; increasing the budget or
-changing the learning rate may be necessary even in simple Gaussian models.
+(vi-monitoring)=
 
 ## Choose a monitor
 
-Both `optimizers` and `loss_monitor` are required. An
-{class}`~liesel.optim.EmaTrainLossMonitor` smooths losses evaluated before optimizer
-updates and carries the average across epochs. Here, `effective_window=20.0`
-sets an EMA span of 20 epoch equivalents. This reduces Monte Carlo fluctuations
-but makes the monitor slower to reflect changes in the fit. It is neither a
-hard 20-epoch window nor a half-life. `"train_full_data"` adds an
-evaluation on all training rows after each epoch. It still draws variational
-samples and can fluctuate without minibatches. Analytic entropy reduces one
-source of Monte Carlo noise; it does not make the whole ELBO deterministic.
-The default stopper spends a fixed 1,000-epoch budget. To opt into early stopping,
-pass a {class}`~liesel.optim.Stopper` with patience smaller than its epoch budget;
-Monte Carlo fluctuations can trigger that rule before the distribution stabilizes.
-See {doc}`optimizer-monitoring` for stopping and histories.
+Both `optimizers` and `loss_monitor` are required. Here,
+{class}`~liesel.optim.EmaTrainLossMonitor` uses a span of 20 epoch equivalents:
+stronger smoothing reduces noise but responds more slowly to changes. The span
+is neither a hard window nor a half-life. `"train_full_data"` instead evaluates
+all training rows after each epoch; its variational draws still make it noisy.
 
-ELBO losses do not support validation splits. Use a train/test split for a final
-predictive check, as in the basic tutorial. `position_final` is the final iterate;
-`position_min_monitor` is the saved epoch-end position with the smallest monitoring
-value. With an EMA, that value combines losses from several positions.
+Without an explicit stopper, `LieselVI` runs 1,000 epochs without early stopping.
+A smaller `patience` enables early stopping, which stochastic fluctuations can
+trigger prematurely. See {doc}`optimizer-monitoring` for stopping and histories.
+ELBO losses do not support validation splits; use held-out test data for a final
+predictive check, as in the basic tutorial.
 
 ## Work through examples
 
@@ -195,25 +157,22 @@ value. With an EMA, that value combines losses from several positions.
 
 variational-models
 Laplace initialization <variational-laplace>
-tutorials/notebooks/11-liesel-vi-basic
-tutorials/notebooks/12-liesel-vi-advanced
+Fit a Gaussian family <tutorials/notebooks/11-liesel-vi-basic>
+Fit two data groups <tutorials/notebooks/12-liesel-vi-advanced>
 ```
 
 ## Configure the fit
 
-Multiple observation sizes require an explicit split. Use
-`PositionSplit.from_model(model, multi_size="manager")` after checking the groups,
-or specify nested `position_keys` for explicit row groups. Mark shared arrays with
-`split_axes={key: None}`. Equal array lengths do not establish row alignment.
+For multiple observation sizes, pass an explicit split after checking row
+alignment; see {doc}`optimizer-splitting` and the two-group tutorial above.
 
-* {doc}`optimizer-splitting` explains explicit splits, axes, and seeds.
-* {doc}`optimizer-batching` covers aligned row groups and fixed computed data.
-* {doc}`optimizer-loss-scaling` explains sample counts and normalization.
-* {doc}`optimizer-weighted-batching` covers unequal sampling probabilities.
-* {doc}`optimizer-customization` covers learning rates and parameter blocks. For
-  VI, explicit optimizers select names in `loss.q.parameters`.
-* {doc}`optimizer-checkpointing` explains how to resume a fit.
+* {doc}`optimizer-batching`: minibatches and fixed computed data.
+* {doc}`optimizer-loss-scaling`: sample counts and normalization.
+* {doc}`optimizer-weighted-batching`: unequal sampling probabilities.
+* {doc}`optimizer-customization`: learning rates and optimizer blocks. VI blocks
+  select names in `loss.q.parameters`.
+* {doc}`optimizer-checkpointing`: resuming a fit.
 
-For arguments, ELBO estimation, and sampling, see {class}`~liesel.optim.LieselVI`,
-{class}`~liesel.optim.NegElboLoss`, {class}`~liesel.optim.VDist`, and
-{class}`~liesel.optim.CompositeVDist` in the {ref}`optimizer-api`.
+See {class}`~liesel.optim.LieselVI` and {class}`~liesel.optim.NegElboLoss` for
+arguments. Configure an explicit loss on the loss itself; wrapper options do not
+override its sample count, scaling, entropy, or prior settings.
