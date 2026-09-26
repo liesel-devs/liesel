@@ -20,6 +20,11 @@ Keep essential constraints beside the example they affect. Link to deeper
 details instead of repeating them. When retiring duplicate notebooks, preserve
 useful examples in the tutorials and genuine checks in the test suite.
 
+Put `Overview <self>` first in the first toctree of each guide landing page.
+Use Sphinx's special `self` entry, not the page's filename, so Overview links to
+the landing page without nested children. Preserve the remaining entries and
+their order. Check the sidebar on both the landing page and its child pages.
+
 ## Write each section around an action
 
 Use a practical heading, a short introduction, the code, and an explanation of

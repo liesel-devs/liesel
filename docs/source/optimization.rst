@@ -57,6 +57,7 @@ Start here
 .. toctree::
    :maxdepth: 1
 
+   Overview <self>
    tutorials/notebooks/09-liesel-optim-basic
    tutorials/notebooks/10-liesel-optim-advanced
 
