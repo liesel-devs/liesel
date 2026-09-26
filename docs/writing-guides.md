@@ -57,6 +57,8 @@ Python in `{code-cell}` blocks without interactive prompts (`>>>` or `...`).
 
 - State prerequisites, such as an existing `model`, before a snippet. Make
   complete tutorials runnable from top to bottom.
+  Imports stay visible in a code cell at the top of each guide. Hide only
+  non-import build setup, such as logging configuration and fixture models or data.
 - Use existing public helpers instead of manual setup or calculations that they
   already handle. Include a lower-level recipe or alternative only when it serves
   a distinct task or helps the reader make a meaningful choice.

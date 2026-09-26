@@ -27,8 +27,6 @@ This page uses a small Gaussian regression. Expand the setup to run the
 examples from top to bottom.
 
 ```{code-cell} ipython3
-:tags: [hide-input]
-
 import logging
 
 import jax.numpy as jnp
@@ -38,6 +36,10 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.model as lsl
 import liesel.optim as opt
+```
+
+```{code-cell} ipython3
+:tags: [hide-input]
 
 logging.getLogger("liesel").setLevel(logging.WARNING)
 
