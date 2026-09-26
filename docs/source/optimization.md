@@ -73,6 +73,7 @@ hierarchical model.
 ```{toctree}
 :maxdepth: 1
 
+Overview <self>
 tutorials/notebooks/09-liesel-optim-basic
 Fit two data groups <tutorials/notebooks/10-liesel-optim-advanced>
 ```

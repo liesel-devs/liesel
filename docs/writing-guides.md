@@ -22,6 +22,11 @@ change the model, algorithm, or reported results; brevity must not hide them.
 When retiring duplicate notebooks, preserve useful examples in tutorials and
 genuine checks in the test suite.
 
+Put `Overview <self>` first in the first toctree of each guide landing page.
+Use Sphinx's special `self` entry, not the page's filename, so Overview links to
+the landing page without nested children. Preserve the remaining entries and
+their order. Check the sidebar on both the landing page and its child pages.
+
 ## Lead with the main workflow
 
 Introduce a feature's general purpose before relating it to special cases. Show

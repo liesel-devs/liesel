@@ -11,6 +11,7 @@ location-scale models:
    :maxdepth: 1
    :caption: Basics
 
+   Overview <self>
    tutorials/md/01a-lin-reg
    tutorials/md/01b-model
    tutorials/md/01d-gibbs-sampling
