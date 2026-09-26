@@ -286,8 +286,11 @@ class TestModel:
         """
 
     def test_log_probs(self, model: Model) -> None:
+        assert isinstance(model.log_prior, jax.Array)
         assert model.log_prior.shape == ()
+        assert isinstance(model.log_lik, jax.Array)
         assert model.log_lik.shape == ()
+        assert isinstance(model.log_prob, jax.Array)
         assert model.log_prob.shape == ()
 
         assert model.log_prob == pytest.approx(model.log_lik + model.log_prior)

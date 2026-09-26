@@ -45,6 +45,8 @@ from .types import (
     ModelInterface,
     ModelState,
     Position,
+    PositionInput,
+    PyTree,
     TransitionInfo,
     TuningInfo,
 )
@@ -81,6 +83,8 @@ __all__ = [
     "NamedTupleInterface",
     "OptimResult",
     "Position",
+    "PositionInput",
+    "PyTree",
     "RWKernel",
     "SamplesSummary",
     "SamplingResults",

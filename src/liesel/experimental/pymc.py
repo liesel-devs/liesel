@@ -74,7 +74,7 @@ from collections.abc import Sequence
 
 import jax
 
-from liesel.goose.types import ModelState, Position
+from liesel.goose.types import ModelState, Position, PositionInput
 
 try:
     import pytensor
@@ -157,7 +157,9 @@ class PyMCInterface:
 
         return Position({key: model_state[key] for key in position_keys})
 
-    def update_state(self, position: Position, model_state: ModelState) -> ModelState:
+    def update_state(
+        self, position: PositionInput, model_state: ModelState
+    ) -> ModelState:
         """Updates the model state with the position returning the new model state."""
         ms: Position = model_state.copy()  # do not change the input (escaped traces)
         ms.update(position)
