@@ -41,7 +41,7 @@ from .types import Array, KeyArray, ModelState, Position, Scalar
 class HMCKernelState:
     """
     A dataclass for the state of a :class:`~liesel.goose.HMCKernel`, implementing the
-    :class:`.DAKernelState` protocol.
+    :class:`~liesel.goose.da.DAKernelState` protocol.
     """
 
     step_size: Scalar
@@ -115,15 +115,16 @@ class HMCKernel(
     mm_diag
         Whether to use a diagonal mass matrix for drawing the momentum vector.
         If True, the inverse mass matrix will be tuned during adaptation using
-        :func:`.tune_inv_mm_diag`. If set to False, the mass matrix will be tuned
-        using :func:`.tune_inv_mm_full` instead.
+        :func:`~liesel.goose.mm.tune_inv_mm_diag`. If set to False, the mass matrix will
+        be tuned
+        using :func:`~liesel.goose.mm.tune_inv_mm_full` instead.
     identifier
         An string acting as a unique identifier for this kernel.
 
     Notes
     -----
     For more information on step size tuning via dual averaging,
-    see :func:`.da_step` and :class:`.DAKernelState`.
+    see :func:`~liesel.goose.da.da_step` and :class:`~liesel.goose.da.DAKernelState`.
 
     .. [#stan] `Stan Development Team, Stan Reference Manual (2021), Chapter 15.2
        <https://mc-stan.org/docs/2_28/reference-manual/hmc-algorithm-parameters.html>`_.

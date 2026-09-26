@@ -2945,7 +2945,7 @@ class Model:
         position_keys
             An iterable of variable or node names.
         model_state
-            A dictionary of node names and their corresponding :class:`.NodeState`. \
+            A dictionary of node names and their corresponding ``NodeState``. \
             If ``None`` (default), the model's current state is used.
         """
         model_state = model_state if model_state is not None else self.state
@@ -2978,10 +2978,10 @@ class Model:
         Variable keys use the converter configured on the respective
         :class:`~liesel.model.Var`; node keys use the converter configured on the
         respective
-        :class:`~liesel.model.Node`. Unknown keys raise a :class:`KeyError` unless
+        :class:`~liesel.model.Node`. Unknown keys raise a :exc:`KeyError` unless
         ``allow_unknown=True``, in which case their values are left unchanged.
 
-        This method is useful for constructing a typed :class:`.Position` at an API
+        This method is useful for constructing a typed ``Position`` at an API
         boundary, before repeatedly passing it through model computations.
         """
         converted = {}
@@ -3062,7 +3062,7 @@ class Model:
         position
             A dictionary of variable or node names and values.
         model_state
-            A dictionary of node names and their corresponding :class:`.NodeState`. \
+            A dictionary of node names and their corresponding ``NodeState``. \
             If ``None`` (default), the model's current state is used.
         inplace
             If ``False`` (default), a new model state is returned, while the current \
@@ -3493,7 +3493,8 @@ def log_prob_pointwise(
         :attr:`Model.observed <liesel.model.Model.observed>`.
     samples
         Dictionary of samples at which to evaluate log probs. If ``samples`` contains
-        entries for weak variables or for nodes in :attr:`.model_nodes` they are
+        entries for weak variables or for nodes in
+        :attr:`~liesel.model.Model.model_nodes` they are
         ignored.
     newdata
         Dictionary of new data at which to evaluate log probs. The keys should

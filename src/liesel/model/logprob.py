@@ -1,4 +1,4 @@
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Literal
 
 import jax
@@ -6,6 +6,9 @@ import jax.flatten_util
 
 from ..goose.types import Array
 from .model import Model
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class LogProb:
