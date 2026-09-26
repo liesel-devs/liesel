@@ -171,6 +171,14 @@ an epoch's worth of batches. Older losses fade gradually; they are not dropped
 at a fixed age. The average continues across epochs and reuses losses already
 computed for optimizer updates.
 
+Because the average still includes older losses, it trails the current loss a
+little. The delay is about half the window: with `effective_window=2.0`, about
+one epoch. The default stopper of `LieselOptim` waits 10 epochs for an
+improvement, and the stopper above waits 20, so this delay makes little
+difference. Increase the window only if the monitored loss still jumps around
+near the end of the fit, and keep the delay well below how long the stopper
+waits.
+
 An EMA combines losses from several parameter positions. Its best saved position
 is the snapshot at the end of that epoch; its exact loss need not equal the
 EMA monitor value. See {py:class}`~liesel.optim.EmaTrainLossMonitor` for the formula
