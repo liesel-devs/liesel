@@ -19,8 +19,18 @@ API Reference
 
 This is an overview of the central classes in Liesel.
 
-Model Basics
-************
+.. _model-api:
+
+.. _model-basics:
+
+.. _model-advanced:
+
+.. _custom-distributions:
+
+.. _p-splines:
+
+Models
+******
 
 The fundamental building blocks of your model graph are given by just three classes.
 Both are documented with examples, so make sure to check them out.
@@ -31,17 +41,35 @@ The model building workflow in Liesel consists of the following steps:
 2. Initialize a :class:`Model <liesel.model.Model>` with your root variable(s).
 
 .. autosummary::
-    :toctree: generated
-    :caption: Model Basics
-    :recursive:
-    :nosignatures:
+   :toctree: generated
+   :nosignatures:
+   :caption: Models
+   :recursive:
 
-    ~liesel.model.Model
-    ~liesel.model.Var
-    ~liesel.model.Dist
+   ~liesel.model.Model
+   ~liesel.model.Var
+   ~liesel.model.Dist
 
-MCMC Setup
-************
+.. toctree::
+   :maxdepth: 1
+
+   reference/model-nodes
+   reference/model-density
+   reference/model-distributions
+   reference/model-splines
+
+.. _mcmc-api:
+
+.. _mcmc-setup:
+
+.. _mcmc-kernels:
+
+.. _model-interfaces:
+
+.. _advanced-mcmc-functionality:
+
+MCMC
+****
 
 To set up an MCMC engine, goose provides the :class:`EngineBuilder <liesel.goose.EngineBuilder>`. Please refer to
 the linked EngineBuilder documentation to learn how to use it.
@@ -53,58 +81,29 @@ directly how it should be sampled. You can then use the method
 conveniently initialize your :class:`EngineBuilder <liesel.goose.EngineBuilder>`.
 
 .. autosummary::
-    :toctree: generated
-    :caption: MCMC Setup
-    :recursive:
-    :nosignatures:
+   :toctree: generated
+   :nosignatures:
+   :caption: MCMC
+   :recursive:
 
-    ~liesel.goose.LieselMCMC
-    ~liesel.goose.MCMCSpec
-    ~liesel.goose.EngineBuilder
-    ~liesel.goose.Engine
+   ~liesel.goose.LieselMCMC
+   ~liesel.goose.MCMCSpec
+   ~liesel.goose.EngineBuilder
+   ~liesel.goose.Engine
 
-MCMC Kernels
-*************
+.. toctree::
+   :maxdepth: 1
 
+   reference/mcmc-kernels
+   reference/mcmc-interfaces
+   reference/mcmc-advanced
 
-Goose makes it easy for you to combine different MCMC kernels for different blocks of
-model parameters. You can also define your own kernel by implementing
-the :class:`Kernel <liesel.goose.Kernel>` protocol.
+.. _summary-plots:
 
-To draw samples from your posterior, you will want to call
-:meth:`sample_all_epochs <liesel.goose.Engine.sample_all_epochs>`. Once sampling is done, you can obtain the results
-with :meth:`get_results <liesel.goose.Engine.get_results>`, which will return a :class:`SamplingResults <liesel.goose.SamplingResults>`
-instance.
-
-.. autosummary::
-    :toctree: generated
-    :caption: MCMC Kernels
-    :recursive:
-    :nosignatures:
-
-    ~liesel.goose.IWLSKernel
-    ~liesel.goose.NUTSKernel
-    ~liesel.goose.HMCKernel
-    ~liesel.goose.RWKernel
-    ~liesel.goose.MHKernel
-    ~liesel.goose.MHProposal
-    ~liesel.goose.GibbsKernel
-
-Summary & Plots
-****************************
+MCMC results
+************
 
 The central classes for handling your sampling results are:
-
-.. autosummary::
-    :toctree: generated
-    :caption: MCMC Results & Summary
-    :recursive:
-    :nosignatures:
-
-    ~liesel.goose.SamplingResults
-    ~liesel.goose.Summary
-    ~liesel.goose.SamplesSummary
-    ~liesel.goose.loo
 
 You can obtain your posterior samples as a dictionary via
 :meth:`get_posterior_samples <liesel.goose.SamplingResults.get_posterior_samples>`. There is also experimental support
@@ -115,197 +114,111 @@ Goose also comes with a number of plotting functions that give you quick
 acccess to important diagnostics.
 
 .. autosummary::
-    :toctree: generated
-    :caption: Plots
-    :recursive:
-    :nosignatures:
+   :toctree: generated
+   :nosignatures:
+   :caption: MCMC results
+   :recursive:
 
-    ~liesel.goose.plot_trace
-    ~liesel.goose.plot_cor
-    ~liesel.goose.plot_pairs
-    ~liesel.goose.plot_scatter
-    ~liesel.goose.plot_density
-    ~liesel.goose.plot_param
+   ~liesel.goose.SamplingResults
+   ~liesel.goose.Summary
+   ~liesel.goose.SamplesSummary
+   ~liesel.goose.loo
+
+.. toctree::
+   :maxdepth: 1
+
+   reference/mcmc-plots
 
 .. _optimizer-api:
 
-Optimizer API
-*************
+Optimization
+************
 
 Start with :doc:`optimization` for parameter fitting or
 :doc:`variational-inference` for approximate posteriors. These pages describe
 the arguments and defaults.
 
 .. autosummary::
-    :toctree: generated
-    :caption: Optimizer API
-    :recursive:
-    :nosignatures:
+   :toctree: generated
+   :nosignatures:
+   :caption: Optimization
+   :recursive:
 
-    ~liesel.optim.LieselOptim
-    ~liesel.optim.LieselVI
-    ~liesel.optim.OptimEngine
-    ~liesel.optim.OptimCheckpoint
-    ~liesel.optim.OptimHistory
-    ~liesel.optim.OptimResult
-    ~liesel.optim.OptimNaNDebugInfo
-    ~liesel.optim.Loss
-    ~liesel.optim.LossMixin
-    ~liesel.optim.NegLogProbLoss
-    ~liesel.optim.NegElboLoss
-    ~liesel.optim.VariationalApproximation
-    ~liesel.optim.VDist
-    ~liesel.optim.CompositeVDist
-    ~liesel.optim.Optimizer
-    ~liesel.optim.OptimizerLike
-    ~liesel.optim.LBFGS
-    ~liesel.optim.Stopper
-    ~liesel.optim.EmaTrainLossMonitor
-    ~liesel.optim.LossMonitor
-    ~liesel.optim.Batches
-    ~liesel.optim.BatchManager
-    ~liesel.optim.Split
-    ~liesel.optim.SplitManager
-    ~liesel.optim.PositionSplit
-    ~liesel.optim.PositionSplitManager
+   ~liesel.optim.LieselOptim
+   ~liesel.optim.OptimEngine
+   ~liesel.optim.OptimCheckpoint
+   ~liesel.optim.OptimHistory
+   ~liesel.optim.OptimResult
+   ~liesel.optim.OptimNaNDebugInfo
+   ~liesel.optim.Stopper
+   ~liesel.optim.EmaTrainLossMonitor
+   ~liesel.optim.LossMonitor
 
-Variational array helpers
-*************************
+.. toctree::
+   :maxdepth: 1
 
-These helpers apply position mappings across leading sample axes.
+   reference/optim-losses
+   reference/optim-optimizers
+   reference/optim-data
+
+.. _variational-array-helpers:
+
+VI
+**
+
+See :doc:`variational-inference` for the fitting workflow.
 
 .. autosummary::
-    :toctree: generated
-    :nosignatures:
+   :toctree: generated
+   :nosignatures:
+   :caption: VI
+   :recursive:
 
-    ~liesel.optim.vi.flatten_leading_batch
-    ~liesel.optim.vi.unflatten_leading_batch
-    ~liesel.optim.vi.vmap_batched
+   ~liesel.optim.LieselVI
+   ~liesel.optim.NegElboLoss
+   ~liesel.optim.VariationalApproximation
+   ~liesel.optim.VDist
+   ~liesel.optim.CompositeVDist
 
-Legacy optimization (deprecated)
-********************************
+.. toctree::
+   :maxdepth: 1
+
+   reference/vi-arrays
+
+.. _experimental-api:
+
+Experimental
+************
+
+These integrations have experimental APIs.
+
+.. autosummary::
+   :toctree: generated
+   :nosignatures:
+   :caption: Experimental
+
+   ~liesel.experimental.arviz
+   ~liesel.experimental.pymc
+
+.. _legacy-optimization-deprecated:
+
+Deprecated
+**********
 
 :func:`liesel.goose.optim_flat` is deprecated and emits a ``FutureWarning``.
 Use :class:`liesel.optim.LieselOptim` for new code, including finding starting
 values for MCMC. See :doc:`optimizer-migration` for a before-and-after example.
 
 .. autosummary::
-    :toctree: generated
-    :caption: Legacy optimization (deprecated)
-    :recursive:
-    :nosignatures:
+   :toctree: generated
+   :nosignatures:
+   :caption: Deprecated
+   :recursive:
 
-    ~liesel.goose.optim_flat
-    ~liesel.goose.Stopper
-    ~liesel.goose.history_to_df
-    ~liesel.goose.OptimResult
-
-Model (Advanced)
-************************
-
-.. autosummary::
-    :toctree: generated
-    :caption: Model (Advanced)
-    :recursive:
-    :nosignatures:
-
-    ~liesel.model.log_prob_pointwise
-    ~liesel.model.LogProb
-    ~liesel.model.FlatLogProb
-    ~liesel.model.Calc
-    ~liesel.model.Node
-    ~liesel.model.Value
-    ~liesel.model.PIT
-    ~liesel.model.TransientCalc
-    ~liesel.model.TransientDist
-    ~liesel.model.TransientIdentity
-    ~liesel.model.TransientNode
-    ~liesel.model.InputGroup
-    ~liesel.model.GraphBuilder
-
-Model Interfaces
-************************
-
-A natural option for setting up your model is the use of ``liesel.model``.
-However, you are not locked
-in to using :class:`Model <liesel.model.Model>`. Goose currently includes the following interfaces:
-
-.. autosummary::
-    :toctree: generated
-    :caption: Model Interfaces
-    :recursive:
-    :nosignatures:
-
-    ~liesel.goose.LieselInterface
-    ~liesel.goose.DictInterface
-    ~liesel.goose.DataclassInterface
-    ~liesel.goose.NamedTupleInterface
-
-P-Splines
-************
-
-.. autosummary::
-    :toctree: generated
-    :caption: P-Splines
-    :recursive:
-    :nosignatures:
-
-    ~liesel.contrib.splines.basis_matrix
-    ~liesel.contrib.splines.equidistant_knots
-    ~liesel.contrib.splines.pspline_penalty
-
-
-Custom Distributions
-********************
-
-.. autosummary::
-    :toctree: generated
-    :caption: Custom Distributions
-    :template: autosummary/class-without-inheritance-strict.rst
-    :nosignatures:
-
-    ~liesel.distributions.GaussianCopula
-    ~liesel.distributions.MultivariateNormalDegenerate
-
-
-Advanced MCMC functionality
-*****************************
-
-.. autosummary::
-    :toctree: generated
-    :caption: MCMC (Advanced)
-
-    ~liesel.goose.mh_step
-    ~liesel.goose.da
-    ~liesel.goose.mm
-    ~liesel.goose.EpochConfig
-    ~liesel.goose.EpochState
-    ~liesel.goose.EpochType
-    ~liesel.goose.KernelState
-    ~liesel.goose.ModelState
-    ~liesel.goose.Kernel
-    ~liesel.goose.TransitionInfo
-    ~liesel.goose.TuningInfo
-    ~liesel.goose.DefaultTransitionInfo
-    ~liesel.goose.DefaultTuningInfo
-    ~liesel.goose.TransitionMixin
-    ~liesel.goose.TransitionOutcome
-    ~liesel.goose.TuningOutcome
-    ~liesel.goose.WarmupOutcome
-    ~liesel.goose.ModelMixin
-
-
-Experimental API
-************************
-
-.. autosummary::
-    :toctree: generated
-    :caption: Experimental API
-    :nosignatures:
-
-    ~liesel.experimental.arviz
-    ~liesel.experimental.pymc
-
+   ~liesel.goose.optim_flat
+   ~liesel.goose.Stopper
+   ~liesel.goose.history_to_df
+   ~liesel.goose.OptimResult
 
 Effort-Based Versioning
 -----------------------
