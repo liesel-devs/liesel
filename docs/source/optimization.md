@@ -57,6 +57,7 @@ The fitted values are returned separately; fitting does not change your model.
 ```{toctree}
 :maxdepth: 1
 
+Overview <self>
 tutorials/notebooks/09-liesel-optim-basic
 Fit two data groups <tutorials/notebooks/10-liesel-optim-advanced>
 ```
