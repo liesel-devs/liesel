@@ -55,13 +55,12 @@ dev = [
     "pydata-sphinx-theme>=0.18.0",
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
-    "rtds-action>=1.1.0",
     "sphinx>=7.2.6",
     "sphinx-autodoc-typehints>=1.19",
     "sphinx-book-theme>=1.1.0",
     "sphinx-copybutton>=0.5",
     "sphinx-remove-toctrees>=0.0.3",
-    "liesel_gam>=0.1.3",
+    "liesel_gam>=0.2.4",
     "ty>=0.0.60",
 ]
 

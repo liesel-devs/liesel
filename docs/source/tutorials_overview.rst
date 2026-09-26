@@ -1,42 +1,43 @@
 Tutorials
 =========
 
-Start with :doc:`model-building` to construct and inspect a model, then follow
-:doc:`sampling` for posterior inference or :doc:`optimization` for point
-estimates. Each route links to complete tutorials and short task guides.
-The model guides also cover prediction and simulation.
+Follow a complete workflow, then use its task guides when a specific question
+arises. Each tutorial starts with its own data and model; do not carry fitted
+objects between tutorials unless a page explicitly asks you to.
 
-Model walkthroughs
+Build and predict
+-----------------
+
+Start with :doc:`tutorials/notebooks/11-model-building` to define variables,
+inspect a graph, and change model values. Continue with
+:doc:`tutorials/notebooks/12-model-predictions` to fit a model whose mean and
+spread vary with covariates and distinguish mean uncertainty from new responses.
+The :doc:`model-building` route links to focused guides for common model tasks.
+
+Sample a posterior
 ------------------
 
-The model-building route introduces the current workflow. These earlier
-walkthroughs provide additional regression examples:
+Use :doc:`tutorials/md/01c-transform` for a first complete NUTS fit, then
+:doc:`tutorials/md/01d-gibbs-sampling` to combine NUTS with an exact Gibbs update.
+The :doc:`sampling` route covers kernel choices, initialization, diagnostics,
+reproducibility, and extending Goose.
 
-.. toctree::
-   :maxdepth: 1
+Optimize parameters
+-------------------
 
-   tutorials/md/01a-lin-reg
-   tutorials/md/02-ls-reg
-
-Draw posterior samples
-----------------------
-
-The :doc:`sampling` guide links to a first regression posterior and a tutorial
-combining NUTS and Gibbs updates. Its task guides cover parameter blocks,
-initialization, warmup, diagnostics, results, reproducibility, and custom kernels.
+Follow :doc:`tutorials/notebooks/09-liesel-optim-basic` for a first point estimate
+and :doc:`tutorials/notebooks/10-liesel-optim-advanced` for two data groups.
+The :doc:`optimization` route covers splitting, batching, monitoring, and more.
 
 Explore applications
 --------------------
 
-.. toctree::
-   :maxdepth: 1
-
-   tutorials/md/03-gev
-   tutorials/md/04-mcycle
-   tutorials/md/06-pymc
-   tutorials/md/07-error-correction
+The :doc:`examples` apply these tools to GEV responses, a sampler comparison,
+variable selection with PyMC, and measurement-error correction.
 
 .. toctree::
    :hidden:
 
+   tutorials/md/01a-lin-reg
    tutorials/md/01b-model
+   tutorials/md/02-ls-reg

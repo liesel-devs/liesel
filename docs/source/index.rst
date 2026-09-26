@@ -13,6 +13,7 @@ Liesel: A Probabilistic Programming Framework
    tutorials_overview
    optimization
    sampling
+   examples
 
 
 API Reference

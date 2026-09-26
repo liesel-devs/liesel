@@ -52,7 +52,10 @@ Values saved for weak variables in `samples` are ignored and recalculated.
 
 `newdata` replaces named inputs for the evaluation. Omit it to use the current
 data; omitted inputs keep their current values. Supply compatible arrays for
-all covariates that change together. Keys must not overlap between `samples`
+all covariates that change together. If the mean and scale use separate design
+inputs `X` and `Z`, provide both with aligned rows; a one-dimensional slice must
+state which other covariate is fixed. See
+{ref}`different-covariates` in the worked tutorial. Keys must not overlap between `samples`
 and `newdata`. Include draws for every parameter whose posterior uncertainty
 you intend to propagate: missing strong inputs keep their current values.
 

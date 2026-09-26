@@ -62,6 +62,10 @@ kernel_table
 Check that every parameter you intend to estimate appears in a kernel.
 A parameter without an inference specification stays at its current value
 unless you add a kernel manually through an {doc}`engine builder <goose-engine>`.
+Declaring a prior and setting the parameter flag does not assign a kernel. If
+you sample regression coefficients but leave the variance without a kernel,
+you obtain a posterior conditional on that fixed variance, not uncertainty
+about both. See {doc}`model-modification` for deliberate model changes.
 
 ## Group parameters
 

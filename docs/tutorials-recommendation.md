@@ -1,8 +1,9 @@
 # Recommendation for the existing tutorials
 
-Status: proposal for review, 26 September 2026. The model and Goose guide edits
-are integrated on `docs/model-goose-guides`. The restructuring below has not
-been implemented.
+Status: implemented and reviewed, 26 September 2026, on
+`docs/model-goose-guides`. The inventory below records the agreed migration
+decisions and findings in the historical sources. The implementation record
+at the end distinguishes completed work from the original proposal.
 
 This recommendation combines inspection of the current sources with discussion
 between the **Liesel Model Guides**, **Liesel Goose Guides**, and
@@ -152,3 +153,50 @@ The GAM migration showed why a clean output build matters: deleting a source did
 not remove its old HTML or cached sidebar links. It also showed that successful
 execution can reveal poor mixing rather than validate an example's teaching
 value. These are separate checks, and both belong in the migration review.
+
+## Implementation record
+
+The approved migration is implemented on `docs/model-goose-guides`. The library
+contains independently executable GEV, motorcycle, PyMC variable-selection, and
+measurement-error examples. The reproducibility page is executable Markdown;
+redundant introductory pages route to maintained tutorials. Their distinct
+lessons and legacy URLs are retained.
+
+The final environment differs from the initial proposal: documentation now
+requires `liesel_gam>=0.2.4`, with its compatible `smoothcon` release recorded in
+`uv.lock`. Motorcycle data are bundled with MASS provenance and licensing, so
+the build no longer needs R. The obsolete `rtds-action` development dependency,
+Quarto tutorial sources, generated figures, and render/update workflow have
+been removed. One strict Sphinx execution job owns the maintained sources.
+
+PyMC indicator probabilities and the measurement-error full conditionals were
+repaired and checked against the actual model targets in focused tests. Their
+independent runs show good chain agreement and no posterior divergences. The
+motorcycle comparison retains the same likelihood, priors, parameterization,
+and smoothing-variance Gibbs updates for both runs. NUTS replaces only the
+coefficient updates. Double precision and a conservative acceptance target
+produce a useful reference fit; the page explicitly diagnoses the untuned
+IWLS baseline's poor mixing rather than treating overlapping curves as proof
+of convergence.
+
+The GPT-5.6 Sol xhigh review loop checked model and transition correctness,
+interpretation of executed outputs, unique lesson coverage, source ownership,
+legacy anchors, navigation, and reproducibility. Findings about missing anchors,
+recording environment changes, and interpreting the sampler comparison were
+fixed and reviewed again. The reviewer reported no remaining actionable
+findings after checking the actual integrated outputs.
+
+Validation used the locked development and PyMC environment. A fresh strict
+Sphinx build (`-E -W --keep-going`) executed all 29 notebooks and 287 code cells
+without cell errors. A subsequent strict incremental build refreshed the final
+library label and GEV interpretation, re-executing GEV successfully. The HTML
+audit checked 858 pages, 696,454 local links and anchors, and descriptive alt
+text for 35 figures across 27 guide/example pages. All five focused tests and
+repository hooks passed. This records local validation; hosted CI has not yet
+run on this commit.
+
+The fresh build emitted an out-of-band `ipykernel.iostream` shutdown traceback
+(`Event loop is closed`) around the custom-kernel tutorial. It did not appear
+in notebook or rendered output, every cell completed, both builds exited zero,
+and the final process audit found no task-owned kernel remaining. No dependency
+workaround was introduced for this transient shutdown message.
