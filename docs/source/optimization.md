@@ -60,7 +60,7 @@ The `optimizers` argument is required. Pass a configured Optax transformation,
 such as `optimizers=optax.adam(0.01)`, to optimize all parameters with it.
 The fitted values are returned separately; fitting does not change your model.
 
-After a joint MAP fit, `optim.loss.approximate_joint_posterior(result)`
+After a joint MAP fit, {meth}`optim.loss.approximate_joint_posterior(result) <liesel.optim.LaplaceLoss.approximate_joint_posterior>`
 can construct a Gaussian approximation for the optimized parameters. It uses
 full-training curvature and checks that the selected position is a stationary
 point with positive curvature; a validation or EMA minimum may not qualify.
@@ -95,5 +95,5 @@ optimizer-migration
 ```
 
 For arguments and defaults, see the {ref}`optimizer-api`.
-`goose.optim_flat` is deprecated and will be removed in 0.8.0; use the migration guide
+{func}`goose.optim_flat <liesel.goose.optim_flat>` is deprecated and will be removed in 0.8.0; use the migration guide
 above to update existing code.

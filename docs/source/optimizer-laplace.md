@@ -15,7 +15,7 @@ of the model's joint density, then fits the remaining parameters. Here we fit a
 Poisson model's mean and random-effect scale while integrating eight group effects.
 
 ```{note}
-**Relation to REML.** `LaplaceLoss` approximates integration over selected
+**Relation to REML.** {class}`LaplaceLoss <liesel.optim.LaplaceLoss>` approximates integration over selected
 parameters in smooth models, including non-Gaussian and nonlinear models.
 The integrated parameters, priors, and Jacobians determine the target. Here
 we integrate the group effects and retain parameter priors, yielding a
@@ -135,7 +135,7 @@ are `mu` and `h(tau)`; `b` keeps its prior. The unscaled loss includes priors,
 Jacobians, and normalization constants; see {doc}`optimizer-loss-scaling`.
 
 For observed arrays with different lengths, pass an explicit `split` to
-`LaplaceLoss`; {ref}`check the groups and opt in <optimizer-split-groups>` first.
+{class}`LaplaceLoss <liesel.optim.LaplaceLoss>`; {ref}`check the groups and opt in <optimizer-split-groups>` first.
 
 ## Inspect group effects
 
@@ -166,15 +166,15 @@ Each effect multiplies the baseline rate `exp(mu)` by `exp(b)`.
 For the first group, the multiplier is about `exp(-1.272) = 0.28`;
 for the last group, it is about `exp(1.328) = 3.77`.
 
-For the final snapshot, pair `position_final` with `loss_state_final`.
+For the final snapshot, pair {attr}`position_final <liesel.optim.OptimResult.position_final>` with {attr}`loss_state_final <liesel.optim.OptimResult.loss_state_final>`.
 See {py:class}`~liesel.optim.LaplaceState` for convergence diagnostics, parameter
-ordering, and the saved curvature in `latent_precision_cholesky`.
+ordering, and the saved curvature in {attr}`latent_precision_cholesky <liesel.optim.LaplaceState.latent_precision_cholesky>`.
 
 ## Estimate uncertainty
 
 Turn the completed fit into a joint Gaussian approximation for `mu`, `h(tau)`,
 and all eight group effects. It includes their correlations, so each draw is a
-complete parameter set that can be passed directly to `Model.predict`:
+complete parameter set that can be passed directly to {meth}`Model.predict <liesel.model.Model.predict>`:
 
 ```{code-cell} ipython3
 posterior = loss.approximate_joint_posterior(result)
@@ -186,9 +186,11 @@ rate_draws = jnp.exp(predicted["log_rate"])
 quantiles = jnp.array([0.05, 0.5, 0.95])
 ```
 
-`Model.predict` transforms draws back to the positive `tau` scale and evaluates
-the log rates. For example, summarize the between-group scale with its 5th, 50th,
-and 95th percentiles:
+{meth}`Model.predict <liesel.model.Model.predict>` transforms draws back to the positive `tau` scale and evaluates
+the log rates. The leading axis indexes the 1,000 draws; the last log-rate
+axis indexes observations. Exponentiate each draw before taking rate summaries,
+rather than exponentiating an average log rate. For example, summarize the
+between-group scale with its 5th, 50th, and 95th percentiles:
 
 ```{code-cell} ipython3
 pd.DataFrame(
@@ -248,8 +250,8 @@ The intervals carry uncertainty in the mean, scale, and group effects through
 to expected counts. New observations also vary according to the Poisson
 distribution.
 
-For matrix calculations, `posterior.covariance()` constructs the full covariance
-on request. `posterior.names` and `posterior.shapes` describe its ordering.
+For matrix calculations, {meth}`posterior.covariance() <liesel.optim.LaplaceApproximation.covariance>` constructs the full covariance
+on request. {attr}`posterior.names <liesel.optim.LaplaceApproximation.names>` and {attr}`posterior.shapes <liesel.optim.LaplaceApproximation.shapes>` describe its ordering.
 
 To work with one parameter, request its block by name:
 
@@ -265,9 +267,9 @@ This 8 × 8 matrix is the marginal covariance of `b`; it includes the
 uncertainty that `mu` and `h(tau)` propagate to `b`.
 Omit the name selection to get a dictionary of blocks for every parameter.
 For a factor of each block's inverse, use
-`posterior.marginal_precision_cholesky_blocks()`.
+{meth}`posterior.marginal_precision_cholesky_blocks() <liesel.optim.LaplaceApproximation.marginal_precision_cholesky_blocks>`.
 For precision conditional on all the other parameters, use
-`posterior.conditional_precision_blocks()`; these are diagonal blocks of the
+{meth}`posterior.conditional_precision_blocks() <liesel.optim.LaplaceApproximation.conditional_precision_blocks>`; these are diagonal blocks of the
 joint precision and generally differ from the marginal precisions.
 
 The helper adds curvature work once per call and checks stationarity and positive
@@ -300,7 +302,7 @@ failed.status
 failed.failure_reason
 ```
 
-`failed.failed_loss_state` holds the inner solver diagnostics. Failures
+{attr}`failed.failed_loss_state <liesel.optim.OptimResult.failed_loss_state>` holds the inner solver diagnostics. Failures
 preserve the last valid snapshot; without one, the loss state is `None`.
 Failed fits cannot resume; earlier saved checkpoints remain available.
 

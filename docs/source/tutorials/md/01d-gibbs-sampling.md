@@ -87,7 +87,7 @@ several entries.
 
 For this normal-inverse-gamma model, the full conditional of $\sigma^2$
 is again an inverse-gamma distribution. To retrieve the relevant values
-from the `model_state`, we use {meth}`.Model.extract_position`.
+from the `model_state`, we use {meth}`Model.extract_position <liesel.model.Model.extract_position>`.
 
 ``` python
 def draw_sigma_sq(prng_key, model_state):
@@ -107,9 +107,9 @@ def draw_sigma_sq(prng_key, model_state):
 ```
 
 The regression coefficients `beta` are still sampled with NUTS. For
-`sigma_sq`, we attach an {class}`~.goose.MCMCSpec` with
-{meth}`~.goose.GibbsKernel.with_transition_fn`, which turns our custom
-transition function into a kernel factory that {class}`.LieselMCMC` can
+`sigma_sq`, we attach an {class}`MCMCSpec <liesel.goose.MCMCSpec>` with
+{meth}`with_transition_fn <liesel.goose.GibbsKernel.with_transition_fn>`, which turns our custom
+transition function into a kernel factory that {class}`LieselMCMC <liesel.goose.LieselMCMC>` can
 use. The Gibbs kernel itself does not need adaptation, but the NUTS
 kernel for `beta` does, so we still run an adaptation phase before
 drawing posterior samples.

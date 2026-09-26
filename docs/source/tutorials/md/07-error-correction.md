@@ -118,7 +118,7 @@ Liesel, setting $\tau^2_{\mu} = 1000$ and $a_x = b_x = 0.001$. We will
 initialize $x$ using the mean of our observed measurements. We also need
 to assign a normal distribution to the observed measurements and define
 $\sigma^{2}_u$ (the variance of the measurements). Note that we are
-building a hierarchical model by providing a {class}`.Var` instance for
+building a hierarchical model by providing a {class}`Var <liesel.model.Var>` instance for
 the `loc` and `scale` arguments of the different distributions.
 
 We begin by establishing $\tau^2_{x}$.
@@ -186,7 +186,7 @@ x_tilde_var = lsl.Var(x_tilde, distribution=measurement_dist, name="x_tilde")
 
 Afterwards we define $\boldsymbol{\beta}$, our design matrix and
 $\sigma^{2}_y$ (the variance of the response). Note that we have to
-create the design matrix using {meth}`.Var.new_calc` as we continuously
+create the design matrix using {meth}`Var.new_calc <liesel.model.Var.new_calc>` as we continuously
 update our x-values during the inference.
 
 ``` python
@@ -252,10 +252,10 @@ id="plot-vars" />
 
 ## MCMC Inference
 
-We choose NUTS kernels ({class}`~.goose.NUTSKernel`) for generating
+We choose NUTS kernels ({class}`NUTSKernel <liesel.goose.NUTSKernel>`) for generating
 posterior samples of $\sigma_y$, $\sigma_u$, $\boldsymbol{\beta}$, and
 to sample our x-values. To draw from $\mu_x$ and $\tau^2_x$ we use Gibbs
-kernels ({class}`~.goose.GibbsKernel`), as this allows us to use custom
+kernels ({class}`GibbsKernel <liesel.goose.GibbsKernel>`), as this allows us to use custom
 transition functions for our parameters. The full conditionals are:
 
 $$\begin{aligned}

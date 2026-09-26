@@ -65,7 +65,7 @@ result.position_min_monitor
 
 `pause_after` limits additional epochs in that call. Early stopping still
 applies. To extend the total budget, change `engine.stopper.epochs` before
-resuming. Calling `fit()` without a checkpoint starts a new run.
+resuming. Calling {meth}`fit() <liesel.optim.LieselOptim.fit>` without a checkpoint starts a new run.
 
 The result's `status` tells you why fitting stopped: `"paused"`,
 `"max_epochs"`, `"early_stopping"`, `"numerical_failure"`, or `"nan"`.
@@ -123,10 +123,10 @@ History and monitoring continue across pauses. Earlier results stay unchanged;
 keeping many snapshots uses extra memory. Treat checkpoint contents as read-only.
 Custom losses must keep their model state and loss-state PyTrees compatible
 and serializable with pickle. Committed and best loss states survive recovery.
-For `LaplaceLoss`, keep the latent parameters and inner-solver controls unchanged;
+For {class}`LaplaceLoss <liesel.optim.LaplaceLoss>`, keep the latent parameters and inner-solver controls unchanged;
 checkpoint recovery checks these settings as well as state structure and dtype.
 
 For manual snapshots, use {py:meth}`liesel.optim.OptimCheckpoint.save` and
 {py:meth}`liesel.optim.OptimCheckpoint.load`. Passing a checkpoint object resumes
-in memory; pass a path to `fit()` for automatic disk saves. See
+in memory; pass a path to {meth}`fit() <liesel.optim.LieselOptim.fit>` for automatic disk saves. See
 {py:meth}`liesel.optim.OptimEngine.fit` for all recovery options.

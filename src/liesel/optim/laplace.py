@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from functools import partial
 from numbers import Real
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import jax
 import jax.numpy as jnp
@@ -44,15 +44,28 @@ class LaplaceState:
     """
 
     outer_position: Position
+    """Outer parameter position at which the conditional mode was evaluated."""
     latent_position: Position
+    """Conditional latent mode for the outer parameter position."""
     latent_precision_cholesky: jax.Array
+    """Lower Cholesky factor of the conditional negative-log-density Hessian."""
     n_iter: jax.Array
+    """Number of attempted Newton steps."""
     gradient_norm: jax.Array
+    """Euclidean norm of the latent gradient at the returned position."""
     newton_decrement_squared: jax.Array
+    """Squared Newton decrement; half this value is the convergence measure."""
     status: jax.Array
+    """Numeric solve status; only ``1`` denotes a valid approximation."""
     n_resolution_steps: jax.Array
+    """Number of accepted steps using the resolution safeguard."""
     latent_names: tuple[str, ...] = field(metadata={"static": True})
+    """Latent parameter names in flattened order, sorted by name."""
     latent_shapes: tuple[tuple[int, ...], ...] = field(metadata={"static": True})
+    """
+    Original parameter shapes in the order of
+    :attr:`~liesel.optim.LaplaceState.latent_names`.
+    """
 
 
 def _evaluate(joint, theta, z):
@@ -325,7 +338,7 @@ class LaplaceLoss(LossMixin):
         For independent groups, pass a checked split from
         :meth:`~liesel.optim.PositionSplit.from_model` with ``multi_size="manager"``.
         Use ``split_axes={key: None}`` there for shared values. Custom aggregate
-        densities may need an explicit :class:`PositionSplit`.
+        densities may need an explicit :class:`~liesel.optim.PositionSplit`.
     latent
         Nonempty sequence of writable continuous parameter names to integrate.
         Scalars, vectors, and matrices can be combined. Duplicate aliases, weak
@@ -364,6 +377,23 @@ class LaplaceLoss(LossMixin):
     """
 
     default_position_keys: Sequence[str]
+    """Outer parameter keys optimized by default."""
+
+    if TYPE_CHECKING:
+        inner_max_iter: int
+        """Maximum attempted Newton steps per evaluation."""
+        inner_tol: float
+        """Positive bound on half the squared Newton decrement."""
+        latent_names: tuple[str, ...]
+        """Latent parameter names in flattened order, sorted by name."""
+        latent_shapes: tuple[tuple[int, ...], ...]
+        """Original latent parameter shapes in flattened order."""
+        model: Model
+        """Model supplying the actual joint log density."""
+        split: SplitConfig
+        """Training observations to substitute into that density."""
+        warm_start: bool
+        """Start each inner solve from the committed latent mode."""
 
     def __init__(
         self,

@@ -191,7 +191,8 @@ class Kernel(Protocol[TKernelState, TTransitionInfo, TTuningInfo]):
             Holds the history of the position of the current epoch, i.e., that
             is the position but each leave in the pytree is enhanced by one
             dimension (axis = 0) which represents the time or MCMC iteration.
-            The value may be ``None`` if the class variable :py:attr:`~needs_histroy` is
+            The value may be ``None`` if the class variable
+            :attr:`~liesel.goose.Kernel.needs_history` is
             ``False``.
         """
 
@@ -237,11 +238,12 @@ class Kernel(Protocol[TKernelState, TTransitionInfo, TTuningInfo]):
         Asks the kernel to inspect the warmup history and react to it.
 
         This method is executed once the first non-warmup epoch is encountered and
-        before :meth:`.start_epoch` is called.
+        before :meth:`~liesel.goose.Kernel.start_epoch` is called.
 
         ``tuning_history`` is ``None`` if no tuning has happened prior to the first
         non-warmup epoch. Otherwise ``tuning_history`` has the same structure as
-        returned from :meth:`.tune` but each leaf has an additional dimension. The first
+        returned from :meth:`~liesel.goose.Kernel.tune` but each leaf has an additional
+        dimension. The first
         dimension refers to the n-the tuning.
 
         Must be jittable.
@@ -255,13 +257,13 @@ class Kernel(Protocol[TKernelState, TTransitionInfo, TTuningInfo]):
 class GeneratedQuantity(Protocol):
     """
     Protocol representing the data structure for quantities generated via
-    implmentations of :class:`.QuantityGenerator`.
+    implmentations of ``QuantityGenerator``.
 
     Concrete implementations should add additional attributes.
 
     The attribute ``error_code`` is reserved to store integers that map to error
     messages via the error book provided in the implmentation of
-    :class:`.QuantityGenerator`.
+    ``QuantityGenerator``.
     """
 
     error_code: int

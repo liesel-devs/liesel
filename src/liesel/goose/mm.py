@@ -24,7 +24,7 @@ def tune_inv_mm_diag(history: Position) -> Array:
     ----------
     history
             Holds the history of the position. It is to be understood as in
-            :meth:`liesel.goose.types.Kernel.tune`.
+            :meth:`~liesel.goose.Kernel.tune`.
     """
 
     matrix = _history_to_matrix(history)
@@ -44,7 +44,7 @@ def tune_inv_mm_full(history: Position) -> Array:
     ----------
     history
             Holds the history of the position. It is to be understood as in
-            :meth:`liesel.goose.types.Kernel.tune`.
+            :meth:`~liesel.goose.Kernel.tune`.
 
     """
 
