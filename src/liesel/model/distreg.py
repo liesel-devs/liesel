@@ -11,6 +11,7 @@ import jax.numpy as jnp
 import jax.random
 import numpy as np
 import tensorflow_probability.substrates.jax.distributions as tfd
+from numpy.typing import ArrayLike
 
 from liesel.distributions import MultivariateNormalDegenerate
 from liesel.goose import EngineBuilder, GibbsKernel, IWLSKernel
@@ -19,7 +20,6 @@ from liesel.option import Option
 
 from .model import GraphBuilder, Model
 from .nodes import (
-    Array,
     Bijector,
     Dist,
     Distribution,
@@ -71,7 +71,7 @@ class DistRegBuilder(GraphBuilder):
 
     def add_p_smooth(
         self,
-        X: Array,
+        X: ArrayLike,
         m: float,
         s: float,
         predictor: str,
@@ -133,8 +133,8 @@ class DistRegBuilder(GraphBuilder):
 
     def add_np_smooth(
         self,
-        X: Array,
-        K: Array,
+        X: ArrayLike,
+        K: ArrayLike,
         a: float,
         b: float,
         predictor: str,
@@ -166,7 +166,7 @@ class DistRegBuilder(GraphBuilder):
         a_var = Var.new_value(a, name=name + "_a")
         b_var = Var.new_value(b, name=name + "_b")
 
-        rank_var = Var.new_value(float(matrix_rank(K)), name=name + "_rank")
+        rank_var = Var.new_value(float(matrix_rank(np.asarray(K))), name=name + "_rank")
         tau2_distribution = Dist(tfd.InverseGamma, concentration=a_var, scale=b_var)
         tau2_var = Var.new_param(10000.0, tau2_distribution, name + "_tau2")
 
@@ -261,7 +261,7 @@ class DistRegBuilder(GraphBuilder):
         return self
 
     def add_response(
-        self, response: Array, distribution: type[Distribution]
+        self, response: ArrayLike, distribution: type[Distribution]
     ) -> DistRegBuilder:
         """
         Adds the response to the model builder.

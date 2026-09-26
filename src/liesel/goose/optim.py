@@ -1,7 +1,7 @@
 import warnings
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, NotRequired, TypedDict
+from typing import Any, NotRequired, TypedDict, cast
 
 import jax
 import jax.experimental
@@ -9,27 +9,28 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 import pandas as pd
+from jax.typing import ArrayLike
 from tqdm import tqdm
 
 from ..model import Model
 from .interface import LieselInterface
-from .types import Array, KeyArray, ModelState, Position, PositionInput
+from .types import KeyArray, ModelState, Position, PositionInput, PyTree
 
 
-def array_to_dict(
-    x: Array, names_prefix: str = "x", prefix_1d: bool = False
-) -> dict[str, Array]:
+def array_to_dict[T: ArrayLike](
+    x: T, names_prefix: str = "x", prefix_1d: bool = False
+) -> dict[str, T]:
     """Turns a 2d-array into a dict."""
 
-    if isinstance(x, float) or x.ndim == 1:
+    if np.ndim(x) <= 1:
         if prefix_1d:
             return {f"{names_prefix}0": x}
         else:
             return {names_prefix: x}
-    elif x.ndim == 2:
-        return {f"{names_prefix}{i}": x[:, i] for i in range(x.shape[-1])}
+    elif isinstance(x, (jax.Array, np.ndarray)) and np.ndim(x) == 2:
+        return {f"{names_prefix}{i}": cast(T, x[:, i]) for i in range(np.shape(x)[-1])}
     else:
-        raise ValueError(f"x should have ndim <= 2, but it has x.ndim={x.ndim}")
+        raise ValueError(f"x should have ndim <= 2, but it has x.ndim={np.ndim(x)}")
 
 
 class OptimHistory(TypedDict):
@@ -51,7 +52,7 @@ class OptimResult:
     """Position dictionary of optimized parameters with their final values."""
     iteration: int
     """Iteration counter of the last iteration."""
-    iteration_best: int
+    iteration_best: int | jax.Array
     """Iteration counter of the iteration with lowest loss."""
     history: OptimHistory
     """History of loss evaluations and, if applicable, intermediate position values."""
@@ -63,7 +64,7 @@ class OptimResult:
     """Number of validation observations, or ``1`` if batching was disabled."""
 
 
-def _find_observed(model: Model) -> dict[str, Array]:
+def _find_observed(model: Model) -> dict[str, jax.Array]:
     obs = {
         var_.name: jnp.array(var_.value)
         for var_ in model.vars.values()
@@ -72,14 +73,16 @@ def _find_observed(model: Model) -> dict[str, Array]:
     return obs
 
 
-def batched_nodes(nodes: Mapping[str, Array], batch_indices: Array) -> dict[str, Array]:
+def batched_nodes(
+    nodes: PositionInput, batch_indices: ArrayLike | None
+) -> dict[str, PyTree]:
     """Returns a subset of the model state using the given batch indices."""
     return jax.tree_util.tree_map(lambda x: x[batch_indices, ...], dict(nodes))
 
 
 def _generate_batch_indices(
     key: KeyArray, n: int, batch_size: int, shuffle: bool = True
-) -> Array:
+) -> jax.Array:
     n_full_batches = n // batch_size
     if shuffle:
         indices = jax.random.permutation(key, n)
@@ -196,11 +199,11 @@ class Stopper:
         if self.rtol < 0:
             raise ValueError("rtol must be non-negative.")
 
-    def stop_early(self, i: int | Array, loss_history: Array):
+    def stop_early(self, i: int | jax.Array, loss_history: ArrayLike) -> jax.Array:
         p = self.patience
         lower = jnp.max(jnp.array([i - p + 1, 0]))
         recent_history = jax.lax.dynamic_slice(
-            loss_history, start_indices=(lower,), slice_sizes=(p,)
+            jnp.asarray(loss_history), start_indices=(lower,), slice_sizes=(p,)
         )
 
         best_loss_in_recent = jnp.min(recent_history)
@@ -220,21 +223,23 @@ class Stopper:
         stop = abs_improvement_is_neglectable | rel_improvement_is_neglectable
         return stop & current_i_is_after_patience
 
-    def stop_now(self, i: int | Array, loss_history: Array):
+    def stop_now(self, i: int | jax.Array, loss_history: ArrayLike) -> jax.Array:
         """Whether optimization should stop now."""
         stop_early = self.stop_early(i=i, loss_history=loss_history)
         stop_max_iter = i >= (self.max_iter - 1)
 
         return stop_early | stop_max_iter
 
-    def continue_(self, i: int | Array, loss_history: Array):
+    def continue_(self, i: int | jax.Array, loss_history: ArrayLike) -> jax.Array:
         """
         Whether optimization should continue (inverse of
         :meth:`~liesel.goose.Stopper.stop_now`).
         """
         return ~self.stop_now(i=i, loss_history=loss_history)
 
-    def which_best_in_recent_history(self, i: int, loss_history: Array):
+    def which_best_in_recent_history(
+        self, i: int, loss_history: ArrayLike
+    ) -> jax.Array:
         """
         Identifies the index of the best observation in the recent loss window.
 
@@ -245,7 +250,7 @@ class Stopper:
         """
         p = self.patience
         recent_history = jax.lax.dynamic_slice(
-            loss_history, start_indices=(i - p + 1,), slice_sizes=(p,)
+            jnp.asarray(loss_history), start_indices=(i - p + 1,), slice_sizes=(p,)
         )
         imin = jnp.argmin(recent_history)
         return i - self.patience + imin + 1
@@ -539,7 +544,9 @@ def optim_flat(
     likelihood_scalar_validation = n_train / n_validation
 
     def _batched_neg_log_prob(
-        position: Position, model_state: ModelState, batch_indices: Array | None = None
+        position: Position,
+        model_state: ModelState,
+        batch_indices: jax.Array | None = None,
     ):
         batched_observed = batched_nodes(observed, batch_indices)
         position = Position(position | batched_observed)
@@ -558,7 +565,9 @@ def optim_flat(
 
         return nlp
 
-    def _neg_log_prob_train(position: Position, model_state: ModelState) -> Array:
+    def _neg_log_prob_train(
+        position: Position, model_state: ModelState
+    ) -> float | np.number | jax.Array:
         updated_state = interface_train.update_state(position, model_state)
         nlp = -updated_state["_model_log_prob"].value
         if scale_loss:
@@ -566,7 +575,9 @@ def optim_flat(
 
         return nlp
 
-    def _neg_log_prob_validation(position: Position, model_state: ModelState) -> Array:
+    def _neg_log_prob_validation(
+        position: Position, model_state: ModelState
+    ) -> float | np.number | jax.Array:
         updated_state = interface_validation.update_state(position, model_state)
         log_lik = likelihood_scalar_validation * updated_state["_model_log_lik"].value
         log_prior = updated_state["_model_log_prior"].value
@@ -577,7 +588,9 @@ def optim_flat(
 
         return nlp
 
-    neg_log_prob_validation: Callable[[Position, ModelState], Array]
+    neg_log_prob_validation: Callable[
+        [Position, ModelState], float | np.number | jax.Array
+    ]
     if model_validation is model_train:
         neg_log_prob_validation = _neg_log_prob_train
     else:
@@ -847,7 +860,7 @@ def history_to_df(history: Mapping[str, Any]) -> pd.DataFrame:
     Turns :attr:`liesel.goose.OptimResult.history <liesel.goose.OptimResult.history>`
     into a ``pandas.DataFrame``.
     """
-    data: dict[str, Array] = {}
+    data: dict[str, ArrayLike] = {}
 
     position_history = history.get("position", None)
     tracked_history = history.get("tracked", None)

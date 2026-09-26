@@ -46,6 +46,7 @@ from .types import (
     ModelState,
     Position,
     PositionInput,
+    PyTree,
     TransitionInfo,
     TuningInfo,
 )
@@ -83,6 +84,7 @@ __all__ = [
     "OptimResult",
     "Position",
     "PositionInput",
+    "PyTree",
     "RWKernel",
     "SamplesSummary",
     "SamplingResults",

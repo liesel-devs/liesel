@@ -9,9 +9,10 @@ from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, TypeVar
 
 import jax
+import numpy as np
 from jax.typing import ArrayLike
 
-from ..types import Position, PositionInput
+from ..types import Position, PositionInput, PyTree
 
 if TYPE_CHECKING:
     from .epoch import EpochState
@@ -24,14 +25,15 @@ if TYPE_CHECKING:
 
 # simple type aliases
 
-PyTree = Any
 Array = Any
-type Scalar = float | jax.Array
+"""Deprecated compatibility alias for Any; use PyTree or an array-specific type."""
+type Scalar = float | np.number | np.ndarray | jax.Array
+"""A numerical scalar, including a zero-dimensional NumPy or JAX array."""
 
 ModelState = PyTree
 KernelState = PyTree
 KeyArray = Any
-JitterFunction = Callable[[KeyArray, Array], Array]
+JitterFunction = Callable[[KeyArray, PyTree], PyTree]
 JitterFunctions = dict[str, JitterFunction]
 
 

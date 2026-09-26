@@ -10,28 +10,33 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 import jax.numpy.linalg as jnpla
+import numpy as np
 import tensorflow_probability.substrates.jax.distributions as tfd
+from jax.typing import ArrayLike
+from numpy.typing import ArrayLike as NumpyArrayLike
 from tensorflow_probability.python.internal import reparameterization
 from tensorflow_probability.substrates.jax import tf2jax as tf
 
 Array = Any
+"""Deprecated compatibility alias for Any; use an array-specific type."""
 
 
-def _rank(eigenvalues: Array, tol: float = 1e-6) -> Array | float:
+def _rank(eigenvalues: ArrayLike, tol: float = 1e-6) -> jax.Array:
     """
     Computes the rank of a matrix based on the provided eigenvalues. The rank is taken
     to be the number of non-zero eigenvalues.
 
     Can handle batches.
     """
+    eigenvalues = jnp.asarray(eigenvalues)
     mask = eigenvalues > tol
     rank = jnp.sum(mask, axis=-1)
     return rank
 
 
 def _log_pdet(
-    eigenvalues: Array, rank: Array | float | None = None, tol: float = 1e-6
-) -> Array | float:
+    eigenvalues: ArrayLike, rank: ArrayLike | None = None, tol: float = 1e-6
+) -> jax.Array:
     """
     Computes the log of the pseudo-determinant of a matrix based on the provided
     eigenvalues. If the rank is provided, it is used to select the non-zero eigenvalues.
@@ -41,10 +46,11 @@ def _log_pdet(
 
     Can handle batches.
     """
+    eigenvalues = jnp.asarray(eigenvalues)
     if rank is None:
         mask = eigenvalues > tol
     else:
-        max_index = eigenvalues.shape[-1] - rank
+        max_index = eigenvalues.shape[-1] - jnp.asarray(rank)
 
         def fn(i, x):
             return x.at[..., i].set(i >= max_index)
@@ -159,10 +165,10 @@ class MultivariateNormalDegenerate(tfd.Distribution):
 
     def __init__(
         self,
-        loc: Array,
-        prec: Array,
-        rank: Array | int | None = None,
-        log_pdet: Array | float | None = None,
+        loc: NumpyArrayLike,
+        prec: ArrayLike,
+        rank: ArrayLike | None = None,
+        log_pdet: ArrayLike | None = None,
         validate_args: bool = False,
         allow_nan_stats: bool = True,
         name: str = "MultivariateNormalDegenerate",
@@ -175,7 +181,10 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         self._log_pdet = log_pdet
 
         # necessary for correct broadcasting over event size
-        loc = jnp.atleast_1d(loc)
+        loc = jnp.atleast_1d(jnp.asarray(loc))
+
+        if not isinstance(prec, (jax.Array, np.ndarray)):
+            prec = jnp.asarray(prec)
 
         if not prec.shape[-2] == prec.shape[-1]:
             raise ValueError(
@@ -212,11 +221,11 @@ class MultivariateNormalDegenerate(tfd.Distribution):
     @classmethod
     def from_penalty(
         cls,
-        loc: Array,
-        var: Array,
-        pen: Array,
-        rank: Array | int | None = None,
-        log_pdet: Array | float | None = None,
+        loc: NumpyArrayLike,
+        var: ArrayLike,
+        pen: ArrayLike,
+        rank: ArrayLike | None = None,
+        log_pdet: ArrayLike | None = None,
         validate_args: bool = False,
         allow_nan_stats: bool = True,
         name: str = "MultivariateNormalDegenerate",
@@ -268,6 +277,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         arguments.
         """
 
+        pen = jnp.asarray(pen)
         prec = pen / jnp.expand_dims(var, axis=(-2, -1))
 
         if rank is None or log_pdet is None:
@@ -275,7 +285,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
             rank = _rank(evals) if rank is None else rank
             log_pdet = _log_pdet(evals, rank=rank) if log_pdet is None else log_pdet
 
-        log_pdet_prec = log_pdet - rank * jnp.log(var)
+        log_pdet_prec = jnp.asarray(log_pdet) - jnp.asarray(rank) * jnp.log(var)
 
         mvnd = cls(
             loc=loc,
@@ -292,11 +302,11 @@ class MultivariateNormalDegenerate(tfd.Distribution):
     @classmethod
     def from_penalty_smooth(
         cls,
-        loc: Array,
-        smooth: Array,
-        pen: Array,
-        rank: Array | int | None = None,
-        log_pdet: Array | float | None = None,
+        loc: NumpyArrayLike,
+        smooth: ArrayLike,
+        pen: ArrayLike,
+        rank: ArrayLike | None = None,
+        log_pdet: ArrayLike | None = None,
         validate_args: bool = False,
         allow_nan_stats: bool = True,
         name: str = "MultivariateNormalDegenerate",
@@ -348,6 +358,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         arguments.
         """
 
+        pen = jnp.asarray(pen)
         prec = pen * jnp.expand_dims(smooth, axis=(-2, -1))
 
         if rank is None or log_pdet is None:
@@ -355,7 +366,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
             rank = _rank(evals) if rank is None else rank
             log_pdet = _log_pdet(evals, rank=rank) if log_pdet is None else log_pdet
 
-        log_pdet_prec = log_pdet + rank * jnp.log(smooth)
+        log_pdet_prec = jnp.asarray(log_pdet) + jnp.asarray(rank) * jnp.log(smooth)
 
         mvnd = cls(
             loc=loc,
@@ -370,12 +381,12 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         return mvnd
 
     @cached_property
-    def eig(self) -> tuple[Array, Array]:
+    def eig(self) -> tuple[jax.Array, jax.Array]:
         """Eigenvalues and eigenvectors of the distribution's precision matrices."""
         return jnpla.eigh(self._prec)
 
     @cached_property
-    def _sqrt_pcov(self) -> Array:
+    def _sqrt_pcov(self) -> jax.Array:
         """
         Square roots of the distribution's pseudo-covariance matrices.
 
@@ -395,7 +406,9 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         return evecs @ diags
 
     @cached_property
-    def rank(self) -> Array | float:
+    def rank(
+        self,
+    ) -> int | float | complex | np.number | np.bool_ | np.ndarray | jax.Array:
         """Ranks of the distribution's precision matrices."""
         if self._rank is not None:
             return self._rank
@@ -403,7 +416,9 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         return _rank(evals, tol=self._tol)
 
     @cached_property
-    def log_pdet(self) -> Array | float:
+    def log_pdet(
+        self,
+    ) -> int | float | complex | np.number | np.bool_ | np.ndarray | jax.Array:
         """Log-pseudo-determinants of the distribution's precision matrices."""
         if self._log_pdet is not None:
             return self._log_pdet
@@ -411,16 +426,16 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         return _log_pdet(evals, self.rank, tol=self._tol)
 
     @property
-    def prec(self) -> Array:
+    def prec(self) -> jax.Array:
         """Precision matrices."""
         return self._prec
 
     @property
-    def loc(self) -> Array:
+    def loc(self) -> jax.Array:
         """Locations."""
         return self._loc
 
-    def _sample_n(self, n, seed=None, **kwargs) -> Array:
+    def _sample_n(self, n, seed=None, **kwargs) -> jax.Array:
         if seed is None:
             raise ValueError("Must provide a JAX PRNG key as `seed`.")
 
@@ -439,8 +454,8 @@ class MultivariateNormalDegenerate(tfd.Distribution):
 
         return centered_samples + loc
 
-    def _log_prob(self, x: Array) -> Array | float:
-        x = x - self._loc
+    def _log_prob(self, x: ArrayLike) -> jax.Array:
+        x = jnp.asarray(x) - self._loc
         # necessary for correct broadcasting in the quadratic form
         x = jnp.expand_dims(x, axis=-2)
         x_T = jnp.swapaxes(x, -2, -1)

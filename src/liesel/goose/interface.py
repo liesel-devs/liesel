@@ -19,14 +19,14 @@ LogProbFunction = Callable[[ModelState], Scalar]
 @usedocs(ModelInterface)
 class DictInterface:
     """
-    A model interface for a model state represented by a ``dict[str, Array]`` and a
+    A model interface for a model state represented by a ``dict[str, PyTree]`` and a
     corresponding log-probability function.
 
     Parameters
     ----------
     log_prob_fn
         A function that takes a model state and returns the log-probability. The
-        model state is expected to be a ``dict[str, Array]``.
+        model state is expected to be a ``dict[str, PyTree]``.
 
     See Also
     --------
@@ -130,7 +130,7 @@ class DataclassInterface:
     See Also
     --------
     .DictInterface : A model interface for a model state represented by a
-        ``dict[str, Array]`` and a corresponding log-probability function.
+        ``dict[str, PyTree]`` and a corresponding log-probability function.
     .LieselInterface : A model interface for a Liesel :class:`~liesel.model.Model`.
 
     Examples
@@ -248,7 +248,7 @@ class LieselInterface:
     See Also
     --------
     .DictInterface : A model interface for a model state represented by a
-        ``dict[str, Array]`` and a corresponding log-probability function.
+        ``dict[str, PyTree]`` and a corresponding log-probability function.
     .DataclassInterface : A model interface for a model state represented by a
         :obj:`~dataclasses.dataclass` and a corresponding log-probability function.
     .LieselInterface : A model interface for a Liesel :class:`~liesel.model.Model`.
@@ -336,7 +336,7 @@ class NamedTupleInterface:
     See Also
     --------
     .DictInterface : A model interface for a model state represented by a
-        ``dict[str, Array]`` and a corresponding log-probability function.
+        ``dict[str, PyTree]`` and a corresponding log-probability function.
     .DataclassInterface : A model interface for a model state represented by a
         :obj:`~dataclasses.dataclass` and a corresponding log-probability function.
     .LieselInterface : A model interface for a Liesel :class:`~liesel.model.Model`.

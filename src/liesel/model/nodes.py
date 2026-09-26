@@ -26,6 +26,7 @@ from typing import (
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pandas as pd
 import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as jd
@@ -33,7 +34,7 @@ import tensorflow_probability.substrates.numpy.bijectors as nb
 import tensorflow_probability.substrates.numpy.distributions as nd
 
 from ..distributions.nodist import NoDistribution
-from ..types import Position, PositionInput
+from ..types import Position, PositionInput, PyTree
 from ._mapping import _KeyCompletableMapping, _KeyCompletableProperty
 from .names import random_name
 from .viz import plot_nodes, plot_vars
@@ -65,6 +66,7 @@ __all__ = [
 ]
 
 type Array = Any
+"""Deprecated compatibility alias for Any; use PyTree or an array-specific type."""
 type Distribution = jd.Distribution | nd.Distribution
 type Bijector = jb.Bijector | nb.Bijector
 
@@ -1348,7 +1350,7 @@ class Dist(Node):
         return dist
 
     @property
-    def log_prob(self) -> Array:
+    def log_prob(self) -> float | np.number | np.ndarray | jax.Array:
         """The log-probability of the distribution."""
         return self.value
 
@@ -2917,7 +2919,7 @@ class Var:
         return not isinstance(self._dist_node, NoDist)
 
     @property
-    def log_prob(self) -> Array:
+    def log_prob(self) -> float | np.number | np.ndarray | jax.Array:
         """
         The log-probability of the variable.
 
@@ -3302,7 +3304,7 @@ class Var:
         samples: PositionInput,
         newdata: PositionInput | None = None,
         chunk_size: int | None = 64,
-    ) -> Array:
+    ) -> PyTree:
         """
         Returns an array of predictions for this variable.
 
@@ -3879,7 +3881,7 @@ class Group:
         """The group's name."""
         return self._name
 
-    def value_from(self, model_state: LieselModelStateInput, name: str) -> Array:
+    def value_from(self, model_state: LieselModelStateInput, name: str) -> PyTree:
         """
         Retrieves the value of a node or variable that is a member of the group from
         a model state.
