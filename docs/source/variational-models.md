@@ -9,18 +9,26 @@ mystnb:
   execution_raise_on_error: true
 ---
 
-# Build a variational model
+# Choose a variational family
 
-Use a Liesel {class}`~liesel.model.Model` as the variational distribution when its
-parameters or conditional dependencies are easier to express as a graph. The
-Gaussian builders are optional: {class}`~liesel.optim.NegElboLoss` accepts a target
-model and a variational model directly.
+Start with {class}`~liesel.optim.VDist` to approximate a selected group of target
+parameters, or combine several groups with {class}`~liesel.optim.CompositeVDist`.
+These helpers build the variational model, create its trainable parameters, and
+map draws back to the target's names and shapes. They let you choose which
+posterior dependencies the family can represent.
+
+This guide assumes the fitting and sampling workflow in
+{doc}`variational-inference`. It first builds Gaussian families for a regression
+model. The {ref}`advanced graph example <vi-custom-graph>` then shows how to use
+an ordinary Liesel {class}`~liesel.model.Model` for conditional distributions that
+you want to define directly.
 
 ## Define the target
 
 We fit an intercept and slope to five measurements with known observation scale.
 Both parameters are on the real line. The data make the intercept and slope
-correlated, so the variational family will allow dependence between their draws.
+correlated, so a dense Gaussian can represent dependence that an independent
+family omits.
 
 ```{code-cell} python
 import jax
@@ -61,7 +69,186 @@ mystnb:
 model.plot()
 ```
 
-## Define conditional draws
+(vi-gaussian-shortcuts)=
+
+## Use Gaussian loss shortcuts
+
+When one Gaussian family should cover **all** target parameters, construct the
+loss directly. Both shortcuts build a `VDist` internally and connect it to the
+negative ELBO; no separate `build()` call is needed.
+
+Use {meth}`~liesel.optim.NegElboLoss.mvn_diag` for independent components, each
+with its own learned mean and standard deviation:
+
+```{code-cell} python
+diagonal_loss = opt.NegElboLoss.mvn_diag(
+    model,
+    scale_diag=0.5,
+    nsamples=16,
+    scale=True,
+)
+```
+
+Use {meth}`~liesel.optim.NegElboLoss.mvn_tril` to learn correlations as well:
+
+```{code-cell} python
+correlated_loss = opt.NegElboLoss.mvn_tril(
+    model,
+    scale_tril=0.5,
+    nsamples=16,
+    scale=True,
+)
+```
+
+`scale_diag` contains initial standard deviations. `scale_tril` is an initial
+lower Cholesky factor: its covariance is `scale_tril @ scale_tril.T`. For either
+shortcut, the scalar `0.5` starts with SD 0.5 in every component. The dense family
+starts with zero correlations but can learn them; the diagonal family cannot.
+A dense factor takes quadratic storage in the total number of scalar components,
+whereas the diagonal scale takes linear storage.
+
+Both losses include `alpha` and `beta` here, using their current target values as
+initial means. Pass either loss to the same fitting and sampling workflow in
+{doc}`variational-inference`. The built helper is accessible as `loss.vdist`,
+and its variational graph as `loss.q`. The Boolean `scale=True` normalizes the
+training loss; it is independent of the Gaussian's initial scale.
+
+Use an explicit `VDist` when selecting a subset of target parameters or supplying
+a custom distribution. Use `CompositeVDist` to choose independent groups, as
+shown below. {meth}`~liesel.optim.NegElboLoss.mvn_blocked` is also available when
+you want exactly one dense block per target parameter: vector components can
+correlate within a parameter, but different parameter names remain independent.
+
+## Build one Gaussian block
+
+A `VDist` governs the target names given in its first argument. One block may
+contain several parameters, including vectors and matrices. Internally it flattens
+their values; its sampling interface restores the original names and shapes.
+Use the names on the unconstrained scale for transformed target parameters.
+
+Choose a Gaussian form according to the dependence you want to represent:
+
+| Builder | Variational family | Dependence within the block |
+| --- | --- | --- |
+| `mvn_diag(scale_diag=...)` | One multivariate Normal with diagonal covariance | None |
+| `mvn_tril(scale_tril=...)` | One multivariate Normal with dense covariance | Learned correlations |
+
+The constructors on `VDist` configure a block; unlike the loss shortcuts above,
+they return the helper itself, not a loss. For independent `alpha` and `beta`, use:
+
+```{code-cell} python
+diagonal = opt.VDist(["alpha", "beta"], model).mvn_diag(scale_diag=0.5).build()
+```
+
+To let the fit learn their correlation, use the same names in a dense block:
+
+```{code-cell} python
+dense = opt.VDist(["alpha", "beta"], model).mvn_tril(scale_tril=0.5).build()
+```
+
+```{code-cell} python
+dense
+```
+
+`mvn_tril` creates the trainable locations and Cholesky factor. The scalar
+`scale_tril=0.5` starts that factor at `0.5 * I`; fitting can learn nonzero
+correlations. Locations start at the current target values, with a separate learned
+mean for each flattened component. A scalar `loc` would instead tie their means;
+use a vector if supplying distinct initial means. See {ref}`vi-initial-scale` for
+choosing scales in your parameter units.
+
+`build()` creates the underlying Liesel model in `dense.q` and returns the same
+helper. Its `parameters` property lists the variational parameter names that
+optimizers adjust, rather than the target names `alpha` and `beta`:
+
+```{code-cell} python
+dense.parameters
+```
+
+You can sample the initial family to inspect its shape before fitting:
+
+```{code-cell} python
+initial_draws = dense.sample(4, seed=jax.random.key(40))
+```
+
+```{code-cell} python
+pd.DataFrame(initial_draws)
+```
+
+Each row contains one draw in the target's representation. These are initial
+variational draws, not draws from a fitted posterior.
+
+## Combine independent blocks
+
+`CompositeVDist` combines initialized `VDist` objects into one variational model.
+It has no `.mvn_diag()` or `.mvn_tril()` constructor of its own: choose the
+distribution on each `VDist` block. Each block may use a different distribution
+or initial scale. Blocks must refer
+to the same target model, and no target name may appear in more than one block.
+Initialize the individual blocks, then call `build()` on the composite:
+
+```{code-cell} python
+alpha_block = opt.VDist(["alpha"], model).mvn_diag(scale_diag=0.5)
+beta_block = opt.VDist(["beta"], model).mvn_diag(scale_diag=0.2)
+blocked = opt.CompositeVDist(alpha_block, beta_block).build()
+```
+
+```{code-cell} python
+blocked
+```
+
+Here `alpha` and `beta` are independent under the variational distribution, even
+though the target posterior correlates them. Fitting can change their means and
+scales but cannot introduce that missing dependence. This is the same family as
+one diagonal Gaussian with separately learned means and scales.
+
+For larger models, a useful compromise is to put related parameters together in
+an `mvn_tril` block and keep other groups in separate blocks. Dense blocks can
+learn dependence within their groups; the composite imposes independence between
+groups. Grouping also limits covariance storage to the individual blocks.
+Independence is a restriction on the family, not a promise to recover the target's
+marginal variances: the negative ELBO determines the best-fitting member.
+
+Cover every parameter whose posterior you want to approximate. Any target
+parameters omitted from the family stay fixed at their current target values;
+Liesel does not silently create extra blocks for them.
+
+## Connect a family to the loss
+
+Both helpers use the same {meth}`~liesel.optim.NegElboLoss.from_vdist` interface.
+It takes the target model, variational model, and draw mapping from the built
+helper:
+
+```{code-cell} python
+dense_loss = opt.NegElboLoss.from_vdist(dense, nsamples=16, scale=True)
+blocked_loss = opt.NegElboLoss.from_vdist(blocked, nsamples=16, scale=True)
+```
+
+Pass either object as `loss` to `LieselVI(model, ...)`, following
+{doc}`variational-inference`. After fitting, use
+`loss.approximate_joint_posterior(result).sample(..., seed=key)` for draws at the
+fitted parameters. Calling `dense.sample(...)` or `blocked.sample(...)` without
+an `at_position` still uses that helper's current model values, which fitting
+does not update.
+
+For a custom distribution over one flattened block, use
+{meth}`~liesel.optim.VDist.init` with an `lsl.Dist` and mark its free variational
+parameters with `lsl.Var.new_param`. The API reference includes an example.
+The sampled distribution must support fully reparameterized draws. When the
+variational distribution itself needs conditional dependencies, build its graph
+directly as below.
+
+(vi-custom-graph)=
+
+## Advanced: build a custom graph
+
+The helpers cover independent blocks and their internal distributions. Building
+an ordinary Liesel model gives you direct control over conditional dependencies
+and shared variational parameters. This requires distinguishing the target's
+random quantities from the free parameters that describe their variational
+distribution, and checking the density and draw mapping yourself.
+
+### Define conditional draws
 
 The variational model first draws `alpha`, then draws `beta` conditionally on it.
 A learned coefficient controls their dependence. Observed variables in `q` are
@@ -102,7 +289,7 @@ mystnb:
   image:
     alt: "Variational graph: alpha is drawn first, and beta's mean depends on alpha through a learned coefficient. Strong free inputs control both draws."
 ---
-q.plot(width=8, height=4, legend=False)
+q.plot(width=8, height=7, legend=False)
 ```
 
 Mark strong, directly settable inputs as parameters. Derived scales and conditional
@@ -120,7 +307,7 @@ ignored by the default `regularize_q_prior=False`, so the Normal prior attached 
 the objective; see {ref}`vi-q-prior-penalties`. Target priors on `alpha` and `beta`
 remain included.
 
-## Fit and sample
+### Fit and sample
 
 Here the observed names and shapes in `q` already match the target parameters,
 so the identity mapping suffices. An explicit loss must belong to the same target
@@ -133,7 +320,7 @@ result = opt.LieselVI(
     model,
     loss=loss,
     optimizers=optax.adam(0.01),
-    loss_monitor=opt.EmaTrainLossMonitor(2.0),
+    loss_monitor=opt.EmaTrainLossMonitor(effective_window=20.0),
     stopper=opt.Stopper(epochs=500, patience=500),
     seed=42,
     show_progress=False,
@@ -169,7 +356,7 @@ and {doc}`optimizer-customization` for separate optimizer blocks.
 
 (vi-q-prior-penalties)=
 
-## Choose q-parameter penalties
+### Choose q-parameter penalties
 
 By default, {class}`~liesel.optim.NegElboLoss` optimizes the ordinary ELBO:
 the expected target log likelihood **and target log prior**, plus the entropy of
@@ -204,7 +391,7 @@ To optimize this penalized objective, pass `regularized_loss` as `loss` to
 `LieselVI`. An explicit loss keeps its own setting; a wrapper flag does not
 modify it. Target-model priors are included in both rows.
 
-## Map names and shapes
+### Map names and shapes
 
 For different names or a flattened block, supply `q_to_p` to `NegElboLoss`.
 The mapping operates on one draw; Liesel applies it across sample axes. Return
