@@ -42,7 +42,8 @@ def mh_step(
 
     Returns
     -------
-    A tuple of a :class:`~liesel.goose.TransitionInfo` and a :class:`.ModelState` (= a
+    A tuple of a :class:`~liesel.goose.TransitionInfo` and a
+    :attr:`~liesel.goose.ModelState` (= a
     pytree).
     """
 

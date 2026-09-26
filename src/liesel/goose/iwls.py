@@ -40,7 +40,7 @@ from .types import Array, KeyArray, ModelState, Position, Scalar
 class IWLSKernelState:
     """
     A dataclass for the state of a :class:`~liesel.goose.IWLSKernel`, implementing the
-    :class:`.liesel.goose.da.DAKernelState` protocol.
+    :class:`~liesel.goose.da.DAKernelState` protocol.
     """
 
     step_size: Scalar
@@ -64,7 +64,7 @@ class IWLSKernel(
     """
     An IWLS kernel with dual averaging and an (optional) user-defined function for
     computing the Cholesky decomposition of the Fisher information matrix, implementing
-    the :class:`.liesel.goose.types.Kernel` protocol.
+    the :class:`~liesel.goose.Kernel` protocol.
 
     Parameters
     ----------
@@ -101,7 +101,7 @@ class IWLSKernel(
     Notes
     -----
     For more information on step size tuning via dual averaging,
-    see :func:`.da_step` and :class:`.DAKernelState`.
+    see :func:`~liesel.goose.da.da_step` and :class:`~liesel.goose.da.DAKernelState`.
     """
 
     error_book: ClassVar[dict[int, str]] = {

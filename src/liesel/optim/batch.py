@@ -2442,7 +2442,7 @@ class BatchManager:
         Each child :class:`~liesel.optim.Batches` object slices the entries named in its
         own
         ``position_keys``. The resulting partial positions are merged into a single
-        :class:`Position`.
+        ``Position``.
 
         Parameters
         ----------

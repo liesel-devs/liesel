@@ -910,7 +910,7 @@ class OptimResult:
     positions, and small metadata about the run. Choose explicitly between
     ``position_final`` and ``position_min_monitor`` when using fitted parameters.
     Accessing an unavailable position or one containing NaN or infinity raises
-    :class:`RuntimeError`. History, status, and diagnostics remain available.
+    :exc:`RuntimeError`. History, status, and diagnostics remain available.
     It also provides plotting methods for losses and saved parameter histories.
 
     Parameters
@@ -1085,7 +1085,7 @@ class OptimResult:
     def position_final(self) -> Position:
         """Terminal parameters, including a finite interrupted partial epoch.
 
-        Raises :class:`RuntimeError` if any parameter contains NaN or infinity.
+        Raises :exc:`RuntimeError` if any parameter contains NaN or infinity.
         """
         return self._checked_position(self._position_final, "position_final")
 
@@ -1094,7 +1094,7 @@ class OptimResult:
         """Parameters saved at the smallest finite monitoring loss.
 
         An earlier best position remains available after a later failure.
-        Raises :class:`RuntimeError` if no finite monitoring loss was recorded,
+        Raises :exc:`RuntimeError` if no finite monitoring loss was recorded,
         or if the saved parameters contain NaN or infinity.
         """
         if self._position_min_monitor is None:

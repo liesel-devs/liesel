@@ -61,7 +61,8 @@ class DAKernelState(Protocol):
 
 def da_init(kernel_state: DAKernelState) -> None:
     """
-    Initializes (or resets) a :class:`.DAKernelState`. Returns ``None`` and should be
+    Initializes (or resets) a :class:`~liesel.goose.da.DAKernelState`. Returns ``None``
+    and should be
     called for the side effect on the ``kernel_state`` argument.
     """
 
@@ -78,13 +79,15 @@ def da_step(
     t0: int = 10,
 ) -> None:
     """
-    Performs an dual averaging update on a :class:`.DAKernelState`. Returns ``None``
+    Performs an dual averaging update on a :class:`~liesel.goose.da.DAKernelState`.
+    Returns ``None``
     and should be called for the side effect on the ``kernel_state`` argument.
 
     Parameters
     ----------
     kernel_state
-        A kernel state implementing the :class:`.DAKernelState` protocol.
+        A kernel state implementing the :class:`~liesel.goose.da.DAKernelState`
+        protocol.
     acceptance_prob
         The acceptance probability of this MCMC iteration.
     time_in_epoch
@@ -132,7 +135,8 @@ def da_step(
 
 def da_finalize(kernel_state: DAKernelState) -> None:
     """
-    Sets the new step size in a :class:`.DAKernelState`. Returns ``None`` and should be
+    Sets the new step size in a :class:`~liesel.goose.da.DAKernelState`. Returns
+    ``None`` and should be
     called for the side effect on the ``kernel_state`` argument.
     """
 
