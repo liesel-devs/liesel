@@ -155,6 +155,7 @@ predictive check, as in the basic tutorial.
 ```{toctree}
 :maxdepth: 1
 
+Overview <self>
 variational-models
 Fit a Gaussian family <tutorials/notebooks/11-liesel-vi-basic>
 Fit two data groups <tutorials/notebooks/12-liesel-vi-advanced>
