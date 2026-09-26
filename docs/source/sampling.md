@@ -63,6 +63,7 @@ a default kernel to parameters without one.
 ```{toctree}
 :maxdepth: 1
 
+Overview <self>
 First posterior <tutorials/md/01c-transform>
 NUTS and Gibbs <tutorials/md/01d-gibbs-sampling>
 ```

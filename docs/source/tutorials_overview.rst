@@ -38,6 +38,7 @@ variable selection with PyMC, and measurement-error correction.
 .. toctree::
    :hidden:
 
+   Overview <self>
    tutorials/md/01a-lin-reg
    tutorials/md/01b-model
    tutorials/md/02-ls-reg

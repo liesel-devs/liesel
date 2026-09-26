@@ -7,6 +7,7 @@ posterior interpretation. For the software basics, start with
 ```{toctree}
 :maxdepth: 1
 
+Overview <self>
 GEV regression <tutorials/md/03-gev>
 Compare samplers <tutorials/md/04-mcycle>
 Variable selection with PyMC <tutorials/md/06-pymc>
