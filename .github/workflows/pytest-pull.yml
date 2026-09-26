@@ -41,3 +41,20 @@ jobs:
         # Skip a dedicated group whose test directory does not exist on this branch.
         if: matrix.group.name != 'optim' || hashFiles('tests/optim/**') != ''
         run: uv run pytest ${{ matrix.group.paths }}
+
+  # Stable name for branch protection: require this check instead of the matrix jobs.
+  pytest-pull-summary:
+    name: pytest-pull
+    needs: pytest-pull
+    # Run even when a test job fails; a skipped required check counts as passing.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check test job results
+        run: |
+          if [ "${{ needs.pytest-pull.result }}" != "success" ]; then
+            echo "Test jobs finished with result: ${{ needs.pytest-pull.result }}"
+            exit 1
+          fi
