@@ -47,11 +47,10 @@ jobs:
       - run: uv run python -m sphinx -E -b html -j 3 -W --keep-going docs/source docs/build/html
         env:
           LIESEL_DOCS_EXECUTED: '0'
-      - run: uv run --no-sync python docs/scripts/executed_notebooks.py docs/build/jupyter_execute "$RUNNER_TEMP/docs-bundle"
       - uses: actions/upload-artifact@v7
         with:
           name: docs-bundle-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/docs-bundle
+          path: docs/build/jupyter_execute/**/*.ipynb
           if-no-files-found: error
           retention-days: 1
 

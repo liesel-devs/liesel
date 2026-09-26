@@ -26,12 +26,8 @@ build:
         commit=$(git rev-parse HEAD)
         entry=$(git ls-tree refs/liesel/docs-outputs-pin "outputs/$commit")
         [ -n "$entry" ] || exit 183
-        bundle=$(mktemp -d)
-        git archive --output="$bundle/notebooks.tar" "refs/liesel/docs-outputs-pin:outputs/$commit"
-        mkdir "$bundle/notebooks"
-        tar -xf "$bundle/notebooks.tar" -C "$bundle/notebooks"
-        /usr/bin/python3 docs/scripts/executed_notebooks.py "$bundle/notebooks" docs/source
-        rm -rf "$bundle"
+        git archive "refs/liesel/docs-outputs-pin:outputs/$commit" | tar -x -C docs/source
+        find docs/source -name '*.ipynb' | while IFS= read -r nb; do rm -f "${nb%.ipynb}.md"; done
     post_install:
       - dot -V
       - pip install uv
