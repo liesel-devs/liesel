@@ -45,7 +45,7 @@ jobs:
         run: uv run --no-sync pytest ${{ matrix.pytest-args }} --run-mcmc
 
       - name: Run doctests
-        run: uv run --no-sync pytest ${{ matrix.pytest-args }} --doctest-modules src/liesel
+        run: uv run --no-sync pytest ${{ matrix.pytest-args }} -n 0 --doctest-modules src/liesel
 
   notify-failure:
     needs: pytest-cron
