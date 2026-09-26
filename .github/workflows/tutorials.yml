@@ -27,11 +27,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Graphviz
         run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends graphviz
-      - uses: astral-sh/setup-uv@v5
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
       - name: Install the locked documentation environment
