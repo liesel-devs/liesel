@@ -20,8 +20,6 @@ The examples assume a Gaussian regression `model` with observed `X` and `y`,
 as in the {doc}`first tutorial <tutorials/notebooks/09-liesel-optim-basic>`.
 
 ```{code-cell} ipython3
-:tags: [remove-cell]
-
 import logging
 
 import jax.numpy as jnp
@@ -31,6 +29,10 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.model as lsl
 import liesel.optim as opt
+```
+
+```{code-cell} ipython3
+:tags: [remove-cell]
 
 logging.getLogger("liesel").setLevel(logging.WARNING)
 
