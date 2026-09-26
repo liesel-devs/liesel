@@ -9,13 +9,28 @@ kernelspec:
 
 Extract draws, compute predictions, and save a finished run.
 
+```{code-cell} ipython3
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+import jax
+import jax.numpy as jnp
+import numpy as np
+import pandas as pd
+import tensorflow_probability.substrates.jax.bijectors as tfb
+import tensorflow_probability.substrates.jax.distributions as tfd
+
+import liesel.goose as gs
+import liesel.model as lsl
+```
+
 ## Prepare the example
 
 These examples require the regression `model` and sampling `results` from
 {doc}`tutorials/md/01c-transform`, with `sigma_sq` included in the stored draws.
 
 ```{code-cell} ipython3
-:load: _examples/goose-regression.py
+:load: _examples/goose-regression.py.inc
 :tags: [remove-cell]
 ```
 
@@ -35,10 +50,6 @@ results = gs.LieselMCMC(model).run_for_epochs(
 ## Extract the posterior
 
 ```{code-cell} ipython3
-import pandas as pd
-
-import liesel.goose as gs
-
 samples = results.get_posterior_samples()
 sample_shapes = pd.DataFrame(
     {
@@ -84,9 +95,6 @@ For the tutorial's design matrix variable `X`, construct a grid with the
 same two columns: intercept and covariate.
 
 ```{code-cell} ipython3
-import jax
-import jax.numpy as jnp
-
 x_grid = jnp.linspace(0.0, 1.0, 50)
 X_grid = jnp.column_stack([jnp.ones_like(x_grid), x_grid])
 
@@ -142,9 +150,6 @@ sample dimensions, if requested, precede the posterior chain/draw dimensions.
 ## Save a finished run
 
 ```{code-cell} ipython3
-from pathlib import Path
-from tempfile import TemporaryDirectory
-
 with TemporaryDirectory() as directory:
     path = Path(directory) / "regression-samples.pkl"
     results.pkl_save(path)

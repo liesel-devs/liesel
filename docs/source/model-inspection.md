@@ -20,9 +20,16 @@ before fitting it.
 ## Find inputs
 
 ```{code-cell} ipython3
-:tags: [remove-cell]
+import jax
+import jax.numpy as jnp
+import tensorflow_probability.substrates.jax.distributions as tfd
 
-%run tutorials/notebooks/11-model-building.ipynb
+import liesel.model as lsl
+```
+
+```{code-cell} ipython3
+:load: _examples/model-building.py.inc
+:tags: [remove-cell]
 ```
 
 ```{code-cell} ipython3

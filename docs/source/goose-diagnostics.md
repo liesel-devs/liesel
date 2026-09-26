@@ -9,13 +9,23 @@ kernelspec:
 
 Check sampler errors and chain behavior before interpreting posterior estimates.
 
+```{code-cell} ipython3
+import jax.numpy as jnp
+import numpy as np
+import tensorflow_probability.substrates.jax.bijectors as tfb
+import tensorflow_probability.substrates.jax.distributions as tfd
+
+import liesel.goose as gs
+import liesel.model as lsl
+```
+
 ## Prepare the example
 
 These examples require the regression `model` and sampling `results` from
 {doc}`tutorials/md/01c-transform`, with `sigma_sq` included in the stored draws.
 
 ```{code-cell} ipython3
-:load: _examples/goose-regression.py
+:load: _examples/goose-regression.py.inc
 :tags: [remove-cell]
 ```
 
@@ -35,8 +45,6 @@ results = gs.LieselMCMC(model).run_for_epochs(
 ## Read the summary
 
 ```{code-cell} ipython3
-import liesel.goose as gs
-
 summary = gs.Summary(results, selected=["beta", "sigma_sq"])
 ```
 

@@ -22,14 +22,20 @@ Use `model` from {doc}`tutorials/notebooks/12-model-predictions`, whose mean
 and log-scale coefficients have proper priors:
 
 ```{code-cell} ipython3
-:tags: [remove-cell]
+import jax
+import jax.numpy as jnp
+import tensorflow_probability.substrates.jax.distributions as tfd
 
-%run tutorials/notebooks/12-model-predictions.ipynb
+import liesel.goose as gs
+import liesel.model as lsl
 ```
 
 ```{code-cell} ipython3
-import jax
+:load: _examples/model-predictions.py.inc
+:tags: [remove-cell]
+```
 
+```{code-cell} ipython3
 key = jax.random.key(27)
 key, prior_key = jax.random.split(key)
 prior_draws = model.sample(shape=(6,), seed=prior_key)
@@ -49,8 +55,6 @@ revisiting their scales. Use a fresh split key for another draw.
 For the posterior `samples` from the same tutorial:
 
 ```{code-cell} ipython3
-import jax.numpy as jnp
-
 x_grid = jnp.linspace(-1.0, 1.0, 60)
 
 key, response_key = jax.random.split(key)

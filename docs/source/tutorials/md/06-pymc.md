@@ -38,9 +38,7 @@ JAX use matching precision. This setting applies to this notebook kernel.
 import jax
 
 jax.config.update("jax_enable_x64", True)
-```
 
-```{code-cell} ipython3
 import jax.numpy as jnp
 import numpy as np
 import pandas as pd

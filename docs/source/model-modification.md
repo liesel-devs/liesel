@@ -18,15 +18,20 @@ examples. Make a copy when you want to compare model variants.
 ## Change a value
 
 ```{code-cell} ipython3
-:tags: [remove-cell]
+import jax
+import jax.numpy as jnp
+import numpy as np
+import tensorflow_probability.substrates.jax.distributions as tfd
 
-%run tutorials/notebooks/11-model-building.ipynb
+import liesel.model as lsl
 ```
 
 ```{code-cell} ipython3
-import jax.numpy as jnp
-import numpy as np
+:load: _examples/model-building.py.inc
+:tags: [remove-cell]
+```
 
+```{code-cell} ipython3
 changed = model.copy()
 changed.vars["beta"].value = jnp.array([0.5, 1.5])
 ```
@@ -46,10 +51,6 @@ that points to the original `beta` still belongs to the original model.
 ## Replace a prior
 
 ```{code-cell} ipython3
-import tensorflow_probability.substrates.jax.distributions as tfd
-
-import liesel.model as lsl
-
 new_width = lsl.Var.new_value(1.0, name="new_prior_scale")
 changed.vars["beta"].dist_node["scale"] = new_width
 ```

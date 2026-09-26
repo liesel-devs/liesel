@@ -12,13 +12,24 @@ the other blocks. Goose applies the kernels in sequence within each iteration.
 You can use different methods for different blocks without changing the model's
 priors or likelihood.
 
+```{code-cell} ipython3
+import jax.numpy as jnp
+import numpy as np
+import pandas as pd
+import tensorflow_probability.substrates.jax.bijectors as tfb
+import tensorflow_probability.substrates.jax.distributions as tfd
+
+import liesel.goose as gs
+import liesel.model as lsl
+```
+
 ## Prepare the example
 
 These examples require the regression `model`, including its transformation
 and inference specifications, from {doc}`tutorials/md/01c-transform`.
 
 ```{code-cell} ipython3
-:load: _examples/goose-regression.py
+:load: _examples/goose-regression.py.inc
 :tags: [remove-cell]
 ```
 
@@ -42,10 +53,6 @@ For custom proposals, start with {doc}`tutorials/md/08-custom-kernel`.
 For the regression `model` from {doc}`tutorials/md/01c-transform`:
 
 ```{code-cell} ipython3
-import pandas as pd
-
-import liesel.goose as gs
-
 mcmc = gs.LieselMCMC(model)
 kernel_table = pd.DataFrame(
     [
@@ -87,8 +94,6 @@ block: both coefficients are proposed together.
 To update both variables jointly, give them an explicit shared group:
 
 ```{code-cell} ipython3
-import tensorflow_probability.substrates.jax.distributions as tfd
-
 joint = gs.MCMCSpec(
     gs.NUTSKernel,
     kernel_group="regression",

@@ -11,13 +11,23 @@ Use an {class}`~liesel.goose.EngineBuilder` when you need an explicit schedule
 or want to add kernels yourself. For routine runs, start with
 {doc}`sampling`.
 
+```{code-cell} ipython3
+import jax.numpy as jnp
+import numpy as np
+import tensorflow_probability.substrates.jax.bijectors as tfb
+import tensorflow_probability.substrates.jax.distributions as tfd
+
+import liesel.goose as gs
+import liesel.model as lsl
+```
+
 ## Prepare the example
 
 These examples require the regression `model`, including its transformation
 and inference specifications, from {doc}`tutorials/md/01c-transform`.
 
 ```{code-cell} ipython3
-:load: _examples/goose-regression.py
+:load: _examples/goose-regression.py.inc
 :tags: [remove-cell]
 ```
 
@@ -26,8 +36,6 @@ and inference specifications, from {doc}`tutorials/md/01c-transform`.
 For the `model` from {doc}`tutorials/md/01c-transform`:
 
 ```{code-cell} ipython3
-import liesel.goose as gs
-
 builder = gs.LieselMCMC(model).get_engine_builder(seed=2026, num_chains=4)
 builder.positions_included = ["sigma_sq"]
 
@@ -80,9 +88,6 @@ Goose can also sample a log density represented without a Liesel graph.
 This independent example targets a standard normal variable:
 
 ```{code-cell} ipython3
-import jax.numpy as jnp
-
-
 def log_prob(state):
     return -0.5 * jnp.square(state["x"]).sum()
 

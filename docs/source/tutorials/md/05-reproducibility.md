@@ -11,6 +11,21 @@ Record both the random seed and the computational environment when saving an
 analysis. A seed controls random draws; it does not by itself guarantee identical
 floating-point results across environments.
 
+```{code-cell} ipython3
+import importlib.metadata
+import platform
+
+import jax
+import jax.numpy as jnp
+import numpy as np
+import pandas as pd
+import tensorflow_probability.substrates.jax.bijectors as tfb
+import tensorflow_probability.substrates.jax.distributions as tfd
+
+import liesel.goose as gs
+import liesel.model as lsl
+```
+
 ## PRNG seeding
 
 This example uses the regression model from {doc}`01c-transform`, including its
@@ -18,7 +33,7 @@ kernel assignments and jitter settings. It starts from that model's initial
 state, independently of earlier notebook sessions.
 
 ```{code-cell} ipython3
-:load: ../../_examples/goose-regression.py
+:load: ../../_examples/goose-regression.py.inc
 :tags: [remove-cell]
 ```
 
@@ -46,8 +61,6 @@ When simulating data yourself, split a key for separate draws. Reusing a key
 repeats its random stream; it does not produce an independent replicate.
 
 ```{code-cell} ipython3
-import jax
-
 x_key, noise_key = jax.random.split(jax.random.key(42))
 x = jax.random.normal(x_key, (3,))
 noise = jax.random.normal(noise_key, (3,))
@@ -65,11 +78,6 @@ Capture versions and numerical settings from the environment actually running
 the analysis. Keep the source code and input data alongside this information.
 
 ```{code-cell} ipython3
-import importlib.metadata
-import platform
-
-import pandas as pd
-
 packages = ["liesel", "jax", "jaxlib", "tfp-nightly", "blackjax"]
 environment = {
     "Python": platform.python_version(),

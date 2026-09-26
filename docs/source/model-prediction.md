@@ -23,14 +23,20 @@ These examples use `model` and posterior `samples` from
 standard deviation `sigma` depend on `x` in that model.
 
 ```{code-cell} ipython3
-:tags: [remove-cell]
+import jax
+import jax.numpy as jnp
+import tensorflow_probability.substrates.jax.distributions as tfd
 
-%run tutorials/notebooks/12-model-predictions.ipynb
+import liesel.goose as gs
+import liesel.model as lsl
 ```
 
 ```{code-cell} ipython3
-import jax.numpy as jnp
+:load: _examples/model-predictions.py.inc
+:tags: [remove-cell]
+```
 
+```{code-cell} ipython3
 x_grid = jnp.linspace(-1.0, 1.0, 60)
 predicted = model.predict(
     samples,
@@ -71,8 +77,6 @@ as above operate on a copied parental submodel.
 ## Summarize predictions
 
 ```{code-cell} ipython3
-import liesel.goose as gs
-
 summary = gs.SamplesSummary(
     predicted,
     quantiles=(0.05, 0.95),

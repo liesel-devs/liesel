@@ -1,11 +1,4 @@
-import jax.numpy as jnp
-import numpy as np
-import tensorflow_probability.substrates.jax.bijectors as tfb
-import tensorflow_probability.substrates.jax.distributions as tfd
-
-import liesel.goose as gs
-import liesel.model as lsl
-
+# Python cell fragment: imports are visible in each guide.
 # Simulate regression observations.
 rng = np.random.default_rng(42)
 n = 500

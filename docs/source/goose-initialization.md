@@ -11,13 +11,24 @@ Goose starts from the model's current state. Choose values with finite log
 density on the correct support, then disperse the chains enough to reveal
 different behavior.
 
+```{code-cell} ipython3
+import jax.numpy as jnp
+import numpy as np
+import tensorflow_probability.substrates.jax.bijectors as tfb
+import tensorflow_probability.substrates.jax.distributions as tfd
+
+import liesel.goose as gs
+import liesel.model as lsl
+import liesel.optim as opt
+```
+
 ## Prepare the example
 
 These examples require the regression `model`, including its transformation
 and inference specifications, from {doc}`tutorials/md/01c-transform`.
 
 ```{code-cell} ipython3
-:load: _examples/goose-regression.py
+:load: _examples/goose-regression.py.inc
 :tags: [remove-cell]
 ```
 
@@ -37,10 +48,6 @@ or good mixing.
 For the regression `model` from {doc}`tutorials/md/01c-transform`:
 
 ```{code-cell} ipython3
-import tensorflow_probability.substrates.jax.distributions as tfd
-
-import liesel.goose as gs
-
 joint = gs.MCMCSpec(
     gs.NUTSKernel,
     kernel_group="regression",
@@ -81,8 +88,6 @@ For a model prepared for unconstrained optimization, fit first and then update
 its state before building the sampler:
 
 ```{code-cell} ipython3
-import liesel.optim as opt
-
 fit = opt.LieselOptim(
     model,
     optimizers="lbfgs",

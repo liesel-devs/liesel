@@ -11,13 +11,24 @@ An iteration applies every configured kernel once. A chain repeats those
 iterations; an epoch is a run of iterations with the same phase and storage
 settings.
 
+```{code-cell} ipython3
+import jax.numpy as jnp
+import numpy as np
+import pandas as pd
+import tensorflow_probability.substrates.jax.bijectors as tfb
+import tensorflow_probability.substrates.jax.distributions as tfd
+
+import liesel.goose as gs
+import liesel.model as lsl
+```
+
 ## Prepare the example
 
 These examples require the regression `model`, including its transformation
 and inference specifications, from {doc}`tutorials/md/01c-transform`.
 
 ```{code-cell} ipython3
-:load: _examples/goose-regression.py
+:load: _examples/goose-regression.py.inc
 :tags: [remove-cell]
 ```
 
@@ -26,10 +37,6 @@ and inference specifications, from {doc}`tutorials/md/01c-transform`.
 For an existing `model` with complete inference specifications:
 
 ```{code-cell} ipython3
-import pandas as pd
-
-import liesel.goose as gs
-
 results = gs.LieselMCMC(model).run_for_epochs(
     seed=2026,
     num_chains=4,
@@ -87,8 +94,6 @@ Kernel states must be recorded during sampling. For the single joint NUTS kernel
 {doc}`tutorials/md/01c-transform`, run:
 
 ```{code-cell} ipython3
-import numpy as np
-
 recorded = gs.LieselMCMC(model).run_for_epochs(
     seed=2026,
     num_chains=4,

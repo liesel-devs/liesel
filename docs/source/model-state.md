@@ -20,15 +20,20 @@ computational nodes. Use `model` from
 ## Try a position
 
 ```{code-cell} ipython3
-:tags: [remove-cell]
+import jax
+import jax.numpy as jnp
+import numpy as np
+import tensorflow_probability.substrates.jax.distributions as tfd
 
-%run tutorials/notebooks/11-model-building.ipynb
+import liesel.model as lsl
 ```
 
 ```{code-cell} ipython3
-import jax.numpy as jnp
-import numpy as np
+:load: _examples/model-building.py.inc
+:tags: [remove-cell]
+```
 
+```{code-cell} ipython3
 position = model.extract_position(["beta", "variance"])
 position["beta"] = jnp.array([0.5, 1.5])
 
@@ -63,8 +68,6 @@ This is also how you can apply a position returned by an optimizer. See
 ## Calculate gradients
 
 ```{code-cell} ipython3
-import liesel.model as lsl
-
 log_prob = lsl.LogProb(model)
 position = model.extract_position(["beta", "variance"])
 ```

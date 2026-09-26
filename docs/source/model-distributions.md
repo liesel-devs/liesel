@@ -19,11 +19,16 @@ statistical role determine how that contribution enters the model.
 ## Choose the event shape
 
 ```{code-cell} ipython3
+import jax
 import jax.numpy as jnp
 import tensorflow_probability.substrates.jax.distributions as tfd
 
+import liesel.goose as gs
 import liesel.model as lsl
+from liesel.distributions import GaussianCopula
+```
 
+```{code-cell} ipython3
 values = jnp.array([[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]])
 
 components = lsl.Var.new_obs(
@@ -62,9 +67,6 @@ positive scale `scale`. Its density is proportional to
 uses absolute rather than squared residuals.
 
 ```{code-cell} ipython3
-import jax
-
-
 class Laplace(tfd.Distribution):
     def __init__(self, loc, scale):
         self.loc = jnp.asarray(loc, dtype=jnp.float32)
@@ -162,8 +164,6 @@ A weak variable can carry a density too. For example, a copula factor evaluates
 a joint dependence density on calculated marginal probability transforms:
 
 ```{code-cell} ipython3
-from liesel.distributions import GaussianCopula
-
 margin_a = lsl.Var.new_obs(
     jnp.array([-0.5, 0.2, 0.8]),
     dist=lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
@@ -214,9 +214,8 @@ Using `model` and posterior `samples` from
 {doc}`tutorials/notebooks/12-model-predictions`:
 
 ```{code-cell} ipython3
+:load: _examples/model-predictions.py.inc
 :tags: [remove-cell]
-
-%run tutorials/notebooks/12-model-predictions.ipynb
 ```
 
 ```{code-cell} ipython3

@@ -59,10 +59,13 @@ summaries that restate the section.
   corresponding Quarto source when converting generated Markdown to MyST.
 - State prerequisites, such as an existing `model`, before a snippet. Make
   complete guides and tutorials runnable from top to bottom. Build-only setup
-  cells may run a linked prerequisite tutorial; use `remove-cell` to omit their
-  source and outputs from the rendered page while still executing them. Keep
-  reader prerequisites visible in the prose and instructional setup visible in
-  the code. Shared setup can also use MyST-NB's native `:load:` option.
+  cells may load non-import fixture code for a linked prerequisite tutorial; use
+  `remove-cell` to omit their source and outputs from the rendered page while
+  still executing them.
+  Imports stay visible in a code cell at the top of each guide. Hide only
+  non-import build setup, such as logging configuration and fixture models or data.
+  Keep reader prerequisites visible in the prose and instructional setup visible
+  in the code. Shared setup can also use MyST-NB's native `:load:` option.
 - Use existing public helpers instead of manual setup or calculations that they
   already handle. Include a lower-level recipe or alternative only when it serves
   a distinct task or helps the reader make a meaningful choice.

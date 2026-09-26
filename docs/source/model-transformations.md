@@ -22,14 +22,21 @@ Starting with `model` from {doc}`tutorials/notebooks/11-model-building`, copy
 it and transform its variance:
 
 ```{code-cell} ipython3
-:tags: [remove-cell]
+import jax
+import jax.numpy as jnp
+import tensorflow_probability.substrates.jax.bijectors as tfb
+import tensorflow_probability.substrates.jax.distributions as tfd
 
-%run tutorials/notebooks/11-model-building.ipynb
+import liesel.goose as gs
+import liesel.model as lsl
 ```
 
 ```{code-cell} ipython3
-import tensorflow_probability.substrates.jax.bijectors as tfb
+:load: _examples/model-building.py.inc
+:tags: [remove-cell]
+```
 
+```{code-cell} ipython3
 transformed = model.copy()
 variance = transformed.vars["variance"]
 
@@ -83,10 +90,6 @@ transform its strong parameter inputs. For example, this selects the scale
 input of a normal likelihood:
 
 ```{code-cell} ipython3
-import tensorflow_probability.substrates.jax.distributions as tfd
-
-import liesel.model as lsl
-
 scale = lsl.Var.new_param(
     1.0,
     dist=lsl.Dist(tfd.LogNormal, loc=0.0, scale=0.5),
@@ -112,8 +115,6 @@ or explicitly drop the old ones with `inference="drop"`. For an untransformed
 variance prepared for NUTS, the corresponding call is:
 
 ```{code-cell} ipython3
-import liesel.goose as gs
-
 prepared = model.copy()
 prepared.vars["variance"].biject(
     tfb.Exp(),

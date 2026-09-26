@@ -21,9 +21,16 @@ two response models.
 For `model` from {doc}`tutorials/notebooks/11-model-building`:
 
 ```{code-cell} ipython3
-:tags: [remove-cell]
+import jax
+import jax.numpy as jnp
+import tensorflow_probability.substrates.jax.distributions as tfd
 
-%run tutorials/notebooks/11-model-building.ipynb
+import liesel.model as lsl
+```
+
+```{code-cell} ipython3
+:load: _examples/model-building.py.inc
+:tags: [remove-cell]
 ```
 
 ```{code-cell} ipython3
@@ -43,11 +50,6 @@ response variance. Changing the copy does not change the original variables.
 This complete example creates two groups of observations:
 
 ```{code-cell} ipython3
-import jax.numpy as jnp
-import tensorflow_probability.substrates.jax.distributions as tfd
-
-import liesel.model as lsl
-
 mean_a = lsl.Var.new_param(
     0.0,
     dist=lsl.Dist(tfd.Normal, loc=0.0, scale=2.0),

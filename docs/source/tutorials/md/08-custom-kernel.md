@@ -9,6 +9,24 @@ kernelspec:
 
 <a id="custom-metropolis-hastings-kernel"></a>
 
+```{code-cell} ipython3
+from collections.abc import Sequence
+from dataclasses import dataclass
+
+import jax
+import jax.flatten_util
+import jax.numpy as jnp
+import tensorflow_probability.substrates.jax.distributions as tfd
+
+import liesel.goose as gs
+import liesel.model as lsl
+from liesel.goose import da  # dual averaging functionality
+from liesel.goose.da import DualAvgState
+from liesel.goose.pytree import (
+    register_dataclass_as_pytree,  # dataclasses must be registered as pytrees with jax
+)
+```
+
 ## Supply an MH proposal
 
 Start with {class}`~liesel.goose.MHKernel` when only your proposal is custom.
@@ -20,13 +38,6 @@ is deliberately simple; for ordinary use, {class}`~liesel.goose.RWKernel` alread
 provides this update.
 
 ```{code-cell} ipython3
-import jax
-import jax.numpy as jnp
-import tensorflow_probability.substrates.jax.distributions as tfd
-
-import liesel.goose as gs
-import liesel.model as lsl
-
 mu = lsl.Var.new_param(
     0.0,
     dist=lsl.Dist(tfd.Normal, 0.0, 2.0),
@@ -120,15 +131,6 @@ State and transition outputs must keep the same structure and array shapes
 throughout sampling.
 
 ```{code-cell} ipython3
-from dataclasses import dataclass
-
-from liesel.goose import da  # dual averaging functionality
-from liesel.goose.da import DualAvgState
-from liesel.goose.pytree import (
-    register_dataclass_as_pytree,  # dataclasses must be registered as pytrees with jax
-)
-
-
 @register_dataclass_as_pytree
 @dataclass
 class RWKernelState:
@@ -159,14 +161,6 @@ the step size. Split the random key so proposal and acceptance use independent
 randomness.
 
 ```{code-cell} ipython3
-from collections.abc import Sequence
-
-import jax
-import jax.flatten_util
-
-import liesel.goose as gs
-
-
 class RWKernel(
     gs.ModelMixin,
     gs.TransitionMixin[RWKernelState, gs.DefaultTransitionInfo],
