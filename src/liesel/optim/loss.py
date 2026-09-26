@@ -8,22 +8,49 @@ implemented by variational losses such as :class:`~liesel.optim.NegElboLoss`.
 
 from collections import Counter
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 import jax
+import jax.numpy as jnp
+import jax.scipy as jsp
 import networkx as nx
+from jax.flatten_util import ravel_pytree
 
 from ..model import Calc, Model
 from ..model.model import _reduced_sum
 from ._log_lik import validate_likelihood_groups
-from ._model_utils import validate_model_data_keys
+from ._model_utils import continuous_coordinate_nodes, validate_model_data_keys
+from .approximation import (
+    LaplaceApproximation,
+    _positive_definite,
+    _prepare_approximation,
+)
 from .split import PositionSplit, PositionSplitManager
 from .types import Position
 
 if TYPE_CHECKING:
-    from .state import OptimCarry
+    from .state import OptimCarry, OptimResult
 
 SplitConfig = PositionSplit | PositionSplitManager
+
+
+def _all_finite(tree):
+    return jnp.all(jnp.array([jnp.all(jnp.isfinite(x)) for x in jax.tree.leaves(tree)]))
+
+
+def _check_evaluation(loss, carry, value, proposal, gradient=None):
+    """Classify stateful evaluations without interpreting their opaque state."""
+    if carry.loss_state is None:
+        return carry
+    reason = getattr(loss, "_evaluation_failure", lambda *_: 0)(
+        value, proposal, gradient
+    )
+    reason = jnp.where(
+        reason != 0,
+        reason,
+        jnp.where(~jnp.isfinite(value), -1, jnp.where(_all_finite(gradient), 0, -2)),
+    )
+    return carry._record_failure(reason, proposal)
 
 
 def _training_loss_scalar(split: SplitConfig) -> float:
@@ -129,31 +156,48 @@ class Loss(Protocol):
         """
         ...
 
-    def loss_train_batched(self, params: Position, carry: "OptimCarry") -> jax.Array:
+    @property
+    def default_position_keys(self) -> Sequence[str] | None:
+        """Optional default optimizer keys; None uses the model's parameters."""
+        ...
+
+    def init_state(self, params: Position, carry: "OptimCarry") -> Any:
+        """Initial loss-state PyTree, or None for a stateless loss."""
+        ...
+
+    def loss_train_batched(
+        self, params: Position, carry: "OptimCarry"
+    ) -> tuple[jax.Array, Any]:
         """
         Computes the training loss for the current mini-batch.
 
         ``carry.batch`` contains the observed mini-batch and ``carry.fixed_position``
-        contains parameters currently owned by other optimizers.
+        contains parameters currently owned by other optimizers. Returns
+        ``(value, proposed_state)``; stateless losses return ``(value, None)``.
         """
         ...
 
-    def loss_train(self, params: Position, carry: "OptimCarry") -> jax.Array:
+    def loss_train(
+        self, params: Position, carry: "OptimCarry"
+    ) -> tuple[jax.Array, Any]:
         """
         Computes the full-data training loss at ``params``.
 
         The engine calls this method for ``loss_monitor="train_full_data"`` after
-        every epoch, at the final post-update position.
+        every epoch, at the final post-update position. It commits the proposed
+        state only when this value is finite. All other proposals are discarded.
         """
         ...
 
-    def loss_monitor(self, params: Position, carry: "OptimCarry") -> jax.Array:
+    def loss_monitor(
+        self, params: Position, carry: "OptimCarry"
+    ) -> tuple[jax.Array, Any]:
         """Computes the complete validation monitoring loss at ``params``."""
         ...
 
     def value_and_grad(
         self, params: Position, carry: "OptimCarry"
-    ) -> tuple[jax.Array, Position]:
+    ) -> tuple[tuple[jax.Array, Any], Position]:
         """Returns ``(loss_train_batched(params, carry), grad)``."""
         ...
 
@@ -198,7 +242,7 @@ class LossMixin:
     ...
     ...     def loss_train_batched(self, params, carry):
     ...         del carry
-    ...         return params["x"] ** 2
+    ...         return params["x"] ** 2, None
     >>> loss = Quadratic()
     >>> loss.grad(Position({"x": jnp.array(3.0)}), carry=None)["x"]
     Array(6., dtype=float32, weak_type=True)
@@ -209,7 +253,10 @@ class LossMixin:
     split: SplitConfig
     """Train/validation/test split used by the loss."""
 
-    loss_train_batched: Callable[[Position, "OptimCarry"], jax.Array]
+    default_position_keys: Sequence[str] | None = None
+    """Optional default optimizer keys; None preserves the model-based default."""
+
+    loss_train_batched: Callable[[Position, "OptimCarry"], tuple[jax.Array, Any]]
     """
     Training objective differentiated by :meth:`~liesel.optim.LossMixin.grad` and
     :meth:`~liesel.optim.LossMixin.value_and_grad`.
@@ -223,7 +270,30 @@ class LossMixin:
     def _validate_batch_keys(self, groups: Sequence[Sequence[str]]) -> None:
         """Optionally validate the data groups evaluated in separate batches."""
 
-    def loss_train(self, params: Position, carry: "OptimCarry") -> jax.Array:
+    def init_state(self, params: Position, carry: "OptimCarry") -> Any:
+        """Returns None for a stateless loss; override to initialize loss state.
+
+        Evaluations return a proposed state without mutating ``carry.loss_state``.
+        Its PyTree structure, shapes, and dtypes must match this initial state.
+        Stateful losses require full-data batches and full-training monitoring.
+        """
+        return None
+
+    def _evaluation_failure(self, value, proposed_state, gradient):
+        """Optional state-specific failure code; gradient is None at monitoring."""
+        return 0
+
+    def _failure_message(self, reason, failed_state) -> str | None:
+        """Optional explanation for a positive state-specific failure code."""
+        return None
+
+    def _checkpoint_configuration(self) -> tuple | None:
+        """Optional configuration metadata checked before checkpoint recovery."""
+        return None
+
+    def loss_train(
+        self, params: Position, carry: "OptimCarry"
+    ) -> tuple[jax.Array, Any]:
         """
         Computes the full-data training loss.
 
@@ -277,7 +347,7 @@ class LossMixin:
 
     def value_and_grad(
         self, params: Position, carry: "OptimCarry"
-    ) -> tuple[jax.Array, Position]:
+    ) -> tuple[tuple[jax.Array, Any], Position]:
         """
         Evaluates :meth:`~liesel.optim.LossMixin.loss_train_batched` and its gradient.
 
@@ -291,9 +361,10 @@ class LossMixin:
         Returns
         -------
         tuple
-            Pair ``(value, grad_tree)`` as returned by :func:`jax.value_and_grad`.
+            ``((value, proposed_state), grad_tree)``. Auxiliary state is not
+            differentiated or committed by this method.
         """
-        grad_ = jax.value_and_grad(self.loss_train_batched, argnums=0)
+        grad_ = jax.value_and_grad(self.loss_train_batched, argnums=0, has_aux=True)
         value, grad_tree = grad_(params, carry)
         return value, Position(grad_tree)
 
@@ -313,8 +384,8 @@ class LossMixin:
         Position
             Gradient tree with the same keys as ``params``.
         """
-        grad_ = jax.grad(self.loss_train_batched, argnums=0)
-        grad_tree = grad_(params, carry)
+        grad_ = jax.grad(self.loss_train_batched, argnums=0, has_aux=True)
+        grad_tree, _ = grad_(params, carry)
         return Position(grad_tree)
 
 
@@ -453,7 +524,9 @@ class NegLogProbLoss(LossMixin):
                 )
         return self.model.extract_position(position_keys)
 
-    def loss_train_batched(self, params: Position, carry: "OptimCarry") -> jax.Array:
+    def loss_train_batched(
+        self, params: Position, carry: "OptimCarry"
+    ) -> tuple[jax.Array, None]:
         """
         Computes mini-batch negative log posterior.
 
@@ -468,9 +541,9 @@ class NegLogProbLoss(LossMixin):
 
         Returns
         -------
-        jax.Array
-            Negative scaled log-likelihood plus log-prior, optionally normalized by
-            ``self.scalar``.
+        tuple
+            ``(value, None)``: negative scaled log-likelihood plus log-prior,
+            optionally normalized by ``self.scalar``.
         """
         position = Position(params | carry.batch | carry.fixed_position)
         states = getattr(carry, "_data_states", {})
@@ -481,9 +554,11 @@ class NegLogProbLoss(LossMixin):
             self.model, new_state, batch_index=carry.i_batch
         )
         log_prior = new_state["_model_log_prior"].value
-        return -(log_lik + log_prior) / self.scalar
+        return (-(log_lik + log_prior) / self.scalar), None
 
-    def loss_train(self, params: Position, carry: "OptimCarry") -> jax.Array:
+    def loss_train(
+        self, params: Position, carry: "OptimCarry"
+    ) -> tuple[jax.Array, None]:
         """
         Computes full-data negative log posterior.
 
@@ -496,9 +571,9 @@ class NegLogProbLoss(LossMixin):
 
         Returns
         -------
-        jax.Array
-            Negative full-data log-likelihood plus log-prior, optionally normalized
-            by ``self.scalar``.
+        tuple
+            ``(value, None)``: negative full-data log-likelihood plus log-prior,
+            optionally normalized by ``self.scalar``.
         """
         states = getattr(carry, "_data_states", {})
         data = {} if "train" in states else self.split.train
@@ -508,9 +583,11 @@ class NegLogProbLoss(LossMixin):
 
         log_lik = self.split.scaled_log_lik(self.model, new_state, part="train")
         log_prior = new_state["_model_log_prior"].value
-        return -(log_lik + log_prior) / self.scalar
+        return (-(log_lik + log_prior) / self.scalar), None
 
-    def loss_monitor(self, params: Position, carry: "OptimCarry") -> jax.Array:
+    def loss_monitor(
+        self, params: Position, carry: "OptimCarry"
+    ) -> tuple[jax.Array, None]:
         """
         Computes validation loss.
 
@@ -523,8 +600,8 @@ class NegLogProbLoss(LossMixin):
 
         Returns
         -------
-        jax.Array
-            Negative scaled validation log-likelihood. If
+        tuple
+            ``(value, None)``: negative scaled validation log-likelihood. If
             ``validation_strategy="log_prob"``, the log-prior is included as well.
         """
         part = "validate" if self.split.has_validation else "train"
@@ -537,7 +614,139 @@ class NegLogProbLoss(LossMixin):
         if self.validation_strategy == "log_prob":
             loss -= new_state["_model_log_prior"].value
 
-        return loss / self.scalar
+        return (loss / self.scalar), None
+
+    def approximate_joint_posterior(
+        self,
+        result: "OptimResult",
+        *,
+        at: str = "min_monitor",
+        raise_on_failure: bool = True,
+        stationarity_tol: float = 1e-4,
+    ) -> LaplaceApproximation:
+        """Construct a joint Gaussian approximation at the selected fitted mode.
+
+        Curvature comes from the full training log-likelihood plus log-prior,
+        including transformation Jacobians. Validation and test data are excluded,
+        and loss normalization (``scale`` or ``LieselOptim.scale_loss``) does not
+        affect the approximation. Only optimized parameters are included;
+        omitted parameters retain their model values.
+
+        Parameters
+        ----------
+        result
+            Fit result belonging to this model, loss, and training data. Keep
+            the model, split, and fixed parameters unchanged after fitting.
+        at
+            ``"min_monitor"`` (default) uses ``result.position_min_monitor``;
+            ``"final"`` uses ``result.position_final``. A minimum validation or
+            EMA monitoring loss need not identify a stationary posterior mode.
+        raise_on_failure
+            Raise RuntimeError on an invalid approximation (default True).
+            False returns an inspectable object with ``valid=False`` whose
+            sampling, covariance, and block methods raise. Invalid argument
+            values always raise ValueError.
+        stationarity_tol
+            Positive finite bound on half the squared Newton decrement for the
+            unscaled full-training objective. Defaults to 1e-4.
+
+        Notes
+        -----
+        This optional calculation evaluates a dense Hessian once per call;
+        it does not refit the model. Finite values and derivatives, positive
+        definite curvature, and stationarity are required. No jitter or
+        eigenvalue clipping is used. Diagnostics retain ``value``, ``gradient``,
+        ``joint_precision``, and ``newton_decrement_squared`` when available;
+        ``reason`` explains a failure. Names are sorted, with parameter entries
+        flattened within each name. Use :meth:`Model.predict
+        <liesel.model.Model.predict>` to transform draws
+        back to the original parameter scales.
+
+        In hierarchical models, joint MAP can favor vanishing scale parameters.
+        :class:`~liesel.optim.LaplaceLoss` instead integrates selected effects
+        before optimizing the remaining parameters.
+        """
+        approximation = _prepare_approximation(
+            result, at, raise_on_failure, stationarity_tol
+        )
+        if approximation.diagnostics["reason"] is not None:
+            return approximation
+        try:
+            data_nodes = {
+                self.model._node_for_position_key(k) for k in self.split.train
+            }
+            continuous_coordinate_nodes(self.model, approximation.names, data_nodes)
+            expected = self.position(approximation.names)
+        except ValueError as error:
+            return approximation._failed(
+                f"Incompatible optimized coordinates: {error}", raise_on_failure
+            )
+        if any(
+            jnp.shape(value) != jnp.shape(expected[name])
+            or jnp.asarray(value).dtype != jnp.asarray(expected[name]).dtype
+            for name, value in approximation.mean.items()
+        ):
+            return approximation._failed(
+                "Selected coordinates have incompatible shapes or dtypes.",
+                raise_on_failure,
+            )
+        flat, unravel = ravel_pytree(approximation.mean)
+        if not flat.size:
+            return approximation._failed(
+                "No optimized coordinates are available.", raise_on_failure
+            )
+
+        training_state = self.model.update_state(
+            self.split.train, self.model.state, allow_weak_vars=True
+        )
+
+        def joint(flat):
+            state = self.model.update_state(unravel(flat), training_state)
+            log_lik = self.split.scaled_log_lik(self.model, state, part="train")
+            return -(log_lik + state["_model_log_prior"].value)
+
+        @jax.jit
+        def derivatives(flat):
+            def grad_with_value(flat):
+                value, gradient = jax.value_and_grad(joint)(flat)
+                return gradient, (value, gradient)
+
+            precision, (value, gradient) = jax.jacfwd(grad_with_value, has_aux=True)(
+                flat
+            )
+            return value, gradient, precision
+
+        value, gradient, precision = derivatives(flat)
+        factor = jnp.linalg.cholesky(precision)
+        decrement = gradient @ jsp.linalg.cho_solve((factor, True), gradient)
+        approximation.diagnostics.update(
+            value=value,
+            gradient=gradient,
+            joint_precision=precision,
+            newton_decrement_squared=decrement,
+        )
+        if not bool(
+            jnp.isfinite(value)
+            & jnp.isfinite(gradient).all()
+            & jnp.isfinite(precision).all()
+        ):
+            return approximation._failed(
+                "Non-finite posterior value or derivatives.", raise_on_failure
+            )
+        if not bool(_positive_definite(precision, factor)):
+            return approximation._failed(
+                "Invalid posterior curvature: positive definiteness is required.",
+                raise_on_failure,
+            )
+        if not bool(decrement / 2 <= stationarity_tol):
+            return approximation._failed(
+                "Stationarity check failed: half the squared Newton decrement "
+                "exceeds stationarity_tol.",
+                raise_on_failure,
+            )
+        approximation.precision_cholesky = factor
+        approximation.valid = True
+        return approximation
 
     def __repr__(self) -> str:
         """Returns a compact representation showing the validation strategy."""

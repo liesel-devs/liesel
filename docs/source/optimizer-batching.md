@@ -20,8 +20,10 @@ represents its full training group.
 
 ## Create batches
 
-This example uses a Gaussian regression with a computed polynomial basis
-and a second covariate. Expand the setup to see the model and its validation split.
+The examples assume a Gaussian regression `model` with observed `x1`, `x2`, and
+`y`, a polynomial `basis` computed from `x1`, and a validation `split`.
+The {doc}`first tutorial <tutorials/notebooks/09-liesel-optim-basic>` introduces
+model construction and {doc}`optimizer-splitting` explains the split.
 
 ```{code-cell} ipython3
 import logging
@@ -37,30 +39,49 @@ import liesel.optim as opt
 ```
 
 ```{code-cell} ipython3
-:tags: [hide-input]
+:tags: [remove-cell]
 
 logging.getLogger("liesel").setLevel(logging.WARNING)
 
 rng = np.random.default_rng(42)
 x = np.linspace(-1.0, 1.0, 128)
+
 x1 = lsl.Var.new_obs(jnp.asarray(x), name="x1")
 x2 = lsl.Var.new_obs(jnp.asarray(rng.normal(size=x.size)), name="x2")
-basis = lsl.Var.new_calc(lambda x: jnp.column_stack([x, x**2]), x1, name="basis")
-beta = lsl.Var.new_param(jnp.zeros(2), lsl.Dist(tfd.Normal, 0.0, 5.0), name="beta")
+basis = lsl.Var.new_calc(
+    lambda x: jnp.column_stack([x, x**2]),
+    x1,
+    name="basis",
+)
+
+beta = lsl.Var.new_param(
+    jnp.zeros(2),
+    dist=lsl.Dist(tfd.Normal, 0.0, 5.0),
+    name="beta",
+)
 log_sigma = lsl.Var.new_param(0.0, name="log_sigma")
 sigma = lsl.Var.new_calc(jnp.exp, log_sigma, name="sigma")
+
 mu = lsl.Var.new_calc(
-    lambda basis, beta, x2: basis @ beta + x2, basis, beta, x2, name="mu"
+    lambda basis, beta, x2: basis @ beta + x2,
+    basis,
+    beta,
+    x2,
+    name="mu",
 )
+
 y = lsl.Var.new_obs(
     jnp.asarray(0.5 * x + x2.value + rng.normal(scale=0.7, size=x.size)),
-    lsl.Dist(tfd.Normal, mu, sigma),
+    dist=lsl.Dist(tfd.Normal, mu, sigma),
     name="y",
 )
 model = lsl.Model(y)
 
 split = opt.PositionSplit.from_model(
-    model, position_keys=["x1", "x2", "y"], validate_axis_share=0.2, seed=42
+    model,
+    position_keys=["x1", "x2", "y"],
+    validate_axis_share=0.2,
+    seed=42,
 )
 ```
 
@@ -68,6 +89,7 @@ Create batches from the training split:
 
 ```{code-cell} ipython3
 batches = opt.Batches.from_split(split, batch_size=32)
+
 result = opt.LieselOptim(
     model,
     optimizers=optax.adam(0.01),
@@ -147,19 +169,26 @@ from the original series. Keep both arrays in one group so selecting a response
 also selects its original lag:
 
 ```{code-cell} ipython3
-import jax.numpy as jnp
-import tensorflow_probability.substrates.jax.distributions as tfd
-
-import liesel.model as lsl
-import liesel.optim as opt
-
 series = jnp.array([0.0, 0.7, 0.4, -0.1, 0.3, 0.9, 0.5])
+
 lag = lsl.Var.new_obs(series[:-1], name="lag")
 phi = lsl.Var.new_param(0.5, name="phi")
-mean = lsl.Var.new_calc(lambda lag, phi: phi * lag, lag, phi)
-response = lsl.Var.new_obs(series[1:], lsl.Dist(tfd.Normal, mean, 1.0), name="y")
+mean = lsl.Var.new_calc(
+    lambda lag, phi: phi * lag,
+    lag,
+    phi,
+)
+response = lsl.Var.new_obs(
+    series[1:],
+    dist=lsl.Dist(tfd.Normal, mean, 1.0),
+    name="y",
+)
 ar_model = lsl.Model(response)
-ar_split = opt.PositionSplit.from_model(ar_model, position_keys=[["y", "lag"]])
+
+ar_split = opt.PositionSplit.from_model(
+    ar_model,
+    position_keys=[["y", "lag"]],
+)
 ar_batches = opt.Batches.from_split(ar_split, batch_size=2)
 ```
 
@@ -181,7 +210,9 @@ batch its rows alongside a raw covariate `x2` and the response `y`:
 
 ```{code-cell} ipython3
 split = opt.PositionSplit.from_model(
-    model, position_keys=["basis", "x2", "y"], validate_axis_share=0.2
+    model,
+    position_keys=["basis", "x2", "y"],
+    validate_axis_share=0.2,
 )
 batches = opt.Batches.from_split(split, batch_size=32)
 ```
@@ -189,9 +220,12 @@ batches = opt.Batches.from_split(split, batch_size=32)
 ```{code-cell} ipython3
 pd.DataFrame(
     {
-        key: {"training": value.shape, "validation": split.validate[key].shape}
+        key: {
+            "training": value.shape,
+            "validation": split.validate[key].shape,
+        }
         for key, value in split.train.items()
-    }
+    },
 ).T
 ```
 
@@ -200,8 +234,10 @@ Its values must remain valid as parameters change, and selecting rows must prese
 their {ref}`likelihood contributions <optimizer-row-wise>`. Raw covariates can still
 be used for inexpensive JAX calculations in the same fit.
 
-Fits using {py:class}`~liesel.optim.NegLogProbLoss` also prepare data-derived
-values once for inputs that batches leave unchanged, including unbatched groups and shared data. They retain full
+Fits using {py:class}`~liesel.optim.NegLogProbLoss` or
+{py:class}`~liesel.optim.LaplaceLoss` also prepare data-derived values once for
+inputs that batches leave unchanged, including unbatched groups and shared data.
+They retain full
 training values only for full-data batches or full-training monitoring, and
 prepare validation values only for validation monitoring. When batches supply
 every training key, EMA or validation monitoring avoids retaining extra

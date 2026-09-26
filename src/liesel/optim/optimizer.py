@@ -17,10 +17,10 @@ import jax
 import jax.numpy as jnp
 import optax
 
+from .loss import Loss, _all_finite, _check_evaluation
 from .types import Position
 
 if TYPE_CHECKING:
-    from .loss import Loss
     from .state import OptimCarry
 
 
@@ -264,7 +264,8 @@ class Optimizer:
         pos = position
 
         opt_state = carry.optimizer_states[self.identifier]
-        value, grad = loss.value_and_grad(pos, carry)
+        (value, proposal), grad = loss.value_and_grad(pos, carry)
+        carry = _check_evaluation(loss, carry, value, proposal, grad)
         try:
             updates, opt_state = self.optimizer.update(grad, opt_state, params=pos)
         except TypeError as error:
@@ -275,6 +276,11 @@ class Optimizer:
                 f"Original error: {error}"
             ) from error
         updated_position = cast(Position, optax.apply_updates(pos, updates))
+
+        if carry.loss_state is not None:
+            carry = carry._record_failure(
+                jnp.where(_all_finite(updated_position), 0, -4), proposal
+            )
 
         carry.position = Position(carry.position | updated_position)
         carry.optimizer_states[self.identifier] = opt_state
@@ -322,6 +328,10 @@ class LBFGS(Optimizer):
     :func:`optax.value_and_grad_from_state` inside :meth:`~liesel.optim.LBFGS.step`,
     which lets Optax
     reuse value/gradient information stored by the L-BFGS transformation.
+    Stateful losses recompute value and gradient with the current committed seed.
+    Stateful losses stop with ``status="numerical_failure"`` on non-finite
+    evaluations or a line search that finds no finite trial. Safe finite fallback
+    steps remain valid when the search budget is exhausted.
 
     L-BFGS requires full-data batches, a deterministic objective, and must be the
     sole optimizer. Other parameter updates would invalidate its cached objective
@@ -399,15 +409,48 @@ class LBFGS(Optimizer):
                 candidate,
                 pos,
             )
-            return loss.loss_train_batched(candidate, carry)
+            return loss.loss_train_batched(candidate, carry)[0]
 
-        value_and_grad = optax.value_and_grad_from_state(loss_fn)
-        value, grad = value_and_grad(pos, state=opt_state)
+        if carry.loss_state is not None:
+            (value, proposal), grad = loss.value_and_grad(pos, carry)
+            carry = _check_evaluation(loss, carry, value, proposal, grad)
+        else:
+            value_and_grad = optax.value_and_grad_from_state(loss_fn)
+            value, grad = value_and_grad(pos, state=opt_state)
         updates, opt_state = self.optimizer.update(
             grad, opt_state, params=pos, value=value, grad=grad, value_fn=loss_fn
         )
 
         updated_position = cast(Position, optax.apply_updates(pos, updates))
+
+        if carry.loss_state is not None:
+            # Optax may retain a safe sufficient-decrease step when its search
+            # budget is exhausted. Positive diagnostic errors alone are not a
+            # numerical failure, and a stationary zero step is valid too.
+            decrease_error = optax.tree.get(opt_state, "decrease_error", default=0.0)
+            candidate_value = optax.tree.get(opt_state, "value", default=value)
+            candidate_grad = optax.tree.get(opt_state, "grad", default=grad)
+            moved = jnp.any(
+                jnp.array([jnp.any(updated_position[k] != pos[k]) for k in pos])
+            )
+            stationary = jnp.all(
+                jnp.array([jnp.all(g == 0) for g in jax.tree.leaves(grad)])
+            )
+            valid_step = _all_finite(
+                (updated_position, candidate_value, candidate_grad)
+            ) & ~(jnp.isinf(decrease_error) & ~moved & ~stationary)
+            reason = jnp.where(valid_step, 0, -3)
+
+            def failed_candidate(carry):
+                _, failed_state = loss.loss_train_batched(updated_position, carry)
+                return carry._record_failure(reason, failed_state)
+
+            carry = jax.lax.cond(
+                (reason != 0) & (carry._numerical_failure == 0),
+                failed_candidate,
+                lambda c: c,
+                carry,
+            )
 
         carry.position = Position(carry.position | updated_position)
         carry.optimizer_states[self.identifier] = opt_state

@@ -1,5 +1,4 @@
 Liesel: A Probabilistic Programming Framework
-=============================================
 
 .. include:: welcome.md
    :parser: myst_parser.sphinx_
@@ -160,6 +159,7 @@ the arguments and defaults.
    reference/optim-losses
    reference/optim-optimizers
    reference/optim-data
+   reference/optim-laplace
 
 .. _variational-array-helpers:
 

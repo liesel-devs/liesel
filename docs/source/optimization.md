@@ -31,16 +31,24 @@ logging.getLogger("liesel").setLevel(logging.WARNING)
 
 loc = lsl.Var.new_param(0.0, name="loc")
 y = lsl.Var.new_obs(
-    jnp.array([1.0, 2.0, 3.0]), lsl.Dist(tfd.Normal, loc, 1.0), name="y"
+    jnp.array([1.0, 2.0, 3.0]),
+    dist=lsl.Dist(tfd.Normal, loc, 1.0),
+    name="y",
 )
 model = lsl.Model(y)
+```
 
-result = opt.LieselOptim(
+Fit its mean with L-BFGS:
+
+```{code-cell} ipython3
+optim = opt.LieselOptim(
     model,
     optimizers="lbfgs",
     loss_monitor="train_full_data",
     show_progress=False,
-).fit()
+)
+
+result = optim.fit()
 ```
 
 ```{code-cell} ipython3
@@ -53,6 +61,14 @@ L-BFGS needs the full data and a deterministic loss. For minibatches, use Adam.
 The `optimizers` argument is required. Pass a configured Optax transformation,
 such as `optimizers=optax.adam(0.01)`, to optimize all parameters with it.
 The fitted values are returned separately; fitting does not change your model.
+
+After a joint MAP fit, {meth}`optim.loss.approximate_joint_posterior(result) <liesel.optim.LaplaceLoss.approximate_joint_posterior>`
+can construct a Gaussian approximation for the optimized parameters. It uses
+full-training curvature and checks that the selected position is a stationary
+point with positive curvature; a validation or EMA minimum may not qualify.
+See {py:meth}`~liesel.optim.NegLogProbLoss.approximate_joint_posterior` for controls
+and {doc}`optimizer-laplace` for a walkthrough of draws and uncertainty in a
+hierarchical model.
 
 ## Start here
 
@@ -71,6 +87,7 @@ Fit two data groups <tutorials/notebooks/10-liesel-optim-advanced>
 
 optimizer-monitoring
 optimizer-customization
+optimizer-laplace
 optimizer-splitting
 optimizer-batching
 optimizer-loss-scaling
