@@ -13,13 +13,16 @@ build:
   tools:
     python: "3.13"
   jobs:
+    post_checkout:
+      - /usr/bin/python3 docs/scripts/executed_notebooks.py gate --commit "$READTHEDOCS_GIT_COMMIT_HASH" --pin "$READTHEDOCS_OUTPUT/docs-outputs-pin.json"
     post_install:
       - dot -V
       - pip install uv
       - UV_PROJECT_ENVIRONMENT=$READTHEDOCS_VIRTUALENV_PATH uv sync --locked --dev --group pymc --link-mode=copy
     build:
       html:
-        - python -m sphinx -T -b html -j 3 -W --keep-going -d _build/doctrees docs/source "$READTHEDOCS_OUTPUT/html"
+        - python docs/scripts/executed_notebooks.py apply --pin "$READTHEDOCS_OUTPUT/docs-outputs-pin.json"
+        - LIESEL_DOCS_EXECUTED=1 python -m sphinx -T -b html -j 3 -W --keep-going -d _build/doctrees docs/source "$READTHEDOCS_OUTPUT/html"
 
 # Build documentation in the docs/ directory with Sphinx
 sphinx:

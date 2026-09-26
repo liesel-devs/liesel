@@ -1,0 +1,82 @@
+name: docs
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Full source commit SHA to build
+        type: string
+        required: true
+      target:
+        description: RTD version slug to build
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.event.pull_request.number || inputs.ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
+          persist-credentials: false
+      - run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends graphviz
+      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - run: uv sync --locked --group dev --group pymc
+      - run: uv run python -m sphinx -E -b html -j 3 -W --keep-going docs/source docs/build/html
+        env:
+          LIESEL_DOCS_EXECUTED: '0'
+      - run: uv run --no-sync python docs/scripts/executed_notebooks.py collect --executed docs/build/jupyter_execute --bundle "$RUNNER_TEMP/docs-bundle"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: docs-bundle-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/docs-bundle
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: build
+    if: >-
+      ${{
+        needs.build.result == 'success' &&
+        github.actor != 'dependabot[bot]' &&
+        (github.event_name != 'pull_request' || github.event.pull_request.head.repo.id == github.repository_id) &&
+        (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main')
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      # The control helper runs with credentials; bundle contents remain data.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          sparse-checkout: docs/scripts/executed_notebooks.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: docs-bundle-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/docs-bundle
+      - run: python3 -S docs/scripts/executed_notebooks.py publish --bundle "$RUNNER_TEMP/docs-bundle"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          READTHEDOCS_TOKEN: ${{ secrets.READTHEDOCS_TOKEN }}
