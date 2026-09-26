@@ -1,6 +1,7 @@
 """Gaussian posterior approximations shared by optimizer losses."""
 
 import math
+import operator
 from collections.abc import Sequence
 from dataclasses import dataclass
 from numbers import Real
@@ -144,9 +145,11 @@ class LaplaceApproximation:
         if not self.valid or self.precision_cholesky is None:
             raise RuntimeError("Cannot sample an invalid Laplace approximation.")
         factor = self.precision_cholesky
-        sample_shape = (
-            (sample_shape,) if isinstance(sample_shape, int) else tuple(sample_shape)
-        )
+        shape_arg: Any = sample_shape
+        try:
+            sample_shape = (operator.index(shape_arg),)
+        except TypeError:
+            sample_shape = tuple(operator.index(dim) for dim in shape_arg)
         size = factor.shape[0]
         noise = jax.random.normal(seed, sample_shape + (size,), dtype=factor.dtype)
         centered = jsp.linalg.solve_triangular(

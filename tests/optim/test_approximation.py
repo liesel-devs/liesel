@@ -53,7 +53,9 @@ def test_sample_requires_keyword_seed_and_defaults_to_one_draw():
         legacy_sample(key)
 
 
-@pytest.mark.parametrize("shape", [1000, [1000]])
+@pytest.mark.parametrize(
+    "shape", [1000, [1000], np.int64(1000), jnp.array(1000), (np.int64(1000),)]
+)
 def test_sample_accepts_integer_and_sequence_shapes_with_identical_draws(shape):
     posterior = gaussian_approximation()
     key = jax.random.key(42)
