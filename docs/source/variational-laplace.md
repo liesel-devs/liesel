@@ -11,18 +11,14 @@ mystnb:
 
 # Initialize VI from Laplace
 
-Use {meth}`~liesel.optim.VDist.mvn_tril_from_laplace` to reuse a fitted
-{class}`~liesel.optim.LaplaceApproximation` as the starting distribution for
-variational inference. One block gives a dense Gaussian; several blocks give
-independent Gaussians with dense covariance within each block.
+Use {meth}`~liesel.optim.VDist.mvn_tril_from_laplace` to initialize a Gaussian
+family from a fitted {class}`~liesel.optim.LaplaceApproximation`. One block covering
+all approximation parameters retains the full covariance; separate blocks are
+independent.
 
-The example fits two latent effects with a shared population mean to one noisy
-measurement of their sum. All parameters are on the real line. This Gaussian
-model has an exact Gaussian posterior, so it also makes the difference between
-a dense family and independent blocks visible.
-
-For the basic fitting workflow, see {doc}`optimizer-laplace` and
-{doc}`variational-inference`. This example includes its model setup.
+This example has two latent effects and a shared mean, all on the real line.
+Its Gaussian posterior makes the effect of blocking visible. For prerequisites,
+see {doc}`optimizer-laplace` and {doc}`variational-inference`.
 
 ## Fit the Laplace model
 
@@ -68,8 +64,7 @@ model.plot()
 ```
 
 {class}`~liesel.optim.LaplaceLoss` integrates out `a` and optimizes `z`.
-Its joint posterior approximation includes both the outer and latent parameters.
-The same initialization API also accepts an approximation from
+The joint approximation includes both. The initializer also accepts output from
 {meth}`~liesel.optim.NegLogProbLoss.approximate_joint_posterior`.
 
 ```{code-cell} python
@@ -96,16 +91,13 @@ pd.Series(
 ```
 
 The fitted means are about 0.57 for `z` and 0.86 for each element of `a`.
-The approximation validates curvature and stationarity; initialization rejects
-an invalid approximation instead of repairing it with jitter or clipping.
+Initialization requires a valid approximation and adds no jitter.
 
 ## Use one dense block
 
-Include every approximation parameter to reuse its full joint covariance.
-The builder matches names and shapes, then reorders the mean and covariance
-into the variational family's flattened order. Transformed parameter names must
-match literally; the helper does not transform between parameter scales or
-verify that two models use the same data and graph.
+Include every approximation parameter to retain its full covariance. Names and
+shapes must match, including transformed names. The helper reorders parameters but
+does not transform scales or check that the data and model agree.
 
 ```{code-cell} python
 dense = (
@@ -123,10 +115,8 @@ pd.DataFrame(
 ).round(3)
 ```
 
-The dense family retains the negative dependence between the two effects and
-positive dependence between each effect and `z`. In this Gaussian example it
-starts at the exact posterior. Sampling noise can still move an optimizer away
-from that starting point.
+The two effects are negatively correlated; each correlates positively with `z`.
+Here the dense family starts at the exact posterior.
 
 ## Use independent blocks
 
@@ -150,30 +140,22 @@ pd.DataFrame(
 ).round(3)
 ```
 
-The conditional variance of each effect is 2/3, compared with the marginal
-variance 5/7 in the dense family. Dependence inside `a` remains represented.
-A block may contain several parameter names; their correlations are retained too.
-For a proper subset, the helper works with selected precision rows without
-constructing the full joint covariance.
+Each effect's conditional variance is 2/3, versus marginal variance 5/7 in the
+dense family. Within-block correlations remain. For a subset, the helper uses
+selected precision rows without constructing the full covariance.
 
-For a Gaussian target, these independent blocks minimize reverse KL under the
-ordinary negative ELBO. Independence alone only fixes cross-block covariance to
-zero: the family could also represent the product of marginals. Which member is
-optimal depends on the objective. For a non-Gaussian posterior, neither good
-initialization nor faster convergence is guaranteed. Marginal initialization is
-also a legitimate choice; use {meth}`~liesel.optim.VDist.mvn_tril` with an explicit
-mean and covariance Cholesky factor when that is your intended starting point.
+For Gaussian targets, these blocks minimize reverse KL under the negative ELBO.
+Independence alone does not imply conditional covariance; the objective selects
+it. For other targets, this is only an initialization. To start from marginals,
+pass their means and covariance Cholesky factors to {meth}`~liesel.optim.VDist.mvn_tril`.
 
-The helper leaves the target model and approximation unchanged. If omitted target
-parameters stay fixed instead of belonging to another variational block, set them
-to their fitted means explicitly when you intend the conditional interpretation.
-It does not shift the selected means for different fixed values.
+The helper leaves the target unchanged. If omitted parameters stay fixed rather
+than entering another block, set them to their fitted means for this conditional
+interpretation; the initializer does not adjust selected means for other fixed values.
 
 ## Continue with VI
 
-Pass either family to {meth}`~liesel.optim.NegElboLoss.from_vdist`. This short run
-shows the fitting and sampling workflow; inspect loss histories and posterior
-predictions before treating a fit as converged.
+Pass either family to {meth}`~liesel.optim.NegElboLoss.from_vdist`:
 
 ```{code-cell} python
 vi_loss = opt.NegElboLoss.from_vdist(blocked, nsamples=32)
@@ -201,9 +183,8 @@ mystnb:
 vi_result.plot_loss()
 ```
 
-The loss fluctuates because VI estimates the expectation with random draws,
-even when its starting family is optimal within the independent-block restriction.
-The curve alone cannot establish posterior accuracy.
+Monte Carlo noise can move the fit away from its starting optimum. Check fitted
+uncertainty and predictions as well as the loss curve.
 
 ```{code-cell} python
 pd.DataFrame(
@@ -215,7 +196,5 @@ pd.DataFrame(
 ).astype(float).round(3)
 ```
 
-These draws describe the fitted variational family. They do not recover the
-cross-block dependence omitted by its definition. See
-{doc}`variational-models` for custom families and {doc}`optimizer-monitoring`
-for stopping and fit diagnostics.
+These draws retain the family's block independence. See {doc}`variational-models`
+for other families and {doc}`optimizer-monitoring` for fit diagnostics.
