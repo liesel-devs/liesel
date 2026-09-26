@@ -121,7 +121,7 @@ To include observation noise, simulate responses conditional on those draws:
 ```{code-cell} ipython3
 parameter_draws = {name: samples[name] for name in model.parameters}
 predictive = model.sample(
-    shape=(),
+    sample_shape=(),
     seed=jax.random.key(2027),
     posterior_samples=parameter_draws,
     newdata={"X": X_grid, "y": jnp.zeros_like(x_grid)},

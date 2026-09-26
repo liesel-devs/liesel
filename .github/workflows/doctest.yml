@@ -28,4 +28,4 @@ jobs:
         run: uv sync --locked --dev --group pymc
 
       - name: Run pytest
-        run: uv run pytest --doctest-modules src/liesel
+        run: uv run pytest -n 0 --doctest-modules src/liesel

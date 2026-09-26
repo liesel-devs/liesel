@@ -38,7 +38,7 @@ import liesel.model as lsl
 ```{code-cell} ipython3
 key = jax.random.key(27)
 key, prior_key = jax.random.split(key)
-prior_draws = model.sample(shape=(6,), seed=prior_key)
+prior_draws = model.sample(sample_shape=(6,), seed=prior_key)
 ```
 
 ```{code-cell} ipython3
@@ -59,7 +59,7 @@ x_grid = jnp.linspace(-1.0, 1.0, 60)
 
 key, response_key = jax.random.split(key)
 replicated = model.sample(
-    shape=(),
+    sample_shape=(),
     seed=response_key,
     posterior_samples=samples,
     newdata={"x": x_grid, "y": jnp.zeros_like(x_grid)},
@@ -70,7 +70,7 @@ replicated = model.sample(
 replicated["y"].shape
 ```
 
-`shape=()` requests one dataset per posterior draw. The result has shape
+`sample_shape=()` requests one dataset per posterior draw. The result has shape
 `(4, 500, 60)`. Posterior sample arrays must have two consistent leading axes
 for chain and draw, followed by the parameter's own shape. The response
 placeholder gives the new observation shape; random responses replace its values.
@@ -88,7 +88,7 @@ To simulate responses conditional on the current coefficient values:
 ```{code-cell} ipython3
 key, conditional_key = jax.random.split(key)
 conditional = model.sample(
-    shape=(6,),
+    sample_shape=(6,),
     seed=conditional_key,
     fixed=["beta", "gamma"],
 )

@@ -781,7 +781,7 @@ class TestVarSample:
             _ = lsl.Model([y])
 
         samples = mu.sample(
-            shape=(1, 100),
+            sample_shape=(1, 100),
             seed=jax.random.key(2),
             chunk_size=13,
         )
@@ -794,7 +794,7 @@ class TestVarSample:
         assert samples["b"].mean() == pytest.approx(0.0, abs=0.1)
         assert samples["b"].std() == pytest.approx(1.0, abs=0.1)
 
-        samples = sigma.sample(shape=(1, 100), seed=jax.random.key(2))
+        samples = sigma.sample(sample_shape=(1, 100), seed=jax.random.key(2))
         assert "sigma" in samples
         assert len(samples) == 1  # because there is only 1 var in the subgraph
         assert samples["sigma"].shape == (1, 100)  # verify correct shape of sigma
@@ -808,7 +808,7 @@ class TestVarSample:
         assert samples["sigma"].mean() == pytest.approx(sigma_mean, abs=0.1)
         assert samples["sigma"].std() == pytest.approx(sigma_std, abs=0.1)
 
-        samples = y.sample(shape=(1, 100), seed=jax.random.key(2))
+        samples = y.sample(sample_shape=(1, 100), seed=jax.random.key(2))
         assert len(samples) == 3
         assert "y" in samples
         assert "sigma" in samples
@@ -837,7 +837,7 @@ class TestVarSample:
         _ = lsl.Model(y)
 
         samples = y.sample(
-            shape=(2,),
+            sample_shape=(2,),
             seed=jax.random.key(8),
             newdata=lsl.Position({"x": RawValue(3.0)}),
         )
