@@ -262,9 +262,9 @@ pd.DataFrame(draws).agg(["mean", "std"]).round(3)
 ---
 mystnb:
   image:
-    alt: "Loss history for the conditional variational model, including stochastic training loss and its smoothed monitor."
+    alt: "Full and recent loss histories for the conditional variational model, including stochastic training loss and its smoothed monitor."
 ---
-result.plot_loss()
+result.plot_loss_overview()
 ```
 
 Both draws share one conditional scale here; use separate scale parameters if

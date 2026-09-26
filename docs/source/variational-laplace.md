@@ -178,9 +178,9 @@ draws = posterior.sample(2_000, seed=jax.random.key(43))
 ---
 mystnb:
   image:
-    alt: "VI loss history across 30 epochs, showing Monte Carlo fluctuations around the Gaussian optimum."
+    alt: "Full and recent VI loss histories across 30 epochs, showing Monte Carlo fluctuations around the Gaussian optimum."
 ---
-vi_result.plot_loss()
+vi_result.plot_loss_overview()
 ```
 
 Monte Carlo noise can move the fit away from its starting optimum. Check fitted
