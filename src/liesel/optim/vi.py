@@ -246,17 +246,6 @@ class NegElboLoss(LossMixin):
     auxiliary random variables without an appropriate target density. See
     :doc:`/variational-models` for a complete conditional-model example.
 
-    Attributes
-    ----------
-    p
-        Target model.
-    q
-        Variational model.
-    split
-        Data split used for training observations.
-    scalar
-        Normalization constant used when ``scale=True``.
-
     Examples
     --------
     The convenience constructor :meth:`mvn_diag` builds a diagonal multivariate
@@ -306,6 +295,18 @@ class NegElboLoss(LossMixin):
     ... ).shape
     ()
     """
+
+    p: Model
+    """Target model."""
+
+    q: Model
+    """Variational model."""
+
+    split: SplitConfig
+    """Train/test split used by the loss; validation data is unsupported."""
+
+    scalar: float
+    """Normalization constant used when ``scale=True``."""
 
     def __init__(
         self,
