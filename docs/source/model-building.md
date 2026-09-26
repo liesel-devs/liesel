@@ -12,7 +12,7 @@ mystnb:
 
 # Model building
 
-Use {mod}`liesel.model` to describe a statistical model, inspect its dependencies,
+Use `liesel.model` to describe a statistical model, inspect its dependencies,
 and evaluate its log density. A model also lets you calculate predictions and
 simulate new responses. Constructing it does not fit its parameters.
 

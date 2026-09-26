@@ -146,9 +146,9 @@ scale.value = 2.0
 round(float(custom_model.log_lik), 3)
 ```
 
-Changing `scale.value` recomputes the likelihood. Its proper log-normal prior
+Changing {attr}`scale.value <liesel.model.Var.value>` recomputes the likelihood. Its proper log-normal prior
 expresses the positive constraint; direct assignments must still respect it.
-No Liesel registration is needed. `Dist` also accepts a factory returning a
+No Liesel registration is needed. {class}`Dist <liesel.model.Dist>` also accepts a factory returning a
 JAX-compatible TFP distribution.
 
 TFP already provides `tfd.Laplace`; this small reimplementation shows where to

@@ -52,7 +52,7 @@ model.extract_position(["beta"])
 The first result contains the candidate coefficients; the second contains the
 model's existing coefficients. `update_state` leaves the model unchanged by
 default. Its input state must already be up to date: it only triggers updates
-through the supplied position. Call `update()` first if automatic updates
+through the supplied position. Call {meth}`update() <liesel.model.Var.update>` first if automatic updates
 have been disabled. Weak variables normally remain calculated, read-only values.
 
 To apply the candidate explicitly:
@@ -112,7 +112,7 @@ np.asarray(predictor.value[:3]).round(3)
 ```
 
 Use JAX array operations in calculations that will be differentiated or compiled.
-Avoid reading mutable globals or capturing `beta.value` in a closure: those
+Avoid reading mutable globals or capturing {attr}`beta.value <liesel.model.Var.value>` in a closure: those
 values would not be explicit graph inputs. A pure function depends only on its
 inputs and has no side effects.
 

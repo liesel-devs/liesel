@@ -82,9 +82,9 @@ model.vars["x"].log_prob
 ```
 
 The response contributes one log density per observation in this scalar normal
-example. `model.log_lik` sums densities on observed variables;
-`model.log_prior` sums densities on parameters. Here their sum is
-`model.log_prob`. Variables without a distribution, such as `x`, contribute
+example. {attr}`model.log_lik <liesel.model.Model.log_lik>` sums densities on observed variables;
+{attr}`model.log_prior <liesel.model.Model.log_prior>` sums densities on parameters. Here their sum is
+{attr}`model.log_prob <liesel.model.Model.log_prob>`. Variables without a distribution, such as `x`, contribute
 zero. A parameter without a distribution has a constant prior contribution;
 on an unbounded domain this is an improper prior, with no distribution to sample.
 

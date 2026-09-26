@@ -83,7 +83,7 @@ the result fields and diagnostics.
 
 The optional `samples` argument to {func}`~liesel.goose.loo` is retained for
 compatibility but ignored. By default, relative MCMC efficiency is estimated
-from likelihood values. Use `gs.loo(log_lik_y)` for this workflow.
+from likelihood values. Use {func}`gs.loo(log_lik_y) <liesel.goose.loo>` for this workflow.
 
 ## Compare like with like
 

@@ -4,7 +4,7 @@ adds the MH step. Optional, the kernel supports a stepsize adaptation.
 """
 
 from collections.abc import Callable, Sequence
-from typing import ClassVar, NamedTuple
+from typing import TYPE_CHECKING, ClassVar, NamedTuple
 
 import jax
 
@@ -42,11 +42,12 @@ class MHProposal(NamedTuple):
 
     See Also
     --------
-    :class:`.MHKernel`
+    :class:`~liesel.goose.MHKernel`
 
     """
 
     position: Position
+    """A dictionary mapping parameter names to their newly proposed values."""
     log_correction: Scalar
     """
     Let :math:`q(x' | x)` be the proposal density, then
@@ -61,7 +62,8 @@ MHProposalFn = Callable[[KeyArray, ModelState, Scalar], MHProposal]
 
 class MHKernel(ModelMixin, TransitionMixin[RWKernelState, MHTransitionInfo], ReprMixin):
     """
-    A Metropolis-Hastings kernel implementing the :class:`.Kernel` protocol.
+    A Metropolis-Hastings kernel implementing the :class:`~liesel.goose.Kernel`
+    protocol.
 
     Parameters
     ----------
@@ -140,12 +142,13 @@ class MHKernel(ModelMixin, TransitionMixin[RWKernelState, MHTransitionInfo], Rep
 
     >>> engine = builder.build()
 
-    From here, you can continue with :meth:`~.goose.Engine.sample_all_epochs` to draw
+    From here, you can continue with :meth:`~liesel.goose.Engine.sample_all_epochs` to
+    draw
     samples from your posterior distribution.
 
     See Also
     --------
-    :class:`.MHProposal`
+    :class:`~liesel.goose.MHProposal`
 
     """
 
@@ -154,9 +157,26 @@ class MHKernel(ModelMixin, TransitionMixin[RWKernelState, MHTransitionInfo], Rep
     needs_history: ClassVar[bool] = False
     """Whether this kernel needs its history for tuning."""
     identifier: str = ""
-    """Kernel identifier, set by :class:`.EngineBuilder`"""
+    """Kernel identifier, set by :class:`~liesel.goose.EngineBuilder`"""
     position_keys: tuple[str, ...]
     """Tuple of position keys handled by this kernel."""
+
+    if TYPE_CHECKING:
+        da_gamma: float
+        """The adaptation regularization scale."""
+        da_kappa: float
+        """The adaptation relaxation exponent."""
+        da_t0: int
+        """The adaptation iteration offset."""
+        da_target_accept: float
+        """Target acceptance probability for dual averaging algorithm."""
+        da_tune_step_size: object
+        """
+        If ``True``, the step size passed as an argument to the proposal function is
+        tuned using the dual averaging algorithm.
+        """
+        initial_step_size: float
+        """Value at which to start step size tuning."""
 
     def __init__(
         self,

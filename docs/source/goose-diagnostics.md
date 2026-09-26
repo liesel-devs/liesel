@@ -62,7 +62,7 @@ summary.aggregate_diagnostics().round(3)
 summary.error_df().reset_index().filter(["error_msg", "phase", "count"])
 ```
 
-`aggregate_diagnostics()` reports the smallest bulk/tail ESS and the largest
+{meth}`aggregate_diagnostics() <liesel.goose.SamplesSummary.aggregate_diagnostics>` reports the smallest bulk/tail ESS and the largest
 R-hat within each parameter variable. This keeps a coefficient vector's worst
 diagnostics visible without printing every element.
 
@@ -93,7 +93,7 @@ little movement. Autocorrelation helps identify slow exploration.
 
 | Symptom | Next check |
 | --- | --- |
-| Non-finite starting density or acceptance probability | Inspect `model.diagnose()`, parameter support, calculations, and starting values. |
+| Non-finite starting density or acceptance probability | Inspect {meth}`model.diagnose() <liesel.model.Model.diagnose>`, parameter support, calculations, and starting values. |
 | Divergent HMC/NUTS transitions | Investigate posterior geometry, scaling, and parameterization; a higher target acceptance may help but is not a general repair. |
 | Maximum NUTS tree depth | Check mixing and parameter dependence. Longer trajectories cost more, so investigate before increasing the limit. |
 | Poor chain overlap or high R-hat | Inspect the affected parameters, starting regions, and possible separate modes. |

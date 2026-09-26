@@ -118,7 +118,7 @@ a substitute for a well-scaled model.
 
 Smaller `order` values run first. With equal values, the high-level helper
 uses reverse graph order, starting nearer the responses. Inspect
-`get_kernel_list()` if the order matters, and use the same order for every
+{meth}`get_kernel_list() <liesel.goose.LieselMCMC.get_kernel_list>` if the order matters, and use the same order for every
 member of a joint group. See {class}`~liesel.goose.MCMCSpec` and
 {meth}`~liesel.goose.LieselMCMC.get_kernel_groups` for the exact grouping rules.
 

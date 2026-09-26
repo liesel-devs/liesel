@@ -61,8 +61,8 @@ direction goes from the unconstrained value to the positive value; its inverse
 computes the initial log variance. The graph gains that value dependency. Its colors and edges follow the
 key in the first tutorial.
 
-`biject` returns the original variable, which is useful for chaining. Read
-`.bijected_var` to obtain the new parameter. {meth}`~liesel.model.Var.transform`
+{meth}`biject <liesel.model.Var.biject>` returns the original variable, which is useful for chaining. Read
+{attr}`.bijected_var <liesel.model.Var.bijected_var>` to obtain the new parameter. {meth}`~liesel.model.Var.transform`
 returns the transformed variable instead. `biject("auto")` selects the
 distribution's default event-space bijector; an explicit bijector makes your
 choice visible.
@@ -106,7 +106,7 @@ scale.bijected_var.name
 ```
 
 These keys name distribution arguments, not model variables. For precise control
-over the source name and its inference configuration, use `Var.biject`.
+over the source name and its inference configuration, use {meth}`Var.biject <liesel.model.Var.biject>`.
 
 ## Set up inference
 

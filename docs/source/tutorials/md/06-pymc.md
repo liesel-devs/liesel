@@ -17,7 +17,7 @@ Liesel-model tutorials; see {doc}`../../goose-engine` for the engine interface.
 Use the repository's `pymc` dependency group together with its documentation
 dependencies (`uv sync --locked --dev --group pymc`). The example was checked
 with Python 3.13, PyMC 6.0.1, PyTensor 3.0.3 and JAX/jaxlib 0.10.1 on CPU with
-64-bit mode enabled below. `PyMCInterface` is experimental, so check the example
+64-bit mode enabled below. {class}`PyMCInterface <liesel.experimental.pymc.PyMCInterface>` is experimental, so check the example
 again when changing that environment. No external dataset is needed.
 
 ```{note}
@@ -109,7 +109,7 @@ with pm.Model() as spike_and_slab_model:
 ```
 
 The model belongs to PyMC, so inspect its native representation here. Liesel's
-`model.plot()` is for Liesel graphs.
+{meth}`model.plot() <liesel.model.Model.plot>` is for Liesel graphs.
 
 ```{code-cell} ipython3
 spike_and_slab_model
@@ -117,7 +117,7 @@ spike_and_slab_model
 
 ## Connect the model
 
-`PyMCInterface` evaluates the model's log density through JAX. Its state uses
+{class}`PyMCInterface <liesel.experimental.pymc.PyMCInterface>` evaluates the model's log density through JAX. Its state uses
 PyMC's unconstrained variable names: positive `sigma2` and `tau` become log
 variables, and `theta` becomes `theta_logodds__`.
 

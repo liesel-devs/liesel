@@ -314,8 +314,8 @@ class RWKernel(
         return gs.WarmupOutcome(error_code=0, kernel_state=kernel_state)
 ```
 
-`init_state` creates each chain's state. `start_epoch` resets dual averaging,
-and `end_epoch` installs its averaged step size. Here `tune` and `end_warmup`
+{meth}`init_state <liesel.goose.Kernel.init_state>` creates each chain's state. {meth}`start_epoch <liesel.goose.Kernel.start_epoch>` resets dual averaging,
+and {meth}`end_epoch <liesel.goose.Kernel.end_epoch>` installs its averaged step size. Here {meth}`tune <liesel.goose.Kernel.tune>` and {meth}`end_warmup <liesel.goose.Kernel.end_warmup>`
 only return successful outcomes; other kernels can use them for updates at
 epoch boundaries and after warmup. See the {class}`~liesel.goose.Kernel`
 protocol for all method contracts.

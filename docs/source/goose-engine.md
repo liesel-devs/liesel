@@ -51,7 +51,7 @@ engine.sample_all_epochs()
 results = engine.get_results()
 ```
 
-`get_engine_builder` supplies the model interface, initial state, kernels,
+{meth}`get_engine_builder <liesel.goose.LieselMCMC.get_engine_builder>` supplies the model interface, initial state, kernels,
 and configured jitter. The remaining calls choose the schedule, construct
 the engine, run it, and retrieve its results.
 
@@ -108,12 +108,12 @@ engine.sample_all_epochs()
 normal_results = engine.get_results()
 ```
 
-Here `set_initial_values` broadcasts one state to all chains. For different
+Here {meth}`set_initial_values <liesel.goose.EngineBuilder.set_initial_values>` broadcasts one state to all chains. For different
 starts, pass state leaves with a leading chain axis and
 `multiple_chains=True`. The interface provides log-density evaluation and
-position updates. See {class}`~liesel.goose.ModelInterface` for the protocol.
+position updates. See `ModelInterface` for the protocol.
 
 The same engine can use other representations through
-{class}`~liesel.goose.ModelInterface`. For custom update logic, start with
+`ModelInterface`. For custom update logic, start with
 an {doc}`MH proposal <tutorials/md/08-custom-kernel>` before implementing a
 complete kernel class.

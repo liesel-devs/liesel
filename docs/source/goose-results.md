@@ -65,8 +65,8 @@ sample_shapes
 
 The shapes are `(4, 1000, 2)` and `(4, 1000)` in the tutorial:
 chains, draws, then any parameter dimensions. Preserve the first two axes
-when computing diagnostics. `get_samples()` also includes initial values
-and warmup; use `get_posterior_samples()` for posterior inference.
+when computing diagnostics. {meth}`get_samples() <liesel.goose.SamplingResults.get_samples>` also includes initial values
+and warmup; use {meth}`get_posterior_samples() <liesel.goose.SamplingResults.get_posterior_samples>` for posterior inference.
 
 ## Record derived values
 
@@ -133,7 +133,7 @@ y_predictive = predictive["y"]
 y_predictive.shape
 ```
 
-Pass draws for the writable parameters to `model.sample`. The recorded
+Pass draws for the writable parameters to {meth}`model.sample <liesel.model.Model.sample>`. The recorded
 `sigma_sq` is a derived value in this model; it is recomputed from
 `log_sigma_sq` rather than set directly.
 
@@ -161,7 +161,7 @@ run. Load only trusted pickle files. Keep the model definition, data, and
 {doc}`environment information <tutorials/md/05-reproducibility>` with the result.
 
 Alternatively, pass `save_path="regression-samples.pkl"` to
-`run_for_epochs`. If that path already exists, Goose **loads it and skips
+{meth}`run_for_epochs <liesel.goose.LieselMCMC.run_for_epochs>`. If that path already exists, Goose **loads it and skips
 sampling**, even when you changed the model, seed, or sampling settings.
-Use a fresh path for a new fit. A saved `SamplingResults` object contains
+Use a fresh path for a new fit. A saved {class}`SamplingResults <liesel.goose.SamplingResults>` object contains
 results; it is not an engine checkpoint for resuming a chain.

@@ -32,7 +32,7 @@ model graph; their reference pages document arguments and defaults.
 The model building workflow in Liesel consists of the following steps:
 
 1. Set up the nodes and variables that make up your model.
-2. Initialize a :class:`.Model` with your root variable(s).
+2. Initialize a :class:`Model <liesel.model.Model>` with your root variable(s).
 
 .. autosummary::
     :toctree: generated
@@ -69,11 +69,11 @@ MCMC Kernels
 
 Goose makes it easy for you to combine different MCMC kernels for different blocks of
 model parameters. You can also define your own kernel by implementing
-the :class:`.Kernel` protocol.
+the :class:`Kernel <liesel.goose.Kernel>` protocol.
 
 To draw samples from your posterior, you will want to call
-:meth:`~.goose.Engine.sample_all_epochs`. Once sampling is done, you can obtain the results
-with :meth:`~.goose.Engine.get_results`, which will return a :class:`~.goose.SamplingResults`
+:meth:`sample_all_epochs <liesel.goose.Engine.sample_all_epochs>`. Once sampling is done, you can obtain the results
+with :meth:`get_results <liesel.goose.Engine.get_results>`, which will return a :class:`SamplingResults <liesel.goose.SamplingResults>`
 instance.
 
 .. autosummary::
@@ -107,9 +107,9 @@ The central classes for handling your sampling results are:
     ~liesel.goose.loo
 
 You can obtain your posterior samples as a dictionary via
-:meth:`~.goose.SamplingResults.get_posterior_samples`. There is also experimental support
+:meth:`get_posterior_samples <liesel.goose.SamplingResults.get_posterior_samples>`. There is also experimental support
 for turning your samples into an ArviZ data object via
-:func:`.to_arviz_inference_data`.
+:func:`to_arviz_inference_data <liesel.experimental.arviz.to_arviz_inference_data>`.
 
 Goose also comes with a number of plotting functions that give you quick
 acccess to important diagnostics.
@@ -209,7 +209,7 @@ Model Interfaces
 
 A natural option for setting up your model is the use of ``liesel.model``.
 However, you are not locked
-in to using :class:`.Model`. Goose currently includes the following interfaces:
+in to using :class:`Model <liesel.model.Model>`. Goose currently includes the following interfaces:
 
 .. autosummary::
     :toctree: generated

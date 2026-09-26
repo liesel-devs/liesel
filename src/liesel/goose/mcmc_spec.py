@@ -64,11 +64,12 @@ class LieselMCMC:
     ...     seed=1, num_chains=4, adaptation=250, posterior=100 # doctest: +SKIP
     ... ) # doctest: +SKIP
 
-    The function returns a :class:`.SamplingResults` object.
+    The function returns a :class:`~liesel.goose.SamplingResults` object.
 
     .. rubric:: More control
 
-    For additional control, we initialize an :class:`.EngineBuilder` and continue
+    For additional control, we initialize an :class:`~liesel.goose.EngineBuilder` and
+    continue
     from there.
 
     >>> builder = gs.LieselMCMC(model).get_engine_builder(seed=1, num_chains=4)
@@ -77,7 +78,9 @@ class LieselMCMC:
     """
 
     model: Model
+    """Model whose variables provide the MCMC specifications."""
     which: str | None = None
+    """Parameter names included in the MCMC setup."""
 
     def get_spec(self, var: Var) -> MCMCSpec | None:
         """
@@ -95,7 +98,8 @@ class LieselMCMC:
         Raises
         ------
         TypeError
-            If the inference attached to the variable is not of type ``MCMCSpec``.
+            If the inference attached to the variable is not of type
+            :class:`~liesel.goose.MCMCSpec`.
         """
         inference = var.get_inference(self.which)
         if inference is None:
@@ -236,12 +240,13 @@ class LieselMCMC:
         apply_jitter
             Whether to apply jitter to the initial states, by default True. Note that
             initial values for a variable will only jittered if the
-            :class:`.MCMCSpec` for this variable was supplied with a ``jitter_dist``.
+            :class:`~liesel.goose.MCMCSpec` for this variable was supplied with a
+            ``jitter_dist``.
 
         Returns
         -------
         EngineBuilder
-            A configured ``EngineBuilder`` instance.
+            A configured :class:`~liesel.goose.EngineBuilder` instance.
         """
         self.validate_inference_specs()
 
@@ -322,7 +327,8 @@ class LieselMCMC:
         apply_jitter
             Whether to apply jitter to the initial states, by default True. Note that
             initial values for a variable will only jittered if the
-            :class:`.MCMCSpec` for this variable was supplied with a ``jitter_dist``.
+            :class:`~liesel.goose.MCMCSpec` for this variable was supplied with a
+            ``jitter_dist``.
             Think of this argument rather as an off-switch of existing jittering.
         store_kernel_states
             Whether to store kernel states in sampling results, which may be useful
@@ -331,10 +337,12 @@ class LieselMCMC:
             Whether to show progress bars during sampling.
         positions_included
             List of additional position keys that should be tracked, see
-            :attr:`.EngineBuilder.positions_included`.
+            :attr:`EngineBuilder.positions_included
+            <liesel.goose.EngineBuilder.positions_included>`.
         positions_excluded
             List of position keys that should not be tracked. Excluded keys override
-            additional keys see :attr:`.EngineBuilder.positions_excluded`.
+            additional keys see :attr:`EngineBuilder.positions_excluded
+            <liesel.goose.EngineBuilder.positions_excluded>`.
         save_path
             Filepath to a pickle file in which results should be saved. If the file
             exists, results are loaded from this file and no sampling occurs.
@@ -343,15 +351,18 @@ class LieselMCMC:
         ---------
 
         This method is *only* appropriate, if your MCMC algorithm is fully specified via
-        :class:`.MCMCSpec` objects in the :attr:`.Var.inference` attributes of the
+        :class:`~liesel.goose.MCMCSpec` objects in the :attr:`Var.inference
+        <liesel.model.Var.inference>` attributes of the
         variables in your model.
 
         See Also
         ---------
-        .get_engine_builder : Method to obtain an :class:`.EngineBuilder` from the
-            LieselMCMC object. The :class:`.EngineBuilder` allows for more detailed
+        .get_engine_builder : Method to obtain an :class:`~liesel.goose.EngineBuilder`
+            from the
+            LieselMCMC object. The :class:`~liesel.goose.EngineBuilder` allows for more
+            detailed
             custom configuration; for example you can add additional MCMC kernels via
-            :meth:`.EngineBuilder.add_kernel`.
+            :meth:`EngineBuilder.add_kernel <liesel.goose.EngineBuilder.add_kernel>`.
 
         Notes
         ------
@@ -435,7 +446,8 @@ class MCMCSpec:
     Parameters
     ----------
     kernel
-        A KernelFactory that returns a ``Kernel`` instance when provided with position
+        A KernelFactory that returns a :class:`~liesel.goose.Kernel` instance when
+        provided with position
         keys and keyword arguments.
     kernel_kwargs
         Additional keyword arguments to be passed to the kernel callable.
@@ -500,11 +512,25 @@ class MCMCSpec:
     )
 
     kernel: KernelFactory
+    """
+    A KernelFactory that returns a :class:`~liesel.goose.Kernel` instance when provided
+    with position keys and keyword arguments.
+    """
     kernel_kwargs: dict[str, Any] = field(default_factory=dict)
+    """Additional keyword arguments to be passed to the kernel callable."""
     kernel_group: str | None = None
+    """Name of the kernel group this variable belongs to."""
     jitter_dist: tfd.Distribution | None = None
+    """
+    A TensorFlow Probability distribution used to apply random jitter to the
+    initial value of the variable.
+    """
     jitter_method: Literal["additive", "multiplicative", "replacement"] = "additive"
+    """
+    The type of jitter to be applied: `additive`, `multiplicative`, or `replacement`.
+    """
     order: int = 99
+    """Relative order of this parameter block in the kernel sequence."""
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.kernel}, {self.kernel_group=})"

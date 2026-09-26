@@ -74,7 +74,7 @@ sorted(changed.vars)
 The old prior-scale variables disappear because they are no longer inputs of
 the model's seed response `y`. `rebuild_graph()` rediscovers the graph from
 its seeds; components added with `add_to_seeds=False` can also disappear.
-`update()` instead recomputes outdated values without pruning the graph.
+{meth}`update() <liesel.model.Var.update>` instead recomputes outdated values without pruning the graph.
 
 The same input indexing works for calculations. Here, `sigma` takes its
 variance as its first positional input:
@@ -106,5 +106,5 @@ sorted(fixed.parameters)
 
 Only `beta` remains a parameter. {meth}`~liesel.model.Model.replace` redirects
 uses of the replaced variable throughout the model, whereas assigning one
-`value_node` or `dist_node` input changes just that connection. Both choices
+{attr}`value_node <liesel.model.Var.value_node>` or {attr}`dist_node <liesel.model.Var.dist_node>` input changes just that connection. Both choices
 change the statistical model here: variance is fixed and its prior is removed.

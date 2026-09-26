@@ -78,10 +78,10 @@ This puts 70% of rows in training, 20% in validation, and 10% in testing, subjec
 to rounding. Splits with validation or test data shuffle by default; set
 `shuffle=False` for an ordered split. Without holdouts, splits preserve the
 original row order and ignore the seed, even with `shuffle=True`. This is also
-the behavior of `LieselOptim`'s automatic full-training split.
+the behavior of {class}`LieselOptim <liesel.optim.LieselOptim>`'s automatic full-training split.
 
 The split's `seed` chooses which rows go into each part. The seed passed to
-`LieselOptim` controls batch sampling during fitting. Both default to `0`.
+{class}`LieselOptim <liesel.optim.LieselOptim>` controls batch sampling during fitting. Both default to `0`.
 Starting parameter values come from the model; seed any random data or starting
 values separately.
 
@@ -89,7 +89,7 @@ values separately.
 
 ## Split several groups
 
-By default, `LieselOptim` raises when observed arrays have different lengths.
+By default, {class}`LieselOptim <liesel.optim.LieselOptim>` raises when observed arrays have different lengths.
 This gives you a chance to check which arrays share rows and which are shared
 data. For independent groups, opt in to grouping by length and inspect the result:
 
@@ -123,9 +123,9 @@ pd.DataFrame(
 )
 ```
 
-Pass the checked split to `LieselOptim` as `split=grouped_split`. Matching lengths
+Pass the checked split to {class}`LieselOptim <liesel.optim.LieselOptim>` as `split=grouped_split`. Matching lengths
 do not establish row alignment: flat or omitted `position_keys` group arrays by
-length only. To choose groups explicitly, use `PositionSplitManager.from_model`
+length only. To choose groups explicitly, use {meth}`PositionSplitManager.from_model <liesel.optim.PositionSplitManager.from_model>`
 with nested keys, such as `position_keys=[["X_a", "y_a"], ["X_b", "y_b"]]`.
 The {doc}`two-group tutorial <tutorials/notebooks/10-liesel-optim-advanced>` shows
 a complete fit.
@@ -150,8 +150,8 @@ offsets with their response.
 For observations on an axis other than zero, set `split_axes` and the
 corresponding `batch_axes` when {doc}`creating batches <optimizer-batching>`.
 
-`PositionSplit` holds the split data. `Split` holds reusable row indices;
-call `split_position()` to apply them. Manager classes handle several groups.
+{class}`PositionSplit <liesel.optim.PositionSplit>` holds the split data. {class}`Split <liesel.optim.Split>` holds reusable row indices;
+call {meth}`split_position() <liesel.optim.Split.split_position>` to apply them. Manager classes handle several groups.
 See {py:meth}`~liesel.optim.PositionSplit.from_model` for the factory options.
 
 For reduced likelihoods or custom objectives, see {doc}`optimizer-loss-scaling`.

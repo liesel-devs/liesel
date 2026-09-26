@@ -1,6 +1,7 @@
 """Loss protocols and concrete losses for experimental optimizers.
 
-This module defines the interface consumed by :class:`.OptimEngine` and provides
+This module defines the interface consumed by :class:`~liesel.optim.OptimEngine` and
+provides
 the default negative log-probability loss for Liesel models.
 """
 
@@ -95,17 +96,20 @@ class Loss(Protocol):
     """
     Protocol for optimizer losses.
 
-    ``OptimEngine`` is intentionally agnostic about the concrete loss type. Any
+    :class:`~liesel.optim.OptimEngine` is intentionally agnostic about the concrete loss
+    type. Any
     object satisfying this protocol can be optimized: it must expose the split used
     for training and validation, provide initial parameter positions, compute
     training and validation losses, and provide gradients for optimizer updates.
 
     Notes
     -----
-    The standard built-in optimizer calls :meth:`value_and_grad` so the objective
+    The standard built-in optimizer calls :meth:`~liesel.optim.Loss.value_and_grad` so
+    the objective
     value used for monitoring and its gradient share one stochastic evaluation.
-    Custom losses can inherit from :class:`LossMixin` to get :meth:`value_and_grad`
-    and :meth:`grad` automatically.
+    Custom losses can inherit from :class:`~liesel.optim.LossMixin` to get
+    :meth:`~liesel.optim.Loss.value_and_grad`
+    and :meth:`~liesel.optim.Loss.grad` automatically.
     """
 
     @property
@@ -153,7 +157,10 @@ class Loss(Protocol):
         ...
 
     def grad(self, params: Position, carry: "OptimCarry") -> Position:
-        """Returns the gradient of :meth:`loss_train_batched` with respect to params."""
+        """
+        Returns the gradient of :meth:`~liesel.optim.Loss.loss_train_batched` with
+        respect to params.
+        """
         ...
 
 
@@ -161,14 +168,17 @@ class LossMixin:
     """
     Shared convenience implementation for differentiable losses.
 
-    Subclasses must define :attr:`split` and :meth:`loss_train_batched`. They should
-    also define :meth:`loss_train` if they support exact full-data monitoring. The
+    Subclasses must define :attr:`~liesel.optim.LossMixin.split` and
+    :meth:`~liesel.optim.LossMixin.loss_train_batched`. They should
+    also define :meth:`~liesel.optim.LossMixin.loss_train` if they support exact
+    full-data monitoring. The
     mixin provides validation-position helpers and JAX gradient methods used by
-    :class:`.Optimizer`.
+    :class:`~liesel.optim.Optimizer`.
 
     Examples
     --------
-    A minimal quadratic loss can inherit from ``LossMixin`` and immediately use the
+    A minimal quadratic loss can inherit from :class:`~liesel.optim.LossMixin` and
+    immediately use the
     gradient helpers:
 
     >>> import jax.numpy as jnp
@@ -199,7 +209,10 @@ class LossMixin:
     """Train/validation/test split used by the loss."""
 
     loss_train_batched: Callable[[Position, "OptimCarry"], jax.Array]
-    """Training objective differentiated by :meth:`grad` and :meth:`value_and_grad`."""
+    """
+    Training objective differentiated by :meth:`~liesel.optim.LossMixin.grad` and
+    :meth:`~liesel.optim.LossMixin.value_and_grad`.
+    """
 
     def _validate_data_keys(
         self, split: SplitConfig, optimizer_keys: Sequence[str]
@@ -265,7 +278,7 @@ class LossMixin:
         self, params: Position, carry: "OptimCarry"
     ) -> tuple[jax.Array, Position]:
         """
-        Evaluates :meth:`loss_train_batched` and its gradient.
+        Evaluates :meth:`~liesel.optim.LossMixin.loss_train_batched` and its gradient.
 
         Parameters
         ----------
@@ -285,7 +298,7 @@ class LossMixin:
 
     def grad(self, params: Position, carry: "OptimCarry") -> Position:
         """
-        Computes the gradient of :meth:`loss_train_batched`.
+        Computes the gradient of :meth:`~liesel.optim.LossMixin.loss_train_batched`.
 
         Parameters
         ----------
@@ -310,7 +323,8 @@ class NegLogProbLoss(LossMixin):
 
     The training objective is the negative sum of the model log-likelihood and
     log-prior. During mini-batch optimization, likelihood terms are scaled through
-    ``carry.batches.scaled_log_lik(...)`` so :class:`.BatchManager` can apply
+    ``carry.batches.scaled_log_lik(...)`` so :class:`~liesel.optim.BatchManager` can
+    apply
     branch-specific scaling for multi-size observed data. Validation loss uses
     ``split.scaled_log_lik(...)`` for the same reason.
 
@@ -318,21 +332,24 @@ class NegLogProbLoss(LossMixin):
     parameter priors. Weak observed variables and weak parameters contribute
     their likelihoods and priors like strong ones.
     Custom aggregate nodes or additional unclassified distribution factors
-    require a custom :class:`Loss`; supplying a manual split is not sufficient.
+    require a custom :class:`~liesel.optim.Loss`; supplying a manual split is not
+    sufficient.
 
     Parameters
     ----------
     model
         Liesel model evaluated by the loss.
     split
-        Train/validation/test split. Use :class:`.PositionSplitManager` for models
+        Train/validation/test split. Use :class:`~liesel.optim.PositionSplitManager` for
+        models
         with observed branches of different sample sizes.
     validation_strategy
         Validation objective. ``"log_lik"`` uses the scaled log-likelihood only.
         ``"log_prob"`` also includes the model log-prior.
     scale
         If ``True``, divide losses by the training sample size. For
-        :class:`.PositionSplitManager`, the scalar is the sum of all branch-specific
+        :class:`~liesel.optim.PositionSplitManager`, the scalar is the sum of all
+        branch-specific
         training sizes.
 
     Examples
@@ -356,6 +373,19 @@ class NegLogProbLoss(LossMixin):
     >>> repr(loss)
     'NegLogProbLoss(validation_strategy=log_lik)'
     """
+
+    if TYPE_CHECKING:
+        scalar: float
+        """Scalar multiplier applied to the negative log probability."""
+        scale: bool
+        """If ``True``, divide losses by the training sample size."""
+        split: SplitConfig
+        """Train/validation/test split."""
+        validation_strategy: Literal["log_lik", "log_prob"]
+        """
+        Validation objective. ``"log_lik"`` uses the scaled log-likelihood only.
+        ``"log_prob"`` also includes the model log-prior.
+        """
 
     def __init__(
         self,
@@ -396,7 +426,7 @@ class NegLogProbLoss(LossMixin):
         Returns
         -------
         Model
-            Model passed to :class:`NegLogProbLoss`.
+            Model passed to :class:`~liesel.optim.NegLogProbLoss`.
         """
         return self._model
 

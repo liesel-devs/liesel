@@ -49,7 +49,7 @@ results = gs.LieselMCMC(model).run_for_epochs(
 
 These counts apply to **each chain**. Adaptation tunes kernel settings.
 Optional burnin lets the chains continue with tuning finished. Both belong to
-warmup. `get_posterior_samples()` returns only the posterior phase: here,
+warmup. {meth}`get_posterior_samples() <liesel.goose.SamplingResults.get_posterior_samples>` returns only the posterior phase: here,
 2,000 draws from each of four chains. The additional recorded initial state
 is not a posterior draw.
 

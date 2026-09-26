@@ -87,13 +87,13 @@ result.status
 result.position_min_monitor
 ```
 
-* `result.position_min_monitor` holds the parameters saved at the epoch with
+* {attr}`result.position_min_monitor <liesel.optim.OptimResult.position_min_monitor>` holds the parameters saved at the epoch with
   the lowest finite monitoring loss. It raises `RuntimeError` if no such loss
   was recorded. An earlier best position remains available after a later failure.
-* `result.position_final` holds the parameters at the end of the run.
-* `result.plot_loss_overview()` shows the full loss history and a closer
+* {attr}`result.position_final <liesel.optim.OptimResult.position_final>` holds the parameters at the end of the run.
+* {meth}`result.plot_loss_overview() <liesel.optim.OptimResult.plot_loss_overview>` shows the full loss history and a closer
   view of recent epochs.
-* `result.plot_params()` shows saved parameter paths.
+* {meth}`result.plot_params() <liesel.optim.OptimResult.plot_params>` shows saved parameter paths.
 
 Both position properties raise `RuntimeError` if their parameters contain NaN
 or infinity. History, status, and diagnostics remain available for inspection.
@@ -101,7 +101,7 @@ See {ref}`optimizer-debug-nans` to capture information about a NaN failure.
 
 The training curve averages the losses seen before each update. Parameters
 change during an epoch, so this curve is not the full training loss at its end.
-Use `result.history.loss_df()` to inspect the recorded values.
+Use {meth}`result.history.loss_df() <liesel.optim.OptimHistory.loss_df>` to inspect the recorded values.
 
 ```{code-cell} ipython3
 result.history.loss_df().tail().round(4)
@@ -158,7 +158,7 @@ and the alternative {py:meth}`~liesel.optim.EmaTrainLossMonitor.from_half_life` 
 
 ## Investigate NaNs
 
-For a configured `LieselOptim` builder, enable first-NaN reproduction capture
+For a configured {class}`LieselOptim <liesel.optim.LieselOptim>` builder, enable first-NaN reproduction capture
 on its engine before fitting:
 
 ```{code-cell} ipython3

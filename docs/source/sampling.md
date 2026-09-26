@@ -7,7 +7,7 @@ kernelspec:
 
 # MCMC sampling
 
-Use {mod}`liesel.goose` to draw posterior samples. Choose a sampling method
+Use `liesel.goose` to draw posterior samples. Choose a sampling method
 (a *kernel*) for each parameter block, then let Goose run the chains.
 
 This complete example estimates a normal mean with a normal prior:
