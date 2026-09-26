@@ -206,7 +206,7 @@ class EpochManager:
         """
         Returns the next epoch with an initialized state.
 
-        Raises a :class:`.RuntimeError` if there are no more epoch configs to return.
+        Raises a :exc:`RuntimeError` if there are no more epoch configs to return.
         """
         if self.has_more():
             config = self._configs[self._next_epoch_ptr]

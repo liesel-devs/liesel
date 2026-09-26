@@ -36,7 +36,7 @@ from .types import KeyArray, ModelState, Position, Scalar, TuningInfo
 class RWKernelState:
     """
     A dataclass for the state of a :class:`~liesel.goose.RWKernel`, implementing the
-    :class:`.DAKernelState` protocol.
+    :class:`~liesel.goose.da.DAKernelState` protocol.
     """
 
     step_size: Scalar

@@ -58,7 +58,7 @@ class TransitionOutcome[TKernelState, TTransitionInfo: TransitionInfo]:
     """
     A dataclass for the return value of the kernel method :meth:`Kernel.transition
     <liesel.goose.Kernel.transition>`.
-    Different kernels can use different types of :class:`.KernelState`'s and
+    Different kernels can use different types of :attr:`~liesel.goose.KernelState`'s and
     :class:`~liesel.goose.TransitionInfo`'s.
     """
 
@@ -68,7 +68,7 @@ class TransitionOutcome[TKernelState, TTransitionInfo: TransitionInfo]:
     """
     kernel_state: TKernelState
     """
-    A kernel state object, see :class:`.DAKernelState`.
+    A kernel state object, see :class:`~liesel.goose.da.DAKernelState`.
     """
     model_state: ModelState
     """
@@ -86,7 +86,7 @@ class TuningOutcome[TKernelState, TTuningInfo: TuningInfo]:
     """
     A dataclass for the return value of the kernel method :meth:`Kernel.tune
     <liesel.goose.Kernel.tune>`.
-    Different kernels can use different types of :class:`.KernelState`'s and
+    Different kernels can use different types of :attr:`~liesel.goose.KernelState`'s and
     :class:`~liesel.goose.TuningInfo`'s.
     """
 
@@ -96,7 +96,7 @@ class TuningOutcome[TKernelState, TTuningInfo: TuningInfo]:
     """
     kernel_state: TKernelState
     """
-    A kernel state object, see :class:`.DAKernelState`.
+    A kernel state object, see :class:`~liesel.goose.da.DAKernelState`.
     """
 
 
@@ -106,14 +106,14 @@ class WarmupOutcome[TKernelState]:
     """
     A dataclass for the return value of the kernel method :meth:`Kernel.end_warmup
     <liesel.goose.Kernel.end_warmup>`.
-    Different kernels can use different types of :class:`.KernelState`'s.
+    Different kernels can use different types of :attr:`~liesel.goose.KernelState`'s.
     """
 
     error_code: int
     """Error code for the transition."""
     kernel_state: TKernelState
     """
-    A kernel state object, see :class:`.DAKernelState`.
+    A kernel state object, see :class:`~liesel.goose.da.DAKernelState`.
     """
 
 
