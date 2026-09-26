@@ -62,13 +62,14 @@ We use a 300-epoch budget here. Without an explicit stopper, `LieselVI` uses
 Sixteen draws per step estimate the ELBO; more draws cost more computation.
 
 ```{code-cell} python
-loss = opt.NegElboLoss.mvn_diag(model, nsamples=16, scale_diag=0.5, scale=True)
+vdist = opt.VDist(["loc"], model).mvn_diag(scale_diag=0.5).build()
+loss = opt.NegElboLoss.from_vdist(vdist, nsamples=16, scale=True)
 
 result = opt.LieselVI(
     model,
     loss=loss,
     optimizers=optax.adam(0.01),
-    loss_monitor=opt.EmaTrainLossMonitor(effective_window=2.0),
+    loss_monitor=opt.EmaTrainLossMonitor(effective_window=20.0),
     stopper=opt.Stopper(epochs=300, patience=300),
     seed=42,
     show_progress=False,
@@ -84,8 +85,11 @@ mystnb:
 result.plot_loss()
 ```
 
-`mvn_diag` creates a diagonal Gaussian over the model parameters and stores its
-{class}`~liesel.optim.VDist` in `loss.vdist`. Fitting leaves the supplied model
+{class}`~liesel.optim.VDist` selects the target parameters to approximate. Here,
+`mvn_diag` assigns a Gaussian with diagonal covariance to `loc`, and `build()`
+creates its variational model. `NegElboLoss.from_vdist` connects that family to the
+target, including the mapping back to the target's parameter names and shapes.
+The loss keeps the helper in `loss.vdist`; fitting leaves the supplied model
 unchanged. Inspect the curve and posterior predictions before treating the fit
 as converged; a decreasing loss alone does not establish posterior accuracy.
 
@@ -134,8 +138,12 @@ constrained parameters. The fitted approximation API also accepts a directly
 constructed {class}`~liesel.optim.NegElboLoss` without a `VDist`. Custom transformed
 families remain subject to [issue #418](https://github.com/liesel-devs/liesel/issues/418).
 
-Use `mvn_tril` for a dense covariance or {class}`~liesel.optim.CompositeVDist` for
-independent blocks. An explicit loss keeps its own sample count, scaling, entropy,
+For a dense Gaussian or independent groups of parameters, see the worked
+{class}`~liesel.optim.VDist` and {class}`~liesel.optim.CompositeVDist` examples in
+{doc}`variational-models`. Its {ref}`Gaussian shortcuts <vi-gaussian-shortcuts>`
+section shows how `NegElboLoss.mvn_diag` and `NegElboLoss.mvn_tril` construct a
+loss directly when one Gaussian family covers all target parameters. An explicit
+loss keeps its own sample count, scaling, entropy,
 and prior settings; configure them on that loss.
 
 (vi-initial-scale)=
@@ -153,9 +161,9 @@ Narrow initialization keeps initial draws local but can take many updates to exp
 wider initialization can produce more variable gradients or reach unstable regions.
 The learning rate, parameterization, and iteration budget also matter.
 
-Override `scale_diag` as in the fit above, use `scale_tril` for dense blocks, or
-`scale` with {meth}`~liesel.optim.VDist.normal`. Arrays allow different scales for
-different parameters. Pass an explicitly constructed loss to `LieselVI` to preserve
+Override `scale_diag` as in the fit above or use `scale_tril` for dense blocks.
+Arrays allow different initial scales for different parameters. Pass an explicitly
+constructed loss to `LieselVI` to preserve
 those settings. Check loss paths and fitted uncertainty; increasing the budget or
 changing the learning rate may be necessary even in simple Gaussian models.
 
@@ -163,7 +171,10 @@ changing the learning rate may be necessary even in simple Gaussian models.
 
 Both `optimizers` and `loss_monitor` are required. An
 {class}`~liesel.optim.EmaTrainLossMonitor` smooths losses evaluated before optimizer
-updates and carries the average across epochs. `"train_full_data"` adds an
+updates and carries the average across epochs. Here, `effective_window=20.0`
+sets an EMA span of 20 epoch equivalents. This reduces Monte Carlo fluctuations
+but makes the monitor slower to reflect changes in the fit. It is neither a
+hard 20-epoch window nor a half-life. `"train_full_data"` adds an
 evaluation on all training rows after each epoch. It still draws variational
 samples and can fluctuate without minibatches. Analytic entropy reduces one
 source of Monte Carlo noise; it does not make the whole ELBO deterministic.
