@@ -73,6 +73,8 @@ Python in `{code-cell}` blocks without interactive prompts (`>>>` or `...`).
 - Tag build-only setup cells with `:tags: [remove-cell]`. They still execute, but
   show no code, output, or expandable box. Keep prerequisites and links to relevant
   tutorials visible in the prose; keep setup that teaches the workflow visible.
+- Imports stay visible in a code cell at the top of each guide. Hide only
+  non-import build setup, such as logging configuration and fixture models or data.
 - Pass distributions to `lsl.Var` and its factory methods using `dist=`, not
   positional arguments.
 - Pass a single model root directly, as in `lsl.Model(y)`. Choose `to_float32`
