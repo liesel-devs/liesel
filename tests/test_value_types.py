@@ -88,7 +88,12 @@ def test_flat_derivatives_have_array_outputs(interface: bool) -> None:
     np.testing.assert_allclose(hessian, -np.eye(2))
     np.testing.assert_allclose(jax.jit(log_prob.grad)(position), gradient)
     if TYPE_CHECKING:
-        log_prob.log_prob(object())  # ty: ignore[invalid-argument-type]
+        flat = lsl.FlatLogProb(model, ["x"])
+        flat.log_prob(object())  # ty: ignore[invalid-argument-type]
+        flat_interface = gs.FlatInterfaceLogProb(
+            gs.LieselInterface(model), model.state, ["x"]
+        )
+        flat_interface.log_prob(object())  # ty: ignore[invalid-argument-type]
 
 
 def test_scalar_and_numpy_log_prob_outputs_are_preserved() -> None:
