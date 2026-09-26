@@ -36,10 +36,9 @@ def observed_log_lik_sources(
 ) -> dict[str, list[str]]:
     """Map observed factors to selected data keys, following weak value inputs.
 
-    Weak observations are recomputed from their strong inputs. Their likelihoods
-    therefore belong to the same row group as those inputs, not to a separately
-    writable copy of the weak value. Multiple groups claiming a factor are rejected
-    by :func:`validate_likelihood_groups`.
+    An observed factor belongs to the group selecting its value or source inputs.
+    This includes explicitly selected computed observations. Multiple groups
+    claiming a factor are rejected by :func:`validate_likelihood_groups`.
     """
     selected = {
         key: model.vars[key].value_node if key in model.vars else model.nodes[key]

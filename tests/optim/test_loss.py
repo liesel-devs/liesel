@@ -1,15 +1,21 @@
 import jax
 import jax.numpy as jnp
+import numpy as np
+import optax
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
+from jax.experimental import io_callback
 
 import liesel.model as lsl
 from liesel.optim import (
     Batches,
+    EmaTrainLossMonitor,
+    LieselOptim,
     NegLogProbLoss,
     PositionSplit,
     PositionSplitManager,
     Split,
+    Stopper,
 )
 from liesel.optim.state import OptimCarry
 from liesel.optim.types import Position
@@ -57,6 +63,422 @@ def _empty_carry(model) -> OptimCarry:
         model_state=model.state,
         save_position_history=False,
     )
+
+
+def _counted_basis_model(extra_branch=False, scale_fn=None):
+    calls = []
+
+    def square(values):
+        calls.append(np.asarray(values).copy())
+        return np.square(values)
+
+    def basis_fn(values):
+        return io_callback(
+            square,
+            jax.ShapeDtypeStruct(values.shape, values.dtype),
+            values,
+            ordered=True,
+        )
+
+    x = lsl.Var.new_value(jnp.arange(1.0, 7.0), name="x")
+    basis = lsl.Var.new_calc(basis_fn, x, name="basis")
+    beta = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, 0.0, 1.0), name="beta")
+    loc = lsl.Var.new_calc(jnp.multiply, basis, beta)
+    scale = 1.0 if scale_fn is None else lsl.Var.new_calc(scale_fn, x, name="scale")
+    y = lsl.Var.new_obs(2 * x.value**2, lsl.Dist(tfd.Normal, loc, scale), name="y")
+    if extra_branch:
+        z = lsl.Var.new_obs(
+            jnp.array([1.0, 1.0, 100.0, 100.0]),
+            lsl.Dist(tfd.Normal, beta, 1.0),
+            name="z",
+        )
+        model = lsl.Model([y, z])
+    else:
+        model = lsl.Model(y)
+    jax.effects_barrier()
+    return model, calls
+
+
+@pytest.mark.parametrize(
+    "optimizer,batch_size", [("lbfgs", None), ("sgd", None), ("sgd", 2)]
+)
+def test_fit_reuses_full_data_basis(optimizer, batch_size):
+    model, calls = _counted_basis_model()
+    optim = LieselOptim(
+        model,
+        split=PositionSplit.from_model(model, position_keys=["x", "y"], shuffle=False),
+        batch_size=batch_size,
+        optimizers="lbfgs" if optimizer == "lbfgs" else optax.sgd(0.0001),
+        loss_monitor="train_full_data",
+        stopper=Stopper(epochs=5, patience=5, min_epochs=5),
+        show_progress=False,
+    )
+    calls.clear()
+    result = optim.fit()
+    jax.effects_barrier()
+    assert result.n_epochs == 5
+    assert sum(call.size == 6 for call in calls) == 1
+    assert sum(call.size == 2 for call in calls) == (15 if batch_size == 2 else 0)
+    assert result.history.position is not None
+    beta = result.history.position["beta"]
+    # Six Normal observations with basis x**2, and a standard Normal prior.
+    expected = (
+        7 * np.log(2 * np.pi) / 2
+        + (2 - beta) ** 2 * np.sum(np.arange(1.0, 7.0) ** 4) / 2
+        + beta**2 / 2
+    ) / 6
+    np.testing.assert_allclose(result.history.loss_monitor, expected, rtol=1e-5)
+
+
+@pytest.mark.parametrize("holdout", ["validate", "test"])
+@pytest.mark.parametrize("batch_size", [None, 1])
+def test_prepared_partitions_keep_omitted_batch_keys_on_training_rows(
+    holdout, batch_size
+):
+    model, calls = _counted_basis_model(extra_branch=True)
+    split = PositionSplit.from_model(
+        model,
+        position_keys=[["x", "y"], ["z"]],
+        multi_size="manager",
+        shuffle=False,
+        validate_axis_share=0.5 if holdout == "validate" else 0.0,
+        test_axis_share=0.5 if holdout == "test" else 0.0,
+    )
+    optim = LieselOptim(
+        model,
+        split=split,
+        batches=Batches.from_split(
+            split, position_keys=["z"], batch_size=batch_size, shuffle=False
+        ),
+        optimizers=optax.sgd(0.01),
+        loss_monitor="validation" if holdout == "validate" else "train_full_data",
+        stopper=Stopper(epochs=5, patience=5, min_epochs=5),
+        show_progress=False,
+    )
+    calls.clear()
+    result = optim.fit()
+    jax.effects_barrier()
+    expected_calls = [[1.0, 2.0, 3.0]]
+    if holdout == "validate":
+        expected_calls += [[4.0, 5.0, 6.0]]
+    np.testing.assert_array_equal(calls, expected_calls)
+
+    # The same gradient applies at each step: the two training z values coincide.
+    steps = np.arange(1, 6) * (1 if batch_size is None else 2)
+    beta = (198 / 101) * (1 - (1 - 0.01 * 101 / 5) ** steps)
+    assert result.history.position is not None
+    np.testing.assert_allclose(result.history.position["beta"], beta, rtol=1e-5)
+    x = np.arange(4.0, 7.0) if holdout == "validate" else np.arange(1.0, 4.0)
+    z = 100.0 if holdout == "validate" else 1.0
+    expected = (
+        5 * np.log(2 * np.pi) / 2 + (2 - beta) ** 2 * np.sum(x**4) / 2 + (z - beta) ** 2
+    )
+    if holdout == "test":
+        expected += np.log(2 * np.pi) / 2 + beta**2 / 2
+    np.testing.assert_allclose(result.history.loss_monitor, expected / 5, rtol=1e-5)
+
+
+@pytest.mark.parametrize("debug", [False, True])
+def test_partial_batches_prepare_unbatched_and_passthrough_values_once(tmp_path, debug):
+    calls = {"x": [], "s": []}
+
+    def counted_square(values, name):
+        def square(values):
+            calls[name].append(np.asarray(values).copy())
+            return np.square(values)
+
+        return io_callback(
+            square,
+            jax.ShapeDtypeStruct(values.shape, values.dtype),
+            values,
+            ordered=True,
+        )
+
+    x = lsl.Var.new_value(jnp.arange(1.0, 7.0), name="x")
+    s = lsl.Var.new_value(jnp.array(1.0), name="s")
+    basis = lsl.Var.new_calc(lambda x: counted_square(x, "x"), x, name="basis")
+    scale = lsl.Var.new_calc(lambda s: counted_square(s, "s"), s, name="scale")
+    beta = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, 0.0, 1.0), name="beta")
+    loc = lsl.Var.new_calc(jnp.multiply, basis, beta)
+    y = lsl.Var.new_obs(2 * x.value**2, lsl.Dist(tfd.Normal, loc, scale), name="y")
+    z = lsl.Var.new_obs(
+        jnp.array([1.0, 1.0, 100.0, 100.0]),
+        lsl.Dist(tfd.Normal, beta, 1.0),
+        name="z",
+    )
+    model = lsl.Model([y, z])
+    splitter = Split.from_model(
+        model,
+        position_keys=["x", "y", "z", "s"],
+        split_axes={"s": None},
+        multi_size="manager",
+        test_axis_share=0.5,
+        shuffle=False,
+    )
+    # The passthrough training value also differs from the model's setup value.
+    data = Position(model.extract_position(["x", "y", "z"]) | {"s": jnp.array(2.0)})
+    split = splitter.split_position(data)
+    engine = LieselOptim(
+        model,
+        split=split,
+        batches=Batches.from_split(
+            split, position_keys=["z"], batch_size=1, shuffle=False
+        ),
+        optimizers=optax.sgd(0.1),
+        loss_monitor=EmaTrainLossMonitor(effective_window=2),
+        stopper=Stopper(epochs=5, patience=5, min_epochs=5),
+        show_progress=False,
+    ).build_engine()
+    engine.debug_nans = debug
+    jax.effects_barrier()
+    for values in calls.values():
+        values.clear()
+
+    checkpoint = tmp_path / "partial-fit.pkl"
+    paused = engine.fit(checkpoint=checkpoint, pause_after=2)
+    jax.effects_barrier()
+    assert paused.status == "paused"
+    np.testing.assert_array_equal(calls["x"], [[1.0, 2.0, 3.0]])
+    np.testing.assert_array_equal(calls["s"], [2.0])
+
+    result = engine.fit(checkpoint=checkpoint)
+    jax.effects_barrier()
+    # A resume rebuilds the same training values once, regardless of epoch count.
+    np.testing.assert_array_equal(calls["x"], [[1.0, 2.0, 3.0]] * 2)
+    np.testing.assert_array_equal(calls["s"], [2.0, 2.0])
+    # Normal y has variance 16, z variance 1, and beta a unit Normal prior.
+    # The normalized gradient is ((73/8)*beta - 57/4) / 5, twice per epoch.
+    steps = 2 * np.arange(1, 6)
+    expected = (114 / 73) * (1 - (1 - 0.1 * 73 / 40) ** steps)
+    assert result.history.position is not None
+    np.testing.assert_allclose(result.history.position["beta"], expected, rtol=1e-5)
+
+
+@pytest.mark.parametrize(
+    "batch_size,monitor",
+    [(None, "validation"), (1, "validation"), (1, "ema"), (1, "train_full_data")],
+)
+def test_fit_batches_computed_basis_without_callbacks(batch_size, monitor):
+    model, calls = _counted_basis_model(extra_branch=True)
+
+    def fit(data_key):
+        split = PositionSplit.from_model(
+            model,
+            position_keys=[[data_key, "y"], ["z"]],
+            multi_size="manager",
+            validate_axis_share=0.5,
+            shuffle=False,
+        )
+        return LieselOptim(
+            model,
+            split=split,
+            batches=Batches.from_split(
+                split,
+                position_keys=[data_key, "y"],
+                batch_size=batch_size,
+                shuffle=False,
+            ),
+            optimizers=optax.sgd(0.01),
+            loss_monitor=(
+                EmaTrainLossMonitor(effective_window=2) if monitor == "ema" else monitor
+            ),
+            stopper=Stopper(epochs=3, patience=3, min_epochs=3),
+            seed=12,
+            show_progress=False,
+        ).fit()
+
+    calls.clear()
+    computed = fit("basis")
+    jax.effects_barrier()
+    assert not calls
+    raw = fit("x")
+    assert computed.history.position is not None
+    assert raw.history.position is not None
+    np.testing.assert_allclose(
+        computed.history.position["beta"], raw.history.position["beta"], rtol=1e-6
+    )
+    np.testing.assert_allclose(
+        computed.history.loss_monitor, raw.history.loss_monitor, rtol=1e-6
+    )
+    # Gaussian SGD reference: the omitted z group contributes only training [1, 1].
+    expected = (
+        (198 / 101) * (1 - 0.798 ** np.arange(1, 4))
+        if batch_size is None
+        else [1.082866944, 1.5709256790939157, 1.7908985300718774]
+    )
+    np.testing.assert_allclose(computed.history.position["beta"], expected, rtol=1e-5)
+
+
+def test_fit_mixes_precomputed_matrix_rows_and_native_covariate_batches():
+    calls = []
+
+    def matrix(values):
+        calls.append(np.asarray(values).copy())
+        return np.column_stack((np.ones_like(values), values))
+
+    def basis_fn(values):
+        return io_callback(
+            matrix,
+            jax.ShapeDtypeStruct((values.size, 2), values.dtype),
+            values,
+            ordered=True,
+        )
+
+    x1 = lsl.Var.new_obs(jnp.arange(-2.0, 6.0), name="x1")
+    x2 = lsl.Var.new_obs(
+        jnp.array([1.0, 3.0, -1.0, 2.0, 0.0, 4.0, -2.0, 1.0]), name="x2"
+    )
+    basis = lsl.Var.new_calc(basis_fn, x1, name="basis")
+    beta = lsl.Var.new_param(jnp.zeros(2), lsl.Dist(tfd.Normal, 0.0, 1.0), name="beta")
+    gamma = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, 0.0, 1.0), name="gamma")
+    loc = lsl.Var.new_calc(
+        lambda basis, beta, x2, gamma: basis @ beta + gamma * x2**2,
+        basis,
+        beta,
+        x2,
+        gamma,
+    )
+    y = lsl.Var.new_obs(jnp.arange(8.0) / 5, lsl.Dist(tfd.Normal, loc, 1.0), name="y")
+    model = lsl.Model(y)
+    jax.effects_barrier()
+
+    def fit(data_key):
+        split = PositionSplit.from_model(
+            model,
+            position_keys=[data_key, "x2", "y"],
+            validate_axis_share=0.25,
+            seed=12,
+        )
+        return LieselOptim(
+            model,
+            split=split,
+            batch_size=2,
+            optimizers=optax.sgd(0.005),
+            loss_monitor="validation",
+            stopper=Stopper(epochs=3, patience=3, min_epochs=3),
+            seed=13,
+            show_progress=False,
+        ).fit()
+
+    calls.clear()
+    computed = fit("basis")
+    jax.effects_barrier()
+    assert not calls
+    raw = fit("x1")
+    jax.effects_barrier()
+    assert calls
+    for actual, expected in zip(
+        jax.tree.leaves(computed.history), jax.tree.leaves(raw.history), strict=True
+    ):
+        np.testing.assert_allclose(actual, expected, rtol=1e-6, atol=1e-7)
+
+
+@pytest.mark.parametrize("debug", [False, True])
+@pytest.mark.parametrize("monitor", ["ema", "validation"])
+def test_minibatches_skip_full_training_basis_and_keep_omitted_training_rows(
+    tmp_path, debug, monitor
+):
+    model, calls = _counted_basis_model(extra_branch=True)
+    split = PositionSplit.from_model(
+        model,
+        position_keys=[["x", "y"], ["z"]],
+        multi_size="manager",
+        shuffle=False,
+        validate_axis_share=0.5,
+    )
+    engine = LieselOptim(
+        model,
+        split=split,
+        batches=Batches.from_split(
+            split, position_keys=["x", "y"], batch_size=1, shuffle=False
+        ),
+        optimizers=optax.sgd(0.01),
+        loss_monitor=(
+            EmaTrainLossMonitor(effective_window=2)
+            if monitor == "ema"
+            else "validation"
+        ),
+        stopper=Stopper(epochs=3, patience=3, min_epochs=3),
+        show_progress=False,
+    ).build_engine()
+    engine.debug_nans = debug
+    calls.clear()
+    checkpoint = tmp_path / "fit.pkl"
+    paused = engine.fit(checkpoint=checkpoint, pause_after=1)
+    assert paused.status == "paused"
+    result = engine.fit(checkpoint=checkpoint)
+    jax.effects_barrier()
+    assert not any(np.array_equal(call, [1.0, 2.0, 3.0]) for call in calls)
+    assert result.n_epochs == 3
+    assert result.history.position is not None
+    # The three scalar Gaussian SGD steps compose to
+    # beta_next = 0.450709792 * beta + 1.082866944, using only training z = [1, 1].
+    np.testing.assert_allclose(
+        result.history.position["beta"],
+        [1.082866944, 1.5709256790939157, 1.7908985300718774],
+        rtol=1e-5,
+    )
+
+
+@pytest.mark.parametrize("debug", [False, True])
+def test_checkpoint_rebuilds_data_states_once(tmp_path, debug):
+    def build_engine():
+        model, calls = _counted_basis_model()
+        split = PositionSplit.from_model(
+            model, position_keys=["x", "y"], validate_axis_share=0.5, shuffle=False
+        )
+        engine = LieselOptim(
+            model,
+            split=split,
+            optimizers=optax.sgd(0.0001),
+            loss_monitor="validation",
+            stopper=Stopper(epochs=5, patience=5, min_epochs=5),
+            show_progress=False,
+        ).build_engine()
+        engine.debug_nans = debug
+        calls.clear()
+        return engine, calls
+
+    engine, calls = build_engine()
+    checkpoint = tmp_path / "fit.pkl"
+    engine.fit(checkpoint=checkpoint, pause_after=2)
+    jax.effects_barrier()
+    assert len(calls) == 2
+    engine, calls = build_engine()
+    resumed = engine.fit(checkpoint=checkpoint)
+    jax.effects_barrier()
+    assert len(calls) == 2
+    uninterrupted = engine.fit()
+    for actual, expected in zip(
+        jax.tree.leaves(resumed.history),
+        jax.tree.leaves(uninterrupted.history),
+        strict=True,
+    ):
+        np.testing.assert_allclose(actual, expected, rtol=1e-6)
+
+
+def test_nan_reproduction_uses_prepared_training_data():
+    # Training rows give a negative Normal scale; the full data give a valid scale.
+    model, calls = _counted_basis_model(scale_fn=lambda x: x.mean() - 3)
+    split = PositionSplit.from_model(
+        model, position_keys=["x", "y"], test_axis_share=0.5, shuffle=False
+    )
+    engine = LieselOptim(
+        model,
+        split=split,
+        optimizers=optax.sgd(0.0001),
+        loss_monitor="train_full_data",
+        stopper=Stopper(epochs=5, patience=5),
+        show_progress=False,
+    ).build_engine()
+    engine.debug_nans = True
+    calls.clear()
+    result = engine.fit()
+    assert result.status == "nan"
+    assert result.nan_debug is not None
+    assert jnp.isnan(result.nan_debug.reproduce_loss(engine))
+    jax.effects_barrier()
+    assert len(calls) == 1
 
 
 def test_neg_log_prob_loss_train_uses_full_training_split_not_current_batch():

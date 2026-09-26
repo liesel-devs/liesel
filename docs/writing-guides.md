@@ -86,7 +86,8 @@ summaries that restate the section.
   `dist=` keyword, rather than as a positional argument.
 - Use code cells without interactive prompts (`>>>` or `...`).
 - Pass a single model root directly, as in `lsl.Model(y)`. Use a sequence for
-  multiple roots.
+  multiple roots. Choose `to_float32` for the needs of the example, independently
+  of this calling style.
 - Use realistic data, fixed seeds, and only the settings needed for the task.
 - Keep setup and modifications together, then put each inspection expression
   in its own cell so its native output appears immediately below it. Prefer
@@ -99,7 +100,9 @@ summaries that restate the section.
   adding repeated defensive checks to examples.
 
 Migration guides should show the old and new code and explain meaningful
-behavior changes.
+behavior changes. Write them only for changes to released APIs. Don't document
+the history of unreleased APIs, such as earlier defaults, renamed arguments, or
+before-and-after tables; describe the current behavior instead.
 
 ## Show useful visuals
 
@@ -123,9 +126,8 @@ Embed interactive explanations beside the relevant text. A separate-page link
 can supplement the embed. Keep essential explanations readable without
 interacting with the visual.
 
-Use static images for guides that do not execute code during the build or when
-generation is unreliable. Record the source command and refresh the image when
-the example changes.
+Static assets can illustrate concepts outside the executable example. Record
+their source and refresh them when the explanation changes.
 
 ## Check the finished result
 

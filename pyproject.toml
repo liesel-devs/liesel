@@ -60,7 +60,7 @@ dev = [
     "sphinx-book-theme>=1.1.0",
     "sphinx-copybutton>=0.5",
     "sphinx-remove-toctrees>=0.0.3",
-    "liesel_gam>=0.2.4",
+    "liesel-gam>=0.2.4",
     "ty>=0.0.60",
 ]
 
