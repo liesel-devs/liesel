@@ -199,7 +199,7 @@ class OptimEngine:
     Parameters
     ----------
     loss
-        Loss object implementing the :class:`.loss.Loss` protocol.
+        Loss object implementing the :class:`~liesel.optim.Loss` protocol.
     batches
         Batch configuration used for the training data. Use
         :class:`~liesel.optim.Batches` for a
@@ -300,7 +300,7 @@ class OptimEngine:
     """
 
     loss: Loss
-    """Loss object implementing the :class:`.loss.Loss` protocol."""
+    """Loss object implementing the :class:`~liesel.optim.Loss` protocol."""
     batches: BatchConfig
     """Batch configuration used for the training data."""
     optimizers: Sequence[OptimizerLike]

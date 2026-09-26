@@ -630,7 +630,7 @@ class Node(ABC):
         """
         The state of the node.
 
-        For the default node, a :class:`.NodeState` with the value and the
+        For the default node, a ``NodeState`` with the value and the
         outdated flag, but subclasses can add extra information to the state.
         """
         return NodeState(self.value, self.outdated)
@@ -837,7 +837,7 @@ class InputGroup(TransientNode):
 
     Essentially, this node "forwards" the val
     ues of its inputs to its outputs
-    as an :class:`.ArgGroup`.
+    as an ``ArgGroup``.
     """
 
     @property

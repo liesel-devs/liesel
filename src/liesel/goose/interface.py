@@ -279,7 +279,7 @@ class LieselInterface:
         position_keys
             An iterable of variable or node names.
         model_state
-            A dictionary of node names and their corresponding :class:`.NodeState`.
+            A dictionary of node names and their corresponding ``NodeState``.
         """
         return self._model.extract_position(position_keys, model_state)
 
@@ -292,7 +292,7 @@ class LieselInterface:
         position
             A dictionary of variable or node names and values.
         model_state
-            A dictionary of node names and their corresponding :class:`.NodeState`.
+            A dictionary of node names and their corresponding ``NodeState``.
 
         Warnings
         --------
@@ -310,7 +310,7 @@ class LieselInterface:
         Parameters
         ----------
         model_state
-            A dictionary of node names and their corresponding :class:`.NodeState`.
+            A dictionary of node names and their corresponding ``NodeState``.
         """
         return model_state["_model_log_prob"].value
 
@@ -390,7 +390,7 @@ class NamedTupleInterface:
         position_keys
             An iterable of variable or node names.
         model_state
-            A dictionary of node names and their corresponding :class:`.NodeState`.
+            A dictionary of node names and their corresponding ``NodeState``.
         """
         return {key: getattr(model_state, key) for key in position_keys}
 
@@ -403,7 +403,7 @@ class NamedTupleInterface:
         position
             A dictionary of variable or node names and values.
         model_state
-            A dictionary of node names and their corresponding :class:`.NodeState`.
+            A dictionary of node names and their corresponding ``NodeState``.
 
         Warnings
         --------
@@ -422,6 +422,6 @@ class NamedTupleInterface:
         Parameters
         ----------
         model_state
-            A dictionary of node names and their corresponding :class:`.NodeState`.
+            A dictionary of node names and their corresponding ``NodeState``.
         """
         return self._log_prob_fn(model_state)
