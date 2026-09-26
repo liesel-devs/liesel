@@ -20,13 +20,6 @@ with Python 3.13, PyMC 6.0.1, PyTensor 3.0.3 and JAX/jaxlib 0.10.1 on CPU with
 64-bit mode enabled below. {class}`PyMCInterface <liesel.experimental.pymc.PyMCInterface>` is experimental, so check the example
 again when changing that environment. No external dataset is needed.
 
-```{note}
-This example replaces the historical transition, which proposed from the
-indicator prior without the required Metropolis–Hastings proposal correction.
-The update below instead draws from a derived full conditional. Old saved
-outputs should not be used to validate the corrected sampler.
-```
-
 ## Generate observations
 
 There is no intercept; the simulated predictors and errors have zero mean.
