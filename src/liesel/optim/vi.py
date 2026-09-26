@@ -26,7 +26,7 @@ ELBO loss:
 >>> loc = lsl.Var.new_param(jnp.array(0.0), name="mu")
 >>> y = lsl.Var.new_obs(
 ...     jnp.array([0.1, -0.2]),
-...     lsl.Dist(tfp.distributions.Normal, loc=loc, scale=1.0),
+...     dist=lsl.Dist(tfp.distributions.Normal, loc=loc, scale=1.0),
 ...     name="y",
 ... )
 >>> p = lsl.Model(y)
@@ -49,7 +49,7 @@ Bind the fitted variational distribution and draw target-model positions:
 ...     p,
 ...     loss=elbo,
 ...     optimizers=optax.adam(0.01),
-...     loss_monitor=opt.EmaTrainLossMonitor(1),
+...     loss_monitor=opt.EmaTrainLossMonitor(effective_window=20.0),
 ...     stopper=opt.Stopper(epochs=3, patience=3),
 ...     show_progress=False,
 ... ).fit()
@@ -186,11 +186,9 @@ class NegElboLoss(LossMixin):
     """
     Monte Carlo negative evidence lower bound loss.
 
-    ``NegElboLoss`` connects a target model ``p`` and a variational model ``q``. The
-    variational model must be able to sample parameter positions, and ``q_to_p`` must
-    map those sampled positions into the parameter names expected by ``p``. The loss
-    is minimized by :class:`.OptimEngine`, so the training loss methods return the
-    negative ELBO. :meth:`estimate_elbo` returns the ELBO itself.
+    Connects a target model ``p`` to a variational model ``q`` through the draw
+    mapping ``q_to_p``. Training methods return the negative ELBO for minimization;
+    :meth:`estimate_elbo` returns the ELBO itself.
 
     Parameters
     ----------
@@ -272,7 +270,7 @@ class NegElboLoss(LossMixin):
     >>> loc = lsl.Var.new_param(jnp.array(0.0), name="mu")
     >>> y = lsl.Var.new_obs(
     ...     jnp.array([0.1, -0.2]),
-    ...     lsl.Dist(tfp.distributions.Normal, loc=loc, scale=1.0),
+    ...     dist=lsl.Dist(tfp.distributions.Normal, loc=loc, scale=1.0),
     ...     name="y",
     ... )
     >>> p = lsl.Model(y)
@@ -297,7 +295,7 @@ class NegElboLoss(LossMixin):
     >>> q_log_scale = lsl.Var.new_param(-1.0, name="q_log_scale")
     >>> q_scale = lsl.Var.new_calc(jnp.exp, q_log_scale, name="q_scale")
     >>> q_mu = lsl.Var.new_obs(
-    ...     0.0, lsl.Dist(tfp.distributions.Normal, q_loc, q_scale), name="mu"
+    ...     0.0, dist=lsl.Dist(tfp.distributions.Normal, q_loc, q_scale), name="mu"
     ... )
     >>> q = lsl.Model(q_mu)
     >>> custom_loss = opt.NegElboLoss(p, q, nsamples=2)
@@ -439,7 +437,7 @@ class NegElboLoss(LossMixin):
         >>> loc = lsl.Var.new_param(jnp.array(0.0), name="mu")
         >>> y = lsl.Var.new_obs(
         ...     jnp.array([0.0, 1.0]),
-        ...     lsl.Dist(tfp.distributions.Normal, loc=loc, scale=1.0),
+        ...     dist=lsl.Dist(tfp.distributions.Normal, loc=loc, scale=1.0),
         ...     name="y",
         ... )
         >>> p = lsl.Model(y)
@@ -1038,16 +1036,14 @@ class NegElboLoss(LossMixin):
 
 class VDist:
     r"""
-    Represents a variational distribution.
+    Builds a variational distribution over selected target parameters.
 
     Parameters
     ----------
     position_keys
-        Sequence / list of strings, giving the names of the parameters in the model
-        ``p`` whose posterior is to be approximated by this :class:`.VDist`.
+        Names of target parameters governed by this block.
     p
-        The :class:`.Model` whose posterior is to be approximated by this
-        :class:`.VDist`.
+        Target :class:`.Model`.
     to_float32
         Whether to convert values in the variational model to ``float32``. If
         ``None``, inherits the ``to_float32`` policy set when constructing ``p``.
@@ -1077,22 +1073,11 @@ class VDist:
     See Also
     --------
 
-    .VDist : Represents a single variational distribution.
-    .CompositeVDist : Represents a composite variational distribution constructed
-        from independent blocks, where each block is given by a :class:`.VDist`.
+    .CompositeVDist : Combine independent variational blocks.
 
     Examples
     --------
-    Take the model :math:`y \sim N(\mu, \sigma^2)`, where the posterior distribution
-    of :math:`(\mu, \ln(\sigma))^\top` is modeled by two independent Gaussian
-    distributions, i.e. we define the following variational distributions:
-
-    .. math::
-        \mu & \sim N(\phi_1, \phi_2^2) \\
-        \ln(\sigma) & \sim N(\phi_3, \phi_4^2)
-
-    This variational distribution can be defined by a single
-    :class:`.VDist` using the :meth:`.VDist.mvn_diag` method like this:
+    Approximate a Normal model's mean and log scale with independent Gaussians:
 
     >>> import jax.numpy as jnp
     >>> import liesel.model as lsl
@@ -1103,7 +1088,7 @@ class VDist:
     >>> scale = lsl.Var.new_param(1.0, name="sigma", bijector=tfp.bijectors.Exp())
     >>> y = lsl.Var.new_obs(
     ...     jnp.linspace(-2, 2, 50),
-    ...     lsl.Dist(tfp.distributions.Normal, loc=loc, scale=scale),
+    ...     dist=lsl.Dist(tfp.distributions.Normal, loc=loc, scale=scale),
     ...     name="y",
     ... )
     >>> p = lsl.Model(y)
@@ -1111,29 +1096,14 @@ class VDist:
     >>> vdist = opt.VDist(["mu", "h(sigma)"], p).mvn_diag().build()
 
 
-    If the variational distribution is intended to capture correlation between the
-    parameters, the correlated parameters should be governed jointly by a single
-    :class:`.VDist`. For example, to use a multivariate Gaussian with a dense
-    covariance matrix in this case, you can use :meth:`.VDist.mvn_tril`:
+    Use a dense block to learn their correlation:
 
     >>> vdist = opt.VDist(["mu", "h(sigma)"], p).mvn_tril().build()
 
-    This would lead to the variational distribution
-
-    .. math::
-
-        \begin{bmatrix}
-        \mu \\ \ln(\sigma)
-        \end{bmatrix}
-        \sim N(\boldsymbol{\phi}, \boldsymbol{\Lambda}),
-
-    where :math:`\boldsymbol{\Lambda}` is a :math:`2 \times 2` covariance matrix.
-
     .. rubric:: Custom variational distributions
 
-    You can use any fully reparameterized tensorflow distribution of fitting
-    event shape, wrapped in a :class:`.Dist`. For example, you can define the
-    model with diagonal covariance matrix from above like this:
+    Supply a fully reparameterized :class:`.Dist` matching the flattened block
+    shape. Mark its trainable inputs as parameters:
 
     >>> q_loc = lsl.Var.new_param(jnp.zeros(2), name="q_loc")
     >>> q_log_scale = lsl.Var.new_param(jnp.zeros(2), name="q_log_scale")
@@ -1143,10 +1113,7 @@ class VDist:
     ... )
     >>> vdist = opt.VDist(["mu", "h(sigma)"], p).init(dist).build()
 
-    .. note::
-        If you use :meth:`.VDist.init`, make sure that the parameters of your
-        variational distribution are :class:`.Var` objects with :attr:`.Var.parameter`
-        set to ``True``.
+    See :doc:`/variational-models` for fitting and conditional families.
 
     """
 
@@ -1881,42 +1848,27 @@ class VariationalApproximation:
 
 class CompositeVDist:
     r"""
-    Composes several :class:`.VDist` instances into a :class:`.Model` that
-    represents a variational distribution.
+    Combines independent :class:`.VDist` blocks into one variational model.
 
     Parameters
     ----------
     *vdists
-        Variable numbers of :class:`.VDist` objects.
+        Initialized blocks sharing one target model. A target parameter may
+        belong to at most one block; duplicate names raise ValueError.
 
     See Also
     --------
 
-    .VDist : Represents a single variational distribution.
-    .CompositeVDist : Represents a composite variational distribution constructed
-        from independent blocks, where each block is given by a :class:`.VDist`.
+    .VDist : Build an individual variational block.
 
     Notes
     -----
-    The :class:`.CompositeVDist` class assumes that each individual parameter in the
-    underlying model p is governed by not more than one :class:`.VDist`.
-
-    The :class:`.CompositeVDist` assumes independence between the parameters
-    governed by its individual :class:`.VDist` instances.
+    Blocks are independent; a dense block can represent dependence within its
+    parameters. Call :meth:`build` on the composite after initializing its blocks.
 
     Examples
     --------
-    Take the model :math:`y \sim N(\mu, \sigma^2)`, where the posterior distribution
-    of :math:`(\mu, \ln(\sigma))^\top` is modeled by two independent Gaussian
-    distributions, i.e. we define the following variational distributions:
-
-    .. math::
-        \mu & \sim N(\phi_1, \phi_2^2) \\
-        \ln(\sigma) & \sim N(\phi_3, \phi_4^2)
-
-    This variational distribution can be composed by defining separate :class:`.VDist`
-    objects for :math:`\mu` and :math:`\ln(\sigma)`, and combining them in a
-    :class:`.CompositeVDist`:
+    Put a Normal model's mean and log scale into separate Gaussian blocks:
 
     >>> import jax.numpy as jnp
     >>> import liesel.model as lsl
@@ -1927,7 +1879,7 @@ class CompositeVDist:
     >>> scale = lsl.Var.new_param(1.0, name="sigma", bijector=tfp.bijectors.Exp())
     >>> y = lsl.Var.new_obs(
     ...     jnp.linspace(-2, 2, 50),
-    ...     lsl.Dist(tfp.distributions.Normal, loc=loc, scale=scale),
+    ...     dist=lsl.Dist(tfp.distributions.Normal, loc=loc, scale=scale),
     ...     name="y",
     ... )
     >>> p = lsl.Model(y)
@@ -1936,29 +1888,13 @@ class CompositeVDist:
     >>> q2 = opt.VDist(["h(sigma)"], p).mvn_diag()
     >>> vdist = opt.CompositeVDist(q1, q2).build()
 
-    In this case, the variational model is equivalent to defining a single
-    :class:`.VDist` using the :meth:`.VDist.mvn_diag` method like this:
+    These scalar blocks represent the same family as one diagonal Gaussian:
 
-    >>> vdist = opt.VDist(["mu", "h(sigma)"], p).mvn_diag()
+    >>> vdist = opt.VDist(["mu", "h(sigma)"], p).mvn_diag().build()
 
-    If the variational distribution is intended to capture correlation between the
-    parameters, the correlated parameters should be governed jointly by a single
-    :class:`.VDist`. For example, to use a multivariate Gaussian with a dense
-    covariance matrix in this case, you can use :meth:`.VDist.mvn_tril`:
+    To learn correlation between them, use one dense block:
 
-    >>> vdist = opt.VDist(["mu", "h(sigma)"], p).mvn_tril()
-
-    This would lead to the variational distribution
-
-    .. math::
-
-        \begin{bmatrix}
-        \mu \\ \ln(\sigma)
-        \end{bmatrix}
-        \sim N(\boldsymbol{\phi}, \boldsymbol{\Lambda}),
-
-    where :math:`\boldsymbol{\Lambda}` is a :math:`2 \times 2` covariance matrix.
-
+    >>> vdist = opt.VDist(["mu", "h(sigma)"], p).mvn_tril().build()
     """
 
     def __init__(self, *vdists: VDist):

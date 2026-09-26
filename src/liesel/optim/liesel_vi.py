@@ -32,15 +32,11 @@ class LieselVI:
     """
     Builds an :class:`.OptimEngine` for variational inference.
 
-    ``LieselVI`` is the quick-start wrapper for ELBO optimization. It constructs one
-    of the standard :class:`.NegElboLoss` variational families and default training
-    batches, and wraps a supplied Optax transformation over all variational
-    parameters. Variational-family initialization belongs to
-    :class:`.NegElboLoss` and :class:`.VDist`; pass a custom ``NegElboLoss`` when you
-    need Laplace or custom initialization. Built-in families start with standard
-    deviation ``0.1`` in model units, an overridable heuristic; see
-    :ref:`vi-initial-scale`. The default objective is the ordinary ELBO, including
-    target priors; extra q-parameter penalties are opt-in (:ref:`vi-q-prior-penalties`).
+    Configures a :class:`.NegElboLoss`, batches, and optimizers over variational
+    parameters. Pass an explicit loss for custom families or initialization.
+    Built-in Gaussians start at SD ``0.1`` in model units (:ref:`vi-initial-scale`).
+    Target priors are included; extra q-parameter penalties are opt-in
+    (:ref:`vi-q-prior-penalties`).
 
     Parameters
     ----------
@@ -132,14 +128,14 @@ class LieselVI:
     >>> loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
     >>> y = lsl.Var.new_obs(
     ...     jnp.array([0.0, 1.0]),
-    ...     lsl.Dist(tfd.Normal, loc=loc, scale=1.0),
+    ...     dist=lsl.Dist(tfd.Normal, loc=loc, scale=1.0),
     ...     name="y",
     ... )
     >>> model = lsl.Model(y)
     >>> engine = LieselVI(
     ...     model,
     ...     optimizers=optax.adam(learning_rate=1e-3),
-    ...     loss_monitor=EmaTrainLossMonitor(effective_window=1.0),
+    ...     loss_monitor=EmaTrainLossMonitor(effective_window=20.0),
     ...     seed=1,
     ... ).build_engine()
     >>> type(engine).__name__
