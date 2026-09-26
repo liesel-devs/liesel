@@ -1,36 +1,44 @@
-
 Tutorials
 =========
 
-Welcome to the tutorials page for Liesel, a probabilistic programming framework for developing semi-parametric regression models and custom Bayesian inference algorithms. In these tutorials, you will learn how to use Liesel to express statistical models as probabilistic graphical models (PGMs), manipulate and update them with ease, and run efficient and modular Markov chain Monte Carlo (MCMC) procedures with different kernels.
+Follow a complete workflow, then use its task guides when a specific question
+arises. Each tutorial starts with its own data and model; do not carry fitted
+objects between tutorials unless a page explicitly asks you to.
 
-Here are the basics to get you started, ranging from simple linear regression up to
-location-scale models:
+Build and predict
+-----------------
+
+Start with :doc:`tutorials/notebooks/11-model-building` to define variables,
+inspect a graph, and change model values. Continue with
+:doc:`tutorials/notebooks/12-model-predictions` to fit a model whose mean and
+spread vary with covariates and distinguish mean uncertainty from new responses.
+The :doc:`model-building` route links to focused guides for common model tasks.
+
+Sample a posterior
+------------------
+
+Use :doc:`tutorials/md/01c-transform` for a first complete NUTS fit, then
+:doc:`tutorials/md/01d-gibbs-sampling` to combine NUTS with an exact Gibbs update.
+The :doc:`sampling` route covers kernel choices, initialization, diagnostics,
+reproducibility, and extending Goose.
+
+Optimize parameters
+-------------------
+
+Follow :doc:`tutorials/notebooks/09-liesel-optim-basic` for a first point estimate
+and :doc:`tutorials/notebooks/10-liesel-optim-advanced` for two data groups.
+The :doc:`optimization` route covers splitting, batching, monitoring, and more.
+
+Explore applications
+--------------------
+
+The :doc:`examples` apply these tools to GEV responses, a sampler comparison,
+variable selection with PyMC, and measurement-error correction.
 
 .. toctree::
-   :maxdepth: 1
-   :caption: Basics
+   :hidden:
 
    Overview <self>
    tutorials/md/01a-lin-reg
    tutorials/md/01b-model
-   tutorials/md/01d-gibbs-sampling
-   tutorials/md/01c-transform
    tutorials/md/02-ls-reg
-
-Here are some more advanced topics, including generalized extreme value (GEV) models,
-a comparison of different samplers, and more:
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Advanced
-
-   tutorials/md/03-gev
-   tutorials/md/04-mcycle
-   tutorials/md/05-reproducibility
-   tutorials/md/06-pymc
-   tutorials/md/07-error-correction
-   tutorials/md/08-custom-kernel
-
-For parameter fitting, start with the :doc:`optimization` guide. It links to
-two worked examples and short guides for common tasks.

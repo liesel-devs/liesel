@@ -1,64 +1,40 @@
 name: tutorials
 
 on:
-  # push:
-  #   branches: [main]
-  # pull_request:
-  #   branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'src/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/tutorials.yml'
+      - '.readthedocs.yaml'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'src/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/tutorials.yml'
+      - '.readthedocs.yaml'
   schedule:
-    - cron: '0 9 * * 2'  # Every Tuesday at 09:00 UTC
-  workflow_dispatch: # trigger manually from GitHub UI
+    - cron: '0 9 * * 2'
+  workflow_dispatch:
 
 jobs:
-  discover-files:
+  build:
     runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    timeout-minutes: 30
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-
-      - name: Find Quarto files
-        id: set-matrix
-        run: |
-          files=$(find docs/source/tutorials/qmd -name '*.qmd' -printf '%P\n' | jq -R . | jq -s -c '{file: .}')
-          echo "matrix=$files" >> $GITHUB_OUTPUT
-
-  render:
-    needs: discover-files
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    strategy:
-      matrix: ${{ fromJson(needs.discover-files.outputs.matrix) }}
-
-    steps:
-      - name: Install Ubuntu packages
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends graphviz graphviz-dev
-
-      - name: Check out repository
-        uses: actions/checkout@v7
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v10.2.0
-
-      - name: "Set up Python"
-        uses: actions/setup-python@v7
+      - uses: actions/checkout@v7
+      - name: Install Graphviz
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends graphviz
+      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: actions/setup-python@v7
         with:
-          python-version-file: "pyproject.toml"
-
-      - name: Install Liesel
-        run: |
-          uv sync --locked --group dev --group pymc
-          uv pip list
-
-      - name: Install Quarto
-        uses: quarto-dev/quarto-actions/setup@v2
-
-      - name: Render Quarto file ${{ matrix.file }}
-        uses: quarto-dev/quarto-actions/render@v2
-        with:
-          path: docs/source/tutorials/qmd/${{ matrix.file }}
-        env:
-          QUARTO_PYTHON: ${{ github.workspace }}/.venv/bin/python
+          python-version: '3.13'
+      - name: Install the locked documentation environment
+        run: uv sync --locked --group dev --group pymc
+      - name: Execute examples and build documentation
+        run: uv run python -m sphinx -E -b html -j 1 -W --keep-going docs/source docs/build/html

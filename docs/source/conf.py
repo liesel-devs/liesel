@@ -108,6 +108,8 @@ html_logo = "../../misc/logo/logo-light.png"
 html_theme_options = {
     "repository_url": "https://github.com/liesel-devs/liesel",
     "use_repository_button": True,
+    "show_navbar_depth": 1,
+    "max_navbar_depth": 2,
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,
@@ -154,10 +156,12 @@ remove_from_toctrees = ["generated/liesel.*.*.*.*.rst"]
 # --------------------------------------------------------------------------------------
 
 # myst configuration
+# Execute notebook sources when Sphinx reads them and stop on execution errors.
+nb_execution_mode = "force"
+nb_execution_allow_errors = False
+nb_execution_raise_on_error = True
+nb_execution_timeout = 180
+
 myst_heading_anchors = 3  # auto-generate 3 levels of heading anchors
 myst_enable_extensions = ["amsmath", "dollarmath", "html_image"]
 myst_dmath_double_inline = True
-
-# Executable guides must fail the build when an example fails.
-nb_execution_raise_on_error = True
-nb_execution_timeout = 180

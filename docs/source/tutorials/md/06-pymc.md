@@ -1,92 +1,98 @@
-# PyMC and Liesel: Spike and Slab
+---
+file_format: mystnb
+kernelspec:
+  name: python3
+  display_name: Python 3
+---
 
+(pymc-and-liesel-spike-and-slab)=
 
-Liesel provides an interface for
-[PyMC](https://www.pymc.io/welcome.html), a popular Python library for
-Bayesian Models. In this tutorial, we see how to specify a model in PyMC
-and then fit it using Liesel.
+# Variable selection with PyMC
 
-Be sure that you have `pymc` installed. If that’s not the case, you can
-install Liesel with the optional dependency PyMC.
+Fit a PyMC model with Goose, combining NUTS for continuous parameters with an
+exact Gibbs update for binary inclusion indicators. This example uses simulated
+data with two active and two inactive predictors. It is independent of the
+Liesel-model tutorials; see {doc}`../../goose-engine` for the engine interface.
 
-``` bash
-pip install liesel[pymc]
+Use the repository's `pymc` dependency group together with its documentation
+dependencies (`uv sync --locked --dev --group pymc`). The example was checked
+with Python 3.13, PyMC 6.0.1, PyTensor 3.0.3 and JAX/jaxlib 0.10.1 on CPU with
+64-bit mode enabled below. {class}`PyMCInterface <liesel.experimental.pymc.PyMCInterface>` is experimental, so check the example
+again when changing that environment. No external dataset is needed.
+
+```{note}
+This example replaces the historical transition, which proposed from the
+indicator prior without the required Metropolis–Hastings proposal correction.
+The update below instead draws from a derived full conditional. Old saved
+outputs should not be used to validate the corrected sampler.
 ```
 
-We will build a Spike and Slab model, a Bayesian approach that allows
-for variable selection by assuming a mixture of two distributions for
-the prior distribution of the regression coefficients: a point mass at
-zero (the “spike”) and a continuous distribution centered around zero
-(the “slab”). The model assumes that each coefficient $\beta_j$ has a
-corresponding indicator variable $\delta_j$ that takes a value of either
-0 or 1, indicating whether the variable is included in the model or not.
-The prior distribution of the indicator variables is a Bernoulli
-distribution, with a parameter $\theta$ that controls the sparsity of
-the model. When the parameter is close to 1, the model is more likely to
-include all variables, while when it is close to 0, the model is more
-likely to select only a few variables. In our case, we assign a Beta
-hyperprior to $\theta$:
+## Generate observations
 
-$$\begin{aligned}
-\mathbf{y} &\sim \mathcal{N} \left( \mathbf{X}\boldsymbol{\beta}, \sigma^2 \mathbf{I} \right)\\
-\boldsymbol{\beta}_j &\sim \mathcal{N}\left(0, (1 - \delta_j)\nu + \delta_j\tau^2_j / \sigma^2 \right)\\
-\tau^2_j &\sim \mathcal{IG}(\text{a}_{\tau}, \text{b}_{\tau})\\
-\delta_j &\sim\text{Bernoulli}(\theta)\\
-\theta &\sim\text{Beta}(\text{a}_\theta, \text{b}_\theta)\\
-\sigma^2 &\sim \mathcal{IG}(\text{a}_{\sigma^2}, \text{b}_{\sigma^2})
-\end{aligned}.$$
+There is no intercept; the simulated predictors and errors have zero mean.
 
-where $\nu$ is a hyperparameter that we set to a fixed small value. That
-way, when $\delta_j = 0$, the prior variance for $\beta_j$ is extremely
-small, practically forcing it to be close to zero.
+Enable 64-bit arithmetic before importing the model interface so PyTensor and
+JAX use matching precision. This setting applies to this notebook kernel.
 
-First, we generate the data. We use a model with four coefficients but
-assume that only two variables are relevant, namely the first and the
-third one.
+```{code-cell} ipython3
+import jax
 
-``` python
-RANDOM_SEED = 123
-rng = np.random.RandomState(RANDOM_SEED)
+jax.config.update("jax_enable_x64", True)
 
-n = 1000
-p = 4
+import jax.numpy as jnp
+import numpy as np
+import pandas as pd
+import pymc as pm
+import tensorflow_probability.substrates.jax.distributions as tfd
 
-sigma_scalar = 1.0
-beta_vec = np.array([3.0, 0.0, 4.0, 0.0])
+import liesel.goose as gs
+from liesel.experimental.pymc import PyMCInterface
 
-X = rng.randn(n, p).astype(np.float32)
+rng = np.random.default_rng(123)
+n, p = 500, 4
+true_beta = np.array([3.0, 0.0, 4.0, 0.0])
 
-errors = rng.normal(size=n).astype(np.float32)
-
-y = X @ beta_vec + sigma_scalar * errors
+X = rng.normal(size=(n, p)).astype(np.float32)
+y = (X @ true_beta + rng.normal(size=n)).astype(np.float32)
 ```
 
-Then, we can specify the model using PyMC.
+## Define the mixture prior
 
-``` python
-spike_and_slab_model = pm.Model()
+The spike is a narrow **normal distribution**, not a point mass at zero.
+Let $s_j$ denote the coefficient prior's standard deviation:
 
-mu = 0.0
+$$
+\begin{aligned}
+y_i \mid \boldsymbol\beta,\sigma^2
+  &\sim \mathcal N(\mathbf x_i^\top\boldsymbol\beta,\sigma^2),\\
+\beta_j\mid\delta_j,\tau,\sigma^2
+  &\sim \mathcal N(0,s_j^2), &
+s_j &= \begin{cases}\nu & \delta_j=0,\\\sqrt{\tau/\sigma^2} & \delta_j=1,\end{cases}\\
+\delta_j\mid\theta &\sim \operatorname{Bernoulli}(\theta), &
+\theta &\sim \operatorname{Beta}(8,8),\\
+\tau &\sim \operatorname{InverseGamma}(1,1), &
+\sigma^2 &\sim \operatorname{InverseGamma}(1,1).
+\end{aligned}
+$$
 
-alpha_tau = 1.0
-beta_tau = 1.0
+Here $\nu=0.1$ is fixed and $\tau$ is shared across coefficients. These are the
+prior choices of this example: the slab scale depends on the response variance,
+and the prior does not enforce that it always exceeds the spike scale.
+An indicator of zero favors a small coefficient rather than removing it exactly.
+An inclusion probability therefore depends on these prior choices and the
+scaling of the predictors.
 
-alpha_sigma = 1.0
-beta_sigma = 1.0
-
-alpha_theta = 8.0
-beta_theta = 8.0
-
+```{code-cell} ipython3
 nu = 0.1
 
-with spike_and_slab_model:
-    # priors
-    sigma2 = pm.InverseGamma("sigma2", alpha=alpha_sigma, beta=beta_sigma)
+with pm.Model() as spike_and_slab_model:
+    # Response variance and mixture hyperparameters.
+    sigma2 = pm.InverseGamma("sigma2", alpha=1.0, beta=1.0)
+    theta = pm.Beta("theta", alpha=8.0, beta=8.0)
+    delta = pm.Bernoulli("delta", p=theta, shape=p)
+    tau = pm.InverseGamma("tau", alpha=1.0, beta=1.0)
 
-    theta = pm.Beta("theta", alpha=alpha_theta, beta=beta_theta)
-    delta = pm.Bernoulli("delta", p=theta, size=p)
-    tau = pm.InverseGamma("tau", alpha=alpha_tau, beta=beta_tau)
-
+    # Coefficient mixture and observed response.
     beta = pm.Normal(
         "beta",
         mu=0.0,
@@ -94,236 +100,235 @@ with spike_and_slab_model:
         shape=p,
     )
 
-    # make a data node
-    Xx = pm.Data("X", X)
-
-    # likelihood
-    pm.Normal("y", mu=Xx @ beta, sigma=pm.math.sqrt(sigma2), observed=y)
+    pm.Normal(
+        "y",
+        mu=X @ beta,
+        sigma=pm.math.sqrt(sigma2),
+        observed=y,
+    )
 ```
 
-Let’s take a look at our model:
+The model belongs to PyMC, so inspect its native representation here. Liesel's
+{meth}`model.plot() <liesel.model.Model.plot>` is for Liesel graphs.
 
-``` python
+```{code-cell} ipython3
 spike_and_slab_model
 ```
 
-$$            \begin{array}{rcl}
-            \text{X} &= &\operatorname{Data}(\text{<shared>})\\\text{sigma2} &\sim & \operatorname{InverseGamma}(1,~1)\\\text{theta} &\sim & \operatorname{Beta}(8,~8)\\\text{delta} &\sim & \operatorname{Bernoulli}(\text{theta})\\\text{tau} &\sim & \operatorname{InverseGamma}(1,~1)\\\text{beta} &\sim & \operatorname{Normal}(0,~f(\text{delta},~\text{sigma2},~\text{tau}))\\\text{y} &\sim & \operatorname{Normal}(f(\text{X},~\text{beta}),~f(\text{sigma2}))
-            \end{array}
-            $$
+## Connect the model
 
-The class {class}`PyMCInterface <liesel.experimental.pymc.PyMCInterface>` offers an interface between PyMC and
-Goose. By default, the constructor of {class}`PyMCInterface <liesel.experimental.pymc.PyMCInterface>` keeps
-track only of a representation of random variables that can be used in
-sampling. For example, `theta` is transformed to the real-numbers space
-with a log-odds transformation, and therefore the model only keeps track
-of `theta_log_odds__`. However, we would like to access the
-untransformed samples as well. We can do this by including them in the
-`additional_vars` argument of the constructor of the interface.
+{class}`PyMCInterface <liesel.experimental.pymc.PyMCInterface>` evaluates the model's log density through JAX. Its state uses
+PyMC's unconstrained variable names: positive `sigma2` and `tau` become log
+variables, and `theta` becomes `theta_logodds__`.
 
-The initial position can be extracted with {meth}`get_initial_state <liesel.experimental.pymc.PyMCInterface.get_initial_state>`.
-The model state is represented as a `Position`.
-
-``` python
-interface = PyMCInterface(
-    spike_and_slab_model, additional_vars=["sigma2", "tau", "theta"]
-)
+```{code-cell} ipython3
+interface = PyMCInterface(spike_and_slab_model)
 state = interface.get_initial_state()
 ```
 
-Since $\delta_j$ is a discrete variable, we need to use a Gibbs sampler
-to draw samples for it. Unfortunately, we cannot derive the posterior
-analytically, but what we can do is use a Metropolis-Hastings step as a
-transition function:
-
-``` python
-def delta_transition_fn(prng_key, model_state):
-    draw_key, mh_key = jax.random.split(prng_key)
-    theta_logodds = model_state["theta_logodds__"]
-    p = jax.numpy.exp(theta_logodds) / (1 + jax.numpy.exp(theta_logodds))
-    draw = jax.random.bernoulli(draw_key, p=p, shape=(4,))
-    proposal = {"delta": jax.numpy.asarray(draw, dtype=np.int64)}
-    _, state = gs.mh.mh_step(
-        prng_key=mh_key, model=interface, proposal=proposal, model_state=model_state
-    )
-    return state
+```{code-cell} ipython3
+pd.DataFrame(
+    {
+        "State variable": list(state),
+        "Shape": [value.shape for value in state.values()],
+        "Dtype": [str(value.dtype) for value in state.values()],
+    },
+)
 ```
 
-Finally, we can sample from the posterior as we do for any other Liesel
-model. In this case, we use a {class}`GibbsKernel <liesel.goose.GibbsKernel>` for
-$\boldsymbol{\delta}$ and a {class}`NUTSKernel <liesel.goose.NUTSKernel>` both for the
-remaining parameters.
+The sampler updates these state variables. Below we transform stored draws back
+to the original scales for interpretation; this does not change the target.
 
-``` python
+## Derive the Gibbs update
+
+Conditional on the coefficients and hyperparameters, the indicators are
+independent. The likelihood of `y` depends on `beta`, so it cancels when comparing
+the two values of an indicator. Writing $\phi(b;0,s)$ for a normal density with
+standard deviation $s$, the conditional log odds are
+
+$$
+\operatorname{logit}\Pr(\delta_j=1\mid\text{rest})
+=\operatorname{logit}(\theta)
+ +\log\phi(\beta_j;0,\sqrt{\tau/\sigma^2})
+ -\log\phi(\beta_j;0,\nu).
+$$
+
+Compute these probabilities from the **current** model state. The logistic
+function avoids exponentiating the odds directly. Use the supplied random key
+and preserve the shape and integer dtype of the indicator state.
+
+```{code-cell} ipython3
+def inclusion_probability(model_state):
+    slab_scale = jnp.exp(
+        0.5 * (model_state["tau_log__"] - model_state["sigma2_log__"]),
+    )
+    log_odds = (
+        model_state["theta_logodds__"]
+        + tfd.Normal(0.0, slab_scale).log_prob(model_state["beta"])
+        - tfd.Normal(0.0, nu).log_prob(model_state["beta"])
+    )
+    return jax.nn.sigmoid(log_odds)
+
+
+def draw_indicators(prng_key, model_state):
+    probability = inclusion_probability(model_state)
+    draw = jax.random.bernoulli(prng_key, p=probability)
+    return {"delta": draw.astype(model_state["delta"].dtype)}
+```
+
+This is an exact Gibbs update, so no acceptance step or proposal correction is
+needed. Exact conditional draws do not guarantee fast mixing of the full chain.
+A prior draw `Bernoulli(theta)` would be a different proposal and would need an
+MH correction; it is not this conditional distribution.
+
+## Run the sampler
+
+NUTS first updates the continuous block given the current indicators. Gibbs
+then updates all indicators given the new continuous values. Jitter disperses
+the continuous starting positions and randomly initializes the indicators; each chain has its own random keys.
+
+```{code-cell} ipython3
+def jitter(key, value):
+    return value + 0.1 * jax.random.normal(key, value.shape)
+
+
+def jitter_indicators(key, value):
+    draw = jax.random.bernoulli(key, p=0.5, shape=value.shape)
+    return draw.astype(value.dtype)
+
+
+continuous = ["beta", "sigma2_log__", "tau_log__", "theta_logodds__"]
 builder = gs.EngineBuilder(seed=13, num_chains=4)
 builder.set_model(interface)
 builder.set_initial_values(state)
-builder.set_duration(warmup_duration=1000, posterior_duration=2000)
-
-builder.add_kernel(
-    gs.NUTSKernel(
-        position_keys=["beta", "sigma2_log__", "tau_log__", "theta_logodds__"]
-    )
+builder.set_jitter_fns(
+    {**{name: jitter for name in continuous}, "delta": jitter_indicators},
 )
-builder.add_kernel(gs.GibbsKernel(["delta"], transition_fn=delta_transition_fn))
+builder.add_kernel(gs.NUTSKernel(continuous))
+builder.add_kernel(gs.GibbsKernel(["delta"], transition_fn=draw_indicators))
 
-builder.positions_included = ["sigma2", "tau"]
-
+builder.add_adaptation(1000)
+builder.add_posterior(1500)
+builder.show_progress = False
 engine = builder.build()
+```
 
+```{code-cell} ipython3
 engine.sample_all_epochs()
-```
-
-    liesel.goose.builder - WARNING - No jitter functions provided. The initial values won't be jittered
-    liesel.goose.engine - INFO - Initializing kernels...
-    /home/runner/work/liesel/liesel/.venv/lib/python3.13/site-packages/jax/_src/numpy/array_methods.py:125: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/jax-ml/jax#current-gotchas for more.
-      return lax_numpy.astype(self, dtype, copy=copy, device=device)
-    liesel.goose.engine - INFO - Done
-    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 75 transitions, 25 jitted together
-
-      0%|                                                  | 0/3 [00:00<?, ?chunk/s]/tmp/ipykernel_6775/3265445119.py:6: UserWarning: Explicitly requested dtype int64 requested in asarray is not available, and will be truncated to dtype int32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/jax-ml/jax#current-gotchas for more.
-      proposal = {"delta": jax.numpy.asarray(draw, dtype=np.int64)}
-
-     33%|██████████████                            | 1/3 [00:04<00:09,  4.98s/chunk]
-    100%|██████████████████████████████████████████| 3/3 [00:04<00:00,  1.66s/chunk]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 3, 2, 2, 4 / 75 transitions
-    liesel.goose.engine - INFO - Finished epoch
-    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 25 transitions, 25 jitted together
-
-      0%|                                                  | 0/1 [00:00<?, ?chunk/s]
-    100%|█████████████████████████████████████████| 1/1 [00:00<00:00, 843.58chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 25 transitions
-    liesel.goose.engine - INFO - Finished epoch
-    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 50 transitions, 25 jitted together
-
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1395.78chunk/s]
-    liesel.goose.engine - INFO - Finished epoch
-    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 100 transitions, 25 jitted together
-
-      0%|                                                  | 0/4 [00:00<?, ?chunk/s]
-    100%|████████████████████████████████████████| 4/4 [00:00<00:00, 1858.97chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 2, 1, 2, 1 / 100 transitions
-    liesel.goose.engine - INFO - Finished epoch
-    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 200 transitions, 25 jitted together
-
-      0%|                                                  | 0/8 [00:00<?, ?chunk/s]
-    100%|█████████████████████████████████████████| 8/8 [00:00<00:00, 688.65chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 200 transitions
-    liesel.goose.engine - INFO - Finished epoch
-    liesel.goose.engine - INFO - Starting epoch: SLOW_ADAPTATION, 500 transitions, 25 jitted together
-
-      0%|                                                 | 0/20 [00:00<?, ?chunk/s]
-    100%|███████████████████████████████████████| 20/20 [00:00<00:00, 244.10chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 500 transitions
-    liesel.goose.engine - INFO - Finished epoch
-    liesel.goose.engine - INFO - Starting epoch: FAST_ADAPTATION, 50 transitions, 25 jitted together
-
-      0%|                                                  | 0/2 [00:00<?, ?chunk/s]
-    100%|████████████████████████████████████████| 2/2 [00:00<00:00, 1183.83chunk/s]
-    liesel.goose.engine - WARNING - Errors per chain for kernel_00: 1, 1, 1, 1 / 50 transitions
-    liesel.goose.engine - INFO - Finished epoch
-    liesel.goose.engine - INFO - Finished warmup
-    liesel.goose.engine - INFO - Starting epoch: POSTERIOR, 2000 transitions, 25 jitted together
-
-      0%|                                                 | 0/80 [00:00<?, ?chunk/s]
-     31%|████████████▏                          | 25/80 [00:00<00:00, 245.78chunk/s]
-     62%|████████████████████████▍              | 50/80 [00:00<00:00, 203.08chunk/s]
-     89%|██████████████████████████████████▌    | 71/80 [00:00<00:00, 193.26chunk/s]
-    100%|███████████████████████████████████████| 80/80 [00:00<00:00, 196.45chunk/s]
-    liesel.goose.engine - INFO - Finished epoch
-
-Now, we can take a look at the summary of the results and at the trace
-plots.
-
-``` python
 results = engine.get_results()
-print(gs.Summary(results))
+samples = results.get_posterior_samples()
 ```
 
-    /home/runner/work/liesel/liesel/.venv/lib/python3.13/site-packages/arviz_stats/base/diagnostics.py:313: RuntimeWarning: invalid value encountered in scalar divide
-      varsd = varvar / evar / 4
-    /home/runner/work/liesel/liesel/.venv/lib/python3.13/site-packages/arviz_stats/base/diagnostics.py:313: RuntimeWarning: invalid value encountered in scalar divide
-      varsd = varvar / evar / 4
-    /home/runner/work/liesel/liesel/.venv/lib/python3.13/site-packages/arviz_stats/base/diagnostics.py:90: RuntimeWarning: invalid value encountered in scalar divide
-      (between_chain_variance / within_chain_variance + num_samples - 1) / (num_samples)
+## Inspect the fit
 
-                             var_fqn     kernel var_index  sample_size      mean  \
-    variable
-    beta                     beta[0]  kernel_00      (0,)         8000  3.037727
-    beta                     beta[1]  kernel_00      (1,)         8000 -0.010908
-    beta                     beta[2]  kernel_00      (2,)         8000  3.955964
-    beta                     beta[3]  kernel_00      (3,)         8000 -0.001761
-    delta                   delta[0]  kernel_01      (0,)         8000  1.000000
-    delta                   delta[1]  kernel_01      (1,)         8000  0.085125
-    delta                   delta[2]  kernel_01      (2,)         8000  1.000000
-    delta                   delta[3]  kernel_01      (3,)         8000  0.063125
-    sigma2                    sigma2          -        ()         8000  1.014129
-    sigma2_log__        sigma2_log__  kernel_00        ()         8000  0.013033
-    tau                          tau          -        ()         8000  0.508712
-    tau_log__              tau_log__  kernel_00        ()         8000  2.156108
-    theta_logodds__  theta_logodds__  kernel_00        ()         8000  0.036925
+Summarize the coefficients and transform the continuous hyperparameters back to
+their original scales. All arrays retain the chain and draw axes.
 
-                          var        sd      ess_bulk     ess_tail  mcse_mean  \
-    variable
-    beta             0.001047  0.032364  12350.724123  6256.921075   0.000292
-    beta             0.000906  0.030099  13113.375119  6451.783328   0.000263
-    beta             0.000982  0.031343  14087.219211  5872.803421   0.000265
-    beta             0.000956  0.030924  13099.915481  5619.069861   0.000270
-    delta            0.000000  0.000000   8000.000000  8000.000000   0.000000
-    delta            0.077879  0.279068    373.017695   373.017695   0.014450
-    delta            0.000000  0.000000   8000.000000  8000.000000   0.000000
-    delta            0.059140  0.243188    511.668790   511.668790   0.010752
-    sigma2           0.002056  0.045342  12679.989600  6471.143078   0.000404
-    sigma2_log__     0.001993  0.044640  12680.000414  6471.143078   0.000397
-    tau              0.012407  0.111386   6499.235557  4334.338046   0.001376
-    tau_log__        0.627498  0.792148   7418.998540  4600.136996   0.009974
-    theta_logodds__  0.219882  0.468916   6499.234703  4334.338046   0.005823
-
-                      mcse_sd      rhat    q_0.05     q_0.5    q_0.95   hdi_low  \
-    variable
-    beta             0.000207  1.002090  2.984296  3.037531  3.090531  2.985247
-    beta             0.000183  1.001970 -0.060500 -0.011142  0.038715 -0.060222
-    beta             0.000192  1.001343  3.904705  3.956123  4.007814  3.901984
-    beta             0.000192  1.001467 -0.052818 -0.001802  0.049597 -0.050066
-    delta                 NaN       NaN  1.000000  1.000000  1.000000  1.000000
-    delta            0.021481  1.013259  0.000000  0.000000  1.000000  0.000000
-    delta                 NaN       NaN  1.000000  1.000000  1.000000  1.000000
-    delta            0.019314  1.007246  0.000000  0.000000  1.000000  0.000000
-    sigma2           0.000291  0.999936  0.941998  1.012915  1.090738  0.942568
-    sigma2_log__     0.000281  0.999939 -0.059752  0.012833  0.086855 -0.056601
-    tau              0.000891  1.000694  0.325165  0.508691  0.692288  0.324628
-    tau_log__        0.009165  1.000442  1.041645  2.055873  3.599275  0.932972
-    theta_logodds__  0.004166  1.000686 -0.730136  0.034769  0.810836 -0.732583
-
-                     hdi_high
-    variable
-    beta             3.091338
-    beta             0.038947
-    beta             4.004807
-    beta             0.051560
-    delta            1.000000
-    delta            0.000000
-    delta            1.000000
-    delta            0.000000
-    sigma2           1.090913
-    sigma2_log__     0.089524
-    tau              0.691743
-    tau_log__        3.418921
-    theta_logodds__  0.808280
-
-As we can see from the posterior means of the $\boldsymbol{\delta}$
-parameters, the model was able to recognize those variable with no
-influence on the respose $\mathbf{y}$:
-
-1.  $\delta_1$ and $\delta_3$ (`delta[0]` and `delta[2]` in the table)
-    have a posterior mean of $1$, indicating inclusion.
-2.  $\delta_2$ and $\delta_4$ (`delta[1]` and `delta[3]` in the table)
-    have a posterior mean of $0.06$, indicating exclusion.
-
-``` python
-gs.plot_trace(results)
+```{code-cell} ipython3
+continuous_draws = {
+    "beta": samples["beta"],
+    "sigma2": jnp.exp(samples["sigma2_log__"]),
+    "tau": jnp.exp(samples["tau_log__"]),
+    "theta": jax.nn.sigmoid(samples["theta_logodds__"]),
+}
+continuous_summary = gs.SamplesSummary(continuous_draws)
 ```
 
-<img src="06-pymc_files/figure-commonmark/results-plot-output-1.png"
-id="results-plot" />
+```{code-cell} ipython3
+continuous_summary.to_dataframe().set_index("var_fqn")[
+    ["mean", "sd", "mcse_mean", "ess_bulk", "rhat"]
+].round(3)
+```
+
+```{code-cell} ipython3
+gs.Summary(results, selected=continuous).error_df().reset_index().filter(
+    ["error_msg", "phase", "count"],
+)
+```
+
+In this run the response variance is close to its generating value of 1.
+All displayed R-hat values are below 1.01 and bulk ESS values exceed 4,900.
+The NUTS kernel records warmup divergences but none during posterior sampling.
+The shared slab parameter `tau` has a long right tail, reflected in its large
+standard deviation.
+
+Use the effective sample sizes and R-hat alongside the errors and traces.
+Warmup errors are reported separately from posterior errors; persistent
+posterior divergences require investigation before interpreting the draws.
+
+```{code-cell} ipython3
+---
+mystnb:
+  image:
+    alt: "Four posterior chains for the four regression coefficients in the PyMC mixture-prior model."
+---
+
+gs.plot_trace(results, params=["beta"], ncol=2)
+```
+
+## Interpret inclusion
+
+The mean of each binary indicator estimates its posterior inclusion probability.
+Compare it with the coefficient estimate and the generating value, which is
+available here only because the data are simulated.
+
+```{code-cell} ipython3
+selection = pd.DataFrame(
+    {
+        "Generating coefficient": true_beta,
+        "Posterior coefficient mean": np.asarray(samples["beta"]).mean(axis=(0, 1)),
+        "Inclusion probability": np.asarray(samples["delta"]).mean(axis=(0, 1)),
+    },
+    index=pd.Index([f"beta[{j}]" for j in range(p)], name="Coefficient"),
+)
+```
+
+```{code-cell} ipython3
+selection.round(3)
+```
+
+```{code-cell} ipython3
+pd.DataFrame(
+    np.asarray(samples["delta"]).mean(axis=1),
+    columns=[f"delta[{j}]" for j in range(p)],
+).rename_axis("Chain").round(3)
+```
+
+The two active predictors have estimated inclusion probabilities near 1,
+while the two inactive predictors are around 0.04 and 0.06 in this run.
+The per-chain rates agree closely.
+
+An indicator that never switches has undefined R-hat and can have uninformative
+ESS; agreement at a constant value is not a convergence check. Inspect the
+indicators for the inactive predictors too, alongside the continuous parameters.
+
+To make individual switches visible, show the first 200 posterior iterations
+of chain 0. This close-up illustrates indicator movement; use the summaries
+above to compare all chains.
+
+```{code-cell} ipython3
+indicator_trace = {"delta": samples["delta"][:, :200]}
+```
+
+(results-plot)=
+
+```{code-cell} ipython3
+---
+mystnb:
+  image:
+    alt: "First 200 posterior iterations of chain 0 for the two inactive predictors, showing binary switches between spike and slab."
+---
+
+gs.plot_trace(
+    indicator_trace,
+    params=["delta"],
+    param_indices=[1, 3],
+    chain_indices=0,
+)
+```
+
+The indicators describe membership in the slab component of this prior, not
+proof that a scientific effect exists. Correlated predictors, prior scales, and
+limited data can make selection uncertain. For diagnostics and model evaluation,
+continue with {doc}`../../goose-diagnostics` and
+{doc}`../../goose-model-comparison`.

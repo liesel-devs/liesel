@@ -1,100 +1,123 @@
-
+---
+file_format: mystnb
+kernelspec:
+  name: python3
+  display_name: Python 3
+---
 
 # Reproducibility
 
+Record both the random seed and the computational environment when saving an
+analysis. A seed controls random draws; it does not by itself guarantee identical
+floating-point results across environments.
+
+```{code-cell} ipython3
+import importlib.metadata
+import platform
+
+import jax
+import jax.numpy as jnp
+import numpy as np
+import pandas as pd
+import tensorflow_probability.substrates.jax.bijectors as tfb
+import tensorflow_probability.substrates.jax.distributions as tfd
+
+import liesel.goose as gs
+import liesel.model as lsl
+```
+
 ## PRNG seeding
 
-Liesel uses [JAX’s functional pseudo-random number
-generation](https://docs.jax.dev/en/latest/random-numbers.html). JAX
-does not use a single global random state; random numbers are generated
-from explicit PRNG keys. In the high-level Goose workflow, this is
-usually handled by passing an integer seed to
-{meth}`run_for_epochs <liesel.goose.LieselMCMC.run_for_epochs>`:
+This example uses the regression model from {doc}`01c-transform`, including its
+kernel assignments and jitter settings. It starts from that model's initial
+state, independently of earlier notebook sessions.
 
-``` python
+```{code-cell} ipython3
+:load: ../../_examples/goose-regression.py.inc
+:tags: [remove-cell]
+```
+
+```{code-cell} ipython3
 results = gs.LieselMCMC(model).run_for_epochs(
     seed=1,
     num_chains=4,
-    adaptation=1000,
-    posterior=1000,
+    adaptation=500,
+    posterior=500,
+    show_progress=False,
 )
+samples = results.get_posterior_samples()
 ```
 
-If you work with the lower-level {class}`EngineBuilder <liesel.goose.EngineBuilder>`, you
-also provide the seed when initializing the builder.
+```{code-cell} ipython3
+{name: value.shape for name, value in samples.items()}
+```
 
-Current JAX versions use typed PRNG keys created with
-`jax.random.key(seed)`. The older `jax.random.PRNGKey(seed)` API is
-still widely seen in existing code, but the typed-key API is the current
-interface. By default, JAX uses the `"threefry2x32"` PRNG
-implementation, but this is configurable through JAX’s
-`jax_default_prng_impl` setting. If exact reproducibility matters,
-record the PRNG implementation together with the integer seed.
+The seed configures Goose's random-key stream, including chain initialization.
+Keep data, initial values, jitter, kernel ordering, and iteration counts with
+it. The lower-level {class}`~liesel.goose.EngineBuilder` also takes a seed.
 
-Even with the same seed, reproducible results cannot be guaranteed
-across different systems or even for separate runs of the same program
-on the same hardware.
+[JAX uses explicit random keys](https://docs.jax.dev/en/latest/random-numbers.html).
+When simulating data yourself, split a key for separate draws. Reusing a key
+repeats its random stream; it does not produce an independent replicate.
 
-## GPU non-determinism
+```{code-cell} ipython3
+x_key, noise_key = jax.random.split(jax.random.key(42))
+x = jax.random.normal(x_key, (3,))
+noise = jax.random.normal(noise_key, (3,))
+```
 
-Floating point operations on GPUs and TPUs are not always bitwise
-deterministic. Different devices, kernels, compiler versions, or
-evaluation orders can lead to small numerical differences. In MCMC,
-small numerical differences can occasionally change adaptation,
-acceptance decisions, or the trajectory of a chain. For bitwise
-reproducibility, prefer running on the CPU and avoid changing JAX, XLA,
-or hardware configuration between runs.
+```{code-cell} ipython3
+{"x": x, "noise": noise}
+```
 
-## Non-reproducibility across systems
+<a id="practical-checklist"></a>
 
-[In our
-experience](https://github.com/blackjax-devs/blackjax/issues/181),
-results from Liesel, BlackJAX and JAX may differ across systems, even if
-the exact same code is run on the CPU. Following [the Stan
-documentation](https://mc-stan.org/docs/reference-manual/reproducibility.html),
-we expect bitwise reproducibility only if all of the following
-components are identical:
+## Record the environment
 
-- the Liesel version,
-- the Python version,
-- the versions of JAX, jaxlib, TensorFlow Probability, BlackJAX, NumPy,
-  SciPy, pandas, and all other relevant libraries,
-- the operating system version,
-- the computer hardware including CPU, motherboard and memory,
-- the compilers, including versions, flags and libraries, used to build
-  Python and all libraries Liesel depends on,
-- the JAX backend and configuration, including whether 64-bit mode is
-  enabled and which PRNG implementation is used,
-- the program, including the seed, initialization, data, sampler
-  configuration, and number of chains.
+Capture versions and numerical settings from the environment actually running
+the analysis. Keep the source code and input data alongside this information.
 
-## Practical checklist
+```{code-cell} ipython3
+packages = ["liesel", "jax", "jaxlib", "tfp-nightly", "blackjax"]
+environment = {
+    "Python": platform.python_version(),
+    "Platform": platform.platform(),
+    "Backend": jax.default_backend(),
+    "64-bit enabled": jax.config.jax_enable_x64,
+    "PRNG implementation": jax.config.jax_default_prng_impl,
+    **{name: importlib.metadata.version(name) for name in packages},
+}
+```
 
-For reproducible analyses, we recommend recording at least the following
-information:
+```{code-cell} ipython3
+pd.Series(environment, name="Value").to_frame()
+```
 
-- the exact code and data used for the analysis,
-- all model initial values and jitter settings,
-- the seed passed to {class}`LieselMCMC <liesel.goose.LieselMCMC>` or
-  {class}`EngineBuilder <liesel.goose.EngineBuilder>`,
-- the number of chains, adaptation iterations, posterior iterations,
-  thinning, and stored positions,
-- the installed versions of Liesel and its numerical dependencies,
-- the JAX backend (`cpu`, `gpu`, or `tpu`), the `jax_enable_x64`
-  setting, and the `jax_default_prng_impl` setting,
-- the operating system and hardware.
+Also record the exact source revision if using development code, package lock
+file, model and sampler settings, and data preparation. Save posterior draws
+and diagnostics for a published analysis; rerunning code is not a substitute
+for preserving the results being reported.
 
-For publication or long-term archiving, store the posterior samples and
-the exact environment specification, for example a lock file or a
-container image.
+<a id="gpu-non-determinism"></a>
+<a id="non-reproducibility-across-systems"></a>
 
-## See also
+## Understand the limits
 
-- [The JAX docs on pseudo-random
-  numbers](https://docs.jax.dev/en/latest/random-numbers.html)
-- [The JAX docs on PRNG
-  configuration](https://docs.jax.dev/en/latest/config_options.html)
-- [The PyTorch docs on
-  reproducibility](https://pytorch.org/docs/stable/notes/randomness.html)
-- [The Stan docs on
-  reproducibility](https://mc-stan.org/docs/reference-manual/reproducibility.html)
+Changing numerical libraries, hardware, compiler settings, or evaluation order
+can change floating-point calculations. In MCMC, small differences can affect
+adaptation or acceptance decisions and lead to different trajectories. CPU
+execution is not a promise of bitwise equality across systems.
+
+The [Stan reproducibility discussion](https://mc-stan.org/docs/reference-manual/reproducibility.html)
+also distinguishes repeating a program in a fixed computational environment
+from statistical reproducibility. When comparing runs in different environments,
+assess posterior quantities relative to their Monte Carlo uncertainty and check
+{doc}`../../goose-diagnostics`; do not require identical individual draws.
+
+<a id="see-also"></a>
+
+For this documentation, the repository lockfile and
+{download}`build instructions <../../../README.md>`
+specify the tested environment. See the
+[JAX random configuration reference](https://docs.jax.dev/en/latest/config_options.html)
+for PRNG options.
