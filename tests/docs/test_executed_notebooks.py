@@ -1,5 +1,7 @@
+import ast
 import base64
 import hashlib
+import importlib.util
 import json
 import subprocess
 import sys
@@ -98,6 +100,38 @@ def add_native_page(root, executed, name, code):
     target.write_text(json.dumps(notebook(code, 1)))
     git(root, "add", f"docs/source/{name}")
     git(root, "commit", "-qm", "add notebook fixture")
+
+
+def add_native_execution_case(
+    root, executed, name, code, tags, execution_count, outputs
+):
+    source = root / "docs/source" / name
+    target = executed / name
+    source_data = notebook(code)
+    executed_data = notebook(code, execution_count, outputs)
+    source_data["cells"][1]["metadata"]["tags"] = tags
+    executed_data["cells"][1]["metadata"]["tags"] = tags
+    source.write_text(json.dumps(source_data))
+    target.write_text(json.dumps(executed_data))
+    git(root, "add", f"docs/source/{name}")
+    git(root, "commit", "-qm", "add notebook execution case")
+
+
+def apply_native_execution_case(tmp_path, name, code, tags, execution_count, outputs):
+    root, executed = make_repo(tmp_path)
+    add_native_execution_case(
+        root, executed, name, code, tags, execution_count, outputs
+    )
+    bundle = tmp_path / "bundle"
+    collect_bundle(root, executed, bundle)
+    result = cli(root, "apply", "--bundle", str(bundle))
+    assert result.returncode == 0, result.stderr
+    applied = json.loads((root / "docs/source" / name).read_text())
+    cell = next(cell for cell in applied["cells"] if cell["cell_type"] == "code")
+    assert cell["source"] == [code]
+    assert cell["metadata"]["tags"] == tags
+    assert cell["outputs"] == outputs
+    return cell
 
 
 def add_myst_page(root, executed):
@@ -214,6 +248,72 @@ def test_apply_round_trips_all_pages_after_validating_the_complete_bundle(tmp_pa
     assert json.loads((root / "docs/source/z.ipynb").read_text()) == notebook(
         "last = True\n", 1
     )
+
+
+def test_apply_accepts_blank_code_cells_without_execution_count(tmp_path):
+    cell = apply_native_execution_case(tmp_path, "blank.ipynb", "", [], None, [])
+
+    assert cell["execution_count"] is None
+
+
+def test_apply_accepts_skip_execution_cells_without_execution_count(tmp_path):
+    cell = apply_native_execution_case(
+        tmp_path,
+        "skipped.ipynb",
+        "answer = 42\n",
+        ["skip-execution"],
+        None,
+        [],
+    )
+
+    assert cell["execution_count"] is None
+
+
+def test_apply_accepts_expected_errors_in_raises_exception_cells(tmp_path):
+    outputs = [
+        {
+            "output_type": "error",
+            "ename": "ValueError",
+            "evalue": "expected",
+            "traceback": ["ValueError: expected"],
+        }
+    ]
+    cell = apply_native_execution_case(
+        tmp_path,
+        "expected-error.ipynb",
+        "raise ValueError('expected')\n",
+        ["raises-exception"],
+        1,
+        outputs,
+    )
+
+    assert cell["execution_count"] == 1
+
+
+def test_myst_reader_config_matches_literal_sphinx_settings():
+    names = {
+        "myst_enable_extensions",
+        "myst_heading_anchors",
+        "myst_dmath_double_inline",
+    }
+    conf = ast.parse((SCRIPT.parents[1] / "source/conf.py").read_text())
+    settings = {}
+    for node in conf.body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id in names:
+                    settings[target.id] = ast.literal_eval(node.value)
+
+    assert settings.keys() == names
+    spec = importlib.util.spec_from_file_location("executed_notebooks", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    publisher = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(publisher)
+    config = publisher.myst_config()
+
+    assert config.enable_extensions == set(settings["myst_enable_extensions"])
+    assert config.heading_anchors == settings["myst_heading_anchors"]
+    assert config.dmath_double_inline == settings["myst_dmath_double_inline"]
 
 
 def test_collect_expands_myst_load_and_apply_keeps_the_docname(tmp_path):

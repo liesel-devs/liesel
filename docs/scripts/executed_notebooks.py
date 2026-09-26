@@ -123,12 +123,16 @@ def validate_cells(source, executed, source_path: Path) -> None:
         if before_tags != after_tags:
             raise BundleError(f"cell tags changed at {source_path}:{index}")
         if after.get("cell_type") == "code":
-            if after.get("execution_count") is None:
+            not_executed_allowed = (
+                not normalized_source(before).strip() or "skip-execution" in before_tags
+            )
+            if after.get("execution_count") is None and not not_executed_allowed:
                 raise BundleError(f"unexecuted code cell at {source_path}:{index}")
-            if any(
+            has_error = any(
                 output.get("output_type") == "error"
                 for output in after.get("outputs", [])
-            ):
+            )
+            if has_error and "raises-exception" not in before_tags:
                 raise BundleError(f"error output at {source_path}:{index}")
         generated_id = source_path.suffix == ".md" or "id" not in before
         if comparable_cell(before, generated_id) != comparable_cell(
