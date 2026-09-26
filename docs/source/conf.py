@@ -23,7 +23,7 @@ on_rtd = os.environ.get("READTHEDOCS") == "True"
 html_baseurl = os.environ.get("READTHEDOCS_CANONICAL_URL", "")
 
 # Tell Jinja2 templates the build is running on Read the Docs
-if os.environ.get("READTHEDOCS", "") == "True":
+if on_rtd:
     html_context["READTHEDOCS"] = True
 
 # -- Project information -----------------------------------------------------
@@ -54,9 +54,6 @@ extensions = [
 # for making copying code from doctests more convenient
 copybutton_prompt_text = r">>> |\.\.\. "
 copybutton_prompt_is_regexp = True
-
-if on_rtd:
-    extensions.append("rtds_action")
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3/", None),
@@ -168,26 +165,3 @@ myst_dmath_double_inline = True
 # Executable guides must fail the build when an example fails.
 nb_execution_raise_on_error = True
 nb_execution_timeout = 180
-
-
-# --------------------------------------------------------------------------------------
-# rtds-action settings
-# --------------------------------------------------------------------------------------
-
-if on_rtd:
-    # The name of your GitHub repository
-    rtds_action_github_repo = "liesel-devs/liesel"
-
-    # The path where the artifact should be extracted
-    # Note: this is relative to the conf.py file!
-    rtds_action_path = "tutorials/md"
-
-    # The "prefix" used in the `upload-artifact` step of the action
-    rtds_action_artifact_prefix = "tutorials-for-"
-
-    # A GitHub personal access token is required, more info below
-    rtds_action_github_token = os.environ["GITHUB_TOKEN"]
-
-    # Whether or not to raise an error on Read the Docs if the
-    # artifact containing the notebooks can't be downloaded (optional)
-    rtds_action_error_if_missing = False
