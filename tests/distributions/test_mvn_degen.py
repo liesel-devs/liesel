@@ -40,7 +40,7 @@ def mvnorm_degen_logpdf(
     x: Array,
     mu: Array,
     precision: Array,
-    log_det: tuple[float, float],
+    log_det: tuple[float, float] | None,
     sigma2: float,
     prop_for_x_mu: bool = False,
 ):
@@ -63,7 +63,7 @@ def mvnorm_degen_logpdf(
     if prop_for_x_mu:
         return t1
 
-    if log_det:
+    if log_det is not None:
         rank_prec = log_det[1]
         gen_log_det = log_det[0]
         gen_log_det += -rank_prec * np.log(sigma2)
