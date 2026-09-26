@@ -114,6 +114,8 @@ summaries that restate the section.
   remove unnecessary inspection calls instead of leaving them without output.
 - Execute examples when building the docs and fail the build on execution errors.
   Keep image alt text in cell metadata and inspect the rendered outputs.
+- Keep generated results in notebook outputs; files written beside a notebook
+  are not included in preview bundles.
 - Keep verification assertions in tests. Investigate awkward API behavior before
   adding repeated defensive checks to examples.
 

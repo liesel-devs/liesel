@@ -161,6 +161,9 @@ nb_execution_mode = "force"
 nb_execution_allow_errors = False
 nb_execution_raise_on_error = True
 nb_execution_timeout = 180
+if os.environ.get("LIESEL_DOCS_EXECUTED") == "1":
+    nb_execution_mode = "off"
+    nb_execution_excludepatterns = ["*"]
 
 myst_heading_anchors = 3  # auto-generate 3 levels of heading anchors
 myst_enable_extensions = ["amsmath", "dollarmath", "html_image"]
