@@ -64,12 +64,12 @@ id="generate-data" />
 ## Building the Model
 
 As the most basic building blocks of a model, Liesel provides the
-{class}`.Var` class for instantiating variables and the {class}`.Dist`
-class for wrapping probability distributions. The {class}`.Var` class
-comes with four constructors, namely {meth}`.Var.new_param` for
-parameters, {meth}`.Var.new_obs` for observed data,
-{meth}`.Var.new_calc` for variables that are deterministic functions of
-other variables in the model, and {meth}`.Var.new_value` for fixed
+{class}`Var <liesel.model.Var>` class for instantiating variables and the {class}`Dist <liesel.model.Dist>`
+class for wrapping probability distributions. The {class}`Var <liesel.model.Var>` class
+comes with four constructors, namely {meth}`Var.new_param <liesel.model.Var.new_param>` for
+parameters, {meth}`Var.new_obs <liesel.model.Var.new_obs>` for observed data,
+{meth}`Var.new_calc <liesel.model.Var.new_calc>` for variables that are deterministic functions of
+other variables in the model, and {meth}`Var.new_value <liesel.model.Var.new_value>` for fixed
 values.
 
 ### The regression coefficients
@@ -77,14 +77,14 @@ values.
 Let’s assume the weakly informative prior
 $\beta_0, \beta_1 \sim \mathcal{N}(0, 100^2)$ for the regression
 coefficients. To define this in Liesel, we will be using the
-{class}`.Dist` class. This class wraps distribution classes with the
+{class}`Dist <liesel.model.Dist>` class. This class wraps distribution classes with the
 TensorFlow Probability (TFP) API. Here, we use the TFP distribution
 object
 [(`tfd.Normal`)](https://www.tensorflow.org/probability/api_docs/python/tfp/distributions/Normal),
 and the two hyperparameters representing the parameters of the
 distribution. TFP uses the names `loc` for the mean and `scale` for the
 standard deviation, so we have to use the same names here. This is a
-general feature of {class}`.Dist`, you should always use the parameter
+general feature of {class}`Dist <liesel.model.Dist>`, you should always use the parameter
 names from TFP to refer to the parameters of your distribution.
 
 ``` python
@@ -92,8 +92,8 @@ beta_prior = lsl.Dist(tfd.Normal, loc=0.0, scale=100.0)
 ```
 
 Now we can create our regression coefficient with the
-{meth}`.Var.new_param` constructor. We also attach an
-{class}`~.goose.MCMCSpec` to `beta`, which tells Goose to sample this
+{meth}`Var.new_param <liesel.model.Var.new_param>` constructor. We also attach an
+{class}`MCMCSpec <liesel.goose.MCMCSpec>` to `beta`, which tells Goose to sample this
 parameter with a NUTS kernel later on:
 
 ``` python
@@ -118,7 +118,7 @@ sigma_sq = lsl.Var.new_param(value=1.0, dist=sigma_sq_prior, name="sigma_sq")
 ```
 
 Since we need to work not only with the variance, but with the scale, we
-initialize the scale using {meth}`.Var.new_calc`, to compute the square
+initialize the scale using {meth}`Var.new_calc <liesel.model.Var.new_calc>`, to compute the square
 root.
 
 ``` python
@@ -128,7 +128,7 @@ sigma = lsl.Var.new_calc(jnp.sqrt, sigma_sq, name="sigma")
 ### Design matrix, fitted values, and response
 
 To compute the matrix-vector product $\mathbf{X}\boldsymbol{\beta}$, we
-use another variable instantiated via {meth}`.Var.new_calc`. We can view
+use another variable instantiated via {meth}`Var.new_calc <liesel.model.Var.new_calc>`. We can view
 our model as $y_i \sim \mathcal{N}(\mu_i, \;\sigma^2)$ with
 $\mu_i = \beta_0 + \beta_1 x_i$, so we use the name `mu` for this
 product.
@@ -151,14 +151,14 @@ y = lsl.Var.new_obs(y_vec, dist=y_dist, name="y")
 
 ### Bringing the model together
 
-Now, we can set up the {class}`.Model`. Here, we will only add the
+Now, we can set up the {class}`Model <liesel.model.Model>`. Here, we will only add the
 response.
 
 ``` python
 model = lsl.Model(y)
 ```
 
-The {meth}`.Model.plot()` method visualizes the model. If the layout of
+The {meth}`Model.plot <liesel.model.Model.plot>` method visualizes the model. If the layout of
 the graph looks messy for you, please make sure you have the
 `pygraphviz` package installed.
 
@@ -175,11 +175,11 @@ This section illustrates the basics of Liesel’s MCMC framework Goose. To
 use Goose, the user needs to select one or more sampling algorithms,
 called (transition) kernels, for the model parameters. Goose comes with
 a number of standard kernels such as Hamiltonian Monte Carlo
-({class}`~.goose.HMCKernel`) or the No U-Turn Sampler
-({class}`~.goose.NUTSKernel`). Multiple kernels can be combined in one
+({class}`HMCKernel <liesel.goose.HMCKernel>`) or the No U-Turn Sampler
+({class}`NUTSKernel <liesel.goose.NUTSKernel>`). Multiple kernels can be combined in one
 sampling scheme and assigned to different parameters, and the user can
 implement their own problem-specific kernels, as long as they are
-compatible with the {class}`.Kernel` protocol. In any case, the user is
+compatible with the {class}`Kernel <liesel.goose.Kernel>` protocol. In any case, the user is
 responsible for constructing a mathematically valid algorithm.
 
 We start with a very simple sampling scheme, keeping $\sigma^2$ fixed at
@@ -188,9 +188,9 @@ More on sampling $\sigma^2$ can be found in the [Parameter
 transformations tutorial](01c-transform.md) and the [Gibbs sampling
 tutorial](01d-gibbs-sampling.md). The NUTS kernel for `beta` was
 specified above through the variable’s `inference` attribute. The
-{class}`.LieselMCMC` helper reads these inference specifications from
+{class}`LieselMCMC <liesel.goose.LieselMCMC>` helper reads these inference specifications from
 the model and can run the sampler directly with
-{meth}`~.goose.LieselMCMC.run_for_epochs`. Here we request 1000
+{meth}`run_for_epochs <liesel.goose.LieselMCMC.run_for_epochs>`. Here we request 1000
 adaptation iterations and 1000 posterior draws per chain.
 
 ``` python
@@ -248,7 +248,7 @@ results = gs.LieselMCMC(model).run_for_epochs(
     100%|███████████████████████████████████████| 40/40 [00:00<00:00, 319.77chunk/s]
     liesel.goose.engine - INFO - Finished epoch
 
-The call to {meth}`~.goose.LieselMCMC.run_for_epochs` builds the engine,
+The call to {meth}`run_for_epochs <liesel.goose.LieselMCMC.run_for_epochs>` builds the engine,
 compiles the model and sampling algorithm, runs all epochs, and returns
 the sampling results. Finally, we print a summary table.
 

@@ -93,7 +93,7 @@ latent variable. The standard deviation `sigma` is then computed as
 parameter.
 
 Now we can set up and run the MCMC algorithm directly from the
-`MCMCSpec` objects stored in the model. We also include `sigma_sq` in
+{class}`MCMCSpec <liesel.goose.MCMCSpec>` objects stored in the model. We also include `sigma_sq` in
 the stored positions, because the NUTS kernel itself samples the
 transformed variable, while `sigma_sq` is the easier quantity to
 interpret.

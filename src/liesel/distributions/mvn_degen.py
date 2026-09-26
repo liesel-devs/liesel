@@ -60,8 +60,9 @@ class MultivariateNormalDegenerate(tfd.Distribution):
     """
     A potentially degenerate multivariate normal distribution.
 
-    Provides the alternative constructor :meth:`.from_penalty` and sampling
-    via :meth:`.MultivariateNormalDegenerate.sample`.
+    Provides the alternative constructor
+    :meth:`~liesel.distributions.MultivariateNormalDegenerate.from_penalty` and sampling
+    via ``MultivariateNormalDegenerate.sample``.
 
     This is a simplified code-based illustration of how the log-probability for an array
     ``x`` is evaluated::
@@ -93,9 +94,11 @@ class MultivariateNormalDegenerate(tfd.Distribution):
         Python ``str``, name prefixed to ``Ops`` created by this class.
     tol
         Numerical tolerance for determining which eigenvalues of the distribution's \
-        precision matrices should be treated as zeros. Used in :attr:`.rank` and \
-        :attr:`.log_pdet`, if they are computed by the class. Also used in \
-        :meth:`.MultivariateNormalDegenerate.sample`.
+        precision matrices should be treated as zeros. Used in
+        :attr:`~liesel.distributions.MultivariateNormalDegenerate.rank` and \
+        :attr:`~liesel.distributions.MultivariateNormalDegenerate.log_pdet`, if they are
+        computed by the class. Also used in \
+        ``MultivariateNormalDegenerate.sample``.
 
     Notes
     -----
@@ -103,7 +106,7 @@ class MultivariateNormalDegenerate(tfd.Distribution):
       based on the eigenvalues of the precision matrix ``prec``. This is an expensive
       operation and can be avoided by specifying the corresponding arguments.
     * When you draw samples from the distribution via
-      :meth:`.MultivariateNormalDegenerate.sample`, it is always
+      ``MultivariateNormalDegenerate.sample``, it is always
       necessary to compute the eigendecomposition of the distribution's precision
       matrices once and cache it, because sampling requires both the eigenvalues and
       eigenvectors.

@@ -4,7 +4,7 @@ Random walk sampler.
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import jax
 import jax.flatten_util
@@ -35,8 +35,8 @@ from .types import KeyArray, ModelState, Position, Scalar, TuningInfo
 @dataclass
 class RWKernelState:
     """
-    A dataclass for the state of a ``RWKernel``, implementing the
-    :class:`.DAKernelState` protocol.
+    A dataclass for the state of a :class:`~liesel.goose.RWKernel`, implementing the
+    :class:`~liesel.goose.da.DAKernelState` protocol.
     """
 
     step_size: Scalar
@@ -56,7 +56,7 @@ class RWKernel(ModelMixin, TransitionMixin[RWKernelState, RWTransitionInfo], Rep
     A random walk kernel.
 
     Uses Gaussian proposals, Metropolis-Hastings correction and dual averaging.
-    Implements the :class:`.Kernel` protocol.
+    Implements the :class:`~liesel.goose.Kernel` protocol.
 
     The kernel uses a default Metropolis-Hastings target acceptance probability of
     0.234, which is optimal for a random walk sampler (in a certain sense). See Gelman
@@ -87,9 +87,21 @@ class RWKernel(ModelMixin, TransitionMixin[RWKernelState, RWTransitionInfo], Rep
     needs_history: ClassVar[bool] = False
     """Whether this kernel needs its history for tuning."""
     identifier: str = ""
-    """Kernel identifier, set by :class:`~.goose.EngineBuilder`"""
+    """Kernel identifier, set by :class:`~liesel.goose.EngineBuilder`"""
     position_keys: tuple[str, ...]
     """Tuple of position keys handled by this kernel."""
+
+    if TYPE_CHECKING:
+        da_gamma: float
+        """The adaptation regularization scale."""
+        da_kappa: float
+        """The adaptation relaxation exponent."""
+        da_t0: int
+        """The adaptation iteration offset."""
+        da_target_accept: float
+        """Target acceptance probability for dual averaging algorithm."""
+        initial_step_size: float
+        """Value at which to start step size tuning."""
 
     def __init__(
         self,

@@ -1,11 +1,14 @@
 from collections.abc import Sequence
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import jax
 import jax.flatten_util
 
 from ..goose.types import Array
 from .model import Model
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class LogProb:
@@ -25,7 +28,8 @@ class LogProb:
 
     See Also
     ---------
-    .FlatLogProb: A similar class that returns gradients and hessians as arrays.
+    ~liesel.model.FlatLogProb : A similar class that returns gradients and hessians as
+        arrays.
 
     Examples
     --------
@@ -59,6 +63,14 @@ class LogProb:
            [-0., -1.]], dtype=float32)}}
 
     """
+
+    if TYPE_CHECKING:
+        component: Literal["log_prob", "log_lik", "log_prior"]
+        """Which component of the model's log probability to evaluate."""
+        diff_mode: Literal["forward", "reverse"]
+        """Which auto-diff mode to use for the Hessian."""
+        model: Model
+        """A Liesel model instance."""
 
     def __init__(
         self,
@@ -112,8 +124,8 @@ class FlatLogProb:
     Interface for evaluating the unnormalized log probability of a Liesel model.
 
     Also provides access to the first and second derivatives.
-    The methods :meth:`.FlatLogProb.grad` and
-    :meth:`.FlatLogProb.hessian` are
+    The methods :meth:`FlatLogProb.grad <liesel.model.FlatLogProb.grad>` and
+    :meth:`FlatLogProb.hessian <liesel.model.FlatLogProb.hessian>` are
     flattened, which means the expect arrays as inputs and return arrays.
 
     Parameters
@@ -130,7 +142,8 @@ class FlatLogProb:
 
     See Also
     --------
-    .LogProb: A similar class that returns gradients and hessians as dictionaries.
+    ~liesel.model.LogProb : A similar class that returns gradients and hessians as
+        dictionaries.
 
 
     Examples
@@ -162,6 +175,16 @@ class FlatLogProb:
     Array([[-1., -0.],
            [-0., -1.]], dtype=float32)
     """
+
+    if TYPE_CHECKING:
+        component: Literal["log_prob", "log_lik", "log_prior"]
+        """Which component of the model's log probability to evaluate."""
+        diff_mode: Literal["forward", "reverse"]
+        """Which auto-diff mode to use for the Hessian."""
+        model: Model
+        """A Liesel model instance."""
+        unravel_fn: Callable
+        """Function mapping a flat parameter vector back to its position dictionary."""
 
     def __init__(
         self,

@@ -15,6 +15,19 @@ import liesel.goose as gs
 import liesel.model as lsl
 
 
+def pytest_collection_modifyitems(items):
+    for item in items:
+        if (
+            isinstance(item, pytest.DoctestItem)
+            and item.name == "liesel.goose.optim.optim_flat"
+        ):
+            item.add_marker(
+                pytest.mark.filterwarnings(
+                    "ignore:liesel.goose.optim_flat is deprecated:FutureWarning"
+                )
+            )
+
+
 @pytest.fixture(autouse=True)
 def add_doctest_imports(doctest_namespace):
     doctest_namespace["np"] = np

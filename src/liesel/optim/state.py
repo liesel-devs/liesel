@@ -1,0 +1,1229 @@
+"""State containers and history helpers for experimental optimizers.
+
+This module mostly supports :class:`~liesel.optim.OptimEngine` internally. The most
+useful
+user-facing pieces are :class:`~liesel.optim.OptimResult`, returned by optimizer runs,
+and
+:class:`~liesel.optim.OptimHistory`, which converts recorded losses and positions into
+tidy
+``pandas`` data frames.
+"""
+
+from __future__ import annotations
+
+import os
+import pickle
+import tempfile
+import time
+from collections.abc import Sequence
+from copy import deepcopy
+from dataclasses import dataclass, field, replace
+from importlib.metadata import version
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Literal
+
+import jax
+import jax.numpy as jnp
+import optax
+import pandas as pd
+import plotnine as p9
+
+from liesel.goose.types import ModelState
+
+from ..__version__ import __version__
+from ..goose.pytree import register_dataclass_as_pytree
+from .batch import Batches, BatchManager
+from .optimizer import OptimizerLike
+from .types import Position
+
+if TYPE_CHECKING:
+    from .engine import OptimEngine
+
+Array = Any
+BatchConfig = Batches | BatchManager
+
+OptimNaNKind = Literal["position_before", "position_after", "loss"]
+
+_NAN_DEBUG_KIND_NONE = 0
+_NAN_DEBUG_KIND_POSITION_BEFORE = 1
+_NAN_DEBUG_KIND_POSITION_AFTER = 2
+_NAN_DEBUG_KIND_LOSS = 3
+_NAN_DEBUG_KIND_NAMES: dict[int, OptimNaNKind] = {
+    _NAN_DEBUG_KIND_POSITION_BEFORE: "position_before",
+    _NAN_DEBUG_KIND_POSITION_AFTER: "position_after",
+    _NAN_DEBUG_KIND_LOSS: "loss",
+}
+
+
+def _first_floating_dtype(*trees) -> jnp.dtype | None:
+    for tree in trees:
+        if tree is None:
+            continue
+
+        for leaf in jax.tree_util.tree_leaves(tree):
+            arr = jnp.asarray(leaf)
+            if jnp.issubdtype(arr.dtype, jnp.floating):
+                return arr.dtype
+
+    return None
+
+
+def _inf_with_dtype(dtype: jnp.dtype | None) -> jax.Array:
+    if dtype is None:
+        return jnp.asarray(jnp.inf)
+
+    return jnp.asarray(jnp.inf, dtype=dtype)
+
+
+def _plot_window_start(n_iter: int, window: int | None) -> int:
+    if window is None:
+        return 0
+
+    if isinstance(window, bool) or window < 1:
+        raise ValueError("window must be None or a positive integer.")
+
+    return max(n_iter - window, 0)
+
+
+def position_df(
+    position: Position, subset: Sequence[str] | None = None
+) -> pd.DataFrame:
+    """
+    Converts a position history into a tidy ``pandas.DataFrame``.
+
+    ``position`` is expected to contain arrays whose leading dimension indexes
+    epochs. Remaining dimensions are flattened into numbered columns. One-dimensional
+    entries keep their original name.
+
+    Parameters
+    ----------
+    position
+        Position history with one leading epoch dimension per entry.
+    subset
+        Optional sequence of position names to keep.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Data frame with an ``"epoch"`` column and one or more columns per position
+        entry.
+
+    Examples
+    --------
+    >>> import jax.numpy as jnp
+    >>> from liesel.optim.state import position_df
+    >>> from liesel.optim.types import Position
+    >>> history = Position(
+    ...     {
+    ...         "theta": jnp.array([[1.0, 2.0], [3.0, 4.0]]),
+    ...         "sigma": jnp.array([5.0, 7.0]),
+    ...     }
+    ... )
+    >>> df = position_df(history)
+    >>> df[["theta0", "sigma"]].to_dict("list")
+    {'theta0': [1.0, 3.0], 'sigma': [5.0, 7.0]}
+    >>> position_df(history, subset=["sigma"]).columns.tolist()
+    ['epoch', 'sigma']
+    """
+    items = [
+        (name, value)
+        for name, value in position.items()
+        if subset is None or name in subset
+    ]
+
+    if not items:
+        first = next(iter(position.values()), None)
+        if first is None:
+            hdim = 0
+        else:
+            first = jnp.asarray(first)
+            if first.ndim == 0:
+                raise ValueError(
+                    "Position history entries must have a leading epoch dimension."
+                )
+            hdim = first.shape[0]
+
+        df = pd.DataFrame(index=range(hdim))
+        df = df.reset_index(names="epoch")
+        return df.astype(float)
+
+    data: dict[str, Array] = {}
+    for name, value in items:
+        value = jnp.asarray(value)
+        original_ndim = value.ndim
+        if value.ndim == 0:
+            raise ValueError(
+                "Position history entries must have a leading epoch dimension, "
+                f"but entry {name!r} has shape {value.shape}."
+            )
+
+        hdim = value.shape[0]
+        pdim = int(jnp.prod(jnp.array(value.shape[1:])))
+        value = jnp.reshape(value, (hdim, pdim))
+
+        if pdim == 1 and original_ndim == 1:
+            data[name] = value[:, 0]
+        else:
+            data |= array_to_dict(value, names_prefix=name)
+
+    df = pd.DataFrame(data)
+    df = df.reset_index(names="epoch")
+
+    return df.astype(float)
+
+
+@register_dataclass_as_pytree
+@dataclass
+class OptimHistory:
+    """
+    Stores loss values and optional position histories for optimizer runs.
+
+    :class:`~liesel.optim.OptimHistory` is allocated before an optimization starts. Loss
+    arrays are
+    initialized with ``jnp.inf``. Position histories, when requested, are initialized
+    with zeros and updated epoch by epoch by :class:`~liesel.optim.OptimEngine`.
+
+    Parameters
+    ----------
+    loss_train
+        Equal-weight mean of the pre-update losses within each completed epoch, with
+        shape ``(epochs,)``. The first active optimizer supplies each batch value; a
+        batch with no active optimizer is evaluated once at the unchanged position.
+        Because parameters may change between batches, this summarizes the
+        optimization trajectory; it is not a full-data loss evaluated at the
+        epoch's final position.
+    loss_monitor
+        Epoch-level series used for stopping and identifying the minimum-monitor
+        position, with shape ``(epochs,)``. Depending on the source, this is a
+        training EMA, complete validation loss, or complete training loss. Exact
+        losses use the post-update epoch position. An EMA snapshot summarizes
+        several positions, so its associated parameter snapshot is not an exact
+        loss-position pair.
+    position
+        Optional parameter position history. Each array has a leading epoch
+        dimension.
+
+    Examples
+    --------
+    >>> import jax.numpy as jnp
+    >>> from liesel.optim import OptimHistory
+    >>> from liesel.optim.types import Position
+    >>> position = Position({"theta": jnp.array([1.0, 2.0])})
+    >>> history = OptimHistory.from_epochs(epochs=3, position=position)
+    >>> history.loss_train.shape
+    (3,)
+    >>> history.position["theta"].shape
+    (3, 2)
+    >>> history
+    OptimHistory(len=3)
+    """
+
+    loss_train: jax.Array
+    """
+    Equal-weight mean of the pre-update losses within each completed epoch, with shape
+    ``(epochs,)``.
+    """
+    loss_monitor: jax.Array
+    """
+    Epoch-level series used for stopping and identifying the minimum-monitor position,
+    with shape ``(epochs,)``.
+    """
+    position: Position | None
+    """Optional parameter position history."""
+
+    @classmethod
+    def from_epochs(
+        cls,
+        epochs: int,
+        position: Position | None,
+        loss_dtype: jnp.dtype | None = None,
+    ) -> OptimHistory:
+        """
+        Allocates an empty optimizer history for a fixed number of epochs.
+
+        Parameters
+        ----------
+        epochs
+            Number of epochs to allocate.
+        position
+            Initial position used to infer the shape of the stored parameter history.
+            If ``None``, no parameter history is allocated.
+        loss_dtype
+            Optional dtype for the loss history. If omitted, the first floating dtype
+            in ``position`` is used, falling back to JAX's default.
+
+        Returns
+        -------
+        OptimHistory
+            Initialized history object.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> from liesel.optim import OptimHistory
+        >>> from liesel.optim.types import Position
+        >>> history = OptimHistory.from_epochs(2, Position({"theta": jnp.array(1.0)}))
+        >>> history.loss_monitor.tolist()
+        [inf, inf]
+        >>> history.position["theta"].tolist()
+        [0.0, 0.0]
+        """
+        position_init = (
+            cls.init_position_history(position, epochs)
+            if position is not None
+            else None
+        )
+
+        if loss_dtype is None:
+            loss_dtype = _first_floating_dtype(position)
+
+        inst = cls(
+            loss_train=jnp.full((epochs,), fill_value=jnp.inf, dtype=loss_dtype),
+            loss_monitor=jnp.full((epochs,), fill_value=jnp.inf, dtype=loss_dtype),
+            position=position_init,
+        )
+        return inst
+
+    def loss_df(self) -> pd.DataFrame:
+        """
+        Converts training and monitoring losses into a ``pandas.DataFrame``.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Data frame with ``"epoch"``, ``"loss_train"``, and
+            ``"loss_monitor"`` columns.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> from liesel.optim import OptimHistory
+        >>> history = OptimHistory.from_epochs(epochs=2, position=None)
+        >>> history.loss_train = history.loss_train.at[0].set(1.5)
+        >>> history.loss_monitor = history.loss_monitor.at[0].set(2.5)
+        >>> history.loss_df().iloc[0].to_dict()
+        {'epoch': 0.0, 'loss_train': 1.5, 'loss_monitor': 2.5}
+        """
+        data: dict[str, Array] = {}
+        data |= array_to_dict(self.loss_train, names_prefix="loss_train")
+        data |= array_to_dict(self.loss_monitor, names_prefix="loss_monitor")
+
+        df = pd.DataFrame(data)
+        df = df.reset_index(names="epoch")
+
+        return df.astype(float)
+
+    def position_df(self, subset: Sequence[str] | None = None) -> pd.DataFrame:
+        """
+        Converts the saved parameter position history into a data frame.
+
+        Parameters
+        ----------
+        subset
+            Optional sequence of parameter names to keep.
+
+        Raises
+        ------
+        TypeError
+            If position history was not saved.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> from liesel.optim import OptimHistory
+        >>> from liesel.optim.types import Position
+        >>> history = OptimHistory.from_epochs(
+        ...     2, Position({"theta": jnp.array([1.0, 2.0])})
+        ... )
+        >>> history.position_df().columns.tolist()
+        ['epoch', 'theta0', 'theta1']
+        >>> no_position = OptimHistory.from_epochs(2, position=None)
+        >>> try:
+        ...     no_position.position_df()
+        ... except TypeError as error:
+        ...     print("not saved" in str(error))
+        True
+        """
+        if self.position is None:
+            raise TypeError(
+                "'position' is None. Probably the position history was not saved."
+            )
+        return position_df(self.position, subset)
+
+    @staticmethod
+    def init_position_history(position: Position, epochs: int) -> Position:
+        """
+        Allocates zero-filled arrays for a position history.
+
+        The returned arrays have one extra leading epoch dimension.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> from liesel.optim import OptimHistory
+        >>> from liesel.optim.types import Position
+        >>> position = Position({"theta": jnp.ones((2,))})
+        >>> history = OptimHistory.init_position_history(position, epochs=3)
+        >>> history["theta"].shape
+        (3, 2)
+        >>> history["theta"].sum()
+        Array(0., dtype=float32)
+        """
+        # initialize arrays of zeros
+        pos = {}
+        for name, value in position.items():
+            value_arr = jnp.asarray(value)
+            pos[name] = jnp.zeros((epochs,) + value_arr.shape, dtype=value_arr.dtype)
+        # fill in initial values
+        # pos = jax.tree.map(lambda d, pos: d.at[0].set(pos), pos, position)
+        return Position(pos)
+
+    @staticmethod
+    def update_position_history(
+        i: int, position_history: Position, position: Position
+    ) -> Position:
+        """
+        Writes a position into a position history at one epoch index.
+
+        Parameters
+        ----------
+        i
+            Epoch index to update.
+        position_history
+            History created by :meth:`~liesel.optim.OptimHistory.init_position_history`.
+        position
+            Position values to store at epoch ``i``.
+
+        Returns
+        -------
+        Position
+            Updated position history.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> from liesel.optim import OptimHistory
+        >>> from liesel.optim.types import Position
+        >>> position = Position({"theta": jnp.array([1.0, 2.0])})
+        >>> history = OptimHistory.init_position_history(position, epochs=2)
+        >>> updated = OptimHistory.update_position_history(1, history, position)
+        >>> updated["theta"].tolist()
+        [[0.0, 0.0], [1.0, 2.0]]
+        """
+        pos_history = jax.tree.map(
+            lambda d, pos: d.at[i].set(pos), position_history, position
+        )
+        return pos_history
+
+    def __repr__(self) -> str:
+        name = type(self).__name__
+        return f"{name}(len={len(self.loss_train)})"
+
+
+def array_to_dict(
+    x: Array, names_prefix: str = "x", prefix_1d: bool = False
+) -> dict[str, Array]:
+    """
+    Converts a one- or two-dimensional array into named columns.
+
+    Parameters
+    ----------
+    x
+        One- or two-dimensional array-like object.
+    names_prefix
+        Prefix used for generated names.
+    prefix_1d
+        If ``True``, one-dimensional input receives a trailing ``"0"`` in its
+        column name.
+
+    Returns
+    -------
+    dict
+        Mapping from generated column names to arrays.
+
+    Examples
+    --------
+    >>> import jax.numpy as jnp
+    >>> from liesel.optim.state import array_to_dict
+    >>> array_to_dict(jnp.array(1.0, dtype=jnp.float32), names_prefix="x")
+    {'x': Array(1., dtype=float32)}
+    >>> array_to_dict(jnp.array([1.0, 2.0]), names_prefix="loss")
+    {'loss': Array([1., 2.], dtype=float32)}
+    >>> array_to_dict(jnp.array([[1.0, 2.0], [3.0, 4.0]]), names_prefix="theta")
+    {'theta0': Array([1., 3.], dtype=float32), 'theta1': Array([2., 4.], dtype=float32)}
+    >>> array_to_dict(jnp.array([1.0, 2.0]), names_prefix="x", prefix_1d=True)
+    {'x0': Array([1., 2.], dtype=float32)}
+    """
+
+    x = jnp.asarray(x)
+
+    if x.ndim == 0 or x.ndim == 1:
+        if prefix_1d:
+            return {f"{names_prefix}0": x}
+        else:
+            return {names_prefix: x}
+    elif x.ndim == 2:
+        return {f"{names_prefix}{i}": x[:, i] for i in range(x.shape[-1])}
+    else:
+        raise ValueError(f"x should have ndim <= 2, but it has x.ndim={x.ndim}")
+
+
+@register_dataclass_as_pytree
+@dataclass
+class OptimNaNDebugState:
+    """
+    Internal fixed-shape NaN debugging state carried through JAX loops.
+
+    The public debug object is constructed from this state after the optimization
+    loop returns. This class intentionally stores numeric codes instead of strings so
+    it can remain a JAX pytree.
+    """
+
+    has_nan: jax.Array
+    kind_code: jax.Array
+    epoch: jax.Array
+    batch: jax.Array
+    optimizer_index: jax.Array
+    obs_batch: Position
+    last_non_nan_position: Position
+    nan_position: Position
+    loss: jax.Array
+    reproduction_position: Position
+    reproduction_key: jax.Array
+    reproduction_optimizer_states: dict[str, optax.OptState]
+    reproduction_batches: BatchConfig
+    reproduction_model_state: ModelState
+
+    @classmethod
+    def new(
+        cls,
+        *,
+        key: jax.Array,
+        position: Position,
+        obs_batch: Position,
+        optimizer_states: dict[str, optax.OptState],
+        batches: BatchConfig,
+        model_state: ModelState,
+        loss_dtype: jnp.dtype | None = None,
+    ) -> OptimNaNDebugState:
+        if loss_dtype is None:
+            loss_dtype = _first_floating_dtype(position)
+
+        loss = jnp.asarray(jnp.nan, dtype=loss_dtype)
+
+        return cls(
+            has_nan=jnp.asarray(False),
+            kind_code=jnp.asarray(_NAN_DEBUG_KIND_NONE, dtype=jnp.int32),
+            epoch=jnp.asarray(0, dtype=jnp.int32),
+            batch=jnp.asarray(0, dtype=jnp.int32),
+            optimizer_index=jnp.asarray(-1, dtype=jnp.int32),
+            obs_batch=obs_batch,
+            last_non_nan_position=position,
+            nan_position=position,
+            loss=loss,
+            reproduction_position=position,
+            reproduction_key=key,
+            reproduction_optimizer_states=optimizer_states,
+            reproduction_batches=batches,
+            reproduction_model_state=model_state,
+        )
+
+
+@register_dataclass_as_pytree
+@dataclass
+class OptimCarry:
+    """
+    Mutable optimizer loop state used by :class:`~liesel.optim.OptimEngine`.
+
+    ``OptimCarry`` is passed through the epoch and mini-batch loops. It contains the
+    current parameter position, model state, optimizer states, batch configuration,
+    current losses, minimum-monitor values, and preallocated history.
+
+    Most users do not need to construct this class directly. Use
+    ``OptimCarry.new`` when testing custom engine logic.
+
+    Parameters
+    ----------
+    key
+        Current JAX pseudo-random key.
+    position
+        Current parameter position.
+    history
+        Preallocated optimizer history.
+    batches
+        Batch configuration used by the optimizer.
+    optimizer_states
+        Optax states keyed by optimizer identifier.
+    model_state
+        Current model state.
+    batch
+        Current mini-batch position.
+    fixed_position
+        Non-optimized position entries.
+    position_min_monitor
+        Parameter position with the smallest completed-epoch monitoring loss so far.
+    min_monitor_loss
+        Smallest completed-epoch monitoring loss found so far.
+    min_monitor_epoch
+        Epoch at which the smallest monitoring loss was found.
+    loss_train
+        Running epoch accumulation of pre-update losses. At a completed epoch it is
+        their equal-weight mean, evaluated along the sequence of parameter positions
+        visited during that epoch.
+    loss_monitor
+        Most recent monitoring loss.
+    epoch
+        Current epoch index.
+    i_batch
+        Current mini-batch index within the epoch.
+    nan_debug_state
+        Optional internal state for debug-only first-NaN capture.
+    """
+
+    key: jax.Array  # random number key
+
+    position: Position  # parameter position (estimation targets)
+
+    history: OptimHistory
+    batches: BatchConfig
+
+    optimizer_states: dict[str, optax.OptState]
+    model_state: ModelState
+
+    batch: Position = field(default_factory=lambda: Position({}))
+    fixed_position: Position = field(default_factory=lambda: Position({}))
+    position_min_monitor: Position = field(default_factory=lambda: Position({}))
+    min_monitor_loss: jax.Array = field(default_factory=lambda: jnp.asarray(jnp.inf))
+    min_monitor_epoch: jax.Array | int = 0
+
+    loss_train: jax.Array = field(default_factory=lambda: jnp.asarray(jnp.inf))
+    loss_monitor: jax.Array = field(default_factory=lambda: jnp.asarray(jnp.inf))
+    _ema_mean: jax.Array = field(default_factory=lambda: jnp.asarray(0.0))
+    _ema_compensation: jax.Array = field(default_factory=lambda: jnp.asarray(0.0))
+
+    epoch: int = 0  # outer while-loop index over epochs
+    i_batch: int | jax.Array = 0  # inner for-loop index over batches
+    nan_debug_state: OptimNaNDebugState | None = None
+
+    # Read-only partition templates, prepared outside the compiled fit loop.
+    _data_states: dict[str, ModelState] = field(default_factory=dict, repr=False)
+    # Keys covered by the training template or model_state; None keeps custom paths.
+    _prepared_training_keys: tuple[str, ...] | None = field(
+        default=None, repr=False, metadata={"static": True}
+    )
+
+    @classmethod
+    def new(
+        cls,
+        key: jax.Array,
+        epochs: int,
+        position: Position,
+        batches: BatchConfig,
+        optimizers: Sequence[OptimizerLike],
+        model_state: ModelState,
+        save_position_history: bool,
+    ) -> OptimCarry:
+        """
+        Creates an initialized optimizer carry.
+
+        Optimizer states are initialized from ``position``. The history stores the
+        parameter position only when ``save_position_history`` is ``True``.
+
+        Examples
+        --------
+        >>> import jax
+        >>> import jax.numpy as jnp
+        >>> import optax
+        >>> from liesel.optim import Batches, Optimizer
+        >>> from liesel.optim.state import OptimCarry
+        >>> from liesel.optim.types import Position
+        >>> position = Position({"theta": jnp.array(0.0)})
+        >>> carry = OptimCarry.new(
+        ...     key=jax.random.key(0),
+        ...     epochs=2,
+        ...     position=position,
+        ...     batches=Batches(["y"], axis_size=4, batch_size=2),
+        ...     optimizers=[Optimizer(["theta"], optax.sgd(0.1))],
+        ...     model_state={},
+        ...     save_position_history=True,
+        ... )
+        >>> carry.optimizer_states.keys()
+        dict_keys([''])
+        >>> carry.history.position["theta"].shape
+        (2,)
+        >>> carry.position_min_monitor == position
+        True
+        """
+        identifiers = [opt.identifier for opt in optimizers]
+        duplicate_identifiers = sorted(
+            {
+                identifier
+                for identifier in identifiers
+                if identifiers.count(identifier) > 1
+            }
+        )
+        if duplicate_identifiers:
+            raise ValueError(
+                "Optimizer identifiers must be unique, but got duplicates: "
+                f"{duplicate_identifiers}."
+            )
+
+        opt_states = {opt.identifier: opt.init(position) for opt in optimizers}
+        loss_dtype = _first_floating_dtype(position)
+        if save_position_history:
+            history = OptimHistory.from_epochs(epochs, position, loss_dtype)
+        else:
+            history = OptimHistory.from_epochs(epochs, None, loss_dtype)
+
+        inf = _inf_with_dtype(loss_dtype)
+        zero = jnp.zeros_like(inf)
+
+        inst = cls(
+            key=key,
+            position=position,
+            history=history,
+            batches=batches,
+            optimizer_states=opt_states,
+            model_state=model_state,
+            position_min_monitor=position,
+            min_monitor_loss=inf,
+            loss_train=inf,
+            loss_monitor=inf,
+            _ema_mean=zero,
+            _ema_compensation=zero,
+        )
+        return inst
+
+    def __repr__(self) -> str:
+        name = type(self).__name__
+        return f"{name}(epoch={self.epoch}, batch={self.i_batch})"
+
+
+@dataclass
+class OptimNaNDebugInfo:
+    """
+    Reproduction data for the first NaN captured by :class:`~liesel.optim.OptimEngine`.
+
+    Use :meth:`~liesel.optim.OptimNaNDebugInfo.reproduce_step` for NaNs introduced by an
+    optimizer update and
+    :meth:`~liesel.optim.OptimNaNDebugInfo.reproduce_loss` for NaNs returned by an
+    optimizer's pre-update loss or
+    by the explicit batched loss evaluation when no optimizer is active.
+
+    The reported optimizer is where NaN was first detected. An earlier update
+    may have produced finite values outside the model's valid parameter domain.
+    Inspect ``last_non_nan_position``: it is free of NaNs, but is not necessarily
+    a valid model state.
+    """
+
+    kind: OptimNaNKind
+    """Stage at which the first NaN was detected."""
+    epoch: int
+    """Epoch index at which the NaN was detected."""
+    batch: int
+    """Batch index at which the NaN was detected."""
+    obs_batch: Position
+    """Observed batch used when the NaN was detected."""
+    last_non_nan_position: Position
+    """Last position free of NaNs; it need not be a valid model state."""
+    nan_position: Position | None
+    """Position containing the detected NaN, if available."""
+    loss: jax.Array | None
+    """Loss value associated with the captured event, if available."""
+    optimizer_index: int | None
+    """Index of the optimizer at detection, if known."""
+    optimizer_identifier: str | None
+    """Identifier of the optimizer at detection, if known."""
+    optimizer_position_keys: tuple[str, ...] | None
+    """Position keys handled by the optimizer at detection, if known."""
+    reproduction_position: Position
+    """Parameter position used to reproduce the captured event."""
+    reproduction_carry: OptimCarry
+    """Optimizer carry used to reproduce the captured event."""
+
+    @property
+    def position(self) -> Position:
+        """Position most directly associated with the captured NaN event."""
+        if self.nan_position is not None:
+            return self.nan_position
+
+        return self.reproduction_position
+
+    def optimizer(self, engine: OptimEngine) -> OptimizerLike | None:
+        """Returns the optimizer associated with the captured NaN, if known."""
+        if self.optimizer_index is None:
+            return None
+
+        return engine.optimizers[self.optimizer_index]
+
+    def reproduce_step(self, engine: OptimEngine) -> OptimCarry:
+        """
+        Re-runs the optimizer step that introduced a NaN position.
+
+        Raises
+        ------
+        ValueError
+            If the captured event was not an optimizer-step position NaN.
+        """
+        opt = self.optimizer(engine)
+        if self.kind != "position_after" or opt is None:
+            raise ValueError(
+                "reproduce_step() is available only for position_after NaN events."
+            )
+
+        carry = deepcopy(self.reproduction_carry)
+        position = opt.position(self.reproduction_position)
+        carry, _ = opt.step(position, engine.loss, carry)
+        return carry
+
+    def reproduce_loss(self, engine: OptimEngine) -> jax.Array:
+        """Reproduces the captured pre-update loss.
+
+        Optimizer-associated events replay that optimizer's step from the saved
+        state and return its scalar loss. Events captured while no optimizer was
+        active re-evaluate the explicit batched training loss directly.
+        """
+        carry = deepcopy(self.reproduction_carry)
+        opt = self.optimizer(engine)
+        if opt is None:
+            return engine.loss.loss_train_batched(self.reproduction_position, carry)
+
+        position = opt.position(self.reproduction_position)
+        _, loss = opt.step(position, engine.loss, carry)
+        return loss
+
+
+def _checkpoint_versions() -> dict[str, str]:
+    return {
+        "liesel": __version__,
+        **{name: version(name) for name in ("jax", "jaxlib", "optax", "numpy")},
+    }
+
+
+_CHECKPOINT_HEADER = b"liesel.optim.checkpoint\x00\x02\n"
+
+
+@dataclass(frozen=True)
+class OptimCheckpoint:
+    """An explicit snapshot from which an optimization run can continue.
+
+    Pass a result's ``checkpoint`` to :meth:`OptimEngine.fit
+    <liesel.optim.OptimEngine.fit>`. The snapshot
+    retains optimizer and random state as well as the completed history; it does
+    not retain an engine or loss callable. Treat snapshots as read-only. Mutable
+    containers are independent of the result, but their immutable JAX arrays are
+    shared. Continuing a snapshot does not mutate it or its original result.
+    """
+
+    _carry: OptimCarry
+    duration: float = 0.0
+    """Cumulative active optimization runtime in seconds."""
+    versions: dict[str, str] = field(default_factory=_checkpoint_versions)
+    """Package versions recorded with the checkpoint."""
+    _rebuild_model_state: bool = False
+    _data_structure: tuple = ()
+
+    @property
+    def history(self) -> OptimHistory:
+        """History retained by this snapshot, sharing arrays with its result."""
+        return self._carry.history
+
+    @property
+    def n_epochs(self) -> int:
+        """Number of completed epochs in this snapshot."""
+        return int(self._carry.epoch)
+
+    def save(self, path: str | os.PathLike[str]) -> None:
+        """Atomically saves this snapshot, replacing an existing file.
+
+        The parent directory must exist. A failed write preserves the previous
+        file. This does not associate the in-memory snapshot with a destination.
+        """
+        path = Path(path)
+        temporary = None
+        start = time.monotonic()
+        try:
+            with tempfile.NamedTemporaryFile(
+                dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False
+            ) as handle:
+                temporary = Path(handle.name)
+                handle.write(_CHECKPOINT_HEADER)
+                pickle.dump(self, handle, protocol=pickle.HIGHEST_PROTOCOL)
+                handle.flush()
+                os.fsync(handle.fileno())
+                # Sample after writing the state so recovery includes its I/O cost.
+                pickle.dump(self.duration + time.monotonic() - start, handle)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, path)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+
+    @classmethod
+    def load(cls, path: str | os.PathLike[str]) -> OptimCheckpoint:
+        """Loads a trusted checkpoint file onto the current JAX device.
+
+        Pickle files can execute code: only load files from trusted sources.
+        Runtime version and state compatibility are checked by ``fit()`` when
+        resuming, so a checkpoint can be loaded for inspection independently.
+        """
+        with Path(path).open("rb") as handle:
+            if handle.read(len(_CHECKPOINT_HEADER)) != _CHECKPOINT_HEADER:
+                raise ValueError(
+                    "Invalid or unsupported optimization checkpoint format."
+                )
+            checkpoint = pickle.load(handle)
+            duration = pickle.load(handle)
+        if not isinstance(checkpoint, cls):
+            raise ValueError("File does not contain an OptimCheckpoint.")  # noqa: TRY004
+        return replace(checkpoint, duration=duration)
+
+
+@dataclass(init=False)
+class OptimResult:
+    """
+    Result returned by an optimizer run.
+
+    :class:`~liesel.optim.OptimResult` bundles the processed history, the terminal and
+    minimum-monitor
+    positions, and small metadata about the run. Choose explicitly between
+    ``position_final`` and ``position_min_monitor`` when using fitted parameters.
+    Accessing an unavailable position or one containing NaN or infinity raises
+    :exc:`RuntimeError`. History, status, and diagnostics remain available.
+    It also provides plotting methods for losses and saved parameter histories.
+
+    Parameters
+    ----------
+    history
+        Processed optimizer history.
+    position_final
+        Actual terminal position, including an interrupted partial epoch.
+    position_min_monitor
+        Position with the smallest finite monitoring loss, or ``None`` if no
+        finite monitoring loss was recorded. For exact validation and full-training
+        monitors, this is
+        the post-update position used for that loss evaluation. For an EMA, it is
+        the associated parameter snapshot, not a position whose exact loss equals
+        the EMA.
+    n_epochs
+        Number of completed epochs included in the processed history.
+    min_monitor_epoch
+        Epoch at which the smallest finite monitoring loss was recorded, or
+        ``None`` if no finite monitoring loss was recorded.
+    monitor_source
+        Configured monitoring source: ``"train_ema"``, ``"validation"``, or
+        ``"train_full_data"``.
+    patience
+        Patience configured for early stopping, measured in epochs.
+    duration
+        Cumulative active runtime in seconds, including checkpoint writes and
+        excluding time paused between calls.
+    nan_debug
+        Reproduction data for the first captured NaN when engine NaN debugging was
+        enabled, otherwise ``None``.
+    checkpoint
+        Explicit resumable state. ``None`` on NaN failure. History arrays are shared
+        with this result; continuation leaves earlier results unchanged.
+    status
+        Why fitting returned: ``"paused"``, ``"max_epochs"``, ``"early_stopping"``,
+        or ``"nan"``. Stopping conditions take precedence over a pause boundary.
+
+    Examples
+    --------
+    >>> import jax.numpy as jnp
+    >>> from liesel.optim import OptimResult
+    >>> from liesel.optim import OptimHistory
+    >>> from liesel.optim.types import Position
+    >>> history = OptimHistory.from_epochs(epochs=2, position=None)
+    >>> position_final = Position({"theta": jnp.array(2.0)})
+    >>> position_min_monitor = Position({"theta": jnp.array(1.0)})
+    >>> result = OptimResult(
+    ...     history=history,
+    ...     position_final=position_final,
+    ...     position_min_monitor=position_min_monitor,
+    ...     n_epochs=2,
+    ...     min_monitor_epoch=0,
+    ...     monitor_source="validation",
+    ...     patience=1,
+    ...     duration=0.25,
+    ... )
+    >>> result  # doctest: +ELLIPSIS
+    OptimResult(n_epochs=2, ..., duration=0.2s)
+    """
+
+    history: OptimHistory
+    """Processed optimizer history."""
+
+    _position_final: Position
+    _position_min_monitor: Position | None
+    n_epochs: int
+    """Number of completed epochs included in the processed history."""
+    min_monitor_epoch: int | None
+    """
+    Epoch at which the smallest finite monitoring loss was recorded, or ``None`` if no
+    finite monitoring loss was recorded.
+    """
+    monitor_source: Literal["train_ema", "validation", "train_full_data"]
+    """
+    Configured monitoring source: ``"train_ema"``, ``"validation"``, or
+    ``"train_full_data"``.
+    """
+    patience: int
+    """Patience configured for early stopping, measured in epochs."""
+    duration: float
+    """
+    Cumulative active runtime in seconds, including checkpoint writes and excluding time
+    paused between calls.
+    """
+    nan_debug: OptimNaNDebugInfo | None = None
+    """
+    Reproduction data for the first captured NaN when engine NaN debugging was enabled,
+    otherwise ``None``.
+    """
+    checkpoint: OptimCheckpoint | None = None
+    """Explicit resumable state. ``None`` on NaN failure."""
+    status: Literal["paused", "max_epochs", "early_stopping", "nan"] = "max_epochs"
+    """
+    Why fitting returned: ``"paused"``, ``"max_epochs"``, ``"early_stopping"``, or
+    ``"nan"``.
+    """
+
+    def __init__(
+        self,
+        history: OptimHistory,
+        position_final: Position,
+        position_min_monitor: Position | None,
+        n_epochs: int,
+        min_monitor_epoch: int | None,
+        monitor_source: Literal["train_ema", "validation", "train_full_data"],
+        patience: int,
+        duration: float,
+        nan_debug: OptimNaNDebugInfo | None = None,
+        checkpoint: OptimCheckpoint | None = None,
+        status: Literal["paused", "max_epochs", "early_stopping", "nan"] = "max_epochs",
+    ):
+        self.history = history
+        self._position_final = position_final
+        self._position_min_monitor = position_min_monitor
+        self.n_epochs = n_epochs
+        self.min_monitor_epoch = min_monitor_epoch
+        self.monitor_source = monitor_source
+        self.patience = patience
+        self.duration = duration
+        self.nan_debug = nan_debug
+        self.checkpoint = checkpoint
+        self.status = status
+
+    @staticmethod
+    def _checked_position(position: Position, name: str) -> Position:
+        if any(not bool(jnp.all(jnp.isfinite(x))) for x in jax.tree.leaves(position)):
+            raise RuntimeError(
+                f"{name} contains NaN or infinity. "
+                "Inspect result.status, result.history, and result.nan_debug."
+            )
+        return position
+
+    @property
+    def position_final(self) -> Position:
+        """Terminal parameters, including a finite interrupted partial epoch.
+
+        Raises :exc:`RuntimeError` if any parameter contains NaN or infinity.
+        """
+        return self._checked_position(self._position_final, "position_final")
+
+    @property
+    def position_min_monitor(self) -> Position:
+        """Parameters saved at the smallest finite monitoring loss.
+
+        An earlier best position remains available after a later failure.
+        Raises :exc:`RuntimeError` if no finite monitoring loss was recorded,
+        or if the saved parameters contain NaN or infinity.
+        """
+        if self._position_min_monitor is None:
+            raise RuntimeError(
+                "No finite monitoring loss was recorded; "
+                "position_min_monitor is unavailable. "
+                "Inspect result.status, result.history, and result.nan_debug."
+            )
+        return self._checked_position(
+            self._position_min_monitor, "position_min_monitor"
+        )
+
+    def plot_loss(
+        self, legend: bool = True, title: str | None = None, window: int | None = None
+    ):
+        """
+        Plots the epoch-mean training loss and configured monitoring loss.
+
+        The training series averages pre-update losses evaluated along
+        each epoch's optimization trajectory. It is not a full-data loss evaluated
+        at the epoch's final position. The monitoring label identifies whether the
+        corresponding series is a training EMA, validation loss, or full-data
+        training loss. For exact monitors, the minimum line identifies the saved
+        post-update position used for that value. For an EMA, it identifies only the
+        associated parameter snapshot.
+
+        Parameters
+        ----------
+        legend
+            Whether to show the plot legend.
+        title
+            Optional plot title.
+        window
+            Optional number of final epochs to show. If ``None``, all epochs are
+            shown.
+
+        Returns
+        -------
+        plotnine.ggplot
+            Plot object with training and monitoring loss curves. A vertical line
+            marks :attr:`~liesel.optim.OptimResult.min_monitor_epoch` when it is inside
+            the displayed window.
+        """
+        history = self.history.loss_df()
+        n_iter = history.shape[0]
+        i = _plot_window_start(n_iter, window)
+        history = history.iloc[i:, :]
+
+        monitor_label = {
+            "train_ema": "Monitoring (training EMA)",
+            "validation": "Monitoring (validation)",
+            "train_full_data": "Monitoring (full training data)",
+        }[self.monitor_source]
+
+        plot_data = history[["loss_monitor", "loss_train", "epoch"]].rename(
+            columns={
+                "loss_monitor": monitor_label,
+                "loss_train": "Training (epoch mean)",
+                "epoch": "Epoch",
+            }
+        )
+
+        plot_data = plot_data.melt(
+            id_vars="Epoch", var_name="Loss Type", value_name="Loss"
+        )
+
+        p = (
+            p9.ggplot(plot_data)
+            + p9.aes(x="Epoch", y="Loss", color="Loss Type", linetype="Loss Type")
+            + p9.geom_line()
+        )
+
+        if self.min_monitor_epoch is not None and i <= self.min_monitor_epoch < n_iter:
+            p = p + p9.geom_vline(xintercept=self.min_monitor_epoch)
+
+        if title is not None:
+            p += p9.ggtitle(title)
+
+        p += p9.theme(legend_position="inside")
+        p += p9.theme(legend_position_inside=(0.8, 0.9))
+
+        if not legend:
+            p += p9.theme(legend_position="none")
+
+        return p
+
+    def plot_loss_overview(self, window: int | None = None):
+        """Plot the full loss history above a recent convergence window.
+
+        Parameters
+        ----------
+        window
+            Number of final epochs to show in the lower panel. The default is
+            twice the configured :attr:`~liesel.optim.OptimResult.patience`.
+
+        Returns
+        -------
+        plotnine.composition.Stack
+            Full and recent loss plots in an 8-by-7-inch composition.
+        """
+        window = 2 * self.patience if window is None else window
+        recent = self.plot_loss(window=window, legend=False) + p9.labs(
+            subtitle="Recent loss history"
+        )
+
+        overview = (self.plot_loss() + p9.labs(subtitle="Full loss history")) / recent
+        return overview + p9.theme(figure_size=(8, 7))
+
+    def plot_params(
+        self,
+        position: Position | None = None,
+        legend: bool = True,
+        title: str | None = None,
+        subset: Sequence[str] | None = None,
+        window: int | None = None,
+    ):
+        """
+        Plots saved parameter histories.
+
+        Parameters
+        ----------
+        position
+            Optional position history to plot. If omitted,
+            ``self.history.position`` is used.
+        legend
+            Whether to show the plot legend.
+        title
+            Optional plot title.
+        subset
+            Optional sequence of parameter names to keep.
+        window
+            Optional number of final epochs to show. If ``None``, all epochs are
+            shown.
+
+        Returns
+        -------
+        plotnine.ggplot
+            Plot object with one curve per flattened parameter column.
+
+        Raises
+        ------
+        TypeError
+            If no position history is available.
+        """
+        position = position or self.history.position
+        if position is None:
+            raise TypeError(
+                "'position' is None and cannot be plotted. "
+                "Probably the position history was not saved."
+            )
+        history = position_df(position, subset)
+        n_iter = history.shape[0]
+        i = _plot_window_start(n_iter, window)
+        history = history.iloc[i:, :]
+
+        plot_data = history.melt(
+            id_vars="epoch", var_name="Parameter", value_name="Value"
+        )
+        plot_data = plot_data.rename(columns={"epoch": "Epoch"})
+
+        p = (
+            p9.ggplot(plot_data)
+            + p9.aes(
+                x="Epoch",
+                y="Value",
+                color="Parameter",
+                group="Parameter",
+            )
+            + p9.geom_line()
+        )
+        if self.min_monitor_epoch is not None and i <= self.min_monitor_epoch < n_iter:
+            p = p + p9.geom_vline(xintercept=self.min_monitor_epoch)
+
+        if title is not None:
+            p += p9.ggtitle(title)
+
+        if not legend:
+            p += p9.theme(legend_position="none")
+
+        return p
+
+    def __repr__(self) -> str:
+        name = type(self).__name__
+        out = (
+            f"{name}(n_epochs={self.n_epochs}, "
+            f"min_monitor_epoch={self.min_monitor_epoch}, "
+            f"monitor_source={self.monitor_source!r}, duration={self.duration:.1f}s)"
+        )
+        return out

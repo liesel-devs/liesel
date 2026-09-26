@@ -112,8 +112,8 @@ $$            \begin{array}{rcl}
             \end{array}
             $$
 
-The class {class}`.PyMCInterface` offers an interface between PyMC and
-Goose. By default, the constructor of {class}`.PyMCInterface` keeps
+The class {class}`PyMCInterface <liesel.experimental.pymc.PyMCInterface>` offers an interface between PyMC and
+Goose. By default, the constructor of {class}`PyMCInterface <liesel.experimental.pymc.PyMCInterface>` keeps
 track only of a representation of random variables that can be used in
 sampling. For example, `theta` is transformed to the real-numbers space
 with a log-odds transformation, and therefore the model only keeps track
@@ -121,7 +121,7 @@ of `theta_log_odds__`. However, we would like to access the
 untransformed samples as well. We can do this by including them in the
 `additional_vars` argument of the constructor of the interface.
 
-The initial position can be extracted with {meth}`.get_initial_state`.
+The initial position can be extracted with {meth}`get_initial_state <liesel.experimental.pymc.PyMCInterface.get_initial_state>`.
 The model state is represented as a `Position`.
 
 ``` python
@@ -150,8 +150,8 @@ def delta_transition_fn(prng_key, model_state):
 ```
 
 Finally, we can sample from the posterior as we do for any other Liesel
-model. In this case, we use a {class}`~.goose.GibbsKernel` for
-$\boldsymbol{\delta}$ and a {class}`~.goose.NUTSKernel` both for the
+model. In this case, we use a {class}`GibbsKernel <liesel.goose.GibbsKernel>` for
+$\boldsymbol{\delta}$ and a {class}`NUTSKernel <liesel.goose.NUTSKernel>` both for the
 remaining parameters.
 
 ``` python
