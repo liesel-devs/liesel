@@ -11,7 +11,7 @@ env:
 jobs:
   pytest-cron:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     strategy:
       matrix:
@@ -45,7 +45,7 @@ jobs:
         run: uv run --no-sync pytest ${{ matrix.pytest-args }} --run-mcmc
 
       - name: Run doctests
-        run: uv run --no-sync pytest ${{ matrix.pytest-args }} --doctest-modules src/liesel
+        run: uv run --no-sync pytest ${{ matrix.pytest-args }} -n 0 --doctest-modules src/liesel
 
   notify-failure:
     needs: pytest-cron

@@ -24,8 +24,6 @@ This example uses a Gaussian regression with a computed polynomial basis
 and a second covariate. Expand the setup to see the model and its validation split.
 
 ```{code-cell} ipython3
-:tags: [hide-input]
-
 import logging
 
 import jax.numpy as jnp
@@ -36,6 +34,10 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.model as lsl
 import liesel.optim as opt
+```
+
+```{code-cell} ipython3
+:tags: [hide-input]
 
 logging.getLogger("liesel").setLevel(logging.WARNING)
 

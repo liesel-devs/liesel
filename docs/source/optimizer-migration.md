@@ -20,11 +20,15 @@ Both examples use the same model and optimize only `loc`:
 ```{code-cell} ipython3
 import logging
 
+import jax
 import jax.numpy as jnp
 import optax
+import pandas as pd
 import tensorflow_probability.substrates.jax.distributions as tfd
 
+import liesel.goose as gs
 import liesel.model as lsl
+import liesel.optim as opt
 
 loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
 y = lsl.Var.new_obs(
@@ -38,8 +42,6 @@ model = lsl.Model(y)
 Before (deprecated):
 
 ```{code-cell} ipython3
-import liesel.goose as gs
-
 result = gs.optim_flat(
     model,
     params=["loc"],
@@ -59,8 +61,6 @@ old_position
 After:
 
 ```{code-cell} ipython3
-import liesel.optim as opt
-
 logging.getLogger("liesel").setLevel(logging.WARNING)
 
 engine = opt.LieselOptim(
@@ -136,8 +136,6 @@ the saved parameter history after fitting. For the example above, this records
 the scalar total log likelihood and the array of individual log likelihoods:
 
 ```{code-cell} ipython3
-import jax
-
 track_keys = ["_model_log_lik", "y_log_prob"]
 history = {
     key: values[: result.n_epochs] for key, values in result.history.position.items()
@@ -153,8 +151,6 @@ derived_history = jax.vmap(extract_quantities)(history)
 ```
 
 ```{code-cell} ipython3
-import pandas as pd
-
 tracked = pd.DataFrame({"log_lik": derived_history["_model_log_lik"]})
 ```
 
