@@ -75,9 +75,9 @@ result = opt.LieselVI(
 ---
 mystnb:
   image:
-    alt: "Training and smoothed monitoring losses over the variational fit."
+    alt: "Full and recent training and smoothed monitoring losses over the variational fit."
 ---
-result.plot_loss()
+result.plot_loss_overview()
 ```
 
 Fitting leaves the supplied model unchanged. Inspect loss and parameter paths
