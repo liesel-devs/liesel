@@ -15,10 +15,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install uv and set the python version
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.2.0
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
@@ -49,7 +49,7 @@ jobs:
 
       - name: Push coverage.svg
         if: matrix.python-version == '3.13'
-        uses: ad-m/github-push-action@master
+        uses: ad-m/github-push-action@v1.3.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           branch: pytest-cov
