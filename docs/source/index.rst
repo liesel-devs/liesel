@@ -10,6 +10,7 @@ Liesel: A Probabilistic Programming Framework
    :maxdepth: 1
 
    tutorials_overview
+   migration-0.6
 
 
 API Reference
@@ -77,10 +78,20 @@ instance.
 .. autosummary::
     :toctree: generated
     :caption: MCMC Kernels
+    :template: autosummary/class-with-inheritance.rst
     :recursive:
     :nosignatures:
 
     ~liesel.goose.IWLSKernel
+    ~liesel.goose.MALAKernel
+    ~liesel.goose.SMMALAKernel
+
+.. autosummary::
+    :toctree: generated
+    :caption: Other MCMC Kernels
+    :recursive:
+    :nosignatures:
+
     ~liesel.goose.NUTSKernel
     ~liesel.goose.HMCKernel
     ~liesel.goose.RWKernel
