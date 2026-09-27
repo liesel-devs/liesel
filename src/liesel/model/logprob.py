@@ -3,8 +3,11 @@ from typing import TYPE_CHECKING, Literal
 
 import jax
 import jax.flatten_util
+import jax.numpy as jnp
+import numpy as np
+from jax.typing import ArrayLike
 
-from ..goose.types import Array
+from ..types import PositionInput, PyTree
 from .model import Model
 
 if TYPE_CHECKING:
@@ -16,6 +19,10 @@ class LogProb:
     Interface for evaluating the unnormalized log probability of a Liesel model.
 
     Also provides access to the first and second derivatives.
+
+    Position mappings are not modified. Derivative methods convert the mapping to a
+    dictionary before differentiation. When applying JAX transformations externally,
+    pass a dictionary or another registered pytree to the transformed function.
 
     Parameters
     ----------
@@ -90,33 +97,33 @@ class LogProb:
         self.component = component
         self.diff_mode = diff_mode
 
-    def __call__(self, position: dict[str, Array | float]) -> Array:
+    def __call__(self, position: PositionInput) -> float | np.number | jax.Array:
         """
         Log probability function evaluated at provided ``position``.
         """
         return self.log_prob(position=position)
 
-    def log_prob(self, position: dict[str, Array | float]) -> Array:
+    def log_prob(self, position: PositionInput) -> float | np.number | jax.Array:
         """
         Log probability function evaluated at provided ``position``.
         """
         updated_state = self.model.update_state(position, self.model.state)
         return updated_state[f"_model_{self.component}"].value
 
-    def grad(self, position: dict[str, Array | float]) -> dict[str, Array]:
+    def grad(self, position: PositionInput) -> dict[str, PyTree]:
         """
         Gradient of the log probability function with respect to the ``position``.
         """
-        return self._grad_fn(position)
+        return self._grad_fn(dict(position))
 
     def hessian(
         self,
-        position: dict[str, Array | float],
-    ) -> dict[str, Array]:
+        position: PositionInput,
+    ) -> dict[str, PyTree]:
         """
         Hessian of the log probability function with respect to the ``position``.
         """
-        return self._hessian_fn(position)
+        return self._hessian_fn(dict(position))
 
 
 class FlatLogProb:
@@ -215,28 +222,28 @@ class FlatLogProb:
         self.component = component
         self.diff_mode = diff_mode
 
-    def __call__(self, flat_position: Array) -> Array:
+    def __call__(self, flat_position: ArrayLike) -> float | np.number | jax.Array:
         """
         Log probability function evaluated at provided ``flat_position``.
         """
         return self.log_prob(flat_position=flat_position)
 
-    def log_prob(self, flat_position: Array) -> Array:
+    def log_prob(self, flat_position: ArrayLike) -> float | np.number | jax.Array:
         """
         Log probability function evaluated at provided ``flat_position``.
         """
-        position = self.unravel_fn(flat_position)
+        position = self.unravel_fn(jnp.asarray(flat_position))
         updated_state = self.model.update_state(position, self.model.state)
         return updated_state[f"_model_{self.component}"].value
 
-    def grad(self, flat_position: Array) -> Array:
+    def grad(self, flat_position: ArrayLike) -> jax.Array:
         """
         Gradient of the log probability function with respect to the ``flat_position``.
         """
-        return self._grad_fn(flat_position)
+        return self._grad_fn(jnp.asarray(flat_position))
 
-    def hessian(self, flat_position: Array) -> Array:
+    def hessian(self, flat_position: ArrayLike) -> jax.Array:
         """
         Hessian of the log probability function with respect to the ``flat_position``.
         """
-        return self._hessian_fn(flat_position)
+        return self._hessian_fn(jnp.asarray(flat_position))

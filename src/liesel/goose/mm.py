@@ -4,19 +4,20 @@ Inverse mass matrix tuner.
 This module uses the error codes 70-79.
 """
 
+from collections.abc import Mapping
+
 import jax
 import jax.numpy as jnp
-
-from .types import Array, Position
+from jax.typing import ArrayLike
 
 _vravel = jax.vmap(jnp.ravel, in_axes=0, out_axes=0)
 
 
-def _history_to_matrix(history: Position) -> Array:
+def _history_to_matrix(history: Mapping[str, ArrayLike]) -> jax.Array:
     return jnp.column_stack([_vravel(x) for x in history.values()])
 
 
-def tune_inv_mm_diag(history: Position) -> Array:
+def tune_inv_mm_diag(history: Mapping[str, ArrayLike]) -> jax.Array:
     """
     Tunes an inverse mass vector with the sample variances of the history.
 
@@ -24,7 +25,8 @@ def tune_inv_mm_diag(history: Position) -> Array:
     ----------
     history
             Holds the history of the position. It is to be understood as in
-            :meth:`~liesel.goose.Kernel.tune`.
+            :meth:`~liesel.goose.Kernel.tune`. Each value must be an array
+            with a leading sample axis, rather than a nested pytree.
     """
 
     matrix = _history_to_matrix(history)
@@ -35,7 +37,7 @@ def tune_inv_mm_diag(history: Position) -> Array:
     return var
 
 
-def tune_inv_mm_full(history: Position) -> Array:
+def tune_inv_mm_full(history: Mapping[str, ArrayLike]) -> jax.Array:
     """
     Tunes an inverse mass matrix with the sample variance-covariance matrix of
     the history.
@@ -44,7 +46,8 @@ def tune_inv_mm_full(history: Position) -> Array:
     ----------
     history
             Holds the history of the position. It is to be understood as in
-            :meth:`~liesel.goose.Kernel.tune`.
+            :meth:`~liesel.goose.Kernel.tune`. Each value must be an array
+            with a leading sample axis, rather than a nested pytree.
 
     """
 

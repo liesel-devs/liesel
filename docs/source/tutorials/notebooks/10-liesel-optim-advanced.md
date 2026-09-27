@@ -14,7 +14,7 @@ Some models use groups with different numbers of rows. Here, a zero-inflated
 gamma model has one response for whether a value is zero and another for its
 positive amount. We keep matching rows together within each group.
 
-Start with [the first tutorial](09-liesel-optim-basic.md) if you are new to
+Start with {doc}`the first tutorial <09-liesel-optim-basic>` if you are new to
 {class}`LieselOptim <liesel.optim.LieselOptim>`.
 
 ```{code-cell} ipython3
@@ -174,8 +174,8 @@ same range here because the run is shorter than the recent-history window.
 These curves summarize both groups together, so they cannot show which
 response accounts for any remaining lack of fit.
 
-One optimizer can fit both groups. Use [separate optimizers](../../optimizer-customization.md)
+One optimizer can fit both groups. Use {doc}`separate optimizers <../../optimizer-customization>`
 only when you want different update rules or learning rates. See
-[splitting](../../optimizer-splitting.md) for custom data axes,
-[batching](../../optimizer-batching.md) for other epoch lengths, and
-[loss scaling](../../optimizer-loss-scaling.md) for how each group contributes.
+{doc}`splitting <../../optimizer-splitting>` for custom data axes,
+{doc}`batching <../../optimizer-batching>` for other epoch lengths, and
+{doc}`loss scaling <../../optimizer-loss-scaling>` for how each group contributes.
