@@ -373,7 +373,8 @@ class LaplaceLoss(LossMixin):
 
     Reverse-mode fitting gradients reuse the final latent factor and include the
     latent dependence of its log determinant. Higher fitting derivatives raise;
-    use ``approximate_joint_posterior`` after fitting for joint uncertainty.
+    use :meth:`~liesel.optim.LaplaceLoss.approximate_joint_posterior` after fitting
+    for joint uncertainty.
     """
 
     default_position_keys: Sequence[str]

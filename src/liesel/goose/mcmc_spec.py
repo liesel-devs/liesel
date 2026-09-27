@@ -61,7 +61,7 @@ class LieselMCMC:
 
     Now we run MCMC:
 
-    >>> results = gs.LieselMCMC(model).run_mcmc( # doctest: +SKIP
+    >>> results = gs.LieselMCMC(model).run_for_epochs( # doctest: +SKIP
     ...     seed=1, num_chains=4, adaptation=250, posterior=100 # doctest: +SKIP
     ... ) # doctest: +SKIP
 

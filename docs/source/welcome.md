@@ -44,10 +44,11 @@ import tensorflow_probability.substrates.jax.distributions as tfd
 import tensorflow_probability.substrates.jax.bijectors as tfb
 ```
 
-# Tutorials
+# Guides
 
-To start working with Liesel, our tutorials might come in handy, starting with
-a tutorial on [linear regression](tutorials/md/01a-lin-reg.md#linear-regression). An overview of our tutorials can be found here: [Liesel tutorials](tutorials_overview.rst).
+Start with {doc}`model-building` to construct and inspect a model, then follow
+{doc}`sampling` or {doc}`optimization` for inference. See {doc}`examples` for
+statistical applications.
 
 # Further Reading
 

@@ -321,7 +321,8 @@ diagnostic = short_loss.approximate_joint_posterior(
 diagnostic.valid
 ```
 
-Its `sample` and `covariance` methods raise.
+Its {meth}`sample <liesel.optim.LaplaceApproximation.sample>` and
+{meth}`covariance <liesel.optim.LaplaceApproximation.covariance>` methods raise.
 
 ## Control warm starts
 
