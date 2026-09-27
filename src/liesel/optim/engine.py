@@ -52,6 +52,7 @@ from .state import (
 )
 from .stop import Stopper
 from .types import ModelState, Position
+from .vi import NegElboLoss
 
 __all__ = ["EmaTrainLossMonitor", "LossMonitor", "OptimEngine"]
 
@@ -797,16 +798,15 @@ class OptimEngine:
 
     def _can_rebuild_model_state(self) -> bool:
         # Only these concrete implementations leave the evaluation template unchanged.
-        return type(self.loss) is NegLogProbLoss and all(
+        return type(self.loss) in (NegLogProbLoss, NegElboLoss) and all(
             type(opt) in (Optimizer, LBFGS) for opt in self.optimizers
         )
 
     def _prepare_data_states(self, carry: OptimCarry) -> None:
-        # Custom losses/optimizers may evolve model_state. Only reuse templates
-        # for the same concrete implementations that permit checkpoint rebuilding.
-        if not self._can_rebuild_model_state():
+        # Only NegLogProbLoss consumes prepared partition templates. Custom
+        # losses/optimizers may evolve model_state and cannot reuse them.
+        if type(self.loss) is not NegLogProbLoss or not self._can_rebuild_model_state():
             return
-        assert isinstance(self.loss, NegLogProbLoss)
         carry._data_states = {}
         if self.batches.is_full_data or self.loss_monitor == "train_full_data":
             carry._data_states["train"] = self.loss.model.update_state(
