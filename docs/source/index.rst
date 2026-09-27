@@ -1,4 +1,5 @@
 Liesel: A Probabilistic Programming Framework
+=============================================
 
 .. include:: welcome.md
    :parser: myst_parser.sphinx_
@@ -8,9 +9,11 @@ Liesel: A Probabilistic Programming Framework
    :hidden:
    :maxdepth: 1
 
-   tutorials_overview
+   model-building
    optimization
    variational-inference
+   sampling
+   examples
 
 
 API Reference
@@ -31,8 +34,8 @@ This is an overview of the central classes in Liesel.
 Models
 ******
 
-The fundamental building blocks of your model graph are given by just three classes.
-Both are documented with examples, so make sure to check them out.
+Start with the :doc:`model-building` guide. These three classes describe the
+model graph; their reference pages document arguments and defaults.
 
 The model building workflow in Liesel consists of the following steps:
 
@@ -70,14 +73,8 @@ The model building workflow in Liesel consists of the following steps:
 MCMC
 ****
 
-To set up an MCMC engine, goose provides the :class:`EngineBuilder <liesel.goose.EngineBuilder>`. Please refer to
-the linked EngineBuilder documentation to learn how to use it.
-
-A recent addition is the :class:`MCMCSpec <liesel.goose.MCMCSpec>`, which can be passed to the
-``inference`` argument of a :class:`model.Var <liesel.model.Var>` upon initialization to tell the variable
-directly how it should be sampled. You can then use the method
-:meth:`get_engine_builder <liesel.goose.LieselMCMC.get_engine_builder>` of :class:`LieselMCMC <liesel.goose.LieselMCMC>` to
-conveniently initialize your :class:`EngineBuilder <liesel.goose.EngineBuilder>`.
+Start with :doc:`sampling` for worked examples and task guides. The pages
+below describe arguments, defaults, and exact behavior.
 
 .. autosummary::
    :toctree: generated
@@ -133,9 +130,8 @@ acccess to important diagnostics.
 Optimization
 ************
 
-Start with :doc:`optimization` for parameter fitting or
-:doc:`variational-inference` for approximate posteriors. These pages describe
-the arguments and defaults.
+Start with the :doc:`optimization` guide. These pages describe the arguments
+and defaults.
 
 .. autosummary::
    :toctree: generated

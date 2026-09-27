@@ -1,8 +1,8 @@
 """contains a deterministic kernel used for test purposes"""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import jax.numpy as jnp
 
@@ -16,7 +16,7 @@ from liesel.goose.kernel import (
     WarmupOutcome,
 )
 from liesel.goose.pytree import register_dataclass_as_pytree
-from liesel.goose.types import KeyArray, ModelInterface, ModelState, Position
+from liesel.goose.types import KeyArray, ModelInterface, ModelState
 
 
 @register_dataclass_as_pytree
@@ -153,7 +153,7 @@ class DetCountingKernel(TransitionMixin[DetCountingKernelState, DetCountingTrans
         kernel_state: DetCountingKernelState,
         model_state: ModelState,
         epoch: EpochState,
-        history: Position | None,
+        history: Mapping[str, Any] | None,
     ) -> TuningOutcome[DetCountingKernelState, DetCountingKernelTuningInfo]:
         kernel_state.tune_counter += 1
         info = DetCountingKernelTuningInfo(error_code=0, time=epoch.time)

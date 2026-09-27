@@ -67,7 +67,7 @@ class LaplaceApproximation:
 
     def _block_slices(self, position_keys):
         if isinstance(position_keys, str):
-            raise ValueError("Pass coordinate names as a sequence, not a string.")  # noqa: TRY004
+            raise ValueError("Pass parameter names as a sequence, not a string.")  # noqa: TRY004
         slices = {}
         offset = 0
         for name, shape in zip(self.names, self.shapes, strict=True):
@@ -76,10 +76,10 @@ class LaplaceApproximation:
             offset += width
         keys = self.names if position_keys is None else position_keys
         if len(set(keys)) != len(keys):
-            raise ValueError("Duplicate coordinate names.")
+            raise ValueError("Duplicate parameter names.")
         for name in keys:
             if name not in slices:
-                raise ValueError(f"Unknown coordinate {name!r}.")
+                raise ValueError(f"Unknown parameter {name!r}.")
         return {name: slices[name] for name in keys}
 
     def marginal_covariance_blocks(

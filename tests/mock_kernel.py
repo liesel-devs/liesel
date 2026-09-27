@@ -1,6 +1,6 @@
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from liesel.goose.epoch import EpochState
 from liesel.goose.kernel import (
@@ -11,7 +11,7 @@ from liesel.goose.kernel import (
     WarmupOutcome,
 )
 from liesel.goose.pytree import register_dataclass_as_pytree
-from liesel.goose.types import Kernel, KeyArray, ModelInterface, ModelState, Position
+from liesel.goose.types import Kernel, KeyArray, ModelInterface, ModelState
 
 
 @register_dataclass_as_pytree
@@ -99,7 +99,7 @@ class MockKernel(ModelMixin):
         kernel_state: MockKernelState,
         model_state: ModelState,
         epoch: EpochState,
-        history: Position | None,
+        history: Mapping[str, Any] | None,
     ) -> TuningOutcome[MockKernelState, MockKernelTuningInfo]:
         info = MockKernelTuningInfo(error_code=0, time=epoch.time)
         return TuningOutcome(info, kernel_state)

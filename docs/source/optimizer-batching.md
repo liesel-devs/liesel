@@ -247,13 +247,6 @@ Use the computed variable's name. Transient variables and calculation-node keys
 are rejected. A computed value cannot be selected together with an ancestor or
 descendant data key; for example, choose either `basis` or the covariate it uses.
 
-For {py:class}`~liesel.optim.LieselVI`, fixed JAX-computed data can also be selected
-explicitly. Omit validation data from its split. {py:class}`~liesel.optim.NegElboLoss`
-rejects computed data that depend on or overlap an inferred target position;
-batch the fixed inputs instead. A dependency may remain fixed outside the
-variational distribution. This support does not extend to ordered callback-based
-computations, which may fail inside VI's vectorized, differentiated ELBO evaluation.
-
 (optimizer-weak-observations)=
 
 ## Batch weak responses

@@ -178,7 +178,7 @@ optimum.
 The training curve averages losses seen during each epoch and includes priors.
 The validation curve evaluates likelihood on its full held-out split at the
 end of the epoch. Because their data and objectives differ, the curves need
-not coincide. See [monitoring and early stopping](../../optimizer-monitoring.md)
+not coincide. See {doc}`monitoring and early stopping <../../optimizer-monitoring>`
 for other choices.
 
 ## Check the held-out fit
@@ -209,5 +209,5 @@ To use the fitted parameters in the original model, assign its updated state:
 model.state = model.update_state(position, model.state)
 ```
 
-Next: [fit a model with two data groups](10-liesel-optim-advanced.md), or
-[choose optimizers and learning rates](../../optimizer-customization.md).
+Next: {doc}`fit a model with two data groups <10-liesel-optim-advanced>`, or
+{doc}`choose optimizers and learning rates <../../optimizer-customization>`.

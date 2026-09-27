@@ -225,7 +225,7 @@ def test_latent_selection_rejects_non_coordinates_and_aliases(selection):
     split = opt.PositionSplit.from_model(
         model, position_keys=[["data"]], infer_sample_sizes=False
     )
-    with pytest.raises(ValueError, match="latent|coordinate"):
+    with pytest.raises(ValueError, match="latent|parameter"):
         opt.LaplaceLoss(model, split, latent=selection)
 
 
@@ -237,7 +237,7 @@ def test_outer_selection_rejects_latent_overlap_and_duplicate_aliases(keys):
         lambda theta, z: theta**2 + z**2, theta=jnp.array(0.0), z=jnp.array(1.0)
     )
     loss = opt.LaplaceLoss(model, split, latent=["z"])
-    with pytest.raises(ValueError, match="coordinate|overlap"):
+    with pytest.raises(ValueError, match="parameter|overlap"):
         loss.position(keys)
 
 
@@ -1170,7 +1170,7 @@ def test_posterior_rejects_visibly_incompatible_snapshots(invalid):
         loss.warm_start = False
     else:
         result.loss_state_min_monitor = replace(state, **changes[invalid])
-    with pytest.raises(RuntimeError, match="state|coordinate|configuration"):
+    with pytest.raises(RuntimeError, match="state|parameter|configuration"):
         loss.approximate_joint_posterior(result)
     failed = loss.approximate_joint_posterior(result, raise_on_failure=False)
     assert not failed.valid

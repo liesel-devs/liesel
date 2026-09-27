@@ -64,15 +64,20 @@ summaries that restate the section.
 
 ## Make examples easy to use
 
-Use executable MyST Markdown for guides with code examples. Put runnable
-Python in `{code-cell}` blocks without interactive prompts (`>>>` or `...`).
-
+- Prefer executable MyST Markdown for task guides with code and results. Use
+  native notebook cells and outputs instead of generated RST output blocks.
+  Add `file_format: mystnb` and a Python `kernelspec` in YAML front matter,
+  then use `{code-cell} ipython3` cells. Keep one source per page; remove the
+  corresponding Quarto source when converting generated Markdown to MyST.
 - State prerequisites, such as an existing `model`, before a snippet. Make
-  complete tutorials runnable from top to bottom. Tag build-only setup cells
-  with `:tags: [remove-cell]`: they execute but show no code, output, or expandable
-  box. Keep prerequisites and links to relevant tutorials visible in the prose.
+  complete guides and tutorials runnable from top to bottom. Build-only setup
+  cells may load non-import fixture code for a linked prerequisite tutorial; use
+  `remove-cell` to omit their source and outputs from the rendered page while
+  still executing them.
   Imports stay visible in a code cell at the top of each guide. Hide only
   non-import build setup, such as logging configuration and fixture models or data.
+  Keep reader prerequisites visible in the prose and instructional setup visible
+  in the code. Shared setup can also use MyST-NB's native `:load:` option.
 - Prefer existing public Liesel helpers over manual calculations that repeat model
   definitions or library functionality. For example, use
   `model.predict(samples, predict=[...], newdata=...)` to evaluate model quantities
@@ -82,23 +87,35 @@ Python in `{code-cell}` blocks without interactive prompts (`>>>` or `...`).
   calculations when they teach a distinct concept or no suitable helper exists.
   Execute revised examples and verify that their statistical meaning and results
   are preserved.
-- Format for visual readability, not just line length. Group code into meaningful
-  stages, with blank lines between stages and substantial independent definitions.
-  Keep short, closely related statements together. Use brief comments to label
-  conceptual groups when the surrounding prose does not make them clear.
-- Apply this judgment to all functions and constructors: wrap dense calls so
-  functions or lambdas, inputs, nested expressions, and named options are easy to
-  distinguish. Use trailing commas so Ruff preserves the layout; keep simple
-  calls compact and follow the repository formatter.
-- Keep related setup and modifications together in one cell. Give each inspection
-  expression its own `{code-cell}`, with its native output immediately below.
-- Pass distributions to `lsl.Var` and its factory methods using `dist=`.
-- Pass a single model root directly, as in `lsl.Model(y)`. Choose `to_float32`
-  for the needs of the example, independently of this calling style.
+- Make the structure of the example visible through its layout. Group imports
+  and organize code into meaningful stages, such as parameters, inputs, mean,
+  scale, response, fitting, and inspection. Use blank lines between stages and
+  substantial independent definitions, including consecutive multiline calls.
+  Keep short, closely related statements together; do not separate every line.
+- Wrap visually dense calls, not only calls that exceed the line-length limit.
+  Put arguments on separate lines when that helps distinguish a function or
+  lambda, its inputs, nested expressions, and named options. Use trailing commas
+  so Ruff preserves the chosen layout. Keep short, easily scanned calls on one
+  line. Apply this judgment to all functions and constructors.
+- Use short comments to label conceptual groups when the surrounding prose does
+  not already make them clear. Explain the role of a group, such as “Scale
+  predictor,” rather than narrating individual assignments.
+- Pass distributions to `lsl.Var` and its factory methods with the explicit
+  `dist=` keyword, rather than as a positional argument.
+- Use code cells without interactive prompts (`>>>` or `...`).
+- Pass a single model root directly, as in `lsl.Model(y)`. Use a sequence for
+  multiple roots. Choose `to_float32` for the needs of the example, independently
+  of this calling style.
 - Use realistic data, fixed seeds, and only the settings needed for the task.
-- Prefer expressions over `print()`. Use native tables for related results.
-  Select useful fields and round numbers for readability. Remove unnecessary
-  inspection calls instead of leaving them without output.
+- Keep setup and modifications together, then put each inspection expression
+  in its own cell so its native output appears immediately below it. Prefer
+  expressions to `print()` for inspecting values, and native tables for related
+  results. Reserve `print()` for messages. Round numbers and select useful fields;
+  remove unnecessary inspection calls instead of leaving them without output.
+- Execute examples when building the docs and fail the build on execution errors.
+  Keep image alt text in cell metadata and inspect the rendered outputs.
+- Keep generated results in notebook outputs; files written beside a notebook
+  are not included in preview bundles.
 - Keep verification assertions in tests. Investigate awkward API behavior before
   adding repeated defensive checks to examples.
 
@@ -109,17 +126,21 @@ before-and-after tables; describe the current behavior instead.
 
 ## Show useful visuals
 
-Use built-in Liesel/Goose plotting helpers where available, and plotnine for
-plots without a suitable helper. Put each plotting call, such as `model.plot()`
-or `gs.plot_trace()`, in its own code cell directly above its rendered figure.
-Keep model construction and fitting separate. Explain what readers should look
-for and what the plot cannot establish. Use enough contrast,
-distinct shapes, or small positional offsets to keep overlapping marks visible.
+Prefer built-in Liesel and Goose plotting helpers when they cover the task,
+for example `model.plot()`, `gs.plot_trace()`, and `result.plot_loss_overview()`.
+Use plotnine for custom statistical plots without a suitable built-in helper.
+Show the rendered plot with its code. Explain what readers should look for and
+what the plot cannot establish. Use enough contrast, distinct shapes, or small
+positional offsets to keep overlapping marks visible.
 
-In model walkthroughs, include `model.plot()` after constructing the model.
-The Read the Docs build installs Graphviz for layout. Give every figure
-descriptive alt text. For cell outputs, use `mystnb.image.alt` cell metadata
-and check that it appears on the rendered image.
+Put each plotting call in its own code cell, with the rendered figure directly
+below it. Keep plot preparation, construction, and fitting code in separate cells.
+
+In model walkthroughs, include `model.plot()` after constructing the model and
+show the graph beside its code. Generate it in an executed tutorial cell where
+possible; the Read the Docs build installs Graphviz for layout. Give figures
+descriptive alt text. For notebooks, use `mystnb.image.alt` cell metadata and
+check that it appears on the rendered image.
 
 Embed interactive explanations beside the relevant text. A separate-page link
 can supplement the embed. Keep essential explanations readable without
@@ -161,15 +182,17 @@ links. Links intended for use outside the docs must work from that context.
 
 ## Check the finished result
 
-Execute guide examples during the docs build and fail the build on execution
-errors. Let execution produce the displayed results; do not maintain copied
-output blocks by hand.
-
 Read the guide from top to bottom for flow, missing prerequisites, repetition,
 and unnecessary detours. Match verification to the change: execute changed
-examples, refresh affected saved outputs, and inspect the rendered code and plots.
-Check that build-only setup is absent, both sidebars remain readable, and links
-resolve. Run the relevant hooks on edited files.
+examples, refresh affected saved outputs, and inspect plots. Build the docs when
+changing rendering or navigation; check both sidebars and that links resolve.
+Execute notebook examples as part of the Sphinx build. Keep
+`nb_execution_mode = "force"`, `nb_execution_allow_errors = False`, and
+`nb_execution_raise_on_error = True` so execution errors fail the build.
+Sphinx's incremental build only executes pages it reads; use `-E` for a fresh
+execution of all notebook sources. Also use `-E` after changing a shared
+`:load:` file, since MyST-NB does not track that file as an incremental-build
+dependency. Run the relevant hooks on edited files.
 
 Report validation accurately,
 including whether builds were fresh or incremental and notebooks were executed,

@@ -373,7 +373,8 @@ class LaplaceLoss(LossMixin):
 
     Reverse-mode fitting gradients reuse the final latent factor and include the
     latent dependence of its log determinant. Higher fitting derivatives raise;
-    use ``approximate_joint_posterior`` after fitting for joint uncertainty.
+    use :meth:`~liesel.optim.LaplaceLoss.approximate_joint_posterior` after fitting
+    for joint uncertainty.
     """
 
     default_position_keys: Sequence[str]
@@ -422,7 +423,7 @@ class LaplaceLoss(LossMixin):
         )
         self._data_nodes = {model._node_for_position_key(k) for k in self.split.train}
         if not latent:
-            raise ValueError("latent must contain at least one continuous coordinate.")
+            raise ValueError("latent must contain at least one continuous parameter.")
         self._latent_nodes = self._coordinate_nodes(latent)
         validate_model_data_keys(model, self.split.position_keys, latent)
         self.latent_names = tuple(sorted(latent))
@@ -453,7 +454,7 @@ class LaplaceLoss(LossMixin):
         """Validate and extract outer parameters, excluding latents and data."""
         nodes = self._coordinate_nodes(position_keys)
         if self._latent_nodes.intersection(nodes):
-            raise ValueError("Outer and latent coordinates must not overlap.")
+            raise ValueError("Outer and latent parameters must not overlap.")
         return self.model.extract_position(position_keys)
 
     def _coordinate_nodes(self, keys: Sequence[str]) -> set:
@@ -579,7 +580,7 @@ class LaplaceLoss(LossMixin):
         try:
             expected_outer = self.position(tuple(position))
         except ValueError as error:
-            return failed(f"Incompatible outer coordinates: {error}")
+            return failed(f"Incompatible outer parameters: {error}")
         if (
             state.latent_names != self.latent_names
             or state.latent_shapes != self.latent_shapes
@@ -592,7 +593,7 @@ class LaplaceLoss(LossMixin):
             )
         ):
             return failed(
-                "The selected Laplace state has incompatible coordinates or metadata."
+                "The selected Laplace state has incompatible parameters or metadata."
             )
         names = tuple(sorted(position)) + state.latent_names
         approximation.mean = Position(position | state.latent_position)

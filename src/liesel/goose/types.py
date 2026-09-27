@@ -9,9 +9,10 @@ from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, TypeVar
 
 import jax
+import numpy as np
 from jax.typing import ArrayLike
 
-from ..types import Position
+from ..types import Position, PositionInput, PyTree
 
 if TYPE_CHECKING:
     from .epoch import EpochState
@@ -24,14 +25,15 @@ if TYPE_CHECKING:
 
 # simple type aliases
 
-PyTree = Any
 Array = Any
-type Scalar = float | jax.Array
+"""Deprecated compatibility alias for Any; use PyTree or an array-specific type."""
+type Scalar = float | np.number | np.ndarray | jax.Array
+"""A numerical scalar, including a zero-dimensional NumPy or JAX array."""
 
 ModelState = PyTree
 KernelState = PyTree
 KeyArray = Any
-JitterFunction = Callable[[KeyArray, Array], Array]
+JitterFunction = Callable[[KeyArray, PyTree], PyTree]
 JitterFunctions = dict[str, JitterFunction]
 
 
@@ -98,7 +100,9 @@ class ModelInterface(Protocol):
         raise NotImplementedError
 
     @abstractmethod
-    def update_state(self, position: Position, model_state: ModelState) -> ModelState:
+    def update_state(
+        self, position: PositionInput, model_state: ModelState
+    ) -> ModelState:
         """Updates the model state with the values in the position."""
 
         raise NotImplementedError
@@ -167,7 +171,7 @@ class Kernel(Protocol[TKernelState, TTransitionInfo, TTuningInfo]):
         kernel_state: TKernelState,
         model_state: ModelState,
         epoch: EpochState,
-        history: Position | None,
+        history: PositionInput | None,
     ) -> TuningOutcome[TKernelState, TTuningInfo]:
         """
         The method can perform automatic tuning of the kernel and is called

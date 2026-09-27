@@ -18,6 +18,7 @@ from .types import (
     ModelInterface,
     ModelState,
     Position,
+    PositionInput,
     Scalar,
     TransitionInfo,
     TuningInfo,
@@ -150,12 +151,12 @@ class ModelMixin:
 
         return self.model.extract_position(self.position_keys, model_state)
 
-    def log_prob_fn(self, model_state: ModelState) -> Callable[[Position], Scalar]:
+    def log_prob_fn(self, model_state: ModelState) -> Callable[[PositionInput], Scalar]:
         """
         Returns the log-probability function with the position as the only argument.
         """
 
-        def log_prob_fn(position: Position) -> Scalar:
+        def log_prob_fn(position: PositionInput) -> Scalar:
             new_model_state = self.model.update_state(position, model_state)
             return self.model.log_prob(new_model_state)
 
@@ -231,9 +232,10 @@ class TuningMixin[TKernelState, TTuningInfo: TuningInfo]:
         kernel_state: TKernelState,
         model_state: ModelState,
         epoch: EpochState,
-        history: Position | None,
+        history: PositionInput | None,
     ) -> TuningOutcome[TKernelState, TTuningInfo]:
         is_slow = epoch.config.type == EpochType.SLOW_ADAPTATION
+        history = dict(history) if history is not None else None
 
         outcome: TuningOutcome[TKernelState, TTuningInfo] = jax.lax.cond(
             is_slow,
@@ -255,7 +257,7 @@ class TuningMixin[TKernelState, TTuningInfo: TuningInfo]:
         kernel_state: TKernelState,
         model_state: ModelState,
         epoch: EpochState,
-        history: Position | None,
+        history: PositionInput | None,
     ) -> TuningOutcome[TKernelState, TTuningInfo]:
         """
         Tunes a kernel after a *fast* adaptation epoch. Must be jittable.
@@ -270,7 +272,7 @@ class TuningMixin[TKernelState, TTuningInfo: TuningInfo]:
         kernel_state: TKernelState,
         model_state: ModelState,
         epoch: EpochState,
-        history: Position | None,
+        history: PositionInput | None,
     ) -> TuningOutcome[TKernelState, TTuningInfo]:
         """
         Tunes a kernel after a *slow* adaptation epoch. Must be jittable.

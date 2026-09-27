@@ -679,7 +679,7 @@ class NegLogProbLoss(LossMixin):
             expected = self.position(approximation.names)
         except ValueError as error:
             return approximation._failed(
-                f"Incompatible optimized coordinates: {error}", raise_on_failure
+                f"Incompatible optimized parameters: {error}", raise_on_failure
             )
         if any(
             jnp.shape(value) != jnp.shape(expected[name])
@@ -687,13 +687,13 @@ class NegLogProbLoss(LossMixin):
             for name, value in approximation.mean.items()
         ):
             return approximation._failed(
-                "Selected coordinates have incompatible shapes or dtypes.",
+                "Selected parameters have incompatible shapes or dtypes.",
                 raise_on_failure,
             )
         flat, unravel = ravel_pytree(approximation.mean)
         if not flat.size:
             return approximation._failed(
-                "No optimized coordinates are available.", raise_on_failure
+                "No optimized parameters are available.", raise_on_failure
             )
 
         training_state = self.model.update_state(

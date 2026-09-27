@@ -10,7 +10,7 @@ import logging
 import warnings
 import weakref
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Hashable, Iterable, Sequence
+from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
 from functools import wraps
 from itertools import chain
 from typing import (
@@ -26,6 +26,7 @@ from typing import (
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pandas as pd
 import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as jd
@@ -33,7 +34,7 @@ import tensorflow_probability.substrates.numpy.bijectors as nb
 import tensorflow_probability.substrates.numpy.distributions as nd
 
 from ..distributions.nodist import NoDistribution
-from ..types import Position
+from ..types import Position, PositionInput, PyTree
 from ._mapping import _KeyCompletableMapping, _KeyCompletableProperty
 from .names import random_name
 from .viz import plot_nodes, plot_vars
@@ -42,7 +43,7 @@ if TYPE_CHECKING:
     from ..goose import MCMCSpec
     from .model import Model
 
-    type InferenceTypes = None | MCMCSpec | dict[str, MCMCSpec] | Any
+    type InferenceTypes = None | MCMCSpec | Mapping[str, MCMCSpec] | Any
 
 __all__ = [
     "Array",
@@ -52,6 +53,8 @@ __all__ = [
     "Distribution",
     "Group",
     "InputGroup",
+    "LieselModelState",
+    "LieselModelStateInput",
     "Node",
     "NodeState",
     "TransientCalc",
@@ -63,6 +66,7 @@ __all__ = [
 ]
 
 type Array = Any
+"""Deprecated compatibility alias for Any; use PyTree or an array-specific type."""
 type Distribution = jd.Distribution | nd.Distribution
 type Bijector = jb.Bijector | nb.Bijector
 
@@ -331,6 +335,13 @@ class NodeState(NamedTuple):
 
     extra: Any = None
     """Optional extra information."""
+
+
+type LieselModelState = dict[str, NodeState]
+"""Concrete dictionary of node names and states returned by a Liesel model."""
+
+type LieselModelStateInput = Mapping[str, NodeState]
+"""Read-only mapping of node names and states accepted by a Liesel model."""
 
 
 class Node(ABC):
@@ -760,7 +771,7 @@ class Node(ABC):
         state["_model"] = self._model()
         return state
 
-    def __setstate__(self, state: dict[str, Any]) -> None:
+    def __setstate__(self, state: Mapping[str, Any]) -> None:
         # __getstate__ stores the dereferenced Model rather than its weak reference.
         model: Model | None = state["_model"]
         self.__dict__.update(state)
@@ -1279,7 +1290,7 @@ class Dist(Node):
         _needs_seed: bool = False,
         bijectors: None
         | Literal["auto"]
-        | dict[str, Bijector | Literal["auto"] | None]
+        | Mapping[str, Bijector | Literal["auto"] | None]
         | Sequence[Bijector | Literal["auto"] | None] = None,
         convert_inputs: Callable[[Any], Any] | Literal["default"] = "default",
         **kwinputs: Any,
@@ -1339,7 +1350,7 @@ class Dist(Node):
         return dist
 
     @property
-    def log_prob(self) -> Array:
+    def log_prob(self) -> float | np.number | np.ndarray | jax.Array:
         """The log-probability of the distribution."""
         return self.value
 
@@ -1371,7 +1382,7 @@ class Dist(Node):
     def biject_parameters(
         self,
         bijectors: Literal["auto"]
-        | dict[str, Bijector | Literal["auto"] | None]
+        | Mapping[str, Bijector | Literal["auto"] | None]
         | Sequence[Bijector | Literal["auto"] | None] = "auto",
         inference: Literal["drop"] | None = None,
     ) -> Self:
@@ -1492,7 +1503,7 @@ class Dist(Node):
     def _resolve_bijectors(
         self,
         bijectors: Literal["auto"]
-        | dict[str, Bijector | Literal["auto"] | None]
+        | Mapping[str, Bijector | Literal["auto"] | None]
         | Sequence[Bijector | Literal["auto"] | None],
     ) -> dict[str, tuple[Var, Bijector | Literal["auto"]]]:
         """Resolves bijector specs to parameter->(Var, Bijector) mappings."""
@@ -1519,9 +1530,9 @@ class Dist(Node):
         if bijectors == "auto":
             bijector_dict = default_bijectors
 
-        elif isinstance(bijectors, dict):
+        elif isinstance(bijectors, Mapping):
             bijector_specs = cast(
-                dict[str, Bijector | Literal["auto"] | None], bijectors
+                Mapping[str, Bijector | Literal["auto"] | None], bijectors
             )
 
             if self.inputs:
@@ -1861,6 +1872,8 @@ class Var:
         automatically generated upon initialization of a :class:`~liesel.model.Model`.
     inference
         Additional information that can be used to set up inference algorithms.
+        Mapping inputs are shallow-copied; the contained specifications remain shared.
+        Direct assignment to ``var.inference`` does not copy the assigned object.
     bijector
         Bijector for variable transformation. If ``"auto"``, uses the default event
         space bijector defined by the variable's distribution.
@@ -1990,7 +2003,10 @@ class Var:
         self.info: dict[str, Any] = {}
         """Additional meta-information about the variable as a dict."""
 
-        self.inference = inference
+        # Snapshot the mapping while preserving shared specification objects.
+        self.inference = (
+            dict(inference) if isinstance(inference, Mapping) else inference
+        )
 
         # Apply bijector eagerly if provided
         if bijector is not None:
@@ -2374,8 +2390,8 @@ class Var:
         return var
 
     def get_inference(self, key: str | None) -> InferenceTypes:
-        if isinstance(self.inference, dict):
-            inference_by_key = cast(dict[str, Any], self.inference)
+        if isinstance(self.inference, Mapping):
+            inference_by_key = cast(Mapping[str, Any], self.inference)
             if key is None:
                 raise ValueError(
                     f"{key=} is invalid. Possible keys: {list(inference_by_key)}."
@@ -2465,6 +2481,7 @@ class Var:
             If ``None`` (default), the new variable will likewise have no inference \
             information, but an error will be raised if there is inference information \
             on the original variable.
+            Mapping inputs are shallow-copied for the transformed variable.
         name
             Name for the new, transformed variable. If ``None`` (default), the new \
             name will be ``<old_name>_transformed``, where ``<old_name>`` is \
@@ -2667,7 +2684,9 @@ class Var:
             self.inference = None
         else:
             self.inference = None
-            tvar.inference = inference
+            tvar.inference = (
+                dict(inference) if isinstance(inference, Mapping) else inference
+            )
 
         self.bijected_var = tvar
         return tvar
@@ -2900,7 +2919,7 @@ class Var:
         return not isinstance(self._dist_node, NoDist)
 
     @property
-    def log_prob(self) -> Array:
+    def log_prob(self) -> float | np.number | np.ndarray | jax.Array:
         """
         The log-probability of the variable.
 
@@ -3282,10 +3301,10 @@ class Var:
 
     def predict(
         self,
-        samples: Position,
-        newdata: Position | None = None,
+        samples: PositionInput,
+        newdata: PositionInput | None = None,
         chunk_size: int | None = 64,
-    ) -> Array:
+    ) -> PyTree:
         """
         Returns an array of predictions for this variable.
 
@@ -3369,10 +3388,10 @@ class Var:
         sample_shape: int | Sequence[int] = (),
         *,
         seed: jax.Array,
-        posterior_samples: Position | None = None,
+        posterior_samples: PositionInput | None = None,
         fixed: Sequence[str] = (),
-        newdata: Position | None = None,
-        dists: dict[str, Dist] | None = None,
+        newdata: PositionInput | None = None,
+        dists: Mapping[str, Dist] | None = None,
         chunk_size: int | None = 64,
     ) -> Position:
         """
@@ -3862,7 +3881,7 @@ class Group:
         """The group's name."""
         return self._name
 
-    def value_from(self, model_state: dict[str, NodeState], name: str) -> Array:
+    def value_from(self, model_state: LieselModelStateInput, name: str) -> PyTree:
         """
         Retrieves the value of a node or variable that is a member of the group from
         a model state.
