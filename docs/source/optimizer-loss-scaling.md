@@ -27,6 +27,10 @@ which need not equal the number of array elements.
 Validation leaves out priors by default. Use `validation_strategy="log_prob"`
 to include them. See {py:class}`~liesel.optim.NegLogProbLoss` for details.
 
+With {py:class}`~liesel.optim.LaplaceLoss`, the objective is always the unscaled
+full-training marginal posterior approximation. It includes priors and Jacobians;
+the wrapper's `scale_loss` setting does not change it. See {doc}`optimizer-laplace`.
+
 <iframe
   class="interactive-visualization"
   data-visualization="likelihood"
@@ -58,20 +62,18 @@ logging.getLogger("liesel").setLevel(logging.WARNING)
 
 loc = lsl.Var.new_param(0.0, name="loc")
 y = lsl.Var.new_obs(
-    jnp.array([1.0, 2.0, 3.0]), lsl.Dist(tfd.Normal, loc, 1.0), name="y"
+    jnp.array([1.0, 2.0, 3.0]),
+    dist=lsl.Dist(tfd.Normal, loc, 1.0),
+    name="y",
 )
 y.dist_node.per_obs = False
 model = lsl.Model(y)
 
 split = opt.PositionSplit.from_model(
-    model, infer_sample_sizes=False, multi_size="manager", shuffle=False
-)
-optim = opt.LieselOptim(
     model,
-    split=split,
-    optimizers=optax.adam(0.01),
-    loss_monitor="train_full_data",
-    show_progress=False,
+    infer_sample_sizes=False,
+    multi_size="manager",
+    shuffle=False,
 )
 ```
 
@@ -79,7 +81,17 @@ optim = opt.LieselOptim(
 split.train_sample_size
 ```
 
+Use this split for the fit:
+
 ```{code-cell} ipython3
+optim = opt.LieselOptim(
+    model,
+    split=split,
+    optimizers=optax.adam(0.01),
+    loss_monitor="train_full_data",
+    show_progress=False,
+)
+
 result = optim.fit()
 ```
 
@@ -94,13 +106,15 @@ split inference or specify batch scaling.
 
 ## Use a custom loss
 
-Custom aggregate likelihood, prior, or probability nodes require a custom
-{py:class}`~liesel.optim.Loss` and an explicit split. A manual split specifies data
-grouping and scaling; it does not change the objective used by
-{py:class}`~liesel.optim.NegLogProbLoss`. The built-in loss accepts the standard sums
+Custom aggregate likelihood, prior, or probability nodes need a loss that evaluates
+those aggregates. A manual split specifies data grouping and scaling; it does not
+change the objective used by
+{py:class}`~liesel.optim.NegLogProbLoss`. That loss accepts the standard sums
 of observed distribution factors and parameter priors, including weak observed
 variables. Other distribution factors must be classified appropriately or handled
-by a custom loss.
+by a custom loss. {class}`LaplaceLoss <liesel.optim.LaplaceLoss>` uses the model's actual joint density,
+including custom aggregates, with full training observations substituted. If
+automatic split inference fails, supply an explicit full-training split.
 
 For the data setup, see {doc}`optimizer-splitting` and
 {doc}`optimizer-batching`. {doc}`optimizer-weighted-batching` explains the

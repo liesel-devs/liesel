@@ -22,21 +22,29 @@ class QuadraticLoss(LossMixin):
     def position(self, position_keys) -> Position:
         return Position({key: jnp.array(0.0) for key in position_keys})
 
-    def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train_batched(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, object]:
         del carry
-        return params["x"] ** 2
+        return (params["x"] ** 2), None
 
-    def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, object]:
         return self.loss_train_batched(params, carry)
 
-    def loss_monitor(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_monitor(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, object]:
         return self.loss_train_batched(params, carry)
 
 
 class DifferentObjectiveDrawLoss(QuadraticLoss):
-    def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train_batched(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, object]:
         del carry
-        return 3.0 * params["x"] ** 2
+        return (3.0 * params["x"] ** 2), None
 
     def grad(self, params: Position, carry: OptimCarry) -> Position:
         del carry
@@ -44,9 +52,9 @@ class DifferentObjectiveDrawLoss(QuadraticLoss):
 
     def value_and_grad(
         self, params: Position, carry: OptimCarry
-    ) -> tuple[jax.Array, Position]:
+    ) -> tuple[tuple[jax.Array, None], Position]:
         del carry
-        return 2.0 * params["x"] ** 2, Position({"x": 4.0 * params["x"]})
+        return (2.0 * params["x"] ** 2, None), Position({"x": 4.0 * params["x"]})
 
 
 def test_optimizer_rejects_empty_position_keys():

@@ -71,6 +71,7 @@ from typing import TYPE_CHECKING, Any, Literal, Self, cast
 import jax
 import jax.flatten_util
 import jax.numpy as jnp
+import jax.scipy as jsp
 import tensorflow_probability.substrates.jax.bijectors as jb
 import tensorflow_probability.substrates.jax.distributions as tfd
 
@@ -79,6 +80,7 @@ from ..model import Dist, Model, Var
 from ..model.logprob import FlatLogProb
 from ..model.model import TemporaryModel
 from ._model_utils import validate_model_data_keys
+from .approximation import LaplaceApproximation, _positive_definite
 from .loss import LossMixin, _training_loss_scalar, _validate_bool
 from .split import PositionSplit, PositionSplitManager, _has_custom_model_log_lik
 from .state import OptimCarry, OptimResult
@@ -130,6 +132,74 @@ def _laplace_covariance(model: Model, position_keys: Sequence[str], loc: jax.Arr
     if not bool(jnp.isfinite(cov_matrix).all()):
         raise ValueError("Laplace covariance must be finite.")
     return cov_matrix
+
+
+def _laplace_conditional_parameters(
+    approximation: LaplaceApproximation, position: Position
+):
+    """Select a joint block in the target's flattened parameter order."""
+    if not approximation.valid or approximation.precision_cholesky is None:
+        raise RuntimeError("Cannot use an invalid Laplace approximation.")
+    if (
+        len(set(approximation.names)) != len(approximation.names)
+        or len(approximation.names) != len(approximation.shapes)
+        or set(approximation.names) != set(approximation.mean)
+    ):
+        raise ValueError("Inconsistent approximation names, shapes, or mean.")
+    for name, shape in zip(approximation.names, approximation.shapes, strict=True):
+        if jnp.shape(approximation.mean[name]) != shape:
+            raise ValueError(f"Approximation shape mismatch for {name!r}.")
+        if not bool(jnp.isfinite(approximation.mean[name]).all()):
+            raise RuntimeError("Approximation means must be finite.")
+    sections = approximation._block_slices(sorted(position))
+    for name in sections:
+        if jnp.shape(position[name]) != jnp.shape(approximation.mean[name]):
+            raise ValueError(f"Target shape mismatch for {name!r}.")
+    factor = approximation.precision_cholesky
+    size = sum(prod(shape) for shape in approximation.shapes)
+    if factor.shape != (size, size):
+        raise ValueError("Approximation precision factor has the wrong shape.")
+    if not bool(_valid_precision_cholesky(factor)):
+        raise RuntimeError("Approximation precision factor is unusable.")
+    indices = jnp.array(
+        [
+            index
+            for section in sections.values()
+            for index in range(section.start, section.stop)
+        ],
+        dtype=jnp.int32,
+    )
+    rows = factor[indices, :]
+    precision = rows @ rows.T
+    precision_factor = jnp.linalg.cholesky(precision)
+    if not bool(_positive_definite(precision, precision_factor)):
+        raise RuntimeError("Selected conditional precision is unusable.")
+    covariance = jsp.linalg.cho_solve(
+        (precision_factor, True), jnp.eye(len(indices), dtype=factor.dtype)
+    )
+    scale_tril = jnp.linalg.cholesky(covariance)
+    if not bool(jnp.isfinite(scale_tril).all()):
+        raise RuntimeError("Selected conditional covariance is unusable.")
+    loc = jnp.concatenate([jnp.ravel(approximation.mean[name]) for name in sections])
+    return loc, scale_tril
+
+
+@jax.jit
+def _valid_precision_cholesky(factor):
+    # A whole-matrix reduction can allocate quadratic compiler temporaries.
+    # Scan rows to keep validation workspace linear in the total dimension.
+    columns = jnp.arange(factor.shape[0])
+
+    def check_row(index, valid):
+        row = factor[index]
+        return (
+            valid
+            & jnp.isfinite(row).all()
+            & (row[index] > 0)
+            & jnp.where(columns > index, row == 0, True).all()
+        )
+
+    return jax.lax.fori_loop(0, factor.shape[0], check_row, jnp.array(True))
 
 
 def _validate_gaussian_scale(value, *, triangular=False):
@@ -1026,9 +1096,11 @@ class NegElboLoss(LossMixin):
 
         return jnp.mean(elbo_samples)
 
-    def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train_batched(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, None]:
         """
-        Computes the negative mini-batch ELBO used by optimizer updates.
+        Returns the negative mini-batch ELBO and stateless proposal ``None``.
 
         ``carry.batch`` supplies observed mini-batch values, and ``carry.batches``
         supplies the corresponding likelihood scaling, including per-branch scaling
@@ -1044,11 +1116,11 @@ class NegElboLoss(LossMixin):
             nsamples=self.nsamples,
             batch_index=carry.i_batch,
         )
-        return -elbo / self.scalar
+        return -elbo / self.scalar, None
 
-    def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_train(self, params: Position, carry: OptimCarry) -> tuple[jax.Array, None]:
         """
-        Computes the negative full-training-data ELBO.
+        Returns the negative full-training-data ELBO and stateless proposal ``None``.
 
         This method uses :attr:`split.train <liesel.optim.PositionSplit.train>`
         as observed data and ignores the
@@ -1065,9 +1137,11 @@ class NegElboLoss(LossMixin):
             split_part="train",
             nsamples=self.nsamples,
         )
-        return -elbo / self.scalar
+        return -elbo / self.scalar, None
 
-    def loss_monitor(self, params: Position, carry: OptimCarry) -> jax.Array:
+    def loss_monitor(
+        self, params: Position, carry: OptimCarry
+    ) -> tuple[jax.Array, None]:
         """Rejects validation monitoring, which ELBO losses do not support."""
         del params, carry
         raise ValueError("NegElboLoss does not support validation monitoring.")
@@ -1659,6 +1733,90 @@ class VDist:
 
         _validate_bijected_scale(scale_tril_var)
         return self.init(dist)
+
+    def mvn_tril_from_laplace(self, approximation: LaplaceApproximation) -> Self:
+        """Initialize a dense Gaussian block from a fitted Laplace approximation.
+
+        Parameters
+        ----------
+        approximation
+            Valid approximation returned by
+            :meth:`LaplaceLoss.approximate_joint_posterior
+            <liesel.optim.LaplaceLoss.approximate_joint_posterior>`
+            or :meth:`NegLogProbLoss.approximate_joint_posterior
+            <liesel.optim.NegLogProbLoss.approximate_joint_posterior>`. Selected names
+            and shapes must match this block's target parameters, on the same
+            transformed scale. Model and data provenance are the caller's
+            responsibility.
+
+        Returns
+        -------
+        Self
+            Initialized builder. Call :meth:`~liesel.optim.VDist.build` to construct its
+            model.
+
+        Raises
+        ------
+        TypeError
+            If ``approximation`` is not a :class:`~liesel.optim.LaplaceApproximation`.
+        ValueError
+            If names, shapes, mean metadata, or factor dimensions are inconsistent.
+        RuntimeError
+            If the approximation is invalid, nonfinite, or has unusable curvature.
+
+        Notes
+        -----
+        For selected parameters S, uses the fitted mean mu_S and covariance
+        inverse(P_SS), where P is the full joint precision. This conditions on
+        every omitted approximation parameter at its fitted mean. A block covering
+        all names reproduces the joint covariance. Cross-parameter correlations
+        within a block are retained, regardless of the input name order.
+
+        The target model and approximation remain unchanged. In particular, omitted
+        target parameters are not set to their fitted means. Set fixed parameters
+        explicitly if that conditional interpretation is intended. No jitter or
+        eigenvalue clipping is applied. Subsets require O(N * B + B**2) workspace
+        for total dimension N and block dimension B, without a full covariance.
+        The dtype policy and scale-factor bijector follow
+        :meth:`~liesel.optim.VDist.mvn_tril`.
+
+        For a Gaussian target and independent blocks covering all parameters,
+        these covariances minimize reverse KL under the ordinary negative ELBO.
+        This does not guarantee a good starting point for non-Gaussian targets or
+        other objectives. See :doc:`/variational-laplace` for a complete fit.
+
+        Examples
+        --------
+        Initialize a scalar block from a fitted Gaussian with precision 4:
+
+        >>> import jax.numpy as jnp
+        >>> import liesel.model as lsl
+        >>> import liesel.optim as opt
+        >>> model = lsl.Model(lsl.Var.new_param(0.0, name="beta"))
+        >>> approximation = opt.LaplaceApproximation(
+        ...     mean={"beta": jnp.array(2.0)},
+        ...     precision_cholesky=jnp.array([[2.0]]),
+        ...     names=("beta",),
+        ...     shapes=((),),
+        ...     valid=True,
+        ...     diagnostics={},
+        ... )
+        >>> q = opt.VDist(["beta"], model).mvn_tril_from_laplace(approximation).build()
+        >>> q.var.dist_node.init_dist().mean()
+        Array([2.], dtype=float32)
+        >>> q.var.dist_node.init_dist().covariance()
+        Array([[0.25]], dtype=float32)
+        """
+        if not isinstance(approximation, LaplaceApproximation):
+            raise TypeError("approximation must be a LaplaceApproximation.")
+        position = self.p.extract_position(self.position_keys)
+        loc, scale_tril = _laplace_conditional_parameters(approximation, position)
+        try:
+            return self.mvn_tril(loc=loc, scale_tril=scale_tril)
+        except ValueError as error:
+            raise RuntimeError(
+                "Cannot represent initialization with the default bijector."
+            ) from error
 
     def build(self) -> Self:
         """

@@ -11,6 +11,7 @@ from liesel.optim import (
     Batches,
     EmaTrainLossMonitor,
     LieselOptim,
+    LossMixin,
     NegLogProbLoss,
     PositionSplit,
     PositionSplitManager,
@@ -19,6 +20,56 @@ from liesel.optim import (
 )
 from liesel.optim.state import OptimCarry
 from liesel.optim.types import Position
+
+
+@pytest.mark.parametrize("optimizer", [optax.sgd(0.1), "lbfgs"])
+def test_loss_can_select_default_outer_parameters(optimizer):
+    class LocationLoss(NegLogProbLoss):
+        default_position_keys = ("loc",)
+
+    loc = lsl.Var.new_param(jnp.array(0.0), name="loc")
+    scale = lsl.Var.new_param(jnp.array(1.0), name="scale")
+    y = lsl.Var.new_obs(
+        jnp.array([1.0, 2.0]), lsl.Dist(tfd.Normal, loc, scale), name="y"
+    )
+    model = lsl.Model([y])
+    loss = LocationLoss(model, PositionSplit.from_model(model))
+    result = LieselOptim(
+        model,
+        loss=loss,
+        optimizers=optimizer,
+        loss_monitor="train_full_data",
+        stopper=Stopper(epochs=1, patience=1),
+        show_progress=False,
+    ).fit()
+    assert set(result.position_final) == {"loc"}
+    assert float(result.position_final["loc"]) > 0.0
+    assert set(model.parameters) == {"loc", "scale"}
+
+
+def test_loss_mixin_differentiates_value_with_auxiliary_state():
+    class Quadratic(LossMixin):
+        def loss_train_batched(self, params, carry):
+            return (params["x"] - 1.0) ** 2, {"evaluated_at": params["x"]}
+
+    loss = Quadratic()
+    params = Position({"x": jnp.array(3.0)})
+    carry = OptimCarry.new(
+        key=jax.random.key(0),
+        epochs=1,
+        position=params,
+        batches=Batches([], axis_size=1, batch_size=None),
+        optimizers=[],
+        model_state={},
+        save_position_history=False,
+    )
+    (value, proposed), gradient = jax.jit(loss.value_and_grad)(params, carry)
+    assert float(value) == 4.0
+    assert float(proposed["evaluated_at"]) == 3.0
+    assert float(gradient["x"]) == 4.0
+    assert float(loss.grad(params, carry)["x"]) == 4.0
+    assert loss.init_state(params, carry) is None
+    assert loss.default_position_keys is None
 
 
 def _normal_obs_model():
@@ -490,7 +541,7 @@ def test_neg_log_prob_loss_train_uses_full_training_split_not_current_batch():
     carry = _empty_carry(model)
     carry.batch = Position({"y": jnp.array([1000.0, 2000.0])})
 
-    value = loss.loss_train(Position({}), carry)
+    value = loss.loss_train(Position({}), carry)[0]
     train_state = model.update_state(split.train, model.state)
     manual = -split.scaled_log_lik(model, train_state, part="train")
     manual -= train_state["_model_log_prior"].value
@@ -505,9 +556,9 @@ def test_neg_log_prob_loss_scale_uses_scalar_training_size():
     ).split_position(model.extract_position(["y"]))
     carry = _empty_carry(model)
 
-    unscaled = NegLogProbLoss(model, split).loss_train(Position({}), carry)
+    unscaled = NegLogProbLoss(model, split).loss_train(Position({}), carry)[0]
     scaled_loss = NegLogProbLoss(model, split, scale=True)
-    scaled = scaled_loss.loss_train(Position({}), carry)
+    scaled = scaled_loss.loss_train(Position({}), carry)[0]
 
     assert scaled_loss.scalar == split.train_axis_size
     assert jnp.allclose(scaled, unscaled / split.train_axis_size)
@@ -523,9 +574,9 @@ def test_neg_log_prob_loss_scale_uses_inferred_training_sample_size():
     )
     carry = _empty_carry(model)
 
-    unscaled = NegLogProbLoss(model, split).loss_train(Position({}), carry)
+    unscaled = NegLogProbLoss(model, split).loss_train(Position({}), carry)[0]
     scaled_loss = NegLogProbLoss(model, split, scale=True)
-    scaled = scaled_loss.loss_train(Position({}), carry)
+    scaled = scaled_loss.loss_train(Position({}), carry)[0]
 
     assert split.train_axis_size == 6
     assert split.train_sample_size == 24.0
@@ -566,9 +617,9 @@ def test_neg_log_prob_loss_scale_uses_total_unequal_branch_training_size():
     split = PositionSplitManager.from_model(model, position_keys=["y1", "y2"])
     carry = _empty_carry(model)
 
-    unscaled = NegLogProbLoss(model, split).loss_train(Position({}), carry)
+    unscaled = NegLogProbLoss(model, split).loss_train(Position({}), carry)[0]
     scaled_loss = NegLogProbLoss(model, split, scale=True)
-    scaled = scaled_loss.loss_train(Position({}), carry)
+    scaled = scaled_loss.loss_train(Position({}), carry)[0]
     scalar = sum(split.train_axis_sizes)
 
     assert scaled_loss.scalar == scalar
@@ -586,9 +637,9 @@ def test_neg_log_prob_loss_scale_uses_total_equal_branch_training_size():
     )
     carry = _empty_carry(model)
 
-    unscaled = NegLogProbLoss(model, split).loss_train(Position({}), carry)
+    unscaled = NegLogProbLoss(model, split).loss_train(Position({}), carry)[0]
     scaled_loss = NegLogProbLoss(model, split, scale=True)
-    scaled = scaled_loss.loss_train(Position({}), carry)
+    scaled = scaled_loss.loss_train(Position({}), carry)[0]
     scalar = sum(split.train_axis_sizes)
 
     assert split.train_axis_size == 4
@@ -669,16 +720,17 @@ def test_held_out_scores_exclude_unsplit_likelihoods(managed, passthrough, strat
                 prior = tfd.Normal(loc=0.0, scale=2.0).log_prob(loc.value)
                 expected = -(manual + (prior if strategy == "log_prob" else 0.0))
                 assert jnp.allclose(
-                    loss.loss_monitor(params, carry), expected / loss.scalar
+                    loss.loss_monitor(params, carry)[0], expected / loss.scalar
                 )
         held_out_scores.append(scores)
-        training_scores.append(float(loss.loss_train(params, carry)))
+        training_scores.append(float(loss.loss_train(params, carry)[0]))
         full_split = PositionSplit.from_model(
             model, position_keys=keys, split_axes={"z": None}, multi_size="manager"
         )
         fallback = NegLogProbLoss(model, full_split, validation_strategy="log_prob")
         assert jnp.allclose(
-            fallback.loss_monitor(params, carry), fallback.loss_train(params, carry)
+            fallback.loss_monitor(params, carry)[0],
+            fallback.loss_train(params, carry)[0],
         )
     assert held_out_scores[0] == held_out_scores[1]
     assert training_scores[0] != training_scores[1]
