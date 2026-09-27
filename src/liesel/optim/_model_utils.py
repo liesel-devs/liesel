@@ -157,7 +157,7 @@ def continuous_coordinate_nodes(
 ) -> set:
     """Resolve distinct writable continuous parameters, excluding data."""
     if isinstance(keys, str):
-        raise ValueError("Pass coordinate names as a sequence, not a string.")  # noqa: TRY004
+        raise ValueError("Pass parameter names as a sequence, not a string.")  # noqa: TRY004
     nodes = set()
     for key in keys:
         if key in model.nodes:
@@ -165,13 +165,13 @@ def continuous_coordinate_nodes(
         elif key in model.vars:
             node = model.vars[key].value_node
         else:
-            raise ValueError(f"Unknown coordinate {key!r}.")
+            raise ValueError(f"Unknown parameter {key!r}.")
         if node in nodes:
-            raise ValueError(f"Duplicate coordinate or alias {key!r}.")
+            raise ValueError(f"Duplicate parameter or alias {key!r}.")
         if not isinstance(node, Value) or not jnp.issubdtype(
             jnp.asarray(node.value).dtype, jnp.floating
         ):
-            raise ValueError(f"{key!r} must be a writable continuous coordinate.")
+            raise ValueError(f"{key!r} must be a writable continuous parameter.")
         if node in data_nodes or (node.var is not None and node.var.observed):
             raise ValueError(f"{key!r} is a training input or observation.")
         dist = (

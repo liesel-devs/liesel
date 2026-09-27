@@ -417,7 +417,7 @@ def test_posterior_rejects_incompatible_coordinates(incompatible):
     else:
         other = model(jnp.array(0.0), prior=lsl.Dist(tfd.Poisson, rate=1.0))
     loss = opt.NegLogProbLoss(other, opt.PositionSplit.from_model(other))
-    with pytest.raises(RuntimeError, match="coordinates"):
+    with pytest.raises(RuntimeError, match="parameters"):
         loss.approximate_joint_posterior(result)
     failed = loss.approximate_joint_posterior(result, raise_on_failure=False)
     assert not failed.valid
@@ -471,7 +471,7 @@ def test_posterior_requires_at_least_one_optimized_coordinate():
         stopper=opt.Stopper(epochs=1, patience=1),
     )
     result = optim.fit()
-    with pytest.raises(RuntimeError, match="No optimized coordinates"):
+    with pytest.raises(RuntimeError, match="No optimized parameters"):
         optim.loss.approximate_joint_posterior(result)
     assert not optim.loss.approximate_joint_posterior(
         result, raise_on_failure=False
