@@ -987,7 +987,7 @@ class TestSplitManager:
             save_position_history=False,
         )
 
-        value = loss.loss_monitor(Position({}), carry)
+        value = loss.loss_monitor(Position({}), carry)[0]
         state = model.update_state(split.validate, model.state)
         manual = -split.scaled_log_lik(model, state)
 
@@ -1144,7 +1144,7 @@ def test_lookup_model_uses_manual_passthrough(holdout, batch_size):
         )
 
     def actual(beta):
-        return engine.loss.loss_train_batched(Position({"beta": beta}), carry)
+        return engine.loss.loss_train_batched(Position({"beta": beta}), carry)[0]
 
     assert jnp.allclose(actual(1.0), expected(1.0))
     assert jnp.allclose(jax.grad(actual)(1.0), jax.grad(expected)(1.0))

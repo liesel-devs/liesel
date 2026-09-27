@@ -203,7 +203,9 @@ def test_full_data_copula_fit_and_parameter_gradients_match_joint_normal(
     for value in (-0.2, 0.4):
         position = model.extract_position(engine.position_keys)
         position["loc"] = jnp.asarray(value, dtype=position["loc"].dtype)
-        actual, grad = jax.value_and_grad(engine.loss.loss_train)(position, carry)
+        (actual, _), grad = jax.value_and_grad(engine.loss.loss_train, has_aux=True)(
+            position, carry
+        )
 
         def expected(p):
             return -joint_log_prob(model, model.update_state(p, model.state)).sum()
@@ -375,6 +377,6 @@ def test_automatic_grouping_when_only_a_weak_variable_has_a_likelihood(factory):
     assert list(engine.split.split_position_keys) == ["response"]
     carry = engine._init_carry(2)
     np.testing.assert_allclose(
-        engine.loss.loss_train({"loc": jnp.array(0.0)}, carry), -model.log_prob
+        engine.loss.loss_train({"loc": jnp.array(0.0)}, carry)[0], -model.log_prob
     )
     assert engine.fit().position_final["loc"] > 0
