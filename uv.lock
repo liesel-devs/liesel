@@ -1090,7 +1090,7 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.10.7" },
     { name = "networkx", specifier = ">=3.4.2" },
     { name = "numpy", specifier = ">=2.0" },
-    { name = "optax", specifier = ">=0.1.7" },
+    { name = "optax", specifier = ">=0.2.5" },
     { name = "pandas", specifier = ">=2.2.3" },
     { name = "plotnine", specifier = ">=0.15.0" },
     { name = "pydot", specifier = ">=3.0" },
