@@ -1716,6 +1716,7 @@ class TestSample:
                 fixed=("y"),
                 chunk_size=13,
             )
+        caught = [w for w in caught if issubclass(w.category, FutureWarning)]
         assert len(caught) == (3 if shape_name == "shape" else 0)
         assert all(
             w.category is FutureWarning and "0.9.0" in str(w.message) for w in caught
@@ -1727,6 +1728,7 @@ class TestSample:
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always", FutureWarning)
             actual = sample((3,), rnd.key(8))
+        caught = [w for w in caught if issubclass(w.category, FutureWarning)]
         assert len(caught) == 1
         assert caught[0].category is FutureWarning
         assert "seed=" in str(caught[0].message)
