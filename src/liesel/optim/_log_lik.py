@@ -37,8 +37,8 @@ def log_prob_sources(
     ``prior=None`` includes both observed and parameter factors. Dependence on a
     selected key assumes the factor represents the selected units additively.
     """
-    selected = {
-        key: model.vars[key].value_node if key in model.vars else model.nodes[key]
+    descendants = {
+        key: nx.descendants(model.node_graph, model._node_for_position_key(key))
         for key in position_keys
     }
     sources = {}
@@ -53,25 +53,22 @@ def log_prob_sources(
     for var in variables.values():
         if var.dist_node is None:
             continue
-        nodes = {var.dist_node}
-        pending = list(nodes)
-        while pending:
-            node = pending.pop()
-            for parent in node.all_input_nodes():
-                if parent not in nodes:
-                    nodes.add(parent)
-                    pending.append(parent)
-        keys = [key for key, node in selected.items() if node in nodes]
+        keys = [key for key, nodes in descendants.items() if var.dist_node in nodes]
         if keys:
             sources[var.name] = keys
     return sources
 
 
-def validate_factor_groups(model: Model, groups: Sequence[Sequence[str]]) -> None:
-    """Reject factors shared by independently sampled row groups."""
+def validate_factor_groups(
+    model: Model, groups: Sequence[Sequence[str]]
+) -> list[dict[str, list[str]]]:
+    """Return group sources, rejecting factors shared by independent groups."""
     covered: dict[str, Sequence[str]] = {}
+    sources = []
     for keys in groups:
-        for name in log_prob_sources(model, keys):
+        group_sources = log_prob_sources(model, keys)
+        sources.append(group_sources)
+        for name in group_sources:
             if name in covered:
                 raise ValueError(
                     f"Log-density factor {name!r} is covered by more than one data "
@@ -80,6 +77,7 @@ def validate_factor_groups(model: Model, groups: Sequence[Sequence[str]]) -> Non
                     "with split_axes={key: None}, or use a custom Loss."
                 )
             covered[name] = keys
+    return sources
 
 
 def scaled_liesel_log_lik(
@@ -111,11 +109,13 @@ def scaled_liesel_log_lik(
     ValueError
         If one observed log-likelihood node is covered by more than one group.
     """
+    sources = validate_factor_groups(model, [keys for keys, _ in groups])
     return _scaled_log_factors(
         model,
         model_state,
         groups,
         corrections,
+        sources,
         prior=False,
         include_uncovered=include_uncovered,
     )
@@ -128,9 +128,9 @@ def scaled_liesel_log_prior(
     corrections: dict[str, tuple[jax.Array, int]] | None = None,
 ):
     """Scale covered parameter priors, including uncovered priors once."""
-    validate_factor_groups(model, [keys for keys, _ in groups])
+    sources = validate_factor_groups(model, [keys for keys, _ in groups])
     node = model.nodes["_model_log_prior"]
-    if not any(log_prob_sources(model, keys, prior=True) for keys, _ in groups):
+    if not any(name in model.parameters for group in sources for name in group):
         selected = {
             model._node_for_position_key(key) for keys, _ in groups for key in keys
         }
@@ -150,7 +150,9 @@ def scaled_liesel_log_prior(
             "Cannot scale batch-dependent priors with a custom log_prior_node. "
             "Use a custom Loss."
         )
-    return _scaled_log_factors(model, model_state, groups, corrections, prior=True)
+    return _scaled_log_factors(
+        model, model_state, groups, corrections, sources, prior=True
+    )
 
 
 def _scaled_log_factors(
@@ -158,19 +160,20 @@ def _scaled_log_factors(
     model_state: ModelState,
     groups: Sequence[tuple[Sequence[str], float]],
     corrections: dict[str, tuple[jax.Array, int]] | None,
+    sources: Sequence[dict[str, list[str]]],
     *,
     prior: bool,
     include_uncovered: bool = True,
 ):
-    validate_factor_groups(model, [keys for keys, _ in groups])
     variables = model.parameters if prior else model.observed
     total = 0.0
     covered_nodes: set[str] = set()
 
-    for position_keys, scale in groups:
+    for (_, scale), group_sources in zip(groups, sources, strict=True):
         node_names = [
             variables[name].dist_node.name
-            for name in log_prob_sources(model, position_keys, prior=prior)
+            for name in group_sources
+            if name in variables
         ]
 
         for node_name in node_names:

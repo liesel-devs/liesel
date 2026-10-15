@@ -17,7 +17,7 @@ from ..model import Calc, Model
 from ..model.model import _reduced_sum
 from ._log_lik import validate_factor_groups
 from ._model_utils import validate_model_data_keys
-from .split import PositionSplit, PositionSplitManager
+from .split import PositionSplit, PositionSplitManager, validate_split_priors
 from .types import Position
 
 if TYPE_CHECKING:
@@ -330,6 +330,10 @@ class NegLogProbLoss(LossMixin):
     ``split.scaled_log_lik(...)`` and ``split.scaled_log_prior(...)`` for the same
     reason. Global priors are included once without scaling.
 
+    Validation or test splits whose keys reach parameter priors require a custom
+    loss: the built-in loss cannot infer the held-out units' local latent values.
+    This restriction applies to both validation strategies.
+
     The model must use the standard sums of observed distribution factors and
     parameter priors. Weak observed variables and weak parameters contribute
     their likelihoods and priors like strong ones.
@@ -398,6 +402,7 @@ class NegLogProbLoss(LossMixin):
     ):
         _validate_model_decomposition(model)
         validate_model_data_keys(model, split.position_keys)
+        validate_split_priors(model, split)
         splits = split.splits if isinstance(split, PositionSplitManager) else (split,)
         validate_factor_groups(model, [part.split_position_keys for part in splits])
         self._model = model
@@ -416,6 +421,7 @@ class NegLogProbLoss(LossMixin):
         self, split: SplitConfig, optimizer_keys: Sequence[str]
     ) -> None:
         validate_model_data_keys(self.model, split.position_keys, optimizer_keys)
+        validate_split_priors(self.model, split)
 
     def _validate_batch_keys(self, groups: Sequence[Sequence[str]]) -> None:
         validate_factor_groups(self.model, groups)

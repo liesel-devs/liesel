@@ -14,7 +14,6 @@ import liesel.model as lsl
 import liesel.optim as opt
 from liesel.goose import LieselInterface
 from liesel.optim._log_lik import log_prob_sources
-from liesel.optim.split import SplitPart
 from liesel.optim.types import Position
 
 
@@ -144,36 +143,55 @@ def test_local_prior_elbo_and_gradients_recover_full_data(entropy, weighted):
 
 
 @pytest.mark.parametrize("manager", [False, True])
-def test_split_scales_local_priors_but_keeps_global_prior_once(manager):
+@pytest.mark.parametrize("part", ["validate", "test"])
+@pytest.mark.parametrize("strategy", ["log_lik", "log_prob"])
+def test_holdout_with_local_priors_requires_custom_loss(manager, part, strategy):
     model = local_model(n=8)
     split = opt.PositionSplit.from_model(
-        model, shuffle=False, validate_axis_share=0.25, test_axis_share=0.25
+        model,
+        shuffle=False,
+        validate_axis_share=0.25 if part == "validate" else 0.0,
+        test_axis_share=0.25 if part == "test" else 0.0,
     )
     assert isinstance(split, opt.PositionSplit)
     if manager:
         split = opt.PositionSplitManager([split])
-    loss = opt.NegLogProbLoss(model, split, validation_strategy="log_prob")
-    params = model.extract_position(list(model.parameters))
-    parts: list[tuple[SplitPart, float]] = [
-        ("train", 1.0),
-        ("validate", 2.0),
-        ("test", 2.0),
-    ]
-    for part, scale in parts:
-        state = model.update_state(getattr(split, part), model.state)
-        prior = scale * state["z_log_prob"].value.sum()
-        prior += state["global_log_prob"].value.sum()
-        assert_tree_close(split.scaled_log_prior(model, state, part), prior)
-        expected = -(split.scaled_log_lik(model, state, part) + prior)
-        if part == "train":
-            assert_tree_close(loss.loss_train(params, carry(model)), expected)
-        if part == "validate":
-            assert_tree_close(loss.loss_monitor(params, carry(model)), expected)
-            likelihood_loss = opt.NegLogProbLoss(model, split)
-            assert_tree_close(
-                likelihood_loss.loss_monitor(params, carry(model)),
-                -split.scaled_log_lik(model, state, part),
-            )
+    with pytest.raises(ValueError, match="held-out.*custom Loss"):
+        opt.LieselOptim(
+            model,
+            split=split,
+            optimizers=optax.adam(0.05),
+            validation_strategy=strategy,
+            loss_monitor="train_full_data",
+        )
+    state = model.update_state(getattr(split, part), model.state)
+    with pytest.raises(ValueError, match="held-out.*custom Loss"):
+        split.scaled_log_prior(model, state, part=part)
+    with pytest.raises(ValueError, match="held-out.*custom Loss"):
+        split.scaled_log_lik(model, state, part=part)
+    if part == "test":
+        with pytest.raises(ValueError, match="held-out.*custom Loss"):
+            opt.NegElboLoss.mvn_diag(model, split=split)
+
+
+@pytest.mark.parametrize("observed", [False, True])
+@pytest.mark.parametrize("shape", [(), (3,)])
+def test_uniform_batch_rejects_indirect_nonpointwise_factors(observed, shape):
+    data = lsl.Var.new_obs(jnp.arange(6.0), name="data")
+    scale = lsl.Var.new_calc(lambda x: 1.0 + 2.5 * jnp.std(x), data)
+    factory = lsl.Var.new_obs if observed else lsl.Var.new_param
+    mu = factory(jnp.zeros(shape), lsl.Dist(tfd.Normal, 0.0, scale), name="mu")
+    model = lsl.Model(mu)
+    batches = opt.Batches(["data"], axis_size=6, batch_size=2, shuffle=False)
+    state = model.update_state(
+        batches.extract_batched_position(model, model.state, 0), model.state
+    )
+    method = batches.scaled_log_lik if observed else batches.scaled_log_prior
+    with pytest.raises(ValueError, match="mu.*pointwise.*custom Loss"):
+        method(model, state)
+    full = opt.Batches(["data"], axis_size=6, batch_size=None)
+    method = full.scaled_log_lik if observed else full.scaled_log_prior
+    assert_tree_close(method(model, model.state), model.log_prob)
 
 
 @pytest.mark.parametrize("factory", [opt.Batches, opt.BatchManager])
@@ -239,8 +257,11 @@ def test_custom_prior_requires_custom_loss_only_when_covered():
     builder.log_prior_node = lsl.Calc(lambda: jnp.array(7.0))
     custom = builder.build_model()
     batches = opt.Batches(["idx", "y"], axis_size=6, batch_size=2)
+    state = custom.update_state(
+        batches.extract_batched_position(custom, custom.state, 0), custom.state
+    )
     with pytest.raises(ValueError, match="custom log_prior_node"):
-        batches.scaled_log_prior(custom, custom.state)
+        batches.scaled_log_prior(custom, state)
     full = opt.Batches([], axis_size=6, batch_size=None)
     assert_tree_close(full.scaled_log_prior(custom, custom.state), 7.0)
 

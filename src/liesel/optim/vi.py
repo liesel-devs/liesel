@@ -81,7 +81,12 @@ from ..model.model import TemporaryModel
 from ._log_lik import validate_factor_groups
 from ._model_utils import validate_model_data_keys
 from .loss import LossMixin, _training_loss_scalar, _validate_bool
-from .split import PositionSplit, PositionSplitManager, _has_custom_model_log_lik
+from .split import (
+    PositionSplit,
+    PositionSplitManager,
+    _has_custom_model_log_lik,
+    validate_split_priors,
+)
 from .state import OptimCarry, OptimResult
 from .types import ModelState, Position
 
@@ -405,6 +410,7 @@ class NegElboLoss(LossMixin):
             else []
         )
         validate_model_data_keys(self.p, split.position_keys, target_keys)
+        validate_split_priors(self.p, split)
         splits = split.splits if isinstance(split, PositionSplitManager) else (split,)
         validate_factor_groups(self.p, [part.split_position_keys for part in splits])
         target_nodes = {self.p._node_for_position_key(key) for key in target_keys}

@@ -140,6 +140,11 @@ on each group's keys. For row data without either factor, supply an explicit
 nested group. A factor depending on multiple independent groups is rejected;
 align those inputs in one group or keep shared data as passthrough.
 
+The built-in losses reject validation or test splits whose keys reach parameter
+priors. They cannot infer the held-out units' local latent values. Use a custom
+`Loss` that handles those latents, or omit the held-out split; choosing
+`validation_strategy="log_lik"` does not remove this restriction.
+
 ## Keep shared data
 
 Shared tables and scalar constants must stay unchanged in every split. For a

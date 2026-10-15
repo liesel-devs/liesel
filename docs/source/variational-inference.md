@@ -61,6 +61,8 @@ batched keys, including weighted-sampling corrections. Global priors contribute
 once. See {doc}`optimizer-loss-scaling` for an indexed-local-prior example.
 Variational draws and entropy still cover the full latent vector; this does not
 restrict guide sampling to the batch or enable validation splits for VI.
+Test splits whose keys reach parameter priors are also rejected because the
+built-in loss does not infer held-out local latents.
 
 ```{code-cell} python
 vdist = opt.VDist(["loc"], model).mvn_diag(scale_diag=0.5).build()

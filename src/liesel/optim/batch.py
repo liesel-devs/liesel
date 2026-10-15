@@ -1498,15 +1498,16 @@ class Batches:
         *,
         allowed_axes: Collection[str] | None = None,
     ) -> dict[str, tuple[jax.Array, int]]:
-        if self.sampling_probabilities is None:
+        weighted = self.sampling_probabilities is not None
+        if not weighted and (self.is_full_data or not isinstance(model, Model)):
             return {}
-        if batch_index is None:
+        if weighted and batch_index is None:
             raise ValueError("Weighted likelihood correction requires batch_index.")
         if not isinstance(model, Model):
             raise TypeError(
                 "Weighted likelihood correction requires a liesel.model.Model."
             )
-        if _has_custom_model_log_lik(model):
+        if weighted and _has_custom_model_log_lik(model):
             raise ValueError(
                 "Weighted correction cannot decompose a custom log_lik_node. "
                 "Apply correction_factors in a custom loss instead."
@@ -1519,7 +1520,9 @@ class Batches:
             raise ValueError(
                 f"likelihood_axes names are not in this batch group: {sorted(unknown)}."
             )
-        factors = self.correction_factors(batch_index)
+        factors = (
+            self.correction_factors(batch_index) if batch_index is not None else None
+        )
         corrections = {}
         assert isinstance(self.batch_axes, dict)
         for name, keys in sources.items():
@@ -1531,6 +1534,14 @@ class Batches:
                 if model._node_for_position_key(key) is var.value_node
             ]
             value = jnp.asarray(model_state[var.dist_node.name].value)
+            if not weighted:
+                if not value_keys and self.batch_size not in value.shape:
+                    raise ValueError(
+                        f"Indirectly batched factor {var.name!r} needs a pointwise "
+                        "log-density axis with batch_size entries. Keep global "
+                        "summaries fixed as passthrough data, or use a custom Loss."
+                    )
+                continue
             if not value.ndim:
                 raise ValueError(f"{var.name!r} needs a pointwise likelihood axis.")
             if var.name in self.likelihood_axes:
@@ -1568,6 +1579,7 @@ class Batches:
                 raise ValueError(
                     f"{var.name!r} likelihood axis must have batch_size entries."
                 )
+            assert factors is not None
             corrections[var.dist_node.name] = (factors, axis)
         return corrections
 
@@ -1585,6 +1597,10 @@ class Batches:
         :attr:`~liesel.optim.Batches.position_keys` are multiplied by
         :attr:`~liesel.optim.Batches.batch_sample_scale`. Other
         observed likelihood terms are left unscaled.
+
+        For minibatches, factors reached only through inputs must retain a
+        pointwise log-density axis with ``batch_size`` entries. A data dependency
+        alone does not establish a sum over sampled units.
 
         Parameters
         ----------
@@ -1654,6 +1670,9 @@ class Batches:
         corrections for ``batch_index``. ``likelihood_axes`` can specify the
         pointwise axis by parameter name. Generic interfaces retain their
         aggregate ``_model_log_prior`` unchanged.
+
+        Indirectly selected priors must retain a pointwise axis with
+        ``batch_size`` entries, even for uniform minibatches.
         """
         if not isinstance(model, Model):
             return model_state["_model_log_prior"].value

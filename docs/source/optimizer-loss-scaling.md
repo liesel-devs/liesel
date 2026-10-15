@@ -27,9 +27,12 @@ use `scale_loss=False` to keep the sum. Sample size counts likelihood terms,
 which need not equal the number of array elements.
 
 Validation leaves out priors by default. With `validation_strategy="log_prob"`,
-held-out local priors receive the same training-to-held-out scale as likelihoods;
-other priors are included once. Test-part prior scaling follows the same rule.
-See {py:class}`~liesel.optim.NegLogProbLoss` for details.
+global priors are included once. The built-in losses reject validation or test
+splits whose keys reach a parameter prior: held-out local latents may receive no
+training gradient, so scoring them at their starting values gives a misleading
+validation loss and can stop training too early. Use a custom `Loss` that handles
+held-out latents, or train without a held-out split. This restriction applies to
+both validation strategies. See {py:class}`~liesel.optim.NegLogProbLoss` for details.
 
 ## Batch local priors
 
@@ -52,6 +55,7 @@ class TermsAt:
         return tfd.Normal(0.0, 1.0).log_prob(z[self.idx])
 
 
+y_values = jnp.linspace(1.0, 3.0, 100)
 idx = lsl.Var.new_obs(jnp.arange(100), name="idx")
 z = lsl.Var.new_param(jnp.zeros(100), lsl.Dist(TermsAt, idx), name="z")
 z_batch = lsl.Var.new_calc(lambda z, i: z[i], z, idx)
@@ -67,8 +71,15 @@ The model's state totals themselves are unscaled; scaling occurs in the loss.
 The same configuration works with `LieselOptim` and `LieselVI`.
 
 Dependency tracing follows both values and distribution inputs, including
-computed inputs. It cannot prove that the terms decompose over selected units:
-the model must satisfy that requirement. A factor depending on two independent
+computed inputs. For minibatches, indirectly selected factors must return an
+array with an axis of batch-size length. This rejects scalar data-dependent
+global priors, such as a prior whose scale is computed from a batched sample's
+standard deviation. Compute such global summaries from the full data and keep
+them fixed as passthrough inputs, or use a custom loss. Full-data evaluation is
+unchanged. Shape checks cannot prove that the terms decompose over selected
+units: the model must still satisfy that requirement.
+
+A factor depending on two independent
 groups is rejected. Keep aligned keys in one group and shared inputs such as
 spline knots fixed with `split_axes={"knots": None}`. Prior-only groups are also
 supported; without likelihood contributions, sample sizes fall back to axis sizes.

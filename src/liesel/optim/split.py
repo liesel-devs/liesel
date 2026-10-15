@@ -13,6 +13,7 @@ import jax.numpy as jnp
 
 from ..model import Model
 from ._log_lik import (
+    log_prob_sources,
     observed_log_lik_sources,
     scaled_common_log_lik,
     scaled_liesel_log_lik,
@@ -28,6 +29,22 @@ from .types import Array, ModelInterface, ModelState, Position
 SplitPart = Literal["train", "validate", "test"]
 SampleSizes = Mapping[SplitPart, int | float]
 _SPLIT_PARTS: tuple[SplitPart, ...] = ("train", "validate", "test")
+
+
+def validate_split_priors(model: Model, split: PositionSplit | PositionSplitManager):
+    """Reject held-out groups whose latent values the built-in losses cannot infer."""
+    splits = split.splits if isinstance(split, PositionSplitManager) else (split,)
+    for child in splits:
+        if not (child.has_validation or child.has_test):
+            continue
+        priors = log_prob_sources(model, child.split_position_keys, prior=True)
+        if priors:
+            raise ValueError(
+                f"Cannot use a validation or test split with priors {sorted(priors)} "
+                "depending on its keys: held-out local latent values are not inferred "
+                "by the built-in loss. Use a custom Loss that handles those latents, "
+                "or omit the held-out split."
+            )
 
 
 def _share_to_size(axis_size: int, share: float) -> int:
@@ -930,6 +947,8 @@ class PositionSplit:
         scale = self.sample_scale(part)
 
         if isinstance(model, Model):
+            if part != "train":
+                validate_split_priors(model, self)
             return scaled_liesel_log_lik(
                 model=model,
                 model_state=model_state,
@@ -945,14 +964,17 @@ class PositionSplit:
         model_state: ModelState,
         part: SplitPart = "validate",
     ) -> jax.Array:
-        """Scale local priors to the training size and include other priors once.
+        """Return split-aware priors, including uncovered priors once.
 
-        Priors depending on ``split_position_keys`` use :meth:`sample_scale` for
-        ``part``, just like likelihoods. Generic model interfaces retain their
-        aggregate ``_model_log_prior`` unchanged.
+        Held-out scoring is rejected when split keys reach parameter priors:
+        the built-in loss cannot infer held-out local latents. Training uses the
+        supplied training state. Generic model interfaces retain their aggregate
+        ``_model_log_prior`` unchanged.
         """
         scale = self.sample_scale(part)
         if isinstance(model, Model):
+            if part != "train":
+                validate_split_priors(model, self)
             return scaled_liesel_log_prior(
                 model, model_state, [(self.split_position_keys, scale)]
             )
@@ -1805,6 +1827,8 @@ class PositionSplitManager:
         scales = self.sample_scales(part)
 
         if isinstance(model, Model):
+            if part != "train":
+                validate_split_priors(model, self)
             groups = [
                 (split.split_position_keys, scale)
                 for split, scale in zip(self.splits, scales, strict=True)
@@ -1830,14 +1854,16 @@ class PositionSplitManager:
         model_state: ModelState,
         part: SplitPart = "validate",
     ) -> jax.Array:
-        """Scale each child's local priors and include uncovered priors once.
+        """Return each child's priors and include uncovered priors once.
 
-        Each child uses its training-to-``part`` sample-size ratio. Generic model
-        interfaces retain their aggregate prior unchanged, even with unequal
-        child scales.
+        Held-out scoring is rejected when a split group's keys reach parameter
+        priors. Generic model interfaces retain their aggregate prior unchanged,
+        even with unequal child scales.
         """
         scales = self.sample_scales(part)
         if isinstance(model, Model):
+            if part != "train":
+                validate_split_priors(model, self)
             groups = [
                 (split.split_position_keys, scale)
                 for split, scale in zip(self.splits, scales, strict=True)
