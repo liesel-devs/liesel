@@ -155,6 +155,7 @@ and defaults.
    reference/optim-losses
    reference/optim-optimizers
    reference/optim-data
+   reference/optim-laplace
 
 .. _variational-array-helpers:
 

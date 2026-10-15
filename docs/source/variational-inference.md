@@ -157,6 +157,7 @@ predictive check, as in the basic tutorial.
 
 Overview <self>
 variational-models
+Laplace initialization <variational-laplace>
 Fit a Gaussian family <tutorials/notebooks/11-liesel-vi-basic>
 Fit two data groups <tutorials/notebooks/12-liesel-vi-advanced>
 ```
