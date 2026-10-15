@@ -164,14 +164,39 @@ def test_holdout_with_local_priors_requires_custom_loss(manager, part, strategy)
             validation_strategy=strategy,
             loss_monitor="train_full_data",
         )
-    state = model.update_state(getattr(split, part), model.state)
-    with pytest.raises(ValueError, match="held-out.*custom Loss"):
-        split.scaled_log_prior(model, state, part=part)
-    with pytest.raises(ValueError, match="held-out.*custom Loss"):
-        split.scaled_log_lik(model, state, part=part)
     if part == "test":
         with pytest.raises(ValueError, match="held-out.*custom Loss"):
             opt.NegElboLoss.mvn_diag(model, split=split)
+
+
+@pytest.mark.parametrize("manager", [False, True])
+@pytest.mark.parametrize("part", ["validate", "test"])
+def test_split_helpers_score_inferred_heldout_latents(manager, part):
+    model = local_model(n=8)
+    split = opt.PositionSplit.from_model(
+        model,
+        shuffle=False,
+        validate_axis_share=0.25 if part == "validate" else 0.0,
+        test_axis_share=0.25 if part == "test" else 0.0,
+    )
+    assert isinstance(split, opt.PositionSplit)
+    if manager:
+        split = opt.PositionSplitManager([split])
+    heldout = getattr(split, part)
+    # Supply the conditional modes, as a custom loss can before scoring.
+    z = model.vars["y"].value / 2
+    state = model.update_state(Position(heldout | {"z": z}), model.state)
+
+    def score(state):
+        return (
+            split.scaled_log_lik(model, state, part=part),
+            split.scaled_log_prior(model, state, part=part),
+        )
+
+    expected_lik = 3 * tfd.Normal(z[heldout["idx"]], 1.0).log_prob(heldout["y"]).sum()
+    expected_prior = 3 * tfd.Normal(0.0, 1.0).log_prob(z[heldout["idx"]]).sum()
+    expected_prior += tfd.Normal(0.0, 1.0).log_prob(model.vars["global"].value)
+    assert_tree_close(jax.jit(score)(state), (expected_lik, expected_prior))
 
 
 @pytest.mark.parametrize("observed", [False, True])

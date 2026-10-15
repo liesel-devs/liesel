@@ -34,6 +34,11 @@ validation loss and can stop training too early. Use a custom `Loss` that handle
 held-out latents, or train without a held-out split. This restriction applies to
 both validation strategies. See {py:class}`~liesel.optim.NegLogProbLoss` for details.
 
+Custom losses can reuse the split's `scaled_log_lik` and `scaled_log_prior`
+helpers after inferring held-out local latents. These helpers only scale the
+supplied state: covered priors receive the same training-to-held-out scale as
+their likelihoods, and uncovered priors are included once.
+
 ## Batch local priors
 
 A local prior can evaluate only the terms selected by a batched index while its

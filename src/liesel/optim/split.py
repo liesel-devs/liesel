@@ -902,6 +902,9 @@ class PositionSplit:
         validation and test scores exclude them. For a generic model
         interface, the scalar ``"_model_log_lik"`` state entry is scaled.
 
+        Callers must infer any held-out local latents before scoring them; this
+        helper only scales the supplied state.
+
         Parameters
         ----------
         model
@@ -947,8 +950,6 @@ class PositionSplit:
         scale = self.sample_scale(part)
 
         if isinstance(model, Model):
-            if part != "train":
-                validate_split_priors(model, self)
             return scaled_liesel_log_lik(
                 model=model,
                 model_state=model_state,
@@ -966,15 +967,13 @@ class PositionSplit:
     ) -> jax.Array:
         """Return split-aware priors, including uncovered priors once.
 
-        Held-out scoring is rejected when split keys reach parameter priors:
-        the built-in loss cannot infer held-out local latents. Training uses the
-        supplied training state. Generic model interfaces retain their aggregate
-        ``_model_log_prior`` unchanged.
+        Covered priors receive the same scale as the split's likelihoods.
+        Callers must infer any held-out local latents before scoring them; this
+        helper only scales the supplied state. Generic model interfaces retain
+        their aggregate ``_model_log_prior`` unchanged.
         """
         scale = self.sample_scale(part)
         if isinstance(model, Model):
-            if part != "train":
-                validate_split_priors(model, self)
             return scaled_liesel_log_prior(
                 model, model_state, [(self.split_position_keys, scale)]
             )
@@ -1774,6 +1773,9 @@ class PositionSplitManager:
         ``ModelInterface``, a common scalar scale is required because observed
         likelihood terms cannot be separated.
 
+        Callers must infer any held-out local latents before scoring them; this
+        helper only scales the supplied state.
+
         Parameters
         ----------
         model
@@ -1827,8 +1829,6 @@ class PositionSplitManager:
         scales = self.sample_scales(part)
 
         if isinstance(model, Model):
-            if part != "train":
-                validate_split_priors(model, self)
             groups = [
                 (split.split_position_keys, scale)
                 for split, scale in zip(self.splits, scales, strict=True)
@@ -1856,14 +1856,13 @@ class PositionSplitManager:
     ) -> jax.Array:
         """Return each child's priors and include uncovered priors once.
 
-        Held-out scoring is rejected when a split group's keys reach parameter
-        priors. Generic model interfaces retain their aggregate prior unchanged,
-        even with unequal child scales.
+        Covered priors receive their child's likelihood scale. Callers must
+        infer any held-out local latents before scoring them; this helper only
+        scales the supplied state. Generic model interfaces retain their
+        aggregate prior unchanged, even with unequal child scales.
         """
         scales = self.sample_scales(part)
         if isinstance(model, Model):
-            if part != "train":
-                validate_split_priors(model, self)
             groups = [
                 (split.split_position_keys, scale)
                 for split, scale in zip(self.splits, scales, strict=True)
