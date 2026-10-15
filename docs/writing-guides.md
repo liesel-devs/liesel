@@ -104,8 +104,8 @@ summaries that restate the section.
   `dist=` keyword, rather than as a positional argument.
 - Use code cells without interactive prompts (`>>>` or `...`).
 - Pass a single model root directly, as in `lsl.Model(y)`. Use a sequence for
-  multiple roots. Choose `to_float32` for the needs of the example, independently
-  of this calling style.
+  multiple roots. Pass `to_float32=True` only if the example needs float32
+  values despite 64-bit mode.
 - Use realistic data, fixed seeds, and only the settings needed for the task.
 - Keep setup and modifications together, then put each inspection expression
   in its own cell so its native output appears immediately below it. Prefer
