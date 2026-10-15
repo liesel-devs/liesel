@@ -116,6 +116,15 @@ class TestModel:
         assert y_var.name in model.vars
         assert data.name in model.nodes
 
+    @pytest.mark.parametrize("to_float32", [None, False, True])
+    def test_to_float32_with_x64(self, to_float32: bool | None) -> None:
+        with jax.enable_x64(True):
+            x = Var.new_obs(np.zeros(3), name="x")
+            kwargs = {} if to_float32 is None else {"to_float32": to_float32}
+            Model(x, **kwargs)
+            expected = "float32" if to_float32 else "float64"
+            assert x.value.dtype == expected
+
     def test_copy_length(self, model: Model) -> None:
         """
         Verifies the correct length of copied var and node dicts.
