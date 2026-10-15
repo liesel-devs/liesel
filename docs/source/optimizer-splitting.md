@@ -135,8 +135,15 @@ even if their lengths happen to match. Every group must have validation data if
 any group does. Keep shared arrays out of row groups with `split_axes={key: None}`,
 as described below.
 
-Automatic grouping requires an observed likelihood in each group. For row data
-without a likelihood, supply an explicit nested group.
+Automatic grouping requires an observed likelihood or parameter prior depending
+on each group's keys. For row data without either factor, supply an explicit
+nested group. A factor depending on multiple independent groups is rejected;
+align those inputs in one group or keep shared data as passthrough.
+
+The built-in losses reject validation or test splits whose keys reach parameter
+priors. They cannot infer the held-out units' local latent values. Use a custom
+`Loss` that handles those latents, or omit the held-out split; choosing
+`validation_strategy="log_lik"` does not remove this restriction.
 
 ## Keep shared data
 

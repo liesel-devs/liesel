@@ -78,9 +78,15 @@ from ..docs import usedocs
 from ..model import Dist, Model, Var
 from ..model.logprob import FlatLogProb
 from ..model.model import TemporaryModel
+from ._log_lik import validate_factor_groups
 from ._model_utils import validate_model_data_keys
 from .loss import LossMixin, _training_loss_scalar, _validate_bool
-from .split import PositionSplit, PositionSplitManager, _has_custom_model_log_lik
+from .split import (
+    PositionSplit,
+    PositionSplitManager,
+    _has_custom_model_log_lik,
+    validate_split_priors,
+)
 from .state import OptimCarry, OptimResult
 from .types import ModelState, Position
 
@@ -404,6 +410,9 @@ class NegElboLoss(LossMixin):
             else []
         )
         validate_model_data_keys(self.p, split.position_keys, target_keys)
+        validate_split_priors(self.p, split)
+        splits = split.splits if isinstance(split, PositionSplitManager) else (split,)
+        validate_factor_groups(self.p, [part.split_position_keys for part in splits])
         target_nodes = {self.p._node_for_position_key(key) for key in target_keys}
         for key in computed_keys:
             if self.p.vars[key].value_node in target_nodes:
@@ -411,6 +420,9 @@ class NegElboLoss(LossMixin):
                     f"Computed data key {key!r} overlaps an inferred target; "
                     "batch its fixed inputs instead."
                 )
+
+    def _validate_batch_keys(self, groups: Sequence[Sequence[str]]) -> None:
+        validate_factor_groups(self.p, groups)
 
     @classmethod
     def from_vdist(
@@ -907,7 +919,7 @@ class NegElboLoss(LossMixin):
         Target-model priors are included. Priors on ``q`` parameters contribute
         only when ``regularize_q_prior=True``; see :ref:`vi-q-prior-penalties`.
         Mini-batch training passes
-        ``batches`` so observed log-likelihood terms can be scaled by the active
+        ``batches`` so target likelihoods and local priors are scaled by the active
         batch configuration. :class:`~liesel.optim.NegElboLoss` rejects validation
         splits, so any
         ``split`` supplied here is expected to have no validation part.
@@ -931,11 +943,11 @@ class NegElboLoss(LossMixin):
             Scalar multiplier for ``p``'s log-likelihood when neither ``split`` nor
             ``batches`` is supplied.
         split
-            Optional split object used to compute split-aware log likelihoods.
+            Optional split object used to scale target likelihoods and local priors.
         split_part
             Split part used when ``split`` is supplied.
         batches
-            Optional batch object used to compute mini-batch-scaled log likelihoods.
+            Optional batch object used to scale target likelihoods and local priors.
         nsamples
             Number of Monte Carlo samples. Defaults to ``self.nsamples``.
         batch_index
@@ -972,15 +984,21 @@ class NegElboLoss(LossMixin):
             if batches is None:
                 if split is None:
                     log_lik_p = scale_log_lik_p_by * p_state_new["_model_log_lik"].value
+                    log_prior_p = p_state_new["_model_log_prior"].value
                 else:
                     log_lik_p = split.scaled_log_lik(
+                        self.p, p_state_new, part=split_part
+                    )
+                    log_prior_p = split.scaled_log_prior(
                         self.p, p_state_new, part=split_part
                     )
             else:
                 log_lik_p = batches.scaled_log_lik(
                     self.p, p_state_new, batch_index=batch_index
                 )
-            log_prior_p = p_state_new["_model_log_prior"].value
+                log_prior_p = batches.scaled_log_prior(
+                    self.p, p_state_new, batch_index=batch_index
+                )
             log_prob_p = log_lik_p + log_prior_p
 
             return log_prob_p

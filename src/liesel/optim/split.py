@@ -13,9 +13,11 @@ import jax.numpy as jnp
 
 from ..model import Model
 from ._log_lik import (
+    log_prob_sources,
     observed_log_lik_sources,
     scaled_common_log_lik,
     scaled_liesel_log_lik,
+    scaled_liesel_log_prior,
 )
 from ._model_utils import (
     multi_size_error_message,
@@ -27,6 +29,22 @@ from .types import Array, ModelInterface, ModelState, Position
 SplitPart = Literal["train", "validate", "test"]
 SampleSizes = Mapping[SplitPart, int | float]
 _SPLIT_PARTS: tuple[SplitPart, ...] = ("train", "validate", "test")
+
+
+def validate_split_priors(model: Model, split: PositionSplit | PositionSplitManager):
+    """Reject held-out groups whose latent values the built-in losses cannot infer."""
+    splits = split.splits if isinstance(split, PositionSplitManager) else (split,)
+    for child in splits:
+        if not (child.has_validation or child.has_test):
+            continue
+        priors = log_prob_sources(model, child.split_position_keys, prior=True)
+        if priors:
+            raise ValueError(
+                f"Cannot use a validation or test split with priors {sorted(priors)} "
+                "depending on its keys: held-out local latent values are not inferred "
+                "by the built-in loss. Use a custom Loss that handles those latents, "
+                "or omit the held-out split."
+            )
 
 
 def _share_to_size(axis_size: int, share: float) -> int:
@@ -884,6 +902,9 @@ class PositionSplit:
         validation and test scores exclude them. For a generic model
         interface, the scalar ``"_model_log_lik"`` state entry is scaled.
 
+        Callers must infer any held-out local latents before scoring them; this
+        helper only scales the supplied state.
+
         Parameters
         ----------
         model
@@ -937,6 +958,26 @@ class PositionSplit:
             )
 
         return scaled_common_log_lik(model_state, scale)
+
+    def scaled_log_prior(
+        self,
+        model: Model | ModelInterface,
+        model_state: ModelState,
+        part: SplitPart = "validate",
+    ) -> jax.Array:
+        """Return split-aware priors, including uncovered priors once.
+
+        Covered priors receive the same scale as the split's likelihoods.
+        Callers must infer any held-out local latents before scoring them; this
+        helper only scales the supplied state. Generic model interfaces retain
+        their aggregate ``_model_log_prior`` unchanged.
+        """
+        scale = self.sample_scale(part)
+        if isinstance(model, Model):
+            return scaled_liesel_log_prior(
+                model, model_state, [(self.split_position_keys, scale)]
+            )
+        return model_state["_model_log_prior"].value
 
     def __repr__(self) -> str:
         name = type(self).__name__
@@ -1732,6 +1773,9 @@ class PositionSplitManager:
         ``ModelInterface``, a common scalar scale is required because observed
         likelihood terms cannot be separated.
 
+        Callers must infer any held-out local latents before scoring them; this
+        helper only scales the supplied state.
+
         Parameters
         ----------
         model
@@ -1803,6 +1847,28 @@ class PositionSplitManager:
             ) from error
 
         return scaled_common_log_lik(model_state, scale)
+
+    def scaled_log_prior(
+        self,
+        model: Model | ModelInterface,
+        model_state: ModelState,
+        part: SplitPart = "validate",
+    ) -> jax.Array:
+        """Return each child's priors and include uncovered priors once.
+
+        Covered priors receive their child's likelihood scale. Callers must
+        infer any held-out local latents before scoring them; this helper only
+        scales the supplied state. Generic model interfaces retain their
+        aggregate prior unchanged, even with unequal child scales.
+        """
+        scales = self.sample_scales(part)
+        if isinstance(model, Model):
+            groups = [
+                (split.split_position_keys, scale)
+                for split, scale in zip(self.splits, scales, strict=True)
+            ]
+            return scaled_liesel_log_prior(model, model_state, groups)
+        return model_state["_model_log_prior"].value
 
     def __repr__(self) -> str:
         name = type(self).__name__
