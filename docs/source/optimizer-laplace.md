@@ -30,8 +30,7 @@ on the remaining parameters. Laplace integration is then exact; see
 
 ## Build the model
 
-Use float64 for this example: enable it before creating arrays and pass
-`to_float32=False` to the model.
+Use float64 for this example: enable it before creating arrays.
 
 ```{code-cell} ipython3
 import logging
@@ -96,7 +95,7 @@ y = lsl.Var.new_obs(
     name="y",
 )
 
-model = lsl.Model(y, to_float32=False)
+model = lsl.Model(y)
 ```
 
 ```{code-cell} ipython3
