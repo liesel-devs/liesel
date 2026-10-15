@@ -16,6 +16,7 @@ from ._log_lik import (
     observed_log_lik_sources,
     scaled_common_log_lik,
     scaled_liesel_log_lik,
+    scaled_liesel_log_prior,
 )
 from ._model_utils import (
     multi_size_error_message,
@@ -938,6 +939,25 @@ class PositionSplit:
 
         return scaled_common_log_lik(model_state, scale)
 
+    def scaled_log_prior(
+        self,
+        model: Model | ModelInterface,
+        model_state: ModelState,
+        part: SplitPart = "validate",
+    ) -> jax.Array:
+        """Scale local priors to the training size and include other priors once.
+
+        Priors depending on ``split_position_keys`` use :meth:`sample_scale` for
+        ``part``, just like likelihoods. Generic model interfaces retain their
+        aggregate ``_model_log_prior`` unchanged.
+        """
+        scale = self.sample_scale(part)
+        if isinstance(model, Model):
+            return scaled_liesel_log_prior(
+                model, model_state, [(self.split_position_keys, scale)]
+            )
+        return model_state["_model_log_prior"].value
+
     def __repr__(self) -> str:
         name = type(self).__name__
         out = (
@@ -1803,6 +1823,27 @@ class PositionSplitManager:
             ) from error
 
         return scaled_common_log_lik(model_state, scale)
+
+    def scaled_log_prior(
+        self,
+        model: Model | ModelInterface,
+        model_state: ModelState,
+        part: SplitPart = "validate",
+    ) -> jax.Array:
+        """Scale each child's local priors and include uncovered priors once.
+
+        Each child uses its training-to-``part`` sample-size ratio. Generic model
+        interfaces retain their aggregate prior unchanged, even with unequal
+        child scales.
+        """
+        scales = self.sample_scales(part)
+        if isinstance(model, Model):
+            groups = [
+                (split.split_position_keys, scale)
+                for split, scale in zip(self.splits, scales, strict=True)
+            ]
+            return scaled_liesel_log_prior(model, model_state, groups)
+        return model_state["_model_log_prior"].value
 
     def __repr__(self) -> str:
         name = type(self).__name__

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from copy import copy
 from dataclasses import InitVar, dataclass, field
 from typing import TYPE_CHECKING, Literal, overload
@@ -12,9 +12,10 @@ import numpy as np
 
 from ..model import Model
 from . import _alias
-from ._log_lik import observed_log_lik_sources
+from ._log_lik import log_prob_sources
 from ._log_lik import scaled_common_log_lik as _scaled_common_log_lik
 from ._log_lik import scaled_liesel_log_lik as _scaled_liesel_log_lik
+from ._log_lik import scaled_liesel_log_prior as _scaled_liesel_log_prior
 from ._model_utils import (
     multi_size_error_message,
     position_key_groups_from_model,
@@ -224,7 +225,7 @@ class Batches:
         Values whose probabilities or correction factors cannot be represented in
         the working dtype are rejected. No probability floor or clipping is applied.
     likelihood_axes
-        Optional mapping from observed-variable name to its pointwise log-likelihood
+        Optional mapping from observed-variable or parameter name to its log-density
         axis. Weighted correction normally infers this axis using trailing event
         reduction and leading broadcasting. Declare it explicitly for custom
         reductions or transpositions. The declared axis must enumerate the sampled
@@ -321,7 +322,7 @@ class Batches:
     """Optional effective likelihood sample size represented by one batch."""
     likelihood_axes: dict[str, int]
     """
-    Optional mapping from observed-variable name to its pointwise log-likelihood axis.
+    Optional mapping from observed-variable or parameter name to its log-density axis.
     """
     _sampling_probabilities: jax.Array | None
     _alias_table: _alias.AliasTable | None
@@ -722,7 +723,7 @@ class Batches:
             or a mapping from one selected key per group to its vector. Omitted
             groups use uniform sampling. Requires replacement sampling.
         likelihood_axes
-            Map observed variable names to axes of their pointwise log probabilities
+            Map observed or parameter names to axes of their pointwise log probabilities
             for weighted likelihood correction. See :class:`~liesel.optim.Batches`.
 
         Returns
@@ -964,7 +965,7 @@ class Batches:
             correction.
 
         likelihood_axes
-            Map observed variable names to axes of their pointwise log probabilities
+            Map observed or parameter names to axes of their pointwise log probabilities
             for weighted correction. Each child receives entries for its own group.
             See :class:`~liesel.optim.Batches` for axis semantics.
 
@@ -1489,11 +1490,13 @@ class Batches:
             return jnp.ones(indices.shape)
         return 1.0 / (self.axis_size * self.sampling_probabilities[indices])
 
-    def _likelihood_corrections(
+    def _factor_corrections(
         self,
         model: Model | ModelInterface,
         model_state: ModelState,
         batch_index: int | jax.Array | None,
+        *,
+        allowed_axes: Collection[str] | None = None,
     ) -> dict[str, tuple[jax.Array, int]]:
         if self.sampling_probabilities is None:
             return {}
@@ -1508,8 +1511,10 @@ class Batches:
                 "Weighted correction cannot decompose a custom log_lik_node. "
                 "Apply correction_factors in a custom loss instead."
             )
-        sources = observed_log_lik_sources(model, self.position_keys)
-        unknown = self.likelihood_axes.keys() - sources.keys()
+        sources = log_prob_sources(model, self.position_keys)
+        unknown = self.likelihood_axes.keys() - (
+            sources.keys() if allowed_axes is None else allowed_axes
+        )
         if unknown:
             raise ValueError(
                 f"likelihood_axes names are not in this batch group: {sorted(unknown)}."
@@ -1518,22 +1523,28 @@ class Batches:
         corrections = {}
         assert isinstance(self.batch_axes, dict)
         for name, keys in sources.items():
-            var = model.observed[name]
+            var = model.vars[name]
             assert var.dist_node is not None
-            key = keys[0]
+            value_keys = [
+                key
+                for key in keys
+                if model._node_for_position_key(key) is var.value_node
+            ]
             value = jnp.asarray(model_state[var.dist_node.name].value)
             if not value.ndim:
                 raise ValueError(f"{var.name!r} needs a pointwise likelihood axis.")
             if var.name in self.likelihood_axes:
                 axis = self.likelihood_axes[var.name]
-            elif var.weak:
+            elif not value_keys or var.weak:
                 if value.ndim != 1:
                     raise ValueError(
-                        f"Set likelihood_axes for weak observed variable {var.name!r}; "
-                        "its likelihood axis cannot be inferred from its inputs."
+                        f"Set likelihood_axes for weak or indirectly batched factor "
+                        f"{var.name!r}; its pointwise axis cannot be inferred "
+                        "from its inputs."
                     )
                 axis = 0
             else:
+                key = value_keys[0]
                 data_ndim = model_state[var.value_node.name].value.ndim
                 event_ndim = len(var.dist_node.init_dist().event_shape)
                 axis = self.batch_axes.get(key, self.default_batch_axis)
@@ -1619,7 +1630,7 @@ class Batches:
         ... )
         True
         """
-        corrections = self._likelihood_corrections(model, model_state, batch_index)
+        corrections = self._factor_corrections(model, model_state, batch_index)
         if isinstance(model, Model):
             return _scaled_liesel_log_lik(
                 model,
@@ -1629,6 +1640,30 @@ class Batches:
             )
 
         return _scaled_common_log_lik(model_state, self.batch_sample_scale)
+
+    def scaled_log_prior(
+        self,
+        model: Model | ModelInterface,
+        model_state: ModelState,
+        *,
+        batch_index: int | jax.Array | None = None,
+    ) -> jax.Array:
+        """Scale priors depending on this group's keys; include other priors once.
+
+        Uses :attr:`batch_sample_scale` and, for weighted sampling, the per-index
+        corrections for ``batch_index``. ``likelihood_axes`` can specify the
+        pointwise axis by parameter name. Generic interfaces retain their
+        aggregate ``_model_log_prior`` unchanged.
+        """
+        if not isinstance(model, Model):
+            return model_state["_model_log_prior"].value
+        corrections = self._factor_corrections(model, model_state, batch_index)
+        return _scaled_liesel_log_prior(
+            model,
+            model_state,
+            [(self.position_keys, self.batch_sample_scale)],
+            corrections,
+        )
 
     def _tree_flatten(self):
         children = (self.indices, self.sampling_probabilities, self._alias_table)
@@ -1953,7 +1988,7 @@ class BatchManager:
             and likelihood correction.
 
         likelihood_axes
-            Map observed variable names to axes of their pointwise log probabilities
+            Map observed or parameter names to axes of their pointwise log probabilities
             for weighted correction. Each child receives entries for its own group.
             See :class:`~liesel.optim.Batches` for axis semantics.
 
@@ -2004,8 +2039,8 @@ class BatchManager:
         )
         shuffle = False if batch_size is None else shuffle
         likelihood_axes = likelihood_axes or {}
-        observed_names = observed_log_lik_sources(model, pos_keys).keys()
-        unknown = likelihood_axes.keys() - observed_names
+        factor_names = log_prob_sources(model, pos_keys).keys()
+        unknown = likelihood_axes.keys() - factor_names
         if unknown:
             raise ValueError(
                 "likelihood_axes names are not in these batch groups: "
@@ -2025,7 +2060,7 @@ class BatchManager:
                 infer_sample_size=infer_sample_size,
                 likelihood_axes={
                     name: likelihood_axes[name]
-                    for name in observed_log_lik_sources(model, keys)
+                    for name in log_prob_sources(model, keys)
                     if name in likelihood_axes
                 },
                 sample_with_replacement=(
@@ -2575,7 +2610,8 @@ class BatchManager:
         batch_index
             Current batch row, required when any child uses weighted sampling.
             Each weighted child corrects its own pointwise likelihood terms before
-            summation. Priors and unbatched terms receive no per-index correction.
+            summation. Unbatched terms receive no per-index correction; local priors use
+            :meth:`scaled_log_prior`.
 
         Returns
         -------
@@ -2624,11 +2660,7 @@ class BatchManager:
         >>> bool(jnp.allclose(manager.scaled_log_lik(model, state), manual))
         True
         """
-        corrections = {}
-        for batch in self.batches:
-            corrections.update(
-                batch._likelihood_corrections(model, model_state, batch_index)
-            )
+        corrections = self._factor_corrections(model, model_state, batch_index)
         if isinstance(model, Model):
             groups = [
                 (batch.position_keys, batch.batch_sample_scale)
@@ -2637,6 +2669,48 @@ class BatchManager:
             return _scaled_liesel_log_lik(model, model_state, groups, corrections)
 
         return _scaled_common_log_lik(model_state, self.batch_sample_scale)
+
+    def _factor_corrections(
+        self,
+        model: Model | ModelInterface,
+        model_state: ModelState,
+        batch_index: int | jax.Array | None,
+    ) -> dict[str, tuple[jax.Array, int]]:
+        # from_split has no model to route axis declarations to children yet.
+        allowed_axes = (
+            log_prob_sources(model, self.position_keys)
+            if isinstance(model, Model)
+            else None
+        )
+        corrections = {}
+        for batch in self.batches:
+            corrections.update(
+                batch._factor_corrections(
+                    model, model_state, batch_index, allowed_axes=allowed_axes
+                )
+            )
+        return corrections
+
+    def scaled_log_prior(
+        self,
+        model: Model | ModelInterface,
+        model_state: ModelState,
+        *,
+        batch_index: int | jax.Array | None = None,
+    ) -> jax.Array:
+        """Scale each child's local priors and include uncovered priors once.
+
+        Weighted children apply their per-index corrections before summation;
+        pass the ``batch_index`` used to produce ``model_state``. Generic model
+        interfaces retain their aggregate prior unchanged.
+        """
+        if not isinstance(model, Model):
+            return model_state["_model_log_prior"].value
+        corrections = self._factor_corrections(model, model_state, batch_index)
+        groups = [
+            (batch.position_keys, batch.batch_sample_scale) for batch in self.batches
+        ]
+        return _scaled_liesel_log_prior(model, model_state, groups, corrections)
 
     def _tree_flatten(self):
         children = (tuple(self.batches),)

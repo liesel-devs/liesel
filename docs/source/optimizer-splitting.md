@@ -135,8 +135,10 @@ even if their lengths happen to match. Every group must have validation data if
 any group does. Keep shared arrays out of row groups with `split_axes={key: None}`,
 as described below.
 
-Automatic grouping requires an observed likelihood in each group. For row data
-without a likelihood, supply an explicit nested group.
+Automatic grouping requires an observed likelihood or parameter prior depending
+on each group's keys. For row data without either factor, supply an explicit
+nested group. A factor depending on multiple independent groups is rejected;
+align those inputs in one group or keep shared data as passthrough.
 
 ## Keep shared data
 

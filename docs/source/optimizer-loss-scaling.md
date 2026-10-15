@@ -12,8 +12,10 @@ mystnb:
 
 # Scale the loss
 
-The default training loss combines likelihood and priors. A minibatch likelihood
-is scaled up to represent its full training group; priors are not scaled up.
+The default training loss combines likelihood and priors. Each factor whose
+log-density depends on a batched key is scaled up to represent its full training
+group. This includes local parameter priors as well as observed likelihoods.
+Priors independent of batched keys are included once, without scaling.
 Each group gets its own factor, so different batch sizes do not change the
 relative weight of the groups.
 
@@ -24,8 +26,52 @@ training only, including observations explicitly marked as passthrough.
 use `scale_loss=False` to keep the sum. Sample size counts likelihood terms,
 which need not equal the number of array elements.
 
-Validation leaves out priors by default. Use `validation_strategy="log_prob"`
-to include them. See {py:class}`~liesel.optim.NegLogProbLoss` for details.
+Validation leaves out priors by default. With `validation_strategy="log_prob"`,
+held-out local priors receive the same training-to-held-out scale as likelihoods;
+other priors are included once. Test-part prior scaling follows the same rule.
+See {py:class}`~liesel.optim.NegLogProbLoss` for details.
+
+## Batch local priors
+
+A local prior can evaluate only the terms selected by a batched index while its
+parameter retains all latent values:
+
+```python
+import jax.numpy as jnp
+import tensorflow_probability.substrates.jax.distributions as tfd
+
+import liesel.model as lsl
+import liesel.optim as opt
+
+
+class TermsAt:
+    def __init__(self, idx):
+        self.idx = idx
+
+    def log_prob(self, z):
+        return tfd.Normal(0.0, 1.0).log_prob(z[self.idx])
+
+
+idx = lsl.Var.new_obs(jnp.arange(100), name="idx")
+z = lsl.Var.new_param(jnp.zeros(100), lsl.Dist(TermsAt, idx), name="z")
+z_batch = lsl.Var.new_calc(lambda z, i: z[i], z, idx)
+y = lsl.Var.new_obs(y_values, lsl.Dist(tfd.Normal, z_batch, 1.0), name="y")
+model = lsl.Model(y)
+split = opt.PositionSplit.from_model(model, position_keys=["idx", "y"])
+batches = opt.Batches.from_split(split, batch_size=10)
+```
+
+Both the likelihood and local prior receive a factor of ten. The prior remains
+in `_model_log_prior`, and `_model_log_lik` still contains only likelihoods.
+The model's state totals themselves are unscaled; scaling occurs in the loss.
+The same configuration works with `LieselOptim` and `LieselVI`.
+
+Dependency tracing follows both values and distribution inputs, including
+computed inputs. It cannot prove that the terms decompose over selected units:
+the model must satisfy that requirement. A factor depending on two independent
+groups is rejected. Keep aligned keys in one group and shared inputs such as
+spline knots fixed with `split_axes={"knots": None}`. Prior-only groups are also
+supported; without likelihood contributions, sample sizes fall back to axis sizes.
 
 <iframe
   class="interactive-visualization"
