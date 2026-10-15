@@ -119,6 +119,8 @@ class EngineBuilder:
     liesel.goose.NUTSKernel : The NUTS kernel.
     liesel.goose.HMCKernel : The HMC kernel.
     liesel.goose.IWLSKernel : The IWLS kernel.
+    liesel.goose.MALAKernel : The MALA kernel.
+    liesel.goose.SMMALAKernel : The simplified manifold MALA kernel.
     liesel.goose.RWKernel : The random walk kernel.
 
     Notes
@@ -571,17 +573,14 @@ class EngineBuilder:
 
         If you use any MCMC kernel that expects hyperparameter tuning an adaptation
         phase, like :class:`~liesel.goose.NUTSKernel`, :class:`~liesel.goose.HMCKernel`
-        or
-        our default implementation of :class:`~liesel.goose.IWLSKernel`, you *must* add
-        an adaptation phase via :meth:`~liesel.goose.EngineBuilder.add_adaptation`. Pure
-        burnin
-        epochs like the ones added with :meth:`~liesel.goose.EngineBuilder.add_burnin`
-        do not perform any
-        adaptation during warmup. They are only applicable if you *exclusively* use
+        or the default :class:`~liesel.goose.MALAKernel` or
+        :class:`~liesel.goose.SMMALAKernel`, you *must* add an adaptation phase via
+        :meth:`~liesel.goose.EngineBuilder.add_adaptation`. Pure burnin epochs like the
+        ones added with :meth:`~liesel.goose.EngineBuilder.add_burnin` do not perform
+        any adaptation during warmup. They are only applicable if you *exclusively* use
         MCMC kernels that do not require adaptation, such as
-        :class:`~liesel.goose.GibbsKernel`
-        or classic, untuned IWLS kernels via :meth:`IWLSKernel.untuned
-        <liesel.goose.IWLSKernel.untuned>`.
+        :class:`~liesel.goose.GibbsKernel` or :class:`~liesel.goose.IWLSKernel`, or
+        Langevin kernels with step-size adaptation disabled.
 
 
         See Also
@@ -694,17 +693,14 @@ class EngineBuilder:
 
         If you use any MCMC kernel that expects hyperparameter tuning an adaptation
         phase, like :class:`~liesel.goose.NUTSKernel`, :class:`~liesel.goose.HMCKernel`
-        or
-        our default implementation of :class:`~liesel.goose.IWLSKernel`, you *must* add
-        an adaptation phase via :meth:`~liesel.goose.EngineBuilder.add_adaptation`. Pure
-        burnin
-        epochs like the ones added with :meth:`~liesel.goose.EngineBuilder.add_burnin`
-        do not perform any
-        adaptation during warmup. They are only applicable if you *exclusively* use
+        or the default :class:`~liesel.goose.MALAKernel` or
+        :class:`~liesel.goose.SMMALAKernel`, you *must* add an adaptation phase via
+        :meth:`~liesel.goose.EngineBuilder.add_adaptation`. Pure burnin epochs like the
+        ones added with :meth:`~liesel.goose.EngineBuilder.add_burnin` do not perform
+        any adaptation during warmup. They are only applicable if you *exclusively* use
         MCMC kernels that do not require adaptation, such as
-        :class:`~liesel.goose.GibbsKernel`
-        or classic, untuned IWLS kernels via :meth:`IWLSKernel.untuned
-        <liesel.goose.IWLSKernel.untuned>`.
+        :class:`~liesel.goose.GibbsKernel` or :class:`~liesel.goose.IWLSKernel`, or
+        Langevin kernels with step-size adaptation disabled.
 
         See Also
         --------

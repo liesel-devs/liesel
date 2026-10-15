@@ -17,10 +17,19 @@ instance.
 
 .. autosummary::
    :toctree: ../generated
+   :template: autosummary/class-with-inheritance.rst
    :nosignatures:
    :recursive:
 
    ~liesel.goose.IWLSKernel
+   ~liesel.goose.MALAKernel
+   ~liesel.goose.SMMALAKernel
+
+.. autosummary::
+   :toctree: ../generated
+   :nosignatures:
+   :recursive:
+
    ~liesel.goose.NUTSKernel
    ~liesel.goose.HMCKernel
    ~liesel.goose.RWKernel
