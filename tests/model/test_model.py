@@ -116,6 +116,15 @@ class TestModel:
         assert y_var.name in model.vars
         assert data.name in model.nodes
 
+    @pytest.mark.parametrize("to_float32", [None, False, True])
+    def test_to_float32_with_x64(self, to_float32: bool | None) -> None:
+        with jax.enable_x64(True):
+            x = Var.new_obs(np.zeros(3), name="x")
+            kwargs = {} if to_float32 is None else {"to_float32": to_float32}
+            Model(x, **kwargs)
+            expected = "float32" if to_float32 else "float64"
+            assert x.value.dtype == expected
+
     def test_copy_length(self, model: Model) -> None:
         """
         Verifies the correct length of copied var and node dicts.
@@ -1716,6 +1725,7 @@ class TestSample:
                 fixed=("y"),
                 chunk_size=13,
             )
+        caught = [w for w in caught if issubclass(w.category, FutureWarning)]
         assert len(caught) == (3 if shape_name == "shape" else 0)
         assert all(
             w.category is FutureWarning and "0.9.0" in str(w.message) for w in caught
@@ -1727,6 +1737,7 @@ class TestSample:
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always", FutureWarning)
             actual = sample((3,), rnd.key(8))
+        caught = [w for w in caught if issubclass(w.category, FutureWarning)]
         assert len(caught) == 1
         assert caught[0].category is FutureWarning
         assert "seed=" in str(caught[0].message)
