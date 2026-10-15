@@ -5,19 +5,20 @@ Posterior statistics and diagnostics.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Any, Literal, NamedTuple, cast
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 
 import arviz as az
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pandas as pd
+from numpy.typing import ArrayLike
 
 from liesel.__version__ import __version__
 from liesel.goose.engine import ErrorLog, SamplingResults
 from liesel.goose.epoch import EpochType
 from liesel.goose.pytree import slice_leaves, stack_leaves
-from liesel.goose.types import Array, Position, TransitionInfo
+from liesel.goose.types import Position, PositionInput, TransitionInfo
 from liesel.option import Option
 
 
@@ -122,7 +123,7 @@ summary_quantities: Sequence[SummaryQuantities] = (
 
 
 def _summarize_acceptance_probabilities(
-    transition_infos: dict[str, TransitionInfo], phase: str
+    transition_infos: Mapping[str, TransitionInfo], phase: str
 ) -> list[dict[str, Any]]:
     data = []
     for k, tinfo in transition_infos.items():
@@ -154,7 +155,7 @@ def summarize_acceptance_probabilities(
 
 class Summary:
     """
-    Posterior summary and diagnostics for :class:`.SamplingResults`.
+    Posterior summary and diagnostics for :class:`~liesel.goose.SamplingResults`.
 
     Offers two main use cases:
 
@@ -162,10 +163,10 @@ class Summary:
        of the posterior samples and a summary of sampling errors.
     2. Programmatically access summary statistics via
        ``quantities[quantity_name][var_name]``. Please refer to the documentation of the
-       attribute :attr:`.quantities` for details.
+       attribute :attr:`~liesel.goose.Summary.quantities` for details.
 
     Additionally, the summary object can be turned into a :class:`~pandas.DataFrame`
-    using :meth:`.to_dataframe`.
+    using :meth:`~liesel.goose.Summary.to_dataframe`.
 
     If ``per_chain=False``, statistics are computed over all posterior chains and
     draws. If ``per_chain=True``, each chain is summarized separately.
@@ -179,11 +180,14 @@ class Summary:
     - ``sd``: Posterior standard deviation.
     - ``var``: Posterior variance.
     - ``quantiles``: Posterior quantiles at the probabilities given by
-      ``quantiles``. These are stored as ``"quantile"`` in :attr:`.quantities`
-      and become columns named ``q_<probability>`` in :meth:`.to_dataframe`.
+      ``quantiles``. These are stored as ``"quantile"`` in
+      :attr:`~liesel.goose.Summary.quantities`
+      and become columns named ``q_<probability>`` in
+      :meth:`~liesel.goose.Summary.to_dataframe`.
     - ``hdi``: Highest density interval with probability mass ``hdi_prob``. This is
       the narrowest posterior interval reported by ArviZ at that probability level.
-      In :meth:`.to_dataframe`, it becomes ``hdi_low`` and ``hdi_high``.
+      In :meth:`~liesel.goose.Summary.to_dataframe`, it becomes ``hdi_low`` and
+      ``hdi_high``.
     - ``ess_bulk``: Bulk effective sample size, a diagnostic for Monte Carlo
       precision in the central part of the posterior distribution.
     - ``ess_tail``: Tail effective sample size, a diagnostic for Monte Carlo
@@ -203,7 +207,7 @@ class Summary:
     additional_chain
         Can be supplied to add more parameters to the summary output. Must be a position
         chain which matches chain and time dimension of the posterior chain as returned
-        by :meth:`~.goose.SamplingResults.get_posterior_samples`.
+        by :meth:`~liesel.goose.SamplingResults.get_posterior_samples`.
     quantiles
         Posterior quantile probabilities to compute when ``"quantiles"`` is included
         in ``which``.
@@ -235,14 +239,15 @@ class Summary:
     """
     Dict of summarizing quantities.
 
-    Let ``summary`` be a :class:`.Summary` instance. The hierarchy is::
+    Let ``summary`` be a :class:`~liesel.goose.Summary` instance. The hierarchy is::
 
         q = summary.quantities["quantity_name"]["parameter_name"]
 
     Available quantity names are ``"mean"``, ``"sd"``, ``"var"``, ``"quantile"``,
     ``"hdi"``, ``"ess_bulk"``, ``"ess_tail"``, ``"rhat"``, ``"mcse_mean"``, and
     ``"mcse_sd"``, depending on the ``which`` argument. Note that ``which`` uses
-    ``"quantiles"`` to request quantiles, while :attr:`.quantities` stores the
+    ``"quantiles"`` to request quantiles, while :attr:`~liesel.goose.Summary.quantities`
+    stores the
     result under ``"quantile"``.
 
     The extracted object is an ``np.ndarray``. If ``per_chain=True``, the arrays for
@@ -286,10 +291,14 @@ class Summary:
     The specific version of Liesel used to produce the results.
     """
 
+    if TYPE_CHECKING:
+        pos_keys_by_kernels_df: pd.DataFrame
+        """Table associating position keys with sampling kernels."""
+
     def __init__(
         self,
         results: SamplingResults,
-        additional_chain: Position | None = None,
+        additional_chain: PositionInput | None = None,
         quantiles: Sequence[float] = (0.05, 0.5, 0.95),
         hdi_prob: float = 0.9,
         selected: list[str] | None = None,
@@ -520,7 +529,8 @@ class Summary:
 
         Notes
         ------
-        If :attr:`.per_chain` is ``True``, rhat cannot be computed and there is not
+        If :attr:`~liesel.goose.Summary.per_chain` is ``True``, rhat cannot be computed
+        and there is not
         present in the output dataframe.
         """
         df = self.to_dataframe()
@@ -785,20 +795,25 @@ class SamplesSummary:
     """
     Posterior summary and diagnostics for a dictionary of sample arrays.
 
-    See :class:`.Summary` for the full description of the computed statistics, their
+    Accepts read-only mappings and does not modify the supplied mapping or its arrays.
+
+    See :class:`~liesel.goose.Summary` for the full description of the computed
+    statistics, their
     interpretation, the ``quantities`` layout, and the behavior of ``quantiles``,
     ``hdi_prob``, ``per_chain``, and ``which``. This class computes the same
-    sample-based statistics as :class:`.Summary`, but takes a plain dictionary of
-    sample arrays instead of a :class:`.SamplingResults` object and does not include
+    sample-based statistics as :class:`~liesel.goose.Summary`, but takes a plain
+    dictionary of
+    sample arrays instead of a :class:`~liesel.goose.SamplingResults` object and does
+    not include
     sampling-error or acceptance-probability diagnostics.
 
     Offers two main use cases:
 
     1. The summary object can be turned into a :class:`~pandas.DataFrame`
-        using :meth:`.to_dataframe`.
+        using :meth:`~liesel.goose.SamplesSummary.to_dataframe`.
     2. Programmatically access summary statistics via
        ``quantities[quantity_name][var_name]``. Please refer to the documentation of the
-       attribute :attr:`.quantities` for details.
+       attribute :attr:`~liesel.goose.SamplesSummary.quantities` for details.
 
     Parameters
     ----------
@@ -818,7 +833,7 @@ class SamplesSummary:
         ``rhat`` are not available if ``per_chain`` is *True*.
     which
         Names of the summary statistics to compute. Supported values are the same as
-        for :class:`.Summary`.
+        for :class:`~liesel.goose.Summary`.
 
     Notes
     -----
@@ -827,10 +842,19 @@ class SamplesSummary:
     """
 
     config: dict
+    """Configuration used to compute and format the summaries."""
+
+    if TYPE_CHECKING:
+        per_chain: bool
+        """Whether summaries are computed separately for each chain."""
+        quantities: dict
+        """Computed summary quantities for the selected samples."""
+        sample_info: dict
+        """Metadata describing the chains and posterior draws."""
 
     def __init__(
         self,
-        samples: dict[str, Array],
+        samples: Mapping[str, ArrayLike],
         quantiles: Sequence[float] = (0.05, 0.5, 0.95),
         hdi_prob: float = 0.9,
         selected: list[str] | None = None,
@@ -851,7 +875,7 @@ class SamplesSummary:
                     f"Supported keys are: {summary_quantities}"
                 )
 
-        posterior_chain = Position(samples)
+        posterior_chain = Position(dict(samples))
 
         if selected:
             posterior_chain = Position(
@@ -867,7 +891,7 @@ class SamplesSummary:
                 del posterior_chain[key]
 
         # get some general infos on the sampling
-        param_chain = next(iter(posterior_chain.values()))
+        param_chain = np.asarray(next(iter(posterior_chain.values())))
 
         sample_info = {
             "num_chains": param_chain.shape[0],
@@ -912,7 +936,7 @@ class SamplesSummary:
     @classmethod
     def from_array(
         cls,
-        a: Array,
+        a: ArrayLike,
         quantiles: Sequence[float] = (0.05, 0.5, 0.95),
         hdi_prob: float = 0.9,
         selected: list[str] | None = None,
@@ -941,10 +965,11 @@ class SamplesSummary:
             If *True*, the summary is calculated on a per-chain basis. Certain \
             measures like ``rhat`` are not available if ``per_chain`` is *True*.
         name
-            Variable name to use for labelling in :meth:`.to_dataframe`.
+            Variable name to use for labelling in
+            :meth:`~liesel.goose.SamplesSummary.to_dataframe`.
         which
             Names of the summary statistics to compute. Supported values are the same
-            as for :class:`.Summary`.
+            as for :class:`~liesel.goose.Summary`.
         """
         samples = {name: a}
         return cls(samples, quantiles, hdi_prob, selected, deselected, per_chain, which)
@@ -1077,7 +1102,8 @@ class SamplesSummary:
 
         Notes
         ------
-        If :attr:`.per_chain` is ``True``, rhat cannot be computed and there is not
+        If :attr:`~liesel.goose.SamplesSummary.per_chain` is ``True``, rhat cannot be
+        computed and there is not
         present in the output dataframe.
         """
         df = self.to_dataframe()
@@ -1169,7 +1195,7 @@ def _apply_loo_scale(
 
 def loo(
     lpp: Mapping[str, jax.typing.ArrayLike] | jax.typing.ArrayLike,
-    samples: dict[str, jax.typing.ArrayLike] | None = None,
+    samples: Mapping[str, jax.typing.ArrayLike] | None = None,
     reff: float | None = None,
     scale: Literal["log", "negative_log", "deviance"] = "log",
 ) -> _LieselELPDData:

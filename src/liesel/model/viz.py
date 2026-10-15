@@ -43,12 +43,14 @@ def plot_nodes(
 
     See Also
     --------
-    .Var.plot_vars : Plots the variables of the Liesel sub-model that terminates in
+    ~liesel.model.Var.plot_vars : Plots the variables of the Liesel sub-model that
+        terminates in
         this variable.
-    .Var.plot_nodes : Plots the nodes of the Liesel sub-model that terminates in
+    ~liesel.model.Var.plot_nodes : Plots the nodes of the Liesel sub-model that
+        terminates in
         this variable.
-    .Model.plot_vars : Plots the variables of a Liesel model.
-    .Model.plot_nodes : Plots the nodes of a Liesel model.
+    ~liesel.model.Model.plot_vars : Plots the variables of a Liesel model.
+    ~liesel.model.Model.plot_nodes : Plots the nodes of a Liesel model.
     .viz.plot_vars : Plots the variables of a Liesel model.
     .viz.plot_nodes : Plots the nodes of a Liesel model.
     """
@@ -104,12 +106,14 @@ def plot_vars(
 
     See Also
     --------
-    .Var.plot_vars : Plots the variables of the Liesel sub-model that terminates in
+    ~liesel.model.Var.plot_vars : Plots the variables of the Liesel sub-model that
+        terminates in
         this variable.
-    .Var.plot_nodes : Plots the nodes of the Liesel sub-model that terminates in
+    ~liesel.model.Var.plot_nodes : Plots the nodes of the Liesel sub-model that
+        terminates in
         this variable.
-    .Model.plot_vars : Plots the variables of a Liesel model.
-    .Model.plot_nodes : Plots the nodes of a Liesel model.
+    ~liesel.model.Model.plot_vars : Plots the variables of a Liesel model.
+    ~liesel.model.Model.plot_nodes : Plots the nodes of a Liesel model.
     .viz.plot_vars : Plots the variables of a Liesel model.
     .viz.plot_nodes : Plots the nodes of a Liesel model.
     """

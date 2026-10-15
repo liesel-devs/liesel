@@ -2,12 +2,14 @@ import gc
 import inspect
 import tempfile
 import typing
+import warnings
 from collections.abc import Generator, Mapping
 from itertools import combinations
 
 import jax
 import jax.numpy as jnp
 import jax.random as rnd
+import numpy as np
 import pytest
 import tensorflow_probability.substrates.jax.distributions as tfd
 from IPython.core.guarded_eval import EvaluationContext, guarded_eval
@@ -113,6 +115,15 @@ class TestModel:
         model = Model(y_var, data)
         assert y_var.name in model.vars
         assert data.name in model.nodes
+
+    @pytest.mark.parametrize("to_float32", [None, False, True])
+    def test_to_float32_with_x64(self, to_float32: bool | None) -> None:
+        with jax.enable_x64(True):
+            x = Var.new_obs(np.zeros(3), name="x")
+            kwargs = {} if to_float32 is None else {"to_float32": to_float32}
+            Model(x, **kwargs)
+            expected = "float32" if to_float32 else "float64"
+            assert x.value.dtype == expected
 
     def test_copy_length(self, model: Model) -> None:
         """
@@ -284,8 +295,11 @@ class TestModel:
         """
 
     def test_log_probs(self, model: Model) -> None:
+        assert isinstance(model.log_prior, jax.Array)
         assert model.log_prior.shape == ()
+        assert isinstance(model.log_lik, jax.Array)
         assert model.log_lik.shape == ()
+        assert isinstance(model.log_prob, jax.Array)
         assert model.log_prob.shape == ()
 
         assert model.log_prob == pytest.approx(model.log_lik + model.log_prior)
@@ -1263,6 +1277,194 @@ def linreg():
     yield model
 
 
+@pytest.fixture(params=["model", "attached", "detached"])
+def normal_sample(request):
+    y = Var.new_obs(jnp.zeros(2), Dist(tfd.Normal, 2.0, 1.0), name="y")
+    model = Model(y) if request.param != "detached" else None
+    if request.param == "model":
+        assert model is not None
+        yield model.sample
+    else:
+        yield y.sample
+
+
+class TestSampleSignature:
+    @pytest.mark.parametrize("legacy", ["shape", "positional"])
+    def test_legacy_calls(self, normal_sample, legacy):
+        key = rnd.key(42)
+        with warnings.catch_warnings(record=True) as current:
+            warnings.simplefilter("always")
+            expected = normal_sample((3,), seed=key)
+        assert not current
+        if legacy == "shape":
+            line = inspect.stack()[0].lineno + 2
+            with pytest.warns(FutureWarning, match="0.9.0") as caught:
+                actual = normal_sample(shape=(3,), seed=key)
+        else:
+            line = inspect.stack()[0].lineno + 2
+            with pytest.warns(FutureWarning, match="0.9.0") as caught:
+                actual = normal_sample((3,), key)
+        assert len(caught) == 1
+        assert "sample_shape=" in str(caught[0].message)
+        assert "seed=" in str(caught[0].message)
+        assert caught[0].filename == __file__
+        assert caught[0].lineno == line
+        assert jax.tree.all(jax.tree.map(jnp.array_equal, actual, expected))
+
+    def test_sample_shape_keyword(self, normal_sample):
+        key = rnd.key(42)
+        expected = normal_sample((3,), seed=key)
+        actual = normal_sample(sample_shape=(3,), seed=key)
+        assert set(actual) == {"y"}
+        assert actual["y"].shape == (3, 2)
+        assert jnp.array_equal(actual["y"], expected["y"])
+        # Draws captured from the released sampler with this key.
+        assert actual["y"] == pytest.approx(
+            jnp.array(
+                [[2.0759256, 1.5136573], [2.6057642, 2.7990441], [2.4323065, 2.5872638]]
+            )
+        )
+
+    @pytest.mark.parametrize("sample_shape", [3, None])
+    def test_integer_and_default_shape(self, normal_sample, sample_shape):
+        key = rnd.key(42)
+        shape = (sample_shape,) if sample_shape is not None else ()
+        expected = normal_sample(shape, seed=key)
+        actual = (
+            normal_sample(sample_shape, seed=key)
+            if sample_shape is not None
+            else normal_sample(seed=key)
+        )
+        assert actual["y"].shape == shape + (2,)
+        assert jnp.array_equal(actual["y"], expected["y"])
+
+    @pytest.mark.parametrize(
+        "sample_shape", [np.int64(3), jnp.array(3), np.array([3]), jnp.array([3])]
+    )
+    def test_array_sample_shape(self, normal_sample, sample_shape):
+        expected = normal_sample((3,), seed=rnd.key(42))
+        actual = normal_sample(sample_shape, seed=rnd.key(42))
+        assert actual["y"].shape == (3, 2)
+        assert jnp.array_equal(actual["y"], expected["y"])
+
+    @pytest.mark.parametrize("argument", ["key", "legacy_key", "shape", "omitted"])
+    def test_missing_seed(self, normal_sample, argument):
+        args = {
+            "key": (rnd.key(42),),
+            "legacy_key": (rnd.PRNGKey(42),),
+            "shape": ((3,),),
+            "omitted": (),
+        }[argument]
+        with pytest.raises(TypeError, match="seed="):
+            normal_sample(*args)
+
+    @pytest.mark.parametrize(
+        "args, kwargs",
+        [
+            ((), {"sample_shape": (), "shape": ()}),
+            (((),), {"shape": ()}),
+            (((),), {"sample_shape": ()}),
+            (((), None), {}),
+            (((), None, None), {"posterior_samples": None}),
+            (((), None, None, (), None, None, 64, 8), {}),
+            ((), {"unexpected": 3}),
+            ((), {"shape": None}),
+        ],
+    )
+    def test_invalid_binding(self, normal_sample, args, kwargs):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            with pytest.raises(TypeError):
+                normal_sample(*args, seed=rnd.key(42), **kwargs)
+        assert not caught
+
+    def test_inspected_signature(self, normal_sample):
+        # Sphinx also inspects the unwrapped function when rendering its signature.
+        for sample in (
+            normal_sample,
+            type(normal_sample.__self__).sample,
+            inspect.unwrap(normal_sample),
+        ):
+            parameters = dict(inspect.signature(sample).parameters)
+            parameters.pop("self", None)
+            assert list(parameters) == [
+                "sample_shape",
+                "seed",
+                "posterior_samples",
+                "fixed",
+                "newdata",
+                "dists",
+                "chunk_size",
+                "shape",
+            ]
+            assert parameters.pop("sample_shape").default == ()
+            assert parameters["seed"].default is inspect.Parameter.empty
+            assert parameters["shape"].default is None
+            assert all(
+                p.kind == inspect.Parameter.KEYWORD_ONLY for p in parameters.values()
+            )
+
+    @pytest.mark.parametrize("shape_name", ["shape", "sample_shape"])
+    def test_jit_recognizes_shape_name(self, normal_sample, shape_name):
+        # Var.sample tracing already fails during model construction; both names
+        # must still be accepted by JAX's signature validation.
+        assert callable(jax.jit(normal_sample, static_argnames=(shape_name,)))
+
+    @pytest.mark.parametrize("kind", ["model", "attached", "detached"])
+    @pytest.mark.parametrize("n_positional", range(1, 7))
+    def test_legacy_prediction_arguments(self, linreg, kind, n_positional):
+        y = linreg.vars["y"]
+        options = {
+            "seed": rnd.key(8),
+            "posterior_samples": Position({"b": jnp.ones((1, 2, 2))}),
+            "fixed": ("sigma",),
+            "newdata": Position(
+                {"X": jnp.tile(jnp.array([[1.0, 2.0], [3.0, 4.0]]), (50, 1))}
+            ),
+            "dists": {"y": Dist(tfd.Deterministic, loc=linreg.vars["mu"])},
+            "chunk_size": 3,
+        }
+        if kind == "detached":
+            linreg.pop_vars()
+        sample = linreg.sample if kind == "model" else y.sample
+        expected = sample((3,), **options)
+        with pytest.warns(FutureWarning, match="seed=") as caught:
+            actual = sample(
+                (3,),
+                *list(options.values())[:n_positional],
+                **dict(list(options.items())[n_positional:]),
+            )
+        assert len(caught) == 1
+        assert set(actual) == {"y"}
+        assert actual["y"].shape == (3, 1, 2, 100)
+        # Preserve the released behavior: an attached Var's custom distribution
+        # references the original model's mu, not the copied parental submodel's.
+        baseline = (
+            jnp.zeros(100)
+            if kind == "attached"
+            else jnp.tile(jnp.array([3.0, 7.0]), 50)
+        )
+        assert jnp.array_equal(
+            actual["y"],
+            jnp.broadcast_to(baseline, (3, 1, 2, 100)),
+        )
+        assert jax.tree.all(jax.tree.map(jnp.array_equal, actual, expected))
+
+    @pytest.mark.parametrize("index", range(6))
+    def test_duplicate_legacy_argument(self, normal_sample, index):
+        names = ["seed", "posterior_samples", "fixed", "newdata", "dists", "chunk_size"]
+        values = [rnd.key(8), None, (), None, None, 3]
+        with pytest.raises(TypeError, match=f"multiple values for '{names[index]}'"):
+            normal_sample((3,), *values[: index + 1], **{names[index]: values[index]})
+
+    def test_legacy_chunk_size_validation(self, normal_sample):
+        with (
+            pytest.warns(FutureWarning, match="chunk_size="),
+            pytest.raises(ValueError, match="positive integer"),
+        ):
+            normal_sample((3,), rnd.key(8), None, (), None, None, 0)
+
+
 class TestSample:
     def test_default_chunk_size(self) -> None:
         assert inspect.signature(Model.sample).parameters["chunk_size"].default == 64
@@ -1272,13 +1474,13 @@ class TestSample:
         model = linreg
 
         expected = model.sample(
-            shape=(2, 5),
+            sample_shape=(2, 5),
             seed=rnd.key(1),
             fixed=["y"],
             chunk_size=None,
         )
         chunked = model.sample(
-            shape=(2, 5),
+            sample_shape=(2, 5),
             seed=rnd.key(1),
             fixed=["y"],
             chunk_size=3,
@@ -1289,19 +1491,19 @@ class TestSample:
     def test_sample_from_posterior_in_chunks(self, linreg: Model):
         model = linreg
         posterior_samples = model.sample(
-            shape=(2, 4),
+            sample_shape=(2, 4),
             seed=rnd.key(7),
             fixed=["y"],
         )
 
         expected = model.sample(
-            shape=(3,),
+            sample_shape=(3,),
             seed=rnd.key(8),
             posterior_samples=posterior_samples,
             chunk_size=None,
         )
         chunked = model.sample(
-            shape=(3,),
+            sample_shape=(3,),
             seed=rnd.key(8),
             posterior_samples=posterior_samples,
             chunk_size=5,
@@ -1316,7 +1518,7 @@ class TestSample:
     ):
         with pytest.raises(ValueError, match="positive integer"):
             linreg.sample(
-                shape=(2,),
+                sample_shape=(2,),
                 seed=rnd.key(1),
                 chunk_size=chunk_size,
             )
@@ -1325,7 +1527,7 @@ class TestSample:
     def test_sample_rejects_non_integer_chunk_size(self, linreg: Model, chunk_size):
         with pytest.raises(TypeError, match="positive integer or None"):
             linreg.sample(
-                shape=(2,),
+                sample_shape=(2,),
                 seed=rnd.key(1),
                 chunk_size=chunk_size,
             )
@@ -1420,7 +1622,7 @@ class TestSample:
 
         # sample with x being fixed
         # so x will not be sampled
-        samples = model.sample(shape=(1, 100), seed=rnd.key(1), fixed=["x"])
+        samples = model.sample(sample_shape=(1, 100), seed=rnd.key(1), fixed=["x"])
 
         assert "mu" in samples  # mu should be sampled
         assert "sigma" in samples  # sigma should be sampled
@@ -1445,7 +1647,7 @@ class TestSample:
         assert samples["sigma"].std() == pytest.approx(sigma_std, abs=0.1)
 
         # now sample all variables, including x
-        samples = model.sample(shape=(1, 100), seed=rnd.key(1))
+        samples = model.sample(sample_shape=(1, 100), seed=rnd.key(1))
 
         assert "x" in samples  # verify that x is in samples
         assert samples["x"].shape == (1, 100)  # verify shape
@@ -1458,7 +1660,7 @@ class TestSample:
         model = linreg
 
         # sample with y fixed; i.e. y will not be sampled
-        samples = model.sample(shape=(1, 100), seed=rnd.key(1), fixed=["y"])
+        samples = model.sample(sample_shape=(1, 100), seed=rnd.key(1), fixed=["y"])
 
         assert "b" in samples  # verify that b has been sampled
         assert "sigma" in samples  # verify that sigma has been sampled
@@ -1483,7 +1685,7 @@ class TestSample:
         assert samples["sigma"].std() == pytest.approx(sigma_std, abs=0.1)
 
         # now sample all nodes, including y
-        samples = model.sample(shape=(1, 80), seed=rnd.key(1))
+        samples = model.sample(sample_shape=(1, 80), seed=rnd.key(1))
 
         assert "y" in samples  # verify that y has been sampled
         # verify shape of y samples
@@ -1497,39 +1699,62 @@ class TestSample:
         y_samples_mean = samples["y"].mean(axis=(0, 1))
         assert jnp.allclose(y_samples_mean, 0.0, atol=0.5)
 
-    def test_sample_prior_linreg_jit(self, linreg: Model):
+    @pytest.mark.parametrize("shape_name", ["shape", "sample_shape"])
+    def test_sample_prior_linreg_jit(self, linreg: Model, shape_name):
         model = linreg
 
         jitted_sample = jax.jit(
             model.sample,
-            static_argnames=["shape", "fixed", "dists", "chunk_size"],
+            static_argnames=[shape_name, "fixed", "dists", "chunk_size"],
         )
-
-        jitted_sample(shape=(1, 100), seed=rnd.key(1))
 
         x_shape = model.vars["X"].value.shape
         x_new = tfd.Uniform(low=10.0, high=11.0).sample(x_shape, seed=rnd.key(9))
-        jitted_sample(shape=(1, 100), seed=rnd.key(1), newdata=Position({"X": x_new}))
-        jitted_sample(
-            shape=(1, 100),
-            seed=rnd.key(1),
-            newdata=Position({"X": x_new}),
-            fixed=("y"),
-            chunk_size=13,
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", FutureWarning)
+            jitted_sample(**{shape_name: (1, 100)}, seed=rnd.key(1))
+            jitted_sample(
+                **{shape_name: (1, 100)},
+                seed=rnd.key(1),
+                newdata=Position({"X": x_new}),
+            )
+            jitted_sample(
+                **{shape_name: (1, 100)},
+                seed=rnd.key(1),
+                newdata=Position({"X": x_new}),
+                fixed=("y"),
+                chunk_size=13,
+            )
+        caught = [w for w in caught if issubclass(w.category, FutureWarning)]
+        assert len(caught) == (3 if shape_name == "shape" else 0)
+        assert all(
+            w.category is FutureWarning and "0.9.0" in str(w.message) for w in caught
         )
+
+    def test_sample_prior_linreg_jit_legacy_positional(self, linreg: Model):
+        expected = linreg.sample((3,), seed=rnd.key(8))
+        sample = jax.jit(linreg.sample, static_argnums=0)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", FutureWarning)
+            actual = sample((3,), rnd.key(8))
+        caught = [w for w in caught if issubclass(w.category, FutureWarning)]
+        assert len(caught) == 1
+        assert caught[0].category is FutureWarning
+        assert "seed=" in str(caught[0].message)
+        assert jax.tree.all(jax.tree.map(jnp.array_equal, actual, expected))
 
     def test_sample_from_custom_dist(self, linreg: Model):
         model = linreg
 
         # sample with y fixed; i.e. y will not be sampled
-        samples = model.sample(shape=(1, 100), seed=rnd.key(1), fixed=["y"])
+        samples = model.sample(sample_shape=(1, 100), seed=rnd.key(1), fixed=["y"])
 
         assert "b" in samples  # verify that b has been sampled
         assert "sigma" in samples  # verify that sigma has been sampled
         assert "y" not in samples  # verify that y has NOT ben sampled
 
         samples2 = model.sample(
-            shape=(1, 100),
+            sample_shape=(1, 100),
             seed=rnd.key(1),
             fixed=["y"],
             dists={"b": Dist(tfd.Uniform, low=0.1, high=0.2)},
@@ -1545,7 +1770,7 @@ class TestSample:
         model = Model([x])
 
         samples = model.sample(
-            shape=(3,),
+            sample_shape=(3,),
             seed=rnd.key(1),
             dists={"x": Dist(tfd.Normal, loc=jnp.zeros(2), scale=1.0)},
         )
@@ -1561,11 +1786,11 @@ class TestSample:
 
         model = Model([y, min_, max_])
 
-        samples1 = model.sample(shape=(1, 100), seed=rnd.key(1))
+        samples1 = model.sample(sample_shape=(1, 100), seed=rnd.key(1))
         assert "m" not in samples1
 
         samples2 = model.sample(
-            shape=(1, 100),
+            sample_shape=(1, 100),
             seed=rnd.key(1),
             dists={"m": Dist(tfd.Uniform, low=min_, high=max_)},
         )
@@ -1588,7 +1813,7 @@ class TestSample:
 
         with pytest.raises(ValueError):
             model.sample(
-                shape=(1, 100),
+                sample_shape=(1, 100),
                 seed=rnd.key(1),
                 dists={"s": Dist(tfd.Uniform, low=min_, high=max_)},
             )
@@ -1604,7 +1829,7 @@ class TestSample:
 
         with pytest.raises(ValueError):
             model.sample(
-                shape=(1, 100),
+                sample_shape=(1, 100),
                 seed=rnd.key(1),
                 dists={"max": Dist(tfd.Uniform, low=min_, high=max_)},
             )
@@ -1635,7 +1860,7 @@ class TestSample:
 
         model = Model([y, min_, max_])
 
-        samples = model.sample(shape=(1, 100), seed=rnd.key(1))
+        samples = model.sample(sample_shape=(1, 100), seed=rnd.key(1))
 
         max_samples = max_.predict(samples)
 
@@ -1643,7 +1868,7 @@ class TestSample:
         assert jnp.all(samples["m"] < max_samples)
 
         samples2 = model.sample(
-            shape=(1, 100),
+            sample_shape=(1, 100),
             seed=rnd.key(1),
             dists={"min": Dist(tfd.Uniform, low=0.48, high=m)},
         )
@@ -1660,9 +1885,9 @@ class TestSample:
     def test_sample_posterior(self, linreg: Model):
         model = linreg
 
-        samples1 = model.sample(shape=(2, 8), seed=rnd.key(7), fixed=["y"])
+        samples1 = model.sample(sample_shape=(2, 8), seed=rnd.key(7), fixed=["y"])
         samples2 = model.sample(
-            shape=(11,), seed=rnd.key(8), posterior_samples=samples1
+            sample_shape=(11,), seed=rnd.key(8), posterior_samples=samples1
         )
 
         assert "y" not in samples1  # verify that y was not sampled in samples1
@@ -1705,13 +1930,13 @@ class TestSample:
 
         if argument == "posterior_samples":
             samples = model.sample(
-                shape=(2,),
+                sample_shape=(2,),
                 seed=rnd.key(8),
                 posterior_samples=Position({"x": RawValue([[3.0]])}),
             )
         else:
             samples = model.sample(
-                shape=(2,),
+                sample_shape=(2,),
                 seed=rnd.key(8),
                 newdata=Position({"x": RawValue(3.0)}),
             )
@@ -1722,14 +1947,14 @@ class TestSample:
         model = linreg
 
         samples1 = model.sample(
-            shape=(2, 8),
+            sample_shape=(2, 8),
             seed=rnd.key(7),
         )
 
         x_shape = model.vars["X"].value.shape
         x_new = tfd.Uniform(low=10.0, high=11.0).sample(x_shape, seed=rnd.key(9))
         samples2 = model.sample(
-            shape=(2, 8),
+            sample_shape=(2, 8),
             seed=rnd.key(8),
             newdata=Position({"X": x_new}),
         )
@@ -1740,7 +1965,7 @@ class TestSample:
         model = linreg
 
         samples1 = model.sample(
-            shape=(2, 8),
+            sample_shape=(2, 8),
             seed=rnd.key(7),
         )
 
@@ -1748,7 +1973,7 @@ class TestSample:
         x_new = tfd.Uniform(low=10.0, high=11.0).sample(x_shape, seed=rnd.key(9))
         with pytest.raises(RuntimeError):
             model.sample(
-                shape=(2, 8),
+                sample_shape=(2, 8),
                 seed=rnd.key(8),
                 posterior_samples=samples1,
                 newdata=Position({"X": x_new, "b": samples1["b"][0, 0, :]}),
@@ -1758,23 +1983,30 @@ class TestSample:
         model = linreg
         # the values in posterior_samples *have* to have leading (chain, iter) axes
         # if one of them is missing, the function errors
-        samples1 = model.sample(shape=(2,), seed=rnd.key(7), fixed=["y"])
+        samples1 = model.sample(sample_shape=(2,), seed=rnd.key(7), fixed=["y"])
         with pytest.raises(ValueError):
-            model.sample(shape=(11,), seed=rnd.key(8), posterior_samples=samples1)
+            model.sample(
+                sample_shape=(11,), seed=rnd.key(8), posterior_samples=samples1
+            )
 
         # *too many* leading axes also cause errors
-        samples1 = model.sample(shape=(3, 2, 8), seed=rnd.key(7), fixed=["y"])
+        samples1 = model.sample(sample_shape=(3, 2, 8), seed=rnd.key(7), fixed=["y"])
         with pytest.raises(RuntimeError):
-            model.sample(shape=(11,), seed=rnd.key(8), posterior_samples=samples1)
+            model.sample(
+                sample_shape=(11,), seed=rnd.key(8), posterior_samples=samples1
+            )
 
     def test_sample_posterior_consistency_of_fixed(self, linreg: Model):
         model = linreg
         # If a variable name that is given in 'fixed' is also included in
         # 'posterior_samples', the function raises an error.
-        samples1 = model.sample(shape=(2, 8), seed=rnd.key(7), fixed=["y"])
+        samples1 = model.sample(sample_shape=(2, 8), seed=rnd.key(7), fixed=["y"])
         with pytest.raises(ValueError):
             model.sample(
-                shape=(11,), seed=rnd.key(8), posterior_samples=samples1, fixed=["b"]
+                sample_shape=(11,),
+                seed=rnd.key(8),
+                posterior_samples=samples1,
+                fixed=["b"],
             )
 
 

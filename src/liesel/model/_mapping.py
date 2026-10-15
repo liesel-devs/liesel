@@ -10,7 +10,8 @@ class _KeyCompletableMapping[V](Mapping[str, V]):
     """
     A read-only mapping view whose string keys can be completed by IPython.
 
-    This class is used for named collections such as ``Model.vars`` and
+    This class is used for named collections such as :meth:`Model.vars
+    <liesel.model.Model.vars>` and
     ``Group.nodes``. IPython recognizes the ``_ipython_key_completions_`` hook
     when completing an expression such as ``model.vars["`` and obtains the
     suggestions from the mapping at runtime. This complements static language
@@ -28,8 +29,10 @@ class _KeyCompletableMapping[V](Mapping[str, V]):
     visible. If the owner replaces the dictionary, an already-held view continues
     to refer to the old dictionary, matching ``MappingProxyType`` semantics.
 
-    Callers that pass a newly created dictionary, as ``Model.parameters`` and
-    ``Model.observed`` do, intentionally create a snapshot instead of a live view.
+    Callers that pass a newly created dictionary, as :meth:`Model.parameters
+    <liesel.model.Model.parameters>` and
+    :meth:`Model.observed <liesel.model.Model.observed>` do, intentionally create a
+    snapshot instead of a live view.
 
     This private type implements the commonly used ``MappingProxyType`` operations
     needed by Liesel, but it is not intended to reproduce every concrete-type or

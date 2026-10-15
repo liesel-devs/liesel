@@ -26,13 +26,14 @@ dependencies = [
     "arviz>=1.0",
     "blackjax>=1.2.1",
     "dill>=0.4",
-    "jax>=0.7.0",
-    "jaxlib>=0.7.0",
+    "jax>=0.8.0",
+    "jaxlib>=0.8.0",
     "matplotlib>=3.10.7",
     "networkx>=3.4.2",
     "numpy>=2.0",
-    "optax>=0.1.7",
+    "optax>=0.2.5",  # L-BFGS line-search dtype fixes.
     "pandas>=2.2.3",
+    "plotnine>=0.15.0",
     "pydot>=3.0",
     "scipy>=1.14.1",
     "seaborn>=0.13.2",
@@ -48,13 +49,12 @@ Repository = "https://github.com/liesel-devs/liesel.git"
 
 [dependency-groups]
 dev = [
-    "ruff>=0.11.7",
+    "ruff>=0.16.0",
     "myst-nb>=1.0.0",
     "pre-commit>=4.6.0",
     "pydata-sphinx-theme>=0.18.0",
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
-    "rtds-action>=1.1.0",
     "sphinx>=7.2.6",
     "sphinx-autodoc-typehints>=1.19",
     "sphinx-book-theme>=1.1.0",
@@ -62,6 +62,7 @@ dev = [
     "sphinx-remove-toctrees>=0.0.3",
     "liesel-gam>=0.2.4",
     "ty>=0.0.60",
+    "pytest-xdist>=3.8.0",
 ]
 
 pymc = ["pymc>=6.0"]
@@ -74,6 +75,11 @@ build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 testpaths = "tests"
+# Run tests in 4 parallel workers. loadscope keeps each test class on one worker.
+# Use `-n 0` to run serially, e.g. with --pdb, and for doctests: under parallel
+# load, an asynchronous JAX callback can run after its doctest has finished and
+# its names have been cleared.
+addopts = ["-n", "4", "--dist", "loadscope"]
 # turn warnings into errors and filter out specific warnings
 filterwarnings = [
     "error",
@@ -87,6 +93,9 @@ filterwarnings = [
     # Needed when testing against the minimum supported version.
     "ignore:JAXopt is no longer maintained:DeprecationWarning",
 ]
+
+[tool.ruff]
+extension = { qmd = "markdown" }
 
 [tool.ruff.lint]
 extend-select = [

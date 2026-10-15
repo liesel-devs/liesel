@@ -50,7 +50,8 @@ class Chain[TPyTree: PyTree](Protocol):
 
 class EpochChain[TPyTree: PyTree](Chain[TPyTree], Protocol):
     """
-    An ``EpochChain`` is a :class:`.Chain` with an associated :class:`.EpochConfig`.
+    An ``EpochChain`` is a :class:`.Chain` with an associated
+    :class:`~liesel.goose.EpochConfig`.
 
     The implementation must implement thinning. That is,
     if epoch.thinning > 1 and enabled in contructor, the chain must
@@ -60,7 +61,7 @@ class EpochChain[TPyTree: PyTree](Chain[TPyTree], Protocol):
     @property
     @abstractmethod
     def epoch(self) -> EpochConfig:
-        """Returns the associated :class:`.EpochConfig`."""
+        """Returns the associated :class:`~liesel.goose.EpochConfig`."""
         raise NotImplementedError
 
 

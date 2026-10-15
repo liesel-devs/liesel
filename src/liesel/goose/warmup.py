@@ -19,7 +19,7 @@ def stan_epochs(
     thinning_warmup: int = 1,
 ) -> list[EpochConfig]:
     """
-    Sets up a list of :class:`.EpochConfig`'s.
+    Sets up a list of :class:`~liesel.goose.EpochConfig`'s.
 
     This follows the Stan Development Team (Stan Reference Manual 2021, Chapter 15.2
     [#stanmanual]_).

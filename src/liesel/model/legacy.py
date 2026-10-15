@@ -157,9 +157,16 @@ def PIT(_input: Var | Dist, distribution: Dist | None = None, name: str = "") ->
     """
     A weak variable evaluating a probability integral transform (PIT).
 
+    An intermediate PIT without its own likelihood need not be marked observed.
+    If a weak variable built from PITs carries a copula likelihood, set that
+    variable's ``observed`` flag to ``True`` so its distribution contributes to
+    :attr:`Model.log_lik <liesel.model.Model.log_lik>`. See the
+    :class:`~liesel.distributions.GaussianCopula`
+    example.
+
     See Also
     --------
-    .liesel.distribution.GaussianCopula : A bivariate Gaussian copula distribution.
+    .liesel.distributions.GaussianCopula : A bivariate Gaussian copula distribution.
 
     Examples
     --------

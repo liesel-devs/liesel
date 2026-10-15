@@ -30,7 +30,6 @@ from .epoch import EpochConfig, EpochManager, EpochState, EpochType
 from .kernel_sequence import KernelSequence, KernelStates, TransitionInfos, TuningInfos
 from .pytree import as_strong_pytree, register_dataclass_as_pytree
 from .types import (
-    Array,
     GeneratedQuantity,
     Kernel,
     KernelState,
@@ -118,7 +117,8 @@ class SamplingResults:
     Contains the results of the MCMC engine.
 
     Easy access to the samples is provided via the methods
-    :meth:`.get_samples` and :meth:`.get_posterior_samples`.
+    :meth:`~liesel.goose.SamplingResults.get_samples` and
+    :meth:`~liesel.goose.SamplingResults.get_posterior_samples`.
     """
 
     positions: EpochChainManager
@@ -246,7 +246,7 @@ class SamplingResults:
         )
         return opt.expect(f"No warmup transition infos in {self!r}")
 
-    def get_warmup_acceptance_probabilities(self) -> dict[str, Array]:
+    def get_warmup_acceptance_probabilities(self) -> dict[str, jax.Array]:
         """
         Returns dictionary of acceptance probabilities during warmup by kernel.
         """
@@ -256,7 +256,7 @@ class SamplingResults:
             data[k] = jnp.asarray(tinfo.acceptance_prob)
         return data
 
-    def get_warmup_position_moved(self) -> dict[str, Array]:
+    def get_warmup_position_moved(self) -> dict[str, jax.Array]:
         """
         Returns dictionary of transition movements (0: no move, 1: move)
         during warmup by kernel.
@@ -267,7 +267,7 @@ class SamplingResults:
             data[k] = jnp.asarray(tinfo.position_moved)
         return data
 
-    def get_posterior_acceptance_probabilities(self) -> dict[str, Array]:
+    def get_posterior_acceptance_probabilities(self) -> dict[str, jax.Array]:
         """
         Returns dictionary of acceptance probabilities during posterior by kernel.
         """
@@ -277,7 +277,7 @@ class SamplingResults:
             data[k] = jnp.asarray(tinfo.acceptance_prob)
         return data
 
-    def get_posterior_position_moved(self) -> dict[str, Array]:
+    def get_posterior_position_moved(self) -> dict[str, jax.Array]:
         """
         Returns dictionary of transition movements (0: no move, 1: move)
         during posterior by kernel.
@@ -288,7 +288,7 @@ class SamplingResults:
             data[k] = jnp.asarray(tinfo.position_moved)
         return data
 
-    def get_tuning_times(self) -> Option[Array]:
+    def get_tuning_times(self) -> Option[jax.Array | np.ndarray]:
         """
         Returns array of tuning times.
         """
@@ -298,7 +298,9 @@ class SamplingResults:
         # opt_tis is not None since self.tuning_infos is not None
         opt_tis = self.tuning_infos.unwrap().get().unwrap()
 
-        time: Array = next(iter(opt_tis.values())).time
+        # Chain leaves have leading chain and time axes, even though the tuning
+        # protocol also permits scalar values before they are collected.
+        time = cast(jax.Array | np.ndarray, next(iter(opt_tis.values())).time)
 
         return Option(time)
 
@@ -360,13 +362,13 @@ class SamplingResults:
         return Option(error_log)
 
     def pkl_save(self, path) -> None:
-        """Save result as a pickled object under :attr:`.path`."""
+        """Save result as a pickled object under ``path``."""
         with open(path, "wb") as f:
             pickle.dump(self, f)
 
     @staticmethod
     def pkl_load(path) -> SamplingResults:
-        """Loads the pickled object from :attr:`.path`."""
+        """Loads the pickled object from ``path``."""
         with open(path, "rb") as f:
             return pickle.load(f)
 
@@ -665,7 +667,7 @@ class Engine:
                     cts[kernel_id] = (nzero, ntrans)
                 return cts
 
-            error_info: dict[str, tuple[Array, int]] = ti_option.map_or(
+            error_info: dict[str, tuple[jax.Array, int]] = ti_option.map_or(
                 {}, count_non_zero_error_codes
             )
 

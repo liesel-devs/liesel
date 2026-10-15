@@ -159,11 +159,11 @@ class TestBasicModifyModel:
         model.locked = False
 
         assert _require_dist_node(y).per_obs
-        assert y.log_prob.size == 10
+        assert jnp.size(y.log_prob) == 10
 
         _require_dist_node(y).per_obs = False
         assert not _require_dist_node(y).per_obs
-        assert y.log_prob.size == 1
+        assert jnp.size(y.log_prob) == 1
 
     def test_change_obs_flag_of_a_var(self):
         x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
@@ -1211,7 +1211,7 @@ class TestModelAdd:
         assert x2.name in model.vars
         assert x2.name in model.observed
         assert x2.log_prob is not None
-        assert model.log_lik == pytest.approx((y.log_prob + x2.log_prob).sum())
+        assert model.log_lik == pytest.approx(jnp.sum(y.log_prob + x2.log_prob))
 
     def test_add_multiple_vars(self):
         x = lsl.Var.new_obs(jrd.normal(jrd.key(1), (10,)), name="x")
@@ -1248,7 +1248,7 @@ class TestModelAdd:
         assert x3.log_prob is not None
 
         assert model.log_lik == pytest.approx(
-            (y.log_prob + x2.log_prob + x3.log_prob).sum()
+            jnp.sum(y.log_prob + x2.log_prob + x3.log_prob)
         )
 
     def test_add_one_node(self):
@@ -1442,7 +1442,7 @@ class TestModelAdd:
         assert x3.log_prob is not None
 
         assert model.log_lik == pytest.approx(
-            (y.log_prob + x2.log_prob + x3.log_prob).sum()
+            jnp.sum(y.log_prob + x2.log_prob + x3.log_prob)
         )
 
 
@@ -1491,7 +1491,7 @@ class TestModelJoin:
         assert x3.log_prob is not None
 
         assert model.log_lik == pytest.approx(
-            (y.log_prob + x2.log_prob + x3.log_prob).sum()
+            jnp.sum(y.log_prob + x2.log_prob + x3.log_prob)
         )
 
     def test_join_with_copy(self):

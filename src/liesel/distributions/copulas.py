@@ -64,8 +64,17 @@ class GaussianCopula(tfd.TransformedDistribution):
     ...     name="x_dependence",
     ... ).update()
 
-    >>> (x1.log_prob + x2.log_prob + x_dependence.log_prob).sum().round(1)
+    Mark the copula factor as observed so the model likelihood includes both
+    marginal densities and their dependence:
+
+    >>> x_dependence.observed = True
+    >>> model = lsl.Model([x_dependence])
+    >>> model.log_lik.round(1)
     Array(-5.9, dtype=float32)
+    >>> jnp.allclose(
+    ...     model.log_lik, (x1.log_prob + x2.log_prob + x_dependence.log_prob).sum()
+    ... )
+    Array(True, dtype=bool)
 
     Comparing to an ordinary multivariate normal:
 
@@ -86,7 +95,6 @@ class GaussianCopula(tfd.TransformedDistribution):
         parameters = dict(locals())
 
         batch_shape = () if dependence is None else np.shape(dependence)
-        loc = np.zeros(batch_shape + (2,))
 
         if dependence is None:
             scale_tril = None
@@ -103,6 +111,9 @@ class GaussianCopula(tfd.TransformedDistribution):
             tril2 = np.stack([dependence, tril22], axis=-1)
             scale_tril = np.stack([tril1, tril2], axis=-2)
 
+        loc = np.zeros(
+            batch_shape + (2,), dtype=None if scale_tril is None else scale_tril.dtype
+        )
         distribution = tfd.MultivariateNormalTriL(
             loc=loc,
             scale_tril=scale_tril,

@@ -17,8 +17,6 @@ import os
 
 html_context = {}
 
-on_rtd = os.environ.get("READTHEDOCS") == "True"
-
 # Set canonical URL from the Read the Docs Domain
 html_baseurl = os.environ.get("READTHEDOCS_CANONICAL_URL", "")
 
@@ -54,9 +52,6 @@ extensions = [
 # for making copying code from doctests more convenient
 copybutton_prompt_text = r">>> |\.\.\. "
 copybutton_prompt_is_regexp = True
-
-if on_rtd:
-    extensions.append("rtds_action")
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3/", None),
@@ -113,6 +108,8 @@ html_logo = "../../misc/logo/logo-light.png"
 html_theme_options = {
     "repository_url": "https://github.com/liesel-devs/liesel",
     "use_repository_button": True,
+    "show_navbar_depth": 1,
+    "max_navbar_depth": 2,
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,
@@ -159,29 +156,15 @@ remove_from_toctrees = ["generated/liesel.*.*.*.*.rst"]
 # --------------------------------------------------------------------------------------
 
 # myst configuration
+# Execute notebook sources when Sphinx reads them and stop on execution errors.
+nb_execution_mode = "force"
+nb_execution_allow_errors = False
+nb_execution_raise_on_error = True
+nb_execution_timeout = 180
+if os.environ.get("LIESEL_DOCS_EXECUTED") == "1":
+    nb_execution_mode = "off"
+    nb_execution_excludepatterns = ["*"]
+
 myst_heading_anchors = 3  # auto-generate 3 levels of heading anchors
 myst_enable_extensions = ["amsmath", "dollarmath", "html_image"]
 myst_dmath_double_inline = True
-
-
-# --------------------------------------------------------------------------------------
-# rtds-action settings
-# --------------------------------------------------------------------------------------
-
-if on_rtd:
-    # The name of your GitHub repository
-    rtds_action_github_repo = "liesel-devs/liesel"
-
-    # The path where the artifact should be extracted
-    # Note: this is relative to the conf.py file!
-    rtds_action_path = "tutorials/md"
-
-    # The "prefix" used in the `upload-artifact` step of the action
-    rtds_action_artifact_prefix = "tutorials-for-"
-
-    # A GitHub personal access token is required, more info below
-    rtds_action_github_token = os.environ["GITHUB_TOKEN"]
-
-    # Whether or not to raise an error on Read the Docs if the
-    # artifact containing the notebooks can't be downloaded (optional)
-    rtds_action_error_if_missing = False

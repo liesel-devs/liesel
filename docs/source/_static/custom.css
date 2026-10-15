@@ -37,3 +37,10 @@ table.dataframe th, table.dataframe td {
 table.dataframe tr:nth-child(even) {
     background-color: #fafafa;
 }
+
+.interactive-visualization {
+    display: block;
+    width: 100%;
+    height: 36rem;
+    border: 0;
+}

@@ -4,13 +4,14 @@ Iteratively weighted least squares (IWLS) sampler
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import ClassVar, Literal, Self, get_args
+from typing import TYPE_CHECKING, ClassVar, Literal, Self, get_args
 
 import jax
 import jax.numpy as jnp
 import jax.numpy.linalg as jnpla
 from jax import grad, jacfwd
 from jax.flatten_util import ravel_pytree
+from jax.typing import ArrayLike
 
 from .da import DualAvgState
 from .epoch import EpochState
@@ -27,7 +28,7 @@ from .kernel import (
 )
 from .mh import mh_step
 from .pytree import register_dataclass_as_pytree
-from .types import Array, KernelState, KeyArray, ModelState, Position, Scalar
+from .types import KernelState, KeyArray, ModelState, Position, PositionInput, Scalar
 
 
 @register_dataclass_as_pytree
@@ -36,7 +37,8 @@ class IWLSKernelState:
     """
     Legacy adaptive IWLS state, retained for loading pre-0.6 sampling results.
 
-    Also used by the Langevin kernels, implementing :class:`.DAKernelState`.
+    Also used by the Langevin kernels, implementing
+    :class:`~liesel.goose.da.DAKernelState`.
     """
 
     step_size: Scalar
@@ -78,14 +80,21 @@ class _GaussianKernel(
     needs_history: ClassVar[bool] = False
     """Whether this kernel needs its history for tuning."""
     identifier: str = ""
-    """Kernel identifier, set by :class:`~.goose.EngineBuilder`"""
+    """Kernel identifier, set by :class:`~liesel.goose.EngineBuilder`"""
     position_keys: tuple[str, ...]
     """Tuple of position keys handled by this kernel."""
+
+    if TYPE_CHECKING:
+        chol_info_fn: Callable[[ModelState], ArrayLike] | None
+        """
+        A custom function that takes a model state and returns the Cholesky
+        decomposition of the information matrix to produce the proposal.
+        """
 
     def __init__(
         self,
         position_keys: Sequence[str],
-        chol_info_fn: Callable[[ModelState], Array] | None = None,
+        chol_info_fn: Callable[[ModelState], ArrayLike] | None = None,
         *,
         identifier: str = "",
         fallback_chol_info: CholInfoFallbackOptions | None = "identity",
@@ -98,6 +107,7 @@ class _GaussianKernel(
 
     @property
     def fallback_chol_info(self) -> CholInfoFallbackOptions | None:
+        """Fallback strategy when the information matrix cannot be factorized."""
         return self._fallback_chol_info
 
     @fallback_chol_info.setter
@@ -111,14 +121,14 @@ class _GaussianKernel(
         self._fallback_chol_info = value
 
     def _flat_log_prob_fn(
-        self, model_state: ModelState, unravel_fn: Callable[[Array], Position]
-    ) -> Callable[[Array], Scalar]:
+        self, model_state: ModelState, unravel_fn: Callable[[jax.Array], Position]
+    ) -> Callable[[jax.Array], Scalar]:
         """
         Returns a callable which takes a flat position and returns the log-probability
         of the model.
         """
 
-        def flat_log_prob_fn(flat_position: Array) -> Scalar:
+        def flat_log_prob_fn(flat_position: jax.Array) -> Scalar:
             position = unravel_fn(flat_position)
             new_model_state = self.model.update_state(position, model_state)
             return self.model.log_prob(new_model_state)
@@ -126,8 +136,8 @@ class _GaussianKernel(
         return flat_log_prob_fn
 
     def _score(
-        self, model_state: ModelState, flat_score_fn: Callable[[Array], Array]
-    ) -> Array:
+        self, model_state: ModelState, flat_score_fn: Callable[[jax.Array], jax.Array]
+    ) -> jax.Array:
         """
         Calls :func:`.flat_score_fn` on a flat position.
 
@@ -138,15 +148,15 @@ class _GaussianKernel(
         return flat_score_fn(flat_position)
 
     def _chol_info(
-        self, model_state: ModelState, flat_hessian_fn: Callable[[Array], Array]
-    ) -> tuple[Array, int]:
+        self, model_state: ModelState, flat_hessian_fn: Callable[[jax.Array], jax.Array]
+    ) -> tuple[jax.Array, jax.Array]:
         """
         Computes a Cholesky factor of the posterior precision approximation via
         :attr:`.flat_hessian_fn`.
 
         The flat position is extracted from the :attr:`.model_state`. If the user
-        provided a :attr:`.chol_info_fn` when initializing the kernel, this function is
-        called instead.
+        provided a :attr:`~liesel.goose.IWLSKernel.chol_info_fn` when initializing the
+        kernel, this function is called instead.
         """
 
         if self.chol_info_fn is None:
@@ -160,11 +170,11 @@ class _GaussianKernel(
             chol = jnpla.cholesky(info_matrix)
             return self._safe_chol(chol, info_matrix)
 
-        chol = self.chol_info_fn(model_state)
+        chol = jnp.asarray(self.chol_info_fn(model_state))
         chol, error_code = self._safe_chol(chol, info_matrix=None)
         return chol, error_code
 
-    def _safe_chol(self, chol, info_matrix) -> tuple[Array, int]:
+    def _safe_chol(self, chol, info_matrix) -> tuple[jax.Array, jax.Array]:
         """
         Makes sure that the cholesky decomposition does not contain any nan values, if
         the argument ``fallback_chol_info`` was not set to "none".
@@ -291,7 +301,7 @@ class _GaussianKernel(
         kernel_state: KernelState,
         model_state: ModelState,
         epoch: EpochState,
-        history: Position | None = None,
+        history: PositionInput | None = None,
     ) -> TuningOutcome[KernelState, IWLSTuningInfo]:
         """
         Currently does nothing.
@@ -356,7 +366,8 @@ class IWLSKernel(_GaussianKernel):
         ``1e-6 * mean(diag(P)) * I`` before factorization. A custom factor bypasses
         this jitter.
     identifier
-        Unique identifier, normally assigned by :class:`.EngineBuilder`.
+        Unique identifier, normally assigned by
+        :class:`~liesel.goose.EngineBuilder`.
     fallback_chol_info
         On failed factorization, use ``"identity"`` (default), or
         ``"chol_of_modified_info"`` to clip eigenvalues to ``1e-5``. The latter
@@ -370,15 +381,15 @@ class IWLSKernel(_GaussianKernel):
     retain the MH correction for regularized and non-Gaussian proposals.
 
     Before 0.6 this class implemented simplified manifold MALA. Use
-    :class:`.SMMALAKernel` with an explicit initial step size to preserve that
-    behavior (``0.01`` was the old default).
+    :class:`~liesel.goose.SMMALAKernel` with an explicit initial step size to preserve
+    that behavior (``0.01`` was the old default).
     """
 
     @classmethod
     def untuned(
         cls,
         position_keys: Sequence[str],
-        chol_info_fn: Callable[[ModelState], Array] | None = None,
+        chol_info_fn: Callable[[ModelState], ArrayLike] | None = None,
         fallback_chol_info: CholInfoFallbackOptions | None = "identity",
     ) -> Self:
         """Compatibility constructor; all IWLS kernels are now untuned."""

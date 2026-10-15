@@ -4,9 +4,11 @@ Hamiltonian/Hybrid Monte Carlo (HMC).
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
+import jax
 import jax.numpy as jnp
+import numpy as np
 from blackjax import hmc as hmc_kernel
 from blackjax.adaptation.step_size import find_reasonable_step_size
 from blackjax.mcmc import hmc
@@ -33,19 +35,19 @@ from .kernel import (
 )
 from .mm import tune_inv_mm_diag, tune_inv_mm_full
 from .pytree import register_dataclass_as_pytree
-from .types import Array, KeyArray, ModelState, Position, Scalar
+from .types import KeyArray, ModelState, Position, PositionInput, Scalar
 
 
 @register_dataclass_as_pytree
 @dataclass
 class HMCKernelState:
     """
-    A dataclass for the state of a :class:`.HMCKernel`, implementing the
-    :class:`.DAKernelState` protocol.
+    A dataclass for the state of a :class:`~liesel.goose.HMCKernel`, implementing the
+    :class:`~liesel.goose.da.DAKernelState` protocol.
     """
 
     step_size: Scalar
-    inverse_mass_matrix: Array
+    inverse_mass_matrix: jax.Array | np.ndarray
     da_state: DualAvgState | None = None
 
     def __post_init__(self):
@@ -90,7 +92,7 @@ class HMCKernel(
 ):
     """
     A HMC kernel with dual averaging and an inverse mass matrix tuner,
-    implementing the :class:`.Kernel` protocol.
+    implementing the :class:`~liesel.goose.Kernel` protocol.
 
     Parameters
     ----------
@@ -115,15 +117,16 @@ class HMCKernel(
     mm_diag
         Whether to use a diagonal mass matrix for drawing the momentum vector.
         If True, the inverse mass matrix will be tuned during adaptation using
-        :func:`.tune_inv_mm_diag`. If set to False, the mass matrix will be tuned
-        using :func:`.tune_inv_mm_full` instead.
+        :func:`~liesel.goose.mm.tune_inv_mm_diag`. If set to False, the mass matrix will
+        be tuned
+        using :func:`~liesel.goose.mm.tune_inv_mm_full` instead.
     identifier
         An string acting as a unique identifier for this kernel.
 
     Notes
     -----
     For more information on step size tuning via dual averaging,
-    see :func:`.da_step` and :class:`.DAKernelState`.
+    see :func:`~liesel.goose.da.da_step` and :class:`~liesel.goose.da.DAKernelState`.
 
     .. [#stan] `Stan Development Team, Stan Reference Manual (2021), Chapter 15.2
        <https://mc-stan.org/docs/2_28/reference-manual/hmc-algorithm-parameters.html>`_.
@@ -134,15 +137,36 @@ class HMCKernel(
     needs_history: ClassVar[bool] = True
     """Whether this kernel needs its history for tuning."""
     identifier: str = ""
-    """Kernel identifier, set by :class:`~.goose.EngineBuilder`"""
+    """Kernel identifier, set by :class:`~liesel.goose.EngineBuilder`"""
     position_keys: tuple[str, ...]
     """Tuple of position keys handled by this kernel."""
+
+    if TYPE_CHECKING:
+        da_gamma: float
+        """The adaptation regularization scale."""
+        da_kappa: float
+        """The adaptation relaxation exponent."""
+        da_t0: int
+        """The adaptation iteration offset."""
+        da_target_accept: float
+        """Target acceptance probability for dual averaging algorithm."""
+        initial_inverse_mass_matrix: ArrayLike | None
+        """
+        Starting value for the inverse mass matrix (the precision matrix of the
+        momentum).
+        """
+        initial_step_size: float | None
+        """Value at which to start step size tuning."""
+        mm_diag: bool
+        """Whether to use a diagonal mass matrix for drawing the momentum vector."""
+        num_integration_steps: int
+        """Number of integration steps used in the leapfrog algorithm."""
 
     def __init__(
         self,
         position_keys: Sequence[str],
         initial_step_size: float | None = None,
-        initial_inverse_mass_matrix: Array | None = None,
+        initial_inverse_mass_matrix: ArrayLike | None = None,
         num_integration_steps: int = 10,
         da_target_accept: float = 0.8,
         da_gamma: float = 0.05,
@@ -188,7 +212,7 @@ class HMCKernel(
             else:
                 inverse_mass_matrix = jnp.eye(flat_position.size)
         else:
-            inverse_mass_matrix = self.initial_inverse_mass_matrix
+            inverse_mass_matrix = jnp.asarray(self.initial_inverse_mass_matrix)
 
         if self.initial_step_size is None:
             blackjax_kernel = self._blackjax_kernel
@@ -273,7 +297,7 @@ class HMCKernel(
         kernel_state: HMCKernelState,
         model_state: ModelState,
         epoch: EpochState,
-        history: Position | None = None,
+        history: PositionInput | None = None,
     ) -> TuningOutcome[HMCKernelState, HMCTuningInfo]:
         """
         Currently does nothing.
@@ -288,7 +312,7 @@ class HMCKernel(
         kernel_state: HMCKernelState,
         model_state: ModelState,
         epoch: EpochState,
-        history: Position | None = None,
+        history: PositionInput | None = None,
     ) -> TuningOutcome[HMCKernelState, HMCTuningInfo]:
         """
         Tunes the inverse mass vector or matrix using the samples from the last epoch.

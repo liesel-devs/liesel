@@ -6,33 +6,37 @@ from __future__ import annotations
 
 import logging
 import math
+import operator
 import re
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
 from numbers import Integral
-from typing import IO, Any, Literal, Self, TypedDict
+from typing import IO, TYPE_CHECKING, Any, Literal, Self, TypedDict, cast
 
 import dill
 import jax
 import jax.numpy as jnp
 import jax.random
 import networkx as nx
+import numpy as np
 import pandas as pd
 
-from ..types import Position
+from ..types import Position, PositionInput, PyTree
 from ._mapping import _KeyCompletableMapping, _KeyCompletableProperty
 from .nodes import (
-    Array,
     Calc,
     Dist,
     Group,
+    LieselModelState,
+    LieselModelStateInput,
     Node,
     NodeState,
     TransientNode,
     Value,
     Var,
     VarValue,
+    _sample_compat,
     _transformed_distribution_bijector,
 )
 from .viz import plot_nodes, plot_vars
@@ -56,15 +60,17 @@ class _SamplingSpec(TypedDict):
     value_node: Node
 
 
-def _reduced_sum(*args: Array) -> Array:
+def _reduced_sum(
+    *args: float | np.number | np.ndarray | jax.Array,
+) -> float | np.number | jax.Array:
     """Computes the sum after reducing arrays to scalars."""
-    reduced = (arg.sum() if hasattr(arg, "sum") else arg for arg in args)
+    reduced = (cast(Any, arg).sum() if hasattr(arg, "sum") else arg for arg in args)
     return sum(reduced)
 
 
 def _transform_back(var_transformed: Var) -> Calc:
     """
-    Creates a :class:`.Calc` mapping a transformed parameter back to
+    Creates a :class:`~liesel.model.Calc` mapping a transformed parameter back to
     the original domain.
     """
 
@@ -85,7 +91,7 @@ def _transform_back(var_transformed: Var) -> Calc:
     return Calc(fn, var_transformed.value_node, *inputs, **kwinputs)
 
 
-def _set_weak_var_value(var: Var, value: Array) -> None:
+def _set_weak_var_value(var: Var, value: Any) -> None:
     """
     Sets the cached value of a weak variable's value node.
 
@@ -93,7 +99,8 @@ def _set_weak_var_value(var: Var, value: Array) -> None:
     can put the graph into an inconsistent state: the cached value no longer
     needs to match the value implied by the variable's inputs.
 
-    This helper calls :meth:`.Node.flag_outdated` on the value node's outputs
+    This helper calls :meth:`Node.flag_outdated <liesel.model.Node.flag_outdated>` on
+    the value node's outputs
     only. It does not call ``var.value_node.flag_outdated()`` on the value node
     itself. Callers that want the weak variable to be recomputed from its inputs
     after downstream updates should usually flag the value node itself as
@@ -126,8 +133,8 @@ def _compile_prediction(
     predict_names = tuple(predict_names)
 
     def predict_one(
-        samples: dict[str, Array], model_state: dict[str, NodeState]
-    ) -> dict[str, Array]:
+        samples: dict[str, PyTree], model_state: LieselModelState
+    ) -> dict[str, PyTree]:
         updated_state = model.update_state(samples, model_state, inplace=False)
         return model.extract_position(predict_names, updated_state)
 
@@ -136,8 +143,8 @@ def _compile_prediction(
     else:
 
         def predict_batched(
-            samples: dict[str, Array], model_state: dict[str, NodeState]
-        ) -> dict[str, Array]:
+            samples: dict[str, PyTree], model_state: LieselModelState
+        ) -> dict[str, PyTree]:
             def predict_from_samples(samples):
                 return predict_one(samples, model_state)
 
@@ -166,7 +173,7 @@ def _validate_chunk_size(chunk_size: int | None) -> int | None:
 
 def _compile_sampling(
     model: Model,
-    sampling_specs: dict[str, _SamplingSpec],
+    sampling_specs: Mapping[str, _SamplingSpec],
     posterior_size: int,
     chunk_size: int | None = None,
 ) -> jax.stages.Wrapped:
@@ -178,11 +185,11 @@ def _compile_sampling(
     """
 
     def one_draw(
-        draw_index: Array,
-        seeds: Array,
-        posterior_samples: dict[str, Array],
-        model_state: dict[str, NodeState],
-    ) -> dict[str, Array]:
+        draw_index: jax.Array,
+        seeds: jax.Array,
+        posterior_samples: dict[str, PyTree],
+        model_state: LieselModelState,
+    ) -> dict[str, PyTree]:
         posterior_index = draw_index % posterior_size
         position = jax.tree.map(
             lambda value: value[posterior_index],
@@ -206,11 +213,11 @@ def _compile_sampling(
         return sampled_position
 
     def draw_all(
-        draw_indices: Array,
-        seeds: Array,
-        posterior_samples: dict[str, Array],
-        model_state: dict[str, NodeState],
-    ) -> dict[str, Array]:
+        draw_indices: jax.Array,
+        seeds: jax.Array,
+        posterior_samples: dict[str, PyTree],
+        model_state: LieselModelState,
+    ) -> dict[str, PyTree]:
         def draw(draw_index):
             return one_draw(
                 draw_index,
@@ -229,13 +236,14 @@ def _compile_sampling(
 
 class GraphBuilder:
     """
-    A graph builder, used to set up a :class:`.Model`.
+    A graph builder, used to set up a :class:`~liesel.model.Model`.
 
     Constructs a model containing all nodes and variables that were added to the graph
     builder and their recursive inputs.
 
     .. important::
-        - In :meth:`.build_model` , the graph builder will automatically find all
+        - In :meth:`~liesel.model.GraphBuilder.build_model` , the graph builder will
+          automatically find all
           **inputs** to its nodes - and the inputs to these inputs
           (i.e. it finds inputs recursively).
         - The **outputs** of the nodes, however, are not added to the model
@@ -251,18 +259,21 @@ class GraphBuilder:
     Parameters
     ----------
     to_float32
-        Whether to convert the dtype of the values of the added nodes \
+        Whether to convert the dtype of the values of the added nodes
         from float64 to float32.
 
     See Also
     --------
 
-    :class:`.Model` : The liesel model class, representing a static graph.
-    :meth:`.GraphBuilder.add` : Method for adding variables and nodes to the
+    :class:`~liesel.model.Model` : The liesel model class, representing a static graph.
+    liesel.model.GraphBuilder.add : Method for adding
+        variables and nodes to the
         GraphBuilder.
-    :meth:`.GraphBuilder.build_model` : Method for building a model from the
+    liesel.model.GraphBuilder.build_model : Method
+        for building a model from the
         GraphBuilder.
-    :meth:`.Var.transform` : Transforms a variable by adding a new transformed
+    liesel.model.Var.transform : Transforms a variable by adding
+        a new transformed
         variable as an input. This is useful for variables that are constrained to a
         certain domain, e.g. positive values.
 
@@ -287,7 +298,8 @@ class GraphBuilder:
     >>> model
     Model(9 nodes, 3 vars)
 
-    Note that when :meth:`.build_model` is called, all :attr:`~.Var.weak` variables in
+    Note that when :meth:`~liesel.model.GraphBuilder.build_model` is called, all
+    :attr:`~liesel.model.Var.weak` variables in
     the graph will be updated. So the value of ``c`` is now available:
 
     >>> c.value
@@ -298,6 +310,17 @@ class GraphBuilder:
     >>> gb.vars
     []
     """
+
+    if TYPE_CHECKING:
+        nodes: list[Node]
+        """Nodes explicitly added to the graph builder."""
+        to_float32: bool
+        """
+        Whether to convert the dtype of the values of the added nodes         from
+        float64 to float32.
+        """
+        vars: list[Var]
+        """Variables explicitly added to the graph builder."""
 
     def __init__(self, to_float32: bool = False):
         self.nodes: list[Node] = []
@@ -433,7 +456,7 @@ class GraphBuilder:
         """
         Sets the missing names for the given nodes or variables.
 
-        Deprecated; use :meth:`.Var.ensure_name` instead.
+        Deprecated; use :meth:`Var.ensure_name <liesel.model.Var.ensure_name>` instead.
         """
         automatically_set_names = []
 
@@ -471,20 +494,24 @@ class GraphBuilder:
         Parameters
         ----------
         *args
-            The nodes, variables or graph builders to add to the graph. Note that \
-            the GraphBuilder will find input nodes recursively for all nodes and \
+            The nodes, variables or graph builders to add to the graph. Note that
+            the GraphBuilder will find input nodes recursively for all nodes and
             variables that are added to it, so you only need to add root nodes.
         to_float32
-            Whether to convert the dtype of the values of the added nodes \
-            from float64 to float32. If ``None`` (default), the GraphBuilder's \
-            attribute ``GraphBuilder.to_float32``, which is set during initialization \
+            Whether to convert the dtype of the values of the added nodes
+            from float64 to float32. If ``None`` (default), the GraphBuilder's
+            attribute :attr:`GraphBuilder.to_float32
+            <liesel.model.GraphBuilder.to_float32>`, which is set during initialization
+
             will be used instead.
 
         See Also
         --------
-        :meth:`.GraphBuilder.build_model` : Method for building a model from the \
+        liesel.model.GraphBuilder.build_model :
+            Method for building a model from the
             GraphBuilder.
-        :meth:`.Var.transform` : Transforms a variable by adding a new
+        liesel.model.Var.transform : Transforms a variable by
+            adding a new
             transformed variable as an input.
 
         Examples
@@ -539,9 +566,11 @@ class GraphBuilder:
         *groups
             The groups to add to the graph.
         to_float32
-            Whether to convert the dtype of the values of the added nodes \
-            from float64 to float32. If ``None`` (default), the GraphBuilder's \
-            attribute ``GraphBuilder.to_float32``, which is set during initialization \
+            Whether to convert the dtype of the values of the added nodes
+            from float64 to float32. If ``None`` (default), the GraphBuilder's
+            attribute :attr:`GraphBuilder.to_float32
+            <liesel.model.GraphBuilder.to_float32>`, which is set during initialization
+
             will be used instead.
 
         Returns
@@ -618,7 +647,8 @@ class GraphBuilder:
         >>> model
         Model(9 nodes, 3 vars)
 
-        Note that when :meth:`.build_model` is called, all :attr:`~.Var.weak` variables
+        Note that when :meth:`~liesel.model.GraphBuilder.build_model` is called, all
+        :attr:`~liesel.model.Var.weak` variables
         in the graph will be updated. So the value of ``c`` is now available:
 
         >>> c.value
@@ -862,7 +892,7 @@ class GraphBuilder:
 
         See Also
         --------
-        :meth:`.viz.plot_nodes` : The function used to plot the nodes.
+        ``liesel.model.viz.plot_nodes`` : The function used to plot the nodes.
 
         """
         nodes, _vars = self._all_nodes_and_vars()
@@ -886,7 +916,7 @@ class GraphBuilder:
 
         See Also
         --------
-        :meth:`.viz.plot_vars` : The function used to plot the variables.
+        ``liesel.model.viz.plot_vars`` : The function used to plot the variables.
         """
         nodes, _vars = self._all_nodes_and_vars()
         nodes_and_vars = nodes + _vars
@@ -990,22 +1020,25 @@ class Model:
     nodes_and_vars
         The nodes and variables to include in the model.
     grow
-        Whether a :class:`.GraphBuilder` should be used to grow the model (finding \
+        Whether a :class:`~liesel.model.GraphBuilder` should be used to grow the model
+        (finding \
         the recursive inputs of the nodes and variables), and to add the model nodes.
     copy
         Whether the nodes and variables should be copied upon initialization.
     to_float32
         Whether to convert the dtype of the values of the added nodes \
-        from float64 to float32. Only takes effect if ``grow=True``.
+        from float64 to float32. Only takes effect if ``grow=True``. Values are \
+        float64 only if 64-bit mode (``jax_enable_x64``) is enabled.
 
     See Also
     --------
-    .Var.new_obs : Initializes a strong variable that holds observed data.
-    .Var.new_param : Initializes a strong variable that acts as a model parameter.
-    .Var.new_calc :
+    ~liesel.model.Var.new_obs : Initializes a strong variable that holds observed data.
+    ~liesel.model.Var.new_param : Initializes a strong variable that acts as a model
+        parameter.
+    ~liesel.model.Var.new_calc :
         Initializes a weak variable that is a function of other variables.
-    .Var.new_value : Initializes a strong variable without a distribution.
-    :class:`.GraphBuilder` :
+    ~liesel.model.Var.new_value : Initializes a strong variable without a distribution.
+    :class:`~liesel.model.GraphBuilder` :
         A graph builder, which can be used to set up and manipulate a model if you need
         more control.
 
@@ -1026,12 +1059,16 @@ class Model:
 
     """
 
+    if TYPE_CHECKING:
+        update_graph_lazily: bool
+        """Whether updates traverse only nodes whose inputs have changed."""
+
     def __init__(
         self,
         *nodes_and_vars: Node | Var | Iterable[Node | Var],
         grow: bool = True,
         copy: bool = False,
-        to_float32: bool = True,
+        to_float32: bool = False,
         validate_log_prob_decomposition: bool = True,
     ):
         # this is for backwards compatibility: Old code, in which an iterable of
@@ -1082,8 +1119,8 @@ class Model:
         """
         Whether the model graph is outdated.
 
-        The model graph can be updated with :meth:`.update_graph` or
-        :meth:`.rebuild_graph`.
+        The model graph can be updated with :meth:`~liesel.model.Model.update_graph` or
+        :meth:`~liesel.model.Model.rebuild_graph`.
         """
         return self._graph_outdated
 
@@ -1277,8 +1314,10 @@ class Model:
 
 
         Note that, if any of the removed variables/nodes are in
-        :attr:`.seed_nodes_and_vars`, they remain in :attr:`.seed_nodes_and_vars` and
-        would be re-added to the graph if :meth:`.rebuild_graph` is called without
+        :attr:`~liesel.model.Model.seed_nodes_and_vars`, they remain in
+        :attr:`~liesel.model.Model.seed_nodes_and_vars` and
+        would be re-added to the graph if :meth:`~liesel.model.Model.rebuild_graph` is
+        called without
         arguments.
         """
         if isinstance(of, str):
@@ -1399,7 +1438,8 @@ class Model:
         variables. Also accepts strings, which must be the names of nodes or variables
         currently in the model.
 
-        If no nodes or variables are supplied, uses the :attr:`.seed_nodes_and_vars`
+        If no nodes or variables are supplied, uses the
+        :attr:`~liesel.model.Model.seed_nodes_and_vars`
         supplied to the model during initialization.
 
         Examples
@@ -1468,7 +1508,8 @@ class Model:
 
         If the updated graph contains singleton nodes, i.e. nodes without inputs or
         outputs, these nodes are dropped from the graph. Singleton variables are not
-        dropped, but can be dropped manually by calling :meth:`.drop_singletons`.
+        dropped, but can be dropped manually by calling
+        :meth:`~liesel.model.Model.drop_singletons`.
         """
         return self.add()  # adding with empty list means simply updating
 
@@ -1481,7 +1522,8 @@ class Model:
         Parameters
         -----------
         *args
-            :class:`.Var` or :class:`.Node` objects to add. Other :class:`.Model`
+            :class:`~liesel.model.Var` or :class:`~liesel.model.Node` objects to add.
+            Other :class:`~liesel.model.Model`
             instances are also accepted, in which case all nodes and variables from
             the supplied models are added to this model. Duplicate names are not
             allowed.
@@ -1495,7 +1537,7 @@ class Model:
 
         See Also
         --------
-        .Model.seed_nodes_and_vars : Seed nodes and variables.
+        ~liesel.model.Model.seed_nodes_and_vars : Seed nodes and variables.
 
         Notes
         -----
@@ -1569,7 +1611,8 @@ class Model:
         self, *vars_and_nodes: Var | Node, copy: bool = False, add_to_seeds: bool = True
     ) -> Self:
         """
-        Adds a variable number of :class:`.Var`s and/or :class:`.Node`s to the model.
+        Adds a variable number of :class:`~liesel.model.Var` objects and/or
+        :class:`~liesel.model.Node`s to the model.
 
         If ``add_to_seeds``, the nodes and variables are also added to the calling
         model's seed nodes and variables.
@@ -1626,7 +1669,8 @@ class Model:
 
         See Also
         --------
-        .Model.join : Join by no or a manually supplied sequence of overlapping names.
+        ~liesel.model.Model.join : Join by no or a manually supplied sequence of
+            overlapping names.
 
         Examples
         --------
@@ -1675,7 +1719,7 @@ class Model:
 
         See Also
         --------
-        .Model.join_by_all : Automatically join by all overlapping names.
+        ~liesel.model.Model.join_by_all : Automatically join by all overlapping names.
 
         Notes
         -----
@@ -1847,9 +1891,10 @@ class Model:
 
         Notes
         -----
-        While the :class:`.Var.value_node` and :class:`.Var.var_value_node` are no
+        While the :class:`Var.value_node <liesel.model.Var.value_node>` and
+        :class:`Var.var_value_node <liesel.model.Var.var_value_node>` are no
         singletons in the *node graph*, they are still dropped if they belong to a
-        singleton :class:`.Var`.
+        singleton :class:`~liesel.model.Var`.
 
         Examples
         --------
@@ -2096,7 +2141,8 @@ class Model:
         """
         Returns an unfrozen deep copy of the model variables.
 
-        Values are dynamically typed, as in :attr:`.vars`, so callers can use
+        Values are dynamically typed, as in :attr:`~liesel.model.Model.vars`, so callers
+        can use
         subclass-specific methods on variables retrieved by name.
         """
         return self.copy_nodes_and_vars()[1]
@@ -2193,7 +2239,7 @@ class Model:
         return model
 
     @property
-    def log_lik(self) -> Array:
+    def log_lik(self) -> float | np.number | jax.Array:
         """
         The log-likelihood of the model.
 
@@ -2203,7 +2249,7 @@ class Model:
         return self._nodes["_model_log_lik"].value
 
     @property
-    def log_prior(self) -> Array:
+    def log_prior(self) -> float | np.number | jax.Array:
         """
         The log-prior of the model.
 
@@ -2213,7 +2259,7 @@ class Model:
         return self._nodes["_model_log_prior"].value
 
     @property
-    def log_prob(self) -> Array:
+    def log_prob(self) -> float | np.number | jax.Array:
         """
         The (unnormalized) log-probability / log-posterior of the model.
 
@@ -2309,13 +2355,15 @@ class Model:
         Raises
         ------
         AttributeError
-            If the value of the :attr:`.Dist.at` node of a distribution node cannot be
+            If the value of the :attr:`Dist.at <liesel.model.Dist.at>` node of a
+            distribution node cannot be
             set.
 
         Notes
         -----
         The simulation is based on the shapes of the current values of the
-        :attr:`.Dist.at` nodes of the distribution nodes. If the :attr:`.Dist.at` node
+        :attr:`Dist.at <liesel.model.Dist.at>` nodes of the distribution nodes. If the
+        :attr:`Dist.at <liesel.model.Dist.at>` node
         of a distribution node is a :Class:`.VarValue` node, the value of its input is
         updated.
         """
@@ -2357,14 +2405,16 @@ class Model:
 
         return self
 
+    @_sample_compat
     def sample(
         self,
-        shape: Sequence[int],
+        sample_shape: int | Sequence[int] = (),
+        *,
         seed: jax.Array,
-        posterior_samples: Position | None = None,
+        posterior_samples: PositionInput | None = None,
         fixed: Sequence[str] = (),
-        newdata: Position | None = None,
-        dists: dict[str, Dist] | None = None,
+        newdata: PositionInput | None = None,
+        dists: Mapping[str, Dist] | None = None,
         chunk_size: int | None = 64,
     ) -> Position:
         """
@@ -2372,8 +2422,9 @@ class Model:
 
         Parameters
         ----------
-        shape
-            Sample shape.
+        sample_shape
+            Shape of the requested draws. An int requests that many draws, equivalent \
+            to a one-tuple. Defaults to ``()``, one draw with no leading sample axes.
         seed
             The seed is split and distributed to the seed nodes of the model. \
             Must be a jax RNG key array that satisfies \
@@ -2395,9 +2446,11 @@ class Model:
             model-specific converters. If ``None`` (default), the current variable \
             values are used.
         dists
-            Can be used to provide a dictionary of variable names and :class:`.Dist` \
+            Can be used to provide a dictionary of variable names and
+            :class:`~liesel.model.Dist` \
             instances to use in sampling. If ``None`` (default), samples are drawn for \
-            each variable using their :attr:`.Var.dist_node`.
+            each variable using their :attr:`Var.dist_node
+            <liesel.model.Var.dist_node>`.
         chunk_size
             Maximum number of flattened requested-draw and posterior-sample \
             combinations to evaluate in parallel. Defaults to ``64``. Pass ``None`` \
@@ -2406,10 +2459,22 @@ class Model:
             potential cost of lower accelerator utilization. It does not reduce the \
             memory required to store the returned samples.
 
+        shape
+            Deprecated alias for ``sample_shape``; do not supply both. Removed in 0.9.0.
+
         Notes
         -----
-        When compiling this function with ``jax.jit``, the arguments ``shape``,
+        When compiling this function with ``jax.jit``, the arguments ``sample_shape``,
         ``fixed``, ``dists``, and ``chunk_size`` must be static.
+
+        .. deprecated:: 0.6
+            The ``shape=`` alias and passing ``seed`` or later arguments positionally
+            will be removed in 0.9.0. Pass ``seed`` and later arguments by keyword.
+            For example, replace ``model.sample((4,), key)`` or
+            ``model.sample(shape=(4,), seed=key)`` with
+            ``model.sample(sample_shape=(4,), seed=key)``.
+            When using ``jax.jit``, also replace ``"shape"`` with ``"sample_shape"``
+            in ``static_argnames``. In 0.9.0, only ``sample_shape`` will remain.
 
         Returns
         -------
@@ -2418,7 +2483,11 @@ class Model:
         """
 
         chunk_size = _validate_chunk_size(chunk_size)
-        shape = tuple(shape)
+        shape_arg: Any = sample_shape
+        try:
+            shape = (operator.index(shape_arg),)
+        except TypeError:
+            shape = tuple(shape_arg)
         posterior_samples = (
             posterior_samples if posterior_samples is not None else Position({})
         )
@@ -2631,12 +2700,12 @@ class Model:
         return Position(jax.tree.map(reshape, drawn_samples))
 
     @property
-    def state(self) -> dict[str, NodeState]:
+    def state(self) -> LieselModelState:
         """The state of the model as a dict of node names and states."""
         return {name: node.state for name, node in self._nodes.items()}
 
     @state.setter
-    def state(self, state: dict[str, NodeState]):
+    def state(self, state: LieselModelStateInput):
         for name, node_state in state.items():
             self._nodes[name].state = node_state
 
@@ -2646,7 +2715,7 @@ class Model:
 
         The update is performed in a topological order, restoring a consistent state
         of the model. This method is called automatically by the nodes if their value
-        is modified (unless :attr:`.auto_update` is ``False``).
+        is modified (unless :attr:`~liesel.model.Model.auto_update` is ``False``).
 
         Parameters
         ----------
@@ -2678,7 +2747,7 @@ class Model:
         A mapping of the model variables with their names as keys.
 
         Values are typed as :obj:`~typing.Any`: names are determined at runtime
-        and may refer to different :class:`.Var` subclasses. This permits
+        and may refer to different :class:`~liesel.model.Var` subclasses. This permits
         subclass-specific operations after lookup without casts. Static type
         checking of retrieved values is therefore left to the caller.
         """
@@ -2688,7 +2757,7 @@ class Model:
     def parameters(self) -> _KeyCompletableMapping[Any]:
         """A mapping of the model parameters with their names as keys.
 
-        Values are dynamically typed, as in :attr:`.vars`.
+        Values are dynamically typed, as in :attr:`~liesel.model.Model.vars`.
         """
         params = {k: v for k, v in self._vars.items() if v.parameter}
         return _KeyCompletableMapping(params)
@@ -2697,7 +2766,7 @@ class Model:
     def observed(self) -> _KeyCompletableMapping[Any]:
         """A mapping of the observed model variables with their names as keys.
 
-        Values are dynamically typed, as in :attr:`.vars`.
+        Values are dynamically typed, as in :attr:`~liesel.model.Model.vars`.
         """
         observed = {k: v for k, v in self._vars.items() if v.observed}
         return _KeyCompletableMapping(observed)
@@ -2720,7 +2789,8 @@ class Model:
         """
         Plots the variables of this model.
 
-        Wraps :func:`~.viz.plot_vars`. Alias for :meth:`.Model.plot_vars`.
+        Wraps ``liesel.model.viz.plot_vars``. Alias for :meth:`Model.plot_vars
+        <liesel.model.Model.plot_vars>`.
 
         Parameters
         ----------
@@ -2740,14 +2810,16 @@ class Model:
 
         See Also
         --------
-        .Var.plot_vars : Plots the variables of the Liesel sub-model that terminates in
+        ~liesel.model.Var.plot_vars : Plots the variables of the Liesel sub-model that
+            terminates in
             this variable.
-        .Var.plot_nodes : Plots the nodes of the Liesel sub-model that terminates in
+        ~liesel.model.Var.plot_nodes : Plots the nodes of the Liesel sub-model that
+            terminates in
             this variable.
-        .Model.plot_vars : Plots the variables of a Liesel model.
-        .Model.plot_nodes : Plots the nodes of a Liesel model.
-        .viz.plot_vars : Plots the variables of a Liesel model.
-        .viz.plot_nodes : Plots the nodes of a Liesel model.
+        ~liesel.model.Model.plot_vars : Plots the variables of a Liesel model.
+        ~liesel.model.Model.plot_nodes : Plots the nodes of a Liesel model.
+        ~liesel.model.Model.plot_vars : Plots the variables of a Liesel model.
+        ~liesel.model.Model.plot_nodes : Plots the nodes of a Liesel model.
         """
         return self.plot_vars(
             show=show,
@@ -2772,7 +2844,7 @@ class Model:
         """
         Plots the variables of this model.
 
-        Wraps :func:`~.viz.plot_vars`.
+        Wraps ``liesel.model.viz.plot_vars``.
 
         Parameters
         ----------
@@ -2792,14 +2864,16 @@ class Model:
 
         See Also
         --------
-        .Var.plot_vars : Plots the variables of the Liesel sub-model that terminates in
+        ~liesel.model.Var.plot_vars : Plots the variables of the Liesel sub-model that
+            terminates in
             this variable.
-        .Var.plot_nodes : Plots the nodes of the Liesel sub-model that terminates in
+        ~liesel.model.Var.plot_nodes : Plots the nodes of the Liesel sub-model that
+            terminates in
             this variable.
-        .Model.plot_vars : Plots the variables of a Liesel model.
-        .Model.plot_nodes : Plots the nodes of a Liesel model.
-        .viz.plot_vars : Plots the variables of a Liesel model.
-        .viz.plot_nodes : Plots the nodes of a Liesel model.
+        ~liesel.model.Model.plot_vars : Plots the variables of a Liesel model.
+        ~liesel.model.Model.plot_nodes : Plots the nodes of a Liesel model.
+        ~liesel.model.Model.plot_vars : Plots the variables of a Liesel model.
+        ~liesel.model.Model.plot_nodes : Plots the nodes of a Liesel model.
         """
         return plot_vars(
             self,
@@ -2824,7 +2898,7 @@ class Model:
         """
         Plots the nodes of this model.
 
-        Wraps :func:`~.viz.plot_nodes`.
+        Wraps ``liesel.model.viz.plot_nodes``.
 
         Parameters
         ----------
@@ -2842,14 +2916,16 @@ class Model:
 
         See Also
         --------
-        .Var.plot_vars : Plots the variables of the Liesel sub-model that terminates in
+        ~liesel.model.Var.plot_vars : Plots the variables of the Liesel sub-model that
+            terminates in
             this variable.
-        .Var.plot_nodes : Plots the nodes of the Liesel sub-model that terminates in
+        ~liesel.model.Var.plot_nodes : Plots the nodes of the Liesel sub-model that
+            terminates in
             this variable.
-        .Model.plot_vars : Plots the variables of a Liesel model.
-        .Model.plot_nodes : Plots the nodes of a Liesel model.
-        .viz.plot_vars : Plots the variables of a Liesel model.
-        .viz.plot_nodes : Plots the nodes of a Liesel model.
+        ~liesel.model.Model.plot_vars : Plots the variables of a Liesel model.
+        ~liesel.model.Model.plot_nodes : Plots the nodes of a Liesel model.
+        ~liesel.model.Model.plot_vars : Plots the variables of a Liesel model.
+        ~liesel.model.Model.plot_nodes : Plots the nodes of a Liesel model.
         """
         return plot_nodes(
             self,
@@ -2863,7 +2939,7 @@ class Model:
     def extract_position(
         self,
         position_keys: Sequence[str],
-        model_state: dict[str, NodeState] | None = None,
+        model_state: LieselModelStateInput | None = None,
     ) -> Position:
         """
         Extracts a position from a model state.
@@ -2873,7 +2949,7 @@ class Model:
         position_keys
             An iterable of variable or node names.
         model_state
-            A dictionary of node names and their corresponding :class:`.NodeState`. \
+            A dictionary of node names and their corresponding ``NodeState``. \
             If ``None`` (default), the model's current state is used.
         """
         model_state = model_state if model_state is not None else self.state
@@ -2896,7 +2972,7 @@ class Model:
 
     def convert_position(
         self,
-        position: Mapping[str, Any],
+        position: PositionInput,
         *,
         allow_unknown: bool = False,
     ) -> Position:
@@ -2904,11 +2980,12 @@ class Model:
         Converts the values in a position using their model-specific converters.
 
         Variable keys use the converter configured on the respective
-        :class:`.Var`; node keys use the converter configured on the respective
-        :class:`.Node`. Unknown keys raise a :class:`KeyError` unless
+        :class:`~liesel.model.Var`; node keys use the converter configured on the
+        respective
+        :class:`~liesel.model.Node`. Unknown keys raise a :exc:`KeyError` unless
         ``allow_unknown=True``, in which case their values are left unchanged.
 
-        This method is useful for constructing a typed :class:`.Position` at an API
+        This method is useful for constructing a typed ``Position`` at an API
         boundary, before repeatedly passing it through model computations.
         """
         converted = {}
@@ -2929,7 +3006,7 @@ class Model:
 
         return Position(converted)
 
-    def _validate_weak_var_position(self, position: dict[str, Array]) -> None:
+    def _validate_weak_var_position(self, position: PositionInput) -> None:
         """
         Validates that weak variable updates in a position are unambiguous.
 
@@ -2975,21 +3052,21 @@ class Model:
 
     def update_state(
         self,
-        position: dict[str, Array],
-        model_state: dict[str, NodeState] | None = None,
+        position: PositionInput,
+        model_state: LieselModelStateInput | None = None,
         inplace: bool = False,
         *,
         allow_weak_vars: bool = False,
-    ) -> dict[str, NodeState]:
+    ) -> LieselModelState:
         """
         Updates and returns a model state given a position.
 
         Parameters
         ----------
         position
-            A dictionary of variable or node names and values.
+            A mapping of variable or node names and values. The mapping is not modified.
         model_state
-            A dictionary of node names and their corresponding :class:`.NodeState`. \
+            A dictionary of node names and their corresponding ``NodeState``. \
             If ``None`` (default), the model's current state is used.
         inplace
             If ``False`` (default), a new model state is returned, while the current \
@@ -3010,6 +3087,10 @@ class Model:
         nodes. Updates can only be triggered through new variable or node values in the
         ``position``. If you supply a ``model_state`` with outdated nodes, these nodes
         and their outputs will not be updated.
+
+        When applying ``jax.jit`` or ``jax.vmap`` to this method, arguments must be
+        JAX-compatible pytrees. Convert unregistered mappings to dictionaries before
+        passing them to the transformed function.
         """
         model = self._copy_computational_model() if not inplace else self
 
@@ -3062,11 +3143,11 @@ class Model:
 
     def predict(
         self,
-        samples: Position,
+        samples: PositionInput,
         predict: Sequence[str] | None = None,
-        newdata: Position | None = None,
+        newdata: PositionInput | None = None,
         chunk_size: int | None = 64,
-    ) -> dict[str, Array]:
+    ) -> dict[str, PyTree]:
         """
         Returns a dictionary of predictions.
 
@@ -3074,7 +3155,8 @@ class Model:
         ----------
         samples
             Dictionary of samples at which to evaluate predictions. If ``samples``
-            contains entries for weak variables or for nodes in :attr:`.model_nodes`
+            contains entries for weak variables or for nodes in
+            :attr:`~liesel.model.Model.model_nodes`
             they are ignored.
         predict
             Sequence of strings, which are the names of nodes or variables. \
@@ -3406,8 +3488,8 @@ class TemporaryModel:
 
 def log_prob_pointwise(
     vars_: Mapping[str, Var],
-    samples: Position,
-    newdata: Position | None = None,
+    samples: PositionInput,
+    newdata: PositionInput | None = None,
 ) -> dict[str, jax.Array]:
     """
     Returns a dictionary of pointwise log probabilities for the supplied variables.
@@ -3416,10 +3498,11 @@ def log_prob_pointwise(
     ----------
     vars_
         Mapping of variables for which to evaluate log probs, such as
-        :attr:`.Model.observed`.
+        :attr:`Model.observed <liesel.model.Model.observed>`.
     samples
         Dictionary of samples at which to evaluate log probs. If ``samples`` contains
-        entries for weak variables or for nodes in :attr:`.model_nodes` they are
+        entries for weak variables or for nodes in
+        :attr:`~liesel.model.Model.model_nodes` they are
         ignored.
     newdata
         Dictionary of new data at which to evaluate log probs. The keys should
@@ -3430,7 +3513,7 @@ def log_prob_pointwise(
     Returns
     -------
     A dictionary with pointwise log probability evaluations as values and the
-    :class:`.Dist` node names of the supplied variables as keys.
+    :class:`~liesel.model.Dist` node names of the supplied variables as keys.
     """
     ll_names = []
     models = []
@@ -3450,10 +3533,10 @@ def log_prob_pointwise(
                 "all variables contributing to the likelihood."
             )
 
-        if var.value.shape != var.log_prob.shape:
+        if var.value.shape != jnp.shape(var.log_prob):
             msg = (
                 f"{var}.value has shape {var.value.shape}, "
-                f"while {var}.log_prob has shape {var.log_prob.shape}. This "
+                f"while {var}.log_prob has shape {jnp.shape(var.log_prob)}. This "
                 f"suggests that the pointwise log prob for {var} may not be "
                 "available, or that you may be using a multivariate distribution. "
                 "Please double check."

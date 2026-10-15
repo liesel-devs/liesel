@@ -17,10 +17,15 @@ class EpochType(IntEnum):
     """Indicates which MCMC phase the epoch is part of."""
 
     INITIAL_VALUES = 0
+    """Initial chain states before any sampling transitions."""
     FAST_ADAPTATION = 1
+    """Warmup phase for adapting fast kernel parameters, such as step sizes."""
     SLOW_ADAPTATION = 2
+    """Warmup phase that also adapts slow parameters, such as mass matrices."""
     BURNIN = 3
+    """Warmup sampling without further kernel adaptation."""
     POSTERIOR = 4
+    """Posterior sampling after warmup, without kernel adaptation."""
 
     @staticmethod
     def is_adaptation(epoch_type: EpochType) -> bool:
@@ -66,8 +71,8 @@ class EpochConfig:
 
     def to_state(self, nth_epoch: int, time_before_epoch: int) -> EpochState:
         """
-        Creates initailized :class:`.EpochState` object based on this of
-        :class:`.EpochConfig` object.
+        Creates initailized :class:`~liesel.goose.EpochState` object based on this of
+        :class:`~liesel.goose.EpochConfig` object.
 
         Parameters
         ----------
@@ -92,12 +97,13 @@ class EpochState:
     EpochState describes the state in the current epoch.
 
     In particular, it calculates how much time is left in the current epoch and
-    advances time. It also, provides access to the :class:`.EpochConfig` of the
+    advances time. It also, provides access to the :class:`~liesel.goose.EpochConfig` of
+    the
     current epoch.
     """
 
     config: EpochConfig
-    """:class:`.EpochConfig` of this epoch."""
+    """:class:`~liesel.goose.EpochConfig` of this epoch."""
     nth_epoch: int
     """Position of this epoch in the epoch sequence."""
     time: int
@@ -119,11 +125,13 @@ class EpochState:
 
 class EpochManager:
     """
-    Manages :class:`.EpochConfig` objects.
+    Manages :class:`~liesel.goose.EpochConfig` objects.
 
-    A sequence of :class:`.EpochConfig` objects can be handed to the manager either
+    A sequence of :class:`~liesel.goose.EpochConfig` objects can be handed to the
+    manager either
     during initialization or later with the `append` method. The manager creates
-    a new :class:`.EpochState` object with properly initialized time values.
+    a new :class:`~liesel.goose.EpochState` object with properly initialized time
+    values.
 
     Furthermore, the :class:`.EpochManager` enforces this invariant:
 
@@ -150,7 +158,7 @@ class EpochManager:
                 self.append(config)
 
     def append(self, config: EpochConfig):
-        """Appends an :class:`.EpochConfig` to the list of epochs."""
+        """Appends an :class:`~liesel.goose.EpochConfig` to the list of epochs."""
         if not self._configs and config.type != EpochType.INITIAL_VALUES:
             raise RuntimeError("First epoch must be of type INITIAL_VALUES")
 
@@ -198,7 +206,7 @@ class EpochManager:
         """
         Returns the next epoch with an initialized state.
 
-        Raises a :class:`.RuntimeError` if there are no more epoch configs to return.
+        Raises a :exc:`RuntimeError` if there are no more epoch configs to return.
         """
         if self.has_more():
             config = self._configs[self._next_epoch_ptr]

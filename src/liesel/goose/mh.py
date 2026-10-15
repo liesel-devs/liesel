@@ -8,16 +8,16 @@ import jax
 import jax.numpy as jnp
 
 from .kernel import DefaultTransitionInfo
-from .types import KeyArray, ModelInterface, ModelState, Position, Scalar
+from .types import KeyArray, ModelInterface, ModelState, PositionInput, Scalar
 
 mh_error_book = {0: "no errors", 90: "nan acceptance prob"}
-"""The error book of the :func:`.mh_step` function."""
+"""The error book of the :func:`~liesel.goose.mh_step` function."""
 
 
 def mh_step(
     prng_key: KeyArray,
     model: ModelInterface,
-    proposal: Position,
+    proposal: PositionInput,
     model_state: ModelState,
     log_correction: Scalar = 0.0,
 ) -> tuple[DefaultTransitionInfo, ModelState]:
@@ -42,7 +42,9 @@ def mh_step(
 
     Returns
     -------
-    A tuple of a :class:`.TransitionInfo` and a :class:`.ModelState` (= a pytree).
+    A tuple of a :class:`~liesel.goose.TransitionInfo` and a
+    :attr:`~liesel.goose.ModelState` (= a
+    pytree).
     """
 
     current_log_prob = jnp.asarray(model.log_prob(model_state))

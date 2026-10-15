@@ -5,13 +5,13 @@ Basic functionality for using B-splines in Liesel.
 from functools import partial
 
 import jax.numpy as jnp
-from jax import jit, lax, vmap
-
-from liesel.model import Array
+from jax import Array, jit, lax, vmap
+from jax.typing import ArrayLike
+from numpy.typing import ArrayLike as NumpyArrayLike
 
 
 def equidistant_knots(
-    x: Array, n_param: int, order: int = 3, eps: float = 0.01
+    x: ArrayLike, n_param: int, order: int = 3, eps: float = 0.01
 ) -> Array:
     """
     Create equidistant knots for a B-spline of the specified order.
@@ -107,7 +107,7 @@ def _build_basis_vector(x: Array, knots: Array, order: int) -> Array:
 
 
 def basis_matrix(
-    x: Array, knots: Array, order: int = 3, outer_ok: bool = False
+    x: NumpyArrayLike, knots: ArrayLike, order: int = 3, outer_ok: bool = False
 ) -> Array:
     """
     Builds a B-spline basis matrix.
@@ -178,7 +178,7 @@ def basis_matrix(
         raise ValueError(f"Invalid {order=}.")
 
     # if x is a scalar, this ensures that the function still works
-    x = jnp.atleast_1d(x)
+    x = jnp.atleast_1d(jnp.asarray(x))
 
     knots = jnp.sort(knots)
 

@@ -1,8 +1,0 @@
-project:
-  title: "tutorials"
-  output-dir: ../md
-format: gfm
-engine: jupyter
-jupyter: python3
-execute:
-  cache: false

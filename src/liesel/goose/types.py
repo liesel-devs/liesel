@@ -9,9 +9,10 @@ from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, TypeVar
 
 import jax
+import numpy as np
 from jax.typing import ArrayLike
 
-from ..types import Position
+from ..types import Position, PositionInput, PyTree
 
 if TYPE_CHECKING:
     from .epoch import EpochState
@@ -24,14 +25,15 @@ if TYPE_CHECKING:
 
 # simple type aliases
 
-PyTree = Any
 Array = Any
-type Scalar = float | jax.Array
+"""Deprecated compatibility alias for Any; use PyTree or an array-specific type."""
+type Scalar = float | np.number | np.ndarray | jax.Array
+"""A numerical scalar, including a zero-dimensional NumPy or JAX array."""
 
 ModelState = PyTree
 KernelState = PyTree
 KeyArray = Any
-JitterFunction = Callable[[KeyArray, Array], Array]
+JitterFunction = Callable[[KeyArray, PyTree], PyTree]
 JitterFunctions = dict[str, JitterFunction]
 
 
@@ -98,7 +100,9 @@ class ModelInterface(Protocol):
         raise NotImplementedError
 
     @abstractmethod
-    def update_state(self, position: Position, model_state: ModelState) -> ModelState:
+    def update_state(
+        self, position: PositionInput, model_state: ModelState
+    ) -> ModelState:
         """Updates the model state with the values in the position."""
 
         raise NotImplementedError
@@ -167,7 +171,7 @@ class Kernel(Protocol[TKernelState, TTransitionInfo, TTuningInfo]):
         kernel_state: TKernelState,
         model_state: ModelState,
         epoch: EpochState,
-        history: Position | None,
+        history: PositionInput | None,
     ) -> TuningOutcome[TKernelState, TTuningInfo]:
         """
         The method can perform automatic tuning of the kernel and is called
@@ -191,7 +195,8 @@ class Kernel(Protocol[TKernelState, TTransitionInfo, TTuningInfo]):
             Holds the history of the position of the current epoch, i.e., that
             is the position but each leave in the pytree is enhanced by one
             dimension (axis = 0) which represents the time or MCMC iteration.
-            The value may be ``None`` if the class variable :py:attr:`~needs_histroy` is
+            The value may be ``None`` if the class variable
+            :attr:`~liesel.goose.Kernel.needs_history` is
             ``False``.
         """
 
@@ -237,11 +242,12 @@ class Kernel(Protocol[TKernelState, TTransitionInfo, TTuningInfo]):
         Asks the kernel to inspect the warmup history and react to it.
 
         This method is executed once the first non-warmup epoch is encountered and
-        before :meth:`.start_epoch` is called.
+        before :meth:`~liesel.goose.Kernel.start_epoch` is called.
 
         ``tuning_history`` is ``None`` if no tuning has happened prior to the first
         non-warmup epoch. Otherwise ``tuning_history`` has the same structure as
-        returned from :meth:`.tune` but each leaf has an additional dimension. The first
+        returned from :meth:`~liesel.goose.Kernel.tune` but each leaf has an additional
+        dimension. The first
         dimension refers to the n-the tuning.
 
         Must be jittable.
@@ -255,13 +261,13 @@ class Kernel(Protocol[TKernelState, TTransitionInfo, TTuningInfo]):
 class GeneratedQuantity(Protocol):
     """
     Protocol representing the data structure for quantities generated via
-    implmentations of :class:`.QuantityGenerator`.
+    implmentations of ``QuantityGenerator``.
 
     Concrete implementations should add additional attributes.
 
     The attribute ``error_code`` is reserved to store integers that map to error
     messages via the error book provided in the implmentation of
-    :class:`.QuantityGenerator`.
+    ``QuantityGenerator``.
     """
 
     error_code: int
