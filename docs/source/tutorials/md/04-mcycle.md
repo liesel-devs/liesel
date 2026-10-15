@@ -87,9 +87,9 @@ and its own smoothing variance $\tau^2\sim\operatorname{InverseGamma}(1,0.005)$.
 This variance controls smoothness; it is distinct from the response variance
 $\sigma(t)^2$.
 
-We keep 64-bit arithmetic enabled in this notebook and construct the model
-with `to_float32=False`: the sharply different response spreads make numerical
-precision relevant for these spline calculations.
+We keep 64-bit arithmetic enabled in this notebook, so the model holds float64
+values: the sharply different response spreads make numerical precision
+relevant for these spline calculations.
 
 The mean uses 20 basis functions and log standard deviation uses 10. These are
 modeling choices shared by both samplers. We keep the centered B-spline
@@ -135,7 +135,7 @@ y = lsl.Var.new_obs(
     dist=lsl.Dist(tfd.Normal, loc=mu, scale=sigma),
     name="y",
 )
-model = lsl.Model(y, to_float32=False)
+model = lsl.Model(y)
 ```
 
 ```{code-cell} ipython3
