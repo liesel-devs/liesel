@@ -2,7 +2,8 @@
 
 This module defines the interface consumed by :class:`~liesel.optim.OptimEngine` and
 provides
-the default negative log-probability loss for Liesel models.
+the default negative log-probability loss for Liesel models. The same protocol is
+implemented by variational losses such as :class:`~liesel.optim.NegElboLoss`.
 """
 
 from collections import Counter
