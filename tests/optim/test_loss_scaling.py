@@ -77,14 +77,15 @@ def test_split_scalar():
     train_state = model.update_state(split.train, model.state)
     validate_state = model.update_state(split.validate, model.state)
     assert jnp.allclose(
-        loss.loss_train(Position({}), carry), -pointwise_sum(train_state, "y_log_prob")
+        loss.loss_train(Position({}), carry)[0],
+        -pointwise_sum(train_state, "y_log_prob"),
     ), "train loss"
     assert jnp.allclose(
-        loss.loss_monitor(Position({}), carry),
+        loss.loss_monitor(Position({}), carry)[0],
         -split.validate_sample_scale * pointwise_sum(validate_state, "y_log_prob"),
     ), "validation loss"
     assert jnp.allclose(
-        scaled_loss.loss_train(Position({}), carry),
+        scaled_loss.loss_train(Position({}), carry)[0],
         -pointwise_sum(train_state, "y_log_prob") / split.train_sample_size,
     ), "scaled train loss"
 
@@ -105,14 +106,15 @@ def test_split_array():
     train_state = model.update_state(split.train, model.state)
     validate_state = model.update_state(split.validate, model.state)
     assert jnp.allclose(
-        loss.loss_train(Position({}), carry), -pointwise_sum(train_state, "y_log_prob")
+        loss.loss_train(Position({}), carry)[0],
+        -pointwise_sum(train_state, "y_log_prob"),
     ), "train loss"
     assert jnp.allclose(
-        loss.loss_monitor(Position({}), carry),
+        loss.loss_monitor(Position({}), carry)[0],
         -split.validate_sample_scale * pointwise_sum(validate_state, "y_log_prob"),
     ), "validation loss"
     assert jnp.allclose(
-        scaled_loss.loss_monitor(Position({}), carry),
+        scaled_loss.loss_monitor(Position({}), carry)[0],
         -split.validate_sample_scale
         * pointwise_sum(validate_state, "y_log_prob")
         / split.train_sample_size,
@@ -131,11 +133,11 @@ def test_batch_scalar():
     carry = empty_carry(model, batch=batch, batches=batches)
     batch_state = model.update_state(batch, model.state)
     assert jnp.allclose(
-        loss.loss_train_batched(Position({}), carry),
+        loss.loss_train_batched(Position({}), carry)[0],
         -batches.batch_sample_scale * pointwise_sum(batch_state, "y_log_prob"),
     ), "batch loss"
     assert jnp.allclose(
-        scaled_loss.loss_train_batched(Position({}), carry),
+        scaled_loss.loss_train_batched(Position({}), carry)[0],
         -batches.batch_sample_scale
         * pointwise_sum(batch_state, "y_log_prob")
         / split.train_sample_size,
@@ -160,11 +162,11 @@ def test_batch_array():
     carry = empty_carry(model, batch=batch, batches=batches)
     batch_state = model.update_state(batch, model.state)
     assert jnp.allclose(
-        loss.loss_train_batched(Position({}), carry),
+        loss.loss_train_batched(Position({}), carry)[0],
         -batches.batch_sample_scale * pointwise_sum(batch_state, "y_log_prob"),
     ), "batch loss"
     assert jnp.allclose(
-        scaled_loss.loss_train_batched(Position({}), carry),
+        scaled_loss.loss_train_batched(Position({}), carry)[0],
         -batches.batch_sample_scale
         * pointwise_sum(batch_state, "y_log_prob")
         / split.train_sample_size,
@@ -190,15 +192,15 @@ def test_split_and_batch_scalar():
     batch_state = model.update_state(batch, model.state)
     validate_state = model.update_state(split.validate, model.state)
     assert jnp.allclose(
-        loss.loss_train_batched(Position({}), carry),
+        loss.loss_train_batched(Position({}), carry)[0],
         -batches.batch_sample_scale * pointwise_sum(batch_state, "y_log_prob"),
     ), "batch loss"
     assert jnp.allclose(
-        loss.loss_monitor(Position({}), empty_carry(model)),
+        loss.loss_monitor(Position({}), empty_carry(model))[0],
         -split.validate_sample_scale * pointwise_sum(validate_state, "y_log_prob"),
     ), "validation loss"
     assert jnp.allclose(
-        scaled_loss.loss_train_batched(Position({}), carry),
+        scaled_loss.loss_train_batched(Position({}), carry)[0],
         -batches.batch_sample_scale
         * pointwise_sum(batch_state, "y_log_prob")
         / split.train_sample_size,
@@ -236,18 +238,18 @@ def test_split_and_batch_different_axes():
         Position(split.validate | {"Z_batch": Z_batch_full}), model.state
     )
     assert jnp.allclose(
-        loss.loss_train_batched(Position({}), carry),
+        loss.loss_train_batched(Position({}), carry)[0],
         -batches.batch_sample_scale * pointwise_sum(batch_state, "y_log_prob"),
     ), "batch loss"
     assert jnp.allclose(
         loss.loss_monitor(
             Position({}),
             empty_carry(model, fixed_position=Position({"Z_batch": Z_batch_full})),
-        ),
+        )[0],
         -split.validate_sample_scale * pointwise_sum(validate_state, "y_log_prob"),
     ), "validation loss"
     assert jnp.allclose(
-        scaled_loss.loss_train_batched(Position({}), carry),
+        scaled_loss.loss_train_batched(Position({}), carry)[0],
         -batches.batch_sample_scale
         * pointwise_sum(batch_state, "y_log_prob")
         / split.train_sample_size,

@@ -29,7 +29,9 @@ logging.getLogger("liesel").setLevel(logging.WARNING)
 
 loc = lsl.Var.new_param(0.0, name="loc")
 y = lsl.Var.new_obs(
-    jnp.array([1.0, 2.0, 3.0]), lsl.Dist(tfd.Normal, loc, 1.0), name="y"
+    jnp.array([1.0, 2.0, 3.0]),
+    dist=lsl.Dist(tfd.Normal, loc, 1.0),
+    name="y",
 )
 model = lsl.Model(y)
 
@@ -66,7 +68,8 @@ applies. To extend the total budget, change `engine.stopper.epochs` before
 resuming. Calling {meth}`fit() <liesel.optim.LieselOptim.fit>` without a checkpoint starts a new run.
 
 The result's `status` tells you why fitting stopped: `"paused"`,
-`"max_epochs"`, `"early_stopping"`, or `"nan"`. A NaN result has no
+`"max_epochs"`, `"early_stopping"`, `"numerical_failure"`, or `"nan"`.
+A numerical-failure or NaN result has no
 checkpoint; recover from an earlier saved checkpoint instead.
 
 ## Save to disk
@@ -77,7 +80,12 @@ This example uses a temporary directory so rerunning the guide starts fresh:
 ```{code-cell} ipython3
 with TemporaryDirectory() as directory:
     checkpoint_path = Path(directory) / "optim.pkl"
-    first = engine.fit(checkpoint=checkpoint_path, checkpoint_every=10, pause_after=10)
+    first = engine.fit(
+        checkpoint=checkpoint_path,
+        checkpoint_every=10,
+        pause_after=10,
+    )
+
     result = engine.fit(checkpoint=checkpoint_path, checkpoint_every=10)
 ```
 
@@ -89,7 +97,7 @@ For a real run, choose a persistent path such as `"optim.pkl"`.
 
 A missing file starts a new run. An existing file resumes it. The engine saves
 every ten epochs here, plus at deliberate pauses and normal completion. A crash
-or timeout loses work since the last successful save. Failed writes and NaN
+or timeout loses work since the last successful save. Failed writes and numerical
 failures leave the previous file intact.
 
 Use a different path for a new experiment and only one writer per path. The
@@ -113,8 +121,10 @@ extends the budget but does not override early stopping.
 
 History and monitoring continue across pauses. Earlier results stay unchanged;
 keeping many snapshots uses extra memory. Treat checkpoint contents as read-only.
-Custom losses that change model state must keep that state compatible and
-serializable with pickle.
+Custom losses must keep their model state and loss-state PyTrees compatible
+and serializable with pickle. Committed and best loss states survive recovery.
+For {class}`LaplaceLoss <liesel.optim.LaplaceLoss>`, keep the latent parameters and inner-solver controls unchanged;
+checkpoint recovery checks these settings as well as state structure and dtype.
 
 For manual snapshots, use {py:meth}`liesel.optim.OptimCheckpoint.save` and
 {py:meth}`liesel.optim.OptimCheckpoint.load`. Passing a checkpoint object resumes
