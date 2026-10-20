@@ -180,22 +180,30 @@ def test_split_helpers_score_inferred_heldout_latents(manager, part):
     assert_tree_close(jax.jit(score)(state), (expected_lik, expected_prior))
 
 
+@pytest.mark.parametrize("weighted", [False, True])
 @pytest.mark.parametrize("observed", [False, True])
 # (2,) has batch_size entries but is global.
 @pytest.mark.parametrize("shape", [(), (2,), (3,)])
-def test_uniform_batch_rejects_indirect_nonpointwise_factors(observed, shape):
+def test_minibatches_reject_indirect_nonpointwise_factors(weighted, observed, shape):
     data = lsl.Var.new_obs(jnp.arange(6.0), name="data")
     scale = lsl.Var.new_calc(lambda x: 1.0 + 2.5 * jnp.std(x), data)
     factory = lsl.Var.new_obs if observed else lsl.Var.new_param
     mu = factory(jnp.zeros(shape), lsl.Dist(tfd.Normal, 0.0, scale), name="mu")
     model = lsl.Model(mu)
-    batches = opt.Batches(["data"], axis_size=6, batch_size=2, shuffle=False)
+    batches = opt.Batches(
+        ["data"],
+        axis_size=6,
+        batch_size=2,
+        shuffle=weighted,
+        sample_with_replacement=weighted,
+        sampling_weights=jnp.arange(1.0, 7.0) if weighted else None,
+    )
     state = model.update_state(
         batches.extract_batched_position(model, model.state, 0), model.state
     )
     method = batches.scaled_log_lik if observed else batches.scaled_log_prior
     with pytest.raises(ValueError, match="mu.*pointwise.*custom Loss"):
-        method(model, state)
+        method(model, state, batch_index=0)
     full = opt.Batches(["data"], axis_size=6, batch_size=None)
     method = full.scaled_log_lik if observed else full.scaled_log_prior
     assert_tree_close(method(model, model.state), model.log_prob)
