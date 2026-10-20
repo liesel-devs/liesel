@@ -535,6 +535,12 @@ class NegLogProbLoss(LossMixin):
         jax.Array
             Negative scaled validation log-likelihood. If
             ``validation_strategy="log_prob"``, the log-prior is included as well.
+
+        Raises
+        ------
+        ValueError
+            If the validation split's keys reach local parameter priors, whose
+            held-out latent values this loss cannot infer.
         """
         part = "validate" if self.split.has_validation else "train"
         states = getattr(carry, "_data_states", {})

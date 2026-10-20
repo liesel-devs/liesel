@@ -95,8 +95,9 @@ whose scale is computed from a batched sample's standard deviation, even when
 their length equals the batch size. Compute such global summaries from the full
 data and keep them fixed as passthrough inputs, or use a custom loss. Full-data
 evaluation is unchanged. This check and the split's local-prior test read
-full-data shapes from `model.state`, so do not store a part state there. Shape checks cannot prove that the terms decompose over selected
-units: the model must still satisfy that requirement.
+full-data shapes from `model.state`, so do not store a part state there. Shape
+checks cannot prove that the terms decompose over selected units: the model must
+still satisfy that requirement.
 
 A factor depending on two independent
 groups is rejected. Keep aligned keys in one group and shared inputs such as

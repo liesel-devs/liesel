@@ -140,13 +140,14 @@ on each group's keys. For row data without either factor, supply an explicit
 nested group. A factor depending on multiple independent groups is rejected;
 align those inputs in one group or keep shared data as passthrough.
 
-The built-in losses reject scoring validation splits whose keys reach local
-parameter priors, as `loss_monitor="validation"` does. They cannot infer the
-held-out units' local latent values. Use a custom `Loss` that handles those
-latents, or monitor the training loss; choosing `validation_strategy="log_lik"`
-does not remove this restriction. Global priors computed from split data and
-held-out parts that are not scored are allowed. Per-unit parameters
-without a prior are not detected; see {doc}`optimizer-loss-scaling`.
+The built-in losses reject validation splits whose keys reach local parameter
+priors when the fit scores them, as with `loss_monitor="validation"`. They
+cannot infer the held-out units' local latent values. Use a custom `Loss` that
+handles those latents, or monitor the training loss; choosing
+`validation_strategy="log_lik"` does not remove this restriction. Global priors
+computed from split data and held-out parts that are not scored are allowed.
+Per-unit parameters without a prior are not detected; see
+{doc}`optimizer-loss-scaling`.
 
 ## Keep shared data
 
