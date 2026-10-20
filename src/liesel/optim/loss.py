@@ -14,9 +14,9 @@ import networkx as nx
 
 from ..model import Calc, Model
 from ..model.model import _reduced_sum
-from ._log_lik import validate_likelihood_groups
+from ._log_lik import validate_factor_groups
 from ._model_utils import validate_model_data_keys
-from .split import PositionSplit, PositionSplitManager
+from .split import PositionSplit, PositionSplitManager, validate_split_priors
 from .types import Position
 
 if TYPE_CHECKING:
@@ -322,11 +322,16 @@ class NegLogProbLoss(LossMixin):
     Negative log-probability loss for Liesel models.
 
     The training objective is the negative sum of the model log-likelihood and
-    log-prior. During mini-batch optimization, likelihood terms are scaled through
-    ``carry.batches.scaled_log_lik(...)`` so :class:`~liesel.optim.BatchManager` can
-    apply
-    branch-specific scaling for multi-size observed data. Validation loss uses
-    ``split.scaled_log_lik(...)`` for the same reason.
+    log-prior. During mini-batch optimization, batch-dependent factors are scaled
+    through ``scaled_log_lik(...)`` and ``scaled_log_prior(...)``. These methods
+    apply branch-specific scaling for :class:`~liesel.optim.BatchManager`.
+    Validation loss uses
+    ``split.scaled_log_lik(...)`` and ``split.scaled_log_prior(...)`` for the same
+    reason. Global priors are included once without scaling.
+
+    Validation or test splits whose keys reach parameter priors require a custom
+    loss: the built-in loss cannot infer the held-out units' local latent values.
+    This restriction applies to both validation strategies.
 
     The model must use the standard sums of observed distribution factors and
     parameter priors. Weak observed variables and weak parameters contribute
@@ -396,8 +401,9 @@ class NegLogProbLoss(LossMixin):
     ):
         _validate_model_decomposition(model)
         validate_model_data_keys(model, split.position_keys)
+        validate_split_priors(model, split)
         splits = split.splits if isinstance(split, PositionSplitManager) else (split,)
-        validate_likelihood_groups(model, [part.split_position_keys for part in splits])
+        validate_factor_groups(model, [part.split_position_keys for part in splits])
         self._model = model
         self.split = split
         if validation_strategy not in ("log_lik", "log_prob"):
@@ -414,9 +420,10 @@ class NegLogProbLoss(LossMixin):
         self, split: SplitConfig, optimizer_keys: Sequence[str]
     ) -> None:
         validate_model_data_keys(self.model, split.position_keys, optimizer_keys)
+        validate_split_priors(self.model, split)
 
     def _validate_batch_keys(self, groups: Sequence[Sequence[str]]) -> None:
-        validate_likelihood_groups(self.model, groups)
+        validate_factor_groups(self.model, groups)
 
     @property
     def model(self) -> Model:
@@ -479,7 +486,9 @@ class NegLogProbLoss(LossMixin):
         log_lik = carry.batches.scaled_log_lik(
             self.model, new_state, batch_index=carry.i_batch
         )
-        log_prior = new_state["_model_log_prior"].value
+        log_prior = carry.batches.scaled_log_prior(
+            self.model, new_state, batch_index=carry.i_batch
+        )
         return -(log_lik + log_prior) / self.scalar
 
     def loss_train(self, params: Position, carry: "OptimCarry") -> jax.Array:
@@ -506,7 +515,7 @@ class NegLogProbLoss(LossMixin):
         new_state = self.model.update_state(position, state, allow_weak_vars=True)
 
         log_lik = self.split.scaled_log_lik(self.model, new_state, part="train")
-        log_prior = new_state["_model_log_prior"].value
+        log_prior = self.split.scaled_log_prior(self.model, new_state, part="train")
         return -(log_lik + log_prior) / self.scalar
 
     def loss_monitor(self, params: Position, carry: "OptimCarry") -> jax.Array:
@@ -534,7 +543,7 @@ class NegLogProbLoss(LossMixin):
         new_state = self.model.update_state(position, state, allow_weak_vars=True)
         loss = -self.split.scaled_log_lik(self.model, new_state, part=part)
         if self.validation_strategy == "log_prob":
-            loss -= new_state["_model_log_prior"].value
+            loss -= self.split.scaled_log_prior(self.model, new_state, part=part)
 
         return loss / self.scalar
 

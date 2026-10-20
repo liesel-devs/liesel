@@ -237,6 +237,12 @@ shares that group's split, scaling, and weighted sampling corrections. It also
 contributes to validation and test scores when its source group is held out.
 A factor spanning independently split or batched groups is rejected.
 
+This dependency rule also follows distribution inputs and covers parameter
+priors. Local priors that read a batched index receive the same group scaling
+and weighted corrections as likelihoods. See {doc}`optimizer-loss-scaling` for
+an example. Shared inputs must remain passthrough data, for example
+`split_axes={"knots": None}` for spline knots used by a batched likelihood.
+
 For weighted batches with a multidimensional weak likelihood, supply its row
 axis explicitly, for example `likelihood_axes={"copula": 0}`. This may differ
 from the strong input's axis. The {ref}`row-wise requirement <optimizer-row-wise>`
