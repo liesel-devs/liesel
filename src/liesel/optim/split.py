@@ -33,18 +33,26 @@ _SPLIT_PARTS: tuple[SplitPart, ...] = ("train", "validate", "test")
 
 
 def validate_split_priors(
-    model: Model, split: PositionSplit | PositionSplitManager, state: ModelState
+    model: Model,
+    split: PositionSplit | PositionSplitManager,
+    state: ModelState | None = None,
 ) -> None:
     """Reject scoring validation groups whose local latents cannot be inferred.
 
-    ``state`` is the validation state. A prior is local if its log-density shape
-    differs from ``model.state``.
+    ``state`` is the validation state. If omitted, its shapes are traced only
+    when a validation group reaches priors. A prior is local if its log-density
+    shape differs from ``model.state``.
     """
     splits = split.splits if isinstance(split, PositionSplitManager) else (split,)
     for child in splits:
         if not child.has_validation:
             continue
         priors = log_prob_sources(model, child.split_position_keys, prior=True)
+        if priors and state is None:
+            state = jax.eval_shape(
+                lambda p: model.update_state(p, model.state, allow_weak_vars=True),
+                split.validate,
+            )
         local = [name for name in priors if not keeps_full_shape(model, state, name)]
         if local:
             raise ValueError(

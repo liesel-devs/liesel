@@ -116,23 +116,25 @@ def test_scored_validation_with_local_priors_requires_custom_loss(
     if manager:
         split = opt.PositionSplitManager([split])
 
-    def fit():
-        return opt.LieselOptim(
-            model,
-            split=split,
-            optimizers=optax.adam(0.05),
-            validation_strategy=strategy,
-            loss_monitor=monitor,
-            stopper=opt.Stopper(epochs=2, patience=2),
-            show_progress=False,
-        ).fit()
-
+    optim = opt.LieselOptim(
+        model,
+        split=split,
+        optimizers=optax.adam(0.05),
+        validation_strategy=strategy,
+        loss_monitor=monitor,
+        stopper=opt.Stopper(epochs=2, patience=2),
+        show_progress=False,
+    )
     if monitor == "train_full_data":
         # The fit scores neither held-out part.
-        assert fit().n_epochs == 2
+        assert optim.fit().n_epochs == 2
         return
+    # Rejected before training, and on direct calls.
     with pytest.raises(ValueError, match="held-out.*custom Loss"):
-        fit()
+        optim.build_engine()
+    loss = opt.NegLogProbLoss(model, split, validation_strategy=strategy)
+    with pytest.raises(ValueError, match="held-out.*custom Loss"):
+        loss.loss_monitor(Position({}), carry(model))
 
 
 def test_validation_includes_data_dependent_global_prior_once():
