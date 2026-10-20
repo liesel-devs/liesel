@@ -1666,6 +1666,12 @@ class Batches:
 
         return _scaled_common_log_lik(model_state, self.batch_sample_scale)
 
+    @property
+    def _row_scale(self) -> float:
+        """Ratio of rows to batch rows, which scales local priors."""
+        assert self.batch_size is not None
+        return self.axis_size / self.batch_size
+
     def scaled_log_prior(
         self,
         model: Model | ModelInterface,
@@ -1675,10 +1681,11 @@ class Batches:
     ) -> jax.Array:
         """Scale priors depending on this group's keys; include other priors once.
 
-        Uses :attr:`batch_sample_scale` and, for weighted sampling, the per-index
-        corrections for ``batch_index``. ``likelihood_axes`` can specify the
-        pointwise axis by parameter name. Generic interfaces retain their
-        aggregate ``_model_log_prior`` unchanged.
+        Uses ``axis_size / batch_size``, which equals :attr:`batch_sample_scale`
+        unless sample sizes are set manually, and, for weighted sampling, the
+        per-index corrections for ``batch_index``. ``likelihood_axes`` can
+        specify the pointwise axis by parameter name. Generic interfaces retain
+        their aggregate ``_model_log_prior`` unchanged.
 
         Indirectly selected priors must retain a pointwise axis with
         ``batch_size`` entries and another length in ``model.state``, even for
@@ -1690,7 +1697,7 @@ class Batches:
         return _scaled_liesel_log_prior(
             model,
             model_state,
-            [(self.position_keys, self.batch_sample_scale)],
+            [(self.position_keys, self._row_scale)],
             corrections,
         )
 
@@ -2729,16 +2736,15 @@ class BatchManager:
     ) -> jax.Array:
         """Scale each child's local priors and include uncovered priors once.
 
-        Weighted children apply their per-index corrections before summation;
-        pass the ``batch_index`` used to produce ``model_state``. Generic model
+        Each child scales by its ratio of rows to batch rows. Weighted children
+        apply their per-index corrections before summation; pass the
+        ``batch_index`` used to produce ``model_state``. Generic model
         interfaces retain their aggregate prior unchanged.
         """
         if not isinstance(model, Model):
             return model_state["_model_log_prior"].value
         corrections = self._factor_corrections(model, model_state, batch_index)
-        groups = [
-            (batch.position_keys, batch.batch_sample_scale) for batch in self.batches
-        ]
+        groups = [(batch.position_keys, batch._row_scale) for batch in self.batches]
         return _scaled_liesel_log_prior(model, model_state, groups, corrections)
 
     def _tree_flatten(self):

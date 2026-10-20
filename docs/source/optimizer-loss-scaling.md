@@ -24,7 +24,9 @@ to the corresponding training size. Unsplit observed likelihoods contribute to
 training only, including observations explicitly marked as passthrough.
 {class}`LieselOptim <liesel.optim.LieselOptim>` then divides losses by the total training sample size by default;
 use `scale_loss=False` to keep the sum. Sample size counts likelihood terms,
-which need not equal the number of array elements.
+which need not equal the number of array elements. Local priors are scaled by
+the ratio of rows instead, which equals the likelihood factor unless sample
+sizes are set manually.
 
 Validation leaves out priors by default. With `validation_strategy="log_prob"`,
 global priors are included once, including priors computed from split data. The
@@ -41,8 +43,8 @@ for details.
 
 Custom losses can reuse the split's `scaled_log_lik` and `scaled_log_prior`
 helpers after inferring held-out local latents. These helpers only scale the
-supplied state: covered local priors receive the same training-to-held-out
-scale as their likelihoods, and global priors are included once.
+supplied state: covered local priors are scaled by the ratio of training to
+held-out rows, and global priors are included once.
 
 ## Batch local priors
 

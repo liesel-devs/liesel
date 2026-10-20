@@ -971,6 +971,11 @@ class PositionSplit:
 
         return scaled_common_log_lik(model_state, scale)
 
+    def _row_scale(self, part: SplitPart) -> float:
+        """Ratio of training rows to rows in ``part``, which scales local priors."""
+        size = self._axis_size_for_part(part)
+        return self.train_axis_size / size if size else 1.0
+
     def scaled_log_prior(
         self,
         model: Model | ModelInterface,
@@ -979,18 +984,18 @@ class PositionSplit:
     ) -> jax.Array:
         """Return split-aware priors, including uncovered priors once.
 
-        Covered local priors receive the same scale as the split's likelihoods.
-        Covered priors that keep their full-data shape are global and included
-        once. Callers must infer any held-out local latents before scoring them; this
-        helper only scales the supplied state. Generic model interfaces retain
-        their aggregate ``_model_log_prior`` unchanged.
+        Covered local priors are scaled by the ratio of training rows to rows in
+        ``part``, which equals the likelihood scale unless sample sizes are set
+        manually. Covered priors that keep their full-data shape are global and
+        included once. Callers must infer any held-out local latents before
+        scoring them; this helper only scales the supplied state. Generic model
+        interfaces retain their aggregate ``_model_log_prior`` unchanged.
         """
-        scale = self.sample_scale(part)
         if isinstance(model, Model):
             return scaled_liesel_log_prior(
                 model,
                 model_state,
-                [(self.split_position_keys, scale)],
+                [(self.split_position_keys, self._row_scale(part))],
                 global_once=True,
             )
         return model_state["_model_log_prior"].value
@@ -1872,17 +1877,17 @@ class PositionSplitManager:
     ) -> jax.Array:
         """Return each child's priors and include uncovered priors once.
 
-        Covered local priors receive their child's likelihood scale; global
-        priors keep their full-data shape and are included once. Callers must
-        infer any held-out local latents before scoring them; this helper only
-        scales the supplied state. Generic model interfaces retain their
-        aggregate prior unchanged, even with unequal child scales.
+        Covered local priors are scaled by their child's ratio of training rows
+        to rows in ``part``; global priors keep their full-data shape and are
+        included once. Callers must infer any held-out local latents before
+        scoring them; this helper only scales the supplied state. Generic model
+        interfaces retain their aggregate prior unchanged, even with unequal
+        child scales.
         """
-        scales = self.sample_scales(part)
         if isinstance(model, Model):
             groups = [
-                (split.split_position_keys, scale)
-                for split, scale in zip(self.splits, scales, strict=True)
+                (split.split_position_keys, split._row_scale(part))
+                for split in self.splits
             ]
             return scaled_liesel_log_prior(model, model_state, groups, global_once=True)
         return model_state["_model_log_prior"].value

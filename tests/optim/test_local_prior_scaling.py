@@ -218,6 +218,31 @@ def test_prior_only_group_and_full_data(factory):
         assert_tree_close(batches.scaled_log_lik(model, state), 0.0)
 
 
+def test_local_priors_scale_by_rows_with_manual_sample_sizes():
+    model = local_model(n=8)
+    batches = opt.Batches(
+        ["idx", "y"], axis_size=8, batch_size=2, sample_size=80.0, batch_sample_size=2.0
+    )
+    state = model.update_state(
+        batches.extract_batched_position(model, model.state, 0), model.state
+    )
+    expected = 4 * state["z_log_prob"].value.sum() + state["global_log_prob"].value
+    for config in (batches, opt.BatchManager([batches])):
+        assert_tree_close(config.scaled_log_prior(model, state), expected)
+
+    split = opt.PositionSplit.from_model(
+        model,
+        validate_axis_share=0.25,
+        shuffle=False,
+        sample_sizes={"train": 60.0, "validate": 2.0},
+    )
+    assert isinstance(split, opt.PositionSplit)
+    state = model.update_state(split.validate, model.state)
+    expected = 3 * state["z_log_prob"].value.sum() + state["global_log_prob"].value
+    for config in (split, opt.PositionSplitManager([split])):
+        assert_tree_close(config.scaled_log_prior(model, state), expected)
+
+
 def test_node_keys_and_distribution_only_observed_dependency():
     model = local_model()
     key = model.vars["idx"].value_node.name
