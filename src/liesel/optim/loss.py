@@ -329,11 +329,12 @@ class NegLogProbLoss(LossMixin):
     ``split.scaled_log_lik(...)`` and ``split.scaled_log_prior(...)`` for the same
     reason. Global priors are included once without scaling.
 
-    Validation splits whose keys reach local parameter priors require a custom
-    loss: the built-in loss cannot infer the held-out units' local latent values.
-    This restriction applies to both validation strategies. A prior is local if
-    its log-density shape changes with the split; per-unit parameters without a
-    prior are not detected.
+    :meth:`loss_monitor` rejects validation splits whose keys reach local
+    parameter priors: the built-in loss cannot infer the held-out units' local
+    latent values. This restriction applies to both validation strategies. A
+    prior is local if its log-density shape changes with the split; per-unit
+    parameters without a prior are not detected. Fits that do not monitor
+    validation can hold out such rows.
 
     The model must use the standard sums of observed distribution factors and
     parameter priors. Weak observed variables and weak parameters contribute
@@ -403,7 +404,6 @@ class NegLogProbLoss(LossMixin):
     ):
         _validate_model_decomposition(model)
         validate_model_data_keys(model, split.position_keys)
-        validate_split_priors(model, split)
         splits = split.splits if isinstance(split, PositionSplitManager) else (split,)
         validate_factor_groups(model, [part.split_position_keys for part in splits])
         self._model = model
@@ -422,7 +422,6 @@ class NegLogProbLoss(LossMixin):
         self, split: SplitConfig, optimizer_keys: Sequence[str]
     ) -> None:
         validate_model_data_keys(self.model, split.position_keys, optimizer_keys)
-        validate_split_priors(self.model, split)
 
     def _validate_batch_keys(self, groups: Sequence[Sequence[str]]) -> None:
         validate_factor_groups(self.model, groups)
@@ -543,6 +542,8 @@ class NegLogProbLoss(LossMixin):
         position = Position(params | data | carry.fixed_position)
         state = states.get(part, carry.model_state)
         new_state = self.model.update_state(position, state, allow_weak_vars=True)
+        if part == "validate":
+            validate_split_priors(self.model, self.split, new_state)
         loss = -self.split.scaled_log_lik(self.model, new_state, part=part)
         if self.validation_strategy == "log_prob":
             loss -= self.split.scaled_log_prior(self.model, new_state, part=part)

@@ -30,13 +30,14 @@ sizes are set manually.
 
 Validation leaves out priors by default. With `validation_strategy="log_prob"`,
 global priors are included once, including priors computed from split data. The
-built-in losses reject validation splits whose keys reach a local parameter
-prior, one whose log-density shape changes with the split: held-out local latents
-may receive no training gradient, so scoring them at their starting values gives
-a misleading validation loss and can stop training too early. Use a custom `Loss`
-that handles held-out latents, or train without a validation split. This
-restriction applies to both validation strategies. Test parts are not scored
-during fitting and are allowed. The check covers only priors: a per-unit
+built-in losses reject scoring validation splits whose keys reach a local
+parameter prior, one whose log-density shape changes with the split: held-out
+local latents may receive no training gradient, so scoring them at their
+starting values gives a misleading validation loss and can stop training too
+early. Use a custom `Loss` that handles held-out latents, or monitor the training
+loss, for example with `loss_monitor="train_full_data"`. This restriction applies
+to both validation strategies. Held-out parts that the fit does not score, such
+as test parts, are allowed. The check covers only priors: a per-unit
 parameter without a prior, such as `z` in `y ~ N(z[idx], 1)`, passes it but gets
 the same constant validation loss. See {py:class}`~liesel.optim.NegLogProbLoss`
 for details.

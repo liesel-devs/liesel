@@ -103,15 +103,14 @@ def test_batch_objective_and_gradients_recover_full_posterior(indexed, weighted)
 
 
 @pytest.mark.parametrize("manager", [False, True])
-@pytest.mark.parametrize("part", ["validate", "test"])
+@pytest.mark.parametrize("monitor", ["validation", "train_full_data"])
 @pytest.mark.parametrize("strategy", ["log_lik", "log_prob"])
-def test_validation_with_local_priors_requires_custom_loss(manager, part, strategy):
+def test_scored_validation_with_local_priors_requires_custom_loss(
+    manager, monitor, strategy
+):
     model = local_model(n=8)
     split = opt.PositionSplit.from_model(
-        model,
-        shuffle=False,
-        validate_axis_share=0.25 if part == "validate" else 0.0,
-        test_axis_share=0.25 if part == "test" else 0.0,
+        model, shuffle=False, validate_axis_share=0.25, test_axis_share=0.25
     )
     assert isinstance(split, opt.PositionSplit)
     if manager:
@@ -123,13 +122,13 @@ def test_validation_with_local_priors_requires_custom_loss(manager, part, strate
             split=split,
             optimizers=optax.adam(0.05),
             validation_strategy=strategy,
-            loss_monitor="train_full_data",
+            loss_monitor=monitor,
             stopper=opt.Stopper(epochs=2, patience=2),
             show_progress=False,
         ).fit()
 
-    if part == "test":
-        # The fit never scores the test part.
+    if monitor == "train_full_data":
+        # The fit scores neither held-out part.
         assert fit().n_epochs == 2
         return
     with pytest.raises(ValueError, match="held-out.*custom Loss"):

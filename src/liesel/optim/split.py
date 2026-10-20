@@ -32,30 +32,26 @@ SampleSizes = Mapping[SplitPart, int | float]
 _SPLIT_PARTS: tuple[SplitPart, ...] = ("train", "validate", "test")
 
 
-def validate_split_priors(model: Model, split: PositionSplit | PositionSplitManager):
-    """Reject validation groups whose local latents the built-in losses cannot infer.
+def validate_split_priors(
+    model: Model, split: PositionSplit | PositionSplitManager, state: ModelState
+) -> None:
+    """Reject scoring validation groups whose local latents cannot be inferred.
 
-    A prior is local if its log-density shape changes with the validation part.
-    Test parts are not scored during fitting.
+    ``state`` is the validation state. A prior is local if its log-density shape
+    differs from ``model.state``.
     """
     splits = split.splits if isinstance(split, PositionSplitManager) else (split,)
     for child in splits:
         if not child.has_validation:
             continue
         priors = log_prob_sources(model, child.split_position_keys, prior=True)
-        if not priors:
-            continue
-        state = jax.eval_shape(
-            lambda p: model.update_state(p, model.state, allow_weak_vars=True),
-            child.validate,
-        )
         local = [name for name in priors if not keeps_full_shape(model, state, name)]
         if local:
             raise ValueError(
-                f"Cannot use a validation split with local priors {sorted(local)} "
+                f"Cannot score a validation split with local priors {sorted(local)} "
                 "depending on its keys: held-out local latent values are not inferred "
                 "by the built-in loss. Use a custom Loss that handles those latents, "
-                "or omit the validation split."
+                "or monitor the training loss, e.g. loss_monitor='train_full_data'."
             )
 
 
