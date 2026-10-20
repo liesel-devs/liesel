@@ -399,27 +399,11 @@ class NegElboLoss(LossMixin):
     ) -> None:
         """Validate data against inferred target positions."""
         del optimizer_keys
-        computed_keys = [
-            key
-            for key in split.position_keys
-            if key in self.p.vars and self.p.vars[key].weak
-        ]
-        target_keys = (
-            list(self.q_to_p(self.q.extract_position(list(self.q.observed))))
-            if computed_keys
-            else []
-        )
+        target_keys = list(self.q_to_p(self.q.extract_position(list(self.q.observed))))
         validate_model_data_keys(self.p, split.position_keys, target_keys)
         validate_split_priors(self.p, split)
         splits = split.splits if isinstance(split, PositionSplitManager) else (split,)
         validate_factor_groups(self.p, [part.split_position_keys for part in splits])
-        target_nodes = {self.p._node_for_position_key(key) for key in target_keys}
-        for key in computed_keys:
-            if self.p.vars[key].value_node in target_nodes:
-                raise ValueError(
-                    f"Computed data key {key!r} overlaps an inferred target; "
-                    "batch its fixed inputs instead."
-                )
 
     def _validate_batch_keys(self, groups: Sequence[Sequence[str]]) -> None:
         validate_factor_groups(self.p, groups)
