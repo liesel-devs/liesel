@@ -81,9 +81,10 @@ The model's state totals themselves are unscaled; scaling occurs in the loss.
 
 Dependency tracing follows both values and distribution inputs, including
 computed inputs. For minibatches, indirectly selected factors must return an
-array with an axis of batch-size length. This rejects scalar data-dependent
-global priors, such as a prior whose scale is computed from a batched sample's
-standard deviation. Compute such global summaries from the full data and keep
+array with an axis of batch-size length that has another length in the model's
+full-data state. This rejects data-dependent global priors, such as a prior
+whose scale is computed from a batched sample's standard deviation, even when
+their length equals the batch size. Compute such global summaries from the full data and keep
 them fixed as passthrough inputs, or use a custom loss. Full-data evaluation is
 unchanged. Shape checks cannot prove that the terms decompose over selected
 units: the model must still satisfy that requirement.

@@ -182,7 +182,8 @@ def test_split_helpers_score_inferred_heldout_latents(manager, part):
 
 
 @pytest.mark.parametrize("observed", [False, True])
-@pytest.mark.parametrize("shape", [(), (3,)])
+# (2,) has batch_size entries but is global.
+@pytest.mark.parametrize("shape", [(), (2,), (3,)])
 def test_uniform_batch_rejects_indirect_nonpointwise_factors(observed, shape):
     data = lsl.Var.new_obs(jnp.arange(6.0), name="data")
     scale = lsl.Var.new_calc(lambda x: 1.0 + 2.5 * jnp.std(x), data)

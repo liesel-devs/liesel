@@ -1534,13 +1534,21 @@ class Batches:
                 if model._node_for_position_key(key) is var.value_node
             ]
             value = jnp.asarray(model_state[var.dist_node.name].value)
+            full_shape = jnp.shape(model.state[var.dist_node.name].value)
+            # Global terms keep their model.state shape. Shapes cannot tell them
+            # apart when batch_size equals axis_size.
+            pointwise = value.ndim == len(full_shape) and any(
+                n == self.batch_size and (n != m or n == self.axis_size)
+                for n, m in zip(value.shape, full_shape, strict=True)
+            )
+            if not value_keys and not pointwise:
+                raise ValueError(
+                    f"Indirectly batched factor {var.name!r} needs a pointwise "
+                    "log-density axis with batch_size entries and another length "
+                    "in model.state. Keep global summaries fixed as passthrough "
+                    "data, or use a custom Loss."
+                )
             if not weighted:
-                if not value_keys and self.batch_size not in value.shape:
-                    raise ValueError(
-                        f"Indirectly batched factor {var.name!r} needs a pointwise "
-                        "log-density axis with batch_size entries. Keep global "
-                        "summaries fixed as passthrough data, or use a custom Loss."
-                    )
                 continue
             if not value.ndim:
                 raise ValueError(f"{var.name!r} needs a pointwise likelihood axis.")
@@ -1599,8 +1607,9 @@ class Batches:
         observed likelihood terms are left unscaled.
 
         For minibatches, factors reached only through inputs must retain a
-        pointwise log-density axis with ``batch_size`` entries. A data dependency
-        alone does not establish a sum over sampled units.
+        pointwise log-density axis with ``batch_size`` entries and another length
+        in ``model.state``. A data dependency alone does not establish a sum over
+        sampled units.
 
         Parameters
         ----------
@@ -1672,7 +1681,8 @@ class Batches:
         aggregate ``_model_log_prior`` unchanged.
 
         Indirectly selected priors must retain a pointwise axis with
-        ``batch_size`` entries, even for uniform minibatches.
+        ``batch_size`` entries and another length in ``model.state``, even for
+        uniform minibatches.
         """
         if not isinstance(model, Model):
             return model_state["_model_log_prior"].value
