@@ -329,9 +329,11 @@ class NegLogProbLoss(LossMixin):
     ``split.scaled_log_lik(...)`` and ``split.scaled_log_prior(...)`` for the same
     reason. Global priors are included once without scaling.
 
-    Validation or test splits whose keys reach parameter priors require a custom
+    Validation splits whose keys reach local parameter priors require a custom
     loss: the built-in loss cannot infer the held-out units' local latent values.
-    This restriction applies to both validation strategies.
+    This restriction applies to both validation strategies. A prior is local if
+    its log-density shape changes with the split; per-unit parameters without a
+    prior are not detected.
 
     The model must use the standard sums of observed distribution factors and
     parameter priors. Weak observed variables and weak parameters contribute

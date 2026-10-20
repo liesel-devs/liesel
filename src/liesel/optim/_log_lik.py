@@ -59,6 +59,12 @@ def log_prob_sources(
     return sources
 
 
+def keeps_full_shape(model: Model, model_state: ModelState, name: str) -> bool:
+    """Whether a factor's log density has the shape it has in ``model.state``."""
+    node = model.vars[name].dist_node.name
+    return jnp.shape(model_state[node].value) == jnp.shape(model.state[node].value)
+
+
 def validate_factor_groups(
     model: Model, groups: Sequence[Sequence[str]]
 ) -> list[dict[str, list[str]]]:
@@ -126,9 +132,25 @@ def scaled_liesel_log_prior(
     model_state: ModelState,
     groups: Sequence[tuple[Sequence[str], float]],
     corrections: dict[str, tuple[jax.Array, int]] | None = None,
+    *,
+    global_once: bool = False,
 ):
-    """Scale covered parameter priors, including uncovered priors once."""
+    """Scale covered parameter priors, including uncovered priors once.
+
+    With ``global_once``, covered priors that keep their ``model.state`` shape
+    are global and included once.
+    """
     sources = validate_factor_groups(model, [keys for keys, _ in groups])
+    if global_once:
+        sources = [
+            {
+                name: keys
+                for name, keys in group.items()
+                if name not in model.parameters
+                or not keeps_full_shape(model, model_state, name)
+            }
+            for group in sources
+        ]
     node = model.nodes["_model_log_prior"]
     if not any(name in model.parameters for group in sources for name in group):
         selected = {

@@ -27,17 +27,22 @@ use `scale_loss=False` to keep the sum. Sample size counts likelihood terms,
 which need not equal the number of array elements.
 
 Validation leaves out priors by default. With `validation_strategy="log_prob"`,
-global priors are included once. The built-in losses reject validation or test
-splits whose keys reach a parameter prior: held-out local latents may receive no
-training gradient, so scoring them at their starting values gives a misleading
-validation loss and can stop training too early. Use a custom `Loss` that handles
-held-out latents, or train without a held-out split. This restriction applies to
-both validation strategies. See {py:class}`~liesel.optim.NegLogProbLoss` for details.
+global priors are included once, including priors computed from split data. The
+built-in losses reject validation splits whose keys reach a local parameter
+prior, one whose log-density shape changes with the split: held-out local latents
+may receive no training gradient, so scoring them at their starting values gives
+a misleading validation loss and can stop training too early. Use a custom `Loss`
+that handles held-out latents, or train without a validation split. This
+restriction applies to both validation strategies. Test parts are not scored
+during fitting and are allowed. The check covers only priors: a per-unit
+parameter without a prior, such as `z` in `y ~ N(z[idx], 1)`, passes it but gets
+the same constant validation loss. See {py:class}`~liesel.optim.NegLogProbLoss`
+for details.
 
 Custom losses can reuse the split's `scaled_log_lik` and `scaled_log_prior`
 helpers after inferring held-out local latents. These helpers only scale the
-supplied state: covered priors receive the same training-to-held-out scale as
-their likelihoods, and uncovered priors are included once.
+supplied state: covered local priors receive the same training-to-held-out
+scale as their likelihoods, and global priors are included once.
 
 ## Batch local priors
 

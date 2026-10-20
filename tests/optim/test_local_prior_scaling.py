@@ -105,7 +105,7 @@ def test_batch_objective_and_gradients_recover_full_posterior(indexed, weighted)
 @pytest.mark.parametrize("manager", [False, True])
 @pytest.mark.parametrize("part", ["validate", "test"])
 @pytest.mark.parametrize("strategy", ["log_lik", "log_prob"])
-def test_holdout_with_local_priors_requires_custom_loss(manager, part, strategy):
+def test_validation_with_local_priors_requires_custom_loss(manager, part, strategy):
     model = local_model(n=8)
     split = opt.PositionSplit.from_model(
         model,
@@ -116,14 +116,39 @@ def test_holdout_with_local_priors_requires_custom_loss(manager, part, strategy)
     assert isinstance(split, opt.PositionSplit)
     if manager:
         split = opt.PositionSplitManager([split])
-    with pytest.raises(ValueError, match="held-out.*custom Loss"):
-        opt.LieselOptim(
+
+    def fit():
+        return opt.LieselOptim(
             model,
             split=split,
             optimizers=optax.adam(0.05),
             validation_strategy=strategy,
             loss_monitor="train_full_data",
-        )
+            stopper=opt.Stopper(epochs=2, patience=2),
+            show_progress=False,
+        ).fit()
+
+    if part == "test":
+        # The fit never scores the test part.
+        assert fit().n_epochs == 2
+        return
+    with pytest.raises(ValueError, match="held-out.*custom Loss"):
+        fit()
+
+
+def test_validation_includes_data_dependent_global_prior_once():
+    data = lsl.Var.new_obs(jnp.arange(8.0), name="data")
+    scale = lsl.Var.new_calc(lambda x: 1.0 + jnp.std(x), data)
+    mu = lsl.Var.new_param(0.5, lsl.Dist(tfd.Normal, 0.0, scale), name="mu")
+    y = lsl.Var.new_obs(jnp.arange(8.0), lsl.Dist(tfd.Normal, mu, 1.0), name="y")
+    model = lsl.Model([y])
+    split = opt.PositionSplit.from_model(
+        model, position_keys=["data", "y"], validate_axis_share=0.25, shuffle=False
+    )
+    loss = opt.NegLogProbLoss(model, split, validation_strategy="log_prob")
+    state = model.update_state(split.validate, model.state)
+    expected = -3 * state["y_log_prob"].value.sum() - state["mu_log_prob"].value
+    assert_tree_close(loss.loss_monitor(Position({"mu": 0.5}), carry(model)), expected)
 
 
 @pytest.mark.parametrize("manager", [False, True])
