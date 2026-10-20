@@ -40,6 +40,11 @@ def validate_model_data_keys(
     parameter_keys: Sequence[str] = (),
 ) -> None:
     """Require writable, non-transient data keys with unambiguous computed values."""
+    optimized_nodes = {
+        model._node_for_position_key(key)
+        for key in parameter_keys
+        if key in model.nodes or key in model.vars
+    }
     for key in position_keys:
         node = model._node_for_position_key(key)
         if isinstance(node, TransientNode):
@@ -49,6 +54,14 @@ def validate_model_data_keys(
         if key not in model.vars and not isinstance(node, Value):
             raise ValueError(
                 f"Use a variable name for computed data, not node key {key!r}."
+            )
+        # Split data, passthrough included, replaces optimized values in the loss.
+        if node in optimized_nodes:
+            raise ValueError(
+                f"Cannot split or batch optimized parameter {key!r}; split data "
+                "would replace its optimized value. To batch local latents, index "
+                "them with a batched data variable, e.g. use z[idx] in the model "
+                "and include idx in position_keys."
             )
         if parameter_keys and key in model.vars and model.vars[key].weak:
             ancestors = nx.ancestors(model.node_graph, node)
