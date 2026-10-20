@@ -1608,8 +1608,8 @@ class Batches:
 
         For minibatches, factors reached only through inputs must retain a
         pointwise log-density axis with ``batch_size`` entries and another length
-        in ``model.state``. A data dependency alone does not establish a sum over
-        sampled units.
+        in ``model.state``, which must hold the full data. A data dependency
+        alone does not establish a sum over sampled units.
 
         Parameters
         ----------
@@ -1688,8 +1688,8 @@ class Batches:
         their aggregate ``_model_log_prior`` unchanged.
 
         Indirectly selected priors must retain a pointwise axis with
-        ``batch_size`` entries and another length in ``model.state``, even for
-        uniform minibatches.
+        ``batch_size`` entries and another length in ``model.state``, which must
+        hold the full data, even for uniform minibatches.
         """
         if not isinstance(model, Model):
             return model_state["_model_log_prior"].value

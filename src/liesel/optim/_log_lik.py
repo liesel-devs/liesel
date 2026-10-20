@@ -60,7 +60,10 @@ def log_prob_sources(
 
 
 def keeps_full_shape(model: Model, model_state: ModelState, name: str) -> bool:
-    """Whether a factor's log density has the shape it has in ``model.state``."""
+    """Whether a factor's log density has its shape in ``model.state``.
+
+    ``model.state`` must hold the full data.
+    """
     node = model.vars[name].dist_node.name
     return jnp.shape(model_state[node].value) == jnp.shape(model.state[node].value)
 

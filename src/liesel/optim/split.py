@@ -982,10 +982,11 @@ class PositionSplit:
 
         Covered local priors are scaled by the ratio of training rows to rows in
         ``part``, which equals the likelihood scale unless sample sizes are set
-        manually. Covered priors that keep their full-data shape are global and
-        included once. Callers must infer any held-out local latents before
-        scoring them; this helper only scales the supplied state. Generic model
-        interfaces retain their aggregate ``_model_log_prior`` unchanged.
+        manually. Covered priors that keep their shape in ``model.state``, which
+        must hold the full data, are global and included once. Callers must
+        infer any held-out local latents before scoring them; this helper only
+        scales the supplied state. Generic model interfaces retain their
+        aggregate ``_model_log_prior`` unchanged.
         """
         if isinstance(model, Model):
             return scaled_liesel_log_prior(
