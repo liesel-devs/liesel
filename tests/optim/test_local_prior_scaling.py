@@ -277,8 +277,11 @@ def test_cross_group_priors_rejected_in_factories_losses_and_manual_batches():
             optimizers=optax.sgd(0.01),
             loss_monitor="train_full_data",
         ).build_engine()
-    with pytest.raises(ValueError, match="factor 'z'"):
-        batches.scaled_log_prior(model, model.state)
+    state = model.update_state(
+        batches.extract_batched_position(model, model.state, 0), model.state
+    )
+    with pytest.raises(ValueError, match="factor 'z'.*more than one data group"):
+        batches.scaled_log_prior(model, state)
 
 
 def test_custom_prior_requires_custom_loss_only_when_covered():
