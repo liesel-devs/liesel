@@ -80,6 +80,10 @@ batches = opt.Batches.from_split(split, batch_size=10)
 Both the likelihood and local prior receive a factor of ten. The prior remains
 in `_model_log_prior`, and `_model_log_lik` still contains only likelihoods.
 The model's state totals themselves are unscaled; scaling occurs in the loss.
+This requires a `liesel.model.Model`. A generic model interface exposes only the
+aggregate `_model_log_prior`, which is included once. If it evaluates only a
+batch's local terms, they keep the batch's share of their full-data weight,
+without a warning; scale them in a custom loss.
 
 Dependency tracing follows both values and distribution inputs, including
 computed inputs. For minibatches, indirectly selected factors must return an
