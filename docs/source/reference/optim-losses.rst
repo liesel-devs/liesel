@@ -16,3 +16,6 @@ Define the objective minimized during a fit.
    ~liesel.optim.Loss
    ~liesel.optim.LossMixin
    ~liesel.optim.NegLogProbLoss
+   ~liesel.optim.LaplaceLoss
+   ~liesel.optim.LaplaceState
+   ~liesel.optim.LaplaceApproximation

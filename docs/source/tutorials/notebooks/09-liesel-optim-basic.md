@@ -18,8 +18,8 @@ import logging
 
 import jax.numpy as jnp
 import numpy as np
-import pandas as pd
 import optax
+import pandas as pd
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.model as lsl
@@ -38,19 +38,36 @@ standard deviation positive.
 rng = np.random.default_rng(202405)
 x = rng.uniform(-2.0, 2.0, size=240)
 X_values = np.column_stack([np.ones_like(x), x])
-y_values = X_values @ np.array([0.7, -1.4]) + rng.normal(scale=0.6, size=x.size)
+y_values = X_values @ np.array([0.7, -1.4]) + rng.normal(
+    scale=0.6,
+    size=x.size,
+)
 
 beta = lsl.Var.new_param(
-    jnp.zeros(2), lsl.Dist(tfd.Normal, loc=0.0, scale=5.0), name="beta"
+    jnp.zeros(2),
+    dist=lsl.Dist(tfd.Normal, loc=0.0, scale=5.0),
+    name="beta",
 )
+
 log_sigma = lsl.Var.new_param(
-    jnp.array(0.0), lsl.Dist(tfd.Normal, loc=0.0, scale=1.0), name="log_sigma"
+    jnp.array(0.0),
+    dist=lsl.Dist(tfd.Normal, loc=0.0, scale=1.0),
+    name="log_sigma",
 )
 sigma = lsl.Var.new_calc(jnp.exp, log_sigma, name="sigma")
+
 X = lsl.Var.new_obs(jnp.asarray(X_values), name="X")
-mu = lsl.Var.new_calc(lambda X, beta: X @ beta, X, beta, name="mu")
+mu = lsl.Var.new_calc(
+    lambda X, beta: X @ beta,
+    X,
+    beta,
+    name="mu",
+)
+
 y = lsl.Var.new_obs(
-    jnp.asarray(y_values), lsl.Dist(tfd.Normal, loc=mu, scale=sigma), name="y"
+    jnp.asarray(y_values),
+    dist=lsl.Dist(tfd.Normal, loc=mu, scale=sigma),
+    name="y",
 )
 model = lsl.Model(y)
 ```
@@ -121,6 +138,7 @@ The stopper allows 250 epochs and checks improvement over the last 30.
 
 ```{code-cell} ipython3
 batches = opt.Batches.from_split(split, batch_size=32)
+
 result = opt.LieselOptim(
     model,
     split=split,
@@ -172,7 +190,12 @@ used all rows.
 ```{code-cell} ipython3
 test_state = model.update_state(position | split.test, model.state)
 test_loss = (
-    -split.scaled_log_lik(model, test_state, part="test") / split.train_sample_size
+    -split.scaled_log_lik(
+        model,
+        test_state,
+        part="test",
+    )
+    / split.train_sample_size
 )
 ```
 

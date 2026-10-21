@@ -601,7 +601,7 @@ def test_engine_uses_current_batch_correction_and_keeps_full_data_monitoring(deb
                 tfd.Normal(params["loc"], 1.0).log_prob(y) / (2 * probabilities)
             )
             prior = tfd.Normal(0.0, 1.0).log_prob(params["loc"])
-            return -(log_lik + prior) / 8
+            return (-(log_lik + prior) / 8), None
 
     expected = make_weighted_engine(loss_type=ReferenceLoss, debug=debug).fit()
     actual = make_weighted_engine(debug=debug).fit()
