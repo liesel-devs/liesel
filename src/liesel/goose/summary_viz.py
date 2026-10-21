@@ -426,6 +426,8 @@ def plot_trace(
     include_warmup: bool = False,
     show: bool = True,
     alpha: float = 0.8,
+    highlight_divergences: bool | Literal["auto"] = "auto",
+    divergence_scope: Literal["parameter", "any"] = "parameter",
     **kwargs,
 ) -> sns.FacetGrid:
     """
@@ -486,15 +488,50 @@ def plot_trace(
     save_path
         File path where the plot is saved.
     include_warmup
-        Include the warmup samples in the trace plot.
+        Include warmup samples and initial values. Initial values have no transition
+        diagnostic and are never marked as divergent.
     alpha
         Transparency, float in ``[0,1]``.
+    highlight_divergences
+        With ``"auto"`` (default), add a combined red rug along the bottom of each
+        affected trace panel when usable HMC/NUTS diagnostics are available. Ticks
+        mark the plotted iteration indices of retained divergent draws, pooling
+        displayed chains. Use ``chain_indices`` to investigate individual chains.
+        Trace lines and axis limits are preserved. Raw sample dictionaries and
+        results known to contain no HMC/NUTS kernels plot without markers. Missing
+        or inconsistent diagnostics or required kernel mappings emit a warning and
+        skip highlighting. Set ``True`` to require highlighting and raise instead,
+        or ``False`` to disable it and skip diagnostic checks.
+    divergence_scope
+        Used when highlighting is enabled. With ``"parameter"`` (default), each
+        panel uses divergences from the kernel updating that parameter, using
+        :attr:`SamplingResults.kernels_by_pos_key
+        <liesel.goose.SamplingResults.kernels_by_pos_key>`. Jointly updated vector
+        components share flags; unmapped parameters and parameters updated by other
+        kernel types contribute none. With ``"any"``, every panel uses divergences
+        from all HMC/NUTS kernels, including unplotted kernels, without requiring
+        the mapping. A shared "Divergent" legend entry appears only if ticks are drawn.
     **kwargs
         Further keyword arguments passed to the seaborn ``relplot()`` function.
 
     Returns
     -------
     A seaborn ``FacetGrid``.
+
+    Raises
+    ------
+    TypeError
+        If ``highlight_divergences=True`` is used with a raw sample dictionary.
+    ValueError
+        If ``highlight_divergences`` is invalid, or highlighting is enabled and
+        ``divergence_scope`` is invalid. Also raised in strict mode (``True``) for
+        unusable diagnostics or a missing required kernel mapping.
+
+    Warns
+    -----
+    UserWarning
+        In automatic mode, if highlighting is skipped because diagnostics or a
+        required kernel mapping are unavailable or inconsistent.
     """
 
     # NOTE: Docstring duplications
@@ -530,6 +567,26 @@ def plot_trace(
         )
 
         g = _set_aesthetics(g, title, title_spacing, xlabel, ylabel="")
+
+    if _add_trace_divergences(
+        results,
+        plot_df,
+        g.axes_dict,
+        include_warmup,
+        highlight_divergences,
+        divergence_scope,
+    ):
+        legend = g.legend
+        legend_data = dict(
+            zip([text.get_text() for text in legend.get_texts()], legend.legend_handles)
+        )
+        legend_data["Divergent"] = Line2D(
+            [], [], color="red", marker="|", linestyle="none"
+        )
+        legend.remove()
+        g.add_legend(
+            legend_data=legend_data, label_order=list(legend_data), title="Chain"
+        )
 
     save_figure(g, save_path)
     if show:
@@ -935,10 +992,12 @@ def plot_param(
     legend_position: tuple[float, float] = (1.2, 0.4),
     save_path: str | None = None,
     show: bool = True,
+    highlight_divergences: bool | Literal["auto"] = "auto",
+    divergence_scope: Literal["parameter", "any"] = "parameter",
 ) -> None:
     """
     Visualizes trace plot, density plot and autocorrelation plot of a single
-    subparameter.
+    subparameter, using posterior draws.
 
     Parameters
     ----------
@@ -996,6 +1055,40 @@ def plot_param(
         Transparency in trace plot, float in ``[0,1]``.
     save_path
         File path where the plot is saved.
+    highlight_divergences
+        With ``"auto"`` (default), add a combined red rug along the bottom of the
+        trace panel when usable HMC/NUTS diagnostics are available. Ticks mark the
+        plotted iteration indices of retained divergent draws, pooling displayed
+        chains. Use ``chain_indices`` to investigate individual chains. Density
+        and autocorrelation panels are unchanged. Raw sample dictionaries and
+        results known to contain no HMC/NUTS kernels plot without markers. Missing
+        or inconsistent diagnostics or required kernel mappings emit a warning and
+        skip highlighting. Set ``True`` to require highlighting and raise instead,
+        or ``False`` to disable it and skip diagnostic checks.
+    divergence_scope
+        Used when highlighting is enabled. With ``"parameter"`` (default), use
+        divergences from the kernel updating the selected parameter, using
+        :attr:`SamplingResults.kernels_by_pos_key
+        <liesel.goose.SamplingResults.kernels_by_pos_key>`. Jointly updated vector
+        components share flags; unmapped parameters and parameters updated by other
+        kernel types contribute none. With ``"any"``, use divergences from all
+        HMC/NUTS kernels, including unplotted kernels, without requiring the mapping.
+        A "Divergent" legend entry appears only if ticks are drawn.
+
+    Raises
+    ------
+    TypeError
+        If ``highlight_divergences=True`` is used with a raw sample dictionary.
+    ValueError
+        If ``highlight_divergences`` is invalid, or highlighting is enabled and
+        ``divergence_scope`` is invalid. Also raised in strict mode (``True``) for
+        unusable diagnostics or a missing required kernel mapping.
+
+    Warns
+    -----
+    UserWarning
+        In automatic mode, if highlighting is skipped because diagnostics or a
+        required kernel mapping are unavailable or inconsistent.
     """
 
     # NOTE: Docstring duplications
@@ -1014,7 +1107,24 @@ def plot_param(
         _add_lineplot(plot_df, ax1, color_list, alpha=alpha)
         _add_kdeplot(plot_df, ax2, color_list)
         _add_corplot(plot_df, ax3, max_lags, color_list)
-        ax1.legend(title="Chain", bbox_to_anchor=legend_position, frameon=False)
+        handles, labels = ax1.get_legend_handles_labels()
+        if _add_trace_divergences(
+            results,
+            plot_df,
+            {plot_df["param_label"].iloc[0]: ax1},
+            False,
+            highlight_divergences,
+            divergence_scope,
+        ):
+            handles.append(Line2D([], [], color="red", marker="|", linestyle="none"))
+            labels.append("Divergent")
+        ax1.legend(
+            handles=handles,
+            labels=labels,
+            title="Chain",
+            bbox_to_anchor=legend_position,
+            frameon=False,
+        )
 
         fig.tight_layout()
         fig.suptitle(_get_title(plot_df, title))
@@ -1023,6 +1133,46 @@ def plot_param(
     save_figure(save_path=save_path)
     if show:
         plt.show()
+
+
+def _add_trace_divergences(
+    results: SamplingResults | Mapping[str, ArrayLike],
+    plot_df: pd.DataFrame,
+    axes: Mapping[str, Any],
+    include_warmup: bool,
+    highlight_divergences: bool | Literal["auto"],
+    divergence_scope: Literal["parameter", "any"],
+) -> bool:
+    """Add one combined rug per trace panel and report whether any marks were drawn."""
+    parameters = (
+        plot_df.drop_duplicates("param_label")
+        .set_index("param_label")["param"]
+        .to_dict()
+    )
+    draws = plot_df[["chain_index", "iteration"]].drop_duplicates()
+    flags = _divergence_flags(
+        results,
+        draws,
+        include_warmup,
+        parameters,
+        divergence_scope,
+        highlight_divergences,
+    )
+    if flags is None or not flags.to_numpy().any():
+        return False
+    for label, axis in axes.items():
+        iterations = np.unique(draws.loc[flags[label], "iteration"])
+        if iterations.size:
+            sns.rugplot(
+                x=iterations,
+                ax=axis,
+                color="red",
+                height=0.05,
+                expand_margins=False,
+                zorder=3,
+                label="Divergent",
+            )
+    return True
 
 
 def _divergence_flags(

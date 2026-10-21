@@ -104,6 +104,186 @@ def separate_kernel_results():
     )
 
 
+@pytest.mark.parametrize("scope", ["parameter", "any"])
+def test_trace_marks_divergent_iterations_only_in_affected_parameter_panels(
+    separate_kernel_results,
+    scope,
+):
+    grid = gs.plot_trace(
+        separate_kernel_results,
+        params=["x", "y", "z"],
+        divergence_scope=scope,
+        show=False,
+    )
+    for label, expected in {"x": [1], "y": [], "z": [3]}.items():
+        if scope == "any":
+            expected = [0, 1, 3]
+        axis = grid.axes_dict[label]
+        rugs = [
+            c
+            for c in axis.collections
+            if isinstance(c, LineCollection) and c.get_label() == "Divergent"
+        ]
+        if expected:
+            assert len(rugs) == 1
+            segments = np.asarray(rugs[0].get_segments())
+            np.testing.assert_array_equal(segments[:, 0, 0], expected)
+            np.testing.assert_array_equal(
+                segments[:, :, 1], [[0, 0.05]] * len(expected)
+            )
+        else:
+            assert rugs == []
+    assert len(grid.figure.legends) == 1
+    assert [text.get_text() for text in grid.legend.get_texts()] == ["0", "Divergent"]
+
+
+@pytest.mark.parametrize("scope, expected", [("parameter", [1]), ("any", [0, 1, 3])])
+def test_param_marks_only_the_trace_panel(separate_kernel_results, scope, expected):
+    gs.plot_param(separate_kernel_results, "x", divergence_scope=scope, show=False)
+
+    figure = plt.gcf()
+    rugs = [
+        c
+        for c in figure.axes[0].collections
+        if isinstance(c, LineCollection) and c.get_label() == "Divergent"
+    ]
+    assert len(rugs) == 1
+    np.testing.assert_array_equal(np.asarray(rugs[0].get_segments())[:, 0, 0], expected)
+    assert all(
+        c.get_label() != "Divergent" for ax in figure.axes[1:] for c in ax.collections
+    )
+    legend = figure.axes[0].get_legend()
+    assert legend is not None
+    assert [text.get_text() for text in legend.get_texts()] == [
+        "0",
+        "Divergent",
+    ]
+
+
+@pytest.mark.parametrize("plot", [gs.plot_trace, gs.plot_param])
+def test_trace_rugs_follow_selected_vector_components(plot):
+    results = results_from_epochs(
+        (
+            EpochConfig(EpochType.POSTERIOR, 4, 1, None),
+            {"beta": np.arange(12).reshape(1, 4, 3)},
+            {"nuts": nuts_info([[0, 1, 0, 1]])},
+        )
+    )
+    if plot is gs.plot_trace:
+        grid = plot(results, params=["beta"], param_indices=(2, 0), show=False)
+        assert set(grid.axes_dict) == {"beta[0]", "beta[2]"}
+        axes = list(grid.axes_dict.values())
+    else:
+        plot(results, "beta", param_index=2, show=False)
+        axes = [plt.gcf().axes[0]]
+    for axis in axes:
+        rug = next(c for c in axis.collections if c.get_label() == "Divergent")
+        assert isinstance(rug, LineCollection)
+        np.testing.assert_array_equal(np.asarray(rug.get_segments())[:, 0, 0], [1, 3])
+
+
+@pytest.mark.parametrize("plot", [gs.plot_trace, gs.plot_param])
+@pytest.mark.parametrize("mode", ["auto", True, False])
+@pytest.mark.parametrize("source", ["available", "unaffected", "dictionary", "missing"])
+def test_trace_highlighting_modes(separate_kernel_results, plot, mode, source):
+    results = separate_kernel_results
+    if source == "dictionary":
+        results = results.get_posterior_samples()
+    elif source == "missing":
+        results.kernels_by_pos_key = Option(None)
+    param = "y" if source == "unaffected" else "x"
+    kwargs = {"params": [param]} if plot is gs.plot_trace else {"param": param}
+    if mode is True and source in ["dictionary", "missing"]:
+        error = TypeError if source == "dictionary" else ValueError
+        with pytest.raises(error):
+            plot(results, highlight_divergences=mode, show=False, **kwargs)
+        return
+    if mode == "auto" and source == "missing":
+        with pytest.warns(
+            UserWarning, match="Divergence highlighting skipped"
+        ) as caught:
+            plot(results, highlight_divergences=mode, show=False, **kwargs)
+        assert len(caught) == 1
+    else:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UserWarning)
+            plot(results, highlight_divergences=mode, show=False, **kwargs)
+    figure = plt.gcf()
+    rugs = [
+        c for ax in figure.axes for c in ax.collections if c.get_label() == "Divergent"
+    ]
+    expected_count = int(source == "available" and mode is not False)
+    assert len(rugs) == expected_count
+    legends = figure.legends + [ax.get_legend() for ax in figure.axes]
+    assert (
+        sum(
+            text.get_text() == "Divergent"
+            for legend in legends
+            if legend is not None
+            for text in legend.get_texts()
+        )
+        == expected_count
+    )
+
+
+@pytest.mark.parametrize(
+    "plot, include_warmup, expected",
+    [
+        (gs.plot_trace, False, [1, 2]),
+        (gs.plot_trace, True, [1, 3, 4]),
+        (gs.plot_param, False, [1, 2]),
+    ],
+)
+def test_trace_rugs_align_with_thinning_epochs_and_selected_chains(
+    thinned_results, plot, include_warmup, expected
+):
+    kwargs = (
+        {"params": ["x"], "include_warmup": include_warmup}
+        if plot is gs.plot_trace
+        else {"param": "x"}
+    )
+    plot(thinned_results, chain_indices=[2, 1], max_chains=1, show=False, **kwargs)
+    rugs = [
+        c
+        for c in plt.gcf().axes[0].collections
+        if isinstance(c, LineCollection) and c.get_label() == "Divergent"
+    ]
+    assert len(rugs) == 1
+    np.testing.assert_array_equal(np.asarray(rugs[0].get_segments())[:, 0, 0], expected)
+
+
+@pytest.mark.parametrize("plot", [gs.plot_trace, gs.plot_param])
+def test_combined_trace_rug_preserves_trace_lines_and_limits(thinned_results, plot):
+    kwargs = {"params": ["x"]} if plot is gs.plot_trace else {"param": "x"}
+    plot(
+        thinned_results,
+        chain_indices=[1, 2],
+        highlight_divergences=False,
+        show=False,
+        **kwargs,
+    )
+    axis = plt.gcf().axes[0]
+    before = [np.asarray(line.get_xydata()).copy() for line in axis.lines]
+    limits = axis.get_xlim(), axis.get_ylim()
+    plt.close("all")
+
+    plot(thinned_results, chain_indices=[1, 2], show=False, **kwargs)
+    axis = plt.gcf().axes[0]
+    assert (axis.get_xlim(), axis.get_ylim()) == limits
+    assert len(axis.lines) == len(before)
+    for line, expected in zip(axis.lines, before):
+        np.testing.assert_array_equal(line.get_xydata(), expected)
+    rugs = [
+        c
+        for c in axis.collections
+        if isinstance(c, LineCollection) and c.get_label() == "Divergent"
+    ]
+    assert len(rugs) == 1
+    np.testing.assert_array_equal(
+        np.asarray(rugs[0].get_segments())[:, 0, 0], [0, 1, 2, 3]
+    )
+
+
 @pytest.mark.parametrize("plot", [gs.plot_scatter, gs.plot_pairs])
 @pytest.mark.parametrize("mode", ["default", "auto"])
 @pytest.mark.parametrize("scope", ["parameter", "any"])

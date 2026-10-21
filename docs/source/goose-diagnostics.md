@@ -103,8 +103,8 @@ Divergences can indicate biased exploration; a tree-depth limit is primarily an
 efficiency concern. Kernel error codes differ, so use their accompanying
 messages rather than comparing numeric codes across methods.
 
-Scatter and pair plots automatically highlight draws associated with divergent
-HMC or NUTS transitions when usable diagnostics are available:
+Scatter, pair, and trace plots automatically highlight draws associated with
+divergent HMC or NUTS transitions when usable diagnostics are available:
 
 ```{code-cell} ipython3
 ---
@@ -135,6 +135,28 @@ gs.plot_pairs(
 )
 ```
 
+```{code-cell} ipython3
+---
+mystnb:
+  image:
+    alt: >-
+      Trace plots of beta and sigma_sq, colored by chain, with combined red rugs
+      marking iterations associated with divergent transitions, if present.
+---
+gs.plot_trace(results, params=["beta", "sigma_sq"]);
+```
+
+```{code-cell} ipython3
+---
+mystnb:
+  image:
+    alt: >-
+      Trace, density, and autocorrelation plots of beta[1], with a combined red
+      divergence rug along the bottom of the trace panel, if divergences occurred.
+---
+gs.plot_param(results, "beta", param_index=1)
+```
+
 By default, a scatter panel marks a draw if an HMC/NUTS kernel updating **either
 plotted parameter** diverged. Each pair-plot diagonal shows a combined red rug
 only for divergences from the kernel updating that parameter. Components of a
@@ -144,9 +166,17 @@ or histograms still use all retained draws, and the rug also works when plotting
 a single parameter. A shared “Divergent” legend entry appears only when at least
 one displayed panel has marked draws.
 
+Trace panels show a combined red rug along the bottom, marking the iteration
+indices of retained divergent draws from the kernel updating that parameter.
+The rug pools the displayed chains; pass `chain_indices` to investigate a
+particular chain. It helps locate clusters of divergences in time while preserving
+the chain-colored trace lines and axis limits. In {func}`~liesel.goose.plot_param`,
+only the trace panel receives a rug; density and autocorrelation panels use all
+draws as usual.
+
 To mark draws whenever **any HMC/NUTS kernel** diverged, including kernels that
 update unplotted parameters, also pass `divergence_scope="any"`. This applies the
-same flags to every scatter panel and diagonal rug. The default is
+same flags to every scatter panel, diagonal rug, and trace rug. The default is
 `divergence_scope="parameter"`.
 
 The default `highlight_divergences="auto"` uses diagnostics from a
@@ -163,10 +193,12 @@ Parameters absent from that mapping, such as stored derived quantities, and
 parameters updated by other kernel types contribute no divergence flags in this
 scope. Use `"any"` to inspect them against all HMC/NUTS divergences; this scope
 does not require the mapping. Chain selection and thinning are respected. With
-`include_warmup=True`, warmup draws are included, but initial values have no
+`include_warmup=True` in scatter, pair, or trace plots, warmup draws are included,
+but initial values have no
 transition diagnostic and receive no marker. Divergences in discarded iterations
 are not displayed. Marked points are stored draws after the full kernel sequence,
 not intermediate locations along a divergent trajectory.
+`plot_param()` uses posterior draws only.
 
 ## Check acceptance
 
