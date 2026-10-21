@@ -34,7 +34,7 @@ def nuts_info(codes):
     )
 
 
-def results_from_epochs(*epochs, kernel_classes=None):
+def results_from_epochs(*epochs, kernel_classes=None, kernels_by_pos_key=None):
     positions = EpochChainManager(apply_thinning=True)
     transition_infos = EpochChainManager()
     for config, samples, infos in epochs:
@@ -51,7 +51,11 @@ def results_from_epochs(*epochs, kernel_classes=None):
         kernel_states=Option(None),
         full_model_states=Option(None),
         kernel_classes=Option(kernel_classes),
-        kernels_by_pos_key=Option(None),
+        kernels_by_pos_key=Option(
+            kernels_by_pos_key
+            if kernels_by_pos_key is not None
+            else {param: "nuts" for param in epochs[0][1]}
+        ),
     )
 
 
@@ -69,6 +73,213 @@ def test_scatter_marks_nuts_divergences_including_combined_tree_depth_error():
     markers = [c for c in plt.gca().collections if c.get_label() == "Divergent"]
     assert len(markers) == 1
     np.testing.assert_array_equal(markers[0].get_offsets(), [[2, 12], [4, 14]])
+
+
+@pytest.fixture
+def separate_kernel_results():
+    return results_from_epochs(
+        (
+            EpochConfig(EpochType.POSTERIOR, 4, 1, None),
+            {
+                "x": np.array([[1, 2, 3, 4]]),
+                "y": np.array([[11, 12, 13, 14]]),
+                "z": np.array([[21, 22, 23, 24]]),
+                "hidden": np.array([[31, 32, 33, 34]]),
+            },
+            {
+                "x_kernel": nuts_info([[0, 1, 0, 0]]),
+                "y_kernel": nuts_info([[0, 0, 0, 0]]),
+                "z_kernel": nuts_info([[0, 0, 0, 3]]),
+                "hidden_kernel": nuts_info([[1, 0, 0, 0]]),
+            },
+        ),
+        kernels_by_pos_key={
+            "x": "x_kernel",
+            "y": "y_kernel",
+            "z": "z_kernel",
+            "hidden": "hidden_kernel",
+        },
+    )
+
+
+def test_pairs_marks_only_kernels_updating_each_panels_parameters(
+    separate_kernel_results,
+):
+    gs.plot_pairs(
+        separate_kernel_results,
+        params=["x", "y", "z"],
+        diag_kind="hist",
+        highlight_divergences=True,
+        show=False,
+    )
+
+    axes = plt.gcf().axes
+    expected = {
+        1: [[12, 2]],
+        2: [[22, 2], [24, 4]],
+        3: [[2, 12]],
+        5: [[24, 14]],
+        6: [[2, 22], [4, 24]],
+        7: [[14, 24]],
+    }
+    for index, coordinates in expected.items():
+        markers = [c for c in axes[index].collections if c.get_label() == "Divergent"]
+        assert len(markers) == 1
+        np.testing.assert_array_equal(markers[0].get_offsets(), coordinates)
+    for axis, values in zip(axes[9:], [[2], [], [24]]):
+        rugs = [
+            c
+            for c in axis.collections
+            if isinstance(c, LineCollection) and c.get_label() == "Divergent"
+        ]
+        if values:
+            assert len(rugs) == 1
+            np.testing.assert_array_equal(
+                np.asarray(rugs[0].get_segments())[:, 0, 0], values
+            )
+        else:
+            assert rugs == []
+
+
+@pytest.mark.parametrize("plot", [gs.plot_scatter, gs.plot_pairs])
+def test_any_scope_marks_divergences_from_unplotted_kernels(
+    separate_kernel_results, plot
+):
+    # Any-kernel scope does not need parameter-to-kernel metadata.
+    separate_kernel_results.kernels_by_pos_key = Option(None)
+    plot(
+        separate_kernel_results,
+        params=["x", "y"],
+        param_indices=(0, 0),
+        highlight_divergences=True,
+        divergence_scope="any",
+        show=False,
+    )
+
+    figure = plt.gcf()
+    markers = [
+        c
+        for ax in figure.axes
+        for c in ax.collections
+        if isinstance(c, PathCollection) and c.get_label() == "Divergent"
+    ]
+    assert len(markers) == (1 if plot is gs.plot_scatter else 2)
+    np.testing.assert_array_equal(
+        markers[-1].get_offsets(), [[1, 11], [2, 12], [4, 14]]
+    )
+    if plot is gs.plot_pairs:
+        rugs = [
+            c
+            for ax in figure.axes
+            for c in ax.collections
+            if isinstance(c, LineCollection) and c.get_label() == "Divergent"
+        ]
+        assert len(rugs) == 2
+        np.testing.assert_array_equal(
+            np.asarray(rugs[0].get_segments())[:, 0, 0], [1, 2, 4]
+        )
+        np.testing.assert_array_equal(
+            np.asarray(rugs[1].get_segments())[:, 0, 0], [11, 12, 14]
+        )
+
+
+@pytest.mark.parametrize("plot", [gs.plot_scatter, gs.plot_pairs])
+def test_highlighting_rejects_unknown_divergence_scope(separate_kernel_results, plot):
+    with pytest.raises(ValueError, match="divergence_scope"):
+        plot(
+            separate_kernel_results,
+            params=["x", "y"],
+            param_indices=(0, 0),
+            highlight_divergences=True,
+            divergence_scope="unknown",
+            show=False,
+        )
+
+
+@pytest.mark.parametrize("plot", [gs.plot_scatter, gs.plot_pairs])
+def test_parameter_scope_requires_kernel_associations(separate_kernel_results, plot):
+    separate_kernel_results.kernels_by_pos_key = Option(None)
+    with pytest.raises(ValueError, match="position-kernel associations"):
+        plot(
+            separate_kernel_results,
+            params=["x", "y"],
+            param_indices=(0, 0),
+            highlight_divergences=True,
+            show=False,
+        )
+
+
+@pytest.mark.parametrize("plot", [gs.plot_scatter, gs.plot_pairs])
+def test_parameter_scope_rejects_missing_mapped_kernel_diagnostics(
+    separate_kernel_results, plot
+):
+    separate_kernel_results.kernels_by_pos_key = Option(
+        {"x": "missing_kernel", "y": "y_kernel"}
+    )
+    with pytest.raises(ValueError, match="transition information"):
+        plot(
+            separate_kernel_results,
+            params=["x", "y"],
+            param_indices=(0, 0),
+            highlight_divergences=True,
+            show=False,
+        )
+
+
+def test_scatter_ignores_divergences_from_unplotted_kernels(separate_kernel_results):
+    gs.plot_scatter(
+        separate_kernel_results,
+        params=["x", "y"],
+        param_indices=(0, 0),
+        highlight_divergences=True,
+        show=False,
+    )
+    markers = [c for c in plt.gca().collections if c.get_label() == "Divergent"]
+    assert len(markers) == 1
+    np.testing.assert_array_equal(markers[0].get_offsets(), [[2, 12]])
+
+
+@pytest.mark.parametrize("plot", [gs.plot_scatter, gs.plot_pairs])
+@pytest.mark.parametrize("association", ["nondivergent", "unmapped", "other_kernel"])
+def test_unaffected_parameters_have_no_markers_or_divergent_legend(
+    separate_kernel_results, plot, association
+):
+    if association == "unmapped":
+        separate_kernel_results.kernels_by_pos_key = Option({})
+    else:
+        separate_kernel_results.kernels_by_pos_key = Option(
+            {"x": "y_kernel", "y": "y_kernel"}
+        )
+        if association == "other_kernel":
+            infos = separate_kernel_results.get_posterior_transition_infos()
+            infos["y_kernel"] = DefaultTransitionInfo(
+                error_code=np.ones((1, 4)),
+                acceptance_prob=np.ones((1, 4)),
+                position_moved=np.ones((1, 4)),
+            )
+            samples = separate_kernel_results.get_posterior_samples()
+            separate_kernel_results = results_from_epochs(
+                (EpochConfig(EpochType.POSTERIOR, 4, 1, None), samples, infos),
+                kernels_by_pos_key={"x": "y_kernel", "y": "y_kernel"},
+            )
+    plot(
+        separate_kernel_results,
+        params=["x", "y"] if plot is gs.plot_scatter else ["y"],
+        param_indices=(0, 0),
+        highlight_divergences=True,
+        show=False,
+    )
+    figure = plt.gcf()
+    assert all(
+        c.get_label() != "Divergent" for ax in figure.axes for c in ax.collections
+    )
+    legends = figure.legends + [ax.get_legend() for ax in figure.axes]
+    assert all(
+        text.get_text() != "Divergent"
+        for legend in legends
+        if legend is not None
+        for text in legend.get_texts()
+    )
 
 
 def test_scatter_combines_hmc_and_nuts_but_not_unrelated_kernel_errors():
@@ -90,7 +301,8 @@ def test_scatter_combines_hmc_and_nuts_but_not_unrelated_kernel_errors():
                     position_moved=np.ones((1, 4)),
                 ),
             },
-        )
+        ),
+        kernels_by_pos_key={"x": "nuts", "y": "hmc"},
     )
 
     gs.plot_scatter(results, ["x", "y"], (0, 0), highlight_divergences=True, show=False)
@@ -360,7 +572,8 @@ def test_ordinary_plots_have_no_divergence_markers_or_legend(plot, case):
     )
 
 
-def test_scatter_highlights_selected_vector_components():
+@pytest.mark.parametrize("plot", [gs.plot_scatter, gs.plot_pairs])
+def test_highlighting_uses_the_joint_kernel_for_selected_vector_components(plot):
     results = results_from_epochs(
         (
             EpochConfig(EpochType.POSTERIOR, 4, 1, None),
@@ -369,10 +582,13 @@ def test_scatter_highlights_selected_vector_components():
                     [[[1, 101, 11], [2, 102, 12], [3, 103, 13], [4, 104, 14]]]
                 )
             },
-            {"nuts": nuts_info([[0, 1, 0, 1]])},
+            {
+                "nuts": nuts_info([[0, 1, 0, 1]]),
+                "unrelated": nuts_info([[1, 0, 1, 0]]),
+            },
         )
     )
-    gs.plot_scatter(
+    plot(
         results,
         params=["beta"],
         param_indices=(2, 0),
@@ -380,7 +596,7 @@ def test_scatter_highlights_selected_vector_components():
         show=False,
     )
 
-    axis = plt.gca()
+    axis = plt.gca() if plot is gs.plot_scatter else plt.gcf().axes[2]
     markers = next(c for c in axis.collections if c.get_label() == "Divergent")
     assert (axis.get_xlabel(), axis.get_ylabel()) == ("beta[0]", "beta[2]")
     np.testing.assert_array_equal(markers.get_offsets(), [[2, 12], [4, 14]])

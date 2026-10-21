@@ -137,17 +137,29 @@ gs.plot_pairs(
 )
 ```
 
-Red crosses identify draws for which **any HMC/NUTS kernel** diverged, including
-NUTS transitions that also reached maximum tree depth. Pair plots additionally
-show a combined red rug along each diagonal, while the chain-colored densities
-or histograms still use all retained draws. The rug also works when plotting a
-single parameter. A shared “Divergent” legend entry appears only when displayed
-draws include divergences.
+By default, a scatter panel marks a draw if an HMC/NUTS kernel updating **either
+plotted parameter** diverged. Each pair-plot diagonal shows a combined red rug
+only for divergences from the kernel updating that parameter. Components of a
+jointly updated vector share their kernel's divergence flags. NUTS transitions
+that also reached maximum tree depth are included. The chain-colored densities
+or histograms still use all retained draws, and the rug also works when plotting
+a single parameter. A shared “Divergent” legend entry appears only when at least
+one displayed panel has marked draws.
+
+To mark draws whenever **any HMC/NUTS kernel** diverged, including kernels that
+update unplotted parameters, also pass `divergence_scope="any"`. This applies the
+same flags to every scatter panel and diagonal rug. The default is
+`divergence_scope="parameter"`; either scope requires
+`highlight_divergences=True` to enable markers.
 
 Pass the {class}`SamplingResults <liesel.goose.SamplingResults>` object,
 rather than a dictionary of samples: highlighting
 requires transition diagnostics and raises an error if no usable HMC/NUTS
-diagnostics are available. Chain selection and thinning are respected. With
+diagnostics are available. The default scope also requires the results' mapping
+from parameters to kernels. Parameters absent from that mapping, such as stored
+derived quantities, and parameters updated by other kernel types receive no
+markers in this scope. Use `"any"` to inspect them against all HMC/NUTS
+divergences. Chain selection and thinning are respected. With
 `include_warmup=True`, warmup draws are included, but initial values have no
 transition diagnostic and receive no marker. Divergences in discarded iterations
 are not displayed. Marked points are stored draws after the full kernel sequence,

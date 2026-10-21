@@ -1024,14 +1024,23 @@ def plot_param(
         plt.show()
 
 
-def _divergent_draws(
+def _divergence_flags(
     results: SamplingResults | Mapping[str, ArrayLike],
     plot_df: pd.DataFrame,
     include_warmup: bool,
+    parameters: Mapping[str, str],
+    divergence_scope: Literal["parameter", "any"],
 ) -> pd.DataFrame:
-    """Select divergent rows by original chain and retained-draw index."""
+    """Align each plotted parameter's divergence flags with retained draws."""
     if not isinstance(results, SamplingResults):
         raise TypeError("Divergence highlighting requires SamplingResults.")
+    if divergence_scope not in ("parameter", "any"):
+        raise ValueError("divergence_scope must be 'parameter' or 'any'.")
+    if divergence_scope == "parameter" and results.kernels_by_pos_key.is_none():
+        raise ValueError(
+            "Divergence highlighting requires position-kernel associations."
+        )
+    kernels = results.kernels_by_pos_key.unwrap_or({})
     missing_info = (
         "Divergence highlighting requires HMC or NUTS transition information."
     )
@@ -1051,11 +1060,17 @@ def _divergent_draws(
             continue
         shape = next(iter(samples.unwrap().values())).shape[:2]
         if epoch.type == EpochType.INITIAL_VALUES:
-            masks.append(np.zeros(shape, dtype=bool))
+            masks.append(np.zeros((*shape, len(parameters)), dtype=bool))
             continue
         if i >= len(info_epochs):
             raise ValueError(missing_info)
         infos = results.transition_infos.get_specific_chain(i).get().unwrap_or({})
+        if divergence_scope == "parameter" and any(
+            kernels[param] not in infos
+            for param in parameters.values()
+            if param in kernels
+        ):
+            raise ValueError(missing_info)
         supported = {
             name: info
             for name, info in infos.items()
@@ -1067,19 +1082,32 @@ def _divergent_draws(
         found_info = True
         if any(flag.ndim != 2 or flag.shape != flags[0].shape for flag in flags):
             raise ValueError(f"Divergence information does not align in epoch {i}.")
-        divergent = np.logical_or.reduce(flags)[:, epoch.thinning - 1 :: epoch.thinning]
-        if divergent.shape != shape:
+        if divergence_scope == "any":
+            parameter_flags = [np.logical_or.reduce(flags)] * len(parameters)
+        else:
+            parameter_flags = [
+                np.asarray(supported[kernels[param]].divergent)
+                if kernels.get(param) in supported
+                else np.zeros_like(flags[0], dtype=bool)
+                for param in parameters.values()
+            ]
+        divergent = np.stack(parameter_flags, axis=-1)[
+            :, epoch.thinning - 1 :: epoch.thinning
+        ]
+        if divergent.shape[:2] != shape:
             raise ValueError(f"Divergence information does not align in epoch {i}.")
         masks.append(divergent)
     if not found_info:
         raise ValueError(missing_info)
     divergent = np.concatenate(masks, axis=1)
-    return plot_df.loc[
+    return pd.DataFrame(
         divergent[
             plot_df["chain_index"].to_numpy(dtype=int),
             plot_df["iteration"].to_numpy(dtype=int),
-        ]
-    ]
+        ],
+        index=plot_df.index,
+        columns=list(parameters),
+    )
 
 
 def plot_scatter(
@@ -1099,6 +1127,7 @@ def plot_scatter(
     include_warmup: bool = False,
     show: bool = True,
     highlight_divergences: bool = False,
+    divergence_scope: Literal["parameter", "any"] = "parameter",
 ):
     """
     Produces a scatterplot of two parameters.
@@ -1168,12 +1197,20 @@ def plot_scatter(
         displaying it.
     highlight_divergences
         Overlay opaque red crosses on draws associated with a divergent HMC or NUTS
-        transition. Requires :class:`~liesel.goose.SamplingResults`. A draw is marked
-        if any HMC/NUTS kernel diverged, including NUTS transitions that also reached
-        maximum tree depth. Chain colors are preserved. Diagnostics are aligned with
-        retained draws after thinning; divergences in discarded iterations are not
-        displayed. These are stored draws after the full kernel sequence, not
-        intermediate locations along divergent trajectories.
+        transition. Requires :class:`~liesel.goose.SamplingResults`. Includes NUTS
+        transitions that also reached maximum tree depth. Chain colors are preserved.
+        Diagnostics are aligned with retained draws after thinning; divergences in
+        discarded iterations are not displayed. These are stored draws after the
+        full kernel sequence, not intermediate locations along divergent trajectories.
+    divergence_scope
+        Used only when ``highlight_divergences=True``. With ``"parameter"``
+        (default), mark a draw if a kernel updating either plotted parameter diverged.
+        Requires :attr:`SamplingResults.kernels_by_pos_key
+        <liesel.goose.SamplingResults.kernels_by_pos_key>`; unmapped parameters and
+        parameters updated by other kernel types contribute no divergence flags.
+        Components of a jointly updated vector share the kernel's flags.
+        With ``"any"``, mark a draw if any HMC/NUTS kernel diverged, including kernels
+        updating unplotted parameters. This scope does not require the mapping.
 
     Raises
     ------
@@ -1181,7 +1218,8 @@ def plot_scatter(
         If highlighting is requested with a raw sample dictionary.
     ValueError
         If highlighting is requested without usable HMC/NUTS transition information,
-        or the diagnostics do not align with the samples.
+        diagnostics do not align with the samples, ``divergence_scope`` is invalid,
+        or the parameter scope lacks position-kernel associations.
     """
     # NOTE: Docstring duplications
     # Multiple arguments in this docstring are shared with other plotting functions.
@@ -1192,6 +1230,11 @@ def plot_scatter(
     )
 
     labels = plot_df.param_label.unique()
+    parameters = (
+        plot_df.drop_duplicates("param_label")
+        .set_index("param_label")["param"]
+        .to_dict()
+    )
     if len(labels) != 2:
         raise ValueError(
             "'plot_scatter' can only plot exactly two parameters. Use 'plot_pairs'"
@@ -1218,7 +1261,10 @@ def plot_scatter(
         ax=axis,
     )
     if highlight_divergences:
-        divergent = _divergent_draws(results, plot_df, include_warmup)
+        flags = _divergence_flags(
+            results, plot_df, include_warmup, parameters, divergence_scope
+        )
+        divergent = plot_df.loc[flags.any(axis=1)]
         if not divergent.empty:
             axis.scatter(
                 divergent[labels[0]],
@@ -1258,6 +1304,7 @@ def plot_pairs(
     include_warmup: bool = False,
     show: bool = True,
     highlight_divergences: bool = False,
+    divergence_scope: Literal["parameter", "any"] = "parameter",
 ):
     """
     Produces a pairplot panel.
@@ -1330,15 +1377,27 @@ def plot_pairs(
         displaying it.
     highlight_divergences
         Highlight draws associated with divergent HMC or NUTS transitions. Requires
-        :class:`~liesel.goose.SamplingResults`. A draw is marked if any HMC/NUTS
-        kernel diverged, including NUTS transitions that also reached maximum tree
-        depth. Scatter panels show opaque red crosses; each diagonal shows one red
-        rug combining divergent draws across chains. Histograms and densities still
-        use all retained draws and preserve chain colors. The rug also works for a
-        single parameter. One shared "Divergent" legend entry is added only when
-        displayed draws include divergences. Diagnostics respect thinning: discarded
-        iterations are not displayed. Markers identify stored draws after the full
-        kernel sequence, not intermediate locations along divergent trajectories.
+        :class:`~liesel.goose.SamplingResults`. Includes NUTS transitions that also
+        reached maximum tree depth. Scatter panels show opaque red crosses; each
+        affected diagonal shows one red rug combining divergent draws across chains.
+        Histograms and densities still use all retained draws and preserve chain
+        colors. The rug also works for a single parameter. One shared "Divergent"
+        legend entry is added only when
+        at least one displayed panel has marked draws. Diagnostics respect thinning:
+        discarded iterations are not displayed. Markers identify stored draws after
+        the full kernel sequence, not intermediate locations along divergent
+        trajectories.
+    divergence_scope
+        Used only when ``highlight_divergences=True``. With ``"parameter"``
+        (default), each diagonal marks divergences from the kernel updating that
+        parameter; off-diagonal panels mark a draw if a kernel updating either
+        parameter diverged. Requires :attr:`SamplingResults.kernels_by_pos_key
+        <liesel.goose.SamplingResults.kernels_by_pos_key>`; unmapped parameters and
+        parameters updated by other kernel types contribute no divergence flags.
+        Components of a jointly updated vector share the kernel's flags.
+        With ``"any"``, every panel uses divergences from all HMC/NUTS kernels,
+        including kernels updating unplotted parameters. This scope does not require
+        the mapping.
 
     Raises
     ------
@@ -1346,7 +1405,8 @@ def plot_pairs(
         If highlighting is requested with a raw sample dictionary.
     ValueError
         If highlighting is requested without usable HMC/NUTS transition information,
-        or the diagnostics do not align with the samples.
+        diagnostics do not align with the samples, ``divergence_scope`` is invalid,
+        or the parameter scope lacks position-kernel associations.
     """
     # NOTE: Docstring duplications
     # Multiple arguments in this docstring are shared with other plotting functions.
@@ -1358,6 +1418,11 @@ def plot_pairs(
     if color_palette is None:
         color_palette = "deep"
 
+    parameters = (
+        plot_df.drop_duplicates("param_label")
+        .set_index("param_label")["param"]
+        .to_dict()
+    )
     plot_df = (
         plot_df.drop(["param_index", "param"], axis=1)
         .pivot(
@@ -1366,8 +1431,10 @@ def plot_pairs(
         .reset_index()
     )
 
-    divergent = (
-        _divergent_draws(results, plot_df, include_warmup)
+    flags = (
+        _divergence_flags(
+            results, plot_df, include_warmup, parameters, divergence_scope
+        )
         if highlight_divergences
         else None
     )
@@ -1386,10 +1453,13 @@ def plot_pairs(
             else color_palette,
         )
 
-    if divergent is not None and not divergent.empty:
+    if flags is not None and flags.to_numpy().any():
         for row, y in enumerate(g.y_vars):
             for col, x in enumerate(g.x_vars):
                 if row != col:
+                    divergent = plot_df.loc[flags[x] | flags[y]]
+                    if divergent.empty:
+                        continue
                     g.axes[row, col].scatter(
                         divergent[x],
                         divergent[y],
@@ -1400,6 +1470,9 @@ def plot_pairs(
                         label="Divergent",
                     )
         for x, axis in zip(g.diag_vars, g.diag_axes):
+            divergent = plot_df.loc[flags[x]]
+            if divergent.empty:
+                continue
             sns.rugplot(
                 x=divergent[x],
                 ax=axis,
