@@ -10,9 +10,13 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from arviz_stats.base import array_stats
+from matplotlib.lines import Line2D
 from numpy.typing import ArrayLike
 
 from liesel.goose.engine import SamplingResults
+from liesel.goose.epoch import EpochType
+from liesel.goose.hmc import HMCKernel, HMCTransitionInfo
+from liesel.goose.nuts import NUTSKernel, NUTSTransitionInfo
 
 LegendPosition = (
     Literal[
@@ -1020,6 +1024,64 @@ def plot_param(
         plt.show()
 
 
+def _divergent_draws(
+    results: SamplingResults | Mapping[str, ArrayLike],
+    plot_df: pd.DataFrame,
+    include_warmup: bool,
+) -> pd.DataFrame:
+    """Select divergent rows by original chain and retained-draw index."""
+    if not isinstance(results, SamplingResults):
+        raise TypeError("Divergence highlighting requires SamplingResults.")
+    missing_info = (
+        "Divergence highlighting requires HMC or NUTS transition information."
+    )
+    known_kernels = {
+        name
+        for name, cls in results.kernel_classes.unwrap_or({}).items()
+        if issubclass(cls, (HMCKernel, NUTSKernel))
+    }
+    info_epochs = results.transition_infos.get_epochs()
+    masks = []
+    found_info = False
+    for i, epoch in enumerate(results.positions.get_epochs()):
+        if not include_warmup and epoch.type != EpochType.POSTERIOR:
+            continue
+        samples = results.positions.get_specific_chain(i).get()
+        if samples.is_none():
+            continue
+        shape = next(iter(samples.unwrap().values())).shape[:2]
+        if epoch.type == EpochType.INITIAL_VALUES:
+            masks.append(np.zeros(shape, dtype=bool))
+            continue
+        if i >= len(info_epochs):
+            raise ValueError(missing_info)
+        infos = results.transition_infos.get_specific_chain(i).get().unwrap_or({})
+        supported = {
+            name: info
+            for name, info in infos.items()
+            if isinstance(info, (HMCTransitionInfo, NUTSTransitionInfo))
+        }
+        if not supported or not known_kernels.issubset(supported):
+            raise ValueError(missing_info)
+        flags = [np.asarray(info.divergent) for info in supported.values()]
+        found_info = True
+        if any(flag.ndim != 2 or flag.shape != flags[0].shape for flag in flags):
+            raise ValueError(f"Divergence information does not align in epoch {i}.")
+        divergent = np.logical_or.reduce(flags)[:, epoch.thinning - 1 :: epoch.thinning]
+        if divergent.shape != shape:
+            raise ValueError(f"Divergence information does not align in epoch {i}.")
+        masks.append(divergent)
+    if not found_info:
+        raise ValueError(missing_info)
+    divergent = np.concatenate(masks, axis=1)
+    return plot_df.loc[
+        divergent[
+            plot_df["chain_index"].to_numpy(dtype=int),
+            plot_df["iteration"].to_numpy(dtype=int),
+        ]
+    ]
+
+
 def plot_scatter(
     results: SamplingResults | Mapping[str, ArrayLike],
     params: list[str],
@@ -1036,6 +1098,7 @@ def plot_scatter(
     save_path: str | None = None,
     include_warmup: bool = False,
     show: bool = True,
+    highlight_divergences: bool = False,
 ):
     """
     Produces a scatterplot of two parameters.
@@ -1097,6 +1160,28 @@ def plot_scatter(
         changing the ``figure_size`` values or the number of chains.
     save_path
         File path where the plot is saved.
+    include_warmup
+        Include warmup samples and initial values. Initial values have no transition
+        diagnostic and are never highlighted.
+    show
+        Display the plot. Set to ``False`` to save or inspect the figure without
+        displaying it.
+    highlight_divergences
+        Overlay opaque red crosses on draws associated with a divergent HMC or NUTS
+        transition. Requires :class:`~liesel.goose.SamplingResults`. A draw is marked
+        if any HMC/NUTS kernel diverged, including NUTS transitions that also reached
+        maximum tree depth. Chain colors are preserved. Diagnostics are aligned with
+        retained draws after thinning; divergences in discarded iterations are not
+        displayed. These are stored draws after the full kernel sequence, not
+        intermediate locations along divergent trajectories.
+
+    Raises
+    ------
+    TypeError
+        If highlighting is requested with a raw sample dictionary.
+    ValueError
+        If highlighting is requested without usable HMC/NUTS transition information,
+        or the diagnostics do not align with the samples.
     """
     # NOTE: Docstring duplications
     # Multiple arguments in this docstring are shared with other plotting functions.
@@ -1119,7 +1204,6 @@ def plot_scatter(
             index=["chain_index", "iteration"], columns="param_label", values="value"
         )
         .reset_index()
-        .drop(["iteration"], axis=1)
     )
 
     color_list = _set_colors(plot_df, color_list)
@@ -1133,6 +1217,18 @@ def plot_scatter(
         palette=color_list,
         ax=axis,
     )
+    if highlight_divergences:
+        divergent = _divergent_draws(results, plot_df, include_warmup)
+        if not divergent.empty:
+            axis.scatter(
+                divergent[labels[0]],
+                divergent[labels[1]],
+                color="red",
+                marker="x",
+                alpha=1,
+                zorder=3,
+                label="Divergent",
+            )
     if title is not None:
         fig.suptitle(title)
         fig.subplots_adjust(top=title_spacing)
@@ -1161,6 +1257,7 @@ def plot_pairs(
     save_path: str | None = None,
     include_warmup: bool = False,
     show: bool = True,
+    highlight_divergences: bool = False,
 ):
     """
     Produces a pairplot panel.
@@ -1226,7 +1323,30 @@ def plot_pairs(
     save_path
         File path where the plot is saved.
     include_warmup
-        Include the warmup samples in the trace plot.
+        Include warmup samples and initial values. Initial values have no transition
+        diagnostic and are never highlighted.
+    show
+        Display the plot. Set to ``False`` to save or inspect the figure without
+        displaying it.
+    highlight_divergences
+        Highlight draws associated with divergent HMC or NUTS transitions. Requires
+        :class:`~liesel.goose.SamplingResults`. A draw is marked if any HMC/NUTS
+        kernel diverged, including NUTS transitions that also reached maximum tree
+        depth. Scatter panels show opaque red crosses; each diagonal shows one red
+        rug combining divergent draws across chains. Histograms and densities still
+        use all retained draws and preserve chain colors. The rug also works for a
+        single parameter. One shared "Divergent" legend entry is added only when
+        displayed draws include divergences. Diagnostics respect thinning: discarded
+        iterations are not displayed. Markers identify stored draws after the full
+        kernel sequence, not intermediate locations along divergent trajectories.
+
+    Raises
+    ------
+    TypeError
+        If highlighting is requested with a raw sample dictionary.
+    ValueError
+        If highlighting is requested without usable HMC/NUTS transition information,
+        or the diagnostics do not align with the samples.
     """
     # NOTE: Docstring duplications
     # Multiple arguments in this docstring are shared with other plotting functions.
@@ -1244,8 +1364,14 @@ def plot_pairs(
             index=["chain_index", "iteration"], columns="param_label", values="value"
         )
         .reset_index()
-        .drop(["iteration"], axis=1)
     )
+
+    divergent = (
+        _divergent_draws(results, plot_df, include_warmup)
+        if highlight_divergences
+        else None
+    )
+    plot_df = plot_df.drop(columns="iteration")
 
     with sns.axes_style(style):
         g = sns.pairplot(
@@ -1259,6 +1385,53 @@ def plot_pairs(
             if isinstance(color_palette, Mapping)
             else color_palette,
         )
+
+    if divergent is not None and not divergent.empty:
+        for row, y in enumerate(g.y_vars):
+            for col, x in enumerate(g.x_vars):
+                if row != col:
+                    g.axes[row, col].scatter(
+                        divergent[x],
+                        divergent[y],
+                        color="red",
+                        marker="x",
+                        alpha=1,
+                        zorder=3,
+                        label="Divergent",
+                    )
+        for x, axis in zip(g.diag_vars, g.diag_axes):
+            sns.rugplot(
+                x=divergent[x],
+                ax=axis,
+                color="red",
+                height=0.05,
+                expand_margins=False,
+                zorder=3,
+                label="Divergent",
+            )
+        legend = g.legend
+        legend_data = dict(
+            zip([text.get_text() for text in legend.get_texts()], legend.legend_handles)
+        )
+        if not legend_data:
+            # Seaborn omits chain legend entries for a single-parameter pair plot.
+            chains = plot_df["chain_index"].unique()
+            palette = (
+                color_palette
+                if isinstance(color_palette, Mapping)
+                else dict(zip(chains, sns.color_palette(color_palette, len(chains))))
+            )
+            legend_data = {
+                str(chain): Line2D(
+                    [], [], color=palette[chain], marker="o", linestyle="none"
+                )
+                for chain in chains
+            }
+        legend_data["Divergent"] = Line2D(
+            [], [], color="red", marker="x", linestyle="none"
+        )
+        legend.remove()
+        g.add_legend(legend_data=legend_data, label_order=list(legend_data))
 
     if title is not None:
         g.figure.suptitle(title)

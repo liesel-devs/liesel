@@ -103,6 +103,56 @@ Divergences can indicate biased exploration; a tree-depth limit is primarily an
 efficiency concern. Kernel error codes differ, so use their accompanying
 messages rather than comparing numeric codes across methods.
 
+To locate draws associated with divergent HMC or NUTS transitions, enable
+`highlight_divergences` in a scatter or pair plot:
+
+```{code-cell} ipython3
+---
+mystnb:
+  image:
+    alt: >-
+      Posterior draws of beta[1] and sigma_sq, colored by chain, with red crosses
+      marking draws associated with divergent HMC or NUTS transitions, if present.
+---
+gs.plot_scatter(
+    results,
+    params=["beta", "sigma_sq"],
+    param_indices=(1, 0),
+    highlight_divergences=True,
+)
+```
+
+```{code-cell} ipython3
+---
+mystnb:
+  image:
+    alt: >-
+      Pair plots of beta and sigma_sq, colored by chain, with red crosses and
+      combined diagonal rugs marking divergent draws, if present.
+---
+gs.plot_pairs(
+    results,
+    params=["beta", "sigma_sq"],
+    highlight_divergences=True,
+)
+```
+
+Red crosses identify draws for which **any HMC/NUTS kernel** diverged, including
+NUTS transitions that also reached maximum tree depth. Pair plots additionally
+show a combined red rug along each diagonal, while the chain-colored densities
+or histograms still use all retained draws. The rug also works when plotting a
+single parameter. A shared “Divergent” legend entry appears only when displayed
+draws include divergences.
+
+Pass the {class}`SamplingResults <liesel.goose.SamplingResults>` object,
+rather than a dictionary of samples: highlighting
+requires transition diagnostics and raises an error if no usable HMC/NUTS
+diagnostics are available. Chain selection and thinning are respected. With
+`include_warmup=True`, warmup draws are included, but initial values have no
+transition diagnostic and receive no marker. Divergences in discarded iterations
+are not displayed. Marked points are stored draws after the full kernel sequence,
+not intermediate locations along a divergent trajectory.
+
 ## Check acceptance
 
 ```{code-cell} ipython3
