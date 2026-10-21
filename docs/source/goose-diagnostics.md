@@ -103,7 +103,7 @@ Divergences can indicate biased exploration; a tree-depth limit is primarily an
 efficiency concern. Kernel error codes differ, so use their accompanying
 messages rather than comparing numeric codes across methods.
 
-Scatter, pair, and trace plots automatically highlight draws associated with
+Scatter, pair, trace, and density plots automatically highlight draws associated with
 divergent HMC or NUTS transitions when usable diagnostics are available:
 
 ```{code-cell} ipython3
@@ -151,8 +151,19 @@ gs.plot_trace(results, params=["beta", "sigma_sq"]);
 mystnb:
   image:
     alt: >-
-      Trace, density, and autocorrelation plots of beta[1], with a combined red
-      divergence rug along the bottom of the trace panel, if divergences occurred.
+      Posterior densities of beta and sigma_sq, colored by chain, with combined
+      red rugs marking parameter values of divergent draws, if present.
+---
+gs.plot_density(results, params=["beta", "sigma_sq"]);
+```
+
+```{code-cell} ipython3
+---
+mystnb:
+  image:
+    alt: >-
+      Trace, density, and autocorrelation plots of beta[1], with combined red
+      divergence rugs on the trace and density panels, if divergences occurred.
 ---
 gs.plot_param(results, "beta", param_index=1)
 ```
@@ -170,13 +181,16 @@ Trace panels show a combined red rug along the bottom, marking the iteration
 indices of retained divergent draws from the kernel updating that parameter.
 The rug pools the displayed chains; pass `chain_indices` to investigate a
 particular chain. It helps locate clusters of divergences in time while preserving
-the chain-colored trace lines and axis limits. In {func}`~liesel.goose.plot_param`,
-only the trace panel receives a rug; density and autocorrelation panels use all
-draws as usual.
+the chain-colored trace lines and axis limits.
+
+In {func}`~liesel.goose.plot_density`, the rug marks parameter values of divergent
+draws, helping locate affected regions of the posterior. The chain-colored KDE
+curves still use all retained draws. In {func}`~liesel.goose.plot_param`, both the
+trace and density panels receive rugs; the autocorrelation panel is unchanged.
 
 To mark draws whenever **any HMC/NUTS kernel** diverged, including kernels that
 update unplotted parameters, also pass `divergence_scope="any"`. This applies the
-same flags to every scatter panel, diagonal rug, and trace rug. The default is
+same flags to every scatter panel, diagonal rug, trace rug, and density rug. The default is
 `divergence_scope="parameter"`.
 
 The default `highlight_divergences="auto"` uses diagnostics from a
@@ -194,11 +208,12 @@ parameters updated by other kernel types contribute no divergence flags in this
 scope. Use `"any"` to inspect them against all HMC/NUTS divergences; this scope
 does not require the mapping. Chain selection and thinning are respected. With
 `include_warmup=True` in scatter, pair, or trace plots, warmup draws are included,
-but initial values have no
-transition diagnostic and receive no marker. Divergences in discarded iterations
+but initial values have no transition diagnostic and receive no marker.
+Divergences in discarded iterations
 are not displayed. Marked points are stored draws after the full kernel sequence,
 not intermediate locations along a divergent trajectory.
-`plot_param()` uses posterior draws only.
+{func}`~liesel.goose.plot_param` and {func}`~liesel.goose.plot_density` use posterior
+draws only.
 
 ## Check acceptance
 

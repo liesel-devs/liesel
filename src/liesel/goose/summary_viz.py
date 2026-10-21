@@ -568,25 +568,15 @@ def plot_trace(
 
         g = _set_aesthetics(g, title, title_spacing, xlabel, ylabel="")
 
-    if _add_trace_divergences(
+    if _add_divergence_rugs(
         results,
         plot_df,
-        g.axes_dict,
+        [(label, axis, "iteration") for label, axis in g.axes_dict.items()],
         include_warmup,
         highlight_divergences,
         divergence_scope,
     ):
-        legend = g.legend
-        legend_data = dict(
-            zip([text.get_text() for text in legend.get_texts()], legend.legend_handles)
-        )
-        legend_data["Divergent"] = Line2D(
-            [], [], color="red", marker="|", linestyle="none"
-        )
-        legend.remove()
-        g.add_legend(
-            legend_data=legend_data, label_order=list(legend_data), title="Chain"
-        )
+        _add_divergence_rug_legend(g)
 
     save_figure(g, save_path)
     if show:
@@ -610,6 +600,8 @@ def plot_density(
     aspect_ratio: float = 1.0,
     save_path: str | None = None,
     show: bool = True,
+    highlight_divergences: bool | Literal["auto"] = "auto",
+    divergence_scope: Literal["parameter", "any"] = "parameter",
     **kwargs,
 ) -> sns.FacetGrid:
     """
@@ -669,12 +661,46 @@ def plot_density(
         ``width = aspect_ratio * height``.
     save_path
         File path where the plot is saved.
+    highlight_divergences
+        With ``"auto"`` (default), add a combined red rug along the bottom of each
+        affected density panel when usable HMC/NUTS diagnostics are available.
+        Ticks mark parameter values of retained divergent posterior draws, pooling
+        displayed chains. KDE curves use all retained draws. Use ``chain_indices``
+        to investigate individual chains. Raw sample dictionaries and results
+        known to contain no HMC/NUTS kernels plot without markers. Missing or
+        inconsistent diagnostics or required kernel mappings emit a warning and
+        skip highlighting. Set ``True`` to require highlighting and raise instead,
+        or ``False`` to disable it and skip diagnostic checks.
+    divergence_scope
+        Used when highlighting is enabled. With ``"parameter"`` (default), each
+        panel uses divergences from the kernel updating that parameter, using
+        :attr:`SamplingResults.kernels_by_pos_key
+        <liesel.goose.SamplingResults.kernels_by_pos_key>`. Jointly updated vector
+        components share flags; unmapped parameters and parameters updated by other
+        kernel types contribute none. With ``"any"``, every panel uses divergences
+        from all HMC/NUTS kernels, including unplotted kernels, without requiring
+        the mapping. A shared "Divergent" legend entry appears only if ticks are drawn.
     **kwargs
         Further keyword arguments passed to the seaborn ``displot()`` function.
 
     Returns
     -------
     A seaborn ``FacetGrid``.
+
+    Raises
+    ------
+    TypeError
+        If ``highlight_divergences=True`` is used with a raw sample dictionary.
+    ValueError
+        If ``highlight_divergences`` is invalid, or highlighting is enabled and
+        ``divergence_scope`` is invalid. Also raised in strict mode (``True``) for
+        unusable diagnostics or a missing required kernel mapping.
+
+    Warns
+    -----
+    UserWarning
+        In automatic mode, if highlighting is skipped because diagnostics or a
+        required kernel mapping are unavailable or inconsistent.
     """
 
     # NOTE: Docstring duplications
@@ -707,6 +733,16 @@ def plot_density(
         )
 
         g = _set_aesthetics(g, title, title_spacing, xlabel, ylabel="")
+
+    if _add_divergence_rugs(
+        results,
+        plot_df,
+        [(label, axis, "value") for label, axis in g.axes_dict.items()],
+        False,
+        highlight_divergences,
+        divergence_scope,
+    ):
+        _add_divergence_rug_legend(g)
 
     save_figure(g, save_path)
     if show:
@@ -1057,10 +1093,11 @@ def plot_param(
         File path where the plot is saved.
     highlight_divergences
         With ``"auto"`` (default), add a combined red rug along the bottom of the
-        trace panel when usable HMC/NUTS diagnostics are available. Ticks mark the
-        plotted iteration indices of retained divergent draws, pooling displayed
-        chains. Use ``chain_indices`` to investigate individual chains. Density
-        and autocorrelation panels are unchanged. Raw sample dictionaries and
+        trace and density panels when usable HMC/NUTS diagnostics are available.
+        Ticks mark iteration indices in the trace panel and parameter values in
+        the density panel, pooling displayed chains. Use ``chain_indices`` to
+        investigate individual chains. Density curves use all retained draws;
+        the autocorrelation panel is unchanged. Raw sample dictionaries and
         results known to contain no HMC/NUTS kernels plot without markers. Missing
         or inconsistent diagnostics or required kernel mappings emit a warning and
         skip highlighting. Set ``True`` to require highlighting and raise instead,
@@ -1108,10 +1145,11 @@ def plot_param(
         _add_kdeplot(plot_df, ax2, color_list)
         _add_corplot(plot_df, ax3, max_lags, color_list)
         handles, labels = ax1.get_legend_handles_labels()
-        if _add_trace_divergences(
+        label = plot_df["param_label"].iloc[0]
+        if _add_divergence_rugs(
             results,
             plot_df,
-            {plot_df["param_label"].iloc[0]: ax1},
+            [(label, ax1, "iteration"), (label, ax2, "value")],
             False,
             highlight_divergences,
             divergence_scope,
@@ -1135,15 +1173,28 @@ def plot_param(
         plt.show()
 
 
-def _add_trace_divergences(
+def _add_divergence_rug_legend(grid: sns.FacetGrid) -> None:
+    """Append a shared rug legend entry while preserving the chain handles."""
+    legend = grid.legend
+    legend_data = dict(
+        zip([text.get_text() for text in legend.get_texts()], legend.legend_handles)
+    )
+    legend_data["Divergent"] = Line2D([], [], color="red", marker="|", linestyle="none")
+    legend.remove()
+    grid.add_legend(
+        legend_data=legend_data, label_order=list(legend_data), title="Chain"
+    )
+
+
+def _add_divergence_rugs(
     results: SamplingResults | Mapping[str, ArrayLike],
     plot_df: pd.DataFrame,
-    axes: Mapping[str, Any],
+    panels: Sequence[tuple[str, Any, Literal["iteration", "value"]]],
     include_warmup: bool,
     highlight_divergences: bool | Literal["auto"],
     divergence_scope: Literal["parameter", "any"],
 ) -> bool:
-    """Add one combined rug per trace panel and report whether any marks were drawn."""
+    """Mark divergent iterations or values and report whether any rugs were drawn."""
     parameters = (
         plot_df.drop_duplicates("param_label")
         .set_index("param_label")["param"]
@@ -1160,11 +1211,18 @@ def _add_trace_divergences(
     )
     if flags is None or not flags.to_numpy().any():
         return False
-    for label, axis in axes.items():
-        iterations = np.unique(draws.loc[flags[label], "iteration"])
-        if iterations.size:
+    marked = False
+    for label, axis, coordinate in panels:
+        divergent_draws = draws.loc[flags[label]]
+        if coordinate == "iteration":
+            values = divergent_draws["iteration"]
+        else:
+            values = plot_df.loc[plot_df["param_label"] == label].merge(
+                divergent_draws, on=["chain_index", "iteration"]
+            )["value"]
+        if values.size:
             sns.rugplot(
-                x=iterations,
+                x=np.unique(values),
                 ax=axis,
                 color="red",
                 height=0.05,
@@ -1172,7 +1230,8 @@ def _add_trace_divergences(
                 zorder=3,
                 label="Divergent",
             )
-    return True
+            marked = True
+    return marked
 
 
 def _divergence_flags(
