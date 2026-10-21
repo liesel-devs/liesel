@@ -14,9 +14,9 @@ import networkx as nx
 
 from ..model import Calc, Model
 from ..model.model import _reduced_sum
-from ._log_lik import validate_likelihood_groups
+from ._log_lik import validate_factor_groups
 from ._model_utils import validate_model_data_keys
-from .split import PositionSplit, PositionSplitManager
+from .split import PositionSplit, PositionSplitManager, validate_split_priors
 from .types import Position
 
 if TYPE_CHECKING:
@@ -322,11 +322,19 @@ class NegLogProbLoss(LossMixin):
     Negative log-probability loss for Liesel models.
 
     The training objective is the negative sum of the model log-likelihood and
-    log-prior. During mini-batch optimization, likelihood terms are scaled through
-    ``carry.batches.scaled_log_lik(...)`` so :class:`~liesel.optim.BatchManager` can
-    apply
-    branch-specific scaling for multi-size observed data. Validation loss uses
-    ``split.scaled_log_lik(...)`` for the same reason.
+    log-prior. During mini-batch optimization, batch-dependent factors are scaled
+    through ``scaled_log_lik(...)`` and ``scaled_log_prior(...)``. These methods
+    apply branch-specific scaling for :class:`~liesel.optim.BatchManager`.
+    Validation loss uses
+    ``split.scaled_log_lik(...)`` and ``split.scaled_log_prior(...)`` for the same
+    reason. Global priors are included once without scaling.
+
+    :meth:`loss_monitor` rejects validation splits whose keys reach local
+    parameter priors: the built-in loss cannot infer the held-out units' local
+    latent values. This restriction applies to both validation strategies. A
+    prior is local if its log-density shape changes with the split; per-unit
+    parameters without a prior are not detected. Fits that do not monitor
+    validation can hold out such rows.
 
     The model must use the standard sums of observed distribution factors and
     parameter priors. Weak observed variables and weak parameters contribute
@@ -397,7 +405,7 @@ class NegLogProbLoss(LossMixin):
         _validate_model_decomposition(model)
         validate_model_data_keys(model, split.position_keys)
         splits = split.splits if isinstance(split, PositionSplitManager) else (split,)
-        validate_likelihood_groups(model, [part.split_position_keys for part in splits])
+        validate_factor_groups(model, [part.split_position_keys for part in splits])
         self._model = model
         self.split = split
         if validation_strategy not in ("log_lik", "log_prob"):
@@ -416,7 +424,7 @@ class NegLogProbLoss(LossMixin):
         validate_model_data_keys(self.model, split.position_keys, optimizer_keys)
 
     def _validate_batch_keys(self, groups: Sequence[Sequence[str]]) -> None:
-        validate_likelihood_groups(self.model, groups)
+        validate_factor_groups(self.model, groups)
 
     @property
     def model(self) -> Model:
@@ -479,7 +487,9 @@ class NegLogProbLoss(LossMixin):
         log_lik = carry.batches.scaled_log_lik(
             self.model, new_state, batch_index=carry.i_batch
         )
-        log_prior = new_state["_model_log_prior"].value
+        log_prior = carry.batches.scaled_log_prior(
+            self.model, new_state, batch_index=carry.i_batch
+        )
         return -(log_lik + log_prior) / self.scalar
 
     def loss_train(self, params: Position, carry: "OptimCarry") -> jax.Array:
@@ -506,7 +516,7 @@ class NegLogProbLoss(LossMixin):
         new_state = self.model.update_state(position, state, allow_weak_vars=True)
 
         log_lik = self.split.scaled_log_lik(self.model, new_state, part="train")
-        log_prior = new_state["_model_log_prior"].value
+        log_prior = self.split.scaled_log_prior(self.model, new_state, part="train")
         return -(log_lik + log_prior) / self.scalar
 
     def loss_monitor(self, params: Position, carry: "OptimCarry") -> jax.Array:
@@ -525,6 +535,12 @@ class NegLogProbLoss(LossMixin):
         jax.Array
             Negative scaled validation log-likelihood. If
             ``validation_strategy="log_prob"``, the log-prior is included as well.
+
+        Raises
+        ------
+        ValueError
+            If the validation split's keys reach local parameter priors, whose
+            held-out latent values this loss cannot infer.
         """
         part = "validate" if self.split.has_validation else "train"
         states = getattr(carry, "_data_states", {})
@@ -532,9 +548,11 @@ class NegLogProbLoss(LossMixin):
         position = Position(params | data | carry.fixed_position)
         state = states.get(part, carry.model_state)
         new_state = self.model.update_state(position, state, allow_weak_vars=True)
+        if part == "validate":
+            validate_split_priors(self.model, self.split, new_state)
         loss = -self.split.scaled_log_lik(self.model, new_state, part=part)
         if self.validation_strategy == "log_prob":
-            loss -= new_state["_model_log_prior"].value
+            loss -= self.split.scaled_log_prior(self.model, new_state, part=part)
 
         return loss / self.scalar
 
