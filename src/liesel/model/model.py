@@ -1027,7 +1027,8 @@ class Model:
         Whether the nodes and variables should be copied upon initialization.
     to_float32
         Whether to convert the dtype of the values of the added nodes \
-        from float64 to float32. Only takes effect if ``grow=True``.
+        from float64 to float32. Only takes effect if ``grow=True``. Values are \
+        float64 only if 64-bit mode (``jax_enable_x64``) is enabled.
 
     See Also
     --------
@@ -1067,7 +1068,7 @@ class Model:
         *nodes_and_vars: Node | Var | Iterable[Node | Var],
         grow: bool = True,
         copy: bool = False,
-        to_float32: bool = True,
+        to_float32: bool = False,
         validate_log_prob_decomposition: bool = True,
     ):
         # this is for backwards compatibility: Old code, in which an iterable of

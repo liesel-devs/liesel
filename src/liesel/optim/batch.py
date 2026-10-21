@@ -1534,13 +1534,21 @@ class Batches:
                 if model._node_for_position_key(key) is var.value_node
             ]
             value = jnp.asarray(model_state[var.dist_node.name].value)
+            full_shape = jnp.shape(model.state[var.dist_node.name].value)
+            # Global terms keep their model.state shape. Shapes cannot tell them
+            # apart when batch_size equals axis_size.
+            pointwise = value.ndim == len(full_shape) and any(
+                n == self.batch_size and (n != m or n == self.axis_size)
+                for n, m in zip(value.shape, full_shape, strict=True)
+            )
+            if not value_keys and not pointwise:
+                raise ValueError(
+                    f"Indirectly batched factor {var.name!r} needs a pointwise "
+                    "log-density axis with batch_size entries and another length "
+                    "in model.state. Keep global summaries fixed as passthrough "
+                    "data, or use a custom Loss."
+                )
             if not weighted:
-                if not value_keys and self.batch_size not in value.shape:
-                    raise ValueError(
-                        f"Indirectly batched factor {var.name!r} needs a pointwise "
-                        "log-density axis with batch_size entries. Keep global "
-                        "summaries fixed as passthrough data, or use a custom Loss."
-                    )
                 continue
             if not value.ndim:
                 raise ValueError(f"{var.name!r} needs a pointwise likelihood axis.")
@@ -1599,7 +1607,8 @@ class Batches:
         observed likelihood terms are left unscaled.
 
         For minibatches, factors reached only through inputs must retain a
-        pointwise log-density axis with ``batch_size`` entries. A data dependency
+        pointwise log-density axis with ``batch_size`` entries and another length
+        in ``model.state``, which must hold the full data. A data dependency
         alone does not establish a sum over sampled units.
 
         Parameters
@@ -1657,6 +1666,12 @@ class Batches:
 
         return _scaled_common_log_lik(model_state, self.batch_sample_scale)
 
+    @property
+    def _row_scale(self) -> float:
+        """Ratio of rows to batch rows, which scales local priors."""
+        assert self.batch_size is not None
+        return self.axis_size / self.batch_size
+
     def scaled_log_prior(
         self,
         model: Model | ModelInterface,
@@ -1666,13 +1681,15 @@ class Batches:
     ) -> jax.Array:
         """Scale priors depending on this group's keys; include other priors once.
 
-        Uses :attr:`batch_sample_scale` and, for weighted sampling, the per-index
-        corrections for ``batch_index``. ``likelihood_axes`` can specify the
-        pointwise axis by parameter name. Generic interfaces retain their
-        aggregate ``_model_log_prior`` unchanged.
+        Uses ``axis_size / batch_size``, which equals :attr:`batch_sample_scale`
+        unless sample sizes are set manually, and, for weighted sampling, the
+        per-index corrections for ``batch_index``. ``likelihood_axes`` can
+        specify the pointwise axis by parameter name. Generic interfaces retain
+        their aggregate ``_model_log_prior`` unchanged.
 
         Indirectly selected priors must retain a pointwise axis with
-        ``batch_size`` entries, even for uniform minibatches.
+        ``batch_size`` entries and another length in ``model.state``, which must
+        hold the full data, even for uniform minibatches.
         """
         if not isinstance(model, Model):
             return model_state["_model_log_prior"].value
@@ -1680,7 +1697,7 @@ class Batches:
         return _scaled_liesel_log_prior(
             model,
             model_state,
-            [(self.position_keys, self.batch_sample_scale)],
+            [(self.position_keys, self._row_scale)],
             corrections,
         )
 
@@ -2719,16 +2736,15 @@ class BatchManager:
     ) -> jax.Array:
         """Scale each child's local priors and include uncovered priors once.
 
-        Weighted children apply their per-index corrections before summation;
-        pass the ``batch_index`` used to produce ``model_state``. Generic model
+        Each child scales by its ratio of rows to batch rows. Weighted children
+        apply their per-index corrections before summation; pass the
+        ``batch_index`` used to produce ``model_state``. Generic model
         interfaces retain their aggregate prior unchanged.
         """
         if not isinstance(model, Model):
             return model_state["_model_log_prior"].value
         corrections = self._factor_corrections(model, model_state, batch_index)
-        groups = [
-            (batch.position_keys, batch.batch_sample_scale) for batch in self.batches
-        ]
+        groups = [(batch.position_keys, batch._row_scale) for batch in self.batches]
         return _scaled_liesel_log_prior(model, model_state, groups, corrections)
 
     def _tree_flatten(self):

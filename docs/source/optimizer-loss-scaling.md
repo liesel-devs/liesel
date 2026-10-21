@@ -24,20 +24,29 @@ to the corresponding training size. Unsplit observed likelihoods contribute to
 training only, including observations explicitly marked as passthrough.
 {class}`LieselOptim <liesel.optim.LieselOptim>` then divides losses by the total training sample size by default;
 use `scale_loss=False` to keep the sum. Sample size counts likelihood terms,
-which need not equal the number of array elements.
+which need not equal the number of array elements. Local priors are scaled by
+the ratio of rows instead, which equals the likelihood factor unless sample
+sizes are set manually.
 
 Validation leaves out priors by default. With `validation_strategy="log_prob"`,
-global priors are included once. The built-in losses reject validation or test
-splits whose keys reach a parameter prior: held-out local latents may receive no
+global priors are included once. A global prior computed from split data is
+evaluated on the scored part's rows: the validation loss uses the validation
+rows' summary, not the training rows'. The built-in losses reject scoring
+validation splits whose keys reach a local parameter prior, one whose
+log-density shape changes with the split: held-out local latents may receive no
 training gradient, so scoring them at their starting values gives a misleading
-validation loss and can stop training too early. Use a custom `Loss` that handles
-held-out latents, or train without a held-out split. This restriction applies to
-both validation strategies. See {py:class}`~liesel.optim.NegLogProbLoss` for details.
+validation loss and can stop training too early. Use a custom `Loss` that
+handles held-out latents, or monitor the training loss, for example with
+`loss_monitor="train_full_data"`. This restriction applies to both validation
+strategies. Held-out parts that the fit does not score, such as test parts, are
+allowed. The check covers only priors: a per-unit parameter without a prior,
+such as `z` in `y ~ N(z[idx], 1)`, passes it but gets the same constant
+validation loss. See {py:class}`~liesel.optim.NegLogProbLoss` for details.
 
 Custom losses can reuse the split's `scaled_log_lik` and `scaled_log_prior`
 helpers after inferring held-out local latents. These helpers only scale the
-supplied state: covered priors receive the same training-to-held-out scale as
-their likelihoods, and uncovered priors are included once.
+supplied state: covered local priors are scaled by the ratio of training to
+held-out rows, and global priors are included once.
 
 ## Batch local priors
 
@@ -74,15 +83,22 @@ Both the likelihood and local prior receive a factor of ten. The prior remains
 in `_model_log_prior`, and `_model_log_lik` still contains only likelihoods.
 The model's state totals themselves are unscaled; scaling occurs in the loss.
 The same configuration works with `LieselOptim` and `LieselVI`.
+This requires a `liesel.model.Model`. A generic model interface exposes only the
+aggregate `_model_log_prior`, which is included once. If it evaluates only a
+batch's local terms, they keep the batch's share of their full-data weight,
+without a warning; scale them in a custom loss.
 
 Dependency tracing follows both values and distribution inputs, including
 computed inputs. For minibatches, indirectly selected factors must return an
-array with an axis of batch-size length. This rejects scalar data-dependent
-global priors, such as a prior whose scale is computed from a batched sample's
-standard deviation. Compute such global summaries from the full data and keep
-them fixed as passthrough inputs, or use a custom loss. Full-data evaluation is
-unchanged. Shape checks cannot prove that the terms decompose over selected
-units: the model must still satisfy that requirement.
+array with an axis of batch-size length that has another length in the model's
+full-data state. This rejects data-dependent global priors, such as a prior
+whose scale is computed from a batched sample's standard deviation, even when
+their length equals the batch size. Compute such global summaries from the full
+data and keep them fixed as passthrough inputs, or use a custom loss. Full-data
+evaluation is unchanged. This check and the split's local-prior test read
+full-data shapes from `model.state`, so do not store a part state there. Shape
+checks cannot prove that the terms decompose over selected units: the model must
+still satisfy that requirement.
 
 A factor depending on two independent
 groups is rejected. Keep aligned keys in one group and shared inputs such as

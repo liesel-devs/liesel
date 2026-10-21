@@ -143,30 +143,53 @@ def test_local_prior_elbo_and_gradients_recover_full_data(entropy, weighted):
 
 
 @pytest.mark.parametrize("manager", [False, True])
-@pytest.mark.parametrize("part", ["validate", "test"])
+@pytest.mark.parametrize("monitor", ["validation", "train_full_data"])
 @pytest.mark.parametrize("strategy", ["log_lik", "log_prob"])
-def test_holdout_with_local_priors_requires_custom_loss(manager, part, strategy):
+def test_scored_validation_with_local_priors_requires_custom_loss(
+    manager, monitor, strategy
+):
     model = local_model(n=8)
     split = opt.PositionSplit.from_model(
-        model,
-        shuffle=False,
-        validate_axis_share=0.25 if part == "validate" else 0.0,
-        test_axis_share=0.25 if part == "test" else 0.0,
+        model, shuffle=False, validate_axis_share=0.25, test_axis_share=0.25
     )
     assert isinstance(split, opt.PositionSplit)
     if manager:
         split = opt.PositionSplitManager([split])
+
+    optim = opt.LieselOptim(
+        model,
+        split=split,
+        optimizers=optax.adam(0.05),
+        validation_strategy=strategy,
+        loss_monitor=monitor,
+        stopper=opt.Stopper(epochs=2, patience=2),
+        show_progress=False,
+    )
+    if monitor == "train_full_data":
+        # The fit scores neither held-out part.
+        assert optim.fit().n_epochs == 2
+        return
+    # Rejected before training, and on direct calls.
     with pytest.raises(ValueError, match="held-out.*custom Loss"):
-        opt.LieselOptim(
-            model,
-            split=split,
-            optimizers=optax.adam(0.05),
-            validation_strategy=strategy,
-            loss_monitor="train_full_data",
-        )
-    if part == "test":
-        with pytest.raises(ValueError, match="held-out.*custom Loss"):
-            opt.NegElboLoss.mvn_diag(model, split=split)
+        optim.build_engine()
+    loss = opt.NegLogProbLoss(model, split, validation_strategy=strategy)
+    with pytest.raises(ValueError, match="held-out.*custom Loss"):
+        loss.loss_monitor(Position({}), carry(model))
+
+
+def test_validation_includes_data_dependent_global_prior_once():
+    data = lsl.Var.new_obs(jnp.arange(8.0), name="data")
+    scale = lsl.Var.new_calc(lambda x: 1.0 + jnp.std(x), data)
+    mu = lsl.Var.new_param(0.5, lsl.Dist(tfd.Normal, 0.0, scale), name="mu")
+    y = lsl.Var.new_obs(jnp.arange(8.0), lsl.Dist(tfd.Normal, mu, 1.0), name="y")
+    model = lsl.Model([y])
+    split = opt.PositionSplit.from_model(
+        model, position_keys=["data", "y"], validate_axis_share=0.25, shuffle=False
+    )
+    loss = opt.NegLogProbLoss(model, split, validation_strategy="log_prob")
+    state = model.update_state(split.validate, model.state)
+    expected = -3 * state["y_log_prob"].value.sum() - state["mu_log_prob"].value
+    assert_tree_close(loss.loss_monitor(Position({"mu": 0.5}), carry(model)), expected)
 
 
 @pytest.mark.parametrize("manager", [False, True])
@@ -182,6 +205,9 @@ def test_split_helpers_score_inferred_heldout_latents(manager, part):
     assert isinstance(split, opt.PositionSplit)
     if manager:
         split = opt.PositionSplitManager([split])
+    if part == "test":
+        # VI never scores test parts, so it can hold out local latents.
+        opt.NegElboLoss.mvn_diag(model, split=split)
     heldout = getattr(split, part)
     # Supply the conditional modes, as a custom loss can before scoring.
     z = model.vars["y"].value / 2
@@ -199,21 +225,30 @@ def test_split_helpers_score_inferred_heldout_latents(manager, part):
     assert_tree_close(jax.jit(score)(state), (expected_lik, expected_prior))
 
 
+@pytest.mark.parametrize("weighted", [False, True])
 @pytest.mark.parametrize("observed", [False, True])
-@pytest.mark.parametrize("shape", [(), (3,)])
-def test_uniform_batch_rejects_indirect_nonpointwise_factors(observed, shape):
+# (2,) has batch_size entries but is global.
+@pytest.mark.parametrize("shape", [(), (2,), (3,)])
+def test_minibatches_reject_indirect_nonpointwise_factors(weighted, observed, shape):
     data = lsl.Var.new_obs(jnp.arange(6.0), name="data")
     scale = lsl.Var.new_calc(lambda x: 1.0 + 2.5 * jnp.std(x), data)
     factory = lsl.Var.new_obs if observed else lsl.Var.new_param
     mu = factory(jnp.zeros(shape), lsl.Dist(tfd.Normal, 0.0, scale), name="mu")
     model = lsl.Model(mu)
-    batches = opt.Batches(["data"], axis_size=6, batch_size=2, shuffle=False)
+    batches = opt.Batches(
+        ["data"],
+        axis_size=6,
+        batch_size=2,
+        shuffle=weighted,
+        sample_with_replacement=weighted,
+        sampling_weights=jnp.arange(1.0, 7.0) if weighted else None,
+    )
     state = model.update_state(
         batches.extract_batched_position(model, model.state, 0), model.state
     )
     method = batches.scaled_log_lik if observed else batches.scaled_log_prior
     with pytest.raises(ValueError, match="mu.*pointwise.*custom Loss"):
-        method(model, state)
+        method(model, state, batch_index=0)
     full = opt.Batches(["data"], axis_size=6, batch_size=None)
     method = full.scaled_log_lik if observed else full.scaled_log_prior
     assert_tree_close(method(model, model.state), model.log_prob)
@@ -233,6 +268,31 @@ def test_prior_only_group_and_full_data(factory):
         expected += state["global_log_prob"].value
         assert_tree_close(batches.scaled_log_prior(model, state), expected)
         assert_tree_close(batches.scaled_log_lik(model, state), 0.0)
+
+
+def test_local_priors_scale_by_rows_with_manual_sample_sizes():
+    model = local_model(n=8)
+    batches = opt.Batches(
+        ["idx", "y"], axis_size=8, batch_size=2, sample_size=80.0, batch_sample_size=2.0
+    )
+    state = model.update_state(
+        batches.extract_batched_position(model, model.state, 0), model.state
+    )
+    expected = 4 * state["z_log_prob"].value.sum() + state["global_log_prob"].value
+    for config in (batches, opt.BatchManager([batches])):
+        assert_tree_close(config.scaled_log_prior(model, state), expected)
+
+    split = opt.PositionSplit.from_model(
+        model,
+        validate_axis_share=0.25,
+        shuffle=False,
+        sample_sizes={"train": 60.0, "validate": 2.0},
+    )
+    assert isinstance(split, opt.PositionSplit)
+    state = model.update_state(split.validate, model.state)
+    expected = 3 * state["z_log_prob"].value.sum() + state["global_log_prob"].value
+    for config in (split, opt.PositionSplitManager([split])):
+        assert_tree_close(config.scaled_log_prior(model, state), expected)
 
 
 def test_node_keys_and_distribution_only_observed_dependency():
@@ -272,8 +332,11 @@ def test_cross_group_priors_rejected_in_factories_losses_and_manual_batches():
                 optimizers=optax.sgd(0.01),
                 loss_monitor="train_full_data",
             ).build_engine()
-    with pytest.raises(ValueError, match="factor 'z'"):
-        batches.scaled_log_prior(model, model.state)
+    state = model.update_state(
+        batches.extract_batched_position(model, model.state, 0), model.state
+    )
+    with pytest.raises(ValueError, match="factor 'z'.*more than one data group"):
+        batches.scaled_log_prior(model, state)
 
 
 def test_custom_prior_requires_custom_loss_only_when_covered():
