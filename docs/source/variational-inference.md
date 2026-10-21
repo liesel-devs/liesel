@@ -56,6 +56,15 @@ model.plot()
 includes target priors; extra {ref}`q-parameter penalties <vi-q-prior-penalties>`
 are opt-in.
 
+Minibatches scale every target likelihood or local prior that depends on the
+batched keys, including weighted-sampling corrections. Global priors contribute
+once. See {doc}`optimizer-loss-scaling` for an indexed-local-prior example.
+Variational draws and entropy still cover the full latent vector; this does not
+restrict guide sampling to the batch or enable validation splits for VI.
+The fit never scores test parts, so they may hold out local latents. To score
+them, infer those latents first and use the split helpers described in
+{doc}`optimizer-loss-scaling`.
+
 ```{code-cell} python
 vdist = opt.VDist(["loc"], model).mvn_diag(scale_diag=0.5).build()
 loss = opt.NegElboLoss.from_vdist(vdist, nsamples=16, scale=True)

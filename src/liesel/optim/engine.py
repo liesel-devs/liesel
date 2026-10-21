@@ -36,7 +36,7 @@ from ._engine_utils import (
 from .batch import Batches, BatchManager
 from .loss import Loss, LossMixin, NegLogProbLoss
 from .optimizer import LBFGS, Optimizer, OptimizerLike
-from .split import PositionSplitManager
+from .split import PositionSplitManager, validate_split_priors
 from .state import (
     _NAN_DEBUG_KIND_LOSS,
     _NAN_DEBUG_KIND_NAMES,
@@ -512,9 +512,10 @@ class OptimEngine:
         Raises
         ------
         ValueError
-            If ``loss_monitor`` is unsupported, validation data is missing, or
-            full-data monitoring uses the unimplemented :class:`~liesel.optim.LossMixin`
-            stub.
+            If ``loss_monitor`` is unsupported, validation data is missing,
+            :class:`~liesel.optim.NegLogProbLoss` would score local priors on
+            validation rows, or full-data monitoring uses the unimplemented
+            :class:`~liesel.optim.LossMixin` stub.
         """
         if not isinstance(self.loss_monitor, EmaTrainLossMonitor) and (
             self.loss_monitor not in ("validation", "train_full_data")
@@ -529,6 +530,14 @@ class OptimEngine:
             raise ValueError(
                 "loss_monitor='validation' requires a split with validation data."
             )
+
+        # Fail before training; some fit loops trace loss_monitor after an epoch.
+        if self.loss_monitor == "validation" and (
+            getattr(self.loss.loss_monitor, "__func__", None)
+            is NegLogProbLoss.loss_monitor
+        ):
+            assert isinstance(self.loss, NegLogProbLoss)
+            validate_split_priors(self.loss.model, self.split)
 
         if self.loss_monitor == "train_full_data" and (
             getattr(self.loss.loss_train, "__func__", None) is LossMixin.loss_train

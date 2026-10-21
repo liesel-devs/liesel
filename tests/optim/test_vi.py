@@ -1,6 +1,7 @@
 import jax
 import jax.numpy as jnp
 import numpy as np
+import optax
 import pytest
 import tensorflow_probability.substrates.jax as tfp
 import tensorflow_probability.substrates.jax.bijectors as tfb
@@ -967,8 +968,50 @@ def test_computed_data_cannot_overlap_inferred_target(target_kind):
     split = opt.PositionSplit.from_model(model, position_keys=["mean", "y"])
     key = "mean" if target_kind == "variable" else model.vars["mean"].value_node.name
     vdist = opt.VDist([key], model).mvn_diag().build()
-    with pytest.raises(ValueError, match="Computed data key 'mean'.*inferred target"):
+    with pytest.raises(ValueError, match="batch optimized parameter 'mean'"):
         opt.NegElboLoss.from_vdist(vdist, split)
+
+
+def _local_latent_model():
+    z = lsl.Var.new_param(
+        jnp.zeros(20), lsl.Dist(tfp.distributions.Normal, 0.0, 1.0), name="z"
+    )
+    idx = lsl.Var.new_value(jnp.arange(20), name="idx")
+    loc = lsl.Var.new_calc(lambda z, idx: z[idx], z, idx, name="loc")
+    y = lsl.Var.new_obs(
+        jnp.arange(20.0), lsl.Dist(tfp.distributions.Normal, loc, 1.0), name="y"
+    )
+    return lsl.Model([y])
+
+
+@pytest.mark.parametrize("loss", ["explicit", "default"])
+@pytest.mark.parametrize("passthrough", [False, True])
+def test_inferred_targets_cannot_be_split_or_batched(loss, passthrough):
+    # Split data would replace the target values drawn from q and freeze q.
+    model = _local_latent_model()
+
+    def build_engine(keys):
+        split = opt.PositionSplit.from_model(
+            model,
+            position_keys=keys,
+            split_axes={"z": None} if passthrough and "z" in keys else None,
+        )
+        vdist = opt.VDist(["z"], model).mvn_diag(scale_diag=0.5).build()
+        return opt.LieselVI(
+            model,
+            loss_monitor="train_full_data",
+            optimizers=optax.adam(0.05),
+            split=split,
+            batches=opt.Batches.from_split(split, batch_size=5),
+            loss=opt.NegElboLoss.from_vdist(vdist, split=split)
+            if loss == "explicit"
+            else "mvn_diag",
+            show_progress=False,
+        ).build_engine()
+
+    with pytest.raises(ValueError, match="batch optimized parameter 'z'"):
+        build_engine(["z", "y"])
+    build_engine(["idx", "y"])  # Data that only indexes a target stays valid.
 
 
 @pytest.mark.parametrize("invalid", ["ancestor", "transient", "node_alias"])
