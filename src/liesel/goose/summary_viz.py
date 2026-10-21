@@ -2,6 +2,7 @@
 Diagnostic plots of the posterior samples.
 """
 
+import warnings
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal
 
@@ -1030,12 +1031,46 @@ def _divergence_flags(
     include_warmup: bool,
     parameters: Mapping[str, str],
     divergence_scope: Literal["parameter", "any"],
+    highlight_divergences: bool | Literal["auto"],
+) -> pd.DataFrame | None:
+    """Resolve whether divergence highlighting applies to this input."""
+    if not isinstance(highlight_divergences, bool) and highlight_divergences != "auto":
+        raise ValueError("highlight_divergences must be 'auto', True, or False.")
+    if highlight_divergences is False:
+        return None
+    if divergence_scope not in ("parameter", "any"):
+        raise ValueError("divergence_scope must be 'parameter' or 'any'.")
+    if highlight_divergences == "auto":
+        if not isinstance(results, SamplingResults):
+            return None
+        if results.kernel_classes.is_some() and not any(
+            issubclass(cls, (HMCKernel, NUTSKernel))
+            for cls in results.kernel_classes.unwrap().values()
+        ):
+            return None
+    try:
+        return _aligned_divergence_flags(
+            results, plot_df, include_warmup, parameters, divergence_scope
+        )
+    except ValueError as error:
+        if highlight_divergences is True:
+            raise
+        warnings.warn(
+            f"Divergence highlighting skipped: {error}", UserWarning, stacklevel=3
+        )
+        return None
+
+
+def _aligned_divergence_flags(
+    results: SamplingResults | Mapping[str, ArrayLike],
+    plot_df: pd.DataFrame,
+    include_warmup: bool,
+    parameters: Mapping[str, str],
+    divergence_scope: Literal["parameter", "any"],
 ) -> pd.DataFrame:
     """Align each plotted parameter's divergence flags with retained draws."""
     if not isinstance(results, SamplingResults):
         raise TypeError("Divergence highlighting requires SamplingResults.")
-    if divergence_scope not in ("parameter", "any"):
-        raise ValueError("divergence_scope must be 'parameter' or 'any'.")
     if divergence_scope == "parameter" and results.kernels_by_pos_key.is_none():
         raise ValueError(
             "Divergence highlighting requires position-kernel associations."
@@ -1126,7 +1161,7 @@ def plot_scatter(
     save_path: str | None = None,
     include_warmup: bool = False,
     show: bool = True,
-    highlight_divergences: bool = False,
+    highlight_divergences: bool | Literal["auto"] = "auto",
     divergence_scope: Literal["parameter", "any"] = "parameter",
 ):
     """
@@ -1196,6 +1231,12 @@ def plot_scatter(
         Display the plot. Set to ``False`` to save or inspect the figure without
         displaying it.
     highlight_divergences
+        With ``"auto"`` (default), highlight when usable diagnostics are available.
+        Raw sample dictionaries and results known to have no HMC/NUTS kernels plot
+        without markers. Missing, incomplete, or misaligned diagnostics, including
+        a missing required kernel mapping, emit a warning and disable highlighting.
+        Set ``True`` to require highlighting and raise on unusable diagnostics;
+        set ``False`` to disable highlighting and skip diagnostic checks.
         Overlay opaque red crosses on draws associated with a divergent HMC or NUTS
         transition. Requires :class:`~liesel.goose.SamplingResults`. Includes NUTS
         transitions that also reached maximum tree depth. Chain colors are preserved.
@@ -1203,7 +1244,8 @@ def plot_scatter(
         discarded iterations are not displayed. These are stored draws after the
         full kernel sequence, not intermediate locations along divergent trajectories.
     divergence_scope
-        Used only when ``highlight_divergences=True``. With ``"parameter"``
+        Used when highlighting is enabled (``"auto"`` or ``True``).
+        With ``"parameter"``
         (default), mark a draw if a kernel updating either plotted parameter diverged.
         Requires :attr:`SamplingResults.kernels_by_pos_key
         <liesel.goose.SamplingResults.kernels_by_pos_key>`; unmapped parameters and
@@ -1215,11 +1257,17 @@ def plot_scatter(
     Raises
     ------
     TypeError
-        If highlighting is requested with a raw sample dictionary.
+        If ``highlight_divergences=True`` is used with a raw sample dictionary.
     ValueError
-        If highlighting is requested without usable HMC/NUTS transition information,
-        diagnostics do not align with the samples, ``divergence_scope`` is invalid,
-        or the parameter scope lacks position-kernel associations.
+        If ``highlight_divergences`` is invalid, or highlighting is enabled and
+        ``divergence_scope`` is invalid. Also raised in strict mode (``True``) for
+        unusable diagnostics or a missing required kernel mapping.
+
+    Warns
+    -----
+    UserWarning
+        In automatic mode, if highlighting is skipped because diagnostics or a
+        required kernel mapping are unavailable or inconsistent.
     """
     # NOTE: Docstring duplications
     # Multiple arguments in this docstring are shared with other plotting functions.
@@ -1260,10 +1308,15 @@ def plot_scatter(
         palette=color_list,
         ax=axis,
     )
-    if highlight_divergences:
-        flags = _divergence_flags(
-            results, plot_df, include_warmup, parameters, divergence_scope
-        )
+    flags = _divergence_flags(
+        results,
+        plot_df,
+        include_warmup,
+        parameters,
+        divergence_scope,
+        highlight_divergences,
+    )
+    if flags is not None:
         divergent = plot_df.loc[flags.any(axis=1)]
         if not divergent.empty:
             axis.scatter(
@@ -1303,7 +1356,7 @@ def plot_pairs(
     save_path: str | None = None,
     include_warmup: bool = False,
     show: bool = True,
-    highlight_divergences: bool = False,
+    highlight_divergences: bool | Literal["auto"] = "auto",
     divergence_scope: Literal["parameter", "any"] = "parameter",
 ):
     """
@@ -1376,6 +1429,12 @@ def plot_pairs(
         Display the plot. Set to ``False`` to save or inspect the figure without
         displaying it.
     highlight_divergences
+        With ``"auto"`` (default), highlight when usable diagnostics are available.
+        Raw sample dictionaries and results known to have no HMC/NUTS kernels plot
+        without markers. Missing, incomplete, or misaligned diagnostics, including
+        a missing required kernel mapping, emit a warning and disable highlighting.
+        Set ``True`` to require highlighting and raise on unusable diagnostics;
+        set ``False`` to disable highlighting and skip diagnostic checks.
         Highlight draws associated with divergent HMC or NUTS transitions. Requires
         :class:`~liesel.goose.SamplingResults`. Includes NUTS transitions that also
         reached maximum tree depth. Scatter panels show opaque red crosses; each
@@ -1388,7 +1447,8 @@ def plot_pairs(
         the full kernel sequence, not intermediate locations along divergent
         trajectories.
     divergence_scope
-        Used only when ``highlight_divergences=True``. With ``"parameter"``
+        Used when highlighting is enabled (``"auto"`` or ``True``).
+        With ``"parameter"``
         (default), each diagonal marks divergences from the kernel updating that
         parameter; off-diagonal panels mark a draw if a kernel updating either
         parameter diverged. Requires :attr:`SamplingResults.kernels_by_pos_key
@@ -1402,11 +1462,17 @@ def plot_pairs(
     Raises
     ------
     TypeError
-        If highlighting is requested with a raw sample dictionary.
+        If ``highlight_divergences=True`` is used with a raw sample dictionary.
     ValueError
-        If highlighting is requested without usable HMC/NUTS transition information,
-        diagnostics do not align with the samples, ``divergence_scope`` is invalid,
-        or the parameter scope lacks position-kernel associations.
+        If ``highlight_divergences`` is invalid, or highlighting is enabled and
+        ``divergence_scope`` is invalid. Also raised in strict mode (``True``) for
+        unusable diagnostics or a missing required kernel mapping.
+
+    Warns
+    -----
+    UserWarning
+        In automatic mode, if highlighting is skipped because diagnostics or a
+        required kernel mapping are unavailable or inconsistent.
     """
     # NOTE: Docstring duplications
     # Multiple arguments in this docstring are shared with other plotting functions.
@@ -1431,12 +1497,13 @@ def plot_pairs(
         .reset_index()
     )
 
-    flags = (
-        _divergence_flags(
-            results, plot_df, include_warmup, parameters, divergence_scope
-        )
-        if highlight_divergences
-        else None
+    flags = _divergence_flags(
+        results,
+        plot_df,
+        include_warmup,
+        parameters,
+        divergence_scope,
+        highlight_divergences,
     )
     plot_df = plot_df.drop(columns="iteration")
 

@@ -103,8 +103,8 @@ Divergences can indicate biased exploration; a tree-depth limit is primarily an
 efficiency concern. Kernel error codes differ, so use their accompanying
 messages rather than comparing numeric codes across methods.
 
-To locate draws associated with divergent HMC or NUTS transitions, enable
-`highlight_divergences` in a scatter or pair plot:
+Scatter and pair plots automatically highlight draws associated with divergent
+HMC or NUTS transitions when usable diagnostics are available:
 
 ```{code-cell} ipython3
 ---
@@ -118,7 +118,6 @@ gs.plot_scatter(
     results,
     params=["beta", "sigma_sq"],
     param_indices=(1, 0),
-    highlight_divergences=True,
 )
 ```
 
@@ -133,7 +132,6 @@ mystnb:
 gs.plot_pairs(
     results,
     params=["beta", "sigma_sq"],
-    highlight_divergences=True,
 )
 ```
 
@@ -149,17 +147,22 @@ one displayed panel has marked draws.
 To mark draws whenever **any HMC/NUTS kernel** diverged, including kernels that
 update unplotted parameters, also pass `divergence_scope="any"`. This applies the
 same flags to every scatter panel and diagonal rug. The default is
-`divergence_scope="parameter"`; either scope requires
-`highlight_divergences=True` to enable markers.
+`divergence_scope="parameter"`.
 
-Pass the {class}`SamplingResults <liesel.goose.SamplingResults>` object,
-rather than a dictionary of samples: highlighting
-requires transition diagnostics and raises an error if no usable HMC/NUTS
-diagnostics are available. The default scope also requires the results' mapping
-from parameters to kernels. Parameters absent from that mapping, such as stored
-derived quantities, and parameters updated by other kernel types receive no
-markers in this scope. Use `"any"` to inspect them against all HMC/NUTS
-divergences. Chain selection and thinning are respected. With
+The default `highlight_divergences="auto"` uses diagnostics from a
+{class}`SamplingResults <liesel.goose.SamplingResults>` object. Raw sample
+dictionaries and results known to contain no HMC/NUTS kernels plot normally
+without markers. If diagnostics or the required kernel mapping are missing,
+incomplete, or misaligned, automatic highlighting emits a warning and plots
+without markers; this does not mean that there were zero divergences.
+Use `highlight_divergences=True` to require highlighting and raise an error
+when it cannot be provided, or `False` to disable it and skip diagnostic checks.
+
+Parameter scope requires the results' mapping from parameters to kernels.
+Parameters absent from that mapping, such as stored derived quantities, and
+parameters updated by other kernel types contribute no divergence flags in this
+scope. Use `"any"` to inspect them against all HMC/NUTS divergences; this scope
+does not require the mapping. Chain selection and thinning are respected. With
 `include_warmup=True`, warmup draws are included, but initial values have no
 transition diagnostic and receive no marker. Divergences in discarded iterations
 are not displayed. Marked points are stored draws after the full kernel sequence,

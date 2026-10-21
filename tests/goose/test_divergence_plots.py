@@ -1,3 +1,5 @@
+import warnings
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
@@ -102,6 +104,103 @@ def separate_kernel_results():
     )
 
 
+@pytest.mark.parametrize("plot", [gs.plot_scatter, gs.plot_pairs])
+@pytest.mark.parametrize("mode", ["default", "auto"])
+@pytest.mark.parametrize("scope", ["parameter", "any"])
+def test_auto_highlights_available_divergences(
+    separate_kernel_results, plot, mode, scope
+):
+    kwargs = {} if mode == "default" else {"highlight_divergences": "auto"}
+    plot(
+        separate_kernel_results,
+        params=["x", "y"],
+        param_indices=(0, 0),
+        divergence_scope=scope,
+        show=False,
+        **kwargs,
+    )
+    markers = [
+        c
+        for ax in plt.gcf().axes
+        for c in ax.collections
+        if isinstance(c, PathCollection) and c.get_label() == "Divergent"
+    ]
+    assert len(markers) == (1 if plot is gs.plot_scatter else 2)
+    expected = [[2, 12]] if scope == "parameter" else [[1, 11], [2, 12], [4, 14]]
+    np.testing.assert_array_equal(markers[-1].get_offsets(), expected)
+
+
+@pytest.mark.parametrize("plot", [gs.plot_scatter, gs.plot_pairs])
+@pytest.mark.parametrize("source", ["dictionary", "non_hmc"])
+def test_auto_plots_inputs_without_applicable_diagnostics_normally(plot, source):
+    samples = {"x": np.array([[1, 2, 3, 4]]), "y": np.array([[11, 12, 13, 14]])}
+    results = results_from_epochs(
+        (
+            EpochConfig(EpochType.POSTERIOR, 4, 1, None),
+            samples,
+            {
+                "rw": DefaultTransitionInfo(
+                    error_code=np.zeros((1, 4)),
+                    acceptance_prob=np.ones((1, 4)),
+                    position_moved=np.ones((1, 4)),
+                )
+            },
+        ),
+        kernel_classes={"rw": gs.RWKernel},
+        kernels_by_pos_key={"x": "rw", "y": "rw"},
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        plot(
+            samples if source == "dictionary" else results,
+            params=["x", "y"],
+            param_indices=(0, 0),
+            show=False,
+        )
+    assert all(
+        c.get_label() != "Divergent" for ax in plt.gcf().axes for c in ax.collections
+    )
+
+
+@pytest.mark.parametrize("plot", [gs.plot_scatter, gs.plot_pairs])
+@pytest.mark.parametrize("missing", ["mapping", "info", "incomplete", "shape"])
+def test_auto_warns_and_skips_unusable_diagnostics(
+    separate_kernel_results, plot, missing
+):
+    results = separate_kernel_results
+    if missing == "mapping":
+        results.kernels_by_pos_key = Option(None)
+    elif missing == "info":
+        results.transition_infos = EpochChainManager()
+    elif missing == "incomplete":
+        results.kernel_classes = Option({"missing_hmc": gs.HMCKernel})
+    else:
+        infos = results.get_posterior_transition_infos()
+        infos["x_kernel"] = nuts_info([[0, 1, 0, 0, 0]])
+        results = results_from_epochs(
+            (
+                EpochConfig(EpochType.POSTERIOR, 4, 1, None),
+                results.get_posterior_samples(),
+                infos,
+            ),
+            kernels_by_pos_key=results.get_kernels_by_pos_key(),
+        )
+    with pytest.warns(UserWarning, match="Divergence highlighting skipped") as caught:
+        plot(results, params=["x", "y"], param_indices=(0, 0), show=False)
+    assert len(caught) == 1
+    figure = plt.gcf()
+    assert all(
+        c.get_label() != "Divergent" for ax in figure.axes for c in ax.collections
+    )
+    legends = figure.legends + [ax.get_legend() for ax in figure.axes]
+    assert all(
+        text.get_text() != "Divergent"
+        for legend in legends
+        if legend is not None
+        for text in legend.get_texts()
+    )
+
+
 def test_pairs_marks_only_kernels_updating_each_panels_parameters(
     separate_kernel_results,
 ):
@@ -142,8 +241,9 @@ def test_pairs_marks_only_kernels_updating_each_panels_parameters(
 
 
 @pytest.mark.parametrize("plot", [gs.plot_scatter, gs.plot_pairs])
+@pytest.mark.parametrize("mode", [True, "auto"])
 def test_any_scope_marks_divergences_from_unplotted_kernels(
-    separate_kernel_results, plot
+    separate_kernel_results, plot, mode
 ):
     # Any-kernel scope does not need parameter-to-kernel metadata.
     separate_kernel_results.kernels_by_pos_key = Option(None)
@@ -151,7 +251,7 @@ def test_any_scope_marks_divergences_from_unplotted_kernels(
         separate_kernel_results,
         params=["x", "y"],
         param_indices=(0, 0),
-        highlight_divergences=True,
+        highlight_divergences=mode,
         divergence_scope="any",
         show=False,
     )
@@ -184,14 +284,30 @@ def test_any_scope_marks_divergences_from_unplotted_kernels(
 
 
 @pytest.mark.parametrize("plot", [gs.plot_scatter, gs.plot_pairs])
-def test_highlighting_rejects_unknown_divergence_scope(separate_kernel_results, plot):
+@pytest.mark.parametrize("mode", [True, "auto"])
+def test_highlighting_rejects_unknown_divergence_scope(
+    separate_kernel_results, plot, mode
+):
     with pytest.raises(ValueError, match="divergence_scope"):
         plot(
             separate_kernel_results,
             params=["x", "y"],
             param_indices=(0, 0),
-            highlight_divergences=True,
+            highlight_divergences=mode,
             divergence_scope="unknown",
+            show=False,
+        )
+
+
+@pytest.mark.parametrize("plot", [gs.plot_scatter, gs.plot_pairs])
+@pytest.mark.parametrize("mode", ["yes", None, 1])
+def test_highlighting_rejects_invalid_modes(separate_kernel_results, plot, mode):
+    with pytest.raises(ValueError, match="highlight_divergences"):
+        plot(
+            separate_kernel_results,
+            params=["x", "y"],
+            param_indices=(0, 0),
+            highlight_divergences=mode,
             show=False,
         )
 
@@ -533,7 +649,9 @@ def test_highlighting_does_not_silently_omit_a_known_hmc_kernel(plot):
 
 
 @pytest.mark.parametrize("plot", [gs.plot_scatter, gs.plot_pairs])
-@pytest.mark.parametrize("case", ["zero", "unselected", "disabled", "dictionary"])
+@pytest.mark.parametrize(
+    "case", ["zero", "unselected", "disabled", "disabled_missing", "dictionary"]
+)
 def test_ordinary_plots_have_no_divergence_markers_or_legend(plot, case):
     samples = {
         "x": np.array([[1, 2, 3, 4], [5, 6, 7, 8]]),
@@ -549,15 +667,20 @@ def test_ordinary_plots_have_no_divergence_markers_or_legend(plot, case):
             {"nuts": nuts_info(codes)},
         )
     )
-    kwargs = {"highlight_divergences": True} if case in ["zero", "unselected"] else {}
-    plot(
-        samples if case == "dictionary" else results,
-        params=["x", "y"],
-        param_indices=(0, 0),
-        chain_indices=[1] if case == "unselected" else None,
-        show=False,
-        **kwargs,
-    )
+    if case == "disabled_missing":
+        results.kernels_by_pos_key = Option(None)
+        results.transition_infos = EpochChainManager()
+    kwargs = {"highlight_divergences": False} if case.startswith("disabled") else {}
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        plot(
+            samples if case == "dictionary" else results,
+            params=["x", "y"],
+            param_indices=(0, 0),
+            chain_indices=[1] if case == "unselected" else None,
+            show=False,
+            **kwargs,
+        )
 
     figure = plt.gcf()
     assert all(
