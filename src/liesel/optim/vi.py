@@ -1,0 +1,2076 @@
+"""Variational inference losses and variational distribution builders.
+
+This module provides the pieces used by :class:`~liesel.optim.LieselVI` and by custom
+variational workflows:
+
+:class:`~liesel.optim.NegElboLoss`
+    A :class:`~liesel.optim.LossMixin` implementation that evaluates a Monte Carlo
+    estimate of
+    the negative evidence lower bound (ELBO) loss.
+:class:`~liesel.optim.VDist`
+    A builder for one variational block. The block governs one or more parameters
+    from a target Liesel model and turns them into a flattened observed variable in
+    a variational model.
+:class:`~liesel.optim.CompositeVDist`
+    A builder that combines several independent :class:`~liesel.optim.VDist` blocks into
+    one
+    variational model.
+
+Examples
+--------
+Build a diagonal multivariate normal variational distribution and wrap it in an
+ELBO loss:
+
+>>> import jax.numpy as jnp
+>>> import liesel.model as lsl
+>>> import liesel.optim as opt
+>>> import tensorflow_probability.substrates.jax as tfp
+>>> loc = lsl.Var.new_param(jnp.array(0.0), name="mu")
+>>> y = lsl.Var.new_obs(
+...     jnp.array([0.1, -0.2]),
+...     dist=lsl.Dist(tfp.distributions.Normal, loc=loc, scale=1.0),
+...     name="y",
+... )
+>>> p = lsl.Model(y)
+>>> vdist = opt.VDist(["mu"], p).mvn_diag().build()
+>>> elbo = opt.NegElboLoss.from_vdist(vdist, nsamples=2)
+>>> repr(elbo)
+'NegElboLoss(nsamples=2)'
+>>> elbo.regularize_q_prior
+False
+>>> vdist.var.dist_node.init_dist().stddev()
+Array([0.1], dtype=float32)
+>>> elbo.position(vdist.parameters).keys()
+dict_keys(['(mu)_loc', 'h((mu)_scale)'])
+
+Bind the fitted variational distribution and draw target-model positions:
+
+>>> import jax
+>>> import optax
+>>> result = opt.LieselVI(
+...     p,
+...     loss=elbo,
+...     optimizers=optax.adam(0.01),
+...     loss_monitor=opt.EmaTrainLossMonitor(effective_window=20.0),
+...     stopper=opt.Stopper(epochs=3, patience=3),
+...     show_progress=False,
+... ).fit()
+>>> posterior = elbo.approximate_joint_posterior(result)
+>>> posterior.sample(5, seed=jax.random.key(42))["mu"].shape
+(5,)
+"""
+
+from __future__ import annotations
+
+import operator
+from collections.abc import Callable, Sequence
+from functools import partial
+from math import prod
+from typing import TYPE_CHECKING, Any, Literal, Self, cast
+
+import jax
+import jax.flatten_util
+import jax.numpy as jnp
+import tensorflow_probability.substrates.jax.bijectors as jb
+import tensorflow_probability.substrates.jax.distributions as tfd
+
+from ..docs import usedocs
+from ..model import Dist, Model, Var
+from ..model.logprob import FlatLogProb
+from ..model.model import TemporaryModel
+from ._model_utils import validate_model_data_keys
+from .loss import LossMixin, _training_loss_scalar, _validate_bool
+from .split import PositionSplit, PositionSplitManager, _has_custom_model_log_lik
+from .state import OptimCarry, OptimResult
+from .types import ModelState, Position
+
+SplitConfig = PositionSplit | PositionSplitManager
+type ScaleBijectorConfig = type[jb.Bijector] | jb.Bijector | None | Literal["auto"]
+
+
+def _validate_positive_int(value: int, name: str) -> None:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise ValueError(f"{name} must be a positive integer, but got {value!r}.")
+
+
+def _validate_no_validation_split(split: SplitConfig) -> None:
+    if split.has_validation:
+        raise ValueError(
+            "NegElboLoss does not support data splits with validation data. "
+            "For variational inference, use a split without validation data "
+            "(for example validate_axis_share=0.0) and choose a training-data monitor."
+        )
+
+
+def _is_laplace_init(value, name: str) -> bool:
+    if not isinstance(value, str):
+        return False
+
+    if value != "laplace":
+        raise ValueError(f"{name} must be 'laplace' or an array-like value.")
+
+    return True
+
+
+def _laplace_covariance(model: Model, position_keys: Sequence[str], loc: jax.Array):
+    flat_position, _ = jax.flatten_util.ravel_pytree(
+        model.extract_position(position_keys)
+    )
+    loc = jnp.broadcast_to(loc, flat_position.shape)
+    info_matrix = -FlatLogProb(model, position_keys).hessian(loc)
+    if not bool(jnp.isfinite(info_matrix).all()):
+        raise ValueError("Laplace curvature must be finite.")
+    diag = jnp.diag(info_matrix)
+    ridge = 1e-6 * jnp.maximum(jnp.mean(jnp.abs(diag)), 1.0)
+    info_matrix += ridge * jnp.eye(jnp.shape(info_matrix)[-1])
+
+    eigvals, eigvecs = jnp.linalg.eigh(info_matrix)
+    inv_eigvals_clipped = 1 / jnp.clip(eigvals, min=1e-5)
+    cov_matrix = (eigvecs * inv_eigvals_clipped) @ eigvecs.T
+    if not bool(jnp.isfinite(cov_matrix).all()):
+        raise ValueError("Laplace covariance must be finite.")
+    return cov_matrix
+
+
+def _validate_gaussian_scale(value, *, triangular=False):
+    if not bool(jnp.isfinite(value).all()):
+        raise ValueError("Initial scale must be finite.")
+    if triangular:
+        if value.ndim != 2 or value.shape[0] != value.shape[1]:
+            raise ValueError("Initial scale factor must be a square matrix.")
+        if not bool((value == jnp.tril(value)).all()):
+            raise ValueError("Initial scale factor must be lower triangular.")
+        if not bool((jnp.diag(value) != 0).all()):
+            raise ValueError("Initial scale factor must have nonzero diagonal entries.")
+    elif not bool((value > 0).all()):
+        raise ValueError("Initial scale must be strictly positive.")
+
+
+def _validate_bijected_scale(var: Var):
+    if var.has_bijected_var and not bool(jnp.isfinite(var.bijected_var.value).all()):
+        raise ValueError(
+            "Initial scale cannot be represented finitely by the chosen bijector."
+        )
+
+
+def _distribution_sample_shape(distribution, value_shape: tuple[int, ...]):
+    event_shape = tuple(distribution.event_shape)
+    batch_shape = tuple(distribution.batch_shape)
+    distribution_shape = batch_shape + event_shape
+    n_distribution_dims = len(distribution_shape)
+
+    if len(value_shape) < n_distribution_dims:
+        raise ValueError(
+            "The variational distribution's event and batch shape "
+            f"{distribution_shape} is incompatible with flattened position shape "
+            f"{value_shape}."
+        )
+
+    if n_distribution_dims and value_shape[-n_distribution_dims:] != distribution_shape:
+        raise ValueError(
+            "The variational distribution's event and batch shape "
+            f"{distribution_shape} does not match the trailing dimensions of the "
+            f"flattened position shape {value_shape}."
+        )
+
+    return value_shape[: len(value_shape) - n_distribution_dims]
+
+
+def _asarray_with_float_dtype(value, dtype: jnp.dtype):
+    arr = jnp.asarray(value)
+    if jnp.issubdtype(arr.dtype, jnp.floating) and jnp.issubdtype(dtype, jnp.floating):
+        return arr.astype(dtype)
+
+    return arr
+
+
+class NegElboLoss(LossMixin):
+    """
+    Monte Carlo negative evidence lower bound loss.
+
+    Connects a target model ``p`` to a variational model ``q`` through the draw
+    mapping ``q_to_p``. Training methods return the negative ELBO for minimization;
+    :meth:`~liesel.optim.NegElboLoss.estimate_elbo` returns the ELBO itself.
+
+    Parameters
+    ----------
+    p
+        Target Liesel model whose posterior is approximated.
+    q
+        Variational Liesel model. Every distribution sampled after fixing its
+        parameters must belong to an observed variable and support fully
+        reparameterized draws. Mark strong free inputs as parameters; computed
+        means and scales remain ordinary derived variables. Unsupported sampled
+        distributions and weak marked parameters raise ValueError.
+    split
+        Train/test split for observed data in ``p``. Validation data is not
+        supported for ELBO losses. If omitted, :meth:`PositionSplit.from_model
+        <liesel.optim.PositionSplit.from_model>` is
+        used. Computed data keys must be fixed with respect to inferred target
+        positions. Dependencies or overlap with inferred targets raise
+        :class:`ValueError` when constructing the loss; batch fixed inputs instead.
+    nsamples
+        Number of Monte Carlo samples used for training losses.
+    q_to_p
+        Function mapping a sampled position from ``q`` to a position accepted by
+        ``p``. Builders such as :class:`~liesel.optim.VDist` provide this mapping
+        automatically.
+        With computed data keys, this mapping is also evaluated on the current
+        observed position of ``q`` at construction to identify inferred target keys.
+        Use a pure, one-to-one structural name/shape mapping whose output keys do
+        not depend on sampled values. It must preserve the draws' density; no
+        change-of-variables Jacobian is added for this mapping.
+    scale
+        If ``True``, divide losses by the training sample size. For
+        :class:`~liesel.optim.PositionSplitManager`, the scalar is the sum of all
+        branch-specific
+        training sizes.
+    vdist
+        Optional variational distribution builder that created ``q``. Stored for
+        introspection and convenience; it is not required for evaluating the loss.
+    regularize_q_prior
+        Defaults to ``False``: optimize the ordinary ELBO, including target-model
+        priors. Set ``True`` to add log-prior penalties on the fixed optimization
+        parameters in ``q``. These penalties change the objective; they are not
+        part of the density of variational draws. See :ref:`vi-q-prior-penalties`.
+    entropy
+        ``"auto"`` (default) uses differentiable distribution entropies where
+        implemented, falling back to Monte Carlo per term on ``NotImplementedError``.
+        Independent block entropies add exactly; conditional entropies are averaged
+        over sampled parents. Custom aggregate likelihoods in ``q`` use Monte Carlo.
+        ``"mc"`` estimates entropy from sampled negative log densities. Analytic
+        entropy avoids sampled log-density evaluation where supported; target-model
+        likelihoods and priors are still evaluated with Monte Carlo draws.
+
+    Notes
+    -----
+    A custom aggregate likelihood in ``q`` must be the normalized joint log density
+    of the draws. Normalization and arbitrary mapping correctness are the caller's
+    responsibility and cannot be checked mechanically. Put nonlinear distribution
+    transformations inside ``q``, with their Jacobians in its density. Do not drop
+    auxiliary random variables without an appropriate target density. See
+    :doc:`/variational-models` for a complete conditional-model example.
+
+    Examples
+    --------
+    The convenience constructor :meth:`~liesel.optim.NegElboLoss.mvn_diag` builds a
+    diagonal multivariate
+    normal variational distribution over all parameters of ``p``:
+
+    >>> import jax
+    >>> import jax.numpy as jnp
+    >>> import liesel.model as lsl
+    >>> import liesel.optim as opt
+    >>> import tensorflow_probability.substrates.jax as tfp
+    >>> loc = lsl.Var.new_param(jnp.array(0.0), name="mu")
+    >>> y = lsl.Var.new_obs(
+    ...     jnp.array([0.1, -0.2]),
+    ...     dist=lsl.Dist(tfp.distributions.Normal, loc=loc, scale=1.0),
+    ...     name="y",
+    ... )
+    >>> p = lsl.Model(y)
+    >>> elbo = opt.NegElboLoss.mvn_diag(p, nsamples=2)
+    >>> repr(elbo)
+    'NegElboLoss(nsamples=2)'
+    >>> sorted(elbo.position(elbo.vdist.parameters))
+    ['(mu)_loc', 'h((mu)_scale)']
+    >>> value = elbo.estimate_elbo(
+    ...     elbo.position(elbo.vdist.parameters),
+    ...     jax.random.key(1),
+    ...     p.state,
+    ...     nsamples=2,
+    ... )
+    >>> value.shape
+    ()
+
+    Supply a variational model directly when its graph is easier to express without
+    a builder. Observed variables are draws; strong parameters are optimized inputs:
+
+    >>> q_loc = lsl.Var.new_param(0.0, name="q_loc")
+    >>> q_log_scale = lsl.Var.new_param(-1.0, name="q_log_scale")
+    >>> q_scale = lsl.Var.new_calc(jnp.exp, q_log_scale, name="q_scale")
+    >>> q_mu = lsl.Var.new_obs(
+    ...     0.0, dist=lsl.Dist(tfp.distributions.Normal, q_loc, q_scale), name="mu"
+    ... )
+    >>> q = lsl.Model(q_mu)
+    >>> custom_loss = opt.NegElboLoss(p, q, nsamples=2)
+    >>> sorted(custom_loss.position(list(q.parameters)))
+    ['q_loc', 'q_log_scale']
+    >>> custom_loss.estimate_elbo(
+    ...     custom_loss.position(list(q.parameters)), jax.random.key(2)
+    ... ).shape
+    ()
+    """
+
+    p: Model
+    """Target model."""
+
+    q: Model
+    """Variational model."""
+
+    split: SplitConfig
+    """Train/test split used by the loss; validation data is unsupported."""
+
+    scalar: float
+    """Normalization constant used when ``scale=True``."""
+
+    if TYPE_CHECKING:
+        entropy: Literal["auto", "mc"]
+        """
+        ``"auto"`` (default) uses differentiable distribution entropies where
+        implemented, falling back to Monte Carlo per term on ``NotImplementedError``.
+        """
+        nsamples: int
+        """Number of Monte Carlo samples used for training losses."""
+        regularize_q_prior: bool
+        """
+        Defaults to ``False``: optimize the ordinary ELBO, including target-model
+        priors.
+        """
+        scale: bool
+        """If ``True``, divide losses by the training sample size."""
+        vdist: VDist | CompositeVDist | None
+        """Optional variational distribution builder that created ``q``."""
+
+    def __init__(
+        self,
+        p: Model,
+        q: Model,
+        split: SplitConfig | None = None,
+        nsamples: int = 10,
+        q_to_p: Callable[[Position], Position] = lambda x: x,
+        scale: bool = False,
+        vdist: VDist | CompositeVDist | None = None,
+        regularize_q_prior: bool = False,
+        entropy: Literal["auto", "mc"] = "auto",
+    ):
+        _validate_positive_int(nsamples, "nsamples")
+        _validate_bool(scale, "scale")
+        if entropy not in ("auto", "mc"):
+            raise ValueError("entropy must be 'auto' or 'mc'.")
+        q_parameters = q.parameters
+        weak_parameters = [name for name, var in q_parameters.items() if var.weak]
+        if weak_parameters:
+            raise ValueError(
+                f"Variational parameters {weak_parameters} must be strong; "
+                "mark their strong free inputs as parameters instead."
+            )
+        # Match Model.sample's distribution selection after fixing q parameters.
+        for node in q._simulation_nodes:
+            if (
+                not isinstance(node, Dist)
+                or node.at is None
+                or node.var is None
+                or node.name in q_parameters
+                or node.at.name in q_parameters
+                or node.var.name in q_parameters
+            ):
+                continue
+            if not node.var.observed:
+                raise ValueError(
+                    f"Sampled variational variable {node.var.name!r} must be observed."
+                )
+            if node.init_dist().reparameterization_type != tfd.FULLY_REPARAMETERIZED:
+                raise ValueError(
+                    f"Variational distribution for {node.var.name!r} must be "
+                    "fully reparameterized."
+                )
+        self.entropy = entropy
+        self.p = p
+        self.q = q
+        self.split = split or PositionSplit.from_model(self.p)
+        _validate_no_validation_split(self.split)
+        self.nsamples = nsamples
+        self._q_to_p = q_to_p
+        self.scale = scale
+        self.scalar = _training_loss_scalar(self.split) if self.scale else 1.0
+        self.vdist = vdist
+        self.regularize_q_prior = regularize_q_prior
+        self._validate_data_keys(self.split, ())
+
+    def _validate_data_keys(
+        self, split: SplitConfig, optimizer_keys: Sequence[str]
+    ) -> None:
+        """Validate data against inferred target positions."""
+        del optimizer_keys
+        computed_keys = [
+            key
+            for key in split.position_keys
+            if key in self.p.vars and self.p.vars[key].weak
+        ]
+        target_keys = (
+            list(self.q_to_p(self.q.extract_position(list(self.q.observed))))
+            if computed_keys
+            else []
+        )
+        validate_model_data_keys(self.p, split.position_keys, target_keys)
+        target_nodes = {self.p._node_for_position_key(key) for key in target_keys}
+        for key in computed_keys:
+            if self.p.vars[key].value_node in target_nodes:
+                raise ValueError(
+                    f"Computed data key {key!r} overlaps an inferred target; "
+                    "batch its fixed inputs instead."
+                )
+
+    @classmethod
+    def from_vdist(
+        cls,
+        vdist: VDist | CompositeVDist,
+        split: SplitConfig | None = None,
+        nsamples: int = 10,
+        scale: bool = False,
+        regularize_q_prior: bool = False,
+        entropy: Literal["auto", "mc"] = "auto",
+    ) -> NegElboLoss:
+        """
+        Constructs a negative ELBO loss from a built variational distribution.
+
+        Parameters
+        ----------
+        vdist
+            Built :class:`~liesel.optim.VDist` or :class:`~liesel.optim.CompositeVDist`.
+            Its :attr:`~liesel.optim.NegElboLoss.q` model must
+            already be available, usually by calling :meth:`VDist.build
+            <liesel.optim.VDist.build>` or
+            :meth:`CompositeVDist.build <liesel.optim.CompositeVDist.build>`.
+        split
+            Optional data split for the target model. Must not contain validation data.
+            If omitted, :meth:`PositionSplit.from_model
+            <liesel.optim.PositionSplit.from_model>` is used.
+        nsamples
+            Number of Monte Carlo samples used for training losses.
+        scale
+            Whether to normalize losses by the training sample size. For
+            :class:`~liesel.optim.PositionSplitManager`, this is the total branch
+            training size.
+        regularize_q_prior
+            Defaults to ``False``. Set ``True`` to add log-prior penalties on
+            variational parameters. Target-model priors remain included either way.
+            See :ref:`vi-q-prior-penalties`.
+
+        entropy
+            ``"auto"`` uses analytic entropy where supported, with per-term Monte
+            Carlo fallback. ``"mc"`` retains the sampled log-density estimator.
+
+        Returns
+        -------
+        NegElboLoss
+            Loss object using ``vdist.q`` and ``vdist.q_to_p``.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> import liesel.model as lsl
+        >>> import liesel.optim as opt
+        >>> import tensorflow_probability.substrates.jax as tfp
+        >>> loc = lsl.Var.new_param(jnp.array(0.0), name="mu")
+        >>> y = lsl.Var.new_obs(
+        ...     jnp.array([0.0, 1.0]),
+        ...     dist=lsl.Dist(tfp.distributions.Normal, loc=loc, scale=1.0),
+        ...     name="y",
+        ... )
+        >>> p = lsl.Model(y)
+        >>> vdist = opt.VDist(["mu"], p).mvn_diag().build()
+        >>> opt.NegElboLoss.from_vdist(vdist).vdist is vdist
+        True
+        """
+        if vdist.q is None:
+            raise ValueError(
+                "vdist.q is None. Call .build() on the variational distribution "
+                "before constructing a NegElboLoss."
+            )
+
+        return cls(
+            vdist.p,
+            vdist.q,
+            split=split,
+            nsamples=nsamples,
+            scale=scale,
+            q_to_p=vdist.q_to_p,
+            vdist=vdist,
+            regularize_q_prior=regularize_q_prior,
+            entropy=entropy,
+        )
+
+    @classmethod
+    def mvn_diag(
+        cls,
+        p: Model,
+        split: SplitConfig | None = None,
+        nsamples: int = 10,
+        scale: bool = False,
+        regularize_q_prior: bool = False,
+        loc: jax.typing.ArrayLike | None = None,
+        scale_diag: Literal["laplace"] | jax.typing.ArrayLike = 0.1,
+        scale_diag_bijector: ScaleBijectorConfig = "auto",
+        to_float32: bool | None = None,
+        entropy: Literal["auto", "mc"] = "auto",
+    ) -> Self:
+        """
+        Builds a diagonal multivariate normal ELBO over all parameters of ``p``.
+
+        Each unconstrained parameter in ``p.parameters`` is included in one joint
+        :class:`~liesel.optim.VDist` with a diagonal covariance matrix. Use
+        :meth:`~liesel.optim.NegElboLoss.mvn_tril` when
+        the variational approximation should model posterior correlations.
+
+        Parameters
+        ----------
+        p
+            Target model.
+        split
+            Optional data split. Must not contain validation data. If omitted,
+            :meth:`PositionSplit.from_model <liesel.optim.PositionSplit.from_model>` is
+            used by :class:`~liesel.optim.NegElboLoss`.
+        nsamples
+            Number of Monte Carlo samples used for training losses.
+        scale
+            Whether to normalize losses by the training sample size. For
+            :class:`~liesel.optim.PositionSplitManager`, this is the total branch
+            training size.
+        regularize_q_prior
+            Defaults to ``False``. Set ``True`` to add log-prior penalties on
+            variational parameters. Target-model priors remain included either way.
+            See :ref:`vi-q-prior-penalties`.
+        loc
+            Initial location of the variational distribution. If ``None``, the
+            current flattened target position is used.
+        scale_diag
+            Defaults to ``0.1`` (initial SD in model units), a heuristic you
+            can override; see :ref:`vi-initial-scale`.
+            Initial marginal standard deviations. A scalar is broadcast to all flat
+            components. The special value ``"laplace"`` initializes from local
+            curvature at ``loc`` and assumes that ``loc`` is already a useful
+            approximation to the posterior mode.
+        scale_diag_bijector
+            Bijector applied to the diagonal scale parameter. ``"auto"`` delegates
+            the choice to :meth:`liesel.model.Dist.biject_parameters
+            <liesel.model.Dist.biject_parameters>`; ``None``
+            leaves the scale parameter untransformed.
+        to_float32
+            Whether to convert values in the variational model to ``float32``. If
+            ``None``, inherits the ``to_float32`` policy set when constructing ``p``.
+
+        entropy
+            ``"auto"`` uses analytic entropy where supported, with per-term Monte
+            Carlo fallback. ``"mc"`` retains the sampled log-density estimator.
+
+        Returns
+        -------
+        NegElboLoss
+            Negative ELBO loss with a built diagonal multivariate normal variational
+            distribution.
+        """
+        vi_dist = (
+            VDist(list(p.parameters), p, to_float32=to_float32)
+            .mvn_diag(
+                loc=loc,
+                scale_diag=scale_diag,
+                scale_diag_bijector=scale_diag_bijector,
+            )
+            .build()
+        )
+        if vi_dist.q is None:
+            raise ValueError
+
+        return cls(
+            vi_dist.p,
+            vi_dist.q,
+            split=split,
+            nsamples=nsamples,
+            scale=scale,
+            q_to_p=vi_dist.q_to_p,
+            vdist=vi_dist,
+            regularize_q_prior=regularize_q_prior,
+            entropy=entropy,
+        )
+
+    @classmethod
+    def mvn_tril(
+        cls,
+        p: Model,
+        split: SplitConfig | None = None,
+        nsamples: int = 10,
+        scale: bool = False,
+        regularize_q_prior: bool = False,
+        loc: jax.typing.ArrayLike | None = None,
+        scale_tril: Literal["laplace"] | jax.typing.ArrayLike = 0.1,
+        scale_tril_bijector: ScaleBijectorConfig = "auto",
+        to_float32: bool | None = None,
+        entropy: Literal["auto", "mc"] = "auto",
+    ) -> Self:
+        """
+        Builds a dense multivariate normal ELBO over all parameters of ``p``.
+
+        The variational distribution uses a single :class:`~liesel.optim.VDist` block
+        with a full
+        lower-triangular scale matrix. This can represent correlations among all
+        optimized parameters.
+
+        Parameters
+        ----------
+        p
+            Target model.
+        split
+            Optional data split. Must not contain validation data. If omitted,
+            :meth:`PositionSplit.from_model <liesel.optim.PositionSplit.from_model>` is
+            used by :class:`~liesel.optim.NegElboLoss`.
+        nsamples
+            Number of Monte Carlo samples used for training losses.
+        scale
+            Whether to normalize losses by the training sample size. For
+            :class:`~liesel.optim.PositionSplitManager`, this is the total branch
+            training size.
+        regularize_q_prior
+            Defaults to ``False``. Set ``True`` to add log-prior penalties on
+            variational parameters. Target-model priors remain included either way.
+            See :ref:`vi-q-prior-penalties`.
+        loc
+            Initial location of the variational distribution. If ``None``, the
+            current flattened target position is used.
+        scale_tril
+            Defaults to ``0.1`` (initial SD in model units), a heuristic you
+            can override; see :ref:`vi-initial-scale`.
+            Initial lower Cholesky factor. A scalar is interpreted as a multiple of
+            the identity matrix. The special value ``"laplace"`` initializes from
+            local curvature at ``loc`` and assumes that ``loc`` is already a useful
+            approximation to the posterior mode.
+        scale_tril_bijector
+            Bijector applied to the lower-triangular scale parameter. ``"auto"``
+            delegates the choice to :meth:`liesel.model.Dist.biject_parameters
+            <liesel.model.Dist.biject_parameters>`;
+            ``None`` leaves the scale parameter untransformed.
+        to_float32
+            Whether to convert values in the variational model to ``float32``. If
+            ``None``, inherits the ``to_float32`` policy set when constructing ``p``.
+
+        entropy
+            ``"auto"`` uses analytic entropy where supported, with per-term Monte
+            Carlo fallback. ``"mc"`` retains the sampled log-density estimator.
+
+        Returns
+        -------
+        NegElboLoss
+            Negative ELBO loss with a built dense multivariate normal variational
+            distribution.
+        """
+        vi_dist = (
+            VDist(list(p.parameters), p, to_float32=to_float32)
+            .mvn_tril(
+                loc=loc,
+                scale_tril=scale_tril,
+                scale_tril_bijector=scale_tril_bijector,
+            )
+            .build()
+        )
+        if vi_dist.q is None:
+            raise ValueError
+        return cls(
+            vi_dist.p,
+            vi_dist.q,
+            split=split,
+            nsamples=nsamples,
+            scale=scale,
+            q_to_p=vi_dist.q_to_p,
+            vdist=vi_dist,
+            regularize_q_prior=regularize_q_prior,
+            entropy=entropy,
+        )
+
+    @classmethod
+    def mvn_blocked(
+        cls,
+        p: Model,
+        split: SplitConfig | None = None,
+        nsamples: int = 10,
+        scale: bool = False,
+        regularize_q_prior: bool = False,
+        scale_tril: Literal["laplace"] | jax.typing.ArrayLike = 0.1,
+        scale_tril_bijector: ScaleBijectorConfig = "auto",
+        to_float32: bool | None = None,
+        entropy: Literal["auto", "mc"] = "auto",
+    ) -> Self:
+        """
+        Builds an ELBO with one dense normal variational block per parameter.
+
+        The resulting :class:`~liesel.optim.CompositeVDist` treats parameter blocks as
+        independent,
+        but each individual parameter can have an internal dense covariance structure
+        when it is vector-valued.
+
+        Parameters
+        ----------
+        p
+            Target model.
+        split
+            Optional data split. Must not contain validation data. If omitted,
+            :meth:`PositionSplit.from_model <liesel.optim.PositionSplit.from_model>` is
+            used by :class:`~liesel.optim.NegElboLoss`.
+        nsamples
+            Number of Monte Carlo samples used for training losses.
+        scale
+            Whether to normalize losses by the training sample size. For
+            :class:`~liesel.optim.PositionSplitManager`, this is the total branch
+            training size.
+        regularize_q_prior
+            Defaults to ``False``. Set ``True`` to add log-prior penalties on
+            variational parameters. Target-model priors remain included either way.
+            See :ref:`vi-q-prior-penalties`.
+        scale_tril
+            Defaults to ``0.1`` (initial SD in model units), a heuristic you
+            can override; see :ref:`vi-initial-scale`.
+            Shared initial lower Cholesky factor passed to each parameter block. A
+            scalar is interpreted as a multiple of each block's identity matrix. The
+            special value ``"laplace"`` initializes each block from local curvature
+            at the current parameter position. Custom per-block locations are
+            intentionally left to manual :class:`~liesel.optim.CompositeVDist`
+            construction.
+        scale_tril_bijector
+            Bijector applied to each block's lower-triangular scale parameter.
+            ``"auto"`` delegates the choice to
+            :meth:`liesel.model.Dist.biject_parameters
+            <liesel.model.Dist.biject_parameters>`; ``None`` leaves the scale
+            parameter untransformed.
+        to_float32
+            Whether to convert values in the variational model to ``float32``. If
+            ``None``, inherits the ``to_float32`` policy set when constructing ``p``.
+
+        entropy
+            ``"auto"`` uses analytic entropy where supported, with per-term Monte
+            Carlo fallback. ``"mc"`` retains the sampled log-density estimator.
+
+        Returns
+        -------
+        NegElboLoss
+            Negative ELBO loss with a built blocked variational distribution.
+        """
+        vi_dists = []
+        for param_name in p.parameters:
+            vi_dist = VDist([param_name], p, to_float32=to_float32).mvn_tril(
+                scale_tril=scale_tril,
+                scale_tril_bijector=scale_tril_bijector,
+            )
+            vi_dists.append(vi_dist)
+
+        vi_dist = CompositeVDist(*vi_dists).build()
+        if vi_dist.q is None:
+            raise ValueError
+        return cls(
+            vi_dist.p,
+            vi_dist.q,
+            split=split,
+            nsamples=nsamples,
+            scale=scale,
+            q_to_p=vi_dist.q_to_p,
+            vdist=vi_dist,
+            regularize_q_prior=regularize_q_prior,
+            entropy=entropy,
+        )
+
+    @property
+    def model(self) -> Model:
+        """Target model evaluated by this loss."""
+        return self.p
+
+    def position(self, position_keys: Sequence[str]) -> Position:
+        """
+        Extracts an initial optimizer position from the variational model.
+
+        Parameters
+        ----------
+        position_keys
+            Names of variational parameters in ``q``.
+
+        Returns
+        -------
+        Position
+            Current ``q`` position restricted to ``position_keys``.
+        """
+        return self.q.extract_position(position_keys)
+
+    def q_to_p(self, q_position: Position) -> Position:
+        """
+        Maps a variational position to a target-model position.
+
+        Parameters
+        ----------
+        q_position
+            Sampled position from ``q``.
+
+        Returns
+        -------
+        Position
+            Position accepted by ``p``.
+        """
+        return self._q_to_p(q_position)
+
+    def approximate_joint_posterior(
+        self, result: OptimResult, *, at: str = "final"
+    ) -> VariationalApproximation:
+        """Bind the fitted variational distribution for posterior sampling.
+
+        Parameters
+        ----------
+        result
+            Fit result belonging to this loss and variational model. The selected
+            parameter values are copied; the result and its history are not retained.
+            Omitted variational parameters are copied from their current model
+            values. Keep the variational graph, nonparameter values and ``q_to_p``
+            mapping unchanged while using the returned object.
+        at
+            ``"final"`` (default) selects ``result.position_final``;
+            ``"min_monitor"`` selects ``result.position_min_monitor``. VI uses the
+            final iterate to avoid selection on a noisy monitoring minimum, unlike
+            deterministic MAP/Laplace approximation defaults. Neither choice
+            certifies convergence. An unavailable minimum does not fall back.
+
+        Returns
+        -------
+        VariationalApproximation
+            The learned variational distribution, with draws mapped to target-model
+            parameter names and shapes. Works with both variational builders and
+            directly supplied ``q`` models and mappings.
+
+        Raises
+        ------
+        ValueError
+            If ``at`` is invalid or the selected position has nonparameter keys,
+            duplicate parameter targets, or incompatible shapes or dtypes.
+        RuntimeError
+            If the selected position is unavailable or contains NaN or infinity.
+
+        Notes
+        -----
+        This binds the learned distribution without refitting or evaluating
+        curvature. Finite fitted parameters do not certify convergence or posterior
+        accuracy. The result must belong to this loss; compatible parameter metadata
+        alone cannot establish that provenance. See the module example for usage.
+        """
+        if at not in ("min_monitor", "final"):
+            raise ValueError("at must be 'min_monitor' or 'final'.")
+        position = (
+            result.position_min_monitor
+            if at == "min_monitor"
+            else result.position_final
+        )
+        parameter_names = {
+            var.value_node: name for name, var in self.q.parameters.items()
+        }
+        selected = Position({})
+        for key, value in position.items():
+            try:
+                name = parameter_names[self.q._node_for_position_key(key)]
+            except KeyError as error:
+                raise ValueError(
+                    f"Unknown variational parameter key: {key!r}."
+                ) from error
+            if name in selected:
+                raise ValueError(
+                    f"Multiple keys select variational parameter {name!r}."
+                )
+            selected[name] = value
+        expected = self.position(list(self.q.parameters))
+        if any(
+            jnp.shape(value) != jnp.shape(expected[name])
+            or getattr(value, "dtype", jnp.asarray(value).dtype)
+            != jnp.asarray(expected[name]).dtype
+            for name, value in selected.items()
+        ):
+            raise ValueError(
+                "Selected variational parameters have incompatible shapes or dtypes."
+            )
+        expected.update(selected)
+        snapshot = Position(jax.tree.map(lambda x: jnp.array(x, copy=True), expected))
+        return VariationalApproximation(self.q, self._q_to_p, snapshot)
+
+    def estimate_elbo(
+        self,
+        params: Position,
+        key: jax.Array,
+        p_state: ModelState | None = None,
+        q_state: ModelState | None = None,
+        obs: Position | None = None,
+        scale_log_lik_p_by: float = 1.0,
+        split: SplitConfig | None = None,
+        split_part: Literal["train", "validate", "test"] = "train",
+        batches=None,
+        nsamples: int | None = None,
+        batch_index: int | jax.Array | None = None,
+    ) -> jax.Array:
+        """
+        Estimates the ELBO at a variational parameter position.
+
+        The method draws ``nsamples`` samples from ``q`` at ``params`` and computes
+        ``E_q[log p(theta, y)] + H(q)``. In automatic entropy mode, supported
+        variational terms use analytic entropy; other terms use sampled negative
+        log densities. Conditional entropies are averaged over sampled parents.
+        Target-model priors are included. Priors on ``q`` parameters contribute
+        only when ``regularize_q_prior=True``; see :ref:`vi-q-prior-penalties`.
+        Mini-batch training passes
+        ``batches`` so observed log-likelihood terms can be scaled by the active
+        batch configuration. :class:`~liesel.optim.NegElboLoss` rejects validation
+        splits, so any
+        ``split`` supplied here is expected to have no validation part.
+
+        Parameters
+        ----------
+        params
+            Variational parameter position at which to evaluate ``q``.
+        key
+            JAX pseudo-random key used for sampling from ``q``.
+        p_state
+            Optional state of the target model ``p``. Defaults to its current
+            ``self.p.state``; an explicit state is used unchanged as the template.
+        q_state
+            Optional state of the variational model ``q``. Defaults to
+            ``self.q.state``.
+        obs
+            Observed data position used to update ``p`` before evaluating
+            likelihood terms.
+        scale_log_lik_p_by
+            Scalar multiplier for ``p``'s log-likelihood when neither ``split`` nor
+            ``batches`` is supplied.
+        split
+            Optional split object used to compute split-aware log likelihoods.
+        split_part
+            Split part used when ``split`` is supplied.
+        batches
+            Optional batch object used to compute mini-batch-scaled log likelihoods.
+        nsamples
+            Number of Monte Carlo samples. Defaults to ``self.nsamples``.
+        batch_index
+            Current batch row. Required when ``batches`` uses weighted sampling.
+
+        Returns
+        -------
+        jax.Array
+            Scalar Monte Carlo estimate of the ELBO.
+        """
+        obs = Position({}) if obs is None else obs
+        p_state = self.p.state if p_state is None else p_state
+        q_state = self.q.state if q_state is None else q_state
+
+        nsamples = nsamples if nsamples is not None else self.nsamples
+        _validate_positive_int(nsamples, "nsamples")
+        q_for_sampling = self.q._copy_computational_model()
+        q_for_sampling.state = q_state
+        samples = q_for_sampling.sample(
+            (nsamples,),
+            seed=key,
+            newdata=params,
+            fixed=tuple(self.q.parameters) + tuple(params),
+        )
+        use_analytic_entropy = self.entropy == "auto" and not _has_custom_model_log_lik(
+            self.q
+        )
+
+        @partial(jax.vmap)
+        def log_prob_of_p(sample):
+            p_state_new = self.p.update_state(
+                self.q_to_p(sample) | obs, p_state, allow_weak_vars=True
+            )
+            if batches is None:
+                if split is None:
+                    log_lik_p = scale_log_lik_p_by * p_state_new["_model_log_lik"].value
+                else:
+                    log_lik_p = split.scaled_log_lik(
+                        self.p, p_state_new, part=split_part
+                    )
+            else:
+                log_lik_p = batches.scaled_log_lik(
+                    self.p, p_state_new, batch_index=batch_index
+                )
+            log_prior_p = p_state_new["_model_log_prior"].value
+            log_prob_p = log_lik_p + log_prior_p
+
+            return log_prob_p
+
+        @partial(jax.vmap)
+        def log_prob_of_q(sample):
+            q_state_new = self.q.update_state(sample | params, q_state)
+            if use_analytic_entropy:
+                q_updated = self.q._copy_computational_model()
+                q_updated.state = q_state_new
+                log_lik_q = 0.0
+                for var in q_updated.observed.values():
+                    if var.dist_node is None:
+                        continue
+                    distribution = var.dist_node.init_dist()
+                    try:
+                        entropy_value = distribution.entropy()
+                    except NotImplementedError:
+                        log_lik_q += jnp.sum(q_state_new[var.dist_node.name].value)
+                    else:
+                        sample_shape = _distribution_sample_shape(
+                            distribution, jnp.shape(var.value)
+                        )
+                        log_lik_q -= prod(sample_shape) * jnp.sum(entropy_value)
+            else:
+                log_lik_q = q_state_new["_model_log_lik"].value
+            log_prior_q = q_state_new["_model_log_prior"].value
+            # Here, I subtract the prior from the likelihood, which may be somewhat
+            # surprising.
+            # The intention here is to allow priors in the variational distribution
+            # to be used for regularization.
+            # Since the ELBO is maximized, and the variational log prob is subtracted
+            # from the ELBO, the variational log prob is minimized. Adding the prior
+            # to the log lik of the variational dist would have the opposite of the
+            # intended effect, since it would also be minimized. You could say we are
+            # treating any priors in the variational model as parts of the main model
+            if self.regularize_q_prior:
+                return log_lik_q - log_prior_q
+
+            return log_lik_q
+
+        elbo_samples = log_prob_of_p(samples) - log_prob_of_q(samples)
+
+        return jnp.mean(elbo_samples)
+
+    def loss_train_batched(self, params: Position, carry: OptimCarry) -> jax.Array:
+        """
+        Computes the negative mini-batch ELBO used by optimizer updates.
+
+        ``carry.batch`` supplies observed mini-batch values, and ``carry.batches``
+        supplies the corresponding likelihood scaling, including per-branch scaling
+        for :class:`~liesel.optim.BatchManager`.
+        """
+        elbo = self.estimate_elbo(
+            Position(params | carry.fixed_position),
+            carry.key,
+            obs=Position(carry.batch),
+            p_state=carry.model_state,
+            q_state=self.q.state,
+            batches=carry.batches,
+            nsamples=self.nsamples,
+            batch_index=carry.i_batch,
+        )
+        return -elbo / self.scalar
+
+    def loss_train(self, params: Position, carry: OptimCarry) -> jax.Array:
+        """
+        Computes the negative full-training-data ELBO.
+
+        This method uses :attr:`split.train <liesel.optim.PositionSplit.train>`
+        as observed data and ignores the
+        current mini-batch in ``carry.batch``. It is useful for diagnostics or
+        full-data optimization.
+        """
+        elbo = self.estimate_elbo(
+            Position(params | carry.fixed_position),
+            carry.key,
+            obs=Position(self.split.train),
+            p_state=carry.model_state,
+            q_state=self.q.state,
+            split=self.split,
+            split_part="train",
+            nsamples=self.nsamples,
+        )
+        return -elbo / self.scalar
+
+    def loss_monitor(self, params: Position, carry: OptimCarry) -> jax.Array:
+        """Rejects validation monitoring, which ELBO losses do not support."""
+        del params, carry
+        raise ValueError("NegElboLoss does not support validation monitoring.")
+
+    def __repr__(self) -> str:
+        """Returns a compact representation showing the training Monte Carlo count."""
+        name = type(self).__name__
+        return f"{name}(nsamples={self.nsamples})"
+
+
+class VDist:
+    r"""
+    Builds a variational distribution over selected target parameters.
+
+    Parameters
+    ----------
+    position_keys
+        Names of target parameters governed by this block.
+    p
+        Target :class:`~liesel.model.Model`.
+    to_float32
+        Whether to convert values in the variational model to ``float32``. If
+        ``None``, inherits the ``to_float32`` policy set when constructing ``p``.
+
+    Notes
+    -----
+    Gaussian initializers require finite locations and scales. Normal and diagonal
+    multivariate scales must be strictly positive. Dense scale factors must be
+    square, lower triangular, and have nonzero diagonals. The chosen bijector must
+    represent the initial value finitely; otherwise construction raises ValueError.
+    Negative dense diagonals are allowed with no bijector or a compatible custom
+    bijector, but not with the automatic positive-diagonal transform.
+
+    Gaussian builders default to initial standard deviation ``0.1`` in each
+    governed parameter's units (transformed units for transformed parameters).
+    This is a heuristic, not a scale-invariant or universally superior choice.
+    Set ``scale``, ``scale_diag``, or ``scale_tril`` explicitly when appropriate;
+    see :ref:`vi-initial-scale`.
+
+    A scalar ``loc`` remains one learned shared location, broadcast to the governed
+    parameters. Use a vector to learn their means separately. Scalar scales expand
+    to one scale per governed parameter. The ``"laplace"`` scale initializer adds
+    its existing ridge and eigenvalue floor; it is an initialization heuristic,
+    not evidence of a valid posterior mode. Nonfinite curvature or results raise
+    ValueError instead of being repaired.
+
+    See Also
+    --------
+
+    .CompositeVDist : Combine independent variational blocks.
+
+    Examples
+    --------
+    Approximate a Normal model's mean and log scale with independent Gaussians:
+
+    >>> import jax.numpy as jnp
+    >>> import liesel.model as lsl
+    >>> import liesel.optim as opt
+    >>> import tensorflow_probability.substrates.jax as tfp
+
+    >>> loc = lsl.Var.new_param(jnp.array(0.0), name="mu")
+    >>> scale = lsl.Var.new_param(1.0, name="sigma", bijector=tfp.bijectors.Exp())
+    >>> y = lsl.Var.new_obs(
+    ...     jnp.linspace(-2, 2, 50),
+    ...     dist=lsl.Dist(tfp.distributions.Normal, loc=loc, scale=scale),
+    ...     name="y",
+    ... )
+    >>> p = lsl.Model(y)
+
+    >>> vdist = opt.VDist(["mu", "h(sigma)"], p).mvn_diag().build()
+
+
+    Use a dense block to learn their correlation:
+
+    >>> vdist = opt.VDist(["mu", "h(sigma)"], p).mvn_tril().build()
+
+    .. rubric:: Custom variational distributions
+
+    Supply a fully reparameterized :class:`~liesel.model.Dist` matching the flattened
+    block
+    shape. Mark its trainable inputs as parameters:
+
+    >>> q_loc = lsl.Var.new_param(jnp.zeros(2), name="q_loc")
+    >>> q_log_scale = lsl.Var.new_param(jnp.zeros(2), name="q_log_scale")
+    >>> q_scale = lsl.Var.new_calc(jnp.exp, q_log_scale, name="q_scale")
+    >>> dist = lsl.Dist(
+    ...     tfp.distributions.MultivariateNormalDiag, loc=q_loc, scale_diag=q_scale
+    ... )
+    >>> vdist = opt.VDist(["mu", "h(sigma)"], p).init(dist).build()
+
+    See :doc:`/variational-models` for fitting and conditional families.
+
+    """
+
+    if TYPE_CHECKING:
+        position_keys: Sequence[str]
+        """Names of target parameters governed by this block."""
+        q: Model | None
+        """Variational model constructed by :meth:`~liesel.optim.VDist.build`."""
+        var: Var | None
+        """Variable representing this block in the variational model."""
+
+    def __init__(
+        self, position_keys: Sequence[str], p: Model, to_float32: bool | None = None
+    ):
+        position_keys = list(position_keys)
+        if not position_keys:
+            raise ValueError("VDist requires at least one position_key.")
+
+        duplicate_keys = sorted(
+            {key for key in position_keys if position_keys.count(key) > 1}
+        )
+        if duplicate_keys:
+            raise ValueError(
+                f"Duplicate position_keys are not allowed: {duplicate_keys}."
+            )
+
+        self.position_keys = position_keys
+        self._p = p
+
+        pos = self.p.extract_position(self.position_keys)
+        flat_pos, unflatten = jax.flatten_util.ravel_pytree(pos)
+        self._unflatten = unflatten
+        self._flat_pos = flat_pos
+        self._flat_pos_name = "(" + "|".join(sorted(self.position_keys)) + ")"
+        self.var: Var | None = None
+        self.q: Model | None = None
+
+        self._to_float32 = p._to_float32 if to_float32 is None else to_float32
+
+    @property
+    def p(self) -> Model:
+        """
+        Target model whose posterior is approximated by this variational block.
+
+        Returns
+        -------
+        Model
+            Model passed to :class:`~liesel.optim.VDist`.
+        """
+        return self._p
+
+    def q_to_p(self, pos: Position) -> Position:
+        """
+        Maps a flat variational position back to the target-model representation.
+
+        :class:`~liesel.optim.VDist` represents the governed target parameters as one
+        flattened
+        pseudo-observed variable in ``q``. This method unflattens that variable into
+        the original target-model position.
+
+        Parameters
+        ----------
+        pos
+            Position in the variational model representation. It must contain this
+            block's flattened pseudo-observed variable.
+
+        Returns
+        -------
+        Position
+            Position in the representation expected by :attr:`~liesel.optim.VDist.p`.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> import liesel.model as lsl
+        >>> import liesel.optim as opt
+        >>> theta = lsl.Var.new_param(jnp.array([1.0, 2.0]), name="theta")
+        >>> p = lsl.Model(theta)
+        >>> vdist = opt.VDist(["theta"], p)
+        >>> vdist.q_to_p({"(theta)": jnp.array([3.0, 4.0])})["theta"].tolist()
+        [3.0, 4.0]
+        """
+        return self._unflatten(pos[self._flat_pos_name])
+
+    def p_to_q_array(self, pos: Position) -> jax.Array:
+        """
+        Flattens target-model position values into this block's variational array.
+
+        Parameters
+        ----------
+        pos
+            Position in the target-model representation. Its keys must match
+            :attr:`~liesel.optim.VDist.position_keys` in the same order.
+
+        Returns
+        -------
+        jax.Array
+            Flattened array used as this block's pseudo-observed value in ``q``.
+
+        Notes
+        -----
+        This is useful for initializing a variational distribution around pre-fitted
+        parameter values.
+        """
+        if not list(pos) == self.position_keys:
+            raise ValueError("list(pos) must be equal to self.position_keys.")
+
+        return jax.flatten_util.ravel_pytree(pos)[0]
+
+    @property
+    def parameters(self) -> list[str]:
+        """
+        Names of the variational parameters in ``q``.
+
+        Returns an empty list before the variational distribution has been
+        initialized with :meth:`VDist.init <liesel.optim.VDist.init>`,
+        :meth:`VDist.normal <liesel.optim.VDist.normal>`,
+        :meth:`VDist.mvn_diag <liesel.optim.VDist.mvn_diag>`, or :meth:`VDist.mvn_tril
+        <liesel.optim.VDist.mvn_tril>`.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> import liesel.model as lsl
+        >>> import liesel.optim as opt
+        >>> theta = lsl.Var.new_param(jnp.array(0.0), name="theta")
+        >>> p = lsl.Model(theta)
+        >>> vdist = opt.VDist(["theta"], p)
+        >>> vdist.parameters
+        []
+        >>> vdist.mvn_diag().parameters
+        ['(theta)_loc', 'h((theta)_scale)']
+        """
+        if self.var is None:
+            return []
+
+        if self.var.model is not None:
+            model = self.var.model.parental_submodel(self.var)
+            params = list(model.parameters)
+            return params
+
+        with TemporaryModel(self.var, to_float32=self._to_float32) as model:
+            params = list(model.parameters)
+
+        return params
+
+    def _validate(self, dist: Dist) -> None:
+        distribution = dist.init_dist()
+        if distribution.reparameterization_type != tfd.FULLY_REPARAMETERIZED:
+            raise ValueError(
+                "Variational distributions must be fully reparameterized, but "
+                f"{distribution!r} has "
+                f"{distribution.reparameterization_type!r}."
+            )
+
+        value_shape = tuple(jnp.shape(self._flat_pos))
+        try:
+            sample_shape = _distribution_sample_shape(distribution, value_shape)
+            sample = distribution.sample(sample_shape, seed=jax.random.key(0))
+            if tuple(jnp.shape(sample)) != value_shape:
+                raise ValueError(
+                    "Sampling from the variational distribution with inferred "
+                    f"{sample_shape=} returned shape {jnp.shape(sample)}, but the "
+                    f"flattened position has shape {value_shape}."
+                )
+            distribution.log_prob(self._flat_pos)
+        except Exception as error:
+            if isinstance(error, ValueError):
+                raise
+            raise ValueError(
+                "The variational distribution is incompatible with the flattened "
+                f"position shape {value_shape}."
+            ) from error
+
+    def _prepare_loc(self, loc: jax.typing.ArrayLike | None) -> jax.Array:
+        loc_value = jnp.asarray(self._flat_pos if loc is None else loc)
+        if self._to_float32 and jnp.issubdtype(loc_value.dtype, jnp.floating):
+            loc_value = loc_value.astype(jnp.float32)
+        if not bool(jnp.isfinite(loc_value).all()):
+            raise ValueError("Initial location must be finite.")
+        return loc_value
+
+    def init(self, dist: Dist) -> Self:
+        """
+        Initializes this block with a custom variational distribution.
+
+        Populates the :attr:`~liesel.optim.VDist.var` attribute with an observed
+        :class:`~liesel.model.Var`. This
+        variable represents the flattened position governed by this
+        :class:`~liesel.optim.VDist`.
+
+        Parameters
+        ----------
+        dist
+            A :class:`~liesel.model.Dist`, representing the joint variational
+            distribution for
+            the flattened position governed by this :class:`~liesel.optim.VDist`.
+
+        Notes
+        -----
+        The docstring of :class:`~liesel.optim.VDist` includes an example using this
+        method.
+
+        Returns
+        -------
+        Self
+            This :class:`~liesel.optim.VDist` instance, allowing chained calls to
+            :meth:`~liesel.optim.VDist.build`.
+        """
+        self._validate(dist)
+
+        flat_pos_var = Var.new_obs(
+            self._flat_pos,
+            distribution=dist,
+            name=self._flat_pos_name,
+        )
+
+        self.var = flat_pos_var
+        return self
+
+    def normal(
+        self,
+        loc: jax.typing.ArrayLike | None = None,
+        scale: Literal["laplace"] | jax.typing.ArrayLike = 0.1,
+        scale_bijector: type[jb.Bijector]
+        | jb.Bijector
+        | None
+        | Literal["auto"] = "auto",
+        *bijector_args,
+        **bijector_kwargs,
+    ) -> Self:
+        """
+        Initializes independent univariate normal variational factors.
+
+        The governed target-model position is flattened, and each flat component is
+        assigned a ``tfd.Normal`` variational distribution. For vector-valued
+        governed positions, use :meth:`~liesel.optim.VDist.mvn_diag` if you prefer one
+        multivariate
+        distribution with diagonal covariance.
+
+        Parameters
+        ----------
+        loc
+            Initial location. If ``None``, the current flattened target position is
+            used. A scalar is one learned location shared by all governed parameters.
+        scale
+            Defaults to ``0.1`` (initial SD in model units), a heuristic you
+            can override; see :ref:`vi-initial-scale`.
+            Initial scale. A scalar is broadcast to all flat components. The special
+            value ``"laplace"`` initializes the scale from the diagonal of a
+            Laplace-style covariance computed from the local curvature of the target
+            model's log probability at ``loc``. This assumes that ``loc`` is already
+            a useful approximation to the posterior mode; no optimization to the mode
+            is performed.
+        scale_bijector
+            Bijector applied to the scale parameter. ``"auto"`` delegates the choice
+            to :meth:`liesel.model.Dist.biject_parameters
+            <liesel.model.Dist.biject_parameters>`; ``None`` leaves the scale
+            parameter untransformed.
+        *bijector_args
+            Positional arguments passed to ``scale_bijector`` when a bijector class
+            is supplied.
+        **bijector_kwargs
+            Keyword arguments passed to ``scale_bijector`` when a bijector class is
+            supplied.
+
+        Returns
+        -------
+        Self
+            This :class:`~liesel.optim.VDist` instance, initialized with a normal
+            variational
+            distribution.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> import liesel.model as lsl
+        >>> import liesel.optim as opt
+        >>> theta = lsl.Var.new_param(jnp.array(0.0), name="theta")
+        >>> p = lsl.Model(theta)
+        >>> opt.VDist(["theta"], p).normal(scale=0.5)
+        VDist(['theta'], dist=Normal)
+        """
+        loc_value = self._prepare_loc(loc)
+        loc_dtype = loc_value.dtype
+
+        if _is_laplace_init(scale, "scale"):
+            cov_matrix = _laplace_covariance(self.p, self.position_keys, loc_value)
+            scale_value = jnp.sqrt(jnp.clip(jnp.diag(cov_matrix), min=1e-12))
+        else:
+            scale_arr = _asarray_with_float_dtype(scale, loc_dtype)
+            if scale_arr.size == 1:
+                scale_value = scale_arr * jnp.ones_like(self._flat_pos)
+            else:
+                scale_value = scale_arr
+        scale_value = _asarray_with_float_dtype(scale_value, loc_dtype)
+        _validate_gaussian_scale(scale_value)
+
+        loc_var = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
+        scale_var = Var.new_param(scale_value, name=self._flat_pos_name + "_scale")
+
+        dist = Dist(tfd.Normal, loc=loc_var, scale=scale_var)
+
+        if scale_bijector is None:
+            pass
+        elif scale_bijector == "auto":
+            dist.biject_parameters({"scale": "auto"})
+        else:
+            scale_var.transform(scale_bijector, *bijector_args, **bijector_kwargs)
+
+        _validate_bijected_scale(scale_var)
+        return self.init(dist)
+
+    def mvn_diag(
+        self,
+        loc: jax.typing.ArrayLike | None = None,
+        scale_diag: Literal["laplace"] | jax.typing.ArrayLike = 0.1,
+        scale_diag_bijector: type[jb.Bijector]
+        | jb.Bijector
+        | None
+        | Literal["auto"] = "auto",
+        *bijector_args,
+        **bijector_kwargs,
+    ) -> Self:
+        """
+        Initializes a multivariate normal distribution with diagonal covariance matrix
+        as the variational distribution q.
+
+        Internally calls :meth:`VDist.init <liesel.optim.VDist.init>`.
+
+        Parameters
+        ----------
+        loc
+            Initial value for the location of the variational distribution. If
+            ``None``, the current flattened target position is used. A scalar is
+            one learned location shared by all governed parameters.
+        scale_diag
+            Defaults to ``0.1`` (initial SD in model units), a heuristic you
+            can override; see :ref:`vi-initial-scale`.
+            Initial value for the square roots of the diagonal elements of the
+            variational distribution's covariance matrix. In other words: The marginal
+            standard deviations/scales. A scalar is broadcast to all flat components.
+            The special value ``"laplace"`` initializes the diagonal scale from a
+            Laplace-style covariance computed from the local curvature of the target
+            model's log probability at ``loc``. This assumes that ``loc`` is already
+            a useful approximation to the posterior mode; no optimization to the mode
+            is performed.
+        scale_diag_bijector
+            Bijector applied to the diagonal scale parameter. ``"auto"`` delegates
+            to :meth:`liesel.model.Dist.biject_parameters
+            <liesel.model.Dist.biject_parameters>`; ``None`` leaves the
+            parameter untransformed.
+        *bijector_args
+            Positional arguments passed to ``scale_diag_bijector`` when a bijector
+            class is supplied.
+        **bijector_kwargs
+            Keyword arguments passed to ``scale_diag_bijector`` when a bijector class
+            is supplied.
+
+        Returns
+        -------
+        Self
+            This :class:`~liesel.optim.VDist` instance, initialized with a diagonal
+            multivariate normal
+            variational distribution.
+
+        Notes
+        -----
+        The docstring of :class:`~liesel.optim.VDist` includes an example using this
+        method.
+        """
+        loc_value = self._prepare_loc(loc)
+        loc_dtype = loc_value.dtype
+
+        if _is_laplace_init(scale_diag, "scale_diag"):
+            cov_matrix = _laplace_covariance(self.p, self.position_keys, loc_value)
+            scale_diag_value = jnp.sqrt(jnp.clip(jnp.diag(cov_matrix), min=1e-12))
+        else:
+            scale_diag_arr = _asarray_with_float_dtype(scale_diag, loc_dtype)
+            if scale_diag_arr.size == 1:
+                scale_diag_value = scale_diag_arr * jnp.ones_like(self._flat_pos)
+            else:
+                scale_diag_value = scale_diag_arr
+        scale_diag_value = _asarray_with_float_dtype(scale_diag_value, loc_dtype)
+        _validate_gaussian_scale(scale_diag_value)
+
+        loc_var = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
+        scale_diag_var = Var.new_param(
+            scale_diag_value, name=self._flat_pos_name + "_scale"
+        )
+
+        dist = Dist(tfd.MultivariateNormalDiag, loc=loc_var, scale_diag=scale_diag_var)
+
+        if scale_diag_bijector is None:
+            pass
+        elif scale_diag_bijector == "auto":
+            dist.biject_parameters({"scale_diag": "auto"})
+        else:
+            scale_diag_var.transform(
+                scale_diag_bijector, *bijector_args, **bijector_kwargs
+            )
+
+        _validate_bijected_scale(scale_diag_var)
+        return self.init(dist)
+
+    def mvn_tril(
+        self,
+        loc: jax.typing.ArrayLike | None = None,
+        scale_tril: Literal["laplace"] | jax.typing.ArrayLike = 0.1,
+        scale_tril_bijector: type[jb.Bijector]
+        | jb.Bijector
+        | None
+        | Literal["auto"] = "auto",
+        *bijector_args,
+        **bijector_kwargs,
+    ) -> Self:
+        """
+        Initializes a multivariate normal distribution with dense covariance matrix
+        as the variational distribution q.
+
+        The covariance matrix is parameterized by a lower Cholesky factor, where
+        the covariance matrix is given by ``S = scale_tril @ scale_tril.T``.
+
+        Parameters
+        ----------
+        loc
+            Initial value for the location of the variational distribution. If
+            ``None``, the current flattened target position is used. A scalar is
+            one learned location shared by all governed parameters.
+        scale_tril
+            Defaults to ``0.1`` (initial SD in model units), a heuristic you
+            can override; see :ref:`vi-initial-scale`.
+            Initial value for the lower Cholesky factor, must have non-zero diagonal
+            elements. A scalar is interpreted as a multiple of the identity matrix.
+            The special value ``"laplace"`` initializes the lower Cholesky factor
+            from a Laplace-style covariance computed from the local curvature of the
+            target model's log probability at ``loc``. This assumes that ``loc`` is
+            already a useful approximation to the posterior mode; no optimization to
+            the mode is performed.
+        scale_tril_bijector
+            Bijector applied to the lower-triangular scale parameter. ``"auto"``
+            delegates to :meth:`liesel.model.Dist.biject_parameters
+            <liesel.model.Dist.biject_parameters>`; ``None`` leaves
+            the parameter untransformed.
+        *bijector_args
+            Positional arguments passed to ``scale_tril_bijector`` when a bijector
+            class is supplied.
+        **bijector_kwargs
+            Keyword arguments passed to ``scale_tril_bijector`` when a bijector class
+            is supplied.
+
+        Returns
+        -------
+        Self
+            This :class:`~liesel.optim.VDist` instance, initialized with a dense
+            multivariate normal
+            variational distribution.
+
+        Notes
+        -----
+        The bijector :class:`tfp.bijectors.FillScaleTril` will be automatically applied
+        to ``scale_tril`` to map its elements to the real line.
+
+        The docstring of :class:`~liesel.optim.VDist` includes an example using this
+        method.
+        """
+        loc_value = self._prepare_loc(loc)
+        loc_dtype = loc_value.dtype
+
+        if _is_laplace_init(scale_tril, "scale_tril"):
+            cov_matrix = _laplace_covariance(self.p, self.position_keys, loc_value)
+            scale_tril_value = jnp.linalg.cholesky(cov_matrix)
+        else:
+            scale_tril_value_arr = _asarray_with_float_dtype(scale_tril, loc_dtype)
+            if scale_tril_value_arr.size == 1:
+                n = self._flat_pos.size
+                scale_tril_value = scale_tril_value_arr * jnp.eye(n, dtype=loc_dtype)
+            else:
+                scale_tril_value = scale_tril_value_arr
+        scale_tril_value = _asarray_with_float_dtype(scale_tril_value, loc_dtype)
+        _validate_gaussian_scale(scale_tril_value, triangular=True)
+
+        loc_var = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
+        scale_tril_var = Var.new_param(
+            scale_tril_value, name=self._flat_pos_name + "_scale_tril"
+        )
+
+        dist = Dist(tfd.MultivariateNormalTriL, loc=loc_var, scale_tril=scale_tril_var)
+
+        if scale_tril_bijector is None:
+            pass
+        elif scale_tril_bijector == "auto":
+            dist.biject_parameters({"scale_tril": "auto"})
+        else:
+            scale_tril_var.transform(
+                scale_tril_bijector, *bijector_args, **bijector_kwargs
+            )
+
+        _validate_bijected_scale(scale_tril_var)
+        return self.init(dist)
+
+    def build(self) -> Self:
+        """
+        Builds the :class:`~liesel.model.Model` for the variational distribution,
+        populates
+        :attr:`~liesel.optim.VDist.q`.
+
+        Returns
+        -------
+        Self
+            This :class:`~liesel.optim.VDist` instance with
+            :attr:`~liesel.optim.VDist.q` populated.
+
+        Raises
+        ------
+        ValueError
+            If :attr:`~liesel.optim.VDist.var` has not been populated yet. See
+            :meth:`VDist.init <liesel.optim.VDist.init>` to
+            populate :attr:`~liesel.optim.VDist.var`.
+        """
+        if self.var is None:
+            raise ValueError("The .var attribute must be set, but is currently None.")
+        self.q = Model([self.var], to_float32=self._to_float32)
+        return self
+
+    def sample(
+        self,
+        sample_shape: int | Sequence[int] = (),
+        *,
+        seed: jax.Array,
+        at_position: Position | None = None,
+    ) -> Position:
+        """
+        Draws samples from the variational approximation to the posterior.
+
+        Parameters
+        ----------
+        sample_shape
+            Leading sample shape as an integer or sequence. Defaults to one draw
+            in the original parameter shapes.
+        seed
+            Required keyword-only JAX key for pseudo-random number generation.
+        at_position
+            Position dictionary holding parameter values (position) of the variational
+            distribution q to use for sampling. No leading batching dimensions are
+            supported for this position.
+
+        Returns
+        -------
+        Position
+            Samples for the parameters governed by this :class:`~liesel.optim.VDist` in
+            the
+            representation of :attr:`~liesel.optim.VDist.p`.
+
+        Examples
+        --------
+        >>> import jax
+        >>> import jax.numpy as jnp
+        >>> import liesel.model as lsl
+        >>> import liesel.optim as opt
+        >>> theta = lsl.Var.new_param(jnp.array([0.0]), name="theta")
+        >>> p = lsl.Model(theta)
+        >>> vdist = opt.VDist(["theta"], p).mvn_diag().build()
+        >>> samples = vdist.sample(3, seed=jax.random.key(1))
+        >>> samples["theta"].shape
+        (3, 1)
+        """
+        return _sample_variational_model(
+            self.q, self.q_to_p, seed, sample_shape, at_position
+        )
+
+    def __repr__(self) -> str:
+        """Returns a compact representation showing governed keys and distribution."""
+        name = type(self).__name__
+        if self.var is not None:
+            if self.var.dist_node is not None:
+                dist = cast(type, self.var.dist_node.distribution).__name__
+            else:
+                dist = None
+        else:
+            dist = None
+        return f"{name}({self.position_keys}, dist={dist})"
+
+
+def flatten_leading_batch(pytree, batch_ndim: int):
+    """
+    Flattens leading batch dimensions of every pytree leaf.
+
+    Parameters
+    ----------
+    pytree
+        Pytree whose leaves have at least ``batch_ndim`` leading dimensions.
+    batch_ndim
+        Number of leading dimensions to flatten into one dimension.
+
+    Returns
+    -------
+    pytree
+        Pytree with the same structure and flattened leading dimensions.
+
+    Examples
+    --------
+    >>> import jax.numpy as jnp
+    >>> from liesel.optim.vi import flatten_leading_batch
+    >>> out = flatten_leading_batch({"x": jnp.zeros((2, 3, 4))}, batch_ndim=2)
+    >>> out["x"].shape
+    (6, 4)
+    """
+
+    def _f(x):
+        x = jnp.asarray(x)
+        b = prod(x.shape[:batch_ndim])
+        return x.reshape((b,) + x.shape[batch_ndim:])
+
+    return jax.tree.map(_f, pytree)
+
+
+def unflatten_leading_batch(pytree, batch_shape):
+    """
+    Restores previously flattened leading batch dimensions.
+
+    Parameters
+    ----------
+    pytree
+        Pytree whose leaves have one flattened leading batch dimension.
+    batch_shape
+        Original leading batch shape.
+
+    Returns
+    -------
+    pytree
+        Pytree with the same structure and restored leading batch dimensions.
+
+    Examples
+    --------
+    >>> import jax.numpy as jnp
+    >>> from liesel.optim.vi import unflatten_leading_batch
+    >>> out = unflatten_leading_batch({"x": jnp.zeros((6, 4))}, batch_shape=(2, 3))
+    >>> out["x"].shape
+    (2, 3, 4)
+    """
+    batch_shape = tuple(batch_shape)
+
+    def _f(x):
+        x = jnp.asarray(x)
+        return x.reshape(batch_shape + x.shape[1:])
+
+    return jax.tree.map(_f, pytree)
+
+
+def vmap_batched(
+    pos: Position, fun: Callable[[Position], Position], batch_shape: Sequence[int]
+):
+    """
+    Applies a position transformation across leading batch dimensions.
+
+    ``jax.vmap`` maps over one leading axis. This helper flattens an arbitrary
+    ``batch_shape`` first, applies ``fun`` once with ``vmap``, and then restores the
+    original batch shape. With an empty ``batch_shape``, ``fun`` is called directly.
+
+    Parameters
+    ----------
+    pos
+        Batched position passed to ``fun``.
+    fun
+        Function mapping one unbatched ``Position`` to another.
+    batch_shape
+        Leading batch shape in every leaf of ``pos``.
+
+    Returns
+    -------
+    Position
+        Transformed position with the same leading batch shape.
+
+    Examples
+    --------
+    >>> import jax.numpy as jnp
+    >>> from liesel.optim.types import Position
+    >>> from liesel.optim.vi import vmap_batched
+    >>> pos = Position({"x": jnp.arange(6).reshape(2, 3)})
+    >>> out = vmap_batched(pos, lambda p: Position({"y": p["x"] + 1}), (2,))
+    >>> out["y"].tolist()
+    [[1, 2, 3], [4, 5, 6]]
+    """
+    batch_ndim = len(batch_shape)
+    if batch_ndim == 0:
+        return fun(pos)
+
+    flat_pos = flatten_leading_batch(pos, batch_ndim=batch_ndim)
+    flat_out_pos = jax.vmap(fun)(flat_pos)
+    out_pos = unflatten_leading_batch(flat_out_pos, batch_shape)
+    return out_pos
+
+
+def _sample_variational_model(
+    q: Model | None,
+    q_to_p: Callable[[Position], Position],
+    seed: jax.Array,
+    sample_shape: int | Sequence[int],
+    at_position: Position | None,
+) -> Position:
+    if q is None:
+        raise ValueError("The object has no model.")
+
+    shape_arg: Any = sample_shape
+    try:
+        sample_shape = (operator.index(shape_arg),)
+    except TypeError:
+        sample_shape = tuple(operator.index(size) for size in shape_arg)
+
+    if at_position is not None:
+        at_position = jax.tree.map(lambda x: jnp.expand_dims(x, (0, 1)), at_position)
+
+    fixed = tuple(name for name in q.parameters if name not in (at_position or {}))
+    q_samples = q.sample(
+        sample_shape=sample_shape, seed=seed, posterior_samples=at_position, fixed=fixed
+    )
+    if at_position is not None:
+        q_samples = jax.tree.map(
+            lambda x: jnp.squeeze(x, (len(sample_shape), len(sample_shape) + 1)),
+            q_samples,
+        )
+
+    return vmap_batched(Position(q_samples), q_to_p, batch_shape=sample_shape)
+
+
+class VariationalApproximation:
+    """Fitted variational posterior in the target model's parameter representation.
+
+    Construct through :meth:`NegElboLoss.approximate_joint_posterior
+    <liesel.optim.NegElboLoss.approximate_joint_posterior>`.
+    Variational parameter values are held independently of the fit result.
+    Keep the variational graph, nonparameter values, and the position mapping
+    unchanged while using this object.
+    """
+
+    def __init__(
+        self,
+        q: Model,
+        q_to_p: Callable[[Position], Position],
+        position: Position,
+    ):
+        self._q = q
+        self._q_to_p = q_to_p
+        self._position = position
+
+    def sample(
+        self, sample_shape: int | Sequence[int] = (), *, seed: jax.Array
+    ) -> Position:
+        """Draw target parameter dictionaries with common leading sample axes.
+
+        The default returns one draw in the original parameter shapes. Pass an
+        integer, a tuple such as ``(1000,)``, or ``(chains, draws)`` for leading
+        sample axes. The JAX random key ``seed`` is required and keyword-only.
+        Use :meth:`liesel.model.Model.predict <liesel.model.Model.predict>` to evaluate
+        derived quantities or
+        transform draws back to constrained parameter scales.
+        """
+        return _sample_variational_model(
+            self._q, self._q_to_p, seed, sample_shape, self._position
+        )
+
+
+class CompositeVDist:
+    r"""
+    Combines independent :class:`~liesel.optim.VDist` blocks into one variational model.
+
+    Parameters
+    ----------
+    *vdists
+        Initialized blocks sharing one target model. A target parameter may
+        belong to at most one block; duplicate names raise ValueError.
+
+    See Also
+    --------
+
+    .VDist : Build an individual variational block.
+
+    Notes
+    -----
+    Blocks are independent; a dense block can represent dependence within its
+    parameters. Call :meth:`~liesel.optim.CompositeVDist.build` on the composite after
+    initializing its blocks.
+
+    Examples
+    --------
+    Put a Normal model's mean and log scale into separate Gaussian blocks:
+
+    >>> import jax.numpy as jnp
+    >>> import liesel.model as lsl
+    >>> import liesel.optim as opt
+    >>> import tensorflow_probability.substrates.jax as tfp
+
+    >>> loc = lsl.Var.new_param(jnp.array(0.0), name="mu")
+    >>> scale = lsl.Var.new_param(1.0, name="sigma", bijector=tfp.bijectors.Exp())
+    >>> y = lsl.Var.new_obs(
+    ...     jnp.linspace(-2, 2, 50),
+    ...     dist=lsl.Dist(tfp.distributions.Normal, loc=loc, scale=scale),
+    ...     name="y",
+    ... )
+    >>> p = lsl.Model(y)
+
+    >>> q1 = opt.VDist(["mu"], p).mvn_diag()
+    >>> q2 = opt.VDist(["h(sigma)"], p).mvn_diag()
+    >>> vdist = opt.CompositeVDist(q1, q2).build()
+
+    These scalar blocks represent the same family as one diagonal Gaussian:
+
+    >>> vdist = opt.VDist(["mu", "h(sigma)"], p).mvn_diag().build()
+
+    To learn correlation between them, use one dense block:
+
+    >>> vdist = opt.VDist(["mu", "h(sigma)"], p).mvn_tril().build()
+    """
+
+    if TYPE_CHECKING:
+        q: Model | None
+        """
+        Combined variational model constructed by
+        :meth:`~liesel.optim.CompositeVDist.build`.
+        """
+        vi_dists: tuple[VDist, ...]
+        """Independent variational blocks combined by this object."""
+
+    def __init__(self, *vdists: VDist):
+        if not vdists:
+            raise ValueError("CompositeVDist requires at least one VDist.")
+
+        first_model = vdists[0].p
+        if any(vdist.p is not first_model for vdist in vdists):
+            raise ValueError("All VDist objects in a CompositeVDist must share one p.")
+
+        all_position_keys = [
+            position_key for vdist in vdists for position_key in vdist.position_keys
+        ]
+        duplicate_position_keys = sorted(
+            {
+                position_key
+                for position_key in all_position_keys
+                if all_position_keys.count(position_key) > 1
+            }
+        )
+        if duplicate_position_keys:
+            raise ValueError(
+                "Each target position key can be governed by at most one VDist. "
+                f"Got duplicates: {duplicate_position_keys}."
+            )
+
+        self.vi_dists = vdists
+        self.q: Model | None = None
+
+    @property
+    @usedocs(VDist.parameters)
+    def parameters(self) -> list[str]:
+        if self.q is None:
+            return []
+        return list(self.q.parameters)
+
+    @property
+    @usedocs(VDist.p)
+    def p(self) -> Model:
+        return self.vi_dists[0].p
+
+    def _to_float32(self) -> bool:
+        """
+        Whether variational model values should be converted to ``float32``.
+
+        All component distributions must agree on their variational model
+        ``to_float32`` setting.
+        """
+        f32 = [dist._to_float32 for dist in self.vi_dists]
+        if len(set(f32)) > 1:
+            raise ValueError(
+                "Some variational distributions seem to have to_float32=True, "
+                "others have to_float32=False. The setting must be consistent."
+            )
+        return f32[0]
+
+    @usedocs(VDist.build)
+    def build(self) -> Self:
+        vars_ = []
+        for dist in self.vi_dists:
+            if dist.var is None:
+                raise ValueError(f".var attribute of {dist} must be set, but is None.")
+            vars_.append(dist.var)
+        q = Model(vars_, to_float32=self._to_float32())
+        self.q = q
+        return self
+
+    @usedocs(VDist.q_to_p)
+    def q_to_p(self, pos: Position) -> Position:
+        positions = [dist.q_to_p(pos) for dist in self.vi_dists]
+        combined = Position({k: v for d in positions for k, v in d.items()})
+        return combined
+
+    @usedocs(VDist.sample)
+    def sample(
+        self,
+        sample_shape: int | Sequence[int] = (),
+        *,
+        seed: jax.Array,
+        at_position: Position | None = None,
+    ) -> Position:
+        return _sample_variational_model(
+            self.q, self.q_to_p, seed, sample_shape, at_position
+        )
+
+    def __repr__(self) -> str:
+        """Returns a compact representation showing the number of blocks."""
+        name = type(self).__name__
+        if self.q is not None:
+            built = "built"
+        else:
+            built = "not built"
+        return f"{name}(n={len(self.vi_dists)}, {built})"
