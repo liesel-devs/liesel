@@ -248,7 +248,7 @@ def test_copula_minibatches_scale_all_factors_and_preserve_other_groups(
     weighted, manager
 ):
     model = copula_model(extra=manager)
-    kwargs = (
+    kwargs: dict[str, Any] = (
         {
             "sampling_weights": {"x1": jnp.arange(1.0, 9.0)}
             if manager

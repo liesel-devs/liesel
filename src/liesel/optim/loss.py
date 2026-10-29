@@ -6,7 +6,7 @@ the default negative log-probability loss for Liesel models.
 """
 
 from collections import Counter
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Literal, Protocol
 
 import jax
@@ -208,11 +208,14 @@ class LossMixin:
     split: SplitConfig
     """Train/validation/test split used by the loss."""
 
-    loss_train_batched: Callable[[Position, "OptimCarry"], jax.Array]
-    """
-    Training objective differentiated by :meth:`~liesel.optim.LossMixin.grad` and
-    :meth:`~liesel.optim.LossMixin.value_and_grad`.
-    """
+    def loss_train_batched(self, params: Position, carry: "OptimCarry") -> jax.Array:
+        """
+        Training objective differentiated by :meth:`~liesel.optim.LossMixin.grad` and
+        :meth:`~liesel.optim.LossMixin.value_and_grad`.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement loss_train_batched()."
+        )
 
     def _validate_data_keys(
         self, split: SplitConfig, optimizer_keys: Sequence[str]
