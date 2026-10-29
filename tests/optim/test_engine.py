@@ -31,7 +31,7 @@ from liesel.optim import (
     Stopper,
 )
 from liesel.optim.liesel_optim import LieselOptim as LieselOptimFromQuick
-from liesel.optim.loss import Loss, LossMixin
+from liesel.optim.loss import Loss, LossMixin, SplitConfig
 from liesel.optim.state import OptimCarry
 from liesel.optim.types import Position
 
@@ -324,7 +324,7 @@ class EpochSequenceLoss(SequenceLoss):
 
 @dataclass
 class UnitGradientLoss(LossMixin):
-    split: PositionSplit
+    split: SplitConfig
 
     def position(self, position_keys) -> Position:
         return Position({key: jnp.array(0.0) for key in position_keys})
@@ -1402,7 +1402,7 @@ def test_ema_monitor_adds_no_full_data_evaluation():
 )
 def test_full_data_monitor_validates_custom_loss(implementation, monkeypatch):
     class BatchedLoss(LossMixin, SequenceLoss):
-        pass
+        loss_train_batched = SequenceLoss.loss_train_batched
 
     class InheritedLoss(UnitGradientLoss):
         pass
