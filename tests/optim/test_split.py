@@ -1110,7 +1110,7 @@ def test_lookup_model_uses_manual_passthrough(holdout, batch_size):
         2 * z.value[g.value], lsl.Dist(tfd.Normal, loc=mu, scale=1.0), name="y"
     )
     model = lsl.Model([y])
-    with pytest.raises(ValueError, match="no observed likelihood"):
+    with pytest.raises(ValueError, match="factor 'y'.*more than one data group"):
         LieselOptim(
             model,
             optimizers=optax.adam(0.02),

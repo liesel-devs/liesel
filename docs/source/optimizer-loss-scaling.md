@@ -12,8 +12,10 @@ mystnb:
 
 # Scale the loss
 
-The default training loss combines likelihood and priors. A minibatch likelihood
-is scaled up to represent its full training group; priors are not scaled up.
+The default training loss combines likelihood and priors. Each factor whose
+log-density depends on a batched key is scaled up to represent its full training
+group. This includes local parameter priors as well as observed likelihoods.
+Priors independent of batched keys are included once, without scaling.
 Each group gets its own factor, so different batch sizes do not change the
 relative weight of the groups.
 
@@ -22,10 +24,85 @@ to the corresponding training size. Unsplit observed likelihoods contribute to
 training only, including observations explicitly marked as passthrough.
 {class}`LieselOptim <liesel.optim.LieselOptim>` then divides losses by the total training sample size by default;
 use `scale_loss=False` to keep the sum. Sample size counts likelihood terms,
-which need not equal the number of array elements.
+which need not equal the number of array elements. Local priors are scaled by
+the ratio of rows instead, which equals the likelihood factor unless sample
+sizes are set manually.
 
-Validation leaves out priors by default. Use `validation_strategy="log_prob"`
-to include them. See {py:class}`~liesel.optim.NegLogProbLoss` for details.
+Validation leaves out priors by default. With `validation_strategy="log_prob"`,
+global priors are included once. A global prior computed from split data is
+evaluated on the scored part's rows: the validation loss uses the validation
+rows' summary, not the training rows'. The built-in losses reject scoring
+validation splits whose keys reach a local parameter prior, one whose
+log-density shape changes with the split: held-out local latents may receive no
+training gradient, so scoring them at their starting values gives a misleading
+validation loss and can stop training too early. Use a custom `Loss` that
+handles held-out latents, or monitor the training loss, for example with
+`loss_monitor="train_full_data"`. This restriction applies to both validation
+strategies. Held-out parts that the fit does not score, such as test parts, are
+allowed. The check covers only priors: a per-unit parameter without a prior,
+such as `z` in `y ~ N(z[idx], 1)`, passes it but gets the same constant
+validation loss. See {py:class}`~liesel.optim.NegLogProbLoss` for details.
+
+Custom losses can reuse the split's `scaled_log_lik` and `scaled_log_prior`
+helpers after inferring held-out local latents. These helpers only scale the
+supplied state: covered local priors are scaled by the ratio of training to
+held-out rows, and global priors are included once.
+
+## Batch local priors
+
+A local prior can evaluate only the terms selected by a batched index while its
+parameter retains all latent values:
+
+```python
+import jax.numpy as jnp
+import tensorflow_probability.substrates.jax.distributions as tfd
+
+import liesel.model as lsl
+import liesel.optim as opt
+
+
+class TermsAt:
+    def __init__(self, idx):
+        self.idx = idx
+
+    def log_prob(self, z):
+        return tfd.Normal(0.0, 1.0).log_prob(z[self.idx])
+
+
+y_values = jnp.linspace(1.0, 3.0, 100)
+idx = lsl.Var.new_obs(jnp.arange(100), name="idx")
+z = lsl.Var.new_param(jnp.zeros(100), lsl.Dist(TermsAt, idx), name="z")
+z_batch = lsl.Var.new_calc(lambda z, i: z[i], z, idx)
+y = lsl.Var.new_obs(y_values, lsl.Dist(tfd.Normal, z_batch, 1.0), name="y")
+model = lsl.Model(y)
+split = opt.PositionSplit.from_model(model, position_keys=["idx", "y"])
+batches = opt.Batches.from_split(split, batch_size=10)
+```
+
+Both the likelihood and local prior receive a factor of ten. The prior remains
+in `_model_log_prior`, and `_model_log_lik` still contains only likelihoods.
+The model's state totals themselves are unscaled; scaling occurs in the loss.
+This requires a `liesel.model.Model`. A generic model interface exposes only the
+aggregate `_model_log_prior`, which is included once. If it evaluates only a
+batch's local terms, they keep the batch's share of their full-data weight,
+without a warning; scale them in a custom loss.
+
+Dependency tracing follows both values and distribution inputs, including
+computed inputs. For minibatches, indirectly selected factors must return an
+array with an axis of batch-size length that has another length in the model's
+full-data state. This rejects data-dependent global priors, such as a prior
+whose scale is computed from a batched sample's standard deviation, even when
+their length equals the batch size. Compute such global summaries from the full
+data and keep them fixed as passthrough inputs, or use a custom loss. Full-data
+evaluation is unchanged. This check and the split's local-prior test read
+full-data shapes from `model.state`, so do not store a part state there. Shape
+checks cannot prove that the terms decompose over selected units: the model must
+still satisfy that requirement.
+
+A factor depending on two independent
+groups is rejected. Keep aligned keys in one group and shared inputs such as
+spline knots fixed with `split_axes={"knots": None}`. Prior-only groups are also
+supported; without likelihood contributions, sample sizes fall back to axis sizes.
 
 <iframe
   class="interactive-visualization"
