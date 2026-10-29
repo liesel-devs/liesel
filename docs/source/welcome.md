@@ -16,6 +16,12 @@ a focus on semi-parametric regression. It includes:
 The name "Liesel" is an homage to the [Gänseliesel fountain][3], landmark of Liesel's
 birth city [Göttingen][4].
 
+**Clearer sampler terminology in 0.6.** Goose now distinguishes IWLS, simplified
+manifold MALA, and ordinary MALA. As part of this clarification, `IWLSKernel` changes
+to an IWLS proposal, while its previous proposal is available as `SMMALAKernel`.
+Ordinary MALA is available as `MALAKernel`. The [migration guide](migration-0.6.md)
+explains how to update existing configurations.
+
 # Installation
 
 You can install Liesel via pip:

@@ -40,6 +40,8 @@ and inference specifications, from {doc}`tutorials/md/01c-transform`.
 | {class}`~liesel.goose.NUTSKernel` | Continuous parameters with gradients. | Parameters on an unconstrained scale; trajectory length is selected automatically. |
 | {class}`~liesel.goose.HMCKernel` | Hamiltonian updates with a chosen trajectory length. | Gradients and the number of integration steps. |
 | {class}`~liesel.goose.IWLSKernel` | Blocks where local curvature gives a useful Gaussian proposal. | A differentiable density with suitable curvature; larger blocks make matrix operations more expensive. |
+| {class}`~liesel.goose.MALAKernel` | Langevin updates using gradients, without curvature. | Gradients only; an adaptation phase tunes the step size. |
+| {class}`~liesel.goose.SMMALAKernel` | Langevin updates preconditioned by local curvature; the pre-0.6 `IWLSKernel` algorithm. | A differentiable density with suitable curvature; an adaptation phase tunes the step size. |
 | {class}`~liesel.goose.RWKernel` | A simple Gaussian random-walk update. | A useful parameter scale; mixing can be slow for strongly dependent parameters. |
 | {class}`~liesel.goose.GibbsKernel` | A block whose full conditional you can sample directly. | A function drawing from that full conditional. |
 | {class}`~liesel.goose.MHKernel` | A custom Metropolis-Hastings proposal. | A proposal function and the backward-minus-forward log proposal correction. |
