@@ -35,7 +35,7 @@ from liesel.optim import (
     VDist,
 )
 from liesel.optim.liesel_optim import LieselOptim as LieselOptimFromQuick
-from liesel.optim.loss import Loss, LossMixin
+from liesel.optim.loss import Loss, LossMixin, SplitConfig
 from liesel.optim.state import OptimCarry
 from liesel.optim.types import Position
 
@@ -411,7 +411,7 @@ def test_stateful_loss_requires_full_training_batches_and_monitor(configuration)
 
 @dataclass
 class BatchSensitiveLoss(LossMixin):
-    split: PositionSplit
+    split: SplitConfig
 
     def position(self, position_keys) -> Position:
         return Position({key: jnp.array(0.0) for key in position_keys})
@@ -482,7 +482,7 @@ class EpochSequenceLoss(SequenceLoss):
 
 @dataclass
 class UnitGradientLoss(LossMixin):
-    split: PositionSplit
+    split: SplitConfig
 
     def position(self, position_keys) -> Position:
         return Position({key: jnp.array(0.0) for key in position_keys})
@@ -593,7 +593,7 @@ class NanLossAndPositionOptimizer(NanOptimizer):
 
 @dataclass
 class DebugNaNLoss(LossMixin):
-    split: PositionSplit
+    split: SplitConfig
     trigger_batch_value: float | None = None
     trigger_epoch: int | None = None
     initial_nan: bool = False

@@ -496,6 +496,7 @@ def test_joint_density_retains_latent_priors_and_transformation_jacobians():
     y = lsl.Var.new_obs(jnp.array([3.0]), lsl.Dist(tfd.Normal, z, 1.0), name="y")
     model = lsl.Model([y])
     loss = opt.LaplaceLoss(model, latent=["z"])
+    assert loss.default_position_keys is not None
     keys = list(loss.default_position_keys)
     assert len(keys) == 1
     position, carry = loss_carry(loss, keys)
@@ -1241,6 +1242,7 @@ def test_posterior_draws_predict_transforms_and_keep_omitted_coordinates_fixed(s
     y = lsl.Var.new_obs(jnp.array([0.0]), lsl.Dist(tfd.Normal, z, 1.0), name="y")
     model = lsl.Model([y])
     loss = opt.LaplaceLoss(model, latent=["z"])
+    assert loss.default_position_keys is not None
     keys = [k for k in loss.default_position_keys if k != "fixed"]
     result = fit_engine(loss, [opt.Optimizer(keys, optax.sgd(0.0))], epochs=1).fit()
     approximation = loss.approximate_joint_posterior(result)

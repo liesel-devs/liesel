@@ -990,3 +990,80 @@ def test_neg_elbo_validates_manual_computed_data_splits(invalid):
     }[invalid]
     with pytest.raises(ValueError, match=message):
         opt.NegElboLoss.from_vdist(vdist, split)
+
+
+def _normal_mean_model():
+    mu = lsl.Var.new_param(
+        jnp.array(0.0),
+        lsl.Dist(tfp.distributions.Normal, loc=0.0, scale=10.0),
+        name="mu",
+    )
+    y = lsl.Var.new_obs(
+        jax.random.normal(jax.random.key(0), (20,)) + 1.0,
+        lsl.Dist(tfp.distributions.Normal, loc=mu, scale=1.0),
+        name="y",
+    )
+    return lsl.Model([y])
+
+
+class TestPointMass:
+    def test_parameters_and_samples(self):
+        p = _two_parameter_model()
+        vdist = opt.VDist(["beta"], p).point_mass().build()
+
+        assert vdist.parameters == ["(beta)_loc"]
+        assert isinstance(
+            _dist_node(vdist).init_dist(), tfp.distributions.Deterministic
+        )
+        for seed in range(2):
+            samples = vdist.sample(3, seed=jax.random.key(seed))
+            np.testing.assert_array_equal(
+                samples["beta"], jnp.tile(p.vars["beta"].value, (3, 1))
+            )
+
+    def test_scalar_loc_is_one_shared_location(self):
+        p = _two_parameter_model()
+        vdist = opt.VDist(["beta"], p).point_mass(loc=2.0).build()
+
+        assert vdist.q is not None
+        assert vdist.q.vars["(beta)_loc"].value.shape == ()
+        samples = vdist.sample(seed=jax.random.key(0))
+        np.testing.assert_array_equal(samples["beta"], jnp.array([2.0, 2.0]))
+
+    @pytest.mark.parametrize("entropy", ["auto", "mc"])
+    def test_elbo_equals_log_joint_at_location(self, entropy):
+        p = _normal_mean_model()
+        vdist = opt.VDist(["mu"], p).point_mass(loc=0.7).build()
+        loss = opt.NegElboLoss.from_vdist(vdist, nsamples=4, entropy=entropy)
+        assert vdist.q is not None
+        params = vdist.q.extract_position(vdist.parameters)
+
+        value, grad = jax.value_and_grad(
+            lambda params: loss.estimate_elbo(params, jax.random.key(1), p.state)
+        )(params)
+
+        def log_joint(mu):
+            state = p.update_state({"mu": mu}, p.state)
+            return state["_model_log_prob"].value
+
+        expected, expected_grad = jax.value_and_grad(log_joint)(jnp.array(0.7))
+        np.testing.assert_allclose(value, expected, rtol=1e-5)
+        np.testing.assert_allclose(grad["(mu)_loc"], expected_grad, rtol=1e-5)
+
+    def test_composite_with_gaussian_block(self):
+        p = _two_parameter_model()
+        gaussian = opt.VDist(["alpha"], p).mvn_diag()
+        point = opt.VDist(["beta"], p).point_mass()
+        composite = opt.CompositeVDist(gaussian, point).build()
+
+        assert composite.q is not None
+        assert "(beta)_loc" in composite.q.parameters
+        assert "(alpha)_loc" in composite.q.parameters
+        samples = composite.sample(50, seed=jax.random.key(0))
+        assert samples["alpha"].std() > 0.0
+        np.testing.assert_array_equal(samples["beta"].std(axis=0), jnp.zeros(2))
+
+        loss = opt.NegElboLoss.from_vdist(composite, nsamples=4)
+        params = composite.q.extract_position(list(composite.q.parameters))
+        value = loss.estimate_elbo(params, jax.random.key(1), p.state)
+        assert jnp.isfinite(value)

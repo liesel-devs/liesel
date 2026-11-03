@@ -7,7 +7,7 @@ implemented by variational losses such as :class:`~liesel.optim.NegElboLoss`.
 """
 
 from collections import Counter
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 import jax
@@ -256,11 +256,16 @@ class LossMixin:
     default_position_keys: Sequence[str] | None = None
     """Optional default optimizer keys; None preserves the model-based default."""
 
-    loss_train_batched: Callable[[Position, "OptimCarry"], tuple[jax.Array, Any]]
-    """
-    Training objective differentiated by :meth:`~liesel.optim.LossMixin.grad` and
-    :meth:`~liesel.optim.LossMixin.value_and_grad`.
-    """
+    def loss_train_batched(
+        self, params: Position, carry: "OptimCarry"
+    ) -> tuple[jax.Array, Any]:
+        """
+        Training objective differentiated by :meth:`~liesel.optim.LossMixin.grad` and
+        :meth:`~liesel.optim.LossMixin.value_and_grad`.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement loss_train_batched()."
+        )
 
     def _validate_data_keys(
         self, split: SplitConfig, optimizer_keys: Sequence[str]

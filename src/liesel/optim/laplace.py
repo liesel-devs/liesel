@@ -377,7 +377,7 @@ class LaplaceLoss(LossMixin):
     for joint uncertainty.
     """
 
-    default_position_keys: Sequence[str]
+    default_position_keys: Sequence[str] | None
     """Outer parameter keys optimized by default."""
 
     if TYPE_CHECKING:
