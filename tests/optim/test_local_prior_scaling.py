@@ -453,6 +453,35 @@ def test_full_size_resampling_needs_declared_axis(weighted):
     assert_tree_close(batches.scaled_log_prior(model, state, batch_index=0), expected)
 
 
+@pytest.mark.parametrize("prior", [False, True])
+def test_warns_when_validation_loss_cannot_move(prior):
+    idx = lsl.Var.new_obs(jnp.arange(10), name="idx")
+    mu = lsl.Var.new_param(0.0, name="mu")
+    z = lsl.Var.new_param(
+        jnp.zeros(10), lsl.Dist(tfd.Normal, mu, 1.0) if prior else None, name="z"
+    )
+    mean = lsl.Var.new_calc(lambda z, i: z[i], z, idx)
+    y = lsl.Var.new_obs(jnp.linspace(1.0, 3.0, 10), lsl.Dist(tfd.Normal, mean, 1.0))
+    model = lsl.Model(y)
+    split = opt.PositionSplit.from_model(
+        model, position_keys=["idx", y.name], validate_axis_share=0.2
+    )
+    optim = opt.LieselOptim(
+        model,
+        split=split,
+        optimizers=optax.adam(0.05),
+        loss_monitor="validation",
+        stopper=opt.Stopper(epochs=2, patience=2),
+        show_progress=False,
+    )
+    if prior:
+        # z ~ N(mu, 1) links held-out z to trained parameters.
+        optim.fit()
+        return
+    with pytest.warns(UserWarning, match="validation loss cannot change"):
+        optim.fit()
+
+
 @pytest.mark.parametrize("stored", ["validate", "batch"])
 def test_model_state_must_hold_full_data(stored):
     model = local_model(n=8)

@@ -41,7 +41,9 @@ handles held-out latents, or monitor the training loss, for example with
 strategies. Held-out parts that the fit does not score, such as test parts, are
 allowed. The check covers only priors: a per-unit parameter without a prior,
 such as `z` in `y ~ N(z[idx], 1)`, passes it but gets the same constant
-validation loss. See {py:class}`~liesel.optim.NegLogProbLoss` for details.
+validation loss. The engine warns before the first epoch when no optimized
+parameter has a gradient in both the training and the validation loss. See
+{py:class}`~liesel.optim.NegLogProbLoss` for details.
 
 Custom losses can reuse the split's `scaled_log_lik` and `scaled_log_prior`
 helpers after inferring held-out local latents. These helpers only scale the
