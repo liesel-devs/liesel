@@ -17,6 +17,7 @@ import sys
 import time
 import warnings
 from collections.abc import Callable, Sequence
+from copy import copy
 from dataclasses import dataclass, replace
 from numbers import Integral
 from pathlib import Path
@@ -719,6 +720,8 @@ class OptimEngine:
             if checkpoint is None
             else self._restore_carry(checkpoint)
         )
+        if checkpoint is None:
+            self._warn_if_validation_loss_cannot_move(carry)
         if checkpoint is not None:
             status = self._fit_status(carry)
             if status in ("max_epochs", "early_stopping"):
@@ -1704,6 +1707,59 @@ class OptimEngine:
             carry.nan_debug_state = self._init_nan_debug_state(carry)
 
         return carry
+
+    def _warn_if_validation_loss_cannot_move(self, carry: OptimCarry) -> None:
+        """Warn if no optimized parameter moves both training and validation loss."""
+        if self.loss_monitor != "validation" or (
+            getattr(self.loss.loss_monitor, "__func__", None)
+            is not NegLogProbLoss.loss_monitor
+        ):
+            return
+        # Perturbed start values avoid gradients that vanish by symmetry, e.g.
+        # z - mu at z = mu = 0; structural zeros stay zero.
+        leaves, treedef = jax.tree.flatten(carry.position)
+        keys = jax.random.split(jax.random.key(0), len(leaves))
+        params = jax.tree.unflatten(
+            treedef,
+            [
+                x + 0.01 * jax.random.normal(k, jnp.shape(x), jnp.result_type(x))
+                if jnp.issubdtype(jnp.result_type(x), jnp.inexact)
+                else x
+                for x, k in zip(leaves, keys, strict=True)
+            ],
+        )
+        train_carry = copy(carry)
+        train_carry.batch = self._observed_batch(
+            carry.batches, prepared_keys=carry._prepared_training_keys
+        )
+        train_carry.i_batch = 0
+
+        @jax.jit
+        def shared_gradient(params, train_carry, carry):
+            grad_train = jax.grad(self.loss.loss_train_batched)(params, train_carry)
+            grad_monitor = jax.grad(self.loss.loss_monitor)(params, carry)
+            return sum(
+                jnp.sum(jnp.abs(a * b))
+                for a, b in zip(
+                    jax.tree.leaves(grad_train),
+                    jax.tree.leaves(grad_monitor),
+                    strict=True,
+                )
+            )
+
+        shared = shared_gradient(params, train_carry, carry)
+        if bool(shared == 0):
+            warnings.warn(
+                "The validation loss cannot change during training: no optimized "
+                "parameter has a gradient in both the training and the validation "
+                "loss. Held-out units' parameters, such as per-unit parameters "
+                "without a prior, get no training gradient, so "
+                "loss_monitor='validation' stops after `patience` epochs. Link "
+                "them to trained parameters through a prior, or monitor the "
+                "training loss.",
+                UserWarning,
+                stacklevel=3,
+            )
 
     def _fit_monolithic(self, carry: OptimCarry, end_epoch: int) -> OptimCarry:
         """Runs the full fit as one JAX loop without host synchronization."""

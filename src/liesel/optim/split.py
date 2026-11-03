@@ -63,6 +63,28 @@ def validate_split_priors(
             )
 
 
+def validate_full_data_state(
+    model: Model, split: PositionSplit | PositionSplitManager
+) -> None:
+    """Require ``model.state`` to hold the full data of every split key.
+
+    The local/global shape rules read full-data shapes from ``model.state``.
+    """
+    splits = split.splits if isinstance(split, PositionSplitManager) else (split,)
+    for child in splits:
+        for key in child.split_position_keys:
+            node = model._node_for_position_key(key)
+            size = jnp.size(model.state[node.name].value)
+            parts = (child.train, child.validate, child.test)
+            expected = sum(jnp.size(part[key]) for part in parts if key in part)
+            if size != expected:
+                raise ValueError(
+                    f"model.state must hold the full data, but {key!r} has {size} "
+                    f"entries there and {expected} in the split. Keep the full data "
+                    "in model.state; pass split parts and batches to the loss instead."
+                )
+
+
 def _share_to_size(axis_size: int, share: float) -> int:
     """Floor a share count, correcting roundoff next to an integer."""
     count = axis_size * share

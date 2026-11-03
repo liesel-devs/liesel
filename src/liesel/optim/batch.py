@@ -1536,17 +1536,23 @@ class Batches:
             value = jnp.asarray(model_state[var.dist_node.name].value)
             full_shape = jnp.shape(model.state[var.dist_node.name].value)
             # Global terms keep their model.state shape. Shapes cannot tell them
-            # apart when batch_size equals axis_size.
+            # apart when batch_size equals axis_size, so that case needs a
+            # declared axis.
+            declared = self.likelihood_axes.get(var.name)
+            if declared is not None and -value.ndim <= declared < value.ndim:
+                declared %= value.ndim
             pointwise = value.ndim == len(full_shape) and any(
-                n == self.batch_size and (n != m or n == self.axis_size)
-                for n, m in zip(value.shape, full_shape, strict=True)
+                n == self.batch_size and (n != m or i == declared)
+                for i, (n, m) in enumerate(zip(value.shape, full_shape, strict=True))
             )
             if not value_keys and not pointwise:
                 raise ValueError(
                     f"Indirectly batched factor {var.name!r} needs a pointwise "
                     "log-density axis with batch_size entries and another length "
-                    "in model.state. Keep global summaries fixed as passthrough "
-                    "data, or use a custom Loss."
+                    "in model.state. With batch_size equal to the row count, "
+                    f"declare likelihood_axes={{{var.name!r}: axis}} for a per-row "
+                    "factor. Keep global summaries fixed as passthrough data, or "
+                    "use a custom Loss."
                 )
             if not weighted:
                 continue

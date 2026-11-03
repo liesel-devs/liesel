@@ -41,7 +41,9 @@ handles held-out latents, or monitor the training loss, for example with
 strategies. Held-out parts that the fit does not score, such as test parts, are
 allowed. The check covers only priors: a per-unit parameter without a prior,
 such as `z` in `y ~ N(z[idx], 1)`, passes it but gets the same constant
-validation loss. See {py:class}`~liesel.optim.NegLogProbLoss` for details.
+validation loss. The engine warns before the first epoch when no optimized
+parameter has a gradient in both the training and the validation loss. See
+{py:class}`~liesel.optim.NegLogProbLoss` for details.
 
 Custom losses can reuse the split's `scaled_log_lik` and `scaled_log_prior`
 helpers after inferring held-out local latents. These helpers only scale the
@@ -96,9 +98,12 @@ whose scale is computed from a batched sample's standard deviation, even when
 their length equals the batch size. Compute such global summaries from the full
 data and keep them fixed as passthrough inputs, or use a custom loss. Full-data
 evaluation is unchanged. This check and the split's local-prior test read
-full-data shapes from `model.state`, so do not store a part state there. Shape
-checks cannot prove that the terms decompose over selected units: the model must
-still satisfy that requirement.
+full-data shapes from `model.state`, so the engine rejects a `model.state` that
+holds only a split part or a batch. When `batch_size` equals the row count,
+which requires sampling with replacement, shapes cannot tell per-row from global
+terms: declare the axis of a per-row factor, for example `likelihood_axes={"z":
+0}`. Shape checks cannot prove that the terms decompose over selected units: the
+model must still satisfy that requirement.
 
 A factor depending on two independent
 groups is rejected. Keep aligned keys in one group and shared inputs such as

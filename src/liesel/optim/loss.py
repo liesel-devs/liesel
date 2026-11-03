@@ -7,7 +7,7 @@ implemented by variational losses such as :class:`~liesel.optim.NegElboLoss`.
 """
 
 from collections import Counter
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Literal, Protocol
 
 import jax
@@ -17,7 +17,12 @@ from ..model import Calc, Model
 from ..model.model import _reduced_sum
 from ._log_lik import validate_factor_groups
 from ._model_utils import validate_model_data_keys
-from .split import PositionSplit, PositionSplitManager, validate_split_priors
+from .split import (
+    PositionSplit,
+    PositionSplitManager,
+    validate_full_data_state,
+    validate_split_priors,
+)
 from .types import Position
 
 if TYPE_CHECKING:
@@ -209,11 +214,14 @@ class LossMixin:
     split: SplitConfig
     """Train/validation/test split used by the loss."""
 
-    loss_train_batched: Callable[[Position, "OptimCarry"], jax.Array]
-    """
-    Training objective differentiated by :meth:`~liesel.optim.LossMixin.grad` and
-    :meth:`~liesel.optim.LossMixin.value_and_grad`.
-    """
+    def loss_train_batched(self, params: Position, carry: "OptimCarry") -> jax.Array:
+        """
+        Training objective differentiated by :meth:`~liesel.optim.LossMixin.grad` and
+        :meth:`~liesel.optim.LossMixin.value_and_grad`.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement loss_train_batched()."
+        )
 
     def _validate_data_keys(
         self, split: SplitConfig, optimizer_keys: Sequence[str]
@@ -423,6 +431,7 @@ class NegLogProbLoss(LossMixin):
         self, split: SplitConfig, optimizer_keys: Sequence[str]
     ) -> None:
         validate_model_data_keys(self.model, split.position_keys, optimizer_keys)
+        validate_full_data_state(self.model, split)
 
     def _validate_batch_keys(self, groups: Sequence[Sequence[str]]) -> None:
         validate_factor_groups(self.model, groups)

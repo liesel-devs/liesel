@@ -463,3 +463,88 @@ def test_weighted_prior_rejects_missing_pointwise_axis(problem):
     }[problem]
     with pytest.raises(ValueError, match=message):
         batches.scaled_log_prior(model, state, batch_index=0)
+
+
+@pytest.mark.parametrize("weighted", [False, True])
+def test_full_size_resampling_needs_declared_axis(weighted):
+    def resample(model, axes=None):
+        return opt.Batches.from_model(
+            model,
+            batch_size=6,
+            sample_with_replacement=True,
+            sampling_weights=jnp.arange(1.0, 7.0) if weighted else None,
+            likelihood_axes=axes,
+        ).start_epoch(jax.random.key(1))
+
+    def batch_state(model, batches):
+        data = batches.extract_batched_position(model, model.state, 0)
+        return model.update_state(data, model.state)
+
+    # A global prior of row-count length has the same shape as a per-row one.
+    data = lsl.Var.new_obs(jnp.arange(6.0), name="data")
+    scale = lsl.Var.new_calc(lambda x: 1.0 + 2.5 * jnp.std(x), data)
+    beta = lsl.Var.new_param(jnp.zeros(6), lsl.Dist(tfd.Normal, 0.0, scale), "beta")
+    model = lsl.Model(beta)
+    batches = resample(model)
+    with pytest.raises(ValueError, match="'beta'.*likelihood_axes"):
+        batches.scaled_log_prior(model, batch_state(model, batches), batch_index=0)
+
+    model = local_model(likelihood=False, global_prior=False)
+    batches = resample(model)
+    with pytest.raises(ValueError, match="'z'.*likelihood_axes"):
+        batches.scaled_log_prior(model, batch_state(model, batches), batch_index=0)
+    for axis in (0, -1):
+        batches = resample(model, {"z": axis})
+        state = batch_state(model, batches)
+        expected = jnp.sum(state["z_log_prob"].value * batches.correction_factors(0))
+        actual = batches.scaled_log_prior(model, state, batch_index=0)
+        assert_tree_close(actual, expected)
+
+
+@pytest.mark.parametrize("prior", [False, True])
+def test_warns_when_validation_loss_cannot_move(prior):
+    idx = lsl.Var.new_obs(jnp.arange(10), name="idx")
+    mu = lsl.Var.new_param(0.0, name="mu")
+    z = lsl.Var.new_param(
+        jnp.zeros(10), lsl.Dist(tfd.Normal, mu, 1.0) if prior else None, name="z"
+    )
+    mean = lsl.Var.new_calc(lambda z, i: z[i], z, idx)
+    y = lsl.Var.new_obs(jnp.linspace(1.0, 3.0, 10), lsl.Dist(tfd.Normal, mean, 1.0))
+    model = lsl.Model(y)
+    split = opt.PositionSplit.from_model(
+        model, position_keys=["idx", y.name], validate_axis_share=0.2
+    )
+    optim = opt.LieselOptim(
+        model,
+        split=split,
+        optimizers=optax.adam(0.05),
+        loss_monitor="validation",
+        stopper=opt.Stopper(epochs=2, patience=2),
+        show_progress=False,
+    )
+    if prior:
+        # z ~ N(mu, 1) links held-out z to trained parameters.
+        optim.fit()
+        return
+    with pytest.warns(UserWarning, match="validation loss cannot change"):
+        optim.fit()
+
+
+@pytest.mark.parametrize("stored", ["validate", "batch"])
+def test_model_state_must_hold_full_data(stored):
+    model = local_model(n=8)
+    holdout = stored == "validate"
+    split = opt.PositionSplit.from_model(
+        model, validate_axis_share=0.25 if holdout else 0.0, shuffle=False
+    )
+    batches = opt.Batches.from_split(split, batch_size=2, shuffle=False)
+    part = split.validate if holdout else batches.get_batched_position(split.train, 0)
+    model.state = model.update_state(part, model.state)
+    with pytest.raises(ValueError, match="model.state must hold the full data"):
+        opt.LieselOptim(
+            model,
+            split=split,
+            batches=batches,
+            optimizers=optax.adam(0.05),
+            loss_monitor="validation" if holdout else "train_full_data",
+        ).build_engine()
