@@ -417,3 +417,37 @@ def test_weighted_prior_rejects_missing_pointwise_axis(problem):
     }[problem]
     with pytest.raises(ValueError, match=message):
         batches.scaled_log_prior(model, state, batch_index=0)
+
+
+@pytest.mark.parametrize("weighted", [False, True])
+def test_full_size_resampling_needs_declared_axis(weighted):
+    def resample(model, axes=None):
+        return opt.Batches.from_model(
+            model,
+            batch_size=6,
+            sample_with_replacement=True,
+            sampling_weights=jnp.arange(1.0, 7.0) if weighted else None,
+            likelihood_axes=axes,
+        ).start_epoch(jax.random.key(1))
+
+    def batch_state(model, batches):
+        data = batches.extract_batched_position(model, model.state, 0)
+        return model.update_state(data, model.state)
+
+    # A global prior of row-count length has the same shape as a per-row one.
+    data = lsl.Var.new_obs(jnp.arange(6.0), name="data")
+    scale = lsl.Var.new_calc(lambda x: 1.0 + 2.5 * jnp.std(x), data)
+    beta = lsl.Var.new_param(jnp.zeros(6), lsl.Dist(tfd.Normal, 0.0, scale), "beta")
+    model = lsl.Model(beta)
+    batches = resample(model)
+    with pytest.raises(ValueError, match="'beta'.*likelihood_axes"):
+        batches.scaled_log_prior(model, batch_state(model, batches), batch_index=0)
+
+    model = local_model(likelihood=False, global_prior=False)
+    batches = resample(model)
+    with pytest.raises(ValueError, match="'z'.*likelihood_axes"):
+        batches.scaled_log_prior(model, batch_state(model, batches), batch_index=0)
+    batches = resample(model, {"z": 0})
+    state = batch_state(model, batches)
+    expected = jnp.sum(state["z_log_prob"].value * batches.correction_factors(0))
+    assert_tree_close(batches.scaled_log_prior(model, state, batch_index=0), expected)
