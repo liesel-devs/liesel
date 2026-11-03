@@ -34,7 +34,7 @@ from ..__version__ import __version__
 from ..goose.pytree import register_dataclass_as_pytree
 from .batch import Batches, BatchManager
 from .optimizer import OptimizerLike
-from .types import Position
+from .types import Position, PyTree
 
 if TYPE_CHECKING:
     from .engine import OptimEngine
@@ -493,6 +493,7 @@ class OptimNaNDebugState:
     reproduction_optimizer_states: dict[str, optax.OptState]
     reproduction_batches: BatchConfig
     reproduction_model_state: ModelState
+    reproduction_loss_state: PyTree
 
     @classmethod
     def new(
@@ -504,6 +505,7 @@ class OptimNaNDebugState:
         optimizer_states: dict[str, optax.OptState],
         batches: BatchConfig,
         model_state: ModelState,
+        loss_state: PyTree = (),
         loss_dtype: jnp.dtype | None = None,
     ) -> OptimNaNDebugState:
         if loss_dtype is None:
@@ -526,6 +528,7 @@ class OptimNaNDebugState:
             reproduction_optimizer_states=optimizer_states,
             reproduction_batches=batches,
             reproduction_model_state=model_state,
+            reproduction_loss_state=loss_state,
         )
 
 
@@ -556,6 +559,10 @@ class OptimCarry:
         Optax states keyed by optimizer identifier.
     model_state
         Current model state.
+    loss_state
+        Current loss state, see :meth:`Loss.init_loss_state
+        <liesel.optim.Loss.init_loss_state>`. Only optimizer steps store a new
+        one. Its shapes and dtypes stay fixed.
     batch
         Current mini-batch position.
     fixed_position
@@ -566,6 +573,8 @@ class OptimCarry:
         Smallest completed-epoch monitoring loss found so far.
     min_monitor_epoch
         Epoch at which the smallest monitoring loss was found.
+    loss_state_min_monitor
+        Loss state stored with ``position_min_monitor``.
     loss_train
         Running epoch accumulation of pre-update losses. At a completed epoch it is
         their equal-weight mean, evaluated along the sequence of parameter positions
@@ -595,6 +604,8 @@ class OptimCarry:
     position_min_monitor: Position = field(default_factory=lambda: Position({}))
     min_monitor_loss: jax.Array = field(default_factory=lambda: jnp.asarray(jnp.inf))
     min_monitor_epoch: jax.Array | int = 0
+    loss_state: PyTree = ()
+    loss_state_min_monitor: PyTree = ()
 
     loss_train: jax.Array = field(default_factory=lambda: jnp.asarray(jnp.inf))
     loss_monitor: jax.Array = field(default_factory=lambda: jnp.asarray(jnp.inf))
@@ -622,12 +633,14 @@ class OptimCarry:
         optimizers: Sequence[OptimizerLike],
         model_state: ModelState,
         save_position_history: bool,
+        loss_state: PyTree = (),
     ) -> OptimCarry:
         """
         Creates an initialized optimizer carry.
 
         Optimizer states are initialized from ``position``. The history stores the
         parameter position only when ``save_position_history`` is ``True``.
+        ``loss_state`` is the initial loss state.
 
         Examples
         --------
@@ -686,6 +699,8 @@ class OptimCarry:
             optimizer_states=opt_states,
             model_state=model_state,
             position_min_monitor=position,
+            loss_state=loss_state,
+            loss_state_min_monitor=loss_state,
             min_monitor_loss=inf,
             loss_train=inf,
             loss_monitor=inf,
@@ -928,6 +943,11 @@ class OptimResult:
     status
         Why fitting returned: ``"paused"``, ``"max_epochs"``, ``"early_stopping"``,
         or ``"nan"``. Stopping conditions take precedence over a pause boundary.
+    loss_state_final
+        Loss state after the last optimizer step, ``()`` for a loss without state.
+    loss_state_min_monitor
+        Loss state stored with ``position_min_monitor``, or ``None`` if no finite
+        monitoring loss was recorded.
 
     Examples
     --------
@@ -988,6 +1008,13 @@ class OptimResult:
     Why fitting returned: ``"paused"``, ``"max_epochs"``, ``"early_stopping"``, or
     ``"nan"``.
     """
+    loss_state_final: PyTree = ()
+    """Loss state after the last optimizer step, ``()`` for a loss without state."""
+    loss_state_min_monitor: PyTree | None = None
+    """
+    Loss state stored with ``position_min_monitor``, or ``None`` if no finite
+    monitoring loss was recorded.
+    """
 
     def __init__(
         self,
@@ -1002,6 +1029,8 @@ class OptimResult:
         nan_debug: OptimNaNDebugInfo | None = None,
         checkpoint: OptimCheckpoint | None = None,
         status: Literal["paused", "max_epochs", "early_stopping", "nan"] = "max_epochs",
+        loss_state_final: PyTree = (),
+        loss_state_min_monitor: PyTree | None = None,
     ):
         self.history = history
         self._position_final = position_final
@@ -1014,6 +1043,8 @@ class OptimResult:
         self.nan_debug = nan_debug
         self.checkpoint = checkpoint
         self.status = status
+        self.loss_state_final = loss_state_final
+        self.loss_state_min_monitor = loss_state_min_monitor
 
     @staticmethod
     def _checked_position(position: Position, name: str) -> Position:

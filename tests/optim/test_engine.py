@@ -258,6 +258,12 @@ class SequenceLoss:
     def value_and_grad(self, params: Position, carry: OptimCarry):
         return self.loss_train_batched(params, carry), self.grad(params, carry)
 
+    def init_loss_state(self):
+        return ()
+
+    def value_and_grad_and_state(self, params: Position, carry: OptimCarry):
+        return *self.value_and_grad(params, carry), carry.loss_state
+
 
 @dataclass
 class QuadraticEngineLoss(SequenceLoss):
@@ -294,6 +300,12 @@ class BatchSensitiveLoss:
 
     def value_and_grad(self, params: Position, carry: OptimCarry):
         return self.loss_train_batched(params, carry), self.grad(params, carry)
+
+    def init_loss_state(self):
+        return ()
+
+    def value_and_grad_and_state(self, params: Position, carry: OptimCarry):
+        return *self.value_and_grad(params, carry), carry.loss_state
 
 
 @dataclass
@@ -475,6 +487,12 @@ class DebugNaNLoss:
 
     def value_and_grad(self, params: Position, carry: OptimCarry):
         return self.loss_train_batched(params, carry), self.grad(params, carry)
+
+    def init_loss_state(self):
+        return ()
+
+    def value_and_grad_and_state(self, params: Position, carry: OptimCarry):
+        return *self.value_and_grad(params, carry), carry.loss_state
 
 
 def _split() -> PositionSplit:

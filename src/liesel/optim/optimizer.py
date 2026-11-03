@@ -243,7 +243,10 @@ class Optimizer:
         :meth:`Loss.value_and_grad <liesel.optim.Loss.value_and_grad>` computes the
         returned loss and gradient
         together, using the same mini-batch, parameter position, PRNG key, and
-        stochastic objective draw.
+        stochastic objective draw. If ``carry.loss_state`` is not empty,
+        :meth:`Loss.value_and_grad_and_state
+        <liesel.optim.Loss.value_and_grad_and_state>` computes them instead, and
+        the new loss state is stored in the carry.
 
         Parameters
         ----------
@@ -264,7 +267,11 @@ class Optimizer:
         pos = position
 
         opt_state = carry.optimizer_states[self.identifier]
-        value, grad = loss.value_and_grad(pos, carry)
+        if jax.tree.leaves(carry.loss_state):
+            value, grad, loss_state = loss.value_and_grad_and_state(pos, carry)
+        else:
+            value, grad = loss.value_and_grad(pos, carry)
+            loss_state = carry.loss_state
         try:
             updates, opt_state = self.optimizer.update(grad, opt_state, params=pos)
         except TypeError as error:
@@ -278,6 +285,7 @@ class Optimizer:
 
         carry.position = Position(carry.position | updated_position)
         carry.optimizer_states[self.identifier] = opt_state
+        carry.loss_state = loss_state
         return carry, value
 
     def _tree_flatten(self):
@@ -328,6 +336,8 @@ class LBFGS(Optimizer):
     and curvature history. Use one joint L-BFGS for all selected parameters;
     unselected parameters stay fixed. The engine rejects mini-batches and mixed
     optimizer configurations, but cannot detect stochastic objective evaluations.
+    A loss with state is rejected, because the line search evaluates the loss
+    several times per step and no single new loss state belongs to the step.
     For a deterministic objective, the returned scalar is the value used for the
     update at the supplied pre-update position.
 
@@ -388,7 +398,17 @@ class LBFGS(Optimizer):
         tuple[OptimCarry, jax.Array]
             Updated carry and the scalar loss used for the update, evaluated at
             the supplied position before the update.
+
+        Raises
+        ------
+        ValueError
+            If ``carry.loss_state`` is not empty.
         """
+        if jax.tree.leaves(carry.loss_state):
+            raise ValueError(
+                "LBFGS does not support a loss with state, because its line search "
+                "evaluates the loss several times per step. Use Optimizer instead."
+            )
         pos = position
         opt_state = carry.optimizer_states[self.identifier]
 
