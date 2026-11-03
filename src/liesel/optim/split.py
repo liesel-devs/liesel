@@ -69,10 +69,20 @@ def validate_full_data_state(
     """Require ``model.state`` to hold the full data of every split key.
 
     The local/global shape rules read full-data shapes from ``model.state``.
+    Groups reaching only likelihoods of their own keys skip the check, so a
+    model built on one batch's data can still use plain likelihoods.
     """
     splits = split.splits if isinstance(split, PositionSplitManager) else (split,)
     for child in splits:
-        for key in child.split_position_keys:
+        keys = child.split_position_keys
+        nodes = {model._node_for_position_key(key) for key in keys}
+        sources = log_prob_sources(model, keys)
+        if all(
+            name in model.observed and model.vars[name].value_node in nodes
+            for name in sources
+        ):
+            continue
+        for key in keys:
             node = model._node_for_position_key(key)
             size = jnp.size(model.state[node.name].value)
             parts = (child.train, child.validate, child.test)
