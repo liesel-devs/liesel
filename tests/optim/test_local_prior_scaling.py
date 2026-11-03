@@ -530,8 +530,22 @@ def test_warns_when_validation_loss_cannot_move(prior):
         optim.fit()
 
 
-@pytest.mark.parametrize("stored", ["validate", "batch"])
+@pytest.mark.parametrize("stored", ["validate", "batch", "plain"])
 def test_model_state_must_hold_full_data(stored):
+    if stored == "plain":
+        # Without priors or indirect factors, shapes are not needed.
+        mu = lsl.Var.new_param(0.0, name="mu")
+        y = lsl.Var.new_obs(jnp.zeros(2), lsl.Dist(tfd.Normal, mu, 1.0), name="y")
+        split = opt.Split(["y"], axis_size=8).split_position(
+            Position({"y": jnp.arange(8.0)})
+        )
+        opt.LieselOptim(
+            lsl.Model(y),
+            split=split,
+            optimizers=optax.adam(0.05),
+            loss_monitor="train_full_data",
+        ).build_engine()
+        return
     model = local_model(n=8)
     holdout = stored == "validate"
     split = opt.PositionSplit.from_model(
