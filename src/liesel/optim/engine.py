@@ -1733,14 +1733,21 @@ class OptimEngine:
             carry.batches, prepared_keys=carry._prepared_training_keys
         )
         train_carry.i_batch = 0
-        grad_train = jax.grad(self.loss.loss_train_batched)(params, train_carry)
-        grad_monitor = jax.grad(self.loss.loss_monitor)(params, carry)
-        shared = sum(
-            jnp.sum(jnp.abs(a * b))
-            for a, b in zip(
-                jax.tree.leaves(grad_train), jax.tree.leaves(grad_monitor), strict=True
+
+        @jax.jit
+        def shared_gradient(params, train_carry, carry):
+            grad_train = jax.grad(self.loss.loss_train_batched)(params, train_carry)
+            grad_monitor = jax.grad(self.loss.loss_monitor)(params, carry)
+            return sum(
+                jnp.sum(jnp.abs(a * b))
+                for a, b in zip(
+                    jax.tree.leaves(grad_train),
+                    jax.tree.leaves(grad_monitor),
+                    strict=True,
+                )
             )
-        )
+
+        shared = shared_gradient(params, train_carry, carry)
         if bool(shared == 0):
             warnings.warn(
                 "The validation loss cannot change during training: no optimized "
