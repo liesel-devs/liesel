@@ -343,7 +343,7 @@ class LieselVI:
         self, optimizers: optax.GradientTransformation | Sequence[OptimizerLike]
     ) -> Sequence[OptimizerLike]:
         if isinstance(optimizers, optax.GradientTransformation):
-            return [Optimizer(list(self.loss.q.parameters), optimizers)]
+            return [Optimizer(self.loss.parameters, optimizers)]
         if isinstance(optimizers, str):
             if optimizers == "lbfgs":
                 raise ValueError(
