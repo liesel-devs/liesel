@@ -14,17 +14,19 @@ triangular_solve = jax.lax.linalg.triangular_solve
 
 def solve(chol_lhs: ArrayLike, rhs: ArrayLike) -> jax.Array:
     """
-    Solves a system of linear equations `chol_lhs @ x = rhs` for x by applying
-    forward and backward substitution. Returns x.
+    Solves ``(chol_lhs @ chol_lhs.T) @ x = rhs`` for x using forward and backward
+    substitution. Returns x.
 
     Parameters
     ----------
     chol_lhs
-        The lower triangular matrix of the Cholesky decomposition.
+        The lower triangular Cholesky factor, or a scalar for a multiple of I.
     rhs
         The right-hand side of the system.
     """
 
+    if jnp.ndim(chol_lhs) == 0:
+        return jnp.asarray(rhs) / jnp.asarray(chol_lhs) ** 2
     tmp = triangular_solve(chol_lhs, rhs, left_side=True, lower=True)
     return triangular_solve(chol_lhs, tmp, lower=True)
 
@@ -41,10 +43,17 @@ def mvn_log_prob(x: ArrayLike, mean: ArrayLike, chol_inv_cov: ArrayLike) -> jax.
         The mean vector.
     chol_inv_cov
         The lower triangular matrix of the Cholesky decomposition of the inverse
-        variance.
+        variance, or a scalar factor for isotropic precision.
     """
 
-    standardized = (jnp.asarray(x) - jnp.asarray(mean)) @ jnp.asarray(chol_inv_cov)
+    x = jnp.asarray(x)
+    mean = jnp.asarray(mean)
+    chol_inv_cov = jnp.asarray(chol_inv_cov)
+    if jnp.ndim(chol_inv_cov) == 0:
+        return jnp.sum(jax.scipy.stats.norm.logpdf((x - mean) * chol_inv_cov)) + (
+            x.size * jnp.log(chol_inv_cov)
+        )
+    standardized = (x - mean) @ chol_inv_cov
     log_prob = jnp.sum(jax.scipy.stats.norm.logpdf(standardized))
     adjustment = jnp.sum(jnp.log(jnp.diag(chol_inv_cov)))
     return log_prob + adjustment
@@ -65,10 +74,12 @@ def mvn_sample(
         The mean vector.
     chol_inv_cov
         The lower triangular matrix of the Cholesky decomposition of the inverse
-        variance.
+        variance, or a scalar factor for isotropic precision.
     """
 
     mean = jnp.asarray(mean)
     standardized = jax.random.normal(prng_key, mean.shape)
+    if jnp.ndim(chol_inv_cov) == 0:
+        return standardized / chol_inv_cov + mean
     centered = triangular_solve(chol_inv_cov, standardized, lower=True)
     return centered + mean

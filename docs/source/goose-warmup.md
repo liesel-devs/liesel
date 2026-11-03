@@ -69,7 +69,8 @@ is not a posterior draw.
 
 During adaptation, kernels can tune within iterations and between epochs.
 NUTS and HMC tune step size and update their inverse mass matrix after slow
-epochs. RW and IWLS tune step size; Gibbs has nothing to tune.
+epochs. RW, MALA, and SMMALA tune step size; IWLS and Gibbs have nothing to
+tune.
 See {doc}`goose-engine` to customize the schedule.
 
 The example lengths are a starting point. Use

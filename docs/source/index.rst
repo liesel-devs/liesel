@@ -13,6 +13,7 @@ Liesel: A Probabilistic Programming Framework
    optimization
    sampling
    examples
+   migration-0.6
 
 
 API Reference
