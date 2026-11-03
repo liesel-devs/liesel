@@ -55,10 +55,12 @@ def _shared_knots_model():
 
 def test_multi_size_model_requires_explicit_split_opt_in():
     model = _shared_knots_model()
-    with pytest.raises(ValueError, match="multiple observation groups"):
+    with pytest.raises(ValueError, match="factor 'y'.*more than one data group"):
         LieselOptim(model, optimizers="lbfgs", loss_monitor="train_full_data")
 
-    split = PositionSplit.from_model(model, multi_size="manager", shuffle=False)
+    split = PositionSplit.from_model(
+        model, split_axes={"knots": None}, multi_size="manager", shuffle=False
+    )
     engine = LieselOptim(
         model, split=split, optimizers="lbfgs", loss_monitor="train_full_data"
     ).build_engine()
@@ -66,7 +68,7 @@ def test_multi_size_model_requires_explicit_split_opt_in():
     assert engine.split is split
     assert isinstance(split, PositionSplitManager)
     assert {tuple(sorted(child.position_keys)) for child in split.splits} == {
-        ("knots", "y2"),
+        ("y2",),
         ("x", "y"),
     }
     assert isinstance(engine.batches, BatchManager)
@@ -76,11 +78,14 @@ def test_multi_size_model_requires_explicit_split_opt_in():
 @pytest.mark.parametrize("factory", [PositionSplit, Split, Batches])
 def test_multi_size_error_identifies_groups_and_remedies(factory):
     kwargs = {"batch_size": 2} if factory is Batches else {}
+    axes_arg = "batch_axes" if factory is Batches else "split_axes"
     with pytest.raises(ValueError) as error:
-        factory.from_model(_shared_knots_model(), **kwargs)
+        factory.from_model(
+            _shared_knots_model(), **{axes_arg: {"knots": None}}, **kwargs
+        )
 
     message = str(error.value)
-    assert "['knots', 'y2'] (axis length 3)" in message
+    assert "['y2'] (axis length 3)" in message
     assert "['x', 'y'] (axis length 6)" in message
     assert "split=opt.PositionSplit.from_model(model, multi_size='manager')" in message
     assert "split_axes={key: None}" in message
