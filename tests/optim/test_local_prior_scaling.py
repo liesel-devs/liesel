@@ -540,6 +540,10 @@ def test_model_state_must_hold_full_data(stored):
     batches = opt.Batches.from_split(split, batch_size=2, shuffle=False)
     part = split.validate if holdout else batches.get_batched_position(split.train, 0)
     model.state = model.update_state(part, model.state)
+    if not holdout:
+        # VI reads the same shapes from its target model's state.
+        with pytest.raises(ValueError, match="model.state must hold the full data"):
+            opt.NegElboLoss.mvn_diag(model, split=split)
     with pytest.raises(ValueError, match="model.state must hold the full data"):
         opt.LieselOptim(
             model,

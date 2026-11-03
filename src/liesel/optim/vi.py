@@ -85,6 +85,7 @@ from .split import (
     PositionSplit,
     PositionSplitManager,
     _has_custom_model_log_lik,
+    validate_full_data_state,
 )
 from .state import OptimCarry, OptimResult
 from .types import ModelState, Position
@@ -400,6 +401,7 @@ class NegElboLoss(LossMixin):
         del optimizer_keys
         target_keys = list(self.q_to_p(self.q.extract_position(list(self.q.observed))))
         validate_model_data_keys(self.p, split.position_keys, target_keys)
+        validate_full_data_state(self.p, split)
         splits = split.splits if isinstance(split, PositionSplitManager) else (split,)
         validate_factor_groups(self.p, [part.split_position_keys for part in splits])
 
