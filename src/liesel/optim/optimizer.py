@@ -359,7 +359,7 @@ class LBFGS(Optimizer):
 
     position_keys: Sequence[str]
     """Names of the parameter entries owned by this optimizer."""
-    optimizer: optax.GradientTransformationExtraArgs = optax.lbfgs()  # noqa: RUF009
+    optimizer: optax.GradientTransformationExtraArgs = optax.lbfgs()  # noqa: RUF009  # ty: ignore[invalid-mutable-override]
     """Optax L-BFGS transformation."""
     identifier: str = ""
     """

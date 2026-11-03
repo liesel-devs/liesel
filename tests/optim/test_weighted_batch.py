@@ -1,5 +1,7 @@
 """Weighted sampling and correction through the public optimization API."""
 
+from typing import Any
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -848,7 +850,9 @@ def test_grouped_sampling_weights(constructor, same_size):
         )
     else:
         cls = Batches if constructor == "batches" else BatchManager
-        extra = {"multi_size": "manager"} if constructor == "batches" else {}
+        extra: dict[str, Any] = (
+            {"multi_size": "manager"} if constructor == "batches" else {}
+        )
         result = cls.from_model(
             model,
             batch_size=2,
@@ -905,7 +909,9 @@ def test_grouped_sampling_weights_validation(constructor, weights, message):
                 ]
             )
             cls = Batches if constructor == "batches" else BatchManager
-            extra = {"multi_size": "manager"} if constructor == "batches" else {}
+            extra: dict[str, Any] = (
+                {"multi_size": "manager"} if constructor == "batches" else {}
+            )
             cls.from_model(
                 model,
                 2,
