@@ -51,7 +51,7 @@ from .state import (
     _checkpoint_versions,
 )
 from .stop import Stopper
-from .types import ModelState, Position
+from .types import ModelState, Position, PyTree
 from .vi import NegElboLoss
 
 __all__ = ["EmaTrainLossMonitor", "LossMonitor", "OptimEngine"]
@@ -761,9 +761,11 @@ class OptimEngine:
 
         if n_epochs == 0 or not bool(jnp.isfinite(carry.min_monitor_loss)):
             position_min_monitor = None
+            loss_state_min_monitor = None
             min_monitor_epoch = None
         else:
             position_min_monitor = carry.position_min_monitor
+            loss_state_min_monitor = carry.loss_state_min_monitor
             min_monitor_epoch = int(carry.min_monitor_epoch)
 
         monitor_source: Literal["train_ema", "validation", "train_full_data"]
@@ -783,6 +785,8 @@ class OptimEngine:
             duration=duration,
             nan_debug=nan_debug,
             status=status,
+            loss_state_final=carry.loss_state,
+            loss_state_min_monitor=loss_state_min_monitor,
             checkpoint=(
                 None if status == "nan" else self._make_checkpoint(carry, duration)
             ),
@@ -795,6 +799,10 @@ class OptimEngine:
             result.duration = previous_duration + time.monotonic() - start
             result.checkpoint = replace(result.checkpoint, duration=result.duration)
         return result
+
+    def _init_loss_state(self) -> PyTree:
+        # Losses that implement the protocol without init_loss_state have no state.
+        return getattr(self.loss, "init_loss_state", tuple)()
 
     def _can_rebuild_model_state(self) -> bool:
         # Only these concrete implementations leave the evaluation template unchanged.
@@ -869,6 +877,9 @@ class OptimEngine:
         states = {opt.identifier: opt.init(position) for opt in self.optimizers}
         self._validate_checkpoint_tree(
             checkpoint._carry.optimizer_states, states, "optimizer state"
+        )
+        self._validate_checkpoint_tree(
+            checkpoint._carry.loss_state, self._init_loss_state(), "loss state"
         )
         if checkpoint._rebuild_model_state:
             if not self._can_rebuild_model_state():
@@ -971,6 +982,8 @@ class OptimEngine:
             batches=debug_state.reproduction_batches,
             optimizer_states=debug_state.reproduction_optimizer_states,
             model_state=debug_state.reproduction_model_state,
+            loss_state=debug_state.reproduction_loss_state,
+            loss_state_min_monitor=carry.loss_state_min_monitor,
             _data_states=carry._data_states,
             _prepared_training_keys=carry._prepared_training_keys,
             batch=debug_state.obs_batch,
@@ -1110,6 +1123,7 @@ class OptimEngine:
             optimizer_states=dict(carry.optimizer_states),
             batches=carry.batches,
             model_state=carry.model_state,
+            loss_state=carry.loss_state,
             loss_dtype=loss_dtype,
         )
 
@@ -1145,6 +1159,7 @@ class OptimEngine:
         reproduction_optimizer_states: dict[str, optax.OptState],
         reproduction_batches: BatchConfig,
         reproduction_model_state: ModelState,
+        reproduction_loss_state: PyTree,
         optimizer_index: int = -1,
     ) -> OptimCarry:
         debug_state = self._debug_state(carry)
@@ -1204,6 +1219,11 @@ class OptimEngine:
             should_capture,
             reproduction_model_state,
             debug_state.reproduction_model_state,
+        )
+        debug_state.reproduction_loss_state = _tree_where(
+            should_capture,
+            reproduction_loss_state,
+            debug_state.reproduction_loss_state,
         )
 
         carry.nan_debug_state = debug_state
@@ -1274,6 +1294,7 @@ class OptimEngine:
         pre_position = Position(dict(carry.position))
         pre_optimizer_states = dict(carry.optimizer_states)
         pre_model_state = carry.model_state
+        pre_loss_state = carry.loss_state
         pre_position_has_nan = _tree_has_nan(pre_position)
         empty_loss = jnp.zeros_like(carry.loss_train)
 
@@ -1292,6 +1313,7 @@ class OptimEngine:
                     reproduction_optimizer_states=pre_optimizer_states,
                     reproduction_batches=carry.batches,
                     reproduction_model_state=pre_model_state,
+                    reproduction_loss_state=pre_loss_state,
                     optimizer_index=opt_index,
                 ),
                 empty_loss,
@@ -1324,6 +1346,7 @@ class OptimEngine:
                     reproduction_optimizer_states=pre_optimizer_states,
                     reproduction_batches=carry.batches,
                     reproduction_model_state=pre_model_state,
+                    reproduction_loss_state=pre_loss_state,
                     optimizer_index=opt_index,
                 )
 
@@ -1339,6 +1362,7 @@ class OptimEngine:
                     reproduction_optimizer_states=pre_optimizer_states,
                     reproduction_batches=carry.batches,
                     reproduction_model_state=pre_model_state,
+                    reproduction_loss_state=pre_loss_state,
                     optimizer_index=opt_index,
                 )
 
@@ -1388,6 +1412,7 @@ class OptimEngine:
                 reproduction_optimizer_states=dict(carry.optimizer_states),
                 reproduction_batches=carry.batches,
                 reproduction_model_state=carry.model_state,
+                reproduction_loss_state=carry.loss_state,
             )
 
         def keep_initial_position(carry: OptimCarry) -> OptimCarry:
@@ -1445,6 +1470,7 @@ class OptimEngine:
                         reproduction_optimizer_states=dict(carry.optimizer_states),
                         reproduction_batches=carry.batches,
                         reproduction_model_state=carry.model_state,
+                        reproduction_loss_state=carry.loss_state,
                     )
 
                 def accumulate_loss(carry: OptimCarry) -> OptimCarry:
@@ -1613,6 +1639,7 @@ class OptimEngine:
         def update_carry(carry: OptimCarry):
             carry.min_monitor_loss = carry.loss_monitor
             carry.position_min_monitor = carry.position
+            carry.loss_state_min_monitor = carry.loss_state
             carry.min_monitor_epoch = carry.epoch
             return carry
 
@@ -1686,6 +1713,7 @@ class OptimEngine:
             optimizers=self.optimizers,
             model_state=self.initial_state,
             save_position_history=self.save_position_history,
+            loss_state=self._init_loss_state(),
         )
         self._prepare_data_states(carry)
         if self.debug_nans:

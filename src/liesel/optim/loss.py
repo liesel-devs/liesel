@@ -18,7 +18,7 @@ from ..model.model import _reduced_sum
 from ._log_lik import validate_likelihood_groups
 from ._model_utils import validate_model_data_keys
 from .split import PositionSplit, PositionSplitManager
-from .types import Position
+from .types import Position, PyTree
 
 if TYPE_CHECKING:
     from .state import OptimCarry
@@ -111,6 +111,12 @@ class Loss(Protocol):
     Custom losses can inherit from :class:`~liesel.optim.LossMixin` to get
     :meth:`~liesel.optim.Loss.value_and_grad`
     and :meth:`~liesel.optim.Loss.grad` automatically.
+
+    A loss can carry a *loss state*: a pytree created by
+    :meth:`~liesel.optim.Loss.init_loss_state`, updated by every training
+    evaluation in an optimizer step and read from ``carry.loss_state`` by the next
+    one. Other evaluations, such as the loss monitor, read the loss state but keep
+    no new one. A loss without state uses the empty loss state ``()``.
     """
 
     @property
@@ -161,6 +167,20 @@ class Loss(Protocol):
         """
         Returns the gradient of :meth:`~liesel.optim.Loss.loss_train_batched` with
         respect to params.
+        """
+        ...
+
+    def init_loss_state(self) -> PyTree:
+        """The loss state before the first step; ``()`` for a loss without state."""
+        ...
+
+    def value_and_grad_and_state(
+        self, params: Position, carry: "OptimCarry"
+    ) -> tuple[jax.Array, Position, PyTree]:
+        """
+        Like :meth:`~liesel.optim.Loss.value_and_grad`, plus the new loss state.
+
+        Reads the current loss state from ``carry.loss_state``.
         """
         ...
 
@@ -296,6 +316,45 @@ class LossMixin:
         grad_ = jax.value_and_grad(self.loss_train_batched, argnums=0)
         value, grad_tree = grad_(params, carry)
         return value, Position(grad_tree)
+
+    def init_loss_state(self) -> PyTree:
+        """
+        Returns the loss state before the first step.
+
+        The default is the empty loss state ``()``. A loss with state overrides
+        this method and :meth:`~liesel.optim.LossMixin.loss_train_batched_and_state`.
+        The loss state must keep its shapes and dtypes across steps.
+        """
+        return ()
+
+    def loss_train_batched_and_state(
+        self, params: Position, carry: "OptimCarry"
+    ) -> tuple[jax.Array, PyTree]:
+        """
+        Computes the training loss for the current mini-batch and the new loss state.
+
+        The default returns :meth:`~liesel.optim.LossMixin.loss_train_batched` and
+        leaves ``carry.loss_state`` unchanged.
+        """
+        return self.loss_train_batched(params, carry), carry.loss_state
+
+    def value_and_grad_and_state(
+        self, params: Position, carry: "OptimCarry"
+    ) -> tuple[jax.Array, Position, PyTree]:
+        """
+        Evaluates :meth:`~liesel.optim.LossMixin.loss_train_batched_and_state` and
+        the gradient of its value.
+
+        Returns
+        -------
+        tuple
+            Triple ``(value, grad_tree, loss_state)``.
+        """
+        grad_ = jax.value_and_grad(
+            self.loss_train_batched_and_state, argnums=0, has_aux=True
+        )
+        (value, loss_state), grad_tree = grad_(params, carry)
+        return value, Position(grad_tree), loss_state
 
     def grad(self, params: Position, carry: "OptimCarry") -> Position:
         """
