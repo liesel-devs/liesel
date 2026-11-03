@@ -22,8 +22,8 @@ import logging
 
 import jax.numpy as jnp
 import numpy as np
-import pandas as pd
 import optax
+import pandas as pd
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 import liesel.model as lsl
@@ -53,7 +53,8 @@ positive_values = rng.gamma(shape=5.0, scale=positive_mean / 5.0)
 
 ```{code-cell} ipython3
 pd.DataFrame(
-    {"rows": [len(zero_values), len(positive_values)]}, index=["all", "positive"]
+    {"rows": [len(zero_values), len(positive_values)]},
+    index=["all", "positive"],
 )
 ```
 
@@ -63,29 +64,51 @@ Each group has its own coefficients. We fix the gamma concentration at 5 to
 keep the example focused on handling the data.
 
 ```{code-cell} ipython3
+# Probability of a zero response.
 alpha = lsl.Var.new_param(
-    jnp.zeros(2), lsl.Dist(tfd.Normal, loc=0.0, scale=5.0), name="alpha"
+    jnp.zeros(2),
+    dist=lsl.Dist(tfd.Normal, loc=0.0, scale=5.0),
+    name="alpha",
 )
+
 X_zero = lsl.Var.new_obs(jnp.asarray(X_zero_values), name="X_zero")
-logits = lsl.Var.new_calc(lambda X, a: X @ a, X_zero, alpha, name="logits")
+logits = lsl.Var.new_calc(
+    lambda X, a: X @ a,
+    X_zero,
+    alpha,
+    name="logits",
+)
+
 zero = lsl.Var.new_obs(
     jnp.asarray(zero_values),
-    lsl.Dist(tfd.Binomial, total_count=1.0, logits=logits),
+    dist=lsl.Dist(tfd.Binomial, total_count=1.0, logits=logits),
     name="zero",
 )
 
+# Mean of a positive response.
 beta = lsl.Var.new_param(
-    jnp.zeros(2), lsl.Dist(tfd.Normal, loc=0.0, scale=5.0), name="beta"
+    jnp.zeros(2),
+    dist=lsl.Dist(tfd.Normal, loc=0.0, scale=5.0),
+    name="beta",
 )
-X_positive = lsl.Var.new_obs(jnp.asarray(X_positive_values), name="X_positive")
+
+X_positive = lsl.Var.new_obs(
+    jnp.asarray(X_positive_values),
+    name="X_positive",
+)
 rate = lsl.Var.new_calc(
-    lambda X, b: 5.0 / jnp.exp(X @ b), X_positive, beta, name="rate"
+    lambda X, b: 5.0 / jnp.exp(X @ b),
+    X_positive,
+    beta,
+    name="rate",
 )
+
 positive = lsl.Var.new_obs(
     jnp.asarray(positive_values),
-    lsl.Dist(tfd.Gamma, concentration=5.0, rate=rate),
+    dist=lsl.Dist(tfd.Gamma, concentration=5.0, rate=rate),
     name="positive",
 )
+
 model = lsl.Model(zero, positive)
 ```
 
@@ -121,7 +144,7 @@ pd.DataFrame(
     [
         {"keys": child.position_keys, "training_rows": child.train_axis_size}
         for child in split.splits
-    ]
+    ],
 )
 ```
 
@@ -134,6 +157,7 @@ batch to its training size.
 
 ```{code-cell} ipython3
 batches = opt.Batches.from_split(split, batch_size=32)
+
 result = opt.LieselOptim(
     model,
     split=split,

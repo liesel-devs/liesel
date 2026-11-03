@@ -23,8 +23,8 @@ An epoch runs all configured batches. The two full-data monitors each add one
 loss evaluation at the end of every epoch. Validation uses likelihood only by
 default; set `validation_strategy="log_prob"` to include priors.
 
-This page uses a small Gaussian regression. Expand the setup to run the
-examples from top to bottom.
+The examples assume a Gaussian regression `model` with observed `X` and `y`,
+as in the {doc}`first tutorial <tutorials/notebooks/09-liesel-optim-basic>`.
 
 ```{code-cell} ipython3
 import logging
@@ -39,20 +39,33 @@ import liesel.optim as opt
 ```
 
 ```{code-cell} ipython3
-:tags: [hide-input]
+:tags: [remove-cell]
 
 logging.getLogger("liesel").setLevel(logging.WARNING)
 
 rng = np.random.default_rng(42)
 x = np.linspace(-1.0, 1.0, 128)
+
 X = lsl.Var.new_obs(jnp.asarray(x), name="X")
-beta = lsl.Var.new_param(0.0, lsl.Dist(tfd.Normal, 0.0, 5.0), name="beta")
+beta = lsl.Var.new_param(
+    0.0,
+    dist=lsl.Dist(tfd.Normal, 0.0, 5.0),
+    name="beta",
+)
+
 log_sigma = lsl.Var.new_param(0.0, name="log_sigma")
 sigma = lsl.Var.new_calc(jnp.exp, log_sigma, name="sigma")
-mu = lsl.Var.new_calc(lambda X, beta: X * beta, X, beta, name="mu")
+
+mu = lsl.Var.new_calc(
+    lambda X, beta: X * beta,
+    X,
+    beta,
+    name="mu",
+)
+
 y = lsl.Var.new_obs(
     jnp.asarray(0.5 * x + rng.normal(scale=0.7, size=x.size)),
-    lsl.Dist(tfd.Normal, mu, sigma),
+    dist=lsl.Dist(tfd.Normal, mu, sigma),
     name="y",
 )
 model = lsl.Model(y)
@@ -62,6 +75,7 @@ model = lsl.Model(y)
 
 ```{code-cell} ipython3
 stopper = opt.Stopper(epochs=500, patience=20, rtol=1e-4)
+
 builder = opt.LieselOptim(
     model,
     optimizers=optax.adam(0.01),
@@ -69,6 +83,7 @@ builder = opt.LieselOptim(
     stopper=stopper,
     show_progress=False,
 )
+
 result = builder.fit()
 ```
 
@@ -91,6 +106,9 @@ result.position_min_monitor
   the lowest finite monitoring loss. It raises `RuntimeError` if no such loss
   was recorded. An earlier best position remains available after a later failure.
 * {attr}`result.position_final <liesel.optim.OptimResult.position_final>` holds the parameters at the end of the run.
+* Stateful losses expose matching {attr}`result.loss_state_min_monitor <liesel.optim.OptimResult.loss_state_min_monitor>` and
+  {attr}`result.loss_state_final <liesel.optim.OptimResult.loss_state_final>` snapshots. These are `None` for stateless losses
+  or when no matching full-training evaluation exists.
 * {meth}`result.plot_loss_overview() <liesel.optim.OptimResult.plot_loss_overview>` shows the full loss history and a closer
   view of recent epochs.
 * {meth}`result.plot_params() <liesel.optim.OptimResult.plot_params>` shows saved parameter paths.
@@ -184,3 +202,7 @@ If a NaN is detected, `debug_info` contains information for reproducing it;
 otherwise it is `None`. See {py:class}`~liesel.optim.OptimNaNDebugInfo` for its
 contents. The captured information helps investigate the failure; it does
 not correct poor starting values.
+
+{class}`LaplaceLoss <liesel.optim.LaplaceLoss>` reports inner or outer numerical failures through
+`status="numerical_failure"`, `failure_reason`, and {attr}`failed_loss_state <liesel.optim.OptimResult.failed_loss_state>`.
+See {ref}`optimizer-laplace-failure` for an example and recovery behavior.
