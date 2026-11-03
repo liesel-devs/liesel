@@ -31,6 +31,14 @@ Follow :doc:`tutorials/notebooks/09-liesel-optim-basic` for a first point estima
 and :doc:`tutorials/notebooks/10-liesel-optim-advanced` for two data groups.
 The :doc:`optimization` route covers splitting, batching, monitoring, and more.
 
+Fit a variational posterior
+---------------------------
+
+Follow :doc:`tutorials/notebooks/11-liesel-vi-basic` for a Gaussian family and
+:doc:`tutorials/notebooks/12-liesel-vi-advanced` for two data groups. The
+:doc:`variational-inference` route covers variational families, fitting, and
+posterior draws.
+
 Explore applications
 --------------------
 

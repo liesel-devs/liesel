@@ -11,6 +11,7 @@ Liesel: A Probabilistic Programming Framework
 
    model-building
    optimization
+   variational-inference
    sampling
    examples
 
@@ -154,6 +155,30 @@ and defaults.
    reference/optim-losses
    reference/optim-optimizers
    reference/optim-data
+
+.. _variational-array-helpers:
+
+VI
+**
+
+See :doc:`variational-inference` for the fitting workflow.
+
+.. autosummary::
+   :toctree: generated
+   :nosignatures:
+   :caption: VI
+   :recursive:
+
+   ~liesel.optim.LieselVI
+   ~liesel.optim.NegElboLoss
+   ~liesel.optim.VariationalApproximation
+   ~liesel.optim.VDist
+   ~liesel.optim.CompositeVDist
+
+.. toctree::
+   :maxdepth: 1
+
+   reference/vi-arrays
 
 .. _experimental-api:
 
