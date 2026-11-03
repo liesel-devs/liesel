@@ -451,3 +451,23 @@ def test_full_size_resampling_needs_declared_axis(weighted):
     state = batch_state(model, batches)
     expected = jnp.sum(state["z_log_prob"].value * batches.correction_factors(0))
     assert_tree_close(batches.scaled_log_prior(model, state, batch_index=0), expected)
+
+
+@pytest.mark.parametrize("stored", ["validate", "batch"])
+def test_model_state_must_hold_full_data(stored):
+    model = local_model(n=8)
+    holdout = stored == "validate"
+    split = opt.PositionSplit.from_model(
+        model, validate_axis_share=0.25 if holdout else 0.0, shuffle=False
+    )
+    batches = opt.Batches.from_split(split, batch_size=2, shuffle=False)
+    part = split.validate if holdout else batches.get_batched_position(split.train, 0)
+    model.state = model.update_state(part, model.state)
+    with pytest.raises(ValueError, match="model.state must hold the full data"):
+        opt.LieselOptim(
+            model,
+            split=split,
+            batches=batches,
+            optimizers=optax.adam(0.05),
+            loss_monitor="validation" if holdout else "train_full_data",
+        ).build_engine()

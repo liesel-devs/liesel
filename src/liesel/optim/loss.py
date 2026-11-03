@@ -16,7 +16,12 @@ from ..model import Calc, Model
 from ..model.model import _reduced_sum
 from ._log_lik import validate_factor_groups
 from ._model_utils import validate_model_data_keys
-from .split import PositionSplit, PositionSplitManager, validate_split_priors
+from .split import (
+    PositionSplit,
+    PositionSplitManager,
+    validate_full_data_state,
+    validate_split_priors,
+)
 from .types import Position
 
 if TYPE_CHECKING:
@@ -422,6 +427,7 @@ class NegLogProbLoss(LossMixin):
         self, split: SplitConfig, optimizer_keys: Sequence[str]
     ) -> None:
         validate_model_data_keys(self.model, split.position_keys, optimizer_keys)
+        validate_full_data_state(self.model, split)
 
     def _validate_batch_keys(self, groups: Sequence[Sequence[str]]) -> None:
         validate_factor_groups(self.model, groups)
