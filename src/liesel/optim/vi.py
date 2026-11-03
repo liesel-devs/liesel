@@ -1276,8 +1276,9 @@ class VDist:
         Returns an empty list before the variational distribution has been
         initialized with :meth:`VDist.init <liesel.optim.VDist.init>`,
         :meth:`VDist.normal <liesel.optim.VDist.normal>`,
-        :meth:`VDist.mvn_diag <liesel.optim.VDist.mvn_diag>`, or :meth:`VDist.mvn_tril
-        <liesel.optim.VDist.mvn_tril>`.
+        :meth:`VDist.mvn_diag <liesel.optim.VDist.mvn_diag>`, :meth:`VDist.mvn_tril
+        <liesel.optim.VDist.mvn_tril>`, or :meth:`VDist.point_mass
+        <liesel.optim.VDist.point_mass>`.
 
         Examples
         --------
@@ -1658,6 +1659,64 @@ class VDist:
             )
 
         _validate_bijected_scale(scale_tril_var)
+        return self.init(dist)
+
+    def point_mass(self, loc: jax.typing.ArrayLike | None = None) -> Self:
+        """
+        Initializes a point mass at one learned location as the variational
+        distribution q.
+
+        The block holds its governed parameters at a single value, so
+        :class:`~liesel.optim.LieselVI` point-estimates them while other blocks
+        approximate their posterior, as in variational EM. The point mass has zero
+        entropy and contributes nothing to the entropy term of the ELBO, so the
+        location maximizes the expected log joint of the target model. The prior of
+        the governed parameters stays in the objective, which makes the location a
+        MAP-type estimate.
+
+        Parameters
+        ----------
+        loc
+            Initial location. If ``None``, the current flattened target position is
+            used. A scalar is one learned location shared by all governed parameters.
+
+        Returns
+        -------
+        Self
+            This :class:`~liesel.optim.VDist` instance, initialized with a
+            ``tfd.Deterministic`` variational distribution.
+
+        Notes
+        -----
+        Every draw from this block equals the location. Posterior summaries computed
+        from these draws show a standard deviation of zero and zero-width intervals.
+        This reflects the point estimate, not certainty about these parameters.
+
+        Examples
+        --------
+        Approximate a mean with a Gaussian and point-estimate a log scale:
+
+        >>> import jax.numpy as jnp
+        >>> import liesel.model as lsl
+        >>> import liesel.optim as opt
+        >>> import tensorflow_probability.substrates.jax as tfp
+        >>> mu = lsl.Var.new_param(jnp.array(0.0), name="mu")
+        >>> sigma = lsl.Var.new_param(1.0, name="sigma", bijector=tfp.bijectors.Exp())
+        >>> y = lsl.Var.new_obs(
+        ...     jnp.linspace(-2, 2, 50),
+        ...     dist=lsl.Dist(tfp.distributions.Normal, loc=mu, scale=sigma),
+        ...     name="y",
+        ... )
+        >>> p = lsl.Model(y)
+        >>> mu_block = opt.VDist(["mu"], p).mvn_diag()
+        >>> sigma_block = opt.VDist(["h(sigma)"], p).point_mass()
+        >>> sigma_block.parameters
+        ['(h(sigma))_loc']
+        >>> vdist = opt.CompositeVDist(mu_block, sigma_block).build()
+        """
+        loc_value = self._prepare_loc(loc)
+        loc_var = Var.new_param(loc_value, name=self._flat_pos_name + "_loc")
+        dist = Dist(tfd.Deterministic, loc=loc_var)
         return self.init(dist)
 
     def build(self) -> Self:
