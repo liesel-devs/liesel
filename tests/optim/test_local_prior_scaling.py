@@ -447,10 +447,12 @@ def test_full_size_resampling_needs_declared_axis(weighted):
     batches = resample(model)
     with pytest.raises(ValueError, match="'z'.*likelihood_axes"):
         batches.scaled_log_prior(model, batch_state(model, batches), batch_index=0)
-    batches = resample(model, {"z": 0})
-    state = batch_state(model, batches)
-    expected = jnp.sum(state["z_log_prob"].value * batches.correction_factors(0))
-    assert_tree_close(batches.scaled_log_prior(model, state, batch_index=0), expected)
+    for axis in (0, -1):
+        batches = resample(model, {"z": axis})
+        state = batch_state(model, batches)
+        expected = jnp.sum(state["z_log_prob"].value * batches.correction_factors(0))
+        actual = batches.scaled_log_prior(model, state, batch_index=0)
+        assert_tree_close(actual, expected)
 
 
 @pytest.mark.parametrize("prior", [False, True])

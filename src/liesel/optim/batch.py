@@ -1539,6 +1539,8 @@ class Batches:
             # apart when batch_size equals axis_size, so that case needs a
             # declared axis.
             declared = self.likelihood_axes.get(var.name)
+            if declared is not None and -value.ndim <= declared < value.ndim:
+                declared %= value.ndim
             pointwise = value.ndim == len(full_shape) and any(
                 n == self.batch_size and (n != m or i == declared)
                 for i, (n, m) in enumerate(zip(value.shape, full_shape, strict=True))
