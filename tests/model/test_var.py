@@ -596,6 +596,48 @@ class TestVarConstructors:
 
 
 class TestVarPredictions:
+    def test_predict_delegates_to_model_override(self) -> None:
+        calls = []
+
+        class OffsetModel(lsl.Model):
+            def predict(self, samples, predict=None, newdata=None, chunk_size=64):
+                calls.append((samples, predict, newdata, chunk_size))
+                result = super().predict(samples, predict, newdata, chunk_size)
+                return {name: value + 10.0 for name, value in result.items()}
+
+        theta = lsl.Var.new_param(0.0, name="theta")
+        x = lsl.Var.new_obs(jnp.array([0.0, 1.0]), name="x")
+        target = lsl.Var.new_calc(lambda t, x: t + x, theta, x, name="target")
+        model = OffsetModel(target)
+        samples = {"theta": jnp.arange(6.0).reshape(2, 3)}
+        newdata = {"x": jnp.array([3.0, 4.0])}
+
+        actual = target.predict(samples, newdata=newdata, chunk_size=2)
+        assert jnp.allclose(actual, samples["theta"][..., None] + newdata["x"] + 10.0)
+        assert len(calls) == 1
+        assert calls[0][0] is samples
+        assert calls[0][1] == [target.name]
+        assert calls[0][2] is newdata
+        assert calls[0][3] == 2
+        assert target.model is model
+        assert jnp.array_equal(x.value, jnp.array([0.0, 1.0]))
+        assert theta.value == 0.0
+
+    @pytest.mark.parametrize("fail", [False, True])
+    def test_predict_detached_unnamed_target_restores_names_and_ownership(self, fail):
+        theta = lsl.Var.new_param(0.0, name="theta")
+        target = lsl.Var.new_calc(lambda t: 2 * t, theta)
+        samples = {"theta": jnp.array([[1.0, 2.0]])}
+        if fail:
+            with pytest.raises(KeyError, match="more strict"):
+                target.predict(samples, newdata={"unknown": jnp.ones(1)})
+        else:
+            actual = target.predict(samples)
+            assert jnp.array_equal(actual, 2 * samples["theta"])
+        assert target.name == ""
+        assert theta.name == "theta"
+        assert target.model is None and theta.model is None
+
     @pytest.mark.parametrize("in_model", (True, False))
     def test_predict(self, in_model) -> None:
         n = 10
