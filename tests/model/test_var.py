@@ -845,8 +845,8 @@ class TestVarSample:
         # this is not a tough check though.
         sigma_dist = sigma.dist_node
         assert sigma_dist is not None
-        sigma_mean = sigma_dist.init_dist().mean()
-        sigma_std = sigma_dist.init_dist().stddev()
+        sigma_mean = float(sigma_dist.init_dist().mean())
+        sigma_std = float(sigma_dist.init_dist().stddev())
         assert samples["sigma"].mean() == pytest.approx(sigma_mean, abs=0.1)
         assert samples["sigma"].std() == pytest.approx(sigma_std, abs=0.1)
 
