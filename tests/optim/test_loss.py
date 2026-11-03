@@ -12,6 +12,7 @@ from liesel.optim import (
     EmaTrainLossMonitor,
     LieselOptim,
     NegLogProbLoss,
+    Optimizer,
     PositionSplit,
     PositionSplitManager,
     Split,
@@ -717,3 +718,47 @@ def test_validation_best_position_ignores_unsplit_training_branch():
         0.0
     )
     assert jnp.allclose(result.history.loss_monitor, expected)
+
+
+def _local_latent_model():
+    mu = lsl.Var.new_param(0.0, name="mu")
+    z = lsl.Var.new_param(jnp.zeros(20), name="z")
+    idx = lsl.Var.new_value(jnp.arange(20), name="idx")
+    loc = lsl.Var.new_calc(lambda mu, z, idx: mu + z[idx], mu, z, idx, name="loc")
+    y = lsl.Var.new_obs(jnp.ones(20), lsl.Dist(tfd.Normal, loc, 1.0), name="y")
+    return lsl.Model([y])
+
+
+@pytest.mark.parametrize(
+    "path", ["from_model", "from_split", "manual_batches", "passthrough", "value_node"]
+)
+def test_optimized_parameters_cannot_be_split_or_batched(path):
+    # Split data would replace the optimized values and freeze them.
+    model = _local_latent_model()
+    keys = ["z_value" if path == "value_node" else "z", "y"]
+    if path in ("from_split", "manual_batches"):
+        split = Split(keys, axis_size=20).split_position(model.extract_position(keys))
+    else:
+        split = PositionSplit.from_model(
+            model,
+            position_keys=keys,
+            split_axes={"z": None} if path == "passthrough" else None,
+        )
+    batches = (
+        Batches(keys, axis_size=20, batch_size=5)
+        if path == "manual_batches"
+        else Batches.from_split(split, batch_size=5)
+    )
+
+    def build_engine(optimized):
+        return LieselOptim(
+            model,
+            optimizers=[Optimizer(optimized, optax.adam(0.05))],
+            loss_monitor="train_full_data",
+            split=split,
+            batches=batches,
+        ).build_engine()
+
+    with pytest.raises(ValueError, match="batch optimized parameter 'z"):
+        build_engine(["mu", "z"])
+    build_engine(["mu"])  # Fixed parameters are data for the optimizer.

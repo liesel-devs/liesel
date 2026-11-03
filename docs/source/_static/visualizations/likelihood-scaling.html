@@ -1499,7 +1499,7 @@ html&gt;body{padding:0}&lt;/style&gt;
     &lt;div class=&quot;lse-result-line lse-full-result&quot;&gt;&lt;/div&gt;
   &lt;/section&gt;
 
-  &lt;div class=&quot;lse-callout text-small&quot;&gt;Likelihood scaling is per branch. The log-prior is included once, never multiplied by a split or batch factor; &lt;code&gt;scale=True&lt;/code&gt; then divides the completed loss by the total effective training sample size.&lt;/div&gt;
+  &lt;div class=&quot;lse-callout text-small&quot;&gt;Factor scaling is per branch. This example uses a global prior, included once. Local priors depending on batched keys receive their group’s split or batch factor; &lt;code&gt;scale=True&lt;/code&gt; then divides the completed loss by the total effective training sample size.&lt;/div&gt;
 
   &lt;script&gt;
     (() =&gt; {

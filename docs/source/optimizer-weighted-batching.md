@@ -107,11 +107,16 @@ uniform sampling. See {py:meth}`~liesel.optim.Batches.from_split` for other sett
 
 The built-in correction gives a sampled row with probability `p` an extra
 factor `1 / (N * p)`, where `N` is the group's row count. This acts before
-summing the likelihood, in addition to the usual minibatch scaling. Full-data
+summing each batch-dependent likelihood or prior, in addition to the usual
+minibatch scaling. Global priors receive no correction. Full-data
 and validation evaluations need no sampling correction.
 
-Keep per-observation likelihoods (`Dist.per_obs=True`). For custom reductions
-or transposed likelihood arrays, set `likelihood_axes` to the axis that follows
-the sampled rows. A likelihood already summed to a scalar cannot be corrected.
-Custom losses must apply {py:meth}`~liesel.optim.Batches.scaled_log_lik` or
+Keep pointwise log densities (`Dist.per_obs=True`). For custom reductions
+or transposed arrays, set `likelihood_axes` to the axis that follows the sampled
+rows. This mapping accepts observed-variable and parameter-prior names, for
+example `likelihood_axes={"z": 1}` for a local prior. Indirectly batched factors
+with multidimensional outputs require an explicit axis. A factor already summed
+to a scalar cannot be corrected.
+Custom losses can use {py:meth}`~liesel.optim.Batches.scaled_log_lik` and
+{py:meth}`~liesel.optim.Batches.scaled_log_prior`, or apply
 {py:meth}`~liesel.optim.Batches.correction_factors` themselves.

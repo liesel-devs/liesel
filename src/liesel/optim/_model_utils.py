@@ -8,7 +8,7 @@ import jax.numpy as jnp
 import networkx as nx
 
 from ..model import Model, TransientNode, Value
-from ._log_lik import observed_log_lik_node_names, validate_likelihood_groups
+from ._log_lik import log_prob_sources, validate_factor_groups
 
 
 def strong_observed_keys(model: Model) -> list[str]:
@@ -40,6 +40,11 @@ def validate_model_data_keys(
     parameter_keys: Sequence[str] = (),
 ) -> None:
     """Require writable, non-transient data keys with unambiguous computed values."""
+    optimized_nodes = {
+        model._node_for_position_key(key)
+        for key in parameter_keys
+        if key in model.nodes or key in model.vars
+    }
     for key in position_keys:
         node = model._node_for_position_key(key)
         if isinstance(node, TransientNode):
@@ -49,6 +54,14 @@ def validate_model_data_keys(
         if key not in model.vars and not isinstance(node, Value):
             raise ValueError(
                 f"Use a variable name for computed data, not node key {key!r}."
+            )
+        # Split data, passthrough included, replaces optimized values in the loss.
+        if node in optimized_nodes:
+            raise ValueError(
+                f"Cannot split or batch optimized parameter {key!r}; split data "
+                "would replace its optimized value. To batch local latents, index "
+                "them with a batched data variable, e.g. use z[idx] in the model "
+                "and include idx in position_keys."
             )
         if parameter_keys and key in model.vars and model.vars[key].weak:
             ancestors = nx.ancestors(model.node_graph, node)
@@ -76,8 +89,9 @@ def position_key_groups_from_model(
     ``None`` are passthrough data and are omitted from the groups. Keys without an
     override use ``default_split_axis``. Flat inputs are grouped by axis length;
     nested inputs retain explicit boundaries, even for equal-sized groups.
-    Inferred groups must contain an observed likelihood; otherwise callers must
-    specify explicit nested groups or mark shared data as passthrough.
+    Inferred groups must contain an observed likelihood or parameter prior;
+    otherwise callers must specify explicit nested groups or mark shared data as
+    passthrough.
     The flat keys retain passthrough entries for extraction from the model.
     """
     split_axes = split_axes or {}
@@ -133,11 +147,12 @@ def position_key_groups_from_model(
 
     if not explicit:
         for _, keys in groups:
-            if not observed_log_lik_node_names(model, keys):
+            if not log_prob_sources(model, keys):
                 passthrough = dict.fromkeys(keys)
                 raise ValueError(
                     f"Cannot infer an observation group for {keys}: no observed "
-                    "likelihood belongs to this group. For shared data, construct "
+                    "likelihood or parameter prior belongs to this group. "
+                    "For shared data, construct "
                     "PositionSplit.from_model(..., "
                     f"split_axes={passthrough!r}), then use "
                     "LieselOptim(..., split=split) or Batches.from_split(split, ...). "
@@ -145,5 +160,5 @@ def position_key_groups_from_model(
                     "explicit nested position_keys."
                 )
 
-    validate_likelihood_groups(model, [keys for _, keys in groups])
+    validate_factor_groups(model, [keys for _, keys in groups])
     return flat_keys, groups
