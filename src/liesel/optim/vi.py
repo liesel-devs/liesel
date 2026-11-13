@@ -241,8 +241,8 @@ class NegElboLoss(LossMixin):
         ``"mc"`` estimates entropy from sampled negative log densities. Analytic
         entropy avoids sampled log-density evaluation where supported; target-model
         likelihoods and priors are still evaluated with Monte Carlo draws.
-    joint_blocks
-        :class:`~liesel.optim.JointVDist` blocks drawn after ``q``, given its
+    function_blocks
+        :class:`~liesel.optim.SampleAndLogProbVDist` blocks drawn after ``q``, given its
         draws mapped by ``q_to_p``. Each is called once per ELBO evaluation and
         contributes its returned log density. Their family states form the loss
         state, see :meth:`~liesel.optim.NegElboLoss.init_loss_state`.
@@ -338,8 +338,8 @@ class NegElboLoss(LossMixin):
         """If ``True``, divide losses by the training sample size."""
         vdist: VDist | CompositeVDist | None
         """Optional variational distribution builder that created ``q``."""
-        joint_blocks: tuple[JointVDist, ...]
-        """Joint blocks drawn after ``q``."""
+        function_blocks: tuple[SampleAndLogProbVDist, ...]
+        """Function blocks drawn after ``q``."""
 
     def __init__(
         self,
@@ -352,7 +352,7 @@ class NegElboLoss(LossMixin):
         vdist: VDist | CompositeVDist | None = None,
         regularize_q_prior: bool = False,
         entropy: Literal["auto", "mc"] = "auto",
-        joint_blocks: Sequence[JointVDist] = (),
+        function_blocks: Sequence[SampleAndLogProbVDist] = (),
     ):
         _validate_positive_int(nsamples, "nsamples")
         _validate_bool(scale, "scale")
@@ -396,10 +396,10 @@ class NegElboLoss(LossMixin):
         self.scalar = _training_loss_scalar(self.split) if self.scale else 1.0
         self.vdist = vdist
         self.regularize_q_prior = regularize_q_prior
-        if any(block.p is not p for block in joint_blocks):
-            raise ValueError("Joint blocks must share the target model p.")
-        _validate_joint_parameter_names(q, joint_blocks)
-        self.joint_blocks = tuple(joint_blocks)
+        if any(block.p is not p for block in function_blocks):
+            raise ValueError("Function blocks must share the target model p.")
+        _validate_function_parameter_names(q, function_blocks)
+        self.function_blocks = tuple(function_blocks)
         self._validate_data_keys(self.split, ())
 
     def _validate_data_keys(
@@ -414,7 +414,7 @@ class NegElboLoss(LossMixin):
         ]
         target_keys = (
             list(self.q_to_p(self.q.extract_position(list(self.q.observed))))
-            + [key for block in self.joint_blocks for key in block.position_keys]
+            + [key for block in self.function_blocks for key in block.position_keys]
             if computed_keys
             else []
         )
@@ -505,7 +505,7 @@ class NegElboLoss(LossMixin):
             vdist=vdist,
             regularize_q_prior=regularize_q_prior,
             entropy=entropy,
-            joint_blocks=getattr(vdist, "joint_blocks", ()),
+            function_blocks=getattr(vdist, "function_blocks", ()),
         )
 
     @classmethod
@@ -790,17 +790,19 @@ class NegElboLoss(LossMixin):
 
     @property
     def parameters(self) -> list[str]:
-        """Names of all variational parameters: those of ``q`` and joint blocks."""
-        joint = [name for block in self.joint_blocks for name in block.parameters]
-        return list(self.q.parameters) + joint
+        """Names of all variational parameters: those of ``q`` and function blocks."""
+        fn_params = [
+            name for block in self.function_blocks for name in block.parameters
+        ]
+        return list(self.q.parameters) + fn_params
 
     def init_loss_state(self) -> PyTree:
         """
-        Returns the joint blocks' initial family states, as a tuple.
+        Returns the function blocks' initial family states, as a tuple.
 
-        A loss without joint blocks has the empty loss state ``()``.
+        A loss without function blocks has the empty loss state ``()``.
         """
-        return tuple(block.init_family_state for block in self.joint_blocks)
+        return tuple(block.init_family_state for block in self.function_blocks)
 
     def position(self, position_keys: Sequence[str]) -> Position:
         """
@@ -809,27 +811,27 @@ class NegElboLoss(LossMixin):
         Parameters
         ----------
         position_keys
-            Names of variational parameters in ``q`` or in joint blocks.
+            Names of variational parameters in ``q`` or in function blocks.
 
         Returns
         -------
         Position
-            Current ``q`` position and initial joint-block parameters, restricted
+            Current ``q`` position and initial function-block parameters, restricted
             to ``position_keys``.
         """
-        joint = {
+        fn_params = {
             name: value
-            for block in self.joint_blocks
+            for block in self.function_blocks
             for name, value in block.init_params.items()
         }
-        if not joint:
+        if not fn_params:
             return self.q.extract_position(position_keys)
         q_position = self.q.extract_position(
-            [key for key in position_keys if key not in joint]
+            [key for key in position_keys if key not in fn_params]
         )
         return Position(
             {
-                key: joint[key] if key in joint else q_position[key]
+                key: fn_params[key] if key in fn_params else q_position[key]
                 for key in position_keys
             }
         )
@@ -869,7 +871,7 @@ class NegElboLoss(LossMixin):
             final iterate to avoid selection on a noisy monitoring minimum, unlike
             deterministic MAP/Laplace approximation defaults. Neither choice
             certifies convergence. An unavailable minimum does not fall back.
-            Joint blocks use the family states stored with the selected position.
+            Function blocks use the family states stored with the selected position.
 
         Returns
         -------
@@ -905,22 +907,26 @@ class NegElboLoss(LossMixin):
             if at == "min_monitor"
             else result.loss_state_final
         )
-        if not self.joint_blocks:
+        if not self.function_blocks:
             family_states = ()
         elif family_states is None or jax.tree.structure(
             family_states
         ) != jax.tree.structure(self.init_loss_state()):
-            raise ValueError("The result's loss state does not match the joint blocks.")
+            raise ValueError(
+                "The result's loss state does not match the function blocks."
+            )
         parameter_names = {
             var.value_node: name for name, var in self.q.parameters.items()
         }
-        joint_names = {name for block in self.joint_blocks for name in block.parameters}
+        function_names = {
+            name for block in self.function_blocks for name in block.parameters
+        }
         selected = Position({})
         for key, value in position.items():
             try:
                 name = (
                     key
-                    if key in joint_names
+                    if key in function_names
                     else parameter_names[self.q._node_for_position_key(key)]
                 )
             except KeyError as error:
@@ -945,7 +951,7 @@ class NegElboLoss(LossMixin):
         expected.update(selected)
         snapshot = Position(jax.tree.map(lambda x: jnp.array(x, copy=True), expected))
         return VariationalApproximation(
-            self.q, self._q_to_p, snapshot, self.joint_blocks, family_states
+            self.q, self._q_to_p, snapshot, self.function_blocks, family_states
         )
 
     def estimate_elbo(
@@ -1007,7 +1013,7 @@ class NegElboLoss(LossMixin):
         batch_index
             Current batch row. Required when ``batches`` uses weighted sampling.
         family_states
-            Family states of the joint blocks. Defaults to
+            Family states of the function blocks. Defaults to
             :meth:`~liesel.optim.NegElboLoss.init_loss_state`.
 
         Returns
@@ -1051,11 +1057,11 @@ class NegElboLoss(LossMixin):
     ) -> tuple[jax.Array, PyTree]:
         """
         Like :meth:`~liesel.optim.NegElboLoss.estimate_elbo`, plus the new family
-        states of the joint blocks.
+        states of the function blocks.
 
         The ELBO draws ``q`` as :meth:`~liesel.optim.NegElboLoss.estimate_elbo`
-        does, then calls each joint block once for all samples, given the draws of
-        ``q``. Without joint blocks, the new family states are ``()``.
+        does, then calls each function block once for all samples, given the draws of
+        ``q``. Without function blocks, the new family states are ``()``.
 
         Returns
         -------
@@ -1070,11 +1076,13 @@ class NegElboLoss(LossMixin):
         _validate_positive_int(nsamples, "nsamples")
         if family_states is None:
             family_states = self.init_loss_state()
-        joint_params = Position(params)
-        joint_names = {name for block in self.joint_blocks for name in block.parameters}
-        params = Position({k: v for k, v in params.items() if k not in joint_names})
-        if self.joint_blocks:
-            key, *joint_keys = jax.random.split(key, 1 + len(self.joint_blocks))
+        all_params = Position(params)
+        function_names = {
+            name for block in self.function_blocks for name in block.parameters
+        }
+        params = Position({k: v for k, v in params.items() if k not in function_names})
+        if self.function_blocks:
+            key, *function_keys = jax.random.split(key, 1 + len(self.function_blocks))
         q_for_sampling = self.q._copy_computational_model()
         q_for_sampling.state = q_state
         samples = q_for_sampling.sample(
@@ -1083,28 +1091,28 @@ class NegElboLoss(LossMixin):
             newdata=params,
             fixed=tuple(self.q.parameters) + tuple(params),
         )
-        joint_draws = Position({})
-        joint_log_q = jnp.zeros(())
+        function_draws = Position({})
+        function_log_q = jnp.zeros(())
         new_family_states = []
-        if self.joint_blocks:
+        if self.function_blocks:
             given = jax.vmap(self.q_to_p)(samples) if samples else Position({})
-            for block, state, joint_key in zip(
-                self.joint_blocks, family_states, joint_keys, strict=True
+            for block, state, function_key in zip(
+                self.function_blocks, family_states, function_keys, strict=True
             ):
-                draws, log_q, new_state = block._sample_and_log_prob(
-                    joint_params, state, joint_key, nsamples, Position(given)
+                draws, log_q, new_state = block._call_fn(
+                    all_params, state, function_key, nsamples, Position(given)
                 )
-                joint_draws.update(draws)
-                joint_log_q = joint_log_q + log_q
+                function_draws.update(draws)
+                function_log_q = function_log_q + log_q
                 new_family_states.append(new_state)
         use_analytic_entropy = self.entropy == "auto" and not _has_custom_model_log_lik(
             self.q
         )
 
         @partial(jax.vmap)
-        def log_prob_of_p(sample, joint_draw):
+        def log_prob_of_p(sample, function_draw):
             p_state_new = self.p.update_state(
-                self.q_to_p(sample) | joint_draw | obs, p_state, allow_weak_vars=True
+                self.q_to_p(sample) | function_draw | obs, p_state, allow_weak_vars=True
             )
             if batches is None:
                 if split is None:
@@ -1160,8 +1168,8 @@ class NegElboLoss(LossMixin):
             return log_lik_q
 
         log_q = log_prob_of_q(samples) if self.q.observed else jnp.zeros(nsamples)
-        elbo_samples = log_prob_of_p(samples, joint_draws) - log_q - joint_log_q
-        penalty = sum(block._penalty(joint_params) for block in self.joint_blocks)
+        elbo_samples = log_prob_of_p(samples, function_draws) - log_q - function_log_q
+        penalty = sum(block._penalty(all_params) for block in self.function_blocks)
 
         return jnp.mean(elbo_samples) - penalty, tuple(new_family_states)
 
@@ -1179,7 +1187,7 @@ class NegElboLoss(LossMixin):
         self, params: Position, carry: OptimCarry
     ) -> tuple[jax.Array, PyTree]:
         """
-        Like :meth:`~liesel.optim.NegElboLoss.loss_train_batched`, plus the joint
+        Like :meth:`~liesel.optim.NegElboLoss.loss_train_batched`, plus the function
         blocks' new family states, read from ``carry.loss_state``.
         """
         elbo, family_states = self.estimate_elbo_and_state(
@@ -1952,8 +1960,10 @@ class VDist:
         return f"{name}({self.position_keys}, dist={dist})"
 
 
-class JointFn(Protocol):
-    """Draws all samples of a :class:`~liesel.optim.JointVDist` block in one call."""
+class SampleAndLogProbFn(Protocol):
+    """
+    Draws and scores all samples of a :class:`~liesel.optim.SampleAndLogProbVDist`.
+    """
 
     def __call__(
         self,
@@ -1976,14 +1986,15 @@ class JointFn(Protocol):
         ...
 
 
-class JointVDist:
+class SampleAndLogProbVDist:
     r"""
-    A variational block that draws and scores all its samples in one call.
+    A variational block given by a function that returns samples and their log
+    density in one call: a *function block*.
 
     Use it for families that a :class:`~liesel.optim.VDist` can't express:
     families whose draws and log density come out of one sequential computation,
     or that update a *family state*, such as running statistics, on every draw.
-    Combine joint blocks with :class:`~liesel.optim.VDist` blocks in a
+    Combine function blocks with :class:`~liesel.optim.VDist` blocks in a
     :class:`~liesel.optim.CompositeVDist`.
 
     Parameters
@@ -1992,11 +2003,12 @@ class JointVDist:
         Names of the target parameters governed by this block.
     p
         Target :class:`~liesel.model.Model`.
-    sample_and_log_prob
-        Joint function, see :class:`~liesel.optim.vi.JointFn`. It is called
+    fn
+        Function that draws and scores all samples of the block, see
+        :class:`~liesel.optim.vi.SampleAndLogProbFn`. It is called
         once per ELBO evaluation for all samples, with this block's variational
         parameters, the current family state and the draws of the
-        :class:`~liesel.optim.VDist` blocks as ``given``. Joint blocks don't see
+        :class:`~liesel.optim.VDist` blocks as ``given``. Function blocks don't see
         each other's draws. The draws must be differentiable in ``params``, like
         those of a fully reparameterized distribution.
     init_params
@@ -2014,7 +2026,7 @@ class JointVDist:
 
     Examples
     --------
-    A diagonal normal family written as a joint function, with a count of its
+    A diagonal normal family written as a function, with a count of its
     calls as family state:
 
     >>> import jax
@@ -2035,10 +2047,10 @@ class JointVDist:
     ...     draws = params["mu_loc"] + scale * jax.random.normal(key, (num_samples, 2))
     ...     log_q = tfd.Normal(params["mu_loc"], scale).log_prob(draws).sum(-1)
     ...     return {"mu": draws}, log_q, count + 1
-    >>> mu_block = opt.JointVDist(
+    >>> mu_block = opt.SampleAndLogProbVDist(
     ...     ["mu"],
     ...     p,
-    ...     sample_and_log_prob=draw_mu,
+    ...     fn=draw_mu,
     ...     init_params={"mu_loc": jnp.zeros(2), "mu_log_scale": jnp.full(2, -2.0)},
     ...     init_family_state=jnp.array(0),
     ... )
@@ -2054,8 +2066,8 @@ class JointVDist:
     if TYPE_CHECKING:
         position_keys: list[str]
         """Names of target parameters governed by this block."""
-        sample_and_log_prob: JointFn
-        """Joint function that draws and scores all samples of this block."""
+        fn: SampleAndLogProbFn
+        """Function that draws and scores all samples of this block."""
         init_params: dict[str, jax.Array]
         """Initial values of this block's variational parameters."""
         init_family_state: PyTree
@@ -2067,14 +2079,16 @@ class JointVDist:
         self,
         position_keys: Sequence[str],
         p: Model,
-        sample_and_log_prob: JointFn,
+        fn: SampleAndLogProbFn,
         init_params: Mapping[str, jax.typing.ArrayLike],
         init_family_state: PyTree = (),
         penalty: Callable[[dict[str, jax.Array]], jax.Array] | None = None,
     ):
         position_keys = list(position_keys)
         if not position_keys:
-            raise ValueError("JointVDist requires at least one position_key.")
+            raise ValueError(
+                "SampleAndLogProbVDist requires at least one position_key."
+            )
         duplicate_keys = sorted(
             {key for key in position_keys if position_keys.count(key) > 1}
         )
@@ -2085,7 +2099,7 @@ class JointVDist:
         p.extract_position(position_keys)
         self.position_keys = position_keys
         self._p = p
-        self.sample_and_log_prob = sample_and_log_prob
+        self.fn = fn
         self.init_params = {name: jnp.asarray(v) for name, v in init_params.items()}
         self.init_family_state = init_family_state
         self.penalty = penalty
@@ -2100,7 +2114,7 @@ class JointVDist:
         """Names of this block's variational parameters."""
         return list(self.init_params)
 
-    def _sample_and_log_prob(
+    def _call_fn(
         self,
         params: Position,
         family_state: PyTree,
@@ -2108,21 +2122,21 @@ class JointVDist:
         num_samples: int,
         given: Position,
     ) -> tuple[Position, jax.Array, PyTree]:
-        """Calls the joint function and checks the structure of its output."""
+        """Calls ``fn`` and checks the structure of its output."""
         block_params = {
             name: params.get(name, value) for name, value in self.init_params.items()
         }
-        draws, log_q, new_state = self.sample_and_log_prob(
+        draws, log_q, new_state = self.fn(
             block_params, family_state, key, num_samples, given
         )
         if sorted(draws) != sorted(self.position_keys):
             raise ValueError(
-                f"Joint function must return draws for {self.position_keys}, "
+                f"fn must return draws for {self.position_keys}, "
                 f"but returned draws for {sorted(draws)}."
             )
         if jnp.shape(log_q) != (num_samples,):
             raise ValueError(
-                f"Joint function must return log_q of shape ({num_samples},), "
+                f"fn must return log_q of shape ({num_samples},), "
                 f"but returned shape {jnp.shape(log_q)}."
             )
         old = [
@@ -2133,7 +2147,7 @@ class JointVDist:
             old != new
         ):
             raise ValueError(
-                "Joint function must return a family state with the structure, "
+                "fn must return a family state with the structure, "
                 "shapes and dtypes of the one it received."
             )
         return Position(draws), log_q, new_state
@@ -2158,28 +2172,28 @@ def _normalize_sample_shape(sample_shape: int | Sequence[int]) -> tuple[int, ...
         return tuple(operator.index(size) for size in shape_arg)
 
 
-def _sample_with_joint_blocks(
+def _sample_with_function_blocks(
     q: Model | None,
     q_to_p: Callable[[Position], Position],
-    joint_blocks: Sequence[JointVDist],
+    function_blocks: Sequence[SampleAndLogProbVDist],
     family_states: Sequence[PyTree],
     seed: jax.Array,
     sample_shape: int | Sequence[int],
     at_position: Position | None,
 ) -> Position:
-    """Draws the VDist blocks of ``q``, then each joint block given those draws."""
-    if not joint_blocks:
+    """Draws the VDist blocks of ``q``, then each function block given those draws."""
+    if not function_blocks:
         return _sample_variational_model(q, q_to_p, seed, sample_shape, at_position)
     if q is None:
         raise ValueError("The object has no model.")
 
     shape = _normalize_sample_shape(sample_shape)
-    joint_names = {name for block in joint_blocks for name in block.parameters}
+    function_names = {name for block in function_blocks for name in block.parameters}
     at_position = Position(at_position or {})
     q_position = Position(
-        {k: v for k, v in at_position.items() if k not in joint_names}
+        {k: v for k, v in at_position.items() if k not in function_names}
     )
-    q_key, *keys = jax.random.split(seed, 1 + len(joint_blocks))
+    q_key, *keys = jax.random.split(seed, 1 + len(function_blocks))
     if q.observed:
         given = _sample_variational_model(q, q_to_p, q_key, shape, q_position or None)
     else:
@@ -2187,8 +2201,8 @@ def _sample_with_joint_blocks(
     num_samples = prod(shape)
     flat_given = Position(flatten_leading_batch(given, len(shape)))
     draws = Position(given)
-    for block, state, key in zip(joint_blocks, family_states, keys, strict=True):
-        block_draws, _, _ = block._sample_and_log_prob(
+    for block, state, key in zip(function_blocks, family_states, keys, strict=True):
+        block_draws, _, _ = block._call_fn(
             at_position, state, key, num_samples, flat_given
         )
         draws.update(unflatten_leading_batch(block_draws, shape))
@@ -2340,7 +2354,7 @@ class VariationalApproximation:
     <liesel.optim.NegElboLoss.approximate_joint_posterior>`.
     Variational parameter values are held independently of the fit result.
     Keep the variational graph, nonparameter values, and the position mapping
-    unchanged while using this object. Joint blocks draw with the family states
+    unchanged while using this object. Function blocks draw with the family states
     of the selected result and keep no new ones.
     """
 
@@ -2349,13 +2363,13 @@ class VariationalApproximation:
         q: Model,
         q_to_p: Callable[[Position], Position],
         position: Position,
-        joint_blocks: Sequence[JointVDist] = (),
+        function_blocks: Sequence[SampleAndLogProbVDist] = (),
         family_states: Sequence[PyTree] = (),
     ):
         self._q = q
         self._q_to_p = q_to_p
         self._position = position
-        self._joint_blocks = tuple(joint_blocks)
+        self._function_blocks = tuple(function_blocks)
         self._family_states = tuple(family_states)
 
     def sample(
@@ -2370,10 +2384,10 @@ class VariationalApproximation:
         derived quantities or
         transform draws back to constrained parameter scales.
         """
-        return _sample_with_joint_blocks(
+        return _sample_with_function_blocks(
             self._q,
             self._q_to_p,
-            self._joint_blocks,
+            self._function_blocks,
             self._family_states,
             seed,
             sample_shape,
@@ -2390,7 +2404,7 @@ class CompositeVDist:
     *vdists
         Initialized blocks sharing one target model. A target parameter may
         belong to at most one block; duplicate names raise ValueError.
-        :class:`~liesel.optim.JointVDist` blocks stay out of the Liesel model
+        :class:`~liesel.optim.SampleAndLogProbVDist` blocks stay out of the Liesel model
         :attr:`~liesel.optim.CompositeVDist.q`; they are drawn after the
         :class:`~liesel.optim.VDist` blocks, given their draws.
 
@@ -2444,10 +2458,10 @@ class CompositeVDist:
         """
         vi_dists: tuple[VDist, ...]
         """Independent :class:`~liesel.optim.VDist` blocks combined by this object."""
-        joint_blocks: tuple[JointVDist, ...]
-        """:class:`~liesel.optim.JointVDist` blocks combined by this object."""
+        function_blocks: tuple[SampleAndLogProbVDist, ...]
+        """Function blocks combined by this object."""
 
-    def __init__(self, *vdists: VDist | JointVDist):
+    def __init__(self, *vdists: VDist | SampleAndLogProbVDist):
         if not vdists:
             raise ValueError("CompositeVDist requires at least one VDist.")
 
@@ -2473,7 +2487,9 @@ class CompositeVDist:
 
         self._p = first_model
         self.vi_dists = tuple(d for d in vdists if isinstance(d, VDist))
-        self.joint_blocks = tuple(d for d in vdists if isinstance(d, JointVDist))
+        self.function_blocks = tuple(
+            d for d in vdists if isinstance(d, SampleAndLogProbVDist)
+        )
         self.q: Model | None = None
 
     @property
@@ -2481,8 +2497,10 @@ class CompositeVDist:
     def parameters(self) -> list[str]:
         if self.q is None:
             return []
-        joint = [name for block in self.joint_blocks for name in block.parameters]
-        return list(self.q.parameters) + joint
+        fn_params = [
+            name for block in self.function_blocks for name in block.parameters
+        ]
+        return list(self.q.parameters) + fn_params
 
     @property
     @usedocs(VDist.p)
@@ -2514,7 +2532,7 @@ class CompositeVDist:
                 raise ValueError(f".var attribute of {dist} must be set, but is None.")
             vars_.append(dist.var)
         q = Model(vars_, to_float32=self._to_float32())
-        _validate_joint_parameter_names(q, self.joint_blocks)
+        _validate_function_parameter_names(q, self.function_blocks)
         self.q = q
         return self
 
@@ -2532,11 +2550,11 @@ class CompositeVDist:
         seed: jax.Array,
         at_position: Position | None = None,
     ) -> Position:
-        return _sample_with_joint_blocks(
+        return _sample_with_function_blocks(
             self.q,
             self.q_to_p,
-            self.joint_blocks,
-            [block.init_family_state for block in self.joint_blocks],
+            self.function_blocks,
+            [block.init_family_state for block in self.function_blocks],
             seed,
             sample_shape,
             at_position,
@@ -2549,19 +2567,19 @@ class CompositeVDist:
             built = "built"
         else:
             built = "not built"
-        n = len(self.vi_dists) + len(self.joint_blocks)
+        n = len(self.vi_dists) + len(self.function_blocks)
         return f"{name}(n={n}, {built})"
 
 
-def _validate_joint_parameter_names(
-    q: Model, joint_blocks: Sequence[JointVDist]
+def _validate_function_parameter_names(
+    q: Model, function_blocks: Sequence[SampleAndLogProbVDist]
 ) -> None:
-    names = [name for block in joint_blocks for name in block.parameters]
+    names = [name for block in function_blocks for name in block.parameters]
     duplicates = sorted(
         {name for name in names if names.count(name) > 1 or name in q.vars}
     )
     if duplicates:
         raise ValueError(
-            "Joint block parameter names must be unique and must not name "
+            "Function block parameter names must be unique and must not name "
             f"variables of q, but got duplicates: {duplicates}."
         )

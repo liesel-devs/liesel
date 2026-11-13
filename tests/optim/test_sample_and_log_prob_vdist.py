@@ -1,4 +1,4 @@
-"""Joint variational blocks that draw and score in one call."""
+"""Variational blocks that sample and score in one call."""
 
 import jax
 import jax.numpy as jnp
@@ -41,17 +41,17 @@ def counting_normal(params, family_state, key, num_samples, given):
 INIT_PARAMS = {"mu_loc": jnp.zeros(2), "mu_log_scale": jnp.log(jnp.full(2, 0.1))}
 
 
-def joint_block(model, fn=counting_normal, **kwargs):
+def function_block(model, fn=counting_normal, **kwargs):
     kwargs.setdefault("init_family_state", jnp.zeros((), dtype=jnp.int32))
-    return opt.JointVDist(
-        ["mu"], model, sample_and_log_prob=fn, init_params=INIT_PARAMS, **kwargs
+    return opt.SampleAndLogProbVDist(
+        ["mu"], model, fn=fn, init_params=INIT_PARAMS, **kwargs
     )
 
 
 def make_loss(model=None, nsamples=8, **kwargs):
     model = make_model() if model is None else model
     tau_block = opt.VDist(["tau"], model).mvn_diag()
-    q = opt.CompositeVDist(joint_block(model, **kwargs), tau_block).build()
+    q = opt.CompositeVDist(function_block(model, **kwargs), tau_block).build()
     return opt.NegElboLoss.from_vdist(q, nsamples=nsamples)
 
 
@@ -66,11 +66,11 @@ def fit(loss, epochs=6, loss_monitor="train_full_data"):
     ).fit()
 
 
-def test_joint_diag_normal_matches_mvn_diag():
+def test_function_diag_normal_matches_mvn_diag():
     model = make_model()
     tau_block = opt.VDist(["tau"], model).mvn_diag()
-    joint_q = opt.CompositeVDist(joint_block(model, fn=diag_normal), tau_block)
-    joint_loss = opt.NegElboLoss.from_vdist(joint_q.build(), nsamples=20_000)
+    function_q = opt.CompositeVDist(function_block(model, fn=diag_normal), tau_block)
+    function_loss = opt.NegElboLoss.from_vdist(function_q.build(), nsamples=20_000)
     mu_block = opt.VDist(["mu"], model).mvn_diag()
     vdist_q = opt.CompositeVDist(mu_block, opt.VDist(["tau"], model).mvn_diag())
     vdist_loss = opt.NegElboLoss.from_vdist(vdist_q.build(), nsamples=20_000)
@@ -83,14 +83,14 @@ def test_joint_diag_normal_matches_mvn_diag():
 
         return jax.value_and_grad(f)(jnp.array([0.3, -0.2]))
 
-    joint_value, joint_grad = elbo(joint_loss, "mu_loc")
+    function_value, function_grad = elbo(function_loss, "mu_loc")
     vdist_value, vdist_grad = elbo(vdist_loss, "(mu)_loc")
 
-    assert jnp.allclose(joint_value, vdist_value, rtol=0.01)
-    assert jnp.allclose(joint_grad, vdist_grad, rtol=0.02)
+    assert jnp.allclose(function_value, vdist_value, rtol=0.01)
+    assert jnp.allclose(function_grad, vdist_grad, rtol=0.02)
 
 
-def test_joint_fn_is_called_once_for_all_samples():
+def test_function_fn_is_called_once_for_all_samples():
     calls = []
 
     def recording(params, family_state, key, num_samples, given):
@@ -156,7 +156,7 @@ def test_min_monitor_posterior_uses_matching_family_state():
     assert [int(state) for state in seen] == [expected]
 
 
-def test_joint_block_sees_vdist_draws_as_given():
+def test_function_block_sees_vdist_draws_as_given():
     seen = []
 
     def reads_given(params, family_state, key, num_samples, given):
@@ -190,7 +190,7 @@ def test_penalty_enters_training_loss():
     assert jnp.allclose(difference, 5.0)
 
 
-def test_loss_parameters_include_joint_parameters_and_are_trained():
+def test_loss_parameters_include_function_parameters_and_are_trained():
     loss = make_loss()
     result = fit(loss, epochs=5)
 
@@ -199,7 +199,7 @@ def test_loss_parameters_include_joint_parameters_and_are_trained():
     assert loss.vdist.parameters == loss.parameters
 
 
-def test_composite_of_only_joint_blocks():
+def test_composite_of_only_function_blocks():
     model = make_model()
 
     def tau_block(params, family_state, key, num_samples, given):
@@ -211,11 +211,11 @@ def test_composite_of_only_joint_blocks():
         )
 
     q = opt.CompositeVDist(
-        joint_block(model),
-        opt.JointVDist(
+        function_block(model),
+        opt.SampleAndLogProbVDist(
             ["tau"],
             model,
-            sample_and_log_prob=tau_block,
+            fn=tau_block,
             init_params={"tau_loc": jnp.array(0.0)},
         ),
     ).build()
@@ -229,27 +229,25 @@ def test_composite_of_only_joint_blocks():
     assert draws["mu"].shape == (5, 2)
 
 
-def test_joint_vdist_validates_its_inputs():
+def test_function_vdist_validates_its_inputs():
     model = make_model()
     with pytest.raises(ValueError, match="position_key"):
-        opt.JointVDist([], model, sample_and_log_prob=diag_normal, init_params={})
+        opt.SampleAndLogProbVDist([], model, fn=diag_normal, init_params={})
     with pytest.raises(ValueError, match="Duplicate"):
-        opt.JointVDist(
-            ["mu", "mu"], model, sample_and_log_prob=diag_normal, init_params={}
-        )
+        opt.SampleAndLogProbVDist(["mu", "mu"], model, fn=diag_normal, init_params={})
 
 
 def test_composite_rejects_clashing_parameter_names():
     model = make_model()
-    other = opt.JointVDist(
-        ["tau"], model, sample_and_log_prob=diag_normal, init_params=INIT_PARAMS
+    other = opt.SampleAndLogProbVDist(
+        ["tau"], model, fn=diag_normal, init_params=INIT_PARAMS
     )
 
     with pytest.raises(ValueError, match="mu_loc"):
-        opt.CompositeVDist(joint_block(model), other).build()
+        opt.CompositeVDist(function_block(model), other).build()
 
 
-def test_joint_fn_with_wrong_output_is_rejected():
+def test_function_fn_with_wrong_output_is_rejected():
     def wrong_keys(params, family_state, key, num_samples, given):
         draws, log_q, state = counting_normal(
             params, family_state, key, num_samples, given

@@ -21,8 +21,8 @@ from .state import OptimNaNDebugInfo as OptimNaNDebugInfo
 from .state import OptimResult as OptimResult
 from .stop import Stopper as Stopper
 from .vi import CompositeVDist as CompositeVDist
-from .vi import JointVDist as JointVDist
 from .vi import NegElboLoss as NegElboLoss
+from .vi import SampleAndLogProbVDist as SampleAndLogProbVDist
 from .vi import VariationalApproximation as VariationalApproximation
 from .vi import VDist as VDist
 
@@ -32,7 +32,6 @@ __all__ = [
     "Batches",
     "CompositeVDist",
     "EmaTrainLossMonitor",
-    "JointVDist",
     "LieselOptim",
     "LieselVI",
     "Loss",
@@ -49,6 +48,7 @@ __all__ = [
     "OptimizerLike",
     "PositionSplit",
     "PositionSplitManager",
+    "SampleAndLogProbVDist",
     "Split",
     "SplitManager",
     "Stopper",
