@@ -348,6 +348,72 @@ Custom joint densities and auxiliary variables require care; see the
 Custom transformed families remain subject to the TFP/JAX cache limitation in
 [issue #418](https://github.com/liesel-devs/liesel/issues/418).
 
+(vi-function-blocks)=
+
+## Draw a block in one call
+
+Some families can't be a {class}`VDist <liesel.optim.VDist>` block. A sequential
+family over a large field draws all its samples in one call that also returns
+their log density, and it may update a *family state*, such as running
+statistics, that the next draw must start from. Write such a family as a function
+that returns samples and their log density, and wrap it in a
+{class}`~liesel.optim.SampleAndLogProbVDist`, a *function block*. The function
+gets the block's variational parameters, the family state, a random key, the
+number of samples, and the draws of the `VDist` blocks as `given`. It returns
+the draws, their log density and the new family state.
+
+Here `beta` gets a normal family written as such a function. Its family state
+counts the calls:
+
+```{code-cell} python
+def draw_beta(params, calls, key, num_samples, given):
+    scale = jnp.exp(params["beta_log_scale"])
+    draws = params["beta_loc"] + scale * jax.random.normal(key, (num_samples,))
+    log_q = tfd.Normal(params["beta_loc"], scale).log_prob(draws)
+    return {"beta": draws}, log_q, calls + 1
+
+
+beta_fn_block = opt.SampleAndLogProbVDist(
+    ["beta"],
+    model,
+    fn=draw_beta,
+    init_params={"beta_loc": 0.0, "beta_log_scale": jnp.log(0.2)},
+    init_family_state=jnp.array(0),
+)
+alpha_block = opt.VDist(["alpha"], model).mvn_diag(scale_diag=0.5)
+fn_q = opt.CompositeVDist(alpha_block, beta_fn_block).build()
+fn_loss = opt.NegElboLoss.from_vdist(fn_q, nsamples=16, scale=True)
+
+fn_result = opt.LieselVI(
+    model,
+    loss=fn_loss,
+    optimizers=optax.adam(0.01),
+    loss_monitor=opt.EmaTrainLossMonitor(effective_window=20.0),
+    stopper=opt.Stopper(epochs=300, patience=300),
+    seed=42,
+    show_progress=False,
+).fit()
+int(fn_result.loss_state_final[0])
+```
+
+The loss calls each function block once per ELBO evaluation, after drawing the
+`VDist` blocks. The family states form the loss state, so only training steps
+keep the new one: the count above equals the number of training steps. The
+loss parameters include the function block's parameters, and
+{meth}`~liesel.optim.NegElboLoss.approximate_joint_posterior` draws with the
+family state stored with the selected position:
+
+```{code-cell} python
+fn_draws = fn_loss.approximate_joint_posterior(fn_result).sample(
+    1_000, seed=jax.random.key(46)
+)
+pd.DataFrame(fn_draws).agg(["mean", "std"]).round(3)
+```
+
+The draws must be differentiable in the parameters, like those of a fully
+reparameterized distribution. An optional `penalty(params)` is added to the
+loss, like {ref}`q-parameter penalties <vi-q-prior-penalties>`.
+
 ## Use another objective
 
 For a different objective, supply a {class}`~liesel.optim.Loss` to
