@@ -39,6 +39,7 @@ from .nodes import (
     _sample_compat,
     _transformed_distribution_bijector,
 )
+from .target import LogProbTarget, TargetSpec
 from .viz import plot_nodes, plot_vars
 
 __all__ = ["GraphBuilder", "Model", "load_model", "save_model"]
@@ -2266,6 +2267,42 @@ class Model:
         Defined as the sum of all distribution nodes.
         """
         return self._nodes["_model_log_prob"].value
+
+    def target(
+        self,
+        include: Sequence[Var | str] | None = None,
+        exclude: Sequence[Var | str] = (),
+        weights: Mapping[Var | str, float] | None = None,
+        component: Literal["log_prob", "log_lik", "log_prior"] = "log_prob",
+    ) -> LogProbTarget:
+        """
+        Creates a kernel target from selected log-probability terms.
+
+        A term is the log-probability of a variable's distribution. For a transformed
+        variable, it is the term of the transformed variable, including the Jacobian.
+
+        Parameters
+        ----------
+        include
+            Terms to use. If ``None``, the terms of ``component`` are used.
+        exclude
+            Terms to drop, e.g. to cut feedback from these variables.
+        weights
+            Weights for some of the terms, e.g. to temper a likelihood. Other terms
+            have weight one.
+        component
+            Which terms to start from: all terms, only observed variables, or only
+            parameters.
+
+        Examples
+        --------
+        Cut feedback from ``y2`` to the parameters of a NUTS kernel:
+
+        >>> target = model.target(exclude=[y2])  # doctest: +SKIP
+        >>> kernel = gs.NUTSKernel(["theta1"], target=target)  # doctest: +SKIP
+        """
+        spec = TargetSpec(include, exclude, weights or {}, component)
+        return spec.resolve(self)
 
     @property
     def node_graph(self) -> nx.DiGraph:

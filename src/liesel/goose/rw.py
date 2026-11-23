@@ -28,7 +28,7 @@ from .kernel import (
 )
 from .mh import mh_step
 from .pytree import register_dataclass_as_pytree
-from .types import KeyArray, ModelState, PositionInput, Scalar, TuningInfo
+from .types import KernelTarget, KeyArray, ModelState, PositionInput, Scalar, TuningInfo
 
 
 @register_dataclass_as_pytree
@@ -79,6 +79,9 @@ class RWKernel(ModelMixin, TransitionMixin[RWKernelState, RWTransitionInfo], Rep
         The adaptation iteration offset.
     identifier
         An string acting as a unique identifier for this kernel.
+    target
+        Log-probability this kernel targets instead of the model's, e.g. from
+        :meth:`~liesel.model.Model.target`. Defaults to the model's log-probability.
 
     """
 
@@ -112,6 +115,7 @@ class RWKernel(ModelMixin, TransitionMixin[RWKernelState, RWTransitionInfo], Rep
         da_kappa: float = 0.75,
         da_t0: int = 10,
         identifier: str = "",
+        target: KernelTarget | None = None,
     ):
         self._model = None
         self.position_keys = tuple(position_keys)
@@ -121,6 +125,7 @@ class RWKernel(ModelMixin, TransitionMixin[RWKernelState, RWTransitionInfo], Rep
         self.da_kappa = da_kappa
         self.da_t0 = da_t0
         self.identifier = identifier
+        self.target = target
 
     def init_state(self, prng_key, model_state):
         """
@@ -151,7 +156,13 @@ class RWKernel(ModelMixin, TransitionMixin[RWKernelState, RWTransitionInfo], Rep
         proposal = unravel_fn(flat_proposal)
 
         # metropolis-hastings calibration
-        info, model_state = mh_step(subkey, self.model, proposal, model_state)
+        info, model_state = mh_step(
+            subkey,
+            self.model,
+            proposal,
+            model_state,
+            log_prob_fn=self.target_log_prob,
+        )
         return TransitionOutcome(info, kernel_state, model_state)
 
     def _adaptive_transition(

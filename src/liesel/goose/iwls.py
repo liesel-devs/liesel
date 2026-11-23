@@ -33,7 +33,7 @@ from .kernel import (
 )
 from .mh import mh_step
 from .pytree import register_dataclass_as_pytree
-from .types import KeyArray, ModelState, Position, PositionInput, Scalar
+from .types import KernelTarget, KeyArray, ModelState, Position, PositionInput, Scalar
 
 
 @register_dataclass_as_pytree
@@ -98,6 +98,9 @@ class IWLSKernel(
         replacing the observed negative Hessian with a very similar positive definite
         matrix. This is slow, because it performs an eigendecomposition and two cholesky
         factorizations. If ``None``, does nothing.
+    target
+        Log-probability this kernel targets instead of the model's, e.g. from
+        :meth:`~liesel.model.Model.target`. Defaults to the model's log-probability.
 
     Notes
     -----
@@ -159,6 +162,7 @@ class IWLSKernel(
         da_t0: int = 10,
         identifier: str = "",
         fallback_chol_info: CholInfoFallbackOptions | None = "identity",
+        target: KernelTarget | None = None,
     ):
         self._model = None
         self.position_keys = tuple(position_keys)
@@ -172,6 +176,7 @@ class IWLSKernel(
         self.da_kappa = da_kappa
         self.da_t0 = da_t0
         self.identifier = identifier
+        self.target = target
         self.fallback_chol_info = fallback_chol_info
 
     @property
@@ -195,6 +200,7 @@ class IWLSKernel(
         position_keys: Sequence[str],
         chol_info_fn: Callable[[ModelState], ArrayLike] | None = None,
         fallback_chol_info: CholInfoFallbackOptions | None = "identity",
+        target: KernelTarget | None = None,
     ) -> Self:
         """
         Initializes an IWLS kernel that does not conduct step size tuning during warmup.
@@ -206,6 +212,7 @@ class IWLSKernel(
             initial_step_size=1.0,
             da_tune_step_size=False,
             fallback_chol_info=fallback_chol_info,
+            target=target,
         )
         return kernel
 
@@ -220,7 +227,7 @@ class IWLSKernel(
         def flat_log_prob_fn(flat_position: jax.Array) -> Scalar:
             position = unravel_fn(flat_position)
             new_model_state = self.model.update_state(position, model_state)
-            return self.model.log_prob(new_model_state)
+            return self.target_log_prob(new_model_state)
 
         return flat_log_prob_fn
 
@@ -360,7 +367,12 @@ class IWLSKernel(
         correction = bwd_log_prob - fwd_log_prob
 
         info, model_state = mh_step(
-            subkey, self.model, proposal, model_state, correction
+            subkey,
+            self.model,
+            proposal,
+            model_state,
+            correction,
+            log_prob_fn=self.target_log_prob,
         )
         info.error_code = info.error_code + error_code_pos
 

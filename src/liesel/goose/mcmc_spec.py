@@ -15,15 +15,16 @@ from typing import (
 )
 
 import jax.numpy as jnp
+import networkx as nx
 import tensorflow_probability.substrates.jax.distributions as tfd
 
 from .builder import EngineBuilder
 from .engine import SamplingResults
 from .interface import LieselInterface
-from .types import JitterFunctions, Kernel, KeyArray, PyTree
+from .types import JitterFunctions, Kernel, KernelTarget, KeyArray, PyTree
 
 if TYPE_CHECKING:
-    from liesel.model import Model, Var
+    from ..model import Model, TargetSpec, Var
 
 
 logger = logging.getLogger(__name__)
@@ -148,6 +149,7 @@ class LieselMCMC:
                     kwargs=inference.kernel_kwargs,
                     position_keys=[name],
                     order=inference.order,
+                    target=inference.target,
                 )
 
             elif group_name in kernel_groups:
@@ -177,6 +179,16 @@ class LieselMCMC:
                             "for the whole group."
                         )
 
+                if inference.target is not None:
+                    if group.target is None:
+                        group.target = inference.target
+                    elif group.target is not inference.target:
+                        raise ValueError(
+                            f"Found incoherent targets for kernel group {group_name}."
+                            " All specifications that provide a target must share"
+                            " the same target object."
+                        )
+
                 group.position_keys.append(name)
 
             else:
@@ -185,6 +197,7 @@ class LieselMCMC:
                     kwargs=inference.kernel_kwargs,
                     position_keys=[name],
                     order=inference.order,
+                    target=inference.target,
                 )
 
         kernel_groups = dict(
@@ -201,11 +214,44 @@ class LieselMCMC:
         -------
         A list of initialized kernel instances ready to be added to the MCMC engine.
         """
-        kernel_groups = self.get_kernel_groups()
-        kernel_list = [
-            g.kernel(g.position_keys, **g.kwargs) for g in kernel_groups.values()
-        ]
+        kernel_list = []
+        for g in self.get_kernel_groups().values():
+            kwargs = dict(g.kwargs)
+            if g.target is not None:
+                if "target" in kwargs:
+                    raise ValueError(
+                        f"Kernel group {g.position_keys} sets the target both in"
+                        " 'target' and in 'kernel_kwargs'."
+                    )
+                kwargs["target"] = self._resolve_target(g.target, g.position_keys)
+            kernel_list.append(g.kernel(g.position_keys, **kwargs))
         return kernel_list
+
+    def _resolve_target(
+        self, target: TargetSpec | KernelTarget, position_keys: list[str]
+    ) -> KernelTarget:
+        """
+        Added a check to ensure target is affacted by parameters in position_keys.
+
+        Raises if not.
+
+        # TODO: i feel its a bit of a foot gun, so i added the check.
+        """
+        # imported here, since liesel.model imports this module
+        from ..model.target import LogProbTarget, TargetSpec
+
+        if isinstance(target, TargetSpec):
+            target = target.resolve(self.model)
+        if not isinstance(target, LogProbTarget):
+            return target
+
+        graph = self.model.node_graph
+        terms = [self.model.nodes[name] for name in target.weights]
+        for key in position_keys:
+            value = self.model.vars[key].var_value_node
+            if not any(value in nx.ancestors(graph, term) for term in terms):
+                raise ValueError(f"Parameter {key!r} does not affect its target.")
+        return target
 
     def get_jitter_functions(self) -> JitterFunctions:
         """
@@ -425,6 +471,7 @@ class _KernelGroup:
     kwargs: Mapping[str, Any] = field(default_factory=dict)
     position_keys: list[str] = field(default_factory=list)
     order: int = 99
+    target: TargetSpec | KernelTarget | None = None
 
 
 P = ParamSpec("P")
@@ -470,6 +517,10 @@ class MCMCSpec:
         nodes/responses come first), which is often a sensible default. After that,
         blocks will be ordered based on the integer provided here. The kernel with the
         smallest ``order`` integer will be used first.
+    target
+        Log-probability the kernel targets instead of the model's. A
+        :class:`~liesel.model.TargetSpec` is resolved against the model. Specifications
+        in the same kernel group that provide a target must share the same object.
 
 
     Examples
@@ -534,6 +585,8 @@ class MCMCSpec:
     """
     order: int = 99
     """Relative order of this parameter block in the kernel sequence."""
+    target: TargetSpec | KernelTarget | None = None
+    """Log-probability the kernel targets instead of the model's."""
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.kernel}, {self.kernel_group=})"

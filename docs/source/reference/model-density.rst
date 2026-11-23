@@ -16,3 +16,5 @@ Evaluate model log densities and work with flattened positions.
    ~liesel.model.log_prob_pointwise
    ~liesel.model.LogProb
    ~liesel.model.FlatLogProb
+   ~liesel.model.LogProbTarget
+   ~liesel.model.TargetSpec

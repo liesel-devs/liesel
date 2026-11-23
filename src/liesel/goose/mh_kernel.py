@@ -22,7 +22,15 @@ from .kernel import (
 )
 from .mh import mh_step
 from .rw import RWKernelState
-from .types import KeyArray, ModelState, Position, PositionInput, Scalar, TuningInfo
+from .types import (
+    KernelTarget,
+    KeyArray,
+    ModelState,
+    Position,
+    PositionInput,
+    Scalar,
+    TuningInfo,
+)
 
 
 class MHProposal(NamedTuple):
@@ -88,6 +96,9 @@ class MHKernel(ModelMixin, TransitionMixin[RWKernelState, MHTransitionInfo], Rep
         The adaptation iteration offset.
     identifier
         A string acting as a unique identifier for this kernel.
+    target
+        Log-probability this kernel targets instead of the model's, e.g. from
+        :meth:`~liesel.model.Model.target`. Defaults to the model's log-probability.
 
     Examples
     --------
@@ -189,6 +200,7 @@ class MHKernel(ModelMixin, TransitionMixin[RWKernelState, MHTransitionInfo], Rep
         da_kappa: float = 0.75,
         da_t0: int = 10,
         identifier: str = "",
+        target: KernelTarget | None = None,
     ):
         self._model = None
         self.position_keys = tuple(position_keys)
@@ -200,6 +212,7 @@ class MHKernel(ModelMixin, TransitionMixin[RWKernelState, MHTransitionInfo], Rep
         self.da_kappa = da_kappa
         self.da_t0 = da_t0
         self.identifier = identifier
+        self.target = target
 
     def init_state(self, prng_key, model_state):
         """Initializes the kernel state."""
@@ -228,6 +241,7 @@ class MHKernel(ModelMixin, TransitionMixin[RWKernelState, MHTransitionInfo], Rep
             proposal.position,
             model_state,
             proposal.log_correction,
+            log_prob_fn=self.target_log_prob,
         )
         return TransitionOutcome(info, kernel_state, model_state)
 

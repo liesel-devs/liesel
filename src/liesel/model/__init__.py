@@ -40,6 +40,7 @@ from .nodes import (
     Value,
     Var,
 )
+from .target import LogProbTarget, TargetSpec
 from .viz import plot_nodes, plot_vars
 
 __all__ = [
@@ -64,6 +65,7 @@ __all__ = [
     "LieselModelState",
     "LieselModelStateInput",
     "LogProb",
+    "LogProbTarget",
     "Model",
     "Node",
     "NodeState",
@@ -76,6 +78,7 @@ __all__ = [
     "Response",
     "Smooth",
     "SmoothingParam",
+    "TargetSpec",
     "TransientCalc",
     "TransientDist",
     "TransientIdentity",
