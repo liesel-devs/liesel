@@ -25,7 +25,7 @@ from .interface import LieselInterface
 from .types import JitterFunctions, Kernel, KernelTarget, KeyArray, PyTree
 
 if TYPE_CHECKING:
-    from liesel.model import Model, TargetSpec, Var
+    from ..model import Model, Var
 
 
 logger = logging.getLogger(__name__)
