@@ -108,10 +108,10 @@ def _dist_name(model: Model, var: Var | str) -> str:
     name = var if isinstance(var, str) else var.name
     if name not in model.vars:
         raise ValueError(f"Variable {name!r} is not part of the model.")
-    var = model.vars[name]
+    var_in_m = model.vars[name]
 
-    if var.dist_node is not None:
-        return var.dist_node.name
-    if var.has_bijected_var and var.bijected_var.dist_node is not None:
-        return var.bijected_var.dist_node.name
+    if var_in_m.dist_node is not None:
+        return var_in_m.dist_node.name
+    if var_in_m.has_bijected_var and var_in_m.bijected_var.dist_node is not None:
+        return var_in_m.bijected_var.dist_node.name
     raise ValueError(f"Variable {name!r} has no distribution.")
