@@ -18,14 +18,13 @@ import jax.numpy as jnp
 import networkx as nx
 import tensorflow_probability.substrates.jax.distributions as tfd
 
-from ..model.target import LogProbTarget, TargetSpec
 from .builder import EngineBuilder
 from .engine import SamplingResults
 from .interface import LieselInterface
 from .types import JitterFunctions, Kernel, KernelTarget, KeyArray, PyTree
 
 if TYPE_CHECKING:
-    from ..model import Model, Var
+    from ..model import Model, TargetSpec, Var
 
 
 logger = logging.getLogger(__name__)
@@ -238,6 +237,8 @@ class LieselMCMC:
 
         # TODO: i feel its a bit of a foot gun, so i added the check.
         """
+        # imported here, since liesel.model imports this module
+        from ..model.target import LogProbTarget, TargetSpec
 
         if isinstance(target, TargetSpec):
             target = target.resolve(self.model)
