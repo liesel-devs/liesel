@@ -77,15 +77,18 @@ import jax
 from liesel.goose.types import ModelState, Position, PositionInput
 
 try:
-    import pytensor
+    import pytensor  # ty: ignore[unresolved-import]
 
     if jax.config.read("jax_enable_x64"):
         pytensor.config.floatX = "float64"
     else:
         pytensor.config.floatX = "float32"
 
-    import pymc as pm
-    from pymc.sampling.jax import get_jaxified_graph, get_jaxified_logp
+    import pymc as pm  # ty: ignore[unresolved-import]
+    from pymc.sampling.jax import (  # ty: ignore[unresolved-import]
+        get_jaxified_graph,
+        get_jaxified_logp,
+    )
 except ImportError as e:
     raise ImportError(
         f"PyMC must be installed to use this module. Original exception: {e}"

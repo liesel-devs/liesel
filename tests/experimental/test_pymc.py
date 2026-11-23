@@ -9,7 +9,7 @@ import pytest
 import liesel.goose as gs
 
 try:
-    import pymc as pm
+    import pymc as pm  # ty: ignore[unresolved-import]
 
     from liesel.experimental.pymc import PyMCInterface
 except ImportError:
