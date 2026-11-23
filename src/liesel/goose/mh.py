@@ -4,6 +4,8 @@ Metropolis-Hastings.
 This module uses the error codes 90-99.
 """
 
+from collections.abc import Callable
+
 import jax
 import jax.numpy as jnp
 
@@ -20,6 +22,7 @@ def mh_step(
     proposal: PositionInput,
     model_state: ModelState,
     log_correction: Scalar = 0.0,
+    log_prob_fn: Callable[[ModelState], Scalar] | None = None,
 ) -> tuple[DefaultTransitionInfo, ModelState]:
     r"""
     Decides if an MCMC proposal is accepted in a Metropolis-Hastings step.
@@ -39,6 +42,8 @@ def mh_step(
         distribution. Let ``q(x' | x)`` be the density of the proposal ``x'`` given
         the current state ``x``, then the ``log_correction`` is defined as
         ``log[q(x | x') / q(x' | x)]``.
+    log_prob_fn
+        Log-probability of a model state. Defaults to ``model.log_prob``.
 
     Returns
     -------
@@ -47,9 +52,12 @@ def mh_step(
     pytree).
     """
 
-    current_log_prob = jnp.asarray(model.log_prob(model_state))
+    if log_prob_fn is None:
+        log_prob_fn = model.log_prob
+
+    current_log_prob = jnp.asarray(log_prob_fn(model_state))
     proposed_model_state = model.update_state(proposal, model_state)
-    proposed_log_prob = jnp.asarray(model.log_prob(proposed_model_state))
+    proposed_log_prob = jnp.asarray(log_prob_fn(proposed_model_state))
 
     log_acc_prob = proposed_log_prob - current_log_prob + jnp.asarray(log_correction)
 

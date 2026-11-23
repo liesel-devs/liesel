@@ -35,7 +35,7 @@ from .kernel import (
 )
 from .mm import tune_inv_mm_diag, tune_inv_mm_full
 from .pytree import register_dataclass_as_pytree
-from .types import KeyArray, ModelState, Position, PositionInput, Scalar
+from .types import KernelTarget, KeyArray, ModelState, Position, PositionInput, Scalar
 
 
 @register_dataclass_as_pytree
@@ -122,6 +122,9 @@ class HMCKernel(
         using :func:`~liesel.goose.mm.tune_inv_mm_full` instead.
     identifier
         An string acting as a unique identifier for this kernel.
+    target
+        Log-probability this kernel targets instead of the model's, e.g. from
+        :meth:`~liesel.model.Model.target`. Defaults to the model's log-probability.
 
     Notes
     -----
@@ -174,6 +177,7 @@ class HMCKernel(
         da_t0: int = 10,
         mm_diag: bool = True,
         identifier: str = "",
+        target: KernelTarget | None = None,
     ):
         self.position_keys = tuple(position_keys)
         self._model = None
@@ -189,6 +193,7 @@ class HMCKernel(
 
         self.mm_diag = mm_diag
         self.identifier = identifier
+        self.target = target
 
     def _blackjax_state(self, model_state: ModelState) -> hmc.HMCState:
         return hmc.init(self.position(model_state), self.log_prob_fn(model_state))

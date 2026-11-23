@@ -42,6 +42,7 @@ from .summary_viz import (
 from .types import (
     Kernel,
     KernelState,
+    KernelTarget,
     ModelInterface,
     ModelState,
     Position,
@@ -71,6 +72,7 @@ __all__ = [
     "InterfaceLogProb",
     "Kernel",
     "KernelState",
+    "KernelTarget",
     "LieselInterface",
     "LieselMCMC",
     "MCMCSpec",

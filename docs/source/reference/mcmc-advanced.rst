@@ -21,6 +21,7 @@ Interfaces and utilities for extending Goose kernels, adaptation, and transition
    ~liesel.goose.KernelState
    ~liesel.goose.ModelState
    ~liesel.goose.Kernel
+   ~liesel.goose.KernelTarget
    ~liesel.goose.TransitionInfo
    ~liesel.goose.TuningInfo
    ~liesel.goose.DefaultTransitionInfo

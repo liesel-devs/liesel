@@ -14,6 +14,7 @@ from .epoch import EpochState, EpochType
 from .pytree import register_dataclass_as_pytree
 from .types import (
     Kernel,
+    KernelTarget,
     KeyArray,
     ModelInterface,
     ModelState,
@@ -126,6 +127,8 @@ class ModelMixin:
     position_keys: tuple[str, ...]
     """Position keys handled by this kernel."""
     _model: ModelInterface | None
+    target: KernelTarget | None = None
+    """Log-probability used instead of the model's. ``None`` uses the model's."""
 
     @property
     def model(self) -> ModelInterface:
@@ -158,9 +161,15 @@ class ModelMixin:
 
         def log_prob_fn(position: PositionInput) -> Scalar:
             new_model_state = self.model.update_state(position, model_state)
-            return self.model.log_prob(new_model_state)
+            return self.target_log_prob(new_model_state)
 
         return log_prob_fn
+
+    def target_log_prob(self, model_state: ModelState) -> Scalar:
+        """Evaluates the kernel's target on a model state."""
+        if self.target is None:
+            return self.model.log_prob(model_state)
+        return self.target(model_state)
 
 
 class TransitionMixin[TKernelState, TTransitionInfo: TransitionInfo]:

@@ -114,6 +114,14 @@ class ModelInterface(Protocol):
         raise NotImplementedError
 
 
+class KernelTarget(Protocol):
+    """
+    A log-probability that a kernel uses instead of the model's log-probability.
+    """
+
+    def __call__(self, model_state: ModelState) -> Scalar: ...
+
+
 class Kernel(Protocol[TKernelState, TTransitionInfo, TTuningInfo]):
     """Protocol for a transition kernel."""
 
